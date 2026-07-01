@@ -41,6 +41,7 @@ import {
 import { addDoc, collection, db, serverTimestamp, onSnapshot, query, orderBy, limit } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { useLanguage } from '@bin/shared';
 
 const ENGINEER_ADMIN_ROLES = new Set(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin']);
 
@@ -126,6 +127,7 @@ export default function BinGptEngineerPage() {
 
   const role = String(user?.role || '').toLowerCase();
   const hasAdminAccess = Boolean(user?.claims?.admin === true || user?.isAdmin === true || ENGINEER_ADMIN_ROLES.has(role));
+  const { t, isRTL } = useLanguage();
 
   React.useEffect(() => {
     if (!hasAdminAccess) return;
@@ -234,20 +236,20 @@ export default function BinGptEngineerPage() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, minWidth: 0 }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, minWidth: 0, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={4} sx={{ maxWidth: 1440, mx: 'auto', minWidth: 0 }}>
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1, minWidth: 0 }}>
             <Bot size={30} color={binThemeTokens.gold} />
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4, overflowWrap: 'anywhere' }}>
-              ADMIN AI STUDIO
+              {t('admin.bin_gpt.eyebrow')}
             </Typography>
           </Stack>
           <Typography variant="h3" fontWeight={950} sx={{ color: '#fff', lineHeight: 1.05, overflowWrap: 'anywhere' }}>
-            BIN-GPT Engineer™
+            {t('admin.bin_gpt.page_title')}
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.58)', mt: 1.5, maxWidth: 920, lineHeight: 1.8, overflowWrap: 'anywhere' }}>
-            Secure command center for branch-based code changes, PR validation, Firebase production deployment governance, rollback control, command history, and immutable audit logging.
+            {t('admin.bin_gpt.page_desc')}
           </Typography>
         </Box>
 
@@ -256,12 +258,12 @@ export default function BinGptEngineerPage() {
           severity="info"
           sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, borderRadius: 3 }}
         >
-          Browser clients only create governed command records. GitHub tokens, Firebase service credentials, merge rights, and production deployment rights must stay in GitHub Actions or backend runners.
+          {t('admin.bin_gpt.security_alert')}
         </Alert>
 
         {!hasAdminAccess && (
           <Alert severity="error" sx={{ borderRadius: 3 }}>
-            This page is blocked for the current session. Owners, tenants, technicians, and non-admin users must never access BIN-GPT Engineer™.
+            {t('admin.bin_gpt.access_blocked')}
           </Alert>
         )}
 
@@ -272,7 +274,7 @@ export default function BinGptEngineerPage() {
                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
                   <ScrollText size={22} color={binThemeTokens.gold} />
                   <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', overflowWrap: 'anywhere' }}>
-                    Secure Engineering Command
+                    {t('admin.bin_gpt.command_section_title')}
                   </Typography>
                 </Stack>
                 <TextField
@@ -281,7 +283,7 @@ export default function BinGptEngineerPage() {
                   fullWidth
                   value={command}
                   onChange={(event) => setCommand(event.target.value)}
-                  placeholder="Enter the governed engineering command..."
+                  placeholder={t('admin.bin_gpt.command_placeholder')}
                   sx={{
                     '& .MuiInputBase-root': {
                       bgcolor: 'rgba(2,6,23,0.72)',
@@ -300,7 +302,7 @@ export default function BinGptEngineerPage() {
                     startIcon={<Rocket size={18} />}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 999 }}
                   >
-                    Create Audit Package
+                    {t('admin.bin_gpt.create_package_btn')}
                   </Button>
                   <Button
                     variant="outlined"
@@ -308,7 +310,7 @@ export default function BinGptEngineerPage() {
                     onClick={() => setCommand(defaultCommand)}
                     sx={{ borderColor: alpha(binThemeTokens.gold, 0.45), color: binThemeTokens.gold, fontWeight: 900, borderRadius: 999 }}
                   >
-                    Reset Template
+                    {t('admin.bin_gpt.reset_template_btn')}
                   </Button>
                 </Stack>
                 {submitting && <LinearProgress sx={{ mt: 2, bgcolor: alpha(binThemeTokens.gold, 0.12), '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />}
@@ -322,7 +324,7 @@ export default function BinGptEngineerPage() {
               <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
                   <GitBranch size={22} color="#10b981" />
-                  <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>Required Workflow</Typography>
+                  <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>{t('admin.bin_gpt.required_workflow_title')}</Typography>
                 </Stack>
                 <Stack spacing={1.15}>
                   {workflowSteps.map((step, index) => (
@@ -343,10 +345,10 @@ export default function BinGptEngineerPage() {
 
         <Grid container spacing={3}>
           {[
-            { title: 'PR Governance', text: 'Branch and PR are mandatory. Direct main commits are blocked by policy.', icon: <GitPullRequest color={binThemeTokens.gold} />, pill: <StatusPill label="BRANCH + PR ONLY" /> },
-            { title: 'Build Gate', text: 'Root build and Functions build must pass before merge and production deploy.', icon: <CheckCircle2 color="#10b981" />, pill: <StatusPill label="CHECKS REQUIRED" tone="success" /> },
-            { title: 'Audit History', text: 'Command, actor, status, PR, deploy logs, and errors are written to Firestore.', icon: <History color="#f59e0b" />, pill: <StatusPill label="AUDIT FIRST" tone="warning" /> },
-            { title: 'No Direct Mutation', text: 'Production Firestore changes require approved migration scripts and rollback plan.', icon: <AlertTriangle color="#ef4444" />, pill: <StatusPill label="LOCKED" tone="danger" /> },
+            { title: t('admin.bin_gpt.card_pr_title'), text: t('admin.bin_gpt.card_pr_text'), icon: <GitPullRequest color={binThemeTokens.gold} />, pill: <StatusPill label={t('admin.bin_gpt.card_pr_pill')} /> },
+            { title: t('admin.bin_gpt.card_build_title'), text: t('admin.bin_gpt.card_build_text'), icon: <CheckCircle2 color="#10b981" />, pill: <StatusPill label={t('admin.bin_gpt.card_build_pill')} tone="success" /> },
+            { title: t('admin.bin_gpt.card_audit_title'), text: t('admin.bin_gpt.card_audit_text'), icon: <History color="#f59e0b" />, pill: <StatusPill label={t('admin.bin_gpt.card_audit_pill')} tone="warning" /> },
+            { title: t('admin.bin_gpt.card_mutation_title'), text: t('admin.bin_gpt.card_mutation_text'), icon: <AlertTriangle color="#ef4444" />, pill: <StatusPill label={t('admin.bin_gpt.card_mutation_pill')} tone="danger" /> },
           ].map((card) => (
             <Grid item xs={12} md={6} lg={3} key={card.title}>
               <Card sx={{ bgcolor: 'rgba(2,6,23,0.86)', border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, borderRadius: 4, height: '100%', minWidth: 0 }}>
@@ -363,7 +365,7 @@ export default function BinGptEngineerPage() {
 
         <Card sx={{ bgcolor: 'rgba(15,23,42,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 4 }}>
           <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
-            <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>Security Rules Embedded in Studio</Typography>
+            <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{t('admin.bin_gpt.security_rules_title')}</Typography>
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
             <Grid container spacing={2}>
               {guardrails.map((rule) => (
@@ -384,7 +386,7 @@ export default function BinGptEngineerPage() {
           <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
               <History size={22} color={binThemeTokens.gold} />
-              <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>AI Action History & Deployments</Typography>
+              <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>{t('admin.bin_gpt.history_title')}</Typography>
             </Stack>
             <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
             
@@ -393,18 +395,18 @@ export default function BinGptEngineerPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell style={{ width: 50 }} />
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 160 }}>DATE</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 280 }}>COMMAND</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>STATUS</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>BUILD</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>DEPLOY</TableCell>
-                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 130 }}>ACTIONS</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 160 }}>{t('admin.bin_gpt.col_date')}</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 280 }}>{t('admin.bin_gpt.col_command')}</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>{t('admin.bin_gpt.col_status')}</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>{t('admin.bin_gpt.col_build')}</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 120 }}>{t('admin.bin_gpt.col_deploy')}</TableCell>
+                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, width: 130 }}>{t('admin.bin_gpt.col_actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {historyDocs.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'rgba(255,255,255,0.5)' }}>No engineering commands found.</TableCell>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'rgba(255,255,255,0.5)' }}>{t('admin.bin_gpt.empty_state')}</TableCell>
                     </TableRow>
                   )}
                   {historyDocs.map((docItem) => {
@@ -445,10 +447,10 @@ export default function BinGptEngineerPage() {
                           <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={7}>
                             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                               <Box sx={{ margin: 2, p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 900 }}>Command Detail</Typography>
+                                <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 900 }}>{t('admin.bin_gpt.detail_command')}</Typography>
                                 <Typography variant="body2" sx={{ color: '#fff', whiteSpace: 'pre-wrap', mb: 2, fontFamily: 'monospace', fontSize: '0.8rem' }}>{docItem.command}</Typography>
                                 
-                                <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 900 }}>Audit Trail</Typography>
+                                <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, mb: 1, fontWeight: 900 }}>{t('admin.bin_gpt.detail_audit_trail')}</Typography>
                                 <Stack spacing={1}>
                                   {docItem.auditTrail?.map((audit: any, idx: number) => (
                                     <Stack direction="row" spacing={1} key={idx} alignItems="center">
@@ -462,7 +464,7 @@ export default function BinGptEngineerPage() {
                                 
                                 {docItem.errorLogs && (Array.isArray(docItem.errorLogs) ? docItem.errorLogs.length > 0 : String(docItem.errorLogs).trim().length > 0) && (
                                   <Box sx={{ mt: 2, p: 2, bgcolor: alpha('#ef4444', 0.1), borderRadius: 2, border: `1px solid ${alpha('#ef4444', 0.2)}` }}>
-                                    <Typography variant="subtitle2" sx={{ color: '#ef4444', fontWeight: 900, mb: 1 }}>Error Logs</Typography>
+                                    <Typography variant="subtitle2" sx={{ color: '#ef4444', fontWeight: 900, mb: 1 }}>{t('admin.bin_gpt.detail_error_logs')}</Typography>
                                     {Array.isArray(docItem.errorLogs) ? (
                                       docItem.errorLogs.map((err: string, i: number) => (
                                         <Typography key={i} variant="caption" sx={{ color: '#fca5a5', display: 'block', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{err}</Typography>

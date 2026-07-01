@@ -23,6 +23,7 @@ import {
 import { motion } from 'framer-motion';
 
 import { db } from '../../lib/firebase';
+import { useLanguage } from '@bin/shared';
 import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
 
 // Helper for type-safe icons in React 18
@@ -61,6 +62,7 @@ export default function LiveOpsCommandCenter() {
     const [activeTechs, setActiveTechs] = useState<TechnicianLocation[]>([]);
     const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
     const [stats, setStats] = useState({ queueClearance: 84, activeTeams: 0 });
+    const { t, isRTL } = useLanguage();
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -110,7 +112,7 @@ export default function LiveOpsCommandCenter() {
     }, []);
 
     return (
-        <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: '#f8fafc' }}>
+        <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: '#f8fafc', direction: isRTL ? 'rtl' : 'ltr' }}>
             {/* ── HEADER: MISSION CONTROL ── */}
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
@@ -119,23 +121,23 @@ export default function LiveOpsCommandCenter() {
                             <Icon icon={NavigationIcon} size={24} color="white" />
                         </Box>
                         <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: -2, fontStyle: 'italic' }}>
-                            LIVE OPS <Box component="span" sx={{ color: '#3b82f6' }}>COMMAND</Box>
+                            {t('admin.live_ops.title_live_ops')} <Box component="span" sx={{ color: '#3b82f6' }}>{t('admin.live_ops.title_command')}</Box>
                         </Typography>
                     </Box>
                     <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, letterSpacing: 6 }}>
-                        Dubai Infrastructure Hub · {currentTime}
+                        {t('admin.live_ops.subtitle', { currentTime })}
                     </Typography>
                 </Box>
                 
                 <Box sx={{ display: 'flex', gap: 3 }}>
                     <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="h6" fontWeight={900} sx={{ color: '#10b981' }}>{stats.queueClearance}%</Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>QUEUE CLEARANCE</Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>{t('admin.live_ops.queue_clearance')}</Typography>
                     </Box>
                     <Box sx={{ width: 1, height: 40, bgcolor: 'rgba(255,255,255,0.1)', w: '1px' }} />
                     <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="h6" fontWeight={900} sx={{ color: '#3b82f6' }}>{stats.activeTeams}</Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>ACTIVE TEAMS</Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>{t('admin.live_ops.active_teams')}</Typography>
                     </Box>
                 </Box>
             </Box>
@@ -206,7 +208,7 @@ export default function LiveOpsCommandCenter() {
                         {activeTechs.length === 0 && (
                             <Box sx={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', opacity: 0.5, flexDirection: 'column', gap: 1 }}>
                                 <Activity size={48} className="animate-pulse" />
-                                <Typography variant="h6" fontWeight={900} letterSpacing={2}>AWAITING FIELD TELEMETRY...</Typography>
+                                <Typography variant="h6" fontWeight={900} letterSpacing={2}>{t('admin.live_ops.awaiting_telemetry')}</Typography>
                             </Box>
                         )}
 
@@ -214,12 +216,12 @@ export default function LiveOpsCommandCenter() {
                         <Box sx={{ position: 'absolute', bottom: 32, left: 32, display: 'flex', gap: 2 }}>
                             <Chip 
                                 icon={<Icon icon={Radio} size={14} className={activeTechs.length > 0 ? "animate-pulse" : ""} />} 
-                                label="REAL-TIME GPS" 
+                                label={t('admin.live_ops.real_time_gps')}
                                 sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#3b82f6', fontWeight: 900, fontSize: 10 }} 
                             />
                             <Chip 
                                 icon={<Icon icon={Activity} size={14} />} 
-                                label="INSTITUTIONAL SYNC" 
+                                label={t('admin.live_ops.institutional_sync')}
                                 sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#10b981', fontWeight: 900, fontSize: 10 }} 
                             />
                         </Box>
@@ -242,7 +244,7 @@ export default function LiveOpsCommandCenter() {
                         }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
                                 <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Icon icon={Zap} size={20} color="#fbbf24" /> LIVE TICKETS
+                                    <Icon icon={Zap} size={20} color="#fbbf24" /> {t('admin.live_ops.live_tickets')}
                                 </Typography>
                                 <IconButton size="small"><Icon icon={Filter} size={18} color="#64748b" /></IconButton>
                             </Box>
@@ -278,7 +280,7 @@ export default function LiveOpsCommandCenter() {
                                 ))}
                                 {liveEvents.length === 0 && (
                                     <Typography variant="caption" sx={{ color: '#64748b', fontStyle: 'italic', textAlign: 'center', py: 2 }}>
-                                        Zero pending incidents reported.
+                                        {t('admin.live_ops.no_incidents')}
                                     </Typography>
                                 )}
                             </Box>
@@ -294,7 +296,7 @@ export default function LiveOpsCommandCenter() {
                             maxHeight: '30vh'
                         }}>
                              <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                                <Icon icon={Users} size={20} color="#3b82f6" /> FIELD SQUAD
+                                <Icon icon={Users} size={20} color="#3b82f6" /> {t('admin.live_ops.field_squad')}
                             </Typography>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 {activeTechs.map(tech => (
@@ -328,7 +330,7 @@ export default function LiveOpsCommandCenter() {
                                             <Typography variant="caption" sx={{ 
                                                 fontWeight: 900, 
                                                 color: tech.riskFlag ? '#ef4444' : tech.status === 'EMERGENCY' ? '#ef4444' : tech.status === 'ON_TICKET' ? '#3b82f6' : '#10b981' 
-                                            }}>{tech.riskFlag ? 'RISK' : tech.status || 'READY'}</Typography>
+                                            }}>{tech.riskFlag ? t('admin.live_ops.risk') : tech.status || t('admin.live_ops.ready')}</Typography>
                                             <Box sx={{ width: 60, mt: 0.5 }}>
                                                 <LinearProgress variant="determinate" value={tech.batteryLevel || 100} sx={{ 
                                                     height: 3, 

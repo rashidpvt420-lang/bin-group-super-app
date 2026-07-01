@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import {
     Container, Typography, Box, Paper, Grid, Stack, Button,
@@ -18,6 +19,7 @@ import { auth, functions } from '../../lib/firebase';
 import RegisterStaffDialog from '../../components/RegisterStaffDialog';
 
 export default function HRManagementPage() {
+    const { t, isRTL } = useLanguage();
     const { user } = useAuth();
     const navigate = useNavigate();
     const [tab, setTab] = useState(0);
@@ -76,37 +78,29 @@ export default function HRManagementPage() {
         }
     };
 
-    const getPayrollErrorMessage = (err: any) => {
+    const getPayrollErrorMessage = (err: any, tFn: typeof t) => {
         const code = err?.code || 'functions/internal';
-        const message = err?.message || 'No additional detail was returned.';
+        const message = err?.message || '';
 
-        if (code === 'functions/unauthenticated') {
-            return 'Your admin session expired. Sign in again and retry payslip generation.';
-        }
-        if (code === 'functions/permission-denied') {
-            return 'Your account does not have HR or finance permission to generate payslips.';
-        }
-        if (code === 'functions/failed-precondition') {
-            return 'Payroll email is not configured in Firebase Secrets. Configure SMTP_USER and SMTP_PASS before retrying.';
-        }
-        if (code === 'functions/invalid-argument') {
-            return `Payslip data is incomplete. ${message}`;
-        }
-        return `Payslip could not be generated (${code}). ${message}`;
+        if (code === 'functions/unauthenticated') return tFn('admin.hr_management.err_unauthenticated');
+        if (code === 'functions/permission-denied') return tFn('admin.hr_management.err_permission_denied');
+        if (code === 'functions/failed-precondition') return tFn('admin.hr_management.err_failed_precondition');
+        if (code === 'functions/invalid-argument') return tFn('admin.hr_management.err_invalid_argument').replace('{message}', message);
+        return tFn('admin.hr_management.err_generic').replace('{code}', code).replace('{message}', message);
     };
 
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ height: '100%', overflowY: 'auto', bgcolor: '#020617', py: 4 }}>
+        <Box sx={{ height: '100%', overflowY: 'auto', bgcolor: '#020617', py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Container maxWidth="xl">
                 <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
-                            SOVEREIGN HUMAN CAPITAL
+                            {t('admin.hr_management.overline')}
                         </Typography>
                         <Typography variant="h3" fontWeight="950" color="#FFF">
-                            HR <Box component="span" sx={{ color: binThemeTokens.gold }}>Command</Box>
+                            {t('admin.hr_management.page_title')} <Box component="span" sx={{ color: binThemeTokens.gold }}>{t('admin.hr_management.page_title_highlight')}</Box>
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={2}>
@@ -117,7 +111,7 @@ export default function HRManagementPage() {
                                 onClick={() => setIsRegisterDialogOpen(true)}
                                 sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                             >
-                                REGISTER STAFF
+                                {t('admin.hr_management.register_staff_btn')}
                             </Button>
                         )}
                     </Stack>
@@ -129,10 +123,10 @@ export default function HRManagementPage() {
                 />
 
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 4, '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 } }}>
-                    <Tab label="STAFF REGISTRY" />
-                    <Tab label="ATTENDANCE & LEAVE" disabled={!isHRStaff} />
-                    <Tab label="PAYROLL HUB" disabled={!isHRManager} />
-                    <Tab label="HR DOCUMENTS" disabled={!isHRStaff} />
+                    <Tab label={t('admin.hr_management.tab_registry')} />
+                    <Tab label={t('admin.hr_management.tab_attendance')} disabled={!isHRStaff} />
+                    <Tab label={t('admin.hr_management.tab_payroll')} disabled={!isHRManager} />
+                    <Tab label={t('admin.hr_management.tab_documents')} disabled={!isHRStaff} />
                 </Tabs>
 
                 {payrollError && (
@@ -148,8 +142,8 @@ export default function HRManagementPage() {
                 {tab === 0 && (
                     <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                         <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <TextField 
-                                placeholder="Search by name, role, ID..." 
+                            <TextField
+                                placeholder={t('admin.hr_management.search_placeholder')} 
                                 size="small"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -159,18 +153,18 @@ export default function HRManagementPage() {
                                 }}
                                 sx={{ width: 400 }}
                             />
-                            <Chip label={`${staff.length} TOTAL PERSONNEL`} sx={{ fontWeight: 900 }} />
+                            <Chip label={t('admin.hr_management.total_personnel_chip').replace('{count}', String(staff.length))} sx={{ fontWeight: 900 }} />
                         </Box>
 
                         <TableContainer>
                             <Table>
                                 <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
                                     <TableRow>
-                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>PERSONNEL</TableCell>
-                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ROLE / SPECIALIZATION</TableCell>
-                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ZONE</TableCell>
-                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
-                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>KPI</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.hr_management.col_personnel')}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.hr_management.col_role_spec')}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.hr_management.col_zone')}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.hr_management.col_status')}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.hr_management.col_kpi')}</TableCell>
                                         <TableCell align="right"></TableCell>
                                     </TableRow>
                                 </TableHead>
@@ -221,11 +215,11 @@ export default function HRManagementPage() {
                                                                 setPayrollError(null);
                                                                 try {
                                                                     if (!auth.currentUser) {
-                                                                        setPayrollError('Your admin session is not active. Sign in again before generating payslips.');
+                                                                        setPayrollError(t('admin.hr_management.session_expired_error'));
                                                                         return;
                                                                     }
                                                                     if (!s.salary || s.salary <= 0) {
-                                                                        setPayrollError(`${s.displayName || 'This staff member'} has no salary on file. Set a salary before generating a payslip.`);
+                                                                        setPayrollError(t('admin.hr_management.no_salary_error').replace('{name}', s.displayName || 'This staff member'));
                                                                         return;
                                                                     }
                                                                     await auth.currentUser.getIdToken(true);
@@ -249,7 +243,7 @@ export default function HRManagementPage() {
                                                                     }
                                                                 } catch (err: any) {
                                                                     console.error("Payroll fault:", err);
-                                                                    setPayrollError(getPayrollErrorMessage(err));
+                                                                    setPayrollError(getPayrollErrorMessage(err, t));
                                                                 } finally {
                                                                     setGeneratingId(null);
                                                                 }
@@ -261,7 +255,7 @@ export default function HRManagementPage() {
                                                                 fontSize: '0.7rem'
                                                             }}
                                                         >
-                                                            PAYSLIP
+                                                            {t('admin.hr_management.payslip_btn')}
                                                         </Button>
                                                     )}
                                                     <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
@@ -283,39 +277,39 @@ export default function HRManagementPage() {
                             <Grid item xs={12} md={4}>
                                 <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${binThemeTokens.gold}`, borderRadius: 4, textAlign: 'center' }}>
                                     <DollarSign size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
-                                    <Typography variant="h5" fontWeight="950" color="#FFF">NEXT DISPATCH</Typography>
+                                    <Typography variant="h5" fontWeight="950" color="#FFF">{t('admin.hr_management.next_dispatch_title')}</Typography>
                                     <Typography variant="h3" fontWeight="950" color={binThemeTokens.gold} sx={{ my: 2 }}>{nextDispatchDate}</Typography>
-                                    <Typography variant="body2" color="textSecondary">Start of next payroll cycle</Typography>
+                                    <Typography variant="body2" color="textSecondary">{t('admin.hr_management.next_dispatch_desc')}</Typography>
                                     <Button fullWidth variant="contained" onClick={() => navigate('/financials/payroll')} sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                                        GENERATE LEDGER
+                                        {t('admin.hr_management.generate_ledger_btn')}
                                     </Button>
                                 </Paper>
                             </Grid>
                             <Grid item xs={12} md={8}>
                                 <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
-                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 4 }}>TREASURY LOGS (STAFF)</Typography>
+                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 4 }}>{t('admin.hr_management.treasury_logs_title')}</Typography>
                                     <Table size="small">
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>MONTH</TableCell>
-                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>GROSS PAYOUT</TableCell>
-                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>STATUS</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>{t('admin.hr_management.col_month')}</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>{t('admin.hr_management.col_gross_payout')}</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>{t('admin.hr_management.col_status')}</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
                                             {treasuryLogsByMonth.length === 0 ? (
                                                 <TableRow>
                                                     <TableCell colSpan={3} sx={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', py: 4 }}>
-                                                        No payroll runs recorded yet.
+                                                        {t('admin.hr_management.no_payroll_empty')}
                                                     </TableCell>
                                                 </TableRow>
                                             ) : treasuryLogsByMonth.map((log: any) => (
                                                 <TableRow key={log.month}>
                                                     <TableCell sx={{ fontWeight: 900 }}>{log.month}</TableCell>
-                                                    <TableCell>AED {log.total.toLocaleString('en-AE')}</TableCell>
+                                                    <TableCell>{t('admin.hr_management.aed_amount').replace('{amount}', log.total.toLocaleString('en-AE'))}</TableCell>
                                                     <TableCell>
                                                         <Chip
-                                                            label={log.allPaid ? 'SETTLED' : 'PENDING'}
+                                                            label={log.allPaid ? t('admin.hr_management.settled_chip') : t('admin.hr_management.pending_chip')}
                                                             size="small"
                                                             color={log.allPaid ? 'success' : 'warning'}
                                                             sx={{ fontWeight: 900, fontSize: 10 }}

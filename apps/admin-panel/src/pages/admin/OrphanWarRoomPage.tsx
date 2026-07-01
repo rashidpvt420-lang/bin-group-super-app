@@ -11,7 +11,7 @@ import {
     Search, Wrench, CheckCircle2
 } from 'lucide-react';
 import { db, collection, query, where, doc, writeBatch, serverTimestamp, onSnapshot, auth, functions, httpsCallable } from '../../lib/firebase';
-import { useAI } from '@bin/shared';
+import { useAI, useLanguage } from '@bin/shared';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
 type RepairReport = {
@@ -34,6 +34,7 @@ type RepairReport = {
 };
 
 export default function OrphanWarRoomPage() {
+    const { t, isRTL } = useLanguage();
     const { setPageContext } = useAI();
     const activeProjectId = 'bin-group-57c60';
     const [orphans, setOrphans] = useState<any[]>([]);
@@ -62,7 +63,7 @@ export default function OrphanWarRoomPage() {
 
     const runInstitutionalRepair = async (dryRun: boolean) => {
         if (!auth.currentUser) {
-            setRepairError("Your admin session is not active. Please log in again before running repair operations.");
+            setRepairError(t('admin.orphan_war_room.err_session_inactive'));
             setRepairErrorDetail(null);
             return;
         }
@@ -88,13 +89,13 @@ export default function OrphanWarRoomPage() {
             }, null, 2));
 
             if (err?.code === 'functions/unauthenticated') {
-                setRepairError("Administrative access expired. Sign in again to re-validate your Sovereign credentials.");
+                setRepairError(t('admin.orphan_war_room.err_auth_expired'));
             } else if (err?.code === 'functions/permission-denied') {
-                setRepairError("Permission Denied: Your account requires explicit 'admin' or 'super_admin' claims to run repair batch protocols.");
+                setRepairError(t('admin.orphan_war_room.err_permission_denied'));
             } else if (err?.message?.includes('not a function')) {
-                setRepairError("Cloud Function 'institutionalRepairTrigger' not found. Verify backend deployment and primary region (europe-west3).");
+                setRepairError(t('admin.orphan_war_room.err_fn_not_found'));
             } else {
-                setRepairError(`Institutional Repair Protocol failed: ${err.message || 'Check connection'}`);
+                setRepairError(t('admin.orphan_war_room.err_generic').replace('{message}', err.message || 'Check connection'));
             }
         } finally {
             setRepairRunning(null);
@@ -245,17 +246,17 @@ export default function OrphanWarRoomPage() {
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>;
 
     return (
-        <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Container maxWidth="xl" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 6 }}>
-                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>ORPHAN <Box component="span" sx={{ color: '#ef4444' }}>WAR ROOM</Box></Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>RELATIONAL INTEGRITY ENFORCEMENT MODULE</Typography>
+                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>{t('admin.orphan_war_room.page_title')} <Box component="span" sx={{ color: '#ef4444' }}>{t('admin.orphan_war_room.page_title_highlight')}</Box></Typography>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.orphan_war_room.page_subtitle')}</Typography>
             </Box>
 
             <Paper sx={{ p: 3, mb: 4, bgcolor: 'rgba(15,23,42,0.78)', border: '1px solid rgba(218,165,32,0.35)', borderRadius: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
                     <Box>
                         <Typography variant="h6" fontWeight="950" sx={{ color: '#DAA520', display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Wrench size={20} /> TECH REPAIR CONTROL
+                            <Wrench size={20} /> {t('admin.orphan_war_room.tech_repair_title')}
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800, display: 'block', mt: 0.5 }}>
                             project: {activeProjectId} | database: (default) | collection: maintenanceTickets
@@ -269,7 +270,7 @@ export default function OrphanWarRoomPage() {
                             onClick={() => runInstitutionalRepair(true)}
                             sx={{ fontWeight: 950, borderColor: '#DAA520', color: '#DAA520' }}
                         >
-                            Dry Run Tech Repair
+                            {t('admin.orphan_war_room.dry_run_btn')}
                         </Button>
                         <Button
                             variant="contained"
@@ -279,7 +280,7 @@ export default function OrphanWarRoomPage() {
                             onClick={() => runInstitutionalRepair(false)}
                             sx={{ fontWeight: 950 }}
                         >
-                            Commit Tech Repair
+                            {t('admin.orphan_war_room.commit_btn')}
                         </Button>
                     </Stack>
                 </Stack>
@@ -289,7 +290,7 @@ export default function OrphanWarRoomPage() {
                         <Typography variant="body2" fontWeight="900">{repairError}</Typography>
                         {repairErrorDetail && (
                             <Box component="details" sx={{ mt: 1 }}>
-                                <Box component="summary" sx={{ cursor: 'pointer', fontWeight: 800 }}>Developer detail</Box>
+                                <Box component="summary" sx={{ cursor: 'pointer', fontWeight: 800 }}>{t('admin.orphan_war_room.dev_detail_label')}</Box>
                                 <Typography component="pre" variant="caption" sx={{ whiteSpace: 'pre-wrap', mt: 1 }}>
                                     {repairErrorDetail}
                                 </Typography>
@@ -302,11 +303,11 @@ export default function OrphanWarRoomPage() {
                     <Box sx={{ mt: 3 }}>
                         <Grid container spacing={2}>
                             {[
-                                ['Docs matched', repairReport.docsMatched ?? 0],
-                                ['Docs updated', repairReport.docsUpdated ?? 0],
-                                ['Docs skipped', repairReport.docsSkipped ?? 0],
-                                ['Orphan IDs', repairReport.orphanTicketIds?.length ?? 0],
-                                ['Invalid-status IDs', repairReport.invalidStatusTicketIds?.length ?? 0],
+                                [t('admin.orphan_war_room.report_docs_matched'), repairReport.docsMatched ?? 0],
+                                [t('admin.orphan_war_room.report_docs_updated'), repairReport.docsUpdated ?? 0],
+                                [t('admin.orphan_war_room.report_docs_skipped'), repairReport.docsSkipped ?? 0],
+                                [t('admin.orphan_war_room.report_orphan_ids'), repairReport.orphanTicketIds?.length ?? 0],
+                                [t('admin.orphan_war_room.report_invalid_ids'), repairReport.invalidStatusTicketIds?.length ?? 0],
                             ].map(([label, value]) => (
                                 <Grid item xs={6} md={2.4} key={label}>
                                     <Paper sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.24)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -319,15 +320,15 @@ export default function OrphanWarRoomPage() {
 
                         <Grid container spacing={2} sx={{ mt: 1 }}>
                             <Grid item xs={12} md={6}>
-                                <Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 950 }}>ORPHAN TICKET IDS</Typography>
+                                <Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.orphan_war_room.orphan_ids_label')}</Typography>
                                 <Typography variant="body2" sx={{ color: '#FFF', wordBreak: 'break-word' }}>
-                                    {repairReport.orphanTicketIds?.join(', ') || 'None'}
+                                    {repairReport.orphanTicketIds?.join(', ') || t('admin.orphan_war_room.none_label')}
                                 </Typography>
                             </Grid>
                             <Grid item xs={12} md={6}>
-                                <Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 950 }}>INVALID-STATUS TICKET IDS</Typography>
+                                <Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.orphan_war_room.invalid_ids_label')}</Typography>
                                 <Typography variant="body2" sx={{ color: '#FFF', wordBreak: 'break-word' }}>
-                                    {repairReport.invalidStatusTicketIds?.join(', ') || 'None'}
+                                    {repairReport.invalidStatusTicketIds?.join(', ') || t('admin.orphan_war_room.none_label')}
                                 </Typography>
                             </Grid>
                         </Grid>
@@ -336,9 +337,9 @@ export default function OrphanWarRoomPage() {
                             <Table size="small">
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell sx={{ color: '#DAA520', fontWeight: 950 }}>TICKET</TableCell>
-                                        <TableCell sx={{ color: '#DAA520', fontWeight: 950 }}>STATUS</TableCell>
-                                        <TableCell sx={{ color: '#DAA520', fontWeight: 950 }}>BEFORE / AFTER</TableCell>
+                                        <TableCell sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.orphan_war_room.col_ticket')}</TableCell>
+                                        <TableCell sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.orphan_war_room.col_status')}</TableCell>
+                                        <TableCell sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.orphan_war_room.col_before_after')}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -363,21 +364,21 @@ export default function OrphanWarRoomPage() {
             <Paper sx={{ p: 3, mb: 4, bgcolor: 'rgba(15,23,42,0.78)', border: '1px solid rgba(59,130,246,0.28)', borderRadius: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
-                        <Typography variant="h6" fontWeight="950" sx={{ color: '#60A5FA' }}>GEO MIGRATION / REPAIR</Typography>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: '#60A5FA' }}>{t('admin.orphan_war_room.geo_title')}</Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800 }}>
-                            Finds properties missing geo, properties with legacy location/coordinates only, and repairs when coordinates are available. Map pin repair is required when no coordinates exist.
+                            {t('admin.orphan_war_room.geo_desc')}
                         </Typography>
                     </Box>
-                    <Chip label={`${geoRepairItems.length} PROPERTIES NEED GEO REVIEW`} sx={{ bgcolor: 'rgba(59,130,246,0.12)', color: '#93c5fd', fontWeight: 950 }} />
+                    <Chip label={t('admin.orphan_war_room.geo_chip').replace('{count}', String(geoRepairItems.length))} sx={{ bgcolor: 'rgba(59,130,246,0.12)', color: '#93c5fd', fontWeight: 950 }} />
                 </Stack>
                 {geoRepairItems.length > 0 && (
                     <TableContainer component={Paper} sx={{ mt: 2, bgcolor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)' }}>
                         <Table size="small">
                             <TableHead>
                                 <TableRow>
-                                    <TableCell sx={{ color: '#93c5fd', fontWeight: 950 }}>PROPERTY</TableCell>
-                                    <TableCell sx={{ color: '#93c5fd', fontWeight: 950 }}>LEGACY SOURCE</TableCell>
-                                    <TableCell align="right" sx={{ color: '#93c5fd', fontWeight: 950 }}>ACTION</TableCell>
+                                    <TableCell sx={{ color: '#93c5fd', fontWeight: 950 }}>{t('admin.orphan_war_room.col_property')}</TableCell>
+                                    <TableCell sx={{ color: '#93c5fd', fontWeight: 950 }}>{t('admin.orphan_war_room.col_legacy_source')}</TableCell>
+                                    <TableCell align="right" sx={{ color: '#93c5fd', fontWeight: 950 }}>{t('admin.orphan_war_room.col_action')}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -387,11 +388,11 @@ export default function OrphanWarRoomPage() {
                                         <TableRow key={property.id}>
                                             <TableCell sx={{ color: '#FFF', fontWeight: 800 }}>{property.name || property.propertyName || property.id}</TableCell>
                                             <TableCell sx={{ color: hasLegacyCoords ? '#10b981' : '#f59e0b', fontWeight: 900 }}>
-                                                {hasLegacyCoords ? 'legacy coordinates available' : 'map pin required'}
+                                                {hasLegacyCoords ? t('admin.orphan_war_room.legacy_coords_avail') : t('admin.orphan_war_room.map_pin_required')}
                                             </TableCell>
                                             <TableCell align="right">
                                                 <Button size="small" variant="outlined" disabled={!hasLegacyCoords} onClick={() => repairLegacyGeo(property)} sx={{ borderColor: '#93c5fd', color: '#93c5fd', fontWeight: 900 }}>
-                                                    Repair Geo
+                                                    {t('admin.orphan_war_room.repair_geo_btn')}
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -406,25 +407,25 @@ export default function OrphanWarRoomPage() {
             {orphans.length === 0 ? (
                 <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(16,185,129,0.05)', border: '1px solid #10b981', borderRadius: 4 }}>
                     <CheckCircle2 size={64} color="#10b981" style={{ marginBottom: 24 }} />
-                    <Typography variant="h4" fontWeight="950" color="#10b981">SYSTEM NOMINAL</Typography>
-                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mt: 2 }}>No unassociated asset dispatches detected in current sector.</Typography>
+                    <Typography variant="h4" fontWeight="950" color="#10b981">{t('admin.orphan_war_room.system_nominal')}</Typography>
+                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)', mt: 2 }}>{t('admin.orphan_war_room.no_orphans_desc')}</Typography>
                 </Paper>
             ) : (
                 <Grid container spacing={4}>
                     <Grid item xs={12}>
                         <Alert severity="warning" variant="filled" sx={{ fontWeight: 900, borderRadius: 2, mb: 4 }}>
-                            DETECTED {orphans.length} DISPATCH NODES WITHOUT RELATIONAL BINDING
+                            {t('admin.orphan_war_room.dispatch_nodes_warning').replace('{count}', String(orphans.length))}
                         </Alert>
                         
                         <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.6)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Table>
                                 <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
                                     <TableRow>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>FAULT TYPE</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>DESCRIPTION</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>SUBMITTED BY</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>TIMESTAMP</TableCell>
-                                        <TableCell align="right" sx={{ color: '#ef4444', fontWeight: 900 }}>PROTOCOL</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>{t('admin.orphan_war_room.col_fault_type')}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>{t('admin.orphan_war_room.col_description')}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>{t('admin.orphan_war_room.col_submitted_by')}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 900 }}>{t('admin.orphan_war_room.col_timestamp')}</TableCell>
+                                        <TableCell align="right" sx={{ color: '#ef4444', fontWeight: 900 }}>{t('admin.orphan_war_room.col_protocol')}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -432,8 +433,8 @@ export default function OrphanWarRoomPage() {
                                         <TableRow key={o.id} hover>
                                             <TableCell><Chip label={o.type} size="small" color="error" sx={{ fontWeight: 900 }} /></TableCell>
                                             <TableCell sx={{ color: '#FFF', fontWeight: 700 }}>{o.description}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{o.tenantName || o.tenantEmail || 'Anonymous'}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'N/A'}</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{o.tenantName || o.tenantEmail || t('admin.orphan_war_room.anonymous_label')}</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : t('admin.orphan_war_room.na_label')}</TableCell>
                                             <TableCell align="right">
                                                 <Button 
                                                     variant="contained" 
@@ -442,7 +443,7 @@ export default function OrphanWarRoomPage() {
                                                     onClick={() => setSelectedOrphan(o)}
                                                     sx={{ fontWeight: 950 }}
                                                 >
-                                                    BIND NODE
+                                                    {t('admin.orphan_war_room.bind_node_btn')}
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -456,42 +457,42 @@ export default function OrphanWarRoomPage() {
 
             {/* REPAIR DIALOG */}
             <Dialog open={!!selectedOrphan} onClose={() => setSelectedOrphan(null)} fullWidth maxWidth="sm">
-                <DialogTitle sx={{ fontWeight: 900 }}>RELATIONAL BINDING PROTOCOL</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 900 }}>{t('admin.orphan_war_room.dialog_title')}</DialogTitle>
                 <DialogContent>
                     <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <Typography variant="body2" color="textSecondary">Assign the following unlinked node to a verified asset:</Typography>
+                        <Typography variant="body2" color="textSecondary">{t('admin.orphan_war_room.dialog_desc')}</Typography>
                         <Paper sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.1)' }}>
-                            <Typography variant="caption" fontWeight="900" color="error">ORPHAN NODE:</Typography>
+                            <Typography variant="caption" fontWeight="900" color="error">{t('admin.orphan_war_room.orphan_node_label')}</Typography>
                             <Typography variant="body1" fontWeight="700">{selectedOrphan?.description}</Typography>
                         </Paper>
 
                         <FormControl fullWidth size="small">
-                            <InputLabel>TARGET PROPERTY</InputLabel>
-                            <Select value={targetPropId} label="TARGET PROPERTY" onChange={(e) => { setTargetPropId(e.target.value); setTargetUnitId(''); }}>
+                            <InputLabel>{t('admin.orphan_war_room.target_property_label')}</InputLabel>
+                            <Select value={targetPropId} label={t('admin.orphan_war_room.target_property_label')} onChange={(e) => { setTargetPropId(e.target.value); setTargetUnitId(''); }}>
                                 {properties.map(p => <MenuItem key={p.id} value={p.id}>{p.name || p.propertyName}</MenuItem>)}
                             </Select>
                         </FormControl>
 
                         <FormControl fullWidth size="small" disabled={!targetPropId}>
-                            <InputLabel>TARGET UNIT</InputLabel>
-                            <Select value={targetUnitId} label="TARGET UNIT" onChange={(e) => setTargetUnitId(e.target.value)}>
+                            <InputLabel>{t('admin.orphan_war_room.target_unit_label')}</InputLabel>
+                            <Select value={targetUnitId} label={t('admin.orphan_war_room.target_unit_label')} onChange={(e) => setTargetUnitId(e.target.value)}>
                                 {units.filter(u => u.propertyId === targetPropId).map(u => (
-                                    <MenuItem key={u.id} value={u.id}>Unit {u.unitNumber}</MenuItem>
+                                    <MenuItem key={u.id} value={u.id}>{t('admin.orphan_war_room.unit_menu_label').replace('{number}', u.unitNumber)}</MenuItem>
                                 ))}
                             </Select>
                         </FormControl>
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => setSelectedOrphan(null)} sx={{ fontWeight: 900 }}>CANCEL</Button>
-                    <Button 
-                        variant="contained" 
-                        color="primary" 
+                    <Button onClick={() => setSelectedOrphan(null)} sx={{ fontWeight: 900 }}>{t('admin.orphan_war_room.cancel_btn')}</Button>
+                    <Button
+                        variant="contained"
+                        color="primary"
                         disabled={!targetUnitId || fixing === selectedOrphan?.id}
                         onClick={handleRepair}
                         sx={{ borderRadius: 100, fontWeight: 900 }}
                     >
-                        {fixing === selectedOrphan?.id ? <CircularProgress size={20} /> : 'SECURE LINKAGE'}
+                        {fixing === selectedOrphan?.id ? <CircularProgress size={20} /> : t('admin.orphan_war_room.secure_linkage_btn')}
                     </Button>
                 </DialogActions>
             </Dialog>

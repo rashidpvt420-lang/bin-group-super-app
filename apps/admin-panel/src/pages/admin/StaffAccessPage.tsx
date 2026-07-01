@@ -2,6 +2,7 @@
 // Admin creates staff accounts with role-based module access control
 
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '@bin/shared';
 import {
     Box, Paper, Typography, Grid, Stack, Button, TextField,
     Dialog, DialogTitle, DialogContent, DialogActions,
@@ -74,6 +75,7 @@ interface StaffMember {
 }
 
 export default function StaffAccessPage() {
+    const { t, isRTL } = useLanguage();
     const [staff, setStaff] = useState<StaffMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -167,7 +169,7 @@ export default function StaffAccessPage() {
                     staffModules: formData.modules,
                     updatedAt: serverTimestamp(),
                 });
-                setSnackbar({ open: true, message: `${formData.displayName} updated successfully.`, error: false });
+                setSnackbar({ open: true, message: t('admin.staff_access.updated_success').replace('{name}', formData.displayName), error: false });
             } else {
                 // Attempt to create via Cloud Function if available, fallback to Firestore only
                 try {
@@ -179,7 +181,7 @@ export default function StaffAccessPage() {
                         modules: formData.modules,
                         tempPassword: formData.tempPassword || `BIN@${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
                     });
-                    setSnackbar({ open: true, message: `${formData.displayName} created. They will receive an email to set their password.`, error: false });
+                    setSnackbar({ open: true, message: t('admin.staff_access.created_success').replace('{name}', formData.displayName), error: false });
                 } catch (fnErr: any) {
                     // Fallback: create Firestore record only (admin must create Firebase Auth manually)
                     const docRef = doc(collection(db, 'users'));
@@ -192,12 +194,12 @@ export default function StaffAccessPage() {
                         createdAt: serverTimestamp(),
                         createdBy: 'admin',
                     });
-                    setSnackbar({ open: true, message: `Staff record created for ${formData.email}. Please create their Firebase Auth account manually.`, error: false });
+                    setSnackbar({ open: true, message: t('admin.staff_access.record_created_success').replace('{email}', formData.email), error: false });
                 }
             }
             setDialogOpen(false);
         } catch (err) {
-            setSnackbar({ open: true, message: 'Failed to save staff member. Check permissions.', error: true });
+            setSnackbar({ open: true, message: t('admin.staff_access.save_failed'), error: true });
         } finally {
             setSubmitting(false);
         }
@@ -210,9 +212,9 @@ export default function StaffAccessPage() {
                 suspendedAt: serverTimestamp(),
                 suspendedBy: 'admin',
             });
-            setSnackbar({ open: true, message: `${member.displayName} access suspended.`, error: false });
+            setSnackbar({ open: true, message: t('admin.staff_access.suspended_success').replace('{name}', member.displayName), error: false });
         } catch {
-            setSnackbar({ open: true, message: 'Failed to suspend access.', error: true });
+            setSnackbar({ open: true, message: t('admin.staff_access.suspend_failed'), error: true });
         }
     };
 
@@ -222,9 +224,9 @@ export default function StaffAccessPage() {
                 status: 'ACTIVE',
                 restoredAt: serverTimestamp(),
             });
-            setSnackbar({ open: true, message: `${member.displayName} access restored.`, error: false });
+            setSnackbar({ open: true, message: t('admin.staff_access.restored_success').replace('{name}', member.displayName), error: false });
         } catch {
-            setSnackbar({ open: true, message: 'Failed to restore access.', error: true });
+            setSnackbar({ open: true, message: t('admin.staff_access.restore_failed'), error: true });
         }
     };
 
@@ -238,20 +240,20 @@ export default function StaffAccessPage() {
 
     return (
         <AdminPageFrame
-            title="Staff Access Control"
-            subtitle="ROLE-BASED MODULE PERMISSIONS"
+            title={t('admin.staff_access.page_title')}
+            subtitle={t('admin.staff_access.page_subtitle')}
             lastUpdated={new Date()}
             onRefresh={() => window.location.reload()}
         >
-            <Box sx={{ pb: 8 }}>
+            <Box sx={{ pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
                 {/* Header Actions */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                            Manage staff accounts and control which modules each staff member can access.
+                            {t('admin.staff_access.page_desc')}
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>
-                            {staff.filter(s => s.status !== 'SUSPENDED').length} active staff · {staff.filter(s => s.status === 'SUSPENDED').length} suspended
+                            {t('admin.staff_access.active_suspended_count').replace('{active}', String(staff.filter(s => s.status !== 'SUSPENDED').length)).replace('{suspended}', String(staff.filter(s => s.status === 'SUSPENDED').length))}
                         </Typography>
                     </Box>
                     <Button
@@ -260,7 +262,7 @@ export default function StaffAccessPage() {
                         onClick={openAddDialog}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3 }}
                     >
-                        ADD STAFF MEMBER
+                        {t('admin.staff_access.add_staff_btn')}
                     </Button>
                 </Box>
 
@@ -275,12 +277,12 @@ export default function StaffAccessPage() {
                             <Table>
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>STAFF MEMBER</TableCell>
-                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>ROLE</TableCell>
-                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>MODULE ACCESS</TableCell>
-                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>STATUS</TableCell>
-                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>LAST LOGIN</TableCell>
-                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }} align="right">ACTIONS</TableCell>
+                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.col_staff')}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.col_role')}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.col_module_access')}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.col_status')}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.col_last_login')}</TableCell>
+                                        <TableCell sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }} align="right">{t('admin.staff_access.col_actions')}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -303,7 +305,7 @@ export default function StaffAccessPage() {
                                                         <Chip key={m} label={MODULE_ACCESS.find(ma => ma.key === m)?.icon + ' ' + m} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)' }} />
                                                     ))}
                                                     {member.modules.length > 4 && (
-                                                        <Chip label={`+${member.modules.length - 4} more`} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }} />
+                                                        <Chip label={t('admin.staff_access.more_modules').replace('{n}', String(member.modules.length - 4))} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }} />
                                                     )}
                                                 </Box>
                                             </TableCell>
@@ -319,23 +321,23 @@ export default function StaffAccessPage() {
                                                 />
                                             </TableCell>
                                             <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
-                                                {member.lastLogin?.toDate ? member.lastLogin.toDate().toLocaleDateString() : 'Never'}
+                                                {member.lastLogin?.toDate ? member.lastLogin.toDate().toLocaleDateString() : t('admin.staff_access.never_label')}
                                             </TableCell>
                                             <TableCell align="right">
                                                 <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                                    <Tooltip title="Edit Access">
+                                                    <Tooltip title={t('admin.staff_access.tooltip_edit')}>
                                                         <IconButton size="small" onClick={() => openEditDialog(member)} sx={{ color: binThemeTokens.gold }}>
                                                             <Edit size={14} />
                                                         </IconButton>
                                                     </Tooltip>
                                                     {member.status === 'ACTIVE' ? (
-                                                        <Tooltip title="Suspend Access">
+                                                        <Tooltip title={t('admin.staff_access.tooltip_suspend')}>
                                                             <IconButton size="small" onClick={() => handleRevokeAccess(member)} sx={{ color: '#ef4444' }}>
                                                                 <XCircle size={14} />
                                                             </IconButton>
                                                         </Tooltip>
                                                     ) : (
-                                                        <Tooltip title="Restore Access">
+                                                        <Tooltip title={t('admin.staff_access.tooltip_restore')}>
                                                             <IconButton size="small" onClick={() => handleRestoreAccess(member)} sx={{ color: '#10b981' }}>
                                                                 <CheckCircle2 size={14} />
                                                             </IconButton>
@@ -348,7 +350,7 @@ export default function StaffAccessPage() {
                                     {staff.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={6} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>
-                                                NO STAFF MEMBERS FOUND
+                                                {t('admin.staff_access.no_staff_empty')}
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -367,13 +369,13 @@ export default function StaffAccessPage() {
                     PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}
                 >
                     <DialogTitle sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        {editMode ? `Edit Access: ${selectedStaff?.displayName}` : 'Add New Staff Member'}
+                        {editMode ? t('admin.staff_access.dialog_edit_title').replace('{name}', selectedStaff?.displayName || '') : t('admin.staff_access.dialog_add_title')}
                     </DialogTitle>
                     <DialogContent sx={{ pt: 3 }}>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <TextField
-                                    fullWidth label="Full Name" value={formData.displayName}
+                                    fullWidth label={t('admin.staff_access.field_full_name')} value={formData.displayName}
                                     onChange={e => setFormData(p => ({ ...p, displayName: e.target.value }))}
                                     disabled={editMode}
                                     sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
@@ -381,7 +383,7 @@ export default function StaffAccessPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <TextField
-                                    fullWidth label="Email Address" type="email" value={formData.email}
+                                    fullWidth label={t('admin.staff_access.field_email')} type="email" value={formData.email}
                                     onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
                                     disabled={editMode}
                                     sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
@@ -390,20 +392,20 @@ export default function StaffAccessPage() {
                             {!editMode && (
                                 <Grid item xs={12} md={6}>
                                     <TextField
-                                        fullWidth label="Temporary Password (optional)" type="password" value={formData.tempPassword}
+                                        fullWidth label={t('admin.staff_access.field_temp_password')} type="password" value={formData.tempPassword}
                                         onChange={e => setFormData(p => ({ ...p, tempPassword: e.target.value }))}
-                                        placeholder="Leave blank for auto-generated"
+                                        placeholder={t('admin.staff_access.temp_password_placeholder')}
                                         sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                     />
                                 </Grid>
                             )}
                             <Grid item xs={12} md={editMode ? 12 : 6}>
                                 <FormControl fullWidth>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
+                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.field_role')}</InputLabel>
                                     <Select
                                         value={formData.role}
                                         onChange={e => handleRoleChange(e.target.value)}
-                                        label="Role"
+                                        label={t('admin.staff_access.field_role')}
                                         sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' } }}
                                     >
                                         {STAFF_ROLES.map(r => (
@@ -420,9 +422,9 @@ export default function StaffAccessPage() {
 
                             <Grid item xs={12}>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>MODULE ACCESS CONTROL</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>{t('admin.staff_access.module_access_label')}</Typography>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 2 }}>
-                                    Select which modules this staff member can access. Role defaults are pre-selected.
+                                    {t('admin.staff_access.module_access_desc')}
                                 </Typography>
                                 <Grid container spacing={1}>
                                     {MODULE_ACCESS.map(module => (
@@ -447,31 +449,31 @@ export default function StaffAccessPage() {
                                 </Grid>
                                 <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-                                        Selected: {formData.modules.length} / {MODULE_ACCESS.length} modules
+                                        {t('admin.staff_access.selected_modules').replace('{n}', String(formData.modules.length)).replace('{total}', String(MODULE_ACCESS.length))}
                                     </Typography>
                                     <Button
                                         size="small"
                                         sx={{ ml: 2, color: binThemeTokens.gold, fontSize: '0.65rem' }}
                                         onClick={() => setFormData(p => ({ ...p, modules: MODULE_ACCESS.map(m => m.key) }))}
-                                    >SELECT ALL</Button>
+                                    >{t('admin.staff_access.select_all_btn')}</Button>
                                     <Button
                                         size="small"
                                         sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}
                                         onClick={() => setFormData(p => ({ ...p, modules: [] }))}
-                                    >CLEAR</Button>
+                                    >{t('admin.staff_access.clear_btn')}</Button>
                                 </Box>
                             </Grid>
                         </Grid>
                     </DialogContent>
                     <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Button onClick={() => setDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
+                        <Button onClick={() => setDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('admin.staff_access.cancel_btn')}</Button>
                         <Button
                             variant="contained"
                             onClick={handleSubmit}
                             disabled={submitting || !formData.displayName || !formData.email}
                             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                         >
-                            {submitting ? 'SAVING...' : editMode ? 'UPDATE ACCESS' : 'CREATE STAFF MEMBER'}
+                            {submitting ? t('admin.staff_access.saving_btn') : editMode ? t('admin.staff_access.update_btn') : t('admin.staff_access.create_btn')}
                         </Button>
                     </DialogActions>
                 </Dialog>

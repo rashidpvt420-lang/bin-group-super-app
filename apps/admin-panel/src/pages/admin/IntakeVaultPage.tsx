@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, 
+import { useLanguage } from '@bin/shared';
+import {
+    Box,
     Typography, 
     Paper, 
     Table, 
@@ -97,6 +98,7 @@ interface IntakeSubmission {
 }
 
 export const IntakeVaultPage: React.FC = () => {
+    const { t, isRTL } = useLanguage();
     const [submissions, setSubmissions] = useState<IntakeSubmission[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedIntake, setSelectedIntake] = useState<IntakeSubmission | null>(null);
@@ -325,19 +327,19 @@ export const IntakeVaultPage: React.FC = () => {
     }
 
     return (
-        <Box sx={{ p: 6, bgcolor: '#020617', minHeight: '100vh' }}>
+        <Box sx={{ p: 6, bgcolor: '#020617', minHeight: '100vh', direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1, letterSpacing: -1 }}>
-                        INTAKE VAULT
+                        {t('admin.intake_vault.page_title')}
                     </Typography>
                     <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 1 }}>
-                        SOVEREIGN QUEUE FOR INSTITUTIONAL ASSET SUBMISSIONS
+                        {t('admin.intake_vault.page_subtitle')}
                     </Typography>
                 </Box>
-                <Chip 
-                    label="VAULT ENCRYPTED" 
-                    icon={<ShieldCheck size={16} color={binThemeTokens.gold} />} 
+                <Chip
+                    label={t('admin.intake_vault.vault_encrypted_chip')}
+                    icon={<ShieldCheck size={16} color={binThemeTokens.gold} />}
                     sx={{ 
                         bgcolor: alpha(binThemeTokens.gold, 0.1), 
                         color: binThemeTokens.gold, 
@@ -357,12 +359,12 @@ export const IntakeVaultPage: React.FC = () => {
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, py: 3 }}>SUBMISSION ID</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>DATE</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ASSETS</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TIER</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>AI STATUS</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }} align="right">ACTIONS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, py: 3 }}>{t('admin.intake_vault.col_submission_id')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.intake_vault.col_date')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.intake_vault.col_assets')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.intake_vault.col_tier')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.intake_vault.col_ai_status')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }} align="right">{t('admin.intake_vault.col_actions')}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -376,8 +378,8 @@ export const IntakeVaultPage: React.FC = () => {
                                     </Stack>
                                 </TableCell>
                                 <TableCell>
-                                    <Chip 
-                                        label={`${intake.properties?.length || 0} Assets`} 
+                                    <Chip
+                                        label={t('admin.intake_vault.assets_chip').replace('{count}', String(intake.properties?.length || 0))}
                                         size="small" 
                                         variant="outlined"
                                         icon={<Building2 size={12} />}
@@ -427,10 +429,10 @@ export const IntakeVaultPage: React.FC = () => {
                 {selectedIntake && (
                     <Box>
                         <Typography variant="h4" fontWeight="900" sx={{ mb: 1, color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            INTAKE ANALYSIS <BrainCircuit size={32} />
+                            {t('admin.intake_vault.drawer_title')} <BrainCircuit size={32} />
                         </Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 2, display: 'block', mb: 3 }}>
-                            PROTOCOL ID: {selectedIntake.id.toUpperCase()} | ORIGIN: {selectedIntake.source}
+                            {t('admin.intake_vault.protocol_id_label').replace('{id}', selectedIntake.id.toUpperCase()).replace('{source}', selectedIntake.source)}
                         </Typography>
 
                         <Divider sx={{ mb: 4, borderColor: alpha(binThemeTokens.gold, 0.1) }} />
@@ -447,23 +449,23 @@ export const IntakeVaultPage: React.FC = () => {
                                         '& .MuiAlert-icon': { color: binThemeTokens.gold }
                                     }}
                                 >
-                                    <Typography variant="subtitle2" fontWeight="900">BIN-GENESIS AI SCORE: {selectedIntake.aiAssessment.score}/100</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>HEURISTIC MODEL: {selectedIntake.aiAssessment.aiModel}</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900">{t('admin.intake_vault.ai_score_label').replace('{score}', String(selectedIntake.aiAssessment.score))}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('admin.intake_vault.ai_model_label').replace('{model}', selectedIntake.aiAssessment.aiModel)}</Typography>
                                 </Alert>
                             )}
 
                                 <Box>
-                                    <Typography variant="overline" fontWeight="900" color="text.secondary">Portfolio Composition</Typography>
+                                    <Typography variant="overline" fontWeight="900" color="text.secondary">{t('admin.intake_vault.section_portfolio')}</Typography>
                                     <Grid container spacing={2} sx={{ mt: 1 }}>
                                         <Grid item xs={6}>
                                             <Paper sx={{ p: 2, bgcolor: '#f1f5f9', borderLeft: '4px solid #0f172a' }}>
-                                                <Typography variant="caption" color="text.secondary">TOTAL UNITS</Typography>
+                                                <Typography variant="caption" color="text.secondary">{t('admin.intake_vault.label_total_units')}</Typography>
                                                 <Typography variant="h6" fontWeight="900">{selectedIntake.portfolioSummary?.totalUnits || 0}</Typography>
                                             </Paper>
                                         </Grid>
                                         <Grid item xs={6}>
                                             <Paper sx={{ p: 2, bgcolor: '#f1f5f9', borderLeft: '4px solid #C6A75E' }}>
-                                                <Typography variant="caption" color="text.secondary">RISK PROFILE</Typography>
+                                                <Typography variant="caption" color="text.secondary">{t('admin.intake_vault.label_risk_profile')}</Typography>
                                                 <Typography variant="h6" fontWeight="900" sx={{ color: '#C6A75E' }}>{selectedIntake.aiAssessment?.riskLevel || selectedIntake.status}</Typography>
                                             </Paper>
                                         </Grid>
@@ -471,17 +473,17 @@ export const IntakeVaultPage: React.FC = () => {
                                 </Box>
 
                                 <Box>
-                                    <Typography variant="overline" fontWeight="900" color="text.secondary">Institutional Valuation Range</Typography>
+                                    <Typography variant="overline" fontWeight="900" color="text.secondary">{t('admin.intake_vault.section_valuation')}</Typography>
                                     <Paper sx={{ p: 2, bgcolor: alpha('#C6A75E', 0.05), border: '1px solid #C6A75E', display: 'flex', justifyContent: 'center', gap: 4, mt: 1 }}>
                                         <Box sx={{ textAlign: 'center' }}>
-                                            <Typography variant="caption" color="text.secondary">MINIMUM AMC</Typography>
+                                            <Typography variant="caption" color="text.secondary">{t('admin.intake_vault.label_min_amc')}</Typography>
                                             <Typography variant="h5" fontWeight="900">
                                                 {selectedIntake.aiAssessment?.valuationRange?.currency || 'AED'} {selectedIntake.aiAssessment?.valuationRange?.min?.toLocaleString() || '0'}
                                             </Typography>
                                         </Box>
                                         <Divider orientation="vertical" flexItem />
                                         <Box sx={{ textAlign: 'center' }}>
-                                            <Typography variant="caption" color="text.secondary">MAXIMUM AMC</Typography>
+                                            <Typography variant="caption" color="text.secondary">{t('admin.intake_vault.label_max_amc')}</Typography>
                                             <Typography variant="h5" fontWeight="900">
                                                 {selectedIntake.aiAssessment?.valuationRange?.currency || 'AED'} {selectedIntake.aiAssessment?.valuationRange?.max?.toLocaleString() || '0'}
                                             </Typography>
@@ -490,7 +492,7 @@ export const IntakeVaultPage: React.FC = () => {
                                 </Box>
 
                                 <Box>
-                                    <Typography variant="overline" fontWeight="900" color="text.secondary">Maintenance Forecast</Typography>
+                                    <Typography variant="overline" fontWeight="900" color="text.secondary">{t('admin.intake_vault.section_maintenance')}</Typography>
                                     <Stack spacing={1} sx={{ mt: 1 }}>
                                         {selectedIntake.aiAssessment?.maintenanceForecast?.map((forecast, i) => (
                                             <Box key={i} sx={{ p: 1.5, bgcolor: '#fafafa', borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px dashed #e2e8f0' }}>
@@ -499,62 +501,62 @@ export const IntakeVaultPage: React.FC = () => {
                                                     AED {forecast.value?.toLocaleString()} / {forecast.period}
                                                 </Typography>
                                             </Box>
-                                        )) || <Typography variant="caption">No forecast data generated.</Typography>}
+                                        )) || <Typography variant="caption">{t('admin.intake_vault.no_forecast')}</Typography>}
                                     </Stack>
                                 </Box>
 
                                 <Box>
-                                    <Typography variant="overline" fontWeight="900" color="text.secondary">Efficiency Recommendations</Typography>
+                                    <Typography variant="overline" fontWeight="900" color="text.secondary">{t('admin.intake_vault.section_efficiency')}</Typography>
                                     <Stack spacing={1} sx={{ mt: 1 }}>
                                         {selectedIntake.aiAssessment?.efficiencyRecommendations?.map((rec, i) => (
                                             <Box key={i} sx={{ p: 1.5, bgcolor: '#fff', border: '1px solid #f1f5f9', borderRadius: 2, display: 'flex', gap: 2 }}>
                                                 <CheckCircle size={16} color="#C6A75E" style={{ flexShrink: 0 }} />
                                                 <Typography variant="body2">{rec}</Typography>
                                             </Box>
-                                        )) || <Typography variant="caption">No recommendations available.</Typography>}
+                                        )) || <Typography variant="caption">{t('admin.intake_vault.no_recommendations')}</Typography>}
                                     </Stack>
                                 </Box>
 
                                 <Box sx={{ mt: 4, p: 3, border: '1px solid #e2e8f0', borderRadius: 4, bgcolor: '#f8fafc' }}>
                                     <Typography variant="subtitle2" fontWeight="900" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <User size={18} /> CONTACT INFORMATION
+                                        <User size={18} /> {t('admin.intake_vault.section_contact')}
                                     </Typography>
                                     {selectedIntake.contactInfo?.email ? (
                                         <Stack spacing={1}>
-                                            <Typography variant="body2"><b>Entity:</b> {selectedIntake.contactInfo.name}</Typography>
-                                            <Typography variant="body2"><b>Email:</b> {selectedIntake.contactInfo.email}</Typography>
-                                            <Typography variant="body2"><b>License:</b> {selectedIntake.contactInfo.licenseNumber}</Typography>
+                                            <Typography variant="body2"><b>{t('admin.intake_vault.contact_entity')}</b> {selectedIntake.contactInfo.name}</Typography>
+                                            <Typography variant="body2"><b>{t('admin.intake_vault.contact_email')}</b> {selectedIntake.contactInfo.email}</Typography>
+                                            <Typography variant="body2"><b>{t('admin.intake_vault.contact_license')}</b> {selectedIntake.contactInfo.licenseNumber}</Typography>
                                         </Stack>
                                     ) : (
                                         <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                                            Guest submission — no contact profile linked yet.
+                                            {t('admin.intake_vault.guest_submission')}
                                         </Typography>
                                     )}
                                 </Box>
 
                                 <Box sx={{ p: 3, border: '1px solid #e2e8f0', borderRadius: 4, bgcolor: '#f8fafc' }}>
-                                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>PROPERTY SUMMARY</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>{t('admin.intake_vault.section_property')}</Typography>
                                     <Stack spacing={1}>
                                         {(selectedIntake.properties || []).map((property, index) => (
                                             <Typography key={property.id || index} variant="body2">
                                                 <b>{property.propertyType || property.subType || 'Property'}:</b> {property.address || property.area || 'No address'} | Units: {property.units || 1} | Emirate: {property.emirate || 'N/A'}
                                             </Typography>
                                         ))}
-                                        {(selectedIntake.properties || []).length === 0 && <Typography variant="body2">No property payload attached.</Typography>}
+                                        {(selectedIntake.properties || []).length === 0 && <Typography variant="body2">{t('admin.intake_vault.no_property_payload')}</Typography>}
                                     </Stack>
                                 </Box>
 
                                 <Box sx={{ p: 3, border: '1px solid #e2e8f0', borderRadius: 4, bgcolor: '#f8fafc' }}>
-                                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>CONTRACT / ADD-ONS / PAYMENT</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>{t('admin.intake_vault.section_contract')}</Typography>
                                     <Stack spacing={1}>
-                                        <Typography variant="body2"><b>Contract:</b> {selectedIntake.selectedPlan?.name || selectedIntake.selectedPlan?.packageName || selectedIntake.contractType || 'N/A'}</Typography>
-                                        <Typography variant="body2"><b>Add-ons:</b> {(selectedIntake.selectedAddOns || selectedIntake.addOns || []).join(', ') || 'None'}</Typography>
-                                        <Typography variant="body2"><b>Payment:</b> {selectedIntake.paymentStatus || selectedIntake.paymentState || 'N/A'} | {selectedIntake.payment?.method || 'No method'} | AED {(selectedIntake.payment?.amount || 0).toLocaleString()}</Typography>
+                                        <Typography variant="body2"><b>{t('admin.intake_vault.contract_label')}</b> {selectedIntake.selectedPlan?.name || selectedIntake.selectedPlan?.packageName || selectedIntake.contractType || 'N/A'}</Typography>
+                                        <Typography variant="body2"><b>{t('admin.intake_vault.addons_label')}</b> {(selectedIntake.selectedAddOns || selectedIntake.addOns || []).join(', ') || t('admin.intake_vault.none_label')}</Typography>
+                                        <Typography variant="body2"><b>{t('admin.intake_vault.payment_label')}</b> {selectedIntake.paymentStatus || selectedIntake.paymentState || 'N/A'} | {selectedIntake.payment?.method || t('admin.intake_vault.no_method_label')} | AED {(selectedIntake.payment?.amount || 0).toLocaleString()}</Typography>
                                     </Stack>
                                 </Box>
 
                                 <Box sx={{ p: 3, border: '1px solid #e2e8f0', borderRadius: 4, bgcolor: '#f8fafc' }}>
-                                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>UPLOADED DOCUMENTS</Typography>
+                                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>{t('admin.intake_vault.section_documents')}</Typography>
                                     <Stack spacing={1}>
                                         {selectedIntake.proofDocuments ? Object.entries(selectedIntake.proofDocuments).map(([key, docData]: [string, any]) => (
                                             <Button key={key} href={docData?.url} target="_blank" rel="noreferrer" variant="outlined" size="small" sx={{ justifyContent: 'space-between', textTransform: 'none' }}>
@@ -566,12 +568,12 @@ export const IntakeVaultPage: React.FC = () => {
                                                 KYC: {key.toUpperCase()}
                                             </Button>
                                         ))}
-                                        {(!selectedIntake.proofDocuments && !selectedIntake.kycUrls) && <Typography variant="body2">No document URLs attached.</Typography>}
+                                        {(!selectedIntake.proofDocuments && !selectedIntake.kycUrls) && <Typography variant="body2">{t('admin.intake_vault.no_documents')}</Typography>}
                                     </Stack>
                                 </Box>
 
                                 <TextField
-                                    label="Clarification note"
+                                    label={t('admin.intake_vault.clarification_note_label')}
                                     multiline
                                     minRows={3}
                                     value={clarificationNote}
@@ -591,27 +593,27 @@ export const IntakeVaultPage: React.FC = () => {
                                         }}
                                         disabled={selectedIntake.status === 'CONVERTED_TO_OWNER'}
                                     >
-                                        {selectedIntake.status === 'CONVERTED_TO_OWNER' ? 'INTAKE COMPLETED' : 'CONVERT TO OWNER'}
+                                        {selectedIntake.status === 'CONVERTED_TO_OWNER' ? t('admin.intake_vault.intake_completed_btn') : t('admin.intake_vault.convert_to_owner_btn')}
                                     </Button>
-                                    <Button 
-                                        variant="outlined" 
+                                    <Button
+                                        variant="outlined"
                                         color="error"
                                         startIcon={<XCircle />}
                                         onClick={() => handleReject(selectedIntake.id)}
-                                        sx={{ 
-                                            fontWeight: 900, 
+                                        sx={{
+                                            fontWeight: 900,
                                             borderColor: binThemeTokens.danger,
                                             color: binThemeTokens.danger
                                         }}
                                     >
-                                        REJECT
+                                        {t('admin.intake_vault.reject_btn')}
                                     </Button>
                                     <Button
                                         variant="outlined"
                                         onClick={() => handleClarification(selectedIntake.id)}
                                         sx={{ fontWeight: 900 }}
                                     >
-                                        REQUEST CLARIFICATION
+                                        {t('admin.intake_vault.request_clarification_btn')}
                                     </Button>
                                 </Stack>
                             </Stack>

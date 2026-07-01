@@ -1,6 +1,7 @@
 // apps/admin-panel/src/pages/dashboard/DashboardPage.tsx
 
 import React, { useEffect, useState } from 'react';
+import { useLanguage } from '@bin/shared';
 import {
     Alert,
     Box,
@@ -191,6 +192,33 @@ const getHealth = (source: any, key: string) => source?.launchHealth?.[key] || s
 
 export default function DashboardPage() {
     const navigate = useNavigate();
+    const { t, isRTL } = useLanguage();
+    const kpiLabels: Record<string, string> = {
+        totalProperties: t('admin.dashboard.kpi_total_properties'),
+        totalUnits: t('admin.dashboard.kpi_total_units'),
+        activeTenants: t('admin.dashboard.kpi_active_tenants'),
+        pendingTenantInvites: t('admin.dashboard.kpi_pending_invites'),
+        openMissions: t('admin.dashboard.kpi_open_missions'),
+        slaBreaches: t('admin.dashboard.kpi_sla_breaches'),
+        nearBreaches: t('admin.dashboard.kpi_near_breaches'),
+        emergencyRequests: t('admin.dashboard.kpi_emergency_requests'),
+        activeTechnicians: t('admin.dashboard.kpi_active_technicians'),
+        activeBrokers: t('admin.dashboard.kpi_active_brokers'),
+        pendingOwnerApprovals: t('admin.dashboard.kpi_pending_owner_approvals'),
+        pendingTechnicianApprovals: t('admin.dashboard.kpi_pending_technician_approvals'),
+        pendingPaymentVerifications: t('admin.dashboard.kpi_pending_payment_verifications'),
+        pendingBrokerCommissions: t('admin.dashboard.kpi_pending_broker_commissions'),
+        activeContracts: t('admin.dashboard.kpi_active_contracts'),
+        propertyPassports: t('admin.dashboard.kpi_property_passports'),
+        documentsUploaded: t('admin.dashboard.kpi_documents_uploaded'),
+        expiredDocs: t('admin.dashboard.kpi_expired_docs'),
+        auditEventsToday: t('admin.dashboard.kpi_audit_events_today'),
+        orphanRecords: t('admin.dashboard.kpi_orphan_records'),
+        totalCollections: t('admin.dashboard.kpi_total_collections'),
+        pendingLiquidity: t('admin.dashboard.kpi_pending_liquidity'),
+        overduePayments: t('admin.dashboard.kpi_overdue_payments'),
+        payrollPending: t('admin.dashboard.kpi_payroll_pending'),
+    };
     const [lastSync, setLastSync] = useState<Date>(new Date());
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [summary, setSummary] = useState<any>({});
@@ -285,26 +313,26 @@ export default function DashboardPage() {
         unsubscribers.push(onSnapshot(query(collection(db, 'intake_submissions'), where('status', 'in', PENDING_OWNER_STATUSES)), (snap) => {
             const items = snap.docs.map((row) => {
                 const data = row.data();
-                return { id: row.id, origin: 'Owner onboarding', type: 'OWNER_ONBOARDING', linkedName: data.companyProfile?.name || data.ownerEmail || data.ownerUid || data.ownerId, createdAt: data.submittedAt || data.createdAt, ...data };
+                return { id: row.id, origin: t('admin.dashboard.origin_owner_onboarding'), type: 'OWNER_ONBOARDING', linkedName: data.companyProfile?.name || data.ownerEmail || data.ownerUid || data.ownerId, createdAt: data.submittedAt || data.createdAt, ...data };
             });
             updateKPI('pendingOwnerApprovals', items.length);
             setApprovalQueue((prev) => [...prev.filter((item) => item.type !== 'OWNER_ONBOARDING'), ...items].sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)));
         }, (err) => handleKPIError('pendingOwnerApprovals', err)));
 
         unsubscribers.push(onSnapshot(query(collection(db, 'users'), where('role', '==', 'technician'), where('status', 'in', PENDING_TECHNICIAN_STATUSES)), (snap) => {
-            const items = snap.docs.map((row) => ({ id: row.id, origin: 'Technician onboarding', type: 'TECH_ONBOARD', linkedName: row.data().displayName || row.data().email || row.id, createdAt: row.data().createdAt, ...row.data() }));
+            const items = snap.docs.map((row) => ({ id: row.id, origin: t('admin.dashboard.origin_tech_onboard'), type: 'TECH_ONBOARD', linkedName: row.data().displayName || row.data().email || row.id, createdAt: row.data().createdAt, ...row.data() }));
             updateKPI('pendingTechnicianApprovals', items.length);
             setApprovalQueue((prev) => [...prev.filter((item) => item.type !== 'TECH_ONBOARD'), ...items].sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)));
         }, (err) => handleKPIError('pendingTechnicianApprovals', err)));
 
         unsubscribers.push(onSnapshot(query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATES)), (snap) => {
-            const items = snap.docs.map((row) => ({ id: row.id, type: 'PAYMENT_PROOF', origin: 'Payment verification', linkedName: row.data().ownerEmail || row.data().tenantEmail || row.data().payerEmail || row.id, createdAt: row.data().createdAt || row.data().submittedAt, ...row.data() }));
+            const items = snap.docs.map((row) => ({ id: row.id, type: 'PAYMENT_PROOF', origin: t('admin.dashboard.origin_payment_verification'), linkedName: row.data().ownerEmail || row.data().tenantEmail || row.data().payerEmail || row.id, createdAt: row.data().createdAt || row.data().submittedAt, ...row.data() }));
             updateKPI('pendingPaymentVerifications', items.length);
             setPaymentProofs(items.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)).slice(0, 5));
         }, (err) => handleKPIError('pendingPaymentVerifications', err)));
 
         unsubscribers.push(onSnapshot(query(collection(db, 'broker_commissions'), where('status', 'in', PENDING_COMMISSION_STATES)), (snap) => {
-            const items = snap.docs.map((row) => ({ id: row.id, type: 'BROKER_COMMISSION', origin: 'Broker commission', linkedName: row.data().brokerName || row.data().brokerEmail || row.data().brokerId || row.id, createdAt: row.data().createdAt || row.data().submittedAt, ...row.data() }));
+            const items = snap.docs.map((row) => ({ id: row.id, type: 'BROKER_COMMISSION', origin: t('admin.dashboard.origin_broker_commission'), linkedName: row.data().brokerName || row.data().brokerEmail || row.data().brokerId || row.id, createdAt: row.data().createdAt || row.data().submittedAt, ...row.data() }));
             updateKPI('pendingBrokerCommissions', items.length);
             setCommissionQueue(items.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt)).slice(0, 5));
         }, (err) => handleKPIError('pendingBrokerCommissions', err)));
@@ -385,16 +413,16 @@ export default function DashboardPage() {
     }, []);
 
     const launchHealthRows: LaunchHealthRow[] = [
-        { label: 'Main App Build', status: getHealth(summary, 'mainAppBuild'), detail: 'Production route smoke' },
-        { label: 'Command Panel Build', status: getHealth(summary, 'commandPanelBuild'), detail: 'Internal operations shell' },
-        { label: 'Owner App Build', status: getHealth(summary, 'ownerAppBuild'), detail: 'Owner portal deploy' },
-        { label: 'Functions Deploy', status: getHealth(summary, 'functionsDeploy'), detail: 'Cloud Functions health' },
-        { label: 'Firestore Rules', status: getHealth(summary, 'firestoreRules'), detail: 'Rules hardening proof' },
-        { label: 'Storage Rules', status: getHealth(summary, 'storageRules'), detail: 'Evidence access rules' },
-        { label: 'App Check', status: getHealth(summary, 'appCheck'), detail: 'Production site key' },
-        { label: 'Payment Verification', status: getHealth(summary, 'paymentVerification'), detail: 'Live or manual proof queue' },
-        { label: 'Branded Email', status: getHealth(summary, 'brandedEmail'), detail: 'Outbound sender status' },
-        { label: 'BIN Connect', status: getHealth(summary, 'binConnect'), detail: 'WhatsApp/webhook health' }
+        { label: t('admin.dashboard.health_main_app_build'), status: getHealth(summary, 'mainAppBuild'), detail: t('admin.dashboard.health_main_app_build_detail') },
+        { label: t('admin.dashboard.health_command_panel_build'), status: getHealth(summary, 'commandPanelBuild'), detail: t('admin.dashboard.health_command_panel_build_detail') },
+        { label: t('admin.dashboard.health_owner_app_build'), status: getHealth(summary, 'ownerAppBuild'), detail: t('admin.dashboard.health_owner_app_build_detail') },
+        { label: t('admin.dashboard.health_functions_deploy'), status: getHealth(summary, 'functionsDeploy'), detail: t('admin.dashboard.health_functions_deploy_detail') },
+        { label: t('admin.dashboard.health_firestore_rules'), status: getHealth(summary, 'firestoreRules'), detail: t('admin.dashboard.health_firestore_rules_detail') },
+        { label: t('admin.dashboard.health_storage_rules'), status: getHealth(summary, 'storageRules'), detail: t('admin.dashboard.health_storage_rules_detail') },
+        { label: t('admin.dashboard.health_app_check'), status: getHealth(summary, 'appCheck'), detail: t('admin.dashboard.health_app_check_detail') },
+        { label: t('admin.dashboard.health_payment_verification'), status: getHealth(summary, 'paymentVerification'), detail: t('admin.dashboard.health_payment_verification_detail') },
+        { label: t('admin.dashboard.health_branded_email'), status: getHealth(summary, 'brandedEmail'), detail: t('admin.dashboard.health_branded_email_detail') },
+        { label: t('admin.dashboard.health_bin_connect'), status: getHealth(summary, 'binConnect'), detail: t('admin.dashboard.health_bin_connect_detail') }
     ];
 
     const verifiedMonthly = Number(summary.monthlyCollections || summary.mrr || summary.monthlyRecurringRevenue || summary.totalCollections || 0);
@@ -406,13 +434,13 @@ export default function DashboardPage() {
         const kpi = kpis[key];
         const isEmpty = kpi.value === 0 || kpi.value === 'AED 0';
         const borderColor = kpi.status === 'denied' || kpi.status === 'error' ? binThemeTokens.danger : alpha(binThemeTokens.gold, 0.1);
-        const value = kpi.status === 'denied' ? 'ACCESS DENIED' : kpi.status === 'error' ? 'ERROR LOADING' : kpi.status === 'loading' ? 'Loading' : kpi.value;
+        const value = kpi.status === 'denied' ? t('admin.dashboard.access_denied') : kpi.status === 'error' ? t('admin.dashboard.error_loading') : kpi.status === 'loading' ? t('admin.dashboard.loading_label') : kpi.value;
         return (
             <Paper key={key} onClick={() => kpi.path && navigate(kpi.path)} sx={{ p: 2, bgcolor: binThemeTokens.graphite, border: `1px solid ${borderColor}`, borderRadius: 4, cursor: kpi.path ? 'pointer' : 'default', minHeight: 126 }}>
                 <Box sx={{ color: kpi.status === 'denied' || kpi.status === 'error' ? binThemeTokens.danger : kpi.color, mb: 1 }}>{kpi.status === 'denied' ? <Lock size={18} /> : kpi.icon}</Box>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>{kpi.label}</Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block' }}>{kpiLabels[key] || kpi.label}</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 950, color: isEmpty ? 'rgba(255,255,255,0.2)' : '#fff' }}>{value}</Typography>
-                {isEmpty && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.15)', fontWeight: 700, fontStyle: 'italic' }}>No records yet</Typography>}
+                {isEmpty && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.15)', fontWeight: 700, fontStyle: 'italic' }}>{t('admin.dashboard.no_records')}</Typography>}
             </Paper>
         );
     };
@@ -421,29 +449,29 @@ export default function DashboardPage() {
         <TableRow key={`${item.type}-${item.id}`} hover>
             <TableCell sx={{ fontWeight: 700 }}>{item.origin}</TableCell>
             <TableCell><Chip label={item.type || 'Standard'} size="small" sx={{ fontSize: '0.65rem', height: 20, fontWeight: 900 }} /></TableCell>
-            <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{item.linkedName || item.userId || 'Not linked'}</TableCell>
+            <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{item.linkedName || item.userId || t('admin.dashboard.not_linked')}</TableCell>
             <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{formatDate(item.createdAt || item.submittedAt)}</TableCell>
-            <TableCell align="right"><Button size="small" variant="outlined" onClick={() => navigate(reviewPathFor(item))} sx={{ fontWeight: 900, fontSize: '0.65rem' }}>REVIEW</Button></TableCell>
+            <TableCell align="right"><Button size="small" variant="outlined" onClick={() => navigate(reviewPathFor(item))} sx={{ fontWeight: 900, fontSize: '0.65rem' }}>{t('admin.dashboard.review_btn')}</Button></TableCell>
         </TableRow>
     )) : (
         <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6, color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{empty}</TableCell></TableRow>
     );
 
     return (
-        <AdminPageFrame title="Executive Command Center" subtitle="HARD-LIVE OPERATIONS TERMINAL" lastUpdated={lastSync} onRefresh={() => window.location.reload()}>
-            <Box sx={{ pb: 8 }}>
+        <AdminPageFrame title={t('admin.dashboard.page_title')} subtitle={t('admin.dashboard.page_subtitle')} lastUpdated={lastSync} onRefresh={() => window.location.reload()}>
+            <Box sx={{ pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
                 <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1, mb: 4, '&::-webkit-scrollbar': { height: 4 } }}>
-                    <Button startIcon={<Plus />} variant="contained" onClick={() => navigate('/onboard-property')}>Add Property</Button>
-                    <Button startIcon={<Upload />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/bulk-import')}>Import Tenants</Button>
-                    <Button startIcon={<CheckCircle2 />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/manual-approvals')}>Verify Payments</Button>
-                    <Button startIcon={<FileText />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/document-vault')}>Document Vault</Button>
-                    <Button startIcon={<Zap />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/admin/pricing-matrix')}>Pricing Matrix</Button>
-                    <Button startIcon={<Shield />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/orphans')}>Orphan War Room</Button>
-                    <Button startIcon={<Activity />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/ops/technicians')}>Duty Command</Button>
-                    <Button startIcon={<TrendingUp />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/reports')}>Command Report</Button>
+                    <Button startIcon={<Plus />} variant="contained" onClick={() => navigate('/onboard-property')}>{t('admin.dashboard.btn_add_property')}</Button>
+                    <Button startIcon={<Upload />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/bulk-import')}>{t('admin.dashboard.btn_import_tenants')}</Button>
+                    <Button startIcon={<CheckCircle2 />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/manual-approvals')}>{t('admin.dashboard.btn_verify_payments')}</Button>
+                    <Button startIcon={<FileText />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/document-vault')}>{t('admin.dashboard.btn_document_vault')}</Button>
+                    <Button startIcon={<Zap />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/admin/pricing-matrix')}>{t('admin.dashboard.btn_pricing_matrix')}</Button>
+                    <Button startIcon={<Shield />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/orphans')}>{t('admin.dashboard.btn_orphan_war_room')}</Button>
+                    <Button startIcon={<Activity />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/ops/technicians')}>{t('admin.dashboard.btn_duty_command')}</Button>
+                    <Button startIcon={<TrendingUp />} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => navigate('/reports')}>{t('admin.dashboard.btn_command_report')}</Button>
                 </Stack>
 
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>PORTFOLIO KPIs</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>{t('admin.dashboard.portfolio_kpis_label')}</Typography>
                 <Grid container spacing={2} sx={{ mb: 6 }}>
                     {Object.keys(kpis).map((key) => <Grid item xs={12} sm={6} md={3} lg={2.4} key={key}>{renderKPI(key)}</Grid>)}
                 </Grid>
@@ -452,13 +480,13 @@ export default function DashboardPage() {
                     <Grid item xs={12} lg={7}>
                         <Paper sx={{ p: 0, overflow: 'hidden', borderRadius: 6, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Shield color={binThemeTokens.gold} /> ACTION QUEUES</Typography>
-                                <Chip label={`${approvalQueue.length + paymentProofs.length + commissionQueue.length} AWAITING`} size="small" sx={{ fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }} />
+                                <Typography variant="h6" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}><Shield color={binThemeTokens.gold} /> {t('admin.dashboard.action_queues_title')}</Typography>
+                                <Chip label={t('admin.dashboard.awaiting_chip').replace('{count}', String(approvalQueue.length + paymentProofs.length + commissionQueue.length))} size="small" sx={{ fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }} />
                             </Box>
                             <TableContainer sx={{ maxHeight: 430 }}>
                                 <Table stickyHeader size="small">
-                                    <TableHead><TableRow><TableCell sx={{ bgcolor: '#0f172a' }}>ORIGIN</TableCell><TableCell sx={{ bgcolor: '#0f172a' }}>TYPE</TableCell><TableCell sx={{ bgcolor: '#0f172a' }}>LINKED</TableCell><TableCell sx={{ bgcolor: '#0f172a' }}>SUBMITTED</TableCell><TableCell sx={{ bgcolor: '#0f172a' }} align="right">ACTION</TableCell></TableRow></TableHead>
-                                    <TableBody>{renderQueueRows([...approvalQueue, ...paymentProofs, ...commissionQueue], 'ALL CLEAR: NO PENDING ACTIONS')}</TableBody>
+                                    <TableHead><TableRow><TableCell sx={{ bgcolor: '#0f172a' }}>{t('admin.dashboard.col_origin')}</TableCell><TableCell sx={{ bgcolor: '#0f172a' }}>{t('admin.dashboard.col_type')}</TableCell><TableCell sx={{ bgcolor: '#0f172a' }}>{t('admin.dashboard.col_linked')}</TableCell><TableCell sx={{ bgcolor: '#0f172a' }}>{t('admin.dashboard.col_submitted')}</TableCell><TableCell sx={{ bgcolor: '#0f172a' }} align="right">{t('admin.dashboard.col_action')}</TableCell></TableRow></TableHead>
+                                    <TableBody>{renderQueueRows([...approvalQueue, ...paymentProofs, ...commissionQueue], t('admin.dashboard.queue_empty'))}</TableBody>
                                 </Table>
                             </TableContainer>
                         </Paper>
@@ -466,54 +494,54 @@ export default function DashboardPage() {
 
                     <Grid item xs={12} lg={5}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><Wrench color={binThemeTokens.gold} /> LIVE OPERATIONS</Typography>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><Wrench color={binThemeTokens.gold} /> {t('admin.dashboard.live_operations_title')}</Typography>
                             <Stack spacing={2}>
                                 {operationsMissions.map((job) => (
                                     <Box key={job.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: `1px solid ${isBreached(job) ? alpha(binThemeTokens.danger, 0.35) : 'rgba(255,255,255,0.05)'}` }}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>MISSION #{job.id.substring(0, 8)}</Typography><Chip label={job.priority || 'NORMAL'} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? alpha(binThemeTokens.danger, 0.1) : 'rgba(255,255,255,0.05)', color: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? binThemeTokens.danger : 'inherit', fontWeight: 900 }} /></Box>
-                                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>{job.title || job.issueType || job.category || 'Maintenance mission'}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{job.propertyName || job.propertyTitle || propertyNamesById[job.propertyId] || 'Property not linked'}</Typography>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.dashboard.mission_label').replace('{id}', job.id.substring(0, 8))}</Typography><Chip label={job.priority || 'NORMAL'} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? alpha(binThemeTokens.danger, 0.1) : 'rgba(255,255,255,0.05)', color: String(job.priority || '').toUpperCase() === 'EMERGENCY' ? binThemeTokens.danger : 'inherit', fontWeight: 900 }} /></Box>
+                                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>{job.title || job.issueType || job.category || t('admin.dashboard.mission_fallback')}</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>{job.propertyName || job.propertyTitle || propertyNamesById[job.propertyId] || t('admin.dashboard.property_not_linked')}</Typography>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.5 }}><Box sx={{ display: 'flex', gap: 0.5 }}><Clock size={12} style={{ color: 'rgba(255,255,255,0.3)' }} /><Typography variant="caption" sx={{ color: isBreached(job) ? binThemeTokens.danger : 'rgba(255,255,255,0.3)', fontWeight: 700 }}>SLA: {formatSla(job)}</Typography></Box><Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{normalizeStatus(job.status)}</Typography></Box>
                                     </Box>
                                 ))}
-                                {operationsMissions.length === 0 && <Box sx={{ py: 6, textAlign: 'center' }}><CheckCircle2 size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} /><Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>NO ACTIVE MISSIONS</Typography></Box>}
+                                {operationsMissions.length === 0 && <Box sx={{ py: 6, textAlign: 'center' }}><CheckCircle2 size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} /><Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{t('admin.dashboard.no_active_missions')}</Typography></Box>}
                             </Stack>
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><CheckCircle2 color={binThemeTokens.gold} /> LAUNCH HEALTH</Typography>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><CheckCircle2 color={binThemeTokens.gold} /> {t('admin.dashboard.launch_health_title')}</Typography>
                             <Stack spacing={1.5}>{launchHealthRows.map((row) => <Box key={row.label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}><Box><Typography variant="body2" sx={{ fontWeight: 800 }}>{row.label}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>{row.detail}</Typography></Box><Chip size="small" label={normalizeStatus(row.status)} sx={{ bgcolor: alpha(statusColor(row.status), 0.12), color: statusColor(row.status), fontWeight: 950 }} /></Box>)}</Stack>
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><DollarSign color={binThemeTokens.gold} /> FINANCIAL INTELLIGENCE</Typography>
-                            <Stack spacing={3}><Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>MONTHLY COLLECTIONS</Typography><Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}><Typography variant="h4" fontWeight="950">{money(verifiedMonthly)}</Typography><Typography variant="caption" sx={{ color: statusColor(growth === 'Trend unavailable' ? 'UNKNOWN' : 'READY'), fontWeight: 900 }}>{growth}</Typography></Box></Box><Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>30-DAY REVENUE (LIVE)</Typography><Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}><Typography variant="h6" fontWeight="950">{revenueTrend.status === 'loading' ? 'Loading' : revenueTrend.status === 'error' ? 'Unavailable' : `AED ${Math.round(revenueTrend.current).toLocaleString()}`}</Typography>{revenueTrend.status === 'success' && revenueTrend.growthPercent !== null && <Typography variant="caption" sx={{ color: revenueTrend.growthPercent >= 0 ? '#10b981' : binThemeTokens.danger, fontWeight: 900 }}>{revenueTrend.growthPercent >= 0 ? '+' : ''}{revenueTrend.growthPercent.toFixed(1)}%</Typography>}{revenueTrend.status === 'success' && revenueTrend.growthPercent === null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>No prior period</Typography>}</Box></Box><Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} /><Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Verified Collections</Typography><Typography variant="body2" sx={{ fontWeight: 900 }}>{kpis.totalCollections.value}</Typography></Box><Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Pending Liquidity</Typography><Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>{kpis.pendingLiquidity.value}</Typography></Box><Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>Overdue Payments</Typography><Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.danger }}>{kpis.overduePayments.value}</Typography></Box><Button fullWidth variant="outlined" sx={{ mt: 1 }} onClick={() => navigate('/transactions')}>FULL LEDGER ACCESS</Button></Stack>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><DollarSign color={binThemeTokens.gold} /> {t('admin.dashboard.financial_intelligence_title')}</Typography>
+                            <Stack spacing={3}><Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.dashboard.monthly_collections_label')}</Typography><Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}><Typography variant="h4" fontWeight="950">{money(verifiedMonthly)}</Typography><Typography variant="caption" sx={{ color: statusColor(growth === 'Trend unavailable' ? 'UNKNOWN' : 'READY'), fontWeight: 900 }}>{growth}</Typography></Box></Box><Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.dashboard.revenue_30d_label')}</Typography><Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}><Typography variant="h6" fontWeight="950">{revenueTrend.status === 'loading' ? t('admin.dashboard.loading_label') : revenueTrend.status === 'error' ? t('admin.dashboard.revenue_unavailable') : `AED ${Math.round(revenueTrend.current).toLocaleString()}`}</Typography>{revenueTrend.status === 'success' && revenueTrend.growthPercent !== null && <Typography variant="caption" sx={{ color: revenueTrend.growthPercent >= 0 ? '#10b981' : binThemeTokens.danger, fontWeight: 900 }}>{revenueTrend.growthPercent >= 0 ? '+' : ''}{revenueTrend.growthPercent.toFixed(1)}%</Typography>}{revenueTrend.status === 'success' && revenueTrend.growthPercent === null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{t('admin.dashboard.no_prior_period')}</Typography>}</Box></Box><Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} /><Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{t('admin.dashboard.verified_collections_label')}</Typography><Typography variant="body2" sx={{ fontWeight: 900 }}>{kpis.totalCollections.value}</Typography></Box><Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{t('admin.dashboard.pending_liquidity_label')}</Typography><Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.gold }}>{kpis.pendingLiquidity.value}</Typography></Box><Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{t('admin.dashboard.overdue_payments_label')}</Typography><Typography variant="body2" sx={{ fontWeight: 900, color: binThemeTokens.danger }}>{kpis.overduePayments.value}</Typography></Box><Button fullWidth variant="outlined" sx={{ mt: 1 }} onClick={() => navigate('/transactions')}>{t('admin.dashboard.full_ledger_btn')}</Button></Stack>
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><FileText color={binThemeTokens.gold} /> COMPLIANCE & DOCS</Typography>
-                            <Box sx={{ mb: 3 }}><Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>SYSTEM SECURITY STATUS</Typography><Chip label={normalizeStatus(securityStatus)} size="small" sx={{ bgcolor: alpha(statusColor(securityStatus), 0.1), color: statusColor(securityStatus), fontWeight: 900, fontSize: '0.6rem' }} /></Box><Box sx={{ height: 4, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}><LinearProgress variant="determinate" value={Math.max(0, Math.min(100, securityScore))} sx={{ height: 4, bgcolor: 'transparent', '& .MuiLinearProgress-bar': { bgcolor: statusColor(securityStatus) } }} /></Box></Box>
-                            <Stack spacing={2}><Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><Box sx={{ p: 1, bgcolor: 'rgba(59,130,246,0.1)', borderRadius: 2, color: '#3b82f6' }}><Shield size={16} /></Box><Box><Typography variant="body2" sx={{ fontWeight: 700 }}>Governance Audit</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>audit_logs listener active</Typography></Box><Typography variant="caption" sx={{ ml: 'auto', color: statusColor(kpis.auditEventsToday.status === 'success' ? 'ACTIVE' : 'UNKNOWN'), fontWeight: 900 }}>{kpis.auditEventsToday.status === 'success' ? 'ACTIVE' : 'UNKNOWN'}</Typography></Box><Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><Box sx={{ p: 1, bgcolor: 'rgba(245,158,11,0.1)', borderRadius: 2, color: '#f59e0b' }}><FileWarning size={16} /></Box><Box><Typography variant="body2" sx={{ fontWeight: 700 }}>Expired Documents</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Firestore-driven expiry check</Typography></Box><Typography variant="caption" sx={{ ml: 'auto', color: expiredDocuments ? '#f59e0b' : '#10b981', fontWeight: 900 }}>{expiredDocuments} PENDING</Typography></Box></Stack>
-                            <Button fullWidth variant="outlined" sx={{ mt: 3 }} onClick={() => navigate('/document-vault')}>OPEN VAULT</Button>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><FileText color={binThemeTokens.gold} /> {t('admin.dashboard.compliance_docs_title')}</Typography>
+                            <Box sx={{ mb: 3 }}><Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('admin.dashboard.security_status_label')}</Typography><Chip label={normalizeStatus(securityStatus)} size="small" sx={{ bgcolor: alpha(statusColor(securityStatus), 0.1), color: statusColor(securityStatus), fontWeight: 900, fontSize: '0.6rem' }} /></Box><Box sx={{ height: 4, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}><LinearProgress variant="determinate" value={Math.max(0, Math.min(100, securityScore))} sx={{ height: 4, bgcolor: 'transparent', '& .MuiLinearProgress-bar': { bgcolor: statusColor(securityStatus) } }} /></Box></Box>
+                            <Stack spacing={2}><Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><Box sx={{ p: 1, bgcolor: 'rgba(59,130,246,0.1)', borderRadius: 2, color: '#3b82f6' }}><Shield size={16} /></Box><Box><Typography variant="body2" sx={{ fontWeight: 700 }}>{t('admin.dashboard.governance_audit_label')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{t('admin.dashboard.audit_logs_active_desc')}</Typography></Box><Typography variant="caption" sx={{ ml: 'auto', color: statusColor(kpis.auditEventsToday.status === 'success' ? 'ACTIVE' : 'UNKNOWN'), fontWeight: 900 }}>{kpis.auditEventsToday.status === 'success' ? t('admin.dashboard.status_active') : t('admin.dashboard.status_unknown')}</Typography></Box><Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><Box sx={{ p: 1, bgcolor: 'rgba(245,158,11,0.1)', borderRadius: 2, color: '#f59e0b' }}><FileWarning size={16} /></Box><Box><Typography variant="body2" sx={{ fontWeight: 700 }}>{t('admin.dashboard.expired_documents_label')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{t('admin.dashboard.firestore_expiry_desc')}</Typography></Box><Typography variant="caption" sx={{ ml: 'auto', color: expiredDocuments ? '#f59e0b' : '#10b981', fontWeight: 900 }}>{t('admin.dashboard.docs_pending_count').replace('{count}', String(expiredDocuments))}</Typography></Box></Stack>
+                            <Button fullWidth variant="outlined" sx={{ mt: 3 }} onClick={() => navigate('/document-vault')}>{t('admin.dashboard.open_vault_btn')}</Button>
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12}>
                         <Paper sx={{ p: 3, borderRadius: 6, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><Activity color={binThemeTokens.gold} /> RECENT ACTIVITY</Typography>
-                            <Stack spacing={2.5}>{recentActivity.map((log) => <Box key={log.id} sx={{ display: 'flex', gap: 2 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} /><Box><Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{log.actor} <Box component="span" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>{log.action}</Box></Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700, display: 'block', mt: 0.5 }}>{log.module} • {(log.timestamp as any)?.toDate ? (log.timestamp as any).toDate().toLocaleTimeString() : 'Just now'}</Typography></Box></Box>)}{recentActivity.length === 0 && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 4 }}>NO RECENT ACTIVITY LOGGED</Typography>}</Stack>
+                            <Typography variant="h6" fontWeight="950" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}><Activity color={binThemeTokens.gold} /> {t('admin.dashboard.recent_activity_title')}</Typography>
+                            <Stack spacing={2.5}>{recentActivity.map((log) => <Box key={log.id} sx={{ display: 'flex', gap: 2 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} /><Box><Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{log.actor} <Box component="span" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>{log.action}</Box></Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 700, display: 'block', mt: 0.5 }}>{log.module} • {(log.timestamp as any)?.toDate ? (log.timestamp as any).toDate().toLocaleTimeString() : t('admin.dashboard.just_now')}</Typography></Box></Box>)}{recentActivity.length === 0 && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', textAlign: 'center', py: 4 }}>{t('admin.dashboard.no_recent_activity')}</Typography>}</Stack>
                         </Paper>
                     </Grid>
                 </Grid>
 
                 <Paper sx={{ p: 3, mt: 6, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 6 }}>
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center"><Box><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>COMMAND SUPPORT TERMINAL</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 600 }}>Support channels are available for critical infrastructure failure. Standard audit logs and system monitoring remain the primary path for routine operations.</Typography></Box><CeoContactButtons compact /></Stack>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} justifyContent="space-between" alignItems="center"><Box><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{t('admin.dashboard.support_terminal_overline')}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', maxWidth: 600 }}>{t('admin.dashboard.support_terminal_desc')}</Typography></Box><CeoContactButtons compact /></Stack>
                 </Paper>
             </Box>
             <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}><Alert severity={snackbar.severity} sx={{ fontWeight: 900, borderRadius: 3 }}>{snackbar.message}</Alert></Snackbar>

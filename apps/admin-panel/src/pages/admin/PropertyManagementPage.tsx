@@ -1,5 +1,6 @@
 // admin-panel/src/pages/admin/PropertyManagementPage.tsx
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '@bin/shared';
 import {
     Container,
     Paper,
@@ -54,6 +55,7 @@ interface Property {
 }
 
 export default function PropertyManagementPage() {
+    const { t, isRTL } = useLanguage();
     const [properties, setProperties] = useState<Property[]>([]);
     const [openAdd, setOpenAdd] = useState(false);
     const [openEdit, setOpenEdit] = useState(false);
@@ -203,29 +205,29 @@ export default function PropertyManagementPage() {
     };
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
+        <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 6 }}>
                 <Box>
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>
-                        ASSET REGISTRY
+                        {t('admin.property_mgmt.page_title')}
                     </Typography>
                     <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>
-                        SOVEREIGN GEOGRAPHIC INVENTORY
+                        {t('admin.property_mgmt.page_subtitle')}
                     </Typography>
                 </Box>
-                <Button 
-                    variant="contained" 
-                    startIcon={<AddIcon />} 
+                <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
                     onClick={() => setOpenAdd(true)}
-                    sx={{ 
-                        background: binThemeTokens.goldGradient, 
+                    sx={{
+                        background: binThemeTokens.goldGradient,
                         color: binThemeTokens.black,
                         fontWeight: 900,
                         px: 4,
                         borderRadius: 100
                     }}
                 >
-                    Add Institutional Asset
+                    {t('admin.property_mgmt.add_asset_btn')}
                 </Button>
             </Box>
 
@@ -238,12 +240,12 @@ export default function PropertyManagementPage() {
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, py: 3 }}>ASSET NAME</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TYPE</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ADDRESS</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ZONE / EMIRATE</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>COORDINATES</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }} align="right">ACTIONS</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, py: 3 }}>{t('admin.property_mgmt.col_asset_name')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.property_mgmt.col_type')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.property_mgmt.col_address')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.property_mgmt.col_zone_emirate')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('admin.property_mgmt.col_coordinates')}</TableCell>
+                            <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }} align="right">{t('admin.property_mgmt.col_actions')}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -264,7 +266,7 @@ export default function PropertyManagementPage() {
                                         <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                                             {prop.geo ? `${prop.geo.lat.toFixed(4)}, ${prop.geo.lng.toFixed(4)}` : prop.coordinates ? `${prop.coordinates.lat.toFixed(4)}, ${prop.coordinates.lng.toFixed(4)}` : 'N/A'}
                                         </Typography>
-                                        {prop.geo?.verified && <Chip label="VERIFIED" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />}
+                                        {prop.geo?.verified && <Chip label={t('admin.property_mgmt.verified_chip')} size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />}
                                     </Box>
                                 </TableCell>
                                 <TableCell align="right">
@@ -292,23 +294,23 @@ export default function PropertyManagementPage() {
                 }}
             >
                 <DialogTitle sx={{ fontWeight: 900, fontSize: '1.5rem' }}>
-                    {openAdd ? 'REGISTER NEW ASSET' : 'UPDATE ASSET DNA'}
+                    {openAdd ? t('admin.property_mgmt.dialog_add_title') : t('admin.property_mgmt.dialog_edit_title')}
                 </DialogTitle>
                 <DialogContent>
                     <Grid container spacing={3} sx={{ mt: 1 }}>
                         <Grid item xs={12} md={8}>
-                            <TextField 
-                                label="Property Name" 
-                                fullWidth 
-                                value={formData.name} 
-                                onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                            <TextField
+                                label={t('admin.property_mgmt.field_property_name')}
+                                fullWidth
+                                value={formData.name}
+                                onChange={(e) => setFormData({...formData, name: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12} md={4}>
-                            <TextField 
-                                select 
-                                label="Property Type" 
-                                fullWidth 
+                            <TextField
+                                select
+                                label={t('admin.property_mgmt.field_property_type')}
+                                fullWidth
                                 value={formData.propertyType}
                                 onChange={(e) => setFormData({...formData, propertyType: e.target.value as any})}
                             >
@@ -319,69 +321,69 @@ export default function PropertyManagementPage() {
                             </TextField>
                         </Grid>
                         <Grid item xs={12}>
-                            <TextField 
-                                label="Full Physical Address" 
-                                fullWidth 
-                                multiline 
-                                rows={2} 
+                            <TextField
+                                label={t('admin.property_mgmt.field_address')}
+                                fullWidth
+                                multiline
+                                rows={2}
                                 value={formData.address}
                                 onChange={(e) => setFormData({...formData, address: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={6}>
-                            <TextField 
-                                label="Latitude" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_latitude')}
+                                fullWidth
                                 value={formData.lat}
                                 onChange={(e) => setFormData({...formData, lat: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={6}>
-                            <TextField 
-                                label="Longitude" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_longitude')}
+                                fullWidth
                                 value={formData.lng}
                                 onChange={(e) => setFormData({...formData, lng: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
-                            <TextField 
-                                label="Emirate" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_emirate')}
+                                fullWidth
                                 value={formData.emirate}
                                 onChange={(e) => setFormData({...formData, emirate: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
-                            <TextField 
-                                label="Service Zone" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_service_zone')}
+                                fullWidth
                                 value={formData.serviceZone}
                                 onChange={(e) => setFormData({...formData, serviceZone: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
-                            <TextField 
-                                label="Units Count" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_units_count')}
+                                fullWidth
                                 type="number"
                                 value={formData.unitsCount}
                                 onChange={(e) => setFormData({...formData, unitsCount: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
-                            <TextField 
-                                label="Floors Count" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_floors_count')}
+                                fullWidth
                                 type="number"
                                 value={formData.floorsCount}
                                 onChange={(e) => setFormData({...formData, floorsCount: e.target.value})}
                             />
                         </Grid>
                         <Grid item xs={12}>
-                            <TextField 
-                                label="Owner UID (Association)" 
-                                fullWidth 
+                            <TextField
+                                label={t('admin.property_mgmt.field_owner_uid')}
+                                fullWidth
                                 value={formData.ownerId}
                                 onChange={(e) => setFormData({...formData, ownerId: e.target.value})}
                             />
@@ -389,19 +391,19 @@ export default function PropertyManagementPage() {
                     </Grid>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => { setOpenAdd(false); setOpenEdit(false); resetForm(); }}>Cancel</Button>
-                    <Button 
-                        variant="contained" 
+                    <Button onClick={() => { setOpenAdd(false); setOpenEdit(false); resetForm(); }}>{t('admin.property_mgmt.cancel_btn')}</Button>
+                    <Button
+                        variant="contained"
                         onClick={openAdd ? handleAddProperty : handleUpdateProperty}
-                        sx={{ 
-                            borderRadius: 100, 
-                            px: 4, 
+                        sx={{
+                            borderRadius: 100,
+                            px: 4,
                             fontWeight: 900,
                             background: binThemeTokens.goldGradient,
                             color: binThemeTokens.black
                         }}
                     >
-                        {openAdd ? 'Finalize Asset' : 'Save DNA Changes'}
+                        {openAdd ? t('admin.property_mgmt.finalize_btn') : t('admin.property_mgmt.save_changes_btn')}
                     </Button>
                 </DialogActions>
             </Dialog>

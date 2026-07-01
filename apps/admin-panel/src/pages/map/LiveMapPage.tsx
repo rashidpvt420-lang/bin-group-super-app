@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '@bin/shared';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { 
@@ -43,6 +44,7 @@ const Icon = ({ icon: IconComponent, size = 16, className = "", color = "current
 
 
 export default function LiveMapPage() {
+  const { t, isRTL } = useLanguage();
   const [tickets, setTickets] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
@@ -222,7 +224,7 @@ export default function LiveMapPage() {
   const availableTechniciansCount = (technicians || []).filter((t) => t.status === 'Available').length;
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#020617', overflow: 'hidden' }}>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#020617', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr' }}>
       
       {/* 🟢 TOP HEADER: REAL-TIME PORTFOLIO STATS */}
       <Box sx={{ 
@@ -236,23 +238,23 @@ export default function LiveMapPage() {
           </div>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>
-              BIN-GROUP <Box component="span" sx={{ color: '#10b981' }}>MISSION CONTROL</Box>
+              BIN-GROUP <Box component="span" sx={{ color: '#10b981' }}>{t('admin.live_map.header_title')}</Box>
             </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold' }}>VERSION 3.0 • DUBAI-HQ PORTFOLIO</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold' }}>{t('admin.live_map.header_sub')}</Typography>
           </Box>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 6 }}>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>OPEN TICKETS</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>{t('admin.live_map.stat_open_tickets')}</Typography>
             <Typography variant="h6" sx={{ fontWeight: 900, color: '#10b981' }}>{openTicketsCount}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>DISPATCHED TICKETS</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>{t('admin.live_map.stat_dispatched_tickets')}</Typography>
             <Typography variant="h6" sx={{ fontWeight: 900, color: '#3b82f6' }}>{dispatchedTicketsCount}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>TECHNICIANS AVAILABLE</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>{t('admin.live_map.stat_technicians_avail')}</Typography>
             <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff' }}>{availableTechniciansCount}/{(technicians || []).length}</Typography>
           </Box>
         </Box>
@@ -273,10 +275,10 @@ export default function LiveMapPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
               <Icon icon={Radio} className="text-emerald-500 animate-ping" size={16} />
               <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fff', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-                AI Autonomous <Box component="span" sx={{ color: '#10b981' }}>Dispatch Feed</Box>
+                {t('admin.live_map.feed_title')} <Box component="span" sx={{ color: '#10b981' }}>{t('admin.live_map.feed_title_highlight')}</Box>
               </Typography>
             </Box>
-            <Typography variant="caption" sx={{ color: '#64748b' }}>Streaming live telemetry from Dubai Residential Clusters...</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b' }}>{t('admin.live_map.feed_subtitle')}</Typography>
           </Box>
 
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -311,7 +313,7 @@ export default function LiveMapPage() {
                        {ticket.status === 'UNASSIGNED' ? <Icon icon={Zap} className="text-blue-400" size={12} /> : <Icon icon={Brain} className="text-emerald-500" size={12} />}
                     </div>
                     <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black' }}>
-                      {ticket.status === 'UNASSIGNED' ? "AI INTERCEPTING..." : `AI DISPATCHED: ${ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'Technician'}`}
+                      {ticket.status === 'UNASSIGNED' ? t('admin.live_map.ai_intercepting') : t('admin.live_map.ai_dispatched').replace('{name}', ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'Technician')}
                     </Typography>
                   </Box>
                   <Typography variant="caption" sx={{ color: '#334155', fontWeight: 'bold' }}>{ticket.timestamp}</Typography>
@@ -323,11 +325,11 @@ export default function LiveMapPage() {
                       <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', mt: 0.5 }}>{ticket.issueDescription || ticket.issue}</Typography>
                    </Box>
                    {ticket.status === 'UNASSIGNED' && (
-                     <Button 
-                       size="small" 
+                     <Button
+                       size="small"
                        onClick={() => handleAssignClick(ticket)}
                        sx={{ bgcolor: '#fff', color: '#000', borderRadius: '8px', fontSize: '9px', fontWeight: 900, '&:hover': { bgcolor: '#cbd5e1' } }}>
-                        MANUAL OVERRIDE
+                        {t('admin.live_map.manual_override_btn')}
                      </Button>
                    )}
                 </Box>
@@ -341,26 +343,26 @@ export default function LiveMapPage() {
           {/* Map Controls Floating Header */}
           <Box sx={{ position: 'absolute', top: 24, left: 24, right: 24, zIndex: 100, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
              <Paper sx={{ p: 1, display: 'flex', gap: 1, bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <Button startIcon={<Icon icon={Layers} size={16}/>} sx={{ color: '#fff', textTransform: 'none', fontWeight: 900 }}>Portfolio Risk Heatmap</Button>
-                <Button startIcon={<Icon icon={Activity} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>Tech Locations</Button>
-                <Button startIcon={<Icon icon={Waves} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>Unit Telemetry</Button>
+                <Button startIcon={<Icon icon={Layers} size={16}/>} sx={{ color: '#fff', textTransform: 'none', fontWeight: 900 }}>{t('admin.live_map.layer_heatmap')}</Button>
+                <Button startIcon={<Icon icon={Activity} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>{t('admin.live_map.layer_locations')}</Button>
+                <Button startIcon={<Icon icon={Waves} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>{t('admin.live_map.layer_telemetry')}</Button>
              </Paper>
 
              <Paper sx={{ p: 1, display: 'flex', gap: 1, bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black', alignSelf: 'center', ml: 1, mr: 1 }}>VERTICAL DEPTH:</Typography>
-                <Button size="small" sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1.5, fontSize: 10, fontWeight: 900 }}>ALL</Button>
-                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>F1-40</Button>
-                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>F41-80</Button>
-                <Button size="small" sx={{ color: '#10b981', fontSize: 10, fontWeight: 900 }}>MEGA (120+)</Button>
+                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black', alignSelf: 'center', ml: 1, mr: 1 }}>{t('admin.live_map.vertical_depth')}</Typography>
+                <Button size="small" sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1.5, fontSize: 10, fontWeight: 900 }}>{t('admin.live_map.depth_all')}</Button>
+                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>{t('admin.live_map.depth_f1_40')}</Button>
+                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>{t('admin.live_map.depth_f41_80')}</Button>
+                <Button size="small" sx={{ color: '#10b981', fontSize: 10, fontWeight: 900 }}>{t('admin.live_map.depth_mega')}</Button>
              </Paper>
 
              <Paper sx={{ px: 2, py: 1, ml: 'auto', bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                   <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'bold' }}>LIVE TICKETS: {(tickets || []).length}</Typography>
+                   <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'bold' }}>{t('admin.live_map.live_tickets').replace('{count}', String((tickets || []).length))}</Typography>
                 </Box>
                 <Box sx={{ width: 1, height: 20, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                <Typography variant="caption" sx={{ color: '#64748b' }}>LIVE CLUSTER: MARINA BRIDGES</Typography>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>{t('admin.live_map.live_cluster')}</Typography>
              </Paper>
           </Box>
 
@@ -434,7 +436,7 @@ export default function LiveMapPage() {
                         backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1
                         }}>
                         <Typography sx={{ fontSize: '10px', fontWeight: 900 }}>
-                            {i === 1 ? 'CRITICAL RISK' : 'PENDING DISPATCH'}
+                            {i === 1 ? t('admin.live_map.critical_risk') : t('admin.live_map.pending_dispatch')}
                         </Typography>
                         </Box>
                         {i === 1 ? (
@@ -458,24 +460,24 @@ export default function LiveMapPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                <div className="bg-emerald-500 w-3 h-3 rounded-full shadow-[0_0_10px_#10b981]" />
                <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>AUTO-DISPATCH ACTIVE</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>AI identifying and routing faults</Typography>
+                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>{t('admin.live_map.status_auto_dispatch')}</Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>{t('admin.live_map.status_auto_dispatch_desc')}</Typography>
                </Box>
             </Box>
             <div className="w-[1px] h-8 bg-slate-800" />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                <div className="bg-blue-500 w-3 h-3 rounded-full shadow-[0_0_10px_#3b82f6]" />
                <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>FORENSIC SYNC PENDING</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>Specialists uploading offline data</Typography>
+                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>{t('admin.live_map.status_forensic_sync')}</Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>{t('admin.live_map.status_forensic_sync_desc')}</Typography>
                </Box>
             </Box>
             <div className="w-[1px] h-8 bg-slate-800" />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                <div className="bg-red-500 w-3 h-3 rounded-full shadow-[0_0_10px_#ef4444]" />
                <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>SLA VIOLATION RISK</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>Response time exceeds 30m target</Typography>
+                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>{t('admin.live_map.status_sla_violation')}</Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>{t('admin.live_map.status_sla_violation_desc')}</Typography>
                </Box>
             </Box>
           </Paper>
@@ -492,24 +494,24 @@ export default function LiveMapPage() {
         }}
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6" fontWeight={900}>DISPATCH TECHNICIAN</Typography>
+          <Typography variant="h6" fontWeight={900}>{t('admin.live_map.dispatch_dialog_title')}</Typography>
           <IconButton onClick={() => setDispatchDialogOpen(false)} sx={{ color: '#64748b' }}><CloseIcon /></IconButton>
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mb: 3, p: 2, bgcolor: '#020617', borderRadius: 2 }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Selected Ticket</Typography>
+            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>{t('admin.live_map.dispatch_selected_ticket')}</Typography>
             <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{selectedTicket?.unit} - {selectedTicket?.issue}</Typography>
           </Box>
 
           <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 2 }}>
             <FormControlLabel
               control={<Checkbox checked={generatePass} onChange={(e) => setGeneratePass(e.target.checked)} sx={{ color: '#10b981', '&.Mui-checked': { color: '#10b981' } }} />}
-              label={<Typography sx={{ fontWeight: 'bold', color: '#10b981' }}>Generate Security Gate Pass PDF</Typography>}
+              label={<Typography sx={{ fontWeight: 'bold', color: '#10b981' }}>{t('admin.live_map.generate_gate_pass')}</Typography>}
             />
-            <Typography variant="caption" sx={{ display: 'block', pl: 4, color: '#64748b' }}>Automatically generates a stamped PDF for immediate WhatsApp delivery to Tenant/Security.</Typography>
+            <Typography variant="caption" sx={{ display: 'block', pl: 4, color: '#64748b' }}>{t('admin.live_map.generate_gate_pass_desc')}</Typography>
           </Box>
 
-          <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, mb: 1, display: 'block' }}>Available Near Property</Typography>
+          <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, mb: 1, display: 'block' }}>{t('admin.live_map.available_near_label')}</Typography>
           <List>
             {(technicians || []).filter(tech => tech.status === 'Available').map((tech) => (
               <ListItem
@@ -533,12 +535,12 @@ export default function LiveMapPage() {
                         <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 'bold' }}>{tech.distance}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: '#94a3b8' }}>Rating: {tech.rating}</Typography>
+                        <Typography variant="caption" sx={{ color: '#94a3b8' }}>{t('admin.live_map.tech_rating_label').replace('{rating}', String(tech.rating))}</Typography>
                       </Box>
                     </Box>
                   }
                 />
-                <Button size="small" variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>Dispatch</Button>
+                <Button size="small" variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>{t('admin.live_map.dispatch_btn')}</Button>
               </ListItem>
             ))}
           </List>

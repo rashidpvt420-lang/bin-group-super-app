@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '@bin/shared';
 import {
     Box,
     Button,
@@ -105,11 +106,12 @@ const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} 
 const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
 const isRentPayment = (row: PaymentRecord) => upper(row.recordType) === 'OWNER_RENT_PAYMENT' || upper(row.transactionType) === 'RENT_COLLECTION' || upper(row.paymentType) === 'RENT_COLLECTION';
-const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.referenceFileName || row.receiptUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || 'No reference recorded';
+const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.referenceFileName || row.receiptUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || '';
 const referenceUrl = (row: PaymentRecord) => row.referenceFileUrl || row.receiptUrl || row.proofUrl || row.attachmentUrl || '';
 const submittedAmount = (row: PaymentRecord) => row.amountReceived || row.mobilizationAmount || row.amountPaid || row.rentPaid || row.amount || 0;
 
 export default function PaymentApprovalsPage() {
+    const { t, isRTL } = useLanguage();
     const [rows, setRows] = React.useState<PaymentRecord[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -279,39 +281,39 @@ export default function PaymentApprovalsPage() {
     };
 
     return (
-        <Box sx={{ p: 4, color: '#fff' }}>
+        <Box sx={{ p: 4, color: '#fff', direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 4 }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>FINANCE COMMAND</Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1 }}>Payment Approvals</Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>Review owner activation payments and rent-collection submissions before verification.</Typography>
+                    <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>{t('admin.payment_approvals.page_overline')}</Typography>
+                    <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1 }}>{t('admin.payment_approvals.page_title')}</Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>{t('admin.payment_approvals.page_subtitle')}</Typography>
                 </Box>
-                <Button startIcon={<RefreshCw size={16} />} onClick={() => window.location.reload()} sx={{ color: '#DAA520', borderColor: 'rgba(218,165,32,0.35)' }} variant="outlined">Refresh</Button>
+                <Button startIcon={<RefreshCw size={16} />} onClick={() => window.location.reload()} sx={{ color: '#DAA520', borderColor: 'rgba(218,165,32,0.35)' }} variant="outlined">{t('admin.payment_approvals.refresh_btn')}</Button>
             </Stack>
 
             {error && <Paper sx={{ p: 2, mb: 3, bgcolor: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca' }}>{error}</Paper>}
 
             <Paper sx={{ bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
                 {loading ? <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: '#DAA520' }} /></Box> : rows.length === 0 ? (
-                    <Box sx={{ p: 8, textAlign: 'center' }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 900 }}>No pending payment submissions</Typography><Typography sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>New owner payments and rent collection records will appear here in real time.</Typography></Box>
+                    <Box sx={{ p: 8, textAlign: 'center' }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 900 }}>{t('admin.payment_approvals.no_pending_title')}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>{t('admin.payment_approvals.no_pending_desc')}</Typography></Box>
                 ) : (
                     <TableContainer>
                         <Table>
-                            <TableHead><TableRow><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Type</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Owner / Tenant</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Property / Contract</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Method</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Reference</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Status</TableCell><TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell></TableRow></TableHead>
+                            <TableHead><TableRow><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_type')}</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_owner_tenant')}</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_property_contract')}</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_method')}</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_reference')}</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_amount')}</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_status')}</TableCell><TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_action')}</TableCell></TableRow></TableHead>
                             <TableBody>
                                 {rows.map((row) => {
                                     const rent = isRentPayment(row);
                                     const hasReferenceFile = Boolean(referenceUrl(row));
                                     return (
                                         <TableRow key={row.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.07)', color: '#fff' } }}>
-                                            <TableCell><Chip label={rent ? 'Rent Collection' : 'Activation'} size="small" sx={{ bgcolor: rent ? 'rgba(16,185,129,0.16)' : 'rgba(218,165,32,0.16)', color: rent ? '#10b981' : '#DAA520', fontWeight: 900 }} /></TableCell>
-                                            <TableCell><Typography sx={{ fontWeight: 900 }}>{rent ? (row.tenantName || 'Tenant') : (row.companyName || row.ownerName || 'Owner Submission')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography></TableCell>
-                                            <TableCell>{rent ? `${row.propertyName || row.propertyId || 'Property'}${row.unitNumber ? ` · Unit ${row.unitNumber}` : ''}` : (row.contractId || row.intakeId || '—')}</TableCell>
-                                            <TableCell>{row.paymentMethod || 'Manual'}</TableCell>
-                                            <TableCell><Typography variant="body2" sx={{ maxWidth: 240, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography>{row.notes && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{row.notes}</Typography>}{row.referenceUploadError && <Typography variant="caption" sx={{ color: '#f87171', display: 'block' }}>{row.referenceUploadError}</Typography>}{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open file</Button>}</TableCell>
+                                            <TableCell><Chip label={rent ? t('admin.payment_approvals.chip_rent_collection') : t('admin.payment_approvals.chip_activation')} size="small" sx={{ bgcolor: rent ? 'rgba(16,185,129,0.16)' : 'rgba(218,165,32,0.16)', color: rent ? '#10b981' : '#DAA520', fontWeight: 900 }} /></TableCell>
+                                            <TableCell><Typography sx={{ fontWeight: 900 }}>{rent ? (row.tenantName || t('admin.payment_approvals.tenant_fallback')) : (row.companyName || row.ownerName || t('admin.payment_approvals.owner_submission_fallback'))}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography></TableCell>
+                                            <TableCell>{rent ? `${row.propertyName || row.propertyId || t('admin.payment_approvals.property_fallback')}${row.unitNumber ? ` ${t('admin.payment_approvals.unit_suffix').replace('{number}', row.unitNumber)}` : ''}` : (row.contractId || row.intakeId || '—')}</TableCell>
+                                            <TableCell>{row.paymentMethod || t('admin.payment_approvals.method_fallback')}</TableCell>
+                                            <TableCell><Typography variant="body2" sx={{ maxWidth: 240, overflowWrap: 'anywhere' }}>{proofText(row) || t('admin.payment_approvals.no_reference')}</Typography>{row.notes && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{row.notes}</Typography>}{row.referenceUploadError && <Typography variant="caption" sx={{ color: '#f87171', display: 'block' }}>{row.referenceUploadError}</Typography>}{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>{t('admin.payment_approvals.open_file_btn')}</Button>}</TableCell>
                                             <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
                                             <TableCell><Chip label={row.status || row.paymentStatus || row.verificationState || 'pending'} size="small" sx={{ bgcolor: 'rgba(218,165,32,0.16)', color: '#DAA520', fontWeight: 900 }} /></TableCell>
-                                            <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{rent ? 'Verify Rent' : 'Verify & Unlock'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => rejectPayment(row.id)} sx={{ color: '#f87171', fontWeight: 900 }}>Reject</Button></Stack></TableCell>
+                                            <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{rent ? t('admin.payment_approvals.verify_rent_btn') : t('admin.payment_approvals.verify_unlock_btn')}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => rejectPayment(row.id)} sx={{ color: '#f87171', fontWeight: 900 }}>{t('admin.payment_approvals.reject_btn')}</Button></Stack></TableCell>
                                         </TableRow>
                                     );
                                 })}
@@ -324,13 +326,13 @@ export default function PaymentApprovalsPage() {
             <Paper sx={{ mt: 4, bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
                 <Box sx={{ p: 3, pb: 2 }}>
                     <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>
-                        CARD PAYMENTS
+                        {t('admin.payment_approvals.card_payments_overline')}
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 900, color: '#fff' }}>
-                        Card Payments (Refundable)
+                        {t('admin.payment_approvals.card_payments_title')}
                     </Typography>
                     <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>
-                        Tenant rent payments made by Stripe card checkout. Refunds are issued directly through Stripe.
+                        {t('admin.payment_approvals.card_payments_desc')}
                     </Typography>
                 </Box>
                 {cardLoading ? (
@@ -339,18 +341,18 @@ export default function PaymentApprovalsPage() {
                     </Box>
                 ) : cardRows.length === 0 ? (
                     <Box sx={{ p: 6, textAlign: 'center' }}>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.55)' }}>No card payments yet.</Typography>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.55)' }}>{t('admin.payment_approvals.no_card_payments')}</Typography>
                     </Box>
                 ) : (
                     <TableContainer>
                         <Table>
                             <TableHead>
                                 <TableRow>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Tenant</TableCell>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Invoice</TableCell>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Status</TableCell>
-                                    <TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_tenant')}</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_invoice')}</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_amount')}</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_status')}</TableCell>
+                                    <TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_action')}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -372,7 +374,7 @@ export default function PaymentApprovalsPage() {
                                                 onClick={() => openRefundDialog(row)}
                                                 sx={{ color: '#f87171', fontWeight: 900 }}
                                             >
-                                                Refund
+                                                {t('admin.payment_approvals.refund_btn')}
                                             </Button>
                                         </TableCell>
                                     </TableRow>
@@ -386,13 +388,13 @@ export default function PaymentApprovalsPage() {
             <Paper sx={{ mt: 4, bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
                 <Box sx={{ p: 3, pb: 2 }}>
                     <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>
-                        OWNER PAYOUTS
+                        {t('admin.payment_approvals.owner_payouts_overline')}
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 900, color: '#fff' }}>
-                        Owner Payout Requests
+                        {t('admin.payment_approvals.owner_payouts_title')}
                     </Typography>
                     <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>
-                        Owners requesting their net rent payout via bank transfer. Mark as paid only after the bank transfer has been sent.
+                        {t('admin.payment_approvals.owner_payouts_desc')}
                     </Typography>
                 </Box>
                 {payoutLoading ? (
@@ -401,32 +403,32 @@ export default function PaymentApprovalsPage() {
                     </Box>
                 ) : payoutRows.length === 0 ? (
                     <Box sx={{ p: 6, textAlign: 'center' }}>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.55)' }}>No pending payout requests.</Typography>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.55)' }}>{t('admin.payment_approvals.no_payout_requests')}</Typography>
                     </Box>
                 ) : (
                     <TableContainer>
                         <Table>
                             <TableHead>
                                 <TableRow>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Owner</TableCell>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell>
-                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Note</TableCell>
-                                    <TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_owner')}</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_amount')}</TableCell>
+                                    <TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_note')}</TableCell>
+                                    <TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.col_action')}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {payoutRows.map((row) => (
                                     <TableRow key={row.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.07)', color: '#fff' } }}>
                                         <TableCell>
-                                            <Typography sx={{ fontWeight: 900 }}>{row.ownerName || 'Owner'}</Typography>
+                                            <Typography sx={{ fontWeight: 900 }}>{row.ownerName || t('admin.payment_approvals.owner_name_fallback')}</Typography>
                                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography>
                                         </TableCell>
                                         <TableCell>{formatMoney(row.amountRequested)}</TableCell>
                                         <TableCell><Typography variant="body2" sx={{ maxWidth: 280, overflowWrap: 'anywhere', color: 'rgba(255,255,255,0.7)' }}>{row.note || '—'}</Typography></TableCell>
                                         <TableCell align="right">
                                             <Stack direction="row" justifyContent="flex-end" gap={1}>
-                                                <Button size="small" startIcon={<CheckCircle size={14} />} disabled={payoutBusyId === row.id} onClick={() => markPayoutPaid(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>Mark Paid</Button>
-                                                <Button size="small" startIcon={<XCircle size={14} />} disabled={payoutBusyId === row.id} onClick={() => openPayoutRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Reject</Button>
+                                                <Button size="small" startIcon={<CheckCircle size={14} />} disabled={payoutBusyId === row.id} onClick={() => markPayoutPaid(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{t('admin.payment_approvals.mark_paid_btn')}</Button>
+                                                <Button size="small" startIcon={<XCircle size={14} />} disabled={payoutBusyId === row.id} onClick={() => openPayoutRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>{t('admin.payment_approvals.reject_btn')}</Button>
                                             </Stack>
                                         </TableCell>
                                     </TableRow>
@@ -438,51 +440,51 @@ export default function PaymentApprovalsPage() {
             </Paper>
 
             <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Confirm Payment & Unlock Owner'}</DialogTitle>
+                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? t('admin.payment_approvals.dialog_confirm_rent_title') : t('admin.payment_approvals.dialog_confirm_activation_title')}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ mt: 1 }}>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isRentPayment(approvalTarget) ? 'This will verify the rent-collection payment only. It will not activate contracts or unlock dashboards.' : 'This will approve the mobilization payment, activate the contract, and unlock the owner dashboard.'}</Typography>
-                        {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>SUBMITTED REFERENCE</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(approvalTarget)}</Typography>{approvalTarget.referenceUploadError && <Typography variant="body2" sx={{ color: '#f87171', mt: 1 }}>{approvalTarget.referenceUploadError}</Typography>}{referenceUrl(approvalTarget) && <Button size="small" onClick={() => openReference(approvalTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open uploaded file</Button>}{approvalTarget.notes && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 1 }}>{approvalTarget.notes}</Typography>}</Paper>}
-                        <TextField label="Bank reference / transaction ID" value={paymentReferenceId} onChange={(e) => setPaymentReferenceId(e.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
-                        <TextField label="Amount received" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
-                        <TextField label="Internal notes" value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} fullWidth multiline minRows={3} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isRentPayment(approvalTarget) ? t('admin.payment_approvals.dialog_confirm_rent_desc') : t('admin.payment_approvals.dialog_confirm_activation_desc')}</Typography>
+                        {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>{t('admin.payment_approvals.submitted_reference_label')}</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(approvalTarget) || t('admin.payment_approvals.no_reference')}</Typography>{approvalTarget.referenceUploadError && <Typography variant="body2" sx={{ color: '#f87171', mt: 1 }}>{approvalTarget.referenceUploadError}</Typography>}{referenceUrl(approvalTarget) && <Button size="small" onClick={() => openReference(approvalTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>{t('admin.payment_approvals.open_uploaded_file_btn')}</Button>}{approvalTarget.notes && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 1 }}>{approvalTarget.notes}</Typography>}</Paper>}
+                        <TextField label={t('admin.payment_approvals.field_bank_reference')} value={paymentReferenceId} onChange={(e) => setPaymentReferenceId(e.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                        <TextField label={t('admin.payment_approvals.field_amount_received')} value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                        <TextField label={t('admin.payment_approvals.field_internal_notes')} value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} fullWidth multiline minRows={3} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button onClick={approvePayment} disabled={!approvalTarget || busyId === approvalTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Confirm & Unlock Owner'}</Button></DialogActions>
+                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{t('admin.payment_approvals.cancel_btn')}</Button><Button onClick={approvePayment} disabled={!approvalTarget || busyId === approvalTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? t('admin.payment_approvals.confirm_rent_btn') : t('admin.payment_approvals.confirm_unlock_btn')}</Button></DialogActions>
             </Dialog>
 
             <Dialog open={Boolean(refundTarget)} onClose={() => setRefundTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>Refund Card Payment</DialogTitle>
+                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.payment_approvals.dialog_refund_title')}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ mt: 1 }}>
                         <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>
-                            This refunds {formatMoney(refundTarget?.amount, refundTarget?.currency)} to the tenant's card via Stripe and marks invoice {refundTarget?.invoiceId || ''} as refunded.
+                            {t('admin.payment_approvals.dialog_refund_desc').replace('{amount}', formatMoney(refundTarget?.amount, refundTarget?.currency)).replace('{id}', refundTarget?.invoiceId || '')}
                         </Typography>
-                        <TextField label="Refund reason" value={refundReason} onChange={(e) => setRefundReason(e.target.value)} fullWidth multiline minRows={2} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                        <TextField label={t('admin.payment_approvals.field_refund_reason')} value={refundReason} onChange={(e) => setRefundReason(e.target.value)} fullWidth multiline minRows={2} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => setRefundTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={() => setRefundTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{t('admin.payment_approvals.cancel_btn')}</Button>
                     <Button onClick={submitRefund} disabled={!refundTarget || refundBusyId === refundTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
-                        Confirm Refund
+                        {t('admin.payment_approvals.confirm_refund_btn')}
                     </Button>
                 </DialogActions>
             </Dialog>
 
             <Dialog open={Boolean(payoutRejectTarget)} onClose={() => setPayoutRejectTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>Reject Payout Request</DialogTitle>
+                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{t('admin.payment_approvals.dialog_reject_payout_title')}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ mt: 1 }}>
                         <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>
-                            This rejects {formatMoney(payoutRejectTarget?.amountRequested)} requested by {payoutRejectTarget?.ownerName || 'this owner'}. They will see the rejection reason on their dashboard.
+                            {t('admin.payment_approvals.dialog_reject_payout_desc').replace('{amount}', formatMoney(payoutRejectTarget?.amountRequested)).replace('{owner}', payoutRejectTarget?.ownerName || t('admin.payment_approvals.this_owner'))}
                         </Typography>
-                        <TextField label="Rejection reason" value={payoutRejectReason} onChange={(e) => setPayoutRejectReason(e.target.value)} fullWidth multiline minRows={2} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                        <TextField label={t('admin.payment_approvals.field_rejection_reason')} value={payoutRejectReason} onChange={(e) => setPayoutRejectReason(e.target.value)} fullWidth multiline minRows={2} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => setPayoutRejectTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={() => setPayoutRejectTarget(null)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{t('admin.payment_approvals.cancel_btn')}</Button>
                     <Button onClick={submitPayoutReject} disabled={!payoutRejectTarget || payoutBusyId === payoutRejectTarget?.id} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>
-                        Confirm Rejection
+                        {t('admin.payment_approvals.confirm_rejection_btn')}
                     </Button>
                 </DialogActions>
             </Dialog>

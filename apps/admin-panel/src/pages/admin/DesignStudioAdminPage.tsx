@@ -15,6 +15,7 @@ import { auth, db, storage, functions, httpsCallable } from '../../lib/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { useLanguage } from '@bin/shared';
 
 const THEMES = [
     "Sovereign Elite (Gold & Graphite)",
@@ -83,7 +84,7 @@ export default function DesignStudioAdminPage() {
 
     const handleGenerate = async () => {
         if (!file) {
-            setError("Please upload a reference image first.");
+            setError(t('admin.design_studio.error_upload_required'));
             return;
         }
 
@@ -142,25 +143,26 @@ export default function DesignStudioAdminPage() {
 
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Failed to generate design. Please try again.");
+            setError(err.message || t('admin.design_studio.error_generate_failed'));
         } finally {
             setIsGenerating(false);
         }
     };
 
+    const { t, isRTL } = useLanguage();
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: '#020617', pt: 4, pb: 10 }}>
+        <Box sx={{ minHeight: '100vh', bgcolor: '#020617', pt: 4, pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Container maxWidth="xl">
                 <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
                         <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.gold, letterSpacing: -1, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Sparkles size={28} /> AI DESIGN STUDIO
+                            <Sparkles size={28} /> {t('admin.design_studio.page_title')}
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
-                            Sovereign Real Estate Transformation Engine
+                            {t('admin.design_studio.page_subtitle')}
                         </Typography>
                     </Box>
-                    <Chip label="SOVEREIGN PRODUCTION" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />
+                    <Chip label={t('admin.design_studio.status_chip')} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 900 }} />
                 </Box>
 
                 {error && (
@@ -181,7 +183,7 @@ export default function DesignStudioAdminPage() {
                                 
                                 {/* Image Upload Zone */}
                                 <Box>
-                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>REFERENCE IMAGE</Typography>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>{t('admin.design_studio.reference_image_label')}</Typography>
                                     <input
                                         accept="image/*"
                                         style={{ display: 'none' }}
@@ -201,10 +203,10 @@ export default function DesignStudioAdminPage() {
                                         }}>
                                             <UploadCloud size={48} color={binThemeTokens.gold} style={{ marginBottom: 16, opacity: 0.8 }} />
                                             <Typography variant="subtitle1" fontWeight="900" color="#fff">
-                                                {file ? file.name : "Upload Space Reference"}
+                                                {file ? file.name : t('admin.design_studio.upload_btn')}
                                             </Typography>
                                             <Typography variant="caption" color="rgba(255,255,255,0.5)">
-                                                JPG, PNG up to 10MB
+                                                {t('admin.design_studio.upload_hint')}
                                             </Typography>
                                         </Box>
                                     </label>
@@ -212,7 +214,7 @@ export default function DesignStudioAdminPage() {
 
                                 {/* Dropdowns (Free-form Autocomplete) */}
                                 <Box>
-                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>CONFIGURATION</Typography>
+                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>{t('admin.design_studio.configuration_label')}</Typography>
                                     <Stack spacing={3}>
                                         <Autocomplete
                                             freeSolo
@@ -223,9 +225,9 @@ export default function DesignStudioAdminPage() {
                                             renderInput={(params) => (
                                                 <TextField 
                                                     {...params} 
-                                                    label="Space Designation / Property Type" 
+                                                    label={t('admin.design_studio.room_type_label')}
                                                     variant="outlined"
-                                                    placeholder="Select or type any custom room/property"
+                                                    placeholder={t('admin.design_studio.room_type_placeholder')}
                                                     InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }}
                                                     sx={{ 
                                                         '& .MuiOutlinedInput-root': { 
@@ -248,9 +250,9 @@ export default function DesignStudioAdminPage() {
                                             renderInput={(params) => (
                                                 <TextField 
                                                     {...params} 
-                                                    label="Architectural Theme" 
+                                                    label={t('admin.design_studio.theme_label')}
                                                     variant="outlined"
-                                                    placeholder="Select or type any custom style"
+                                                    placeholder={t('admin.design_studio.theme_placeholder')}
                                                     InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }}
                                                     sx={{ 
                                                         '& .MuiOutlinedInput-root': { 
@@ -265,11 +267,11 @@ export default function DesignStudioAdminPage() {
                                         />
 
                                         <TextField
-                                            label="Custom Directives (Optional)"
+                                            label={t('admin.design_studio.custom_directives_label')}
                                             multiline rows={3}
                                             value={prompt}
                                             onChange={(e) => setPrompt(e.target.value)}
-                                            placeholder="E.g., Add a large chandelier, make the flooring marble, etc."
+                                            placeholder={t('admin.design_studio.custom_directives_placeholder')}
                                             InputProps={{ sx: { color: '#fff' } }}
                                             InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }}
                                             sx={{ 
@@ -295,7 +297,7 @@ export default function DesignStudioAdminPage() {
                                         '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)' }
                                     }}
                                 >
-                                    {isGenerating ? "GENERATING RENDER..." : "GENERATE DESIGN"}
+                                    {isGenerating ? t('admin.design_studio.generating_btn') : t('admin.design_studio.generate_btn')}
                                 </Button>
                             </Stack>
                         </Paper>
@@ -311,8 +313,8 @@ export default function DesignStudioAdminPage() {
                             {!preview && !generatedImageBase64 ? (
                                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, opacity: 0.3 }}>
                                     <ImageIcon size={80} style={{ marginBottom: 24 }} />
-                                    <Typography variant="h6" fontWeight="900">NO IMAGE LOADED</Typography>
-                                    <Typography variant="body2">Upload a reference image to begin.</Typography>
+                                    <Typography variant="h6" fontWeight="900">{t('admin.design_studio.no_image_title')}</Typography>
+                                    <Typography variant="body2">{t('admin.design_studio.no_image_desc')}</Typography>
                                 </Box>
                             ) : (
                                 <Box sx={{ position: 'relative', flex: 1, borderRadius: 4, overflow: 'hidden', bgcolor: '#000' }}>
@@ -366,10 +368,10 @@ export default function DesignStudioAdminPage() {
                                     {/* Labels */}
                                     <Box sx={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', gap: 2 }}>
                                         {generatedImageBase64 && (
-                                            <Chip label="NEW DESIGN" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
+                                            <Chip label={t('admin.design_studio.new_design_chip')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
                                         )}
                                         {preview && (
-                                            <Chip label="ORIGINAL" sx={{ bgcolor: 'rgba(0,0,0,0.7)', color: '#FFF', fontWeight: 900, backdropFilter: 'blur(4px)' }} />
+                                            <Chip label={t('admin.design_studio.original_chip')} sx={{ bgcolor: 'rgba(0,0,0,0.7)', color: '#FFF', fontWeight: 900, backdropFilter: 'blur(4px)' }} />
                                         )}
                                     </Box>
 

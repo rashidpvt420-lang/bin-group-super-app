@@ -4,6 +4,7 @@ import { CheckCircle2, ClipboardCheck, FileCheck2, Rocket, ShieldAlert, ShieldCh
 import { addDoc, collection, db, limit, onSnapshot, orderBy, query, serverTimestamp } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { useLanguage } from '@bin/shared';
 
 type GateStatus = 'pending' | 'passed' | 'blocked' | 'waived';
 type GateGroup = 'Owner' | 'Tenant' | 'Technician' | 'Broker' | 'Admin' | 'Provider' | 'Device' | 'Business' | 'Role Buttons';
@@ -106,8 +107,10 @@ export default function PublicLaunchCommandCenterPage() {
   const [notes, setNotes] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [notice, setNotice] = React.useState('');
+  const [noticeSeverity, setNoticeSeverity] = React.useState<'success' | 'warning' | 'error'>('success');
   const [evidence, setEvidence] = React.useState<LaunchEvidence[]>([]);
   const [evidenceLoading, setEvidenceLoading] = React.useState(true);
+  const { t, isRTL } = useLanguage();
 
   React.useEffect(() => {
     const q = query(collection(db, 'launch_evidence'), orderBy('createdAt', 'desc'), limit(300));
@@ -116,7 +119,8 @@ export default function PublicLaunchCommandCenterPage() {
       setEvidenceLoading(false);
     }, (error) => {
       console.error('[PUBLIC-LAUNCH] evidence listener failed', error);
-      setNotice(error?.message || 'Could not load launch evidence. Check Firestore rules and admin permissions.');
+      setNoticeSeverity('error');
+      setNotice(error?.message || t('admin.public_launch.load_failed'));
       setEvidenceLoading(false);
     });
     return () => unsubscribe();
@@ -138,11 +142,8 @@ export default function PublicLaunchCommandCenterPage() {
   const readiness = Math.round((passedCount / Math.max(requiredGates.length, 1)) * 100);
   const selected = LAUNCH_GATES.find((gate) => gate.id === selectedGate) || LAUNCH_GATES[0];
   const selectedEvidence = latestByGate.get(selectedGate);
-  const decision = blockedCount > 0
-    ? 'PUBLIC LAUNCH BLOCKED'
-    : pendingRequired === 0
-      ? 'PUBLIC READY'
-      : 'EVIDENCE REQUIRED';
+  const decisionKey: 'BLOCKED' | 'READY' | 'PENDING' = blockedCount > 0 ? 'BLOCKED' : pendingRequired === 0 ? 'READY' : 'PENDING';
+  const decision = t(`admin.public_launch.decision_${decisionKey.toLowerCase()}`);
 
   const groupSummary = React.useMemo(() => {
     const groups = Array.from(new Set(LAUNCH_GATES.map((gate) => gate.group)));
@@ -157,7 +158,8 @@ export default function PublicLaunchCommandCenterPage() {
 
   const saveProof = async () => {
     if (!testerName.trim() || !proofRef.trim()) {
-      setNotice('Tester name and screenshot/log/proof reference are required.');
+      setNoticeSeverity('warning');
+      setNotice(t('admin.public_launch.required_fields'));
       return;
     }
     try {
@@ -178,33 +180,33 @@ export default function PublicLaunchCommandCenterPage() {
         recordedByEmail: user?.email || null,
         createdAt: serverTimestamp(),
       });
-      setNotice('Launch proof saved. Readiness score updates automatically from latest evidence per gate.');
+      setNoticeSeverity('success');
+      setNotice(t('admin.public_launch.proof_saved'));
       setProofRef('');
       setNotes('');
     } catch (error: any) {
-      setNotice(error?.message || 'Could not save launch proof record.');
+      setNoticeSeverity('error');
+      setNotice(error?.message || t('admin.public_launch.save_failed'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff' }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff', direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 4 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>PUBLIC LAUNCH COMMAND CENTER</Typography>
-          <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>Final Release Evidence Control</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{t('admin.public_launch.eyebrow')}</Typography>
+          <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>{t('admin.public_launch.page_title')}</Typography>
           <Typography sx={{ color: 'rgba(255,255,255,.64)', maxWidth: 940, mt: 1 }}>
-            This page now reads launch_evidence live from Firestore and calculates readiness from the latest evidence for every Owner, Tenant, Technician, Broker, Admin, provider, device, and business gate.
+            {t('admin.public_launch.page_desc')}
           </Typography>
         </Box>
-        <Chip icon={<Rocket size={16} />} label={decision} sx={{ bgcolor: decision === 'PUBLIC READY' ? alpha('#22c55e', .16) : decision.includes('BLOCKED') ? alpha('#ef4444', .16) : alpha('#f59e0b', .16), color: decision === 'PUBLIC READY' ? '#22c55e' : decision.includes('BLOCKED') ? '#ef4444' : '#f59e0b', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
+        <Chip icon={<Rocket size={16} />} label={decision} sx={{ bgcolor: decisionKey === 'READY' ? alpha('#22c55e', .16) : decisionKey === 'BLOCKED' ? alpha('#ef4444', .16) : alpha('#f59e0b', .16), color: decisionKey === 'READY' ? '#22c55e' : decisionKey === 'BLOCKED' ? '#ef4444' : '#f59e0b', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
       </Stack>
 
-      <Alert severity={decision === 'PUBLIC READY' ? 'success' : blockedCount > 0 ? 'error' : 'warning'} sx={{ mb: 3, borderRadius: 3 }}>
-        {decision === 'PUBLIC READY'
-          ? 'All required launch gates have passed or were formally waived with evidence.'
-          : 'Full public launch requires passed evidence for all required gates. Founder-attested smoke testing is useful, but each gate still needs proof recorded here.'}
+      <Alert severity={decisionKey === 'READY' ? 'success' : blockedCount > 0 ? 'error' : 'warning'} sx={{ mb: 3, borderRadius: 3 }}>
+        {decisionKey === 'READY' ? t('admin.public_launch.all_gates_passed') : t('admin.public_launch.launch_blocked_msg')}
       </Alert>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -212,10 +214,10 @@ export default function PublicLaunchCommandCenterPage() {
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={1.2}>
               <ShieldCheck color={binThemeTokens.gold} />
-              <Typography variant="h5" fontWeight={950}>Launch readiness</Typography>
+              <Typography variant="h5" fontWeight={950}>{t('admin.public_launch.launch_readiness')}</Typography>
               <Typography variant="h3" fontWeight={950} color={readiness >= 90 ? '#22c55e' : binThemeTokens.gold}>{readiness}%</Typography>
               <LinearProgress variant="determinate" value={readiness} sx={{ height: 10, borderRadius: 10 }} />
-              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{passedCount} of {requiredGates.length} required gates passed/waived from Firestore evidence.</Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{t('admin.public_launch.gates_passed_count', { passed: String(passedCount), total: String(requiredGates.length) })}</Typography>
             </Stack>
           </Paper>
         </Grid>
@@ -223,9 +225,9 @@ export default function PublicLaunchCommandCenterPage() {
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={1.2}>
               <ShieldAlert color={blockedCount > 0 ? '#ef4444' : '#f59e0b'} />
-              <Typography variant="h5" fontWeight={950}>Required gates pending</Typography>
+              <Typography variant="h5" fontWeight={950}>{t('admin.public_launch.required_gates_pending')}</Typography>
               <Typography variant="h3" fontWeight={950} color={blockedCount > 0 ? '#ef4444' : '#f59e0b'}>{pendingRequired}</Typography>
-              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{blockedCount} blocked gate(s). Do not open unrestricted public signup until this is zero.</Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{t('admin.public_launch.blocked_gates_desc', { count: String(blockedCount) })}</Typography>
             </Stack>
           </Paper>
         </Grid>
@@ -233,9 +235,9 @@ export default function PublicLaunchCommandCenterPage() {
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={1.2}>
               <FileCheck2 color="#22c55e" />
-              <Typography variant="h5" fontWeight={950}>Evidence records</Typography>
+              <Typography variant="h5" fontWeight={950}>{t('admin.public_launch.evidence_records')}</Typography>
               <Typography variant="h3" fontWeight={950} color="#22c55e">{evidenceLoading ? '...' : evidence.length}</Typography>
-              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>Live Firestore records with role, device, URL, proof reference, notes, tester, status, and timestamp.</Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{t('admin.public_launch.evidence_records_desc')}</Typography>
             </Stack>
           </Paper>
         </Grid>
@@ -256,7 +258,7 @@ export default function PublicLaunchCommandCenterPage() {
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
-            <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2 }}><ClipboardCheck color={binThemeTokens.gold} /><Typography variant="h5" fontWeight={950}>Required launch gates</Typography></Stack>
+            <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2 }}><ClipboardCheck color={binThemeTokens.gold} /><Typography variant="h5" fontWeight={950}>{t('admin.public_launch.required_launch_gates')}</Typography></Stack>
             <Grid container spacing={1.4}>
               {LAUNCH_GATES.map((gate) => {
                 const currentStatus = gateStatus(gate);
@@ -273,7 +275,7 @@ export default function PublicLaunchCommandCenterPage() {
                       </Stack>
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .7 }}>{gate.proofRequired}</Typography>
                       <Typography variant="caption" sx={{ color: latest?.proofRef ? '#22c55e' : 'rgba(255,255,255,.38)', mt: 1, display: 'block', fontWeight: 800 }}>
-                        {latest?.proofRef ? `Latest proof: ${latest.proofRef}` : 'No proof recorded yet'} · {getEvidenceTime(latest)}
+                        {latest?.proofRef ? t('admin.public_launch.latest_proof', { ref: latest.proofRef }) : t('admin.public_launch.no_proof_yet')} · {getEvidenceTime(latest)}
                       </Typography>
                     </Box>
                   </Grid>
@@ -286,24 +288,24 @@ export default function PublicLaunchCommandCenterPage() {
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={2}>
-              <Typography variant="h5" fontWeight={950}>Record proof</Typography>
+              <Typography variant="h5" fontWeight={950}>{t('admin.public_launch.record_proof')}</Typography>
               {selectedEvidence && (
                 <Alert severity={selectedEvidence.status === 'passed' ? 'success' : selectedEvidence.status === 'blocked' ? 'error' : 'info'}>
-                  Latest evidence: {selectedEvidence.status} · {selectedEvidence.proofRef || 'no proof reference'} · {getEvidenceTime(selectedEvidence)}
+                  {t('admin.public_launch.latest_evidence_line', { status: selectedEvidence.status, ref: selectedEvidence.proofRef || t('admin.public_launch.no_proof_ref') })} · {getEvidenceTime(selectedEvidence)}
                 </Alert>
               )}
-              {notice && <Alert severity={notice.includes('saved') ? 'success' : 'warning'}>{notice}</Alert>}
-              <TextField select label="Launch gate" value={selectedGate} onChange={(event) => { setSelectedGate(event.target.value); const current = latestByGate.get(event.target.value)?.status || 'pending'; setStatus(current); }}>{LAUNCH_GATES.map((gate) => <MenuItem key={gate.id} value={gate.id}>{gate.title}</MenuItem>)}</TextField>
-              <TextField select label="Status" value={status} onChange={(event) => setStatus(event.target.value as GateStatus)}>{statuses.map((value) => <MenuItem key={value} value={value}><Chip size="small" label={value} sx={{ bgcolor: alpha(statusColor[value], .15), color: statusColor[value], fontWeight: 850 }} /></MenuItem>)}</TextField>
-              <TextField label="Tester name" value={testerName} onChange={(event) => setTesterName(event.target.value)} />
-              <TextField select label="Role tested" value={role} onChange={(event) => setRole(event.target.value)}>{roles.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
-              <TextField select label="Device" value={device} onChange={(event) => setDevice(event.target.value)}>{devices.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
-              <TextField label="Production URL" value={productionUrl} onChange={(event) => setProductionUrl(event.target.value)} />
-              <TextField label="Screenshot / log / evidence reference" value={proofRef} onChange={(event) => setProofRef(event.target.value)} placeholder="Example: GitHub run ID, screenshot file name, Firebase log link" />
-              <TextField label="Notes" multiline minRows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What passed, what failed, exact action tested, next fix if any." />
-              <Button onClick={saveProof} disabled={busy} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Saving...' : 'Save proof record'}</Button>
+              {notice && <Alert severity={noticeSeverity}>{notice}</Alert>}
+              <TextField select label={t('admin.public_launch.form_gate_label')} value={selectedGate} onChange={(event) => { setSelectedGate(event.target.value); const current = latestByGate.get(event.target.value)?.status || 'pending'; setStatus(current); }}>{LAUNCH_GATES.map((gate) => <MenuItem key={gate.id} value={gate.id}>{gate.title}</MenuItem>)}</TextField>
+              <TextField select label={t('admin.public_launch.form_status_label')} value={status} onChange={(event) => setStatus(event.target.value as GateStatus)}>{statuses.map((value) => <MenuItem key={value} value={value}><Chip size="small" label={value} sx={{ bgcolor: alpha(statusColor[value], .15), color: statusColor[value], fontWeight: 850 }} /></MenuItem>)}</TextField>
+              <TextField label={t('admin.public_launch.form_tester_label')} value={testerName} onChange={(event) => setTesterName(event.target.value)} />
+              <TextField select label={t('admin.public_launch.form_role_label')} value={role} onChange={(event) => setRole(event.target.value)}>{roles.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
+              <TextField select label={t('admin.public_launch.form_device_label')} value={device} onChange={(event) => setDevice(event.target.value)}>{devices.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
+              <TextField label={t('admin.public_launch.form_url_label')} value={productionUrl} onChange={(event) => setProductionUrl(event.target.value)} />
+              <TextField label={t('admin.public_launch.form_proof_label')} value={proofRef} onChange={(event) => setProofRef(event.target.value)} placeholder={t('admin.public_launch.form_proof_placeholder')} />
+              <TextField label={t('admin.public_launch.form_notes_label')} multiline minRows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t('admin.public_launch.form_notes_placeholder')} />
+              <Button onClick={saveProof} disabled={busy} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? t('admin.public_launch.saving_btn') : t('admin.public_launch.save_btn')}</Button>
               <Divider sx={{ borderColor: 'rgba(255,255,255,.08)' }} />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Readiness is now calculated from live Firestore evidence. Latest record per gate controls the launch decision. A blocked record blocks public launch until a newer passed/waived proof is saved.</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>{t('admin.public_launch.form_footer_note')}</Typography>
             </Stack>
           </Paper>
         </Grid>

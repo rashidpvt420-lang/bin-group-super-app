@@ -1,5 +1,6 @@
 // admin-panel/src/pages/tenants/TenantsManagementPage.tsx
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '@bin/shared';
 import {
   Box, Container, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, TextField, Typography, Button, Dialog,
@@ -22,6 +23,7 @@ interface Unit {
 }
 
 export default function TenantsManagementPage() {
+  const { t, isRTL } = useLanguage();
   const [tenants, setTenants] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [openAdd, setOpenAdd] = useState(false);
@@ -305,7 +307,7 @@ export default function TenantsManagementPage() {
           await batch.commit();
           
           setOpenEdit(false);
-          setSuccess("Tenant registry updated successfully.");
+          setSuccess(t('admin.tenants_mgmt.updated_success'));
           // Local update
           setTenants(prev => prev.map(t => t.uid === selectedTenant.uid ? { ...t, ...updates } : t));
       } catch (err: any) {
@@ -324,10 +326,10 @@ export default function TenantsManagementPage() {
           const sendFn = httpsCallable(functions, 'sendTenantInvitations');
           const result = await sendFn({ importBatchId: batchId });
           const data = result.data as any;
-          setSuccess(`Invitation engine triggered: ${data.sentCount} queued, ${data.skippedCount} already sent.`);
+          setSuccess(t('admin.tenants_mgmt.invitation_triggered').replace('{sent}', String(data.sentCount)).replace('{skipped}', String(data.skippedCount)));
           fetchImportHistory();
       } catch (err: any) {
-          setError(err.message || "Failed to trigger invitation engine.");
+          setError(err.message || t('admin.tenants_mgmt.trigger_failed'));
       } finally {
           setSubmitting(false);
       }
@@ -342,10 +344,10 @@ export default function TenantsManagementPage() {
           const sendFn = httpsCallable(functions, 'sendTenantInvitations');
           const result = await sendFn({ importBatchId: batchId });
           const data = result.data as any;
-          setSuccess(`Resend triggered: ${data.sentCount} failed invitations re-queued.`);
+          setSuccess(t('admin.tenants_mgmt.resend_triggered').replace('{sent}', String(data.sentCount)));
           fetchImportHistory();
       } catch (err: any) {
-          setError(err.message || "Failed to resend invitations.");
+          setError(err.message || t('admin.tenants_mgmt.resend_failed'));
       } finally {
           setSubmitting(false);
       }
@@ -362,9 +364,9 @@ export default function TenantsManagementPage() {
       try {
           const resendFn = httpsCallable(functions, 'resendTenantInvitation');
           await resendFn({ invitationId });
-          setSuccess("Invitation resent successfully.");
+          setSuccess(t('admin.tenants_mgmt.invitation_resent'));
       } catch (err: any) {
-          setError(err.message || "Failed to resend invitation.");
+          setError(err.message || t('admin.tenants_mgmt.resend_invite_failed'));
       } finally {
           setSubmitting(false);
       }
@@ -400,7 +402,7 @@ export default function TenantsManagementPage() {
           }
 
           await batch.commit();
-          setSuccess("Tenant archived successfully.");
+          setSuccess(t('admin.tenants_mgmt.archived_success'));
           setTenants(prev => prev.map(t => t.uid === tenant.uid ? { ...t, ...updates } : t));
       } catch (err: any) {
           console.error("Archive Error:", err);
@@ -468,13 +470,13 @@ export default function TenantsManagementPage() {
 
           await batch.commit();
           
-          setSuccess(`Tenant ${tenantEmail} removed and unit vacated.`);
+          setSuccess(t('admin.tenants_mgmt.removed_success').replace('{email}', tenantEmail));
           setTenants(prev => prev.filter(t => t.uid !== tenantId));
           setOpenDeleteConfirm(false);
           setTenantToDelete(null);
       } catch (err: any) {
           console.error("Soft Delete Error:", err);
-          setError(`Failed to remove tenant: ${err.message}`);
+          setError(t('admin.tenants_mgmt.remove_failed').replace('{message}', err.message));
       } finally {
           setSubmitting(false);
       }
@@ -486,28 +488,28 @@ export default function TenantsManagementPage() {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" fontWeight="950">TENANT REGISTRY</Typography>
+        <Typography variant="h4" fontWeight="950">{t('admin.tenants_mgmt.page_title')}</Typography>
         <Stack direction="row" spacing={2}>
-            <Button 
-                variant="outlined" 
-                startIcon={<HistoryIcon />} 
+            <Button
+                variant="outlined"
+                startIcon={<HistoryIcon />}
                 onClick={() => setView(view === 'registry' ? 'history' : 'registry')}
                 sx={{ borderRadius: 100, fontWeight: 900, borderColor: '#000', color: '#000' }}
             >
-                {view === 'registry' ? 'IMPORT HISTORY' : 'BACK TO REGISTRY'}
+                {view === 'registry' ? t('admin.tenants_mgmt.import_history_btn') : t('admin.tenants_mgmt.back_to_registry_btn')}
             </Button>
-            <Button 
-                variant="outlined" 
-                startIcon={<BulkIcon />} 
+            <Button
+                variant="outlined"
+                startIcon={<BulkIcon />}
                 onClick={() => setOpenBulk(true)}
                 sx={{ borderRadius: 100, fontWeight: 900, borderColor: '#000', color: '#000' }}
             >
-                BULK IMPORT
+                {t('admin.tenants_mgmt.bulk_import_btn')}
             </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setSelectedOwnerId(''); setSelectedPropertyId(''); setSelectedUnitId(''); setOpenAdd(true); }} sx={{ borderRadius: 100, bgcolor: '#000', fontWeight: 900 }}>
-              ASSIGN NEW TENANT
+              {t('admin.tenants_mgmt.assign_tenant_btn')}
             </Button>
         </Stack>
       </Box>
@@ -521,11 +523,11 @@ export default function TenantsManagementPage() {
               <Table>
                 <TableHead sx={{ bgcolor: '#f8fafc' }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 900 }}>TENANT</TableCell>
-                    <TableCell sx={{ fontWeight: 900 }}>PROPERTY & UNIT</TableCell>
-                    <TableCell sx={{ fontWeight: 900 }}>INVITATION</TableCell>
-                    <TableCell sx={{ fontWeight: 900 }}>STATUS</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 900 }}>ACTIONS</TableCell>
+                    <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_tenant')}</TableCell>
+                    <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_property_unit')}</TableCell>
+                    <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_invitation')}</TableCell>
+                    <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_status')}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -536,8 +538,8 @@ export default function TenantsManagementPage() {
                         <Typography variant="caption" color="text.secondary">{tenant.uid}</Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight="700">{tenant.propertyName || 'Unlinked'}</Typography>
-                        <Typography variant="caption">Unit {tenant.unitNumber || 'N/A'}</Typography>
+                        <Typography variant="body2" fontWeight="700">{tenant.propertyName || t('admin.tenants_mgmt.unlinked_label')}</Typography>
+                        <Typography variant="caption">{t('admin.tenants_mgmt.unit_label')} {tenant.unitNumber || 'N/A'}</Typography>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">{tenant.email}</Typography>
@@ -566,7 +568,7 @@ export default function TenantsManagementPage() {
                           <Stack direction="row" spacing={1} justifyContent="flex-end">
                               <IconButton size="small" onClick={() => handleOpenEdit(tenant)}><EditIcon fontSize="small" /></IconButton>
                               <IconButton size="small" color="error" onClick={() => confirmDelete(tenant)}><DeleteIcon fontSize="small" /></IconButton>
-                              <Button size="small" variant="text" color="warning" onClick={() => handleArchiveTenant(tenant)} sx={{ fontWeight: 800, fontSize: '0.7rem' }}>ARCHIVE</Button>
+                              <Button size="small" variant="text" color="warning" onClick={() => handleArchiveTenant(tenant)} sx={{ fontWeight: 800, fontSize: '0.7rem' }}>{t('admin.tenants_mgmt.archive_btn')}</Button>
                           </Stack>
                       </TableCell>
                     </TableRow>
@@ -577,7 +579,7 @@ export default function TenantsManagementPage() {
 
             {hasMore && (
               <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-                <Button onClick={loadMoreTenants} sx={{ fontWeight: 900, color: '#000' }}>LOAD MORE RECORDS</Button>
+                <Button onClick={loadMoreTenants} sx={{ fontWeight: 900, color: '#000' }}>{t('admin.tenants_mgmt.load_more_btn')}</Button>
               </Box>
             )}
           </>
@@ -586,13 +588,13 @@ export default function TenantsManagementPage() {
             <Table>
                 <TableHead sx={{ bgcolor: '#f8fafc' }}>
                     <TableRow>
-                        <TableCell sx={{ fontWeight: 900 }}>BATCH ID</TableCell>
-                        <TableCell sx={{ fontWeight: 900 }}>PROPERTY</TableCell>
-                        <TableCell sx={{ fontWeight: 900 }}>DATE</TableCell>
-                        <TableCell sx={{ fontWeight: 900 }}>RECORDS</TableCell>
-                        <TableCell sx={{ fontWeight: 900 }}>INVITATIONS</TableCell>
-                        <TableCell sx={{ fontWeight: 900 }}>STATUS</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 900 }}>ACTIONS</TableCell>
+                        <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_batch_id')}</TableCell>
+                        <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_property')}</TableCell>
+                        <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_date')}</TableCell>
+                        <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_records')}</TableCell>
+                        <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_invitations')}</TableCell>
+                        <TableCell sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_status')}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 900 }}>{t('admin.tenants_mgmt.col_actions')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -603,37 +605,37 @@ export default function TenantsManagementPage() {
                             <TableCell>{batch.createdAt?.toDate ? batch.createdAt.toDate().toLocaleDateString() : 'N/A'}</TableCell>
                             <TableCell>
                                 <Typography variant="body2" sx={{ fontWeight: 800 }}>{batch.validRows} / {batch.totalRows}</Typography>
-                                <Typography variant="caption" color="error">{batch.errorRows} Errors</Typography>
+                                <Typography variant="caption" color="error">{t('admin.tenants_mgmt.errors_label').replace('{count}', String(batch.errorRows))}</Typography>
                             </TableCell>
                             <TableCell>
                                 <Stack spacing={0.5}>
-                                    <Chip label={`${batch.sentCount || 0} Sent`} size="small" color="success" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
-                                    <Chip label={`${batch.failedCount || 0} Failed`} size="small" color="error" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
-                                    <Chip label={`${batch.pendingCount || 0} Pending`} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
+                                    <Chip label={t('admin.tenants_mgmt.sent_chip').replace('{count}', String(batch.sentCount || 0))} size="small" color="success" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
+                                    <Chip label={t('admin.tenants_mgmt.failed_chip').replace('{count}', String(batch.failedCount || 0))} size="small" color="error" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
+                                    <Chip label={t('admin.tenants_mgmt.pending_chip').replace('{count}', String(batch.pendingCount || 0))} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
                                 </Stack>
                             </TableCell>
                              <TableCell><Chip label={batch.status?.toUpperCase()} size="small" color="primary" sx={{ fontWeight: 900, fontSize: '0.65rem' }} /></TableCell>
                              <TableCell align="right">
                                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                    <Button 
-                                        size="small" 
-                                        startIcon={<SendIcon />} 
+                                    <Button
+                                        size="small"
+                                        startIcon={<SendIcon />}
                                         disabled={submitting || (batch.sentCount > 0 && batch.failedCount === 0)}
                                         onClick={() => handleSendInvitations(batch.importBatchId)}
                                         sx={{ fontWeight: 800, fontSize: '0.7rem' }}
                                     >
-                                        SEND
+                                        {t('admin.tenants_mgmt.send_btn')}
                                     </Button>
                                     {batch.failedCount > 0 && (
-                                        <Button 
-                                            size="small" 
+                                        <Button
+                                            size="small"
                                             variant="outlined"
                                             color="error"
                                             disabled={submitting}
                                             onClick={() => handleResendFailedInvitations(batch.importBatchId)}
                                             sx={{ fontWeight: 800, fontSize: '0.7rem' }}
                                         >
-                                            RETRY FAILED
+                                            {t('admin.tenants_mgmt.retry_failed_btn')}
                                         </Button>
                                     )}
                                  </Stack>
@@ -641,7 +643,7 @@ export default function TenantsManagementPage() {
                         </TableRow>
                     ))}
                     {importHistory.length === 0 && (
-                        <TableRow><TableCell colSpan={7} align="center"><Typography sx={{ py: 4, color: 'text.secondary' }}>No import history found.</Typography></TableCell></TableRow>
+                        <TableRow><TableCell colSpan={7} align="center"><Typography sx={{ py: 4, color: 'text.secondary' }}>{t('admin.tenants_mgmt.no_import_history')}</Typography></TableCell></TableRow>
                     )}
                 </TableBody>
             </Table>
@@ -657,28 +659,28 @@ export default function TenantsManagementPage() {
 
       {/* ASSIGNMENT DIALOG */}
       <Dialog open={openAdd} onClose={() => setOpenAdd(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 950 }}>RELATIONAL TENANT ASSIGNMENT</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 950 }}>{t('admin.tenants_mgmt.assign_dialog_title')}</DialogTitle>
         <DialogContent dividers>
             <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                     <FormControl fullWidth sx={{ mb: 2 }}>
-                        <InputLabel>Target Owner</InputLabel>
-                        <Select value={selectedOwnerId} onChange={(e) => setSelectedOwnerId(e.target.value)} label="Target Owner">
+                        <InputLabel>{t('admin.tenants_mgmt.target_owner_label')}</InputLabel>
+                        <Select value={selectedOwnerId} onChange={(e) => setSelectedOwnerId(e.target.value)} label={t('admin.tenants_mgmt.target_owner_label')}>
                             {owners.map(o => <MenuItem key={o.id} value={o.id}>{o.displayName || o.name || o.email}</MenuItem>)}
                         </Select>
                     </FormControl>
                     <FormControl fullWidth sx={{ mb: 2 }} disabled={!selectedOwnerId}>
-                        <InputLabel>Target Property</InputLabel>
-                        <Select value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} label="Target Property">
+                        <InputLabel>{t('admin.tenants_mgmt.target_property_label')}</InputLabel>
+                        <Select value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} label={t('admin.tenants_mgmt.target_property_label')}>
                             {properties.filter(p => p.ownerId === selectedOwnerId).map(p => <MenuItem key={p.id} value={p.id}>{p.name || p.propertyName || p.address}</MenuItem>)}
                         </Select>
                     </FormControl>
                     <FormControl fullWidth sx={{ mb: 2 }} disabled={!selectedPropertyId}>
-                        <InputLabel>Target Unit</InputLabel>
-                        <Select value={selectedUnitId} onChange={(e) => setSelectedUnitId(e.target.value)} label="Target Unit">
+                        <InputLabel>{t('admin.tenants_mgmt.target_unit_label')}</InputLabel>
+                        <Select value={selectedUnitId} onChange={(e) => setSelectedUnitId(e.target.value)} label={t('admin.tenants_mgmt.target_unit_label')}>
                             {units.filter(u => u.propertyId === selectedPropertyId).map(u => (
                                 <MenuItem key={u.id} value={u.id} disabled={u.occupancyStatus === 'OCCUPIED'}>
-                                    {u.unitNumber} {u.occupancyStatus === 'OCCUPIED' ? '(OCCUPIED)' : '(VACANT)'}
+                                    {u.unitNumber} {u.occupancyStatus === 'OCCUPIED' ? t('admin.tenants_mgmt.occupied_label') : t('admin.tenants_mgmt.vacant_label')}
                                 </MenuItem>
                             ))}
                         </Select>
@@ -687,29 +689,29 @@ export default function TenantsManagementPage() {
 
                 <Grid item xs={12} md={6}>
                     <Box sx={{ mb: 2, p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
-                        <Typography variant="overline" fontWeight="900">Tenant Identity Mode</Typography>
+                        <Typography variant="overline" fontWeight="900">{t('admin.tenants_mgmt.tenant_identity_mode')}</Typography>
                         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                            <Button size="small" variant={tenantMode === 'new' ? 'contained' : 'outlined'} onClick={() => setTenantMode('new')}>New Tenant</Button>
-                            <Button size="small" variant={tenantMode === 'existing' ? 'contained' : 'outlined'} onClick={() => setTenantMode('existing')}>Existing User</Button>
+                            <Button size="small" variant={tenantMode === 'new' ? 'contained' : 'outlined'} onClick={() => setTenantMode('new')}>{t('admin.tenants_mgmt.new_tenant_btn')}</Button>
+                            <Button size="small" variant={tenantMode === 'existing' ? 'contained' : 'outlined'} onClick={() => setTenantMode('existing')}>{t('admin.tenants_mgmt.existing_user_btn')}</Button>
                         </Stack>
                     </Box>
 
                     {tenantMode === 'new' ? (
                         <Stack spacing={2}>
-                            <TextField label="Full Name" fullWidth value={newTenant.displayName} onChange={(e) => setNewTenant({...newTenant, displayName: e.target.value})} />
-                            <TextField label="Email" fullWidth value={newTenant.email} onChange={(e) => setNewTenant({...newTenant, email: e.target.value})} />
-                            <TextField label="Phone" fullWidth value={newTenant.phoneNumber} onChange={(e) => setNewTenant({...newTenant, phoneNumber: e.target.value})} />
-                            <TextField label="Emirates ID" fullWidth value={newTenant.emiratesID} onChange={(e) => setNewTenant({...newTenant, emiratesID: e.target.value})} />
+                            <TextField label={t('admin.tenants_mgmt.field_full_name')} fullWidth value={newTenant.displayName} onChange={(e) => setNewTenant({...newTenant, displayName: e.target.value})} />
+                            <TextField label={t('admin.tenants_mgmt.field_email')} fullWidth value={newTenant.email} onChange={(e) => setNewTenant({...newTenant, email: e.target.value})} />
+                            <TextField label={t('admin.tenants_mgmt.field_phone')} fullWidth value={newTenant.phoneNumber} onChange={(e) => setNewTenant({...newTenant, phoneNumber: e.target.value})} />
+                            <TextField label={t('admin.tenants_mgmt.field_emirates_id')} fullWidth value={newTenant.emiratesID} onChange={(e) => setNewTenant({...newTenant, emiratesID: e.target.value})} />
                         </Stack>
                     ) : (
                         <Stack spacing={2}>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                                <TextField label="Search Email" fullWidth size="small" value={existingTenantSearch} onChange={(e) => setExistingTenantSearch(e.target.value)} />
+                                <TextField label={t('admin.tenants_mgmt.search_email_label')} fullWidth size="small" value={existingTenantSearch} onChange={(e) => setExistingTenantSearch(e.target.value)} />
                                 <IconButton onClick={handleSearchExisting} disabled={searchLoading} color="primary"><SearchIcon /></IconButton>
                             </Box>
                             <FormControl fullWidth>
-                                <InputLabel>Select Linked Tenant</InputLabel>
-                                <Select value={selectedExistingTenantId} onChange={(e) => setSelectedExistingTenantId(e.target.value)} label="Select Linked Tenant">
+                                <InputLabel>{t('admin.tenants_mgmt.select_linked_tenant')}</InputLabel>
+                                <Select value={selectedExistingTenantId} onChange={(e) => setSelectedExistingTenantId(e.target.value)} label={t('admin.tenants_mgmt.select_linked_tenant')}>
                                     {tenants.map(t => <MenuItem key={t.uid} value={t.uid}>{t.displayName} ({t.email})</MenuItem>)}
                                 </Select>
                             </FormControl>
@@ -719,138 +721,136 @@ export default function TenantsManagementPage() {
             </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenAdd(false)} sx={{ fontWeight: 800 }}>CANCEL</Button>
+          <Button onClick={() => setOpenAdd(false)} sx={{ fontWeight: 800 }}>{t('admin.tenants_mgmt.cancel_btn')}</Button>
           <Button variant="contained" color="primary" onClick={handleAddTenant} disabled={submitting || (tenantMode === 'new' && !newTenant.email) || (tenantMode === 'existing' && !selectedExistingTenantId)} sx={{ borderRadius: 100, fontWeight: 900 }}>
-            {submitting ? <CircularProgress size={20} color="inherit" /> : 'SECURE RELATIONAL LINK'}
+            {submitting ? <CircularProgress size={20} color="inherit" /> : t('admin.tenants_mgmt.secure_link_btn')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* EDIT TENANT DIALOG */}
       <Dialog open={openEdit} onClose={() => setOpenEdit(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 950 }}>EDIT TENANT PROFILE</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 950 }}>{t('admin.tenants_mgmt.edit_dialog_title')}</DialogTitle>
         <DialogContent dividers>
             <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
                     <Stack spacing={2}>
-                        <TextField 
-                            label="Display Name" 
-                            fullWidth 
-                            value={editForm.displayName} 
-                            onChange={(e) => setEditForm({...editForm, displayName: e.target.value})} 
+                        <TextField
+                            label={t('admin.tenants_mgmt.field_display_name')}
+                            fullWidth
+                            value={editForm.displayName}
+                            onChange={(e) => setEditForm({...editForm, displayName: e.target.value})}
                         />
-                        <TextField 
-                            label="Phone Number" 
-                            fullWidth 
-                            value={editForm.phoneNumber} 
-                            onChange={(e) => setEditForm({...editForm, phoneNumber: e.target.value})} 
+                        <TextField
+                            label={t('admin.tenants_mgmt.field_phone_number')}
+                            fullWidth
+                            value={editForm.phoneNumber}
+                            onChange={(e) => setEditForm({...editForm, phoneNumber: e.target.value})}
                         />
-                        <TextField 
-                            label="Emirates ID" 
-                            fullWidth 
-                            value={editForm.emiratesID} 
-                            onChange={(e) => setEditForm({...editForm, emiratesID: e.target.value})} 
+                        <TextField
+                            label={t('admin.tenants_mgmt.field_emirates_id')}
+                            fullWidth
+                            value={editForm.emiratesID}
+                            onChange={(e) => setEditForm({...editForm, emiratesID: e.target.value})}
                         />
                         <FormControl fullWidth>
-                            <InputLabel>Account Status</InputLabel>
-                            <Select 
-                                value={editForm.status} 
+                            <InputLabel>{t('admin.tenants_mgmt.field_account_status')}</InputLabel>
+                            <Select
+                                value={editForm.status}
                                 onChange={(e) => setEditForm({...editForm, status: e.target.value})}
-                                label="Account Status"
+                                label={t('admin.tenants_mgmt.field_account_status')}
                             >
-                                <MenuItem value="active">Active</MenuItem>
-                                <MenuItem value="inactive">Inactive</MenuItem>
-                                <MenuItem value="pending">Pending</MenuItem>
-                                <MenuItem value="archived">Archived</MenuItem>
+                                <MenuItem value="active">{t('admin.tenants_mgmt.status_active')}</MenuItem>
+                                <MenuItem value="inactive">{t('admin.tenants_mgmt.status_inactive')}</MenuItem>
+                                <MenuItem value="pending">{t('admin.tenants_mgmt.status_pending')}</MenuItem>
+                                <MenuItem value="archived">{t('admin.tenants_mgmt.status_archived')}</MenuItem>
                             </Select>
                         </FormControl>
-                        <TextField 
-                            label="Internal Notes" 
-                            fullWidth 
-                            multiline 
-                            rows={3} 
-                            value={editForm.notes} 
-                            onChange={(e) => setEditForm({...editForm, notes: e.target.value})} 
+                        <TextField
+                            label={t('admin.tenants_mgmt.field_internal_notes')}
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={editForm.notes}
+                            onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
                         />
                     </Stack>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>ASSIGNMENT & LINKAGE</Typography>
+                    <Typography variant="subtitle2" fontWeight="900" gutterBottom>{t('admin.tenants_mgmt.assignment_linkage_title')}</Typography>
                     <FormControl fullWidth sx={{ mb: 2 }}>
-                        <InputLabel>Property</InputLabel>
-                        <Select 
-                            value={selectedPropertyId} 
-                            onChange={(e) => setSelectedPropertyId(e.target.value)} 
-                            label="Property"
+                        <InputLabel>{t('admin.tenants_mgmt.property_label')}</InputLabel>
+                        <Select
+                            value={selectedPropertyId}
+                            onChange={(e) => setSelectedPropertyId(e.target.value)}
+                            label={t('admin.tenants_mgmt.property_label')}
                         >
-                            <MenuItem value=""><em>None</em></MenuItem>
+                            <MenuItem value=""><em>{t('admin.tenants_mgmt.none_option')}</em></MenuItem>
                             {properties.map(p => (
                                 <MenuItem key={p.id} value={p.id}>{p.name || p.propertyName}</MenuItem>
                             ))}
                         </Select>
                     </FormControl>
                     <FormControl fullWidth disabled={!selectedPropertyId}>
-                        <InputLabel>Unit</InputLabel>
-                        <Select 
-                            value={selectedUnitId} 
-                            onChange={(e) => setSelectedUnitId(e.target.value)} 
-                            label="Unit"
+                        <InputLabel>{t('admin.tenants_mgmt.unit_select_label')}</InputLabel>
+                        <Select
+                            value={selectedUnitId}
+                            onChange={(e) => setSelectedUnitId(e.target.value)}
+                            label={t('admin.tenants_mgmt.unit_select_label')}
                         >
-                            <MenuItem value=""><em>None</em></MenuItem>
+                            <MenuItem value=""><em>{t('admin.tenants_mgmt.none_option')}</em></MenuItem>
                             {units.filter(u => u.propertyId === selectedPropertyId).map(u => (
                                 <MenuItem key={u.id} value={u.id} disabled={u.occupancyStatus === 'OCCUPIED' && u.id !== selectedTenant?.unitId}>
-                                    {u.unitNumber} {u.occupancyStatus === 'OCCUPIED' ? (u.id === selectedTenant?.unitId ? '(CURRENT)' : '(OCCUPIED)') : '(VACANT)'}
+                                    {u.unitNumber} {u.occupancyStatus === 'OCCUPIED' ? (u.id === selectedTenant?.unitId ? t('admin.tenants_mgmt.current_label') : t('admin.tenants_mgmt.occupied_label')) : t('admin.tenants_mgmt.vacant_label')}
                                 </MenuItem>
                             ))}
                         </Select>
                     </FormControl>
                     <Box sx={{ mt: 3, p: 2, bgcolor: '#f1f5f9', borderRadius: 2 }}>
-                        <Typography variant="caption" fontWeight="800" color="text.secondary">READ-ONLY SECURITY DATA</Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}><strong>Email:</strong> {selectedTenant?.email}</Typography>
-                        <Typography variant="body2"><strong>UID:</strong> {selectedTenant?.uid}</Typography>
+                        <Typography variant="caption" fontWeight="800" color="text.secondary">{t('admin.tenants_mgmt.readonly_security_title')}</Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}><strong>{t('admin.tenants_mgmt.email_label')}</strong> {selectedTenant?.email}</Typography>
+                        <Typography variant="body2"><strong>{t('admin.tenants_mgmt.uid_label')}</strong> {selectedTenant?.uid}</Typography>
                     </Box>
                 </Grid>
             </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setOpenEdit(false)} sx={{ fontWeight: 800 }}>CANCEL</Button>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={handleUpdateTenant} 
+          <Button onClick={() => setOpenEdit(false)} sx={{ fontWeight: 800 }}>{t('admin.tenants_mgmt.cancel_btn')}</Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleUpdateTenant}
             disabled={submitting}
             sx={{ borderRadius: 100, fontWeight: 900 }}
           >
-            {submitting ? <CircularProgress size={20} color="inherit" /> : 'SAVE CHANGES'}
+            {submitting ? <CircularProgress size={20} color="inherit" /> : t('admin.tenants_mgmt.save_changes_btn')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* DELETE CONFIRMATION DIALOG */}
       <Dialog open={openDeleteConfirm} onClose={() => !submitting && setOpenDeleteConfirm(false)}>
-        <DialogTitle sx={{ fontWeight: 950, color: 'error.main' }}>REMOVE TENANT FROM REGISTRY?</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 950, color: 'error.main' }}>{t('admin.tenants_mgmt.delete_dialog_title')}</DialogTitle>
         <DialogContent>
             <Typography variant="body1">
-                Are you sure you want to remove <strong>{tenantToDelete?.displayName}</strong> ({tenantToDelete?.email})?
+                {t('admin.tenants_mgmt.delete_confirm_msg').replace('{name}', tenantToDelete?.displayName || '').replace('{email}', tenantToDelete?.email || '')}
             </Typography>
             <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary', bgcolor: '#fff5f5', p: 2, borderRadius: 1, border: '1px solid #fed7d7' }}>
-                • Role will be changed to <strong>tenant_deleted</strong>.<br />
-                • Linked unit <strong>{tenantToDelete?.unitNumber}</strong> will be set to <strong>VACANT</strong>.<br />
-                • Financial records and audit trails will be <strong>preserved</strong>.
+                {t('admin.tenants_mgmt.delete_detail_msg').replace('{unit}', tenantToDelete?.unitNumber || '')}
             </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-            <Button onClick={() => setOpenDeleteConfirm(false)} disabled={submitting} sx={{ fontWeight: 800 }}>CANCEL</Button>
-            <Button 
-                variant="contained" 
-                color="error" 
-                onClick={handleDeleteTenant} 
+            <Button onClick={() => setOpenDeleteConfirm(false)} disabled={submitting} sx={{ fontWeight: 800 }}>{t('admin.tenants_mgmt.cancel_btn')}</Button>
+            <Button
+                variant="contained"
+                color="error"
+                onClick={handleDeleteTenant}
                 disabled={submitting}
                 startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
                 sx={{ borderRadius: 100, fontWeight: 900 }}
             >
-                {submitting ? 'REMOVING...' : 'CONFIRM REMOVAL'}
+                {submitting ? t('admin.tenants_mgmt.removing_btn') : t('admin.tenants_mgmt.confirm_removal_btn')}
             </Button>
         </DialogActions>
       </Dialog>
