@@ -30,7 +30,7 @@ export default function AuditorPortalPage() {
             try {
                 const { collection, getDocs, query, limit } = await import('../../lib/firebase');
                 const { db } = await import('../../lib/firebase');
-                const snap = await getDocs(query(collection(db, 'auditLogs'), limit(10)));
+                const snap = await getDocs(query(collection(db, 'audit_logs'), limit(10)));
                 if (!snap.empty) {
                     setAuditData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                     setIsReady(true);

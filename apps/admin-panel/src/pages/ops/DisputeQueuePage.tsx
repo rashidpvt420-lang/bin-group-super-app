@@ -7,7 +7,7 @@ import {
 import {
     AlertTriangle, Shield, CheckCircle2, UserCheck, XCircle, RotateCcw
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
