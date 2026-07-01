@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Snackbar, Alert, Box, IconButton, Typography } from '@mui/material';
-import { X, ShieldAlert } from 'lucide-react';
+import { Snackbar, Alert, Typography } from '@mui/material';
+import { ShieldAlert } from 'lucide-react';
+
+export type SovereignSeverity = 'success' | 'error' | 'warning' | 'info';
+
+export const showSovereignToast = (message: string, severity: SovereignSeverity = 'error') => {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sovereign_alert', { detail: { message, severity } }));
+    }
+};
 
 export const setupSovereignAlertInterceptor = () => {
     if (typeof window !== 'undefined') {
         window.alert = (message?: any) => {
-            const event = new CustomEvent('sovereign_alert', { detail: message });
-            window.dispatchEvent(event);
+            showSovereignToast(String(message), 'info');
         };
     }
 };
@@ -14,11 +21,19 @@ export const setupSovereignAlertInterceptor = () => {
 export const SovereignAlertHandler: React.FC = () => {
     const [open, setOpen] = useState(false);
     const [message, setMessage] = useState('');
+    const [severity, setSeverity] = useState<SovereignSeverity>('error');
 
     useEffect(() => {
         const handleAlert = (e: Event) => {
             const customEvent = e as CustomEvent;
-            setMessage(String(customEvent.detail || ''));
+            const detail = customEvent.detail;
+            if (typeof detail === 'object' && detail !== null && 'message' in detail) {
+                setMessage(String(detail.message || ''));
+                setSeverity(detail.severity || 'error');
+            } else {
+                setMessage(String(detail || ''));
+                setSeverity('error');
+            }
             setOpen(true);
         };
 
@@ -26,9 +41,7 @@ export const SovereignAlertHandler: React.FC = () => {
         return () => window.removeEventListener('sovereign_alert', handleAlert);
     }, []);
 
-    const handleClose = () => {
-        setOpen(false);
-    };
+    const handleClose = () => setOpen(false);
 
     return (
         <Snackbar 
@@ -41,15 +54,13 @@ export const SovereignAlertHandler: React.FC = () => {
             <Alert 
                 icon={<ShieldAlert size={20} />}
                 onClose={handleClose} 
-                severity="error" 
+                severity={severity} 
                 variant="filled"
                 sx={{ 
                     bgcolor: '#0B0B0C',
                     color: '#FFF', 
-                    border: '1px solid #ef4444', 
                     borderRadius: 3,
-                    boxShadow: '0 8px 32px rgba(239, 68, 68, 0.2)',
-                    '& .MuiAlert-icon': { color: '#ef4444' }
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
                 }}
             >
                 <Typography variant="body2" fontWeight={700}>
