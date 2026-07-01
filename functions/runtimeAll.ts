@@ -6,3 +6,4 @@ export { listOwnerHandoverInspections, updateOwnerHandoverInspection } from './o
 export { submitTenantMoveInspection } from './tenantHandoverInspections';
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
 export { adminCreateUser, syncStaffCustomClaims } from './adminUserProvisioning';
+export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
