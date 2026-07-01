@@ -422,7 +422,7 @@ async function collectEligibleOwnerContracts() {
   const snap = await db.collection("contracts").limit(2500).get();
   const grouped = new Map<string, any[]>();
   snap.forEach((doc) => {
-    const data = { id: doc.id, contractId: doc.id, ...doc.data() };
+    const data: any = { id: doc.id, contractId: doc.id, ...doc.data() };
     if (!includesMaintenanceAndPropertyManagement(data)) return;
     const ownerId = safeString(data.ownerId || data.ownerUid || data.userId || data.createdBy);
     if (!ownerId) return;
