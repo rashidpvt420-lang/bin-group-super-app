@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, ClipboardCheck, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
+import { Building2, ClipboardCheck, ClipboardList, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -243,6 +243,7 @@ export default function OwnerDashboardResolvedPage() {
   const [ledgerSummary, setLedgerSummary] = useState<any>(null);
   const [pendingPayments, setPendingPayments] = useState(0);
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [pendingHandovers, setPendingHandovers] = useState(0);
   const [permissionWarning, setPermissionWarning] = useState('');
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   // Ref to hold real-time unsubscribe callbacks
@@ -475,6 +476,26 @@ export default function OwnerDashboardResolvedPage() {
       liveUnsubs.current.push(unsubBank);
     } catch (e) {
       console.warn('[OwnerDashboard] Could not attach live bank account listener:', e);
+    }
+
+    // Live pending handover inspections count.
+    try {
+      const handoverQuery = query(
+        collection(db, 'inspections'),
+        where('ownerId', '==', authUid),
+        where('status', 'in', ['SUBMITTED', 'OWNER_REVIEW', 'DISPUTED'])
+      );
+      const unsubHandovers = onSnapshot(
+        handoverQuery,
+        (snap) => { setPendingHandovers(snap.size); },
+        (err) => {
+          if (isPermDenied(err)) warnLiveDenied('handover inspection count');
+          else console.warn('[OwnerDashboard] Live handover count error:', err);
+        }
+      );
+      liveUnsubs.current.push(unsubHandovers);
+    } catch (e) {
+      console.warn('[OwnerDashboard] Could not attach live handover listener:', e);
     }
 
     return () => {
@@ -724,6 +745,7 @@ export default function OwnerDashboardResolvedPage() {
     { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
     { label: tx('dash.kpi.pendingPayments', 'Pending Payments'), value: pendingPayments, icon: <Wallet size={20} />, color: '#f59e0b', to: '/owner/financials' },
     { label: tx('dash.kpi.pendingApprovals', 'Pending Owner Approvals'), value: pendingApprovals, icon: <ClipboardCheck size={20} />, color: '#8b5cf6', to: '/owner/approvals' },
+    { label: tx('dash.kpi.pendingHandovers', 'Pending Handovers'), value: pendingHandovers, icon: <ClipboardList size={20} />, color: '#06b6d4', to: '/owner/inspections' },
   ];
 
   return (
