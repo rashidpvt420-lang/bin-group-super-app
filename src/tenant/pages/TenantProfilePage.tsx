@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Grid, Avatar, CircularProgress, Chip, Stack, TextField, Button, Alert, Divider } from '@mui/material';
+import { Box, Typography, Paper, Grid, Avatar, CircularProgress, Chip, Stack, TextField, Button, Alert, Divider, alpha } from '@mui/material';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { db, auth, collection, query, where, getDocs, doc, getDoc, setDoc, updateProfile, sendPasswordResetEmail, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { User, Phone, Mail, Save, KeyRound } from 'lucide-react';
+import { User, Phone, Mail, Save, KeyRound, ShieldCheck, Shield } from 'lucide-react';
 import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
 
 const inputSx = {
@@ -28,6 +28,8 @@ export default function TenantProfilePage() {
     const [phone, setPhone] = useState('');
     const [emergencyName, setEmergencyName] = useState('');
     const [emergencyPhone, setEmergencyPhone] = useState('');
+    const [emiratesId, setEmiratesId] = useState('');
+    const [emiratesIdVerified, setEmiratesIdVerified] = useState(false);
     const [notice, setNotice] = useState<Notice | null>(null);
 
     useEffect(() => {
@@ -44,6 +46,8 @@ export default function TenantProfilePage() {
                 setPhone(userData.phoneNumber || userData.phone || user.phoneNumber || '');
                 setEmergencyName(userData.emergencyContact?.name || '');
                 setEmergencyPhone(userData.emergencyContact?.phone || '');
+                setEmiratesId(userData.emiratesId || userData.emiratesID || '');
+                setEmiratesIdVerified(Boolean(userData.emiratesIdVerified));
 
                 let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid)));
                 if (unitSnap.empty) unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid)));
@@ -90,6 +94,9 @@ export default function TenantProfilePage() {
                     name: emergencyName.trim(),
                     phone: emergencyPhone.trim(),
                 },
+                emiratesId: emiratesId.trim(),
+                emiratesID: emiratesId.trim(),
+                emiratesIdVerified: false,
                 updatedAt: serverTimestamp(),
             }, { merge: true });
             setProfileData((prev: any) => ({ ...prev, displayName: displayName.trim(), phoneNumber: phone.trim(), phone: phone.trim(), emergencyContact: { name: emergencyName.trim(), phone: emergencyPhone.trim() } }));
@@ -158,6 +165,27 @@ export default function TenantProfilePage() {
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Phone Number', 'رقم الهاتف')} value={phone} onChange={(e) => setPhone(e.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Name', 'اسم جهة الاتصال للطوارئ')} value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Phone', 'هاتف جهة الاتصال للطوارئ')} value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} sx={inputSx} /></Grid>
+                    <Grid item xs={12}>
+                        <Stack spacing={1}>
+                            <TextField
+                                fullWidth
+                                label={label('Emirates ID Number', 'رقم الهوية الإماراتية')}
+                                value={emiratesId}
+                                onChange={(e) => setEmiratesId(e.target.value)}
+                                placeholder="784-XXXX-XXXXXXX-X"
+                                helperText={label('Your Emirates ID will be verified by the property management team.', 'سيتم التحقق من هويتك الإماراتية من قِبَل فريق إدارة العقارات.')}
+                                sx={{ ...inputSx, '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.4)' } }}
+                            />
+                            {emiratesId && (
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                                    {emiratesIdVerified
+                                        ? <Chip icon={<ShieldCheck size={14} />} label={label('Emirates ID Verified', 'هوية إماراتية موثَّقة')} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 950 }} />
+                                        : <Chip icon={<Shield size={14} />} label={label('Pending Verification', 'بانتظار التحقق')} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 950 }} />
+                                    }
+                                </Stack>
+                            )}
+                        </Stack>
+                    </Grid>
                 </Grid>
                 <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
                     <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Saving...', 'جارٍ الحفظ...') : label('Save Profile', 'حفظ الملف')}</Button>

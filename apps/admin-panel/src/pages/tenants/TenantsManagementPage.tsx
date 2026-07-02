@@ -36,7 +36,8 @@ export default function TenantsManagementPage() {
       propertyId: '',
       unitId: '',
       notes: '',
-      emiratesID: ''
+      emiratesID: '',
+      emiratesIdVerified: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -241,7 +242,8 @@ export default function TenantsManagementPage() {
           propertyId: tenant.propertyId || '',
           unitId: tenant.unitId || '',
           notes: tenant.notes || '',
-          emiratesID: tenant.emiratesID || tenant.emiratesId || ''
+          emiratesID: tenant.emiratesID || tenant.emiratesId || '',
+          emiratesIdVerified: Boolean(tenant.emiratesIdVerified),
       });
       setSelectedPropertyId(tenant.propertyId || '');
       setSelectedUnitId(tenant.unitId || '');
@@ -267,6 +269,7 @@ export default function TenantsManagementPage() {
               unitId: selectedUnitId,
               notes: editForm.notes,
               emiratesID: editForm.emiratesID,
+              emiratesIdVerified: editForm.emiratesIdVerified,
               updatedAt: serverTimestamp(),
               updatedBy: currentAdminUid
           };
@@ -747,12 +750,26 @@ export default function TenantsManagementPage() {
                             value={editForm.phoneNumber}
                             onChange={(e) => setEditForm({...editForm, phoneNumber: e.target.value})}
                         />
-                        <TextField
-                            label={t('admin.tenants_mgmt.field_emirates_id')}
-                            fullWidth
-                            value={editForm.emiratesID}
-                            onChange={(e) => setEditForm({...editForm, emiratesID: e.target.value})}
-                        />
+                        <Stack spacing={1}>
+                            <TextField
+                                label={t('admin.tenants_mgmt.field_emirates_id')}
+                                fullWidth
+                                value={editForm.emiratesID}
+                                onChange={(e) => setEditForm({...editForm, emiratesID: e.target.value, emiratesIdVerified: false})}
+                                helperText={editForm.emiratesIdVerified ? '✓ Verified by admin' : editForm.emiratesID ? 'Pending admin verification' : ''}
+                            />
+                            {editForm.emiratesID && (
+                                <Button
+                                    size="small"
+                                    variant={editForm.emiratesIdVerified ? 'outlined' : 'contained'}
+                                    color={editForm.emiratesIdVerified ? 'success' : 'primary'}
+                                    onClick={() => setEditForm(f => ({ ...f, emiratesIdVerified: !f.emiratesIdVerified }))}
+                                    sx={{ alignSelf: 'flex-start', fontWeight: 800 }}
+                                >
+                                    {editForm.emiratesIdVerified ? '✓ Verified — Click to Revoke' : 'Mark Emirates ID Verified'}
+                                </Button>
+                            )}
+                        </Stack>
                         <FormControl fullWidth>
                             <InputLabel>{t('admin.tenants_mgmt.field_account_status')}</InputLabel>
                             <Select

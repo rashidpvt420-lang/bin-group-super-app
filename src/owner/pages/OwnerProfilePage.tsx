@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Avatar, Box, Button, CircularProgress, Divider, Grid, Paper, Stack, TextField, Typography } from '@mui/material';
-import { Building2, KeyRound, Mail, Phone, Save, Shield, User } from 'lucide-react';
+import { Alert, Avatar, Box, Button, Chip, CircularProgress, Divider, Grid, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Building2, KeyRound, Mail, Phone, Save, Shield, ShieldCheck, User } from 'lucide-react';
 import { auth, db, doc, getDoc, sendPasswordResetEmail, serverTimestamp, setDoc, updateProfile } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -30,6 +30,8 @@ export default function OwnerProfilePage() {
   const [billingEmail, setBillingEmail] = useState('');
   const [billingPhone, setBillingPhone] = useState('');
   const [preferredContact, setPreferredContact] = useState('email');
+  const [emiratesId, setEmiratesId] = useState('');
+  const [emiratesIdVerified, setEmiratesIdVerified] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
@@ -49,6 +51,8 @@ export default function OwnerProfilePage() {
         setBillingEmail(data.billingContact?.email || data.billingEmail || user.email || '');
         setBillingPhone(data.billingContact?.phone || data.billingPhone || data.phoneNumber || data.phone || user.phoneNumber || '');
         setPreferredContact(data.notificationPreferences?.preferredContact || data.preferredContact || 'email');
+        setEmiratesId(data.emiratesId || data.emiratesID || '');
+        setEmiratesIdVerified(Boolean(data.emiratesIdVerified));
       } catch (error) {
         console.error('[OwnerProfile] load failed:', error);
         setNotice({ type: 'error', text: label('Owner profile could not be loaded.', 'تعذر تحميل ملف المالك.') });
@@ -89,6 +93,8 @@ export default function OwnerProfilePage() {
           language: lang,
         },
         language: lang,
+        emiratesId: emiratesId.trim(),
+        emiratesID: emiratesId.trim(),
         updatedAt: serverTimestamp(),
       };
       await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
@@ -155,6 +161,28 @@ export default function OwnerProfilePage() {
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Name', 'اسم جهة الفوترة')} value={billingName} onChange={(e) => setBillingName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Email', 'بريد الفوترة الإلكتروني')} value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} onChange={(e) => setBillingPhone(e.target.value)} sx={inputSx} /></Grid>
+          <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Identity Verification', 'التحقق من الهوية')}</Typography></Grid>
+          <Grid item xs={12} md={6}>
+            <Stack spacing={1}>
+              <TextField
+                fullWidth
+                label={label('Emirates ID Number', 'رقم الهوية الإماراتية')}
+                value={emiratesId}
+                onChange={(e) => setEmiratesId(e.target.value)}
+                placeholder="784-XXXX-XXXXXXX-X"
+                helperText={label('Your Emirates ID will be verified by the BIN GROUP team.', 'سيتم التحقق من هويتك الإماراتية من قِبَل فريق BIN GROUP.')}
+                sx={inputSx}
+              />
+              {emiratesId && (
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                  {emiratesIdVerified
+                    ? <Chip icon={<ShieldCheck size={14} />} label={label('Emirates ID Verified', 'هوية إماراتية موثَّقة')} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 950 }} />
+                    : <Chip icon={<Shield size={14} />} label={label('Pending Verification', 'بانتظار التحقق')} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 950 }} />
+                  }
+                </Stack>
+              )}
+            </Stack>
+          </Grid>
         </Grid>
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
