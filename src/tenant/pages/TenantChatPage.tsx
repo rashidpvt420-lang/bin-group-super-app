@@ -4,12 +4,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Send } from 'lucide-react';
 import { db, doc, getDoc, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TenantChatPage() {
     const { ticketId } = useParams();
     const { user } = useRole();
     const navigate = useNavigate();
+    const { tx, isRTL } = useLanguage();
     const [ticket, setTicket] = useState<any>(null);
     const [messages, setMessages] = useState<any[]>([]);
     const [newMessage, setNewMessage] = useState('');
@@ -63,9 +65,9 @@ export default function TenantChatPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column', direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                Chat: {ticket?.assignedTechnicianName || 'Technician'}
+                {tx('chat.title_prefix', 'Chat')}: {ticket?.assignedTechnicianName || tx('chat.technician', 'Technician')}
             </Typography>
 
             <Paper sx={{ flex: 1, p: 3, mb: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflowY: 'auto' }}>
@@ -88,7 +90,7 @@ export default function TenantChatPage() {
                     })}
                     {messages.length === 0 && (
                         <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 10 }}>
-                            Send a message to the technician.
+                            {tx('chat.empty_state', 'Send a message to the technician.')}
                         </Typography>
                     )}
                     <div ref={messagesEndRef} />
@@ -99,7 +101,7 @@ export default function TenantChatPage() {
                 <Paper sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 10, display: 'flex', alignItems: 'center' }}>
                     <TextField 
                         fullWidth 
-                        placeholder="Type your message..." 
+                        placeholder={tx('chat.placeholder', 'Type your message...')}
                         variant="standard" 
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}

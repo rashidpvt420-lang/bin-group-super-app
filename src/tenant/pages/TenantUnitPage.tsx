@@ -3,6 +3,7 @@ import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, Dial
 import { Building2, ClipboardCheck, FileText, Home, ShieldCheck, UserRound, Wrench } from 'lucide-react';
 import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type UnitDoc = {
@@ -46,6 +47,7 @@ const emptyInspectionForm = (): InspectionForm => ({
 
 export default function TenantUnitPage() {
   const { user } = useRole();
+  const { tx, isRTL } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [unit, setUnit] = useState<UnitDoc | null>(null);
   const [property, setProperty] = useState<any | null>(null);
@@ -130,7 +132,7 @@ export default function TenantUnitPage() {
   const maintenance = String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase();
 
   return (
-    <Box>
+    <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={4}>
         {error && <Alert severity="warning" onClose={() => setError(null)}>{error}</Alert>}
         {handoverResult && <Alert severity="success" onClose={() => setHandoverResult('')}>{handoverResult}</Alert>}
@@ -140,54 +142,54 @@ export default function TenantUnitPage() {
             <Stack direction="row" spacing={2.5} alignItems="center">
               <Box sx={{ width: 64, height: 64, display: 'grid', placeItems: 'center', borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}><Home size={32} /></Box>
               <Box>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>MY UNIT</Typography>
-                <Typography variant="h4" sx={{ color: '#FFF', fontWeight: 950 }}>Unit {unit.unitNumber || '—'}</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('unit.overline', 'MY UNIT')}</Typography>
+                <Typography variant="h4" sx={{ color: '#FFF', fontWeight: 950 }}>{tx('unit.unit_prefix', 'Unit')} {unit.unitNumber || '—'}</Typography>
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'} · Floor {unit.floor || '—'}</Typography>
               </Box>
             </Stack>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="flex-start" justifyContent="flex-end">
-              <Chip icon={<ShieldCheck size={14} />} label="TENANT ISOLATED VIEW" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950 }} />
+              <Chip icon={<ShieldCheck size={14} />} label={tx('unit.isolated_chip', 'TENANT ISOLATED VIEW')} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950 }} />
               <Button startIcon={<ClipboardCheck size={16} />} variant="contained" onClick={() => setHandoverOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                Submit Handover
+                {tx('unit.submit_handover', 'Submit Handover')}
               </Button>
             </Stack>
           </Stack>
         </Paper>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>PROPERTY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>OCCUPANCY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>Submit requests from the tenant dashboard.</Typography></Paper></Grid>
-          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><FileText color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>TENANCY REGISTRATION</Typography><Typography sx={{ color: unit.tenancyRegistrationNumber ? '#FFF' : 'rgba(255,255,255,0.3)', fontWeight: 950 }}>{unit.tenancyRegistrationNumber || 'Not yet registered'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>Ejari / Tawtheeq</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>{tx('unit.property_label', 'PROPERTY')}</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>{tx('unit.occupancy_label', 'OCCUPANCY')}</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>{tx('unit.maintenance_label', 'MAINTENANCE')}</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{tx('unit.maintenance_desc', 'Submit requests from the tenant dashboard.')}</Typography></Paper></Grid>
+          <Grid item xs={12} md={3}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><FileText color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>{tx('unit.registration_label', 'TENANCY REGISTRATION')}</Typography><Typography sx={{ color: unit.tenancyRegistrationNumber ? '#FFF' : 'rgba(255,255,255,0.3)', fontWeight: 950 }}>{unit.tenancyRegistrationNumber || tx('unit.not_registered', 'Not yet registered')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{tx('unit.ejari_label', 'Ejari / Tawtheeq')}</Typography></Paper></Grid>
         </Grid>
 
         <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-          This page only loads the unit assigned to your tenant profile by tenant ID or tenant email. Other building units are not shown here.
+          {tx('unit.isolated_alert', 'This page only loads the unit assigned to your tenant profile by tenant ID or tenant email. Other building units are not shown here.')}
         </Alert>
       </Stack>
 
       <Dialog open={handoverOpen} onClose={() => setHandoverOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Submit move-in / move-out handover</DialogTitle>
+        <DialogTitle>{tx('unit.handover_dialog_title', 'Submit move-in / move-out handover')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 1 }}>
-            <TextField select label="Inspection type" value={handoverForm.inspectionType} onChange={(event) => setHandoverForm((current) => ({ ...current, inspectionType: event.target.value as InspectionForm['inspectionType'] }))} fullWidth>
-              <MenuItem value="MOVE_IN">Move-in</MenuItem>
-              <MenuItem value="MOVE_OUT">Move-out</MenuItem>
+            <TextField select label={tx('unit.inspection_type_label', 'Inspection type')} value={handoverForm.inspectionType} onChange={(event) => setHandoverForm((current) => ({ ...current, inspectionType: event.target.value as InspectionForm['inspectionType'] }))} fullWidth>
+              <MenuItem value="MOVE_IN">{tx('unit.move_in', 'Move-in')}</MenuItem>
+              <MenuItem value="MOVE_OUT">{tx('unit.move_out', 'Move-out')}</MenuItem>
             </TextField>
-            <TextField label="Summary" value={handoverForm.summary} onChange={(event) => setHandoverForm((current) => ({ ...current, summary: event.target.value }))} fullWidth required />
-            <TextField label="Notes" value={handoverForm.notes} onChange={(event) => setHandoverForm((current) => ({ ...current, notes: event.target.value }))} fullWidth multiline minRows={3} />
-            <TextField label="Evidence URL" value={handoverForm.evidenceUrl} onChange={(event) => setHandoverForm((current) => ({ ...current, evidenceUrl: event.target.value }))} fullWidth helperText="Paste uploaded photo/video/report evidence URL if available." />
-            <TextField label="Report URL" value={handoverForm.reportUrl} onChange={(event) => setHandoverForm((current) => ({ ...current, reportUrl: event.target.value }))} fullWidth />
+            <TextField label={tx('unit.summary_label', 'Summary')} value={handoverForm.summary} onChange={(event) => setHandoverForm((current) => ({ ...current, summary: event.target.value }))} fullWidth required />
+            <TextField label={tx('unit.notes_label', 'Notes')} value={handoverForm.notes} onChange={(event) => setHandoverForm((current) => ({ ...current, notes: event.target.value }))} fullWidth multiline minRows={3} />
+            <TextField label={tx('unit.evidence_url_label', 'Evidence URL')} value={handoverForm.evidenceUrl} onChange={(event) => setHandoverForm((current) => ({ ...current, evidenceUrl: event.target.value }))} fullWidth helperText={tx('unit.evidence_url_helper', 'Paste uploaded photo/video/report evidence URL if available.')} />
+            <TextField label={tx('unit.report_url_label', 'Report URL')} value={handoverForm.reportUrl} onChange={(event) => setHandoverForm((current) => ({ ...current, reportUrl: event.target.value }))} fullWidth />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField type="number" label="Deposit held" value={handoverForm.depositHeld} onChange={(event) => setHandoverForm((current) => ({ ...current, depositHeld: Number(event.target.value) }))} fullWidth />
-              <TextField type="number" label="Damage estimate" value={handoverForm.damageEstimate} onChange={(event) => setHandoverForm((current) => ({ ...current, damageEstimate: Number(event.target.value) }))} fullWidth />
+              <TextField type="number" label={tx('unit.deposit_held_label', 'Deposit held')} value={handoverForm.depositHeld} onChange={(event) => setHandoverForm((current) => ({ ...current, depositHeld: Number(event.target.value) }))} fullWidth />
+              <TextField type="number" label={tx('unit.damage_estimate_label', 'Damage estimate')} value={handoverForm.damageEstimate} onChange={(event) => setHandoverForm((current) => ({ ...current, damageEstimate: Number(event.target.value) }))} fullWidth />
             </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setHandoverOpen(false)}>Cancel</Button>
+          <Button onClick={() => setHandoverOpen(false)}>{tx('unit.cancel', 'Cancel')}</Button>
           <Button disabled={handoverSaving || !handoverForm.summary.trim()} onClick={submitHandoverInspection} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-            {handoverSaving ? 'Submitting...' : 'Submit handover'}
+            {handoverSaving ? tx('unit.submitting', 'Submitting...') : tx('unit.submit_handover_btn', 'Submit handover')}
           </Button>
         </DialogActions>
       </Dialog>

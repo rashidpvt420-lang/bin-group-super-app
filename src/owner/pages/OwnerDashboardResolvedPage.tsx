@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Building2, ClipboardCheck, ClipboardList, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
+import { Building2, CalendarClock, ClipboardCheck, ClipboardList, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -766,6 +766,7 @@ export default function OwnerDashboardResolvedPage() {
           <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.propPassport', 'Property Passport')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('owner-money-snapshot')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{tx('dash.owner.money', 'Money')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>{tx('dash.owner.complaints', 'Complaints')}</Button>
+          <Button variant="outlined" onClick={() => navigate('/owner/renewals')} startIcon={<CalendarClock size={16} />} sx={{ borderColor: '#6366f1', color: '#6366f1', fontWeight: 950 }}>{tx('dash.owner.renewals', 'Renewals')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('authorized-property-reporters')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.addPerson', 'Add Person')}</Button>
         </Stack>
       </Box>

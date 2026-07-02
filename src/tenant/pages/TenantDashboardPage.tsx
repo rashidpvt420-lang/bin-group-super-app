@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench, Bell, Key, Package, Car, Store, Contact, MessageSquare, Users } from 'lucide-react';
+import { Activity, AlertTriangle, CalendarClock, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench, Bell, Key, Package, Car, Store, Contact, MessageSquare, Users } from 'lucide-react';
 import { collection, db, doc, getDoc, getDocs, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -198,6 +198,7 @@ export default function TenantDashboardPage() {
     { label: tx('service.staff', 'Staff Directory'), icon: <Contact size={20} />, route: '/tenant/staff-directory', visible: showManagement },
     { label: tx('service.messages', 'Messages'), icon: <MessageSquare size={20} />, route: '/tenant/messages', visible: true },
     { label: tx('service.community', 'Community Board'), icon: <Users size={20} />, route: '/tenant/community', visible: true },
+    { label: tx('service.renewals', 'Lease Renewal'), icon: <CalendarClock size={20} />, route: '/tenant/renewals', visible: true },
   ].filter((button) => button.visible), [showMaintenance, showManagement, tx]);
 
   if (loading) {

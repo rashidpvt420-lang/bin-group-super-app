@@ -45,6 +45,8 @@ const primaryMenu = [
         { text: 'Unit Status Control', icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
         { text: "Duty Command Center", icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
+        { text: tx('ops.renewals.page_title', 'Renewals Command'), icon: <PendingActionsIcon />, path: '/ops/renewals', color: '#6366f1' },
+        { text: tx('ops.dispute.page_title', 'Dispute Queue'), icon: <PendingActionsIcon />, path: '/ops/disputes', color: '#ef4444' },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Grid, Stack, Button, CircularProgress, Chip, alpha } from '@mui/material';
 import { db, collection, query, where, getDocs, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { FileText, Download, FileCheck, Info, Eye } from 'lucide-react';
 
@@ -67,6 +68,7 @@ async function queryGeneralDocs() {
 
 export default function TenantDocumentsPage() {
     const { user } = useRole();
+    const { tx, isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState<any[]>([]);
 
@@ -105,9 +107,9 @@ export default function TenantDocumentsPage() {
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box>
-            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>Documents & Notices</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4 }}>Download your lease, invoices, receipts, notices, service documents, and building files shared by BIN GROUP.</Typography>
+        <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{tx('docs.page_title', 'Documents & Notices')}</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{tx('docs.page_subtitle', 'Download your lease, invoices, receipts, notices, service documents, and building files shared by BIN GROUP.')}</Typography>
 
             <Grid container spacing={3}>
                 {documents.map(doc => {
@@ -115,26 +117,26 @@ export default function TenantDocumentsPage() {
                     return (
                     <Grid item xs={12} md={6} key={doc.id}>
                         <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
-                                <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+                            <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
                                     <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
                                         {doc.type === 'NOTICE' ? <Info size={24} color={binThemeTokens.gold} /> : <FileText size={24} color={binThemeTokens.gold} />}
                                     </Box>
-                                    <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="body1" fontWeight="900" color="#FFF" noWrap>{doc.title || doc.name || 'Tenant Document'}</Typography>
-                                        <Typography variant="caption" color="textSecondary">Added: {new Date(dateOf(doc)).toLocaleDateString()}</Typography>
+                                    <Box sx={{ minWidth: 0, textAlign: isRTL ? 'right' : 'left' }}>
+                                        <Typography variant="body1" fontWeight="900" color="#FFF" noWrap>{doc.title || doc.name || tx('docs.doc_fallback', 'Tenant Document')}</Typography>
+                                        <Typography variant="caption" color="textSecondary">{tx('docs.added_label', 'Added')}: {new Date(dateOf(doc)).toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE')}</Typography>
                                         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                                            <Chip size="small" label={doc.type || doc.category || 'DOCUMENT'} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontWeight: 900 }} />
-                                            <Chip size="small" label={hasFile ? 'READY' : 'PENDING FILE'} sx={{ bgcolor: alpha(hasFile ? '#10b981' : '#f59e0b', 0.12), color: hasFile ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
+                                            <Chip size="small" label={doc.type || doc.category || tx('docs.type_document', 'DOCUMENT')} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontWeight: 900 }} />
+                                            <Chip size="small" label={hasFile ? tx('docs.status_ready', 'READY') : tx('docs.status_pending', 'PENDING FILE')} sx={{ bgcolor: alpha(hasFile ? '#10b981' : '#f59e0b', 0.12), color: hasFile ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
                                         </Stack>
                                     </Box>
                                 </Stack>
-                                <Stack direction="row" spacing={1}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1}>
                                     <Button variant="outlined" size="small" startIcon={<Eye size={15} />} disabled={!hasFile} onClick={() => openDocument(doc)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.4), fontWeight: 900 }}>
-                                        VIEW
+                                        {tx('common.view', 'VIEW')}
                                     </Button>
                                     <Button variant="contained" size="small" startIcon={hasFile ? <Download size={15} /> : <FileCheck size={15} />} disabled={!hasFile} onClick={() => downloadDocument(doc)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                                        DOWNLOAD
+                                        {tx('common.download', 'DOWNLOAD')}
                                     </Button>
                                 </Stack>
                             </Stack>
@@ -145,7 +147,7 @@ export default function TenantDocumentsPage() {
             {documents.length === 0 && (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
                     <Typography variant="body1" color="textSecondary">
-                        No downloadable documents available yet.
+                        {tx('docs.empty_state', 'No downloadable documents available yet.')}
                     </Typography>
                 </Paper>
             )}
