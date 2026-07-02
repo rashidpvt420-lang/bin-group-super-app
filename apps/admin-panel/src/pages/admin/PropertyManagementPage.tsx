@@ -120,7 +120,7 @@ export default function PropertyManagementPage() {
             resetForm();
         } catch (error: any) {
             console.error("Error adding property:", error);
-            alert(error?.message || 'We could not verify this location. Admin review is required.');
+            alert(error?.message || t('admin.property_mgmt.geo_verify_failed'));
         }
     };
 
@@ -175,12 +175,12 @@ export default function PropertyManagementPage() {
             resetForm();
         } catch (error: any) {
             console.error("Error updating property:", error);
-            alert(error?.message || 'We could not verify this location. Admin review is required.');
+            alert(error?.message || t('admin.property_mgmt.geo_verify_failed'));
         }
     };
 
     const handleDeleteProperty = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this asset from the registry?")) {
+        if (window.confirm(t('admin.property_mgmt.delete_confirm'))) {
             try {
                 await deleteDoc(doc(db, 'properties', id));
             } catch (error) {

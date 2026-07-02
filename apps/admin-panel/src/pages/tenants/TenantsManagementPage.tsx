@@ -148,9 +148,9 @@ export default function TenantsManagementPage() {
                 return [found, ...prev];
             });
             setSelectedExistingTenantId(found.uid);
-            alert("Sovereign Match Found: User identified in registry.");
+            alert(t('admin.tenants_mgmt.alert_match_found'));
         } else {
-            alert("No user found with this email. Please use 'New Tenant' mode.");
+            alert(t('admin.tenants_mgmt.alert_no_user_found'));
         }
     } catch (err) {
         console.error(err);
@@ -162,7 +162,7 @@ export default function TenantsManagementPage() {
   const handleAddTenant = async () => {
     const usingExistingTenant = tenantMode === 'existing';
     if (!selectedOwnerId || !selectedPropertyId || !selectedUnitId || (!usingExistingTenant && (!newTenant.email || !newTenant.displayName)) || (usingExistingTenant && !selectedExistingTenantId)) {
-        alert("Owner, Property, Unit, and tenant identity are required.");
+        alert(t('admin.tenants_mgmt.alert_required_fields'));
         return;
     }
 
@@ -173,13 +173,13 @@ export default function TenantsManagementPage() {
       const existingTenant = tenants.find(t => t.uid === selectedExistingTenantId);
 
       if (!unitData || unitData.propertyId !== selectedPropertyId) {
-        alert("Linkage broken: Select a unit that belongs to the chosen property.");
+        alert(t('admin.tenants_mgmt.alert_linkage_broken'));
         setSubmitting(false);
         return;
       }
 
       if (unitData.occupancyStatus === 'OCCUPIED') {
-        alert("Occupancy Alert: This unit is already occupied.");
+        alert(t('admin.tenants_mgmt.alert_unit_occupied'));
         setSubmitting(false);
         return;
       }
@@ -225,7 +225,7 @@ export default function TenantsManagementPage() {
 
       await batch.commit();
       setOpenAdd(false);
-      alert("Relational Link Secured: Tenant assigned to Unit.");
+      alert(t('admin.tenants_mgmt.alert_tenant_assigned'));
     } catch (err: any) {
         alert("Fault: " + err.message);
     } finally {
@@ -358,7 +358,7 @@ export default function TenantsManagementPage() {
 
   const handleResendInvitation = async (invitationId: string) => {
       if (!invitationId) {
-          alert("No invitation record found for this tenant.");
+          alert(t('admin.tenants_mgmt.alert_no_invitation'));
           return;
       }
       setSubmitting(true);
@@ -377,7 +377,7 @@ export default function TenantsManagementPage() {
 
   const handleArchiveTenant = async (tenant: any) => {
       if (!currentAdminUid) return;
-      if (!window.confirm("Archive this tenant? They will no longer be able to log in to the tenant portal.")) return;
+      if (!window.confirm(t('admin.tenants_mgmt.confirm_archive'))) return;
       
       setSubmitting(true);
       try {
@@ -756,7 +756,7 @@ export default function TenantsManagementPage() {
                                 fullWidth
                                 value={editForm.emiratesID}
                                 onChange={(e) => setEditForm({...editForm, emiratesID: e.target.value, emiratesIdVerified: false})}
-                                helperText={editForm.emiratesIdVerified ? '✓ Verified by admin' : editForm.emiratesID ? 'Pending admin verification' : ''}
+                                helperText={editForm.emiratesIdVerified ? t('admin.tenants_mgmt.emirates_id_verified_helper') : editForm.emiratesID ? t('admin.tenants_mgmt.emirates_id_pending_helper') : ''}
                             />
                             {editForm.emiratesID && (
                                 <Button
@@ -766,7 +766,7 @@ export default function TenantsManagementPage() {
                                     onClick={() => setEditForm(f => ({ ...f, emiratesIdVerified: !f.emiratesIdVerified }))}
                                     sx={{ alignSelf: 'flex-start', fontWeight: 800 }}
                                 >
-                                    {editForm.emiratesIdVerified ? '✓ Verified — Click to Revoke' : 'Mark Emirates ID Verified'}
+                                    {editForm.emiratesIdVerified ? t('admin.tenants_mgmt.emirates_id_revoke_btn') : t('admin.tenants_mgmt.emirates_id_verify_btn')}
                                 </Button>
                             )}
                         </Stack>

@@ -115,7 +115,7 @@ export const IntakeVaultPage: React.FC = () => {
     }, []);
 
     const handleApprove = async (intake: IntakeSubmission) => {
-        if (!intake.payment?.paymentId && !window.confirm("This legacy intake has no linked payment transaction. Continue only if finance has verified the mobilization payment offline.")) {
+        if (!intake.payment?.paymentId && !window.confirm(t('admin.intake_vault.legacy_intake_confirm'))) {
             return;
         }
 
@@ -279,15 +279,15 @@ export const IntakeVaultPage: React.FC = () => {
 
             await batch.commit();
             setSelectedIntake(null);
-            alert("Sovereign Node Activated: Intake converted to live Owner portfolio.");
+            alert(t('admin.intake_vault.activation_success'));
         } catch (err) {
             console.error("Conversion Protocol Fault:", err);
-            alert("Relational Provisioning Failure. Check Admin permissions.");
+            alert(t('admin.intake_vault.activation_failed'));
         }
     };
 
     const handleReject = async (id: string) => {
-        if (!window.confirm("Initialize Rejection Protocol? This will archive the submission.")) return;
+        if (!window.confirm(t('admin.intake_vault.rejection_confirm'))) return;
         try {
             await updateDoc(doc(db, 'intake_submissions', id), {
                 status: 'REJECTED',
@@ -301,7 +301,7 @@ export const IntakeVaultPage: React.FC = () => {
 
     const handleClarification = async (id: string) => {
         if (!clarificationNote.trim()) {
-            alert("Add a clarification note before requesting more information.");
+            alert(t('admin.intake_vault.clarification_required'));
             return;
         }
         try {

@@ -140,7 +140,7 @@ export default function PaymentApprovalsPage() {
         }, (err) => {
             console.error('[ADMIN_PAYMENTS] stream failed', err);
             setLoading(false);
-            setError(err?.message || 'Payment approvals stream failed.');
+            setError(err?.message || t('admin.payment_approvals.error_stream_failed'));
         });
         return () => unsubscribe();
     }, []);
@@ -188,7 +188,7 @@ export default function PaymentApprovalsPage() {
             await updateDoc(doc(db, 'payoutRequests', row.id), { status: 'paid', paidAt: serverTimestamp(), updatedAt: serverTimestamp() });
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] payout mark-paid failed', err);
-            setError(err?.message || 'Could not mark payout as paid.');
+            setError(err?.message || t('admin.payment_approvals.error_payout_paid_failed'));
         } finally {
             setPayoutBusyId(null);
         }
@@ -208,7 +208,7 @@ export default function PaymentApprovalsPage() {
             setPayoutRejectTarget(null);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] payout reject failed', err);
-            setError(err?.message || 'Could not reject payout request.');
+            setError(err?.message || t('admin.payment_approvals.error_payout_reject_failed'));
         } finally {
             setPayoutBusyId(null);
         }
@@ -231,7 +231,7 @@ export default function PaymentApprovalsPage() {
             setApprovalTarget(null);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] approval failed', err);
-            setError(err?.message || 'Approval failed.');
+            setError(err?.message || t('admin.payment_approvals.error_approval_failed'));
         } finally {
             setBusyId(null);
         }
@@ -245,7 +245,7 @@ export default function PaymentApprovalsPage() {
             await callable({ paymentId, reason: 'Rejected from admin payment approval console.' });
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] rejection failed', err);
-            setError(err?.message || 'Rejection failed.');
+            setError(err?.message || t('admin.payment_approvals.error_rejection_failed'));
         } finally {
             setBusyId(null);
         }
@@ -269,7 +269,7 @@ export default function PaymentApprovalsPage() {
             setRefundTarget(null);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] refund failed', err);
-            setError(err?.message || 'Refund failed.');
+            setError(err?.message || t('admin.payment_approvals.error_refund_failed'));
         } finally {
             setRefundBusyId(null);
         }

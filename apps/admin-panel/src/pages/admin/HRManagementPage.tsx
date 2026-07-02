@@ -239,7 +239,7 @@ export default function HRManagementPage() {
                                                                     });
 
                                                                     if (result.data.success) {
-                                                                        alert("Sovereign Pay Advice secured and dispatched via email.");
+                                                                        alert(t('admin.hr_management.payslip_dispatched'));
                                                                     }
                                                                 } catch (err: any) {
                                                                     console.error("Payroll fault:", err);
