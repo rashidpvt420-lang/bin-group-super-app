@@ -12,23 +12,12 @@ let cachedCairoFont: Buffer | null = null;
 async function getCairoFont(): Promise<Buffer> {
     if (cachedCairoFont) return cachedCairoFont;
     
-    const fontUrl = 'https://fonts.gstatic.com/s/cairo/v20/SLXQ1O5tq8QA3r565Uq13w.ttf';
+    const fs = require('fs');
+    const path = require('path');
     
-    return new Promise<Buffer>((resolve, reject) => {
-        https.get(fontUrl, (res) => {
-            if (res.statusCode !== 200) {
-                reject(new Error(`Failed to download font: status ${res.statusCode}`));
-                return;
-            }
-            const chunks: Buffer[] = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
-                cachedCairoFont = Buffer.concat(chunks);
-                resolve(cachedCairoFont);
-            });
-            res.on('error', reject);
-        }).on('error', reject);
-    });
+    const fontPath = path.join(__dirname, '..', 'assets', 'Cairo-Regular.ttf');
+    cachedCairoFont = fs.readFileSync(fontPath);
+    return cachedCairoFont;
 }
 
 function isArabic(text: string): boolean {

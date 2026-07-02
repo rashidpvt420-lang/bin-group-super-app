@@ -77,7 +77,8 @@ function daysUntil(date: Date, now = new Date()) {
 }
 
 function milestoneFor(daysRemaining: number) {
-  return RENEWAL_MILESTONES.find((days) => daysRemaining === days) ?? null;
+  const ascending = [...RENEWAL_MILESTONES].reverse();
+  return ascending.find((days) => days >= daysRemaining) ?? null;
 }
 
 function expiryDateFrom(data: any): Date | null {
