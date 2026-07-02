@@ -50,12 +50,18 @@ interface Broker {
     status?: 'PENDING' | 'APPROVED' | 'REJECTED';
     bankName?: string;
     iban?: string;
+    bankIban?: string;
+    bankAccountHolder?: string;
     emiratesId?: string;
-    kycDocumentUrl?: string; // from signup
+    kycDocumentUrl?: string;
     reraLicense?: string;
     reraVerified?: boolean;
     reraStatus?: 'VERIFIED' | 'REJECTED' | string;
     reraReviewNote?: string;
+    tradeLicenseNumber?: string;
+    tradeLicenseVerified?: boolean;
+    tradeLicenseStatus?: 'VERIFIED' | 'REJECTED' | string;
+    tradeLicenseReviewNote?: string;
 }
 
 export default function BrokerManagementPage() {
@@ -67,6 +73,10 @@ export default function BrokerManagementPage() {
     const [reraReason, setReraReason] = useState('');
     const [reraBusyId, setReraBusyId] = useState<string | null>(null);
     const [reraError, setReraError] = useState<string | null>(null);
+    const [tlTarget, setTlTarget] = useState<Broker | null>(null);
+    const [tlReason, setTlReason] = useState('');
+    const [tlBusyId, setTlBusyId] = useState<string | null>(null);
+    const [tlError, setTlError] = useState<string | null>(null);
     const [stats, setStats] = useState({
         total: 0,
         pending: 0,
@@ -158,6 +168,42 @@ export default function BrokerManagementPage() {
         return 'default';
     };
 
+    const openTlDialog = (broker: Broker) => {
+        setTlTarget(broker);
+        setTlReason('');
+        setTlError(null);
+    };
+
+    const submitTlVerification = async (verified: boolean) => {
+        if (!tlTarget?.id) return;
+        setTlBusyId(tlTarget.id);
+        setTlError(null);
+        try {
+            const callable = httpsCallable(functions, 'setBrokerTradeLicenseVerification');
+            await callable({ brokerId: tlTarget.id, verified, reason: tlReason.trim() || undefined });
+            setTlTarget(null);
+        } catch (err: any) {
+            console.error('[BROKER_MGT] TL verification failed', err);
+            setTlError(err?.message || t('broker.tl_verify_failed'));
+        } finally {
+            setTlBusyId(null);
+        }
+    };
+
+    const tlStatusLabel = (broker: Broker | null) => {
+        if (!broker) return '';
+        if (broker.tradeLicenseVerified) return t('broker.tl_verified');
+        if (broker.tradeLicenseStatus === 'REJECTED') return t('broker.tl_rejected');
+        return t('broker.tl_pending');
+    };
+
+    const tlStatusColor = (broker: Broker | null): 'success' | 'error' | 'default' => {
+        if (!broker) return 'default';
+        if (broker.tradeLicenseVerified) return 'success';
+        if (broker.tradeLicenseStatus === 'REJECTED') return 'error';
+        return 'default';
+    };
+
     return (
         <Box sx={{ p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h4" sx={{ fontWeight: 900, mb: 4, letterSpacing: '-0.02em', textAlign: isRTL ? 'right' : 'left' }}>
@@ -246,6 +292,13 @@ export default function BrokerManagementPage() {
                                             size="small"
                                             sx={{ fontWeight: 700, fontSize: '0.65rem' }}
                                         />
+                                        <Chip
+                                            label={`${t('broker.tl_label')}: ${tlStatusLabel(broker)}`}
+                                            color={tlStatusColor(broker)}
+                                            variant="outlined"
+                                            size="small"
+                                            sx={{ fontWeight: 700, fontSize: '0.65rem' }}
+                                        />
                                     </Stack>
                                 </TableCell>
                                 <TableCell align={isRTL ? 'left' : 'right'}>
@@ -259,6 +312,11 @@ export default function BrokerManagementPage() {
                                     <Tooltip title={t('broker.rera_verify_action')}>
                                         <IconButton color={broker.reraVerified ? 'success' : 'default'} onClick={() => openReraDialog(broker)}>
                                             <VerifiedUserIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title={t('broker.tl_verify_action')}>
+                                        <IconButton color={broker.tradeLicenseVerified ? 'success' : 'default'} onClick={() => openTlDialog(broker)}>
+                                            <BadgeIcon />
                                         </IconButton>
                                     </Tooltip>
                                 </TableCell>
@@ -303,6 +361,19 @@ export default function BrokerManagementPage() {
                                         </Button>
                                     </Stack>
                                 </Box>
+                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">{t('broker.tl_label')}</Typography>
+                                    <Typography sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{selectedBroker.tradeLicenseNumber || t('broker.not_provided')}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">{t('broker.tl_current_status')}</Typography>
+                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ mt: 0.5 }}>
+                                        <Chip label={tlStatusLabel(selectedBroker)} color={tlStatusColor(selectedBroker)} size="small" sx={{ fontWeight: 800 }} />
+                                        <Button size="small" startIcon={<BadgeIcon fontSize="small" />} onClick={() => openTlDialog(selectedBroker)} sx={{ fontWeight: 700 }}>
+                                            {t('broker.tl_verify_action')}
+                                        </Button>
+                                    </Stack>
+                                </Box>
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 800, color: 'primary.main', textAlign: isRTL ? 'right' : 'left' }}>
@@ -315,13 +386,22 @@ export default function BrokerManagementPage() {
                                         <Typography sx={{ fontWeight: 700 }}>{selectedBroker.bankName || t('broker.not_configured')}</Typography>
                                     </Box>
                                 </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                     <BadgeIcon color="action" />
                                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                         <Typography variant="caption" color="text.secondary" display="block">{t('broker.iban')}</Typography>
-                                        <Typography sx={{ fontWeight: 700, fontSpace: 'monospace' }}>{selectedBroker.iban || t('broker.not_configured')}</Typography>
+                                        <Typography sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{selectedBroker.bankIban || selectedBroker.iban || t('broker.not_configured')}</Typography>
                                     </Box>
                                 </Box>
+                                {selectedBroker.bankAccountHolder && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                                        <BadgeIcon color="action" />
+                                        <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                            <Typography variant="caption" color="text.secondary" display="block">{t('broker.account_holder')}</Typography>
+                                            <Typography sx={{ fontWeight: 700 }}>{selectedBroker.bankAccountHolder}</Typography>
+                                        </Box>
+                                    </Box>
+                                )}
                             </Grid>
                             {selectedBroker.kycDocumentUrl && (
                                 <Grid item xs={12}>
@@ -349,6 +429,58 @@ export default function BrokerManagementPage() {
                             {t('broker.approve_partner_btn')}
                         </Button>
                     )}
+                </DialogActions>
+            </Dialog>
+
+            {/* Trade License Verification Dialog */}
+            <Dialog open={!!tlTarget} onClose={() => setTlTarget(null)} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
+                <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+                    {t('broker.tl_dialog_title')}
+                </DialogTitle>
+                <DialogContent dividers>
+                    {tlError && (
+                        <Box sx={{ mb: 2, p: 2, bgcolor: 'error.light', borderRadius: 2 }}>
+                            <Typography sx={{ color: 'error.dark', fontWeight: 700 }}>{tlError}</Typography>
+                        </Box>
+                    )}
+                    <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">{t('broker.tl_label')}</Typography>
+                        <Typography sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{tlTarget?.tradeLicenseNumber || t('broker.not_provided')}</Typography>
+                    </Box>
+                    <Box sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">{t('broker.tl_current_status')}</Typography>
+                        <Chip label={tlStatusLabel(tlTarget)} color={tlStatusColor(tlTarget)} size="small" sx={{ fontWeight: 800, mt: 0.5 }} />
+                    </Box>
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={2}
+                        label={t('broker.tl_review_note')}
+                        value={tlReason}
+                        onChange={(e) => setTlReason(e.target.value)}
+                        sx={{ mt: 2 }}
+                    />
+                </DialogContent>
+                <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+                    <Button onClick={() => setTlTarget(null)} sx={{ fontWeight: 700 }}>{t('common.close')}</Button>
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        disabled={tlBusyId === tlTarget?.id}
+                        onClick={() => submitTlVerification(false)}
+                        sx={{ fontWeight: 800, borderRadius: 2 }}
+                    >
+                        {t('broker.tl_reject_btn')}
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="success"
+                        disabled={tlBusyId === tlTarget?.id || !tlTarget?.tradeLicenseNumber}
+                        onClick={() => submitTlVerification(true)}
+                        sx={{ fontWeight: 800, borderRadius: 2 }}
+                    >
+                        {tlBusyId === tlTarget?.id ? <CircularProgress size={18} /> : t('broker.tl_verify_btn')}
+                    </Button>
                 </DialogActions>
             </Dialog>
 

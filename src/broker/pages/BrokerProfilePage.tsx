@@ -7,13 +7,15 @@ import {
   CircularProgress,
   Divider,
   Grid,
+  IconButton,
+  InputAdornment,
   Paper,
   Stack,
   TextField,
   Typography,
   alpha,
 } from '@mui/material';
-import { Award, Briefcase, Calendar, KeyRound, Mail, MapPin, Save, ShieldCheck, User, Zap } from 'lucide-react';
+import { Award, Briefcase, Building2, Calendar, CreditCard, Eye, EyeOff, KeyRound, MapPin, Save, ShieldCheck, User, Zap } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { auth, db, doc, getDoc, sendPasswordResetEmail, serverTimestamp, setDoc, updateProfile } from '../../lib/firebase';
@@ -26,6 +28,12 @@ const inputSx = {
   '& .MuiFilledInput-root': { bgcolor: '#F3F4F6', borderRadius: 3, color: binThemeTokens.textPrimary },
   '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary },
 };
+
+function maskIban(iban: string): string {
+  const clean = iban.replace(/\s/g, '');
+  if (clean.length <= 6) return clean;
+  return clean.substring(0, 4) + ' **** **** ' + clean.substring(clean.length - 4);
+}
 
 export default function BrokerProfilePage() {
   const { user } = useRole();
@@ -42,6 +50,11 @@ export default function BrokerProfilePage() {
   const [companyName, setCompanyName] = useState('');
   const [reraLicense, setReraLicense] = useState('');
   const [primaryRegion, setPrimaryRegion] = useState('Dubai, UAE');
+  const [tradeLicenseNumber, setTradeLicenseNumber] = useState('');
+  const [bankIban, setBankIban] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccountHolder, setBankAccountHolder] = useState('');
+  const [showIban, setShowIban] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -58,6 +71,10 @@ export default function BrokerProfilePage() {
         setCompanyName(data.companyName || '');
         setReraLicense(data.reraLicense || '');
         setPrimaryRegion(data.primaryRegion || data.region || 'Dubai, UAE');
+        setTradeLicenseNumber(data.tradeLicenseNumber || '');
+        setBankIban(data.bankIban || '');
+        setBankName(data.bankName || '');
+        setBankAccountHolder(data.bankAccountHolder || '');
       } catch (err) {
         console.error('Broker profile fetch failed:', err);
         setNotice({ type: 'error', text: label('Broker profile could not be loaded.', 'تعذر تحميل ملف الوسيط.') });
@@ -74,6 +91,17 @@ export default function BrokerProfilePage() {
       setNotice({ type: 'warning', text: label('Full professional name is required.', 'الاسم المهني الكامل مطلوب.') });
       return;
     }
+    const hasAnyBankField = bankIban.trim() || bankName.trim() || bankAccountHolder.trim();
+    if (hasAnyBankField) {
+      if (!bankIban.trim() || !bankName.trim() || !bankAccountHolder.trim()) {
+        setNotice({ type: 'warning', text: label('All three bank account fields are required together.', 'جميع حقول الحساب المصرفي الثلاثة مطلوبة معًا.') });
+        return;
+      }
+      if (!bankIban.trim().toUpperCase().startsWith('AE')) {
+        setNotice({ type: 'warning', text: label('IBAN must start with AE for UAE bank accounts.', 'يجب أن يبدأ رقم الآيبان بـ AE للحسابات المصرفية الإماراتية.') });
+        return;
+      }
+    }
     setUpdating(true);
     setNotice(null);
     try {
@@ -81,6 +109,9 @@ export default function BrokerProfilePage() {
       const isLicenseChanged = reraLicense.trim() !== (brokerData?.reraLicense || '').trim();
       const reraStatus = isLicenseChanged ? (reraLicense.trim() ? 'PENDING' : 'NOT_SUBMITTED') : (brokerData?.reraStatus || 'NOT_SUBMITTED');
       const reraVerified = isLicenseChanged ? false : Boolean(brokerData?.reraVerified);
+      const isTLChanged = tradeLicenseNumber.trim() !== (brokerData?.tradeLicenseNumber || '').trim();
+      const tradeLicenseStatus = isTLChanged ? (tradeLicenseNumber.trim() ? 'PENDING' : 'NOT_SUBMITTED') : (brokerData?.tradeLicenseStatus || 'NOT_SUBMITTED');
+      const tradeLicenseVerified = isTLChanged ? false : Boolean(brokerData?.tradeLicenseVerified);
       const payload = {
         uid: user.uid,
         email: user.email || brokerData?.email || '',
@@ -92,6 +123,12 @@ export default function BrokerProfilePage() {
         reraLicense: reraLicense.trim(),
         reraVerified,
         reraStatus,
+        tradeLicenseNumber: tradeLicenseNumber.trim(),
+        tradeLicenseStatus,
+        tradeLicenseVerified,
+        bankIban: bankIban.trim().toUpperCase(),
+        bankName: bankName.trim(),
+        bankAccountHolder: bankAccountHolder.trim(),
         primaryRegion: primaryRegion.trim(),
         language: lang,
         updatedAt: serverTimestamp(),
@@ -132,6 +169,11 @@ export default function BrokerProfilePage() {
   const reraStatusLabel = lang === 'ar'
     ? reraStatus === 'PENDING' ? 'قيد المراجعة' : reraStatus === 'REJECTED' ? 'مرفوض' : brokerData?.reraVerified ? 'موثق' : 'مطلوب'
     : reraStatus.replaceAll('_', ' ');
+
+  const tlStatus = (brokerData?.tradeLicenseStatus || 'NOT_SUBMITTED').toString();
+  const tlStatusLabel = lang === 'ar'
+    ? tlStatus === 'PENDING' ? 'قيد المراجعة' : tlStatus === 'REJECTED' ? 'مرفوض' : brokerData?.tradeLicenseVerified ? 'موثق' : 'مطلوب'
+    : tlStatus.replaceAll('_', ' ');
 
   return (
     <BrokerPageFrame
@@ -180,6 +222,29 @@ export default function BrokerProfilePage() {
                 </Box>
               </Stack>
             </Paper>
+
+            <Paper sx={{ mt: 3, p: 4, borderRadius: 8, bgcolor: alpha(brokerData?.tradeLicenseVerified ? '#10b981' : '#6366f1', 0.03), border: `1px solid ${alpha(brokerData?.tradeLicenseVerified ? '#10b981' : '#6366f1', 0.16)}` }}>
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                <Building2 size={24} color={brokerData?.tradeLicenseVerified ? '#10b981' : '#6366f1'} />
+                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                  <Typography variant="body1" fontWeight="950" color={brokerData?.tradeLicenseVerified ? '#10b981' : '#6366f1'}>{label('Trade License', 'الرخصة التجارية')}</Typography>
+                  <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{tradeLicenseNumber ? label(`License #${tradeLicenseNumber} status: ${tlStatusLabel}.`, `حالة الرخصة رقم ${tradeLicenseNumber}: ${tlStatusLabel}.`) : label('Provide a valid trade license number to complete your business profile.', 'أدخل رقم الرخصة التجارية الصالح لاستكمال ملفك التجاري.')}</Typography>
+                </Box>
+              </Stack>
+            </Paper>
+
+            {brokerData?.bankIban && (
+              <Paper sx={{ mt: 3, p: 4, borderRadius: 8, bgcolor: alpha('#10b981', 0.03), border: `1px solid ${alpha('#10b981', 0.16)}` }}>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                  <CreditCard size={24} color="#10b981" />
+                  <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                    <Typography variant="body1" fontWeight="950" color="#10b981">{label('Payout Account', 'حساب الصرف')}</Typography>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700, fontFamily: 'monospace' }}>{maskIban(brokerData.bankIban)}</Typography>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{brokerData.bankName}</Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            )}
           </Grid>
 
           <Grid item xs={12} lg={8}>
@@ -195,6 +260,7 @@ export default function BrokerProfilePage() {
                 <Grid item xs={12} md={6}><TextField fullWidth label={label('Associated Brokerage Firm', 'شركة الوساطة المرتبطة')} value={companyName} onChange={(e) => setCompanyName(e.target.value)} variant="filled" sx={inputSx} /></Grid>
                 <Grid item xs={12} md={6}><TextField fullWidth label={label('RERA License Number', 'رقم رخصة ريرا')} value={reraLicense} onChange={(e) => setReraLicense(e.target.value)} variant="filled" placeholder={label('e.g. 12345/2026', 'مثال: 12345/2026')} sx={inputSx} /></Grid>
                 <Grid item xs={12} md={6}><TextField fullWidth label={label('Primary Region', 'المنطقة الرئيسية')} value={primaryRegion} onChange={(e) => setPrimaryRegion(e.target.value)} variant="filled" sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth label={label('Trade License Number', 'رقم الرخصة التجارية')} value={tradeLicenseNumber} onChange={(e) => setTradeLicenseNumber(e.target.value)} variant="filled" placeholder={label('e.g. CN-1234567', 'مثال: CN-1234567')} sx={inputSx} /></Grid>
               </Grid>
 
               <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 6 }}>
@@ -205,6 +271,45 @@ export default function BrokerProfilePage() {
                   {resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}
                 </Button>
               </Stack>
+
+              <Divider sx={{ my: 6, borderColor: '#F1F2F4' }} />
+
+              <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary} sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left' }}>
+                <CreditCard size={20} color={binThemeTokens.gold} /> {label('Commission Payout Account', 'حساب صرف العمولات')}
+              </Typography>
+              <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 3, textAlign: isRTL ? 'right' : 'left' }}>
+                {label('Add your UAE bank account to receive commission disbursements. IBAN must start with AE.', 'أضف حسابك المصرفي الإماراتي لاستلام صرف العمولات. يجب أن يبدأ رقم الآيبان بـ AE.')}
+              </Typography>
+              <Grid container spacing={4}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label={label('IBAN (AE...)', 'رقم الآيبان (AE...)')}
+                    value={showIban ? bankIban : (bankIban ? maskIban(bankIban) : '')}
+                    onChange={(e) => { if (showIban) setBankIban(e.target.value.toUpperCase()); }}
+                    onFocus={() => setShowIban(true)}
+                    onBlur={() => setShowIban(false)}
+                    variant="filled"
+                    placeholder="AE07 0331 2345 6789 0123 456"
+                    sx={inputSx}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={() => setShowIban(!showIban)} size="small" edge="end">
+                            {showIban ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField fullWidth label={label('Bank Name', 'اسم البنك')} value={bankName} onChange={(e) => setBankName(e.target.value)} variant="filled" placeholder={label('e.g. Emirates NBD', 'مثال: بنك الإمارات دبي الوطني')} sx={inputSx} />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField fullWidth label={label('Account Holder Name', 'اسم صاحب الحساب')} value={bankAccountHolder} onChange={(e) => setBankAccountHolder(e.target.value)} variant="filled" placeholder={label('Full name as on bank records', 'الاسم الكامل كما في سجلات البنك')} sx={inputSx} />
+                </Grid>
+              </Grid>
 
               <Divider sx={{ my: 6, borderColor: '#F1F2F4' }} />
 

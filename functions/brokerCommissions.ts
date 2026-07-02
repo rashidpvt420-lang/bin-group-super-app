@@ -181,3 +181,48 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
 
   return { status: "SUCCESS", brokerId, verified, releasedCommissions: released };
 });
+
+/**
+ * Admin-only: set a broker's trade license verification status.
+ * Mirrors setBrokerReraVerification exactly — same admin guard, same audit
+ * log, same format check. Trade license verification does NOT release held
+ * commissions (RERA verification controls that gate).
+ */
+export const setBrokerTradeLicenseVerification = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+  await requireAdmin(request.auth);
+
+  const brokerId = String(request.data?.brokerId || "").trim();
+  const verified = request.data?.verified === true;
+  const reason = String(request.data?.reason || "").trim();
+  if (!brokerId) throw new HttpsError("invalid-argument", "brokerId is required.");
+
+  const userRef = db.collection("users").doc(brokerId);
+  const snap = await userRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Broker not found.");
+
+  const broker = snap.data() || {};
+  const license = String(broker.tradeLicenseNumber || "").trim();
+  if (verified && !isValidReraFormat(license)) {
+    throw new HttpsError("failed-precondition", "Broker trade license number is missing or invalid; cannot verify.");
+  }
+
+  const now = ts();
+  await userRef.set({
+    tradeLicenseVerified: verified,
+    tradeLicenseStatus: verified ? "VERIFIED" : "REJECTED",
+    tradeLicenseReviewedBy: request.auth?.uid || "admin",
+    tradeLicenseReviewedAt: now,
+    tradeLicenseReviewNote: reason || null,
+    updatedAt: now,
+  }, { merge: true });
+
+  await db.collection("auditLogs").add({
+    action: verified ? "ADMIN_VERIFY_BROKER_TRADE_LICENSE" : "ADMIN_REJECT_BROKER_TRADE_LICENSE",
+    actorId: request.auth?.uid || "admin",
+    brokerId,
+    reason: reason || null,
+    createdAt: now,
+  });
+
+  return { status: "SUCCESS", brokerId, verified };
+});
