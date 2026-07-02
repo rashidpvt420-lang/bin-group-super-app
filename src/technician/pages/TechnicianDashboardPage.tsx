@@ -105,8 +105,8 @@ const getSlaTimeRemaining = (job: any) => {
     if (!job?.createdAt) return 'No SLA policy';
     const created = job.createdAt.toDate ? job.createdAt.toDate() : new Date(job.createdAt);
     const now = new Date();
-    
-    let slaMinutes = 240; 
+
+    let slaMinutes = 240;
     const priority = String(job.priority || '').toUpperCase();
     if (priority === 'EMERGENCY') {
         slaMinutes = 30;
@@ -115,18 +115,18 @@ const getSlaTimeRemaining = (job: any) => {
     } else if (priority === 'STANDARD') {
         slaMinutes = 240;
     }
-    
+
     const limitTime = new Date(created.getTime() + slaMinutes * 60000);
     const diffMs = limitTime.getTime() - now.getTime();
-    
+
     if (diffMs <= 0) {
         return 'SLA BREACHED';
     }
-    
+
     const diffMins = Math.floor(diffMs / 60000);
     const hours = Math.floor(diffMins / 60);
     const mins = diffMins % 60;
-    
+
     if (hours > 0) {
         return `${hours}h ${mins}m left`;
     }
@@ -204,7 +204,7 @@ const readable = (...values: any[]) => {
 export default function TechnicianDashboardPage() {
     const { user } = useRole();
     const navigate = useNavigate();
-    const { t, isRTL } = useLanguage();
+    const { tx, isRTL } = useLanguage();
 
     const [loading, setLoading] = useState(true);
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
@@ -257,7 +257,7 @@ export default function TechnicianDashboardPage() {
 
         const qPayroll = query(collection(db, 'payroll_entries'), where('technicianId', '==', user.uid));
         const unsubPayroll = onSnapshot(qPayroll, (snap) => {
-            const sum = snap.docs.reduce((acc, doc) => acc + (doc.data().amount || 0), 0);
+            const sum = snap.docs.reduce((acc, d) => acc + (d.data().amount || 0), 0);
             setEarnings(sum);
         }, (error) => console.warn('[TechnicianDashboard] payroll unavailable:', error));
 
@@ -352,7 +352,7 @@ export default function TechnicianDashboardPage() {
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2, color: ui.ink }}>
             <CircularProgress sx={{ color: ui.gold }} />
-            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Operator Stream...'}</Typography>
+            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 900 }}>{tx('tech.dash.initializing', 'Initializing Operator Stream...')}</Typography>
         </Box>
     );
 
@@ -360,9 +360,9 @@ export default function TechnicianDashboardPage() {
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 8, md: 6 }, minWidth: 0, bgcolor: ui.canvas, color: ui.ink }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2.5 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-                    <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{t('dash.terminal.technician') || 'FIELD SOVEREIGN'}</Typography>
-                    <Typography variant="h3" fontWeight="950" sx={{ mt: 1, color: ui.ink, fontSize: { xs: '2.05rem', md: '2.8rem' }, letterSpacing: '-0.045em' }}>Technical Command Dashboard</Typography>
-                    <Typography variant="body1" sx={{ color: ui.muted, mt: 1, maxWidth: 760, fontWeight: 700 }}>Staff profile, duty status, dispatch performance, SLA health, compliance, tools, certificates, and live mission control in one terminal.</Typography>
+                    <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('tech.dash.overline', 'FIELD SOVEREIGN')}</Typography>
+                    <Typography variant="h3" fontWeight="950" sx={{ mt: 1, color: ui.ink, fontSize: { xs: '2.05rem', md: '2.8rem' }, letterSpacing: '-0.045em' }}>{tx('tech.dash.title', 'Technical Command Dashboard')}</Typography>
+                    <Typography variant="body1" sx={{ color: ui.muted, mt: 1, maxWidth: 760, fontWeight: 700 }}>{tx('tech.dash.subtitle', 'Staff profile, duty status, dispatch performance, SLA health, compliance, tools, certificates, and live mission control in one terminal.')}</Typography>
                 </Box>
                 <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(ui.gold, 0.12), border: `2px solid ${alpha(ui.gold, 0.55)}`, color: ui.gold, fontWeight: 950, fontSize: 26, borderRadius: 2 }}>{String(technicianName).charAt(0) || 'T'}</Avatar>
             </Box>
@@ -374,7 +374,7 @@ export default function TechnicianDashboardPage() {
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
                         <Box sx={{ p: 1.5, bgcolor: alpha(ui.gold, 0.13), borderRadius: 2, color: ui.gold }}><BadgeCheck size={30} /></Box>
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>TECHNICIAN IDENTITY</Typography>
+                            <Typography variant="overline" sx={{ color: ui.muted, fontWeight: 950, letterSpacing: 1.2 }}>{tx('tech.dash.identity', 'TECHNICIAN IDENTITY')}</Typography>
                             <Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{technicianName}</Typography>
                             <Typography variant="body2" sx={{ color: ui.muted, overflowWrap: 'anywhere', fontWeight: 700 }}>{trade} • {employeeId}</Typography>
                         </Box>
@@ -386,39 +386,203 @@ export default function TechnicianDashboardPage() {
             </SectionCard>
 
             <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
-                <Grid item xs={6} md={2.4}><MetricCard icon={<Activity size={20} />} label="Active Jobs" value={stats.assigned} tone={ui.blue} helper="Assigned live tickets" /></Grid>
-                <Grid item xs={6} md={2.4}><MetricCard icon={<Zap size={20} />} label="Emergency" value={stats.emergency} tone={ui.red} helper="Priority response" /></Grid>
-                <Grid item xs={6} md={2.4}><MetricCard icon={<CheckCircle2 size={20} />} label="Closed Today" value={stats.completedToday} tone={ui.green} helper="Completed jobs" /></Grid>
-                <Grid item xs={6} md={2.4}><MetricCard icon={<Clock size={20} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper="Requires attention" /></Grid>
-                <Grid item xs={12} md={2.4}><MetricCard icon={<DollarSign size={20} />} label="Earnings (Month)" value={`AED ${(earnings || (stats.completedMonth * 150)).toLocaleString()}`} tone={ui.green} helper="Approved payouts" /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<Activity size={20} />} label={tx('tech.dash.metric_active', 'Active Jobs')} value={stats.assigned} tone={ui.blue} helper={tx('tech.dash.metric_active_helper', 'Assigned live tickets')} /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<Zap size={20} />} label={tx('tech.dash.metric_emergency', 'Emergency')} value={stats.emergency} tone={ui.red} helper={tx('tech.dash.metric_emergency_helper', 'Priority response')} /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<CheckCircle2 size={20} />} label={tx('tech.dash.metric_closed', 'Closed Today')} value={stats.completedToday} tone={ui.green} helper={tx('tech.dash.metric_closed_helper', 'Completed jobs')} /></Grid>
+                <Grid item xs={6} md={2.4}><MetricCard icon={<Clock size={20} />} label={tx('tech.dash.metric_sla', 'SLA Risk')} value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper={tx('tech.dash.metric_sla_helper', 'Requires attention')} /></Grid>
+                <Grid item xs={12} md={2.4}><MetricCard icon={<DollarSign size={20} />} label={tx('tech.dash.metric_earnings', 'Earnings (Month)')} value={`AED ${(earnings || (stats.completedMonth * 150)).toLocaleString()}`} tone={ui.green} helper={tx('tech.dash.metric_earnings_helper', 'Approved payouts')} /></Grid>
             </Grid>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<User />} title="Staff Control Profile" /><DetailRow label="Full name" value={technicianName} /><DetailRow label="Employee ID" value={employeeId} /><DetailRow label="Email" value={email} icon={<Mail size={13} />} /><DetailRow label="Phone" value={phone} icon={<Phone size={13} />} /><DetailRow label="Trade" value={trade} /><DetailRow label="Supervisor" value={supervisor} /><DetailRow label="Shift" value={shift} /><DetailRow label="Base zone" value={baseLocation} /></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<Briefcase />} title="Duty & Attendance" /><DetailRow label="Duty status" value={profile.dutyStatus || dutyStatus} /><DetailRow label="Last check-in" value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} /><DetailRow label="Roster status" value={rosterStatus} /><DetailRow label="Monthly completions" value={stats.completedMonth} /><DetailRow label="Leave balance" value={`${leaveBalance} days`} /><Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>HR & REQUESTS</Button></SectionCard></Grid>
-                <Grid item xs={12} lg={4}><SectionCard><TitleRow icon={<CalendarDays />} title="Contract & Actions" /><DetailRow label="Contract type" value={contractType} /><DetailRow label="Joining date" value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} /><DetailRow label="Open action items" value={openActionItems} /><DetailRow label="Core profile sync" value={profile.syncStatus === 'synced' ? 'Ready' : 'Needs core review'} /><DetailRow label="Compliance actions" value={complianceWarnings.length ? `${complianceWarnings.length} pending` : 'Clear'} /></SectionCard></Grid>
+                <Grid item xs={12} lg={4}>
+                    <SectionCard>
+                        <TitleRow icon={<User />} title={tx('tech.dash.profile_title', 'Staff Control Profile')} />
+                        <DetailRow label={tx('tech.dash.label_fullname', 'Full name')} value={technicianName} />
+                        <DetailRow label={tx('tech.dash.label_empid', 'Employee ID')} value={employeeId} />
+                        <DetailRow label={tx('tech.dash.label_email', 'Email')} value={email} icon={<Mail size={13} />} />
+                        <DetailRow label={tx('tech.dash.label_phone', 'Phone')} value={phone} icon={<Phone size={13} />} />
+                        <DetailRow label={tx('tech.dash.label_trade', 'Trade')} value={trade} />
+                        <DetailRow label={tx('tech.dash.label_supervisor', 'Supervisor')} value={supervisor} />
+                        <DetailRow label={tx('tech.dash.label_shift', 'Shift')} value={shift} />
+                        <DetailRow label={tx('tech.dash.label_basezone', 'Base zone')} value={baseLocation} />
+                    </SectionCard>
+                </Grid>
+                <Grid item xs={12} lg={4}>
+                    <SectionCard>
+                        <TitleRow icon={<Briefcase />} title={tx('tech.dash.duty_title', 'Duty & Attendance')} />
+                        <DetailRow label={tx('tech.dash.label_duty_status', 'Duty status')} value={profile.dutyStatus || dutyStatus} />
+                        <DetailRow label={tx('tech.dash.label_last_checkin', 'Last check-in')} value={formatTime(raw.checkIn || raw.clockIn || raw.startedAt)} />
+                        <DetailRow label={tx('tech.dash.label_roster', 'Roster status')} value={rosterStatus} />
+                        <DetailRow label={tx('tech.dash.label_monthly', 'Monthly completions')} value={stats.completedMonth} />
+                        <DetailRow label={tx('tech.dash.label_leave', 'Leave balance')} value={`${leaveBalance} ${tx('tech.dash.label_leave_suffix', 'days')}`} />
+                        <Button fullWidth variant="outlined" onClick={() => navigate('/technician/hr')} sx={{ mt: 2, borderColor: ui.gold, color: ui.gold, fontWeight: 950 }}>{tx('tech.dash.hr_button', 'HR & REQUESTS')}</Button>
+                    </SectionCard>
+                </Grid>
+                <Grid item xs={12} lg={4}>
+                    <SectionCard>
+                        <TitleRow icon={<CalendarDays />} title={tx('tech.dash.contract_title', 'Contract & Actions')} />
+                        <DetailRow label={tx('tech.dash.label_contract_type', 'Contract type')} value={contractType} />
+                        <DetailRow label={tx('tech.dash.label_joining', 'Joining date')} value={joiningDate === 'Pending sync' ? 'Not set' : joiningDate} />
+                        <DetailRow label={tx('tech.dash.label_action_items', 'Open action items')} value={openActionItems} />
+                        <DetailRow label={tx('tech.dash.label_sync', 'Core profile sync')} value={profile.syncStatus === 'synced' ? tx('tech.dash.sync_ready', 'Ready') : tx('tech.dash.sync_review', 'Needs core review')} />
+                        <DetailRow label={tx('tech.dash.label_compliance', 'Compliance actions')} value={complianceWarnings.length ? `${complianceWarnings.length} ${tx('tech.dash.pending', 'pending')}` : tx('tech.dash.compliance_clear', 'Clear')} />
+                    </SectionCard>
+                </Grid>
             </Grid>
 
             <SectionCard sx={{ mb: 3.5, bgcolor: isOnDuty ? alpha(ui.green, 0.045) : ui.soft, border: `1px solid ${isOnDuty ? alpha(ui.green, 0.25) : ui.line}` }}>
                 <Grid container spacing={3} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={12} md={6}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>{dutyStatus === 'BREAK' ? <Coffee size={28} /> : <Power size={28} />}</Box><Box><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>DUTY PROTOCOL</Typography><Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{String(dutyStatus).replace('_', ' ')}</Typography></Box></Stack></Grid>
-                    <Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>{dutyStatus === 'OFF' ? <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>ACTIVATE DUTY</Button> : <><Button variant="outlined" onClick={() => handleDutyToggle(dutyStatus === 'WORKING' ? 'BREAK' : 'WORKING')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>{dutyStatus === 'WORKING' ? 'STANDBY / BREAK' : 'RESUME OPS'}</Button><Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>END SHIFT</Button></>}</Stack></Grid>
+                    <Grid item xs={12} md={6}>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                            <Box sx={{ p: 1.5, bgcolor: alpha(isOnDuty ? ui.green : ui.gold, 0.10), borderRadius: 2, color: isOnDuty ? ui.green : ui.gold }}>
+                                {dutyStatus === 'BREAK' ? <Coffee size={28} /> : <Power size={28} />}
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, letterSpacing: 1 }}>{tx('tech.dash.duty_protocol', 'DUTY PROTOCOL')}</Typography>
+                                <Typography variant="h5" fontWeight="950" sx={{ color: ui.ink, textTransform: 'uppercase' }}>{String(dutyStatus).replace('_', ' ')}</Typography>
+                            </Box>
+                        </Stack>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} justifyContent={{ xs: 'flex-start', md: isRTL ? 'flex-start' : 'flex-end' }}>
+                            {dutyStatus === 'OFF' ? (
+                                <Button variant="contained" onClick={() => handleDutyToggle('WORKING')} disabled={updating} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950, px: 3 }}>{tx('tech.dash.activate_duty', 'ACTIVATE DUTY')}</Button>
+                            ) : (
+                                <>
+                                    <Button variant="outlined" onClick={() => handleDutyToggle(dutyStatus === 'WORKING' ? 'BREAK' : 'WORKING')} disabled={updating} sx={{ borderColor: ui.gold, color: ui.gold, fontWeight: 950, px: 3 }}>
+                                        {dutyStatus === 'WORKING' ? tx('tech.dash.standby', 'STANDBY / BREAK') : tx('tech.dash.resume_ops', 'RESUME OPS')}
+                                    </Button>
+                                    <Button variant="outlined" color="error" onClick={() => handleDutyToggle('OFF')} disabled={updating} sx={{ fontWeight: 950, px: 3 }}>{tx('tech.dash.end_shift', 'END SHIFT')}</Button>
+                                </>
+                            )}
+                        </Stack>
+                    </Grid>
                 </Grid>
             </SectionCard>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }}>
-                <Grid item xs={12} lg={7}><SectionCard><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}><TitleRow icon={<Target size={20} />} title="Active Mission Feed" /><Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>VIEW ALL</Button></Stack>{activeJobs.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>No active missions assigned. Keep duty status active to receive dispatches.</Typography> : <Stack spacing={1.5}>{activeJobs.slice(0, 5).map((job) => <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}><Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box><Box flex={1} sx={{ minWidth: 0 }}><Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap><Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} /><Chip size="small" label={getSlaTimeRemaining(job)} sx={{ bgcolor: '#FFFFFF', color: getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, border: `1px solid ${alpha(getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, 0.3)}`, fontWeight: 900 }} /></Stack></Box><ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></Stack></Paper>)}</Stack>}</SectionCard></Grid>
-                <Grid item xs={12} lg={5}><SectionCard><TitleRow icon={<Award size={20} />} title="Performance Command" /><DetailRow label="Completed this month" value={stats.completedMonth} /><DetailRow label="Quality score" value={qualityDisplay} /><DetailRow label="SLA health" value={slaDisplay} /><DetailRow label="Open SLA risks" value={stats.slaRisk} /><Box sx={{ mt: 2 }}><Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900 }}>MONTHLY OPS PROGRESS</Typography><LinearProgress variant="determinate" value={Math.min(100, stats.completedMonth * 5)} sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: ui.gold } }} /></Box><Divider sx={{ my: 2.5 }} />{recentCompleted.length === 0 ? <Typography variant="body2" sx={{ color: ui.muted }}>No completed jobs recorded this month.</Typography> : <Stack spacing={1}>{recentCompleted.slice(0, 3).map((job) => <Typography key={job.id} variant="body2" sx={{ color: ui.ink, fontWeight: 750 }}>• {String(job.category || 'Completed job')}</Typography>)}</Stack>}</SectionCard></Grid>
+                <Grid item xs={12} lg={7}>
+                    <SectionCard>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+                            <TitleRow icon={<Target size={20} />} title={tx('tech.dash.missions_title', 'Active Mission Feed')} />
+                            <Button size="small" onClick={() => navigate('/technician/jobs')} sx={{ color: ui.gold, fontWeight: 900 }}>{tx('tech.dash.view_all', 'VIEW ALL')}</Button>
+                        </Stack>
+                        {activeJobs.length === 0 ? (
+                            <Typography variant="body2" sx={{ color: ui.muted, fontWeight: 700 }}>{tx('tech.dash.no_missions', 'No active missions assigned. Keep duty status active to receive dispatches.')}</Typography>
+                        ) : (
+                            <Stack spacing={1.5}>
+                                {activeJobs.slice(0, 5).map((job) => (
+                                    <Paper key={job.id} onClick={() => navigate(`/technician/job/${job.id}`)} sx={{ p: 2, bgcolor: ui.soft, border: `1px solid ${ui.line}`, borderRadius: 2, cursor: 'pointer', minWidth: 0, '&:hover': { borderColor: alpha(ui.gold, 0.5) } }}>
+                                        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                                            <Box sx={{ p: 1.2, bgcolor: alpha(ui.gold, 0.1), borderRadius: 1.5, color: ui.gold, alignSelf: { xs: 'flex-start', sm: 'center' } }}><MapPin size={20} /></Box>
+                                            <Box flex={1} sx={{ minWidth: 0 }}>
+                                                <Typography fontWeight="900" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || job.issueType || 'Maintenance')} - {String(job.unitNumber || job.propertyName || '')}</Typography>
+                                                <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 700 }}>{String(job.propertyName || job.address || 'Property')}</Typography>
+                                                <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+                                                    <Chip size="small" label={String(job.status || 'ACTIVE')} sx={{ bgcolor: '#FFFFFF', color: ui.gold, border: `1px solid ${alpha(ui.gold, 0.3)}`, fontWeight: 900 }} />
+                                                    <Chip size="small" label={String(job.priority || 'standard')} sx={{ bgcolor: '#FFFFFF', color: job.priority === 'emergency' ? ui.red : ui.blue, border: `1px solid ${alpha(job.priority === 'emergency' ? ui.red : ui.blue, 0.3)}`, fontWeight: 900 }} />
+                                                    <Chip size="small" label={getSlaTimeRemaining(job)} sx={{ bgcolor: '#FFFFFF', color: getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, border: `1px solid ${alpha(getSlaTimeRemaining(job) === 'SLA BREACHED' ? ui.red : ui.muted, 0.3)}`, fontWeight: 900 }} />
+                                                </Stack>
+                                            </Box>
+                                            <ArrowRight size={16} color={ui.muted} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
+                                        </Stack>
+                                    </Paper>
+                                ))}
+                            </Stack>
+                        )}
+                    </SectionCard>
+                </Grid>
+                <Grid item xs={12} lg={5}>
+                    <SectionCard>
+                        <TitleRow icon={<Award size={20} />} title={tx('tech.dash.perf_title', 'Performance Command')} />
+                        <DetailRow label={tx('tech.dash.label_monthly_comp', 'Completed this month')} value={stats.completedMonth} />
+                        <DetailRow label={tx('tech.dash.label_quality', 'Quality score')} value={qualityDisplay} />
+                        <DetailRow label={tx('tech.dash.label_sla_health', 'SLA health')} value={slaDisplay} />
+                        <DetailRow label={tx('tech.dash.label_open_sla', 'Open SLA risks')} value={stats.slaRisk} />
+                        <Box sx={{ mt: 2 }}>
+                            <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900 }}>{tx('tech.dash.monthly_progress', 'MONTHLY OPS PROGRESS')}</Typography>
+                            <LinearProgress variant="determinate" value={Math.min(100, stats.completedMonth * 5)} sx={{ height: 8, borderRadius: 4, mt: 1, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: ui.gold } }} />
+                        </Box>
+                        <Divider sx={{ my: 2.5 }} />
+                        {recentCompleted.length === 0 ? (
+                            <Typography variant="body2" sx={{ color: ui.muted }}>{tx('tech.dash.no_completed', 'No completed jobs recorded this month.')}</Typography>
+                        ) : (
+                            <Stack spacing={1}>
+                                {recentCompleted.slice(0, 3).map((job) => (
+                                    <Typography key={job.id} variant="body2" sx={{ color: ui.ink, fontWeight: 750 }}>• {String(job.category || 'Completed job')}</Typography>
+                                ))}
+                            </Stack>
+                        )}
+                    </SectionCard>
+                </Grid>
             </Grid>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }}>
-                <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<FileText size={20} />} title="Compliance Documents" /><DetailRow label="Visa expiry" value={visaExpiry === 'Pending sync' ? 'Not set' : visaExpiry} /><DetailRow label="Emirates ID expiry" value={idExpiry === 'Pending sync' ? 'Not set' : idExpiry} /><DetailRow label="Passport expiry" value={passportExpiry === 'Pending sync' ? 'Not set' : passportExpiry} /><DetailRow label="Medical card" value={formatDocumentStatus(profile.medicalCardStatus)} /><DetailRow label="Medical card expiry" value={medicalExpiry === 'Pending sync' ? 'Not set' : medicalExpiry} /><DetailRow label="PPE issued" value={ppeLabel} /><DetailRow label="Driving license" value={formatDocumentStatus(profile.drivingLicenseStatus)} /></SectionCard></Grid>
-                <Grid item xs={12} md={6}><SectionCard><TitleRow icon={<Hammer size={20} />} title="Skills, Tools & Assets" /><DetailRow label="Primary trade" value={trade} /><DetailRow label="Skill level" value={profile.skillLevel} /><DetailRow label="Vehicle" value={vehicleLabel} icon={<Car size={13} />} /><DetailRow label="Tool kit" value={toolKitLabel} /><DetailRow label="Certifications" value={certificationLabel} /><DetailRow label="Dispatch readiness" value={formatDispatchReadiness(profile.dispatchReadiness)} /></SectionCard></Grid>
+                <Grid item xs={12} md={6}>
+                    <SectionCard>
+                        <TitleRow icon={<FileText size={20} />} title={tx('tech.dash.compliance_title', 'Compliance Documents')} />
+                        <DetailRow label={tx('tech.dash.label_visa', 'Visa expiry')} value={visaExpiry === 'Pending sync' ? 'Not set' : visaExpiry} />
+                        <DetailRow label={tx('tech.dash.label_eid', 'Emirates ID expiry')} value={idExpiry === 'Pending sync' ? 'Not set' : idExpiry} />
+                        <DetailRow label={tx('tech.dash.label_passport', 'Passport expiry')} value={passportExpiry === 'Pending sync' ? 'Not set' : passportExpiry} />
+                        <DetailRow label={tx('tech.dash.label_medical', 'Medical card')} value={formatDocumentStatus(profile.medicalCardStatus)} />
+                        <DetailRow label={tx('tech.dash.label_medical_expiry', 'Medical card expiry')} value={medicalExpiry === 'Pending sync' ? 'Not set' : medicalExpiry} />
+                        <DetailRow label={tx('tech.dash.label_ppe', 'PPE issued')} value={ppeLabel} />
+                        <DetailRow label={tx('tech.dash.label_driving', 'Driving license')} value={formatDocumentStatus(profile.drivingLicenseStatus)} />
+                    </SectionCard>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                    <SectionCard>
+                        <TitleRow icon={<Hammer size={20} />} title={tx('tech.dash.skills_title', 'Skills, Tools & Assets')} />
+                        <DetailRow label={tx('tech.dash.label_primary_trade', 'Primary trade')} value={trade} />
+                        <DetailRow label={tx('tech.dash.label_skill_level', 'Skill level')} value={profile.skillLevel} />
+                        <DetailRow label={tx('tech.dash.label_vehicle', 'Vehicle')} value={vehicleLabel} icon={<Car size={13} />} />
+                        <DetailRow label={tx('tech.dash.label_toolkit', 'Tool kit')} value={toolKitLabel} />
+                        <DetailRow label={tx('tech.dash.label_certs', 'Certifications')} value={certificationLabel} />
+                        <DetailRow label={tx('tech.dash.label_dispatch', 'Dispatch readiness')} value={formatDispatchReadiness(profile.dispatchReadiness)} />
+                    </SectionCard>
+                </Grid>
             </Grid>
 
-            {(coreWarnings.length > 0 || complianceWarnings.length > 0) && <SectionCard sx={{ mb: 3.5, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.24)}` }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#D97706" /><Typography variant="subtitle1" fontWeight="950" sx={{ color: ui.ink }}>Staff Data Review</Typography></Stack>{coreWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• Core sync: {warning}</Typography>)}{complianceWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• Compliance action: {warning}</Typography>)}</SectionCard>}
+            {(coreWarnings.length > 0 || complianceWarnings.length > 0) && (
+                <SectionCard sx={{ mb: 3.5, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.24)}` }}>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+                        <AlertTriangle size={20} color="#D97706" />
+                        <Typography variant="subtitle1" fontWeight="950" sx={{ color: ui.ink }}>{tx('tech.dash.review_title', 'Staff Data Review')}</Typography>
+                    </Stack>
+                    {coreWarnings.map((warning) => (
+                        <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• {tx('tech.dash.core_sync', 'Core sync')}: {warning}</Typography>
+                    ))}
+                    {complianceWarnings.map((warning) => (
+                        <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• {tx('tech.dash.compliance_action', 'Compliance action')}: {warning}</Typography>
+                    ))}
+                </SectionCard>
+            )}
 
-            {missionPool.length > 0 && isOnDuty && <Box><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 2 }}><Navigation size={20} color={ui.gold} /><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>Available Mission Pool</Typography></Stack><Grid container spacing={3}>{missionPool.map((job) => <Grid item xs={12} md={6} key={job.id}><SectionCard sx={{ bgcolor: job.priority === 'emergency' ? alpha(ui.red, 0.055) : ui.canvas, border: `1px solid ${job.priority === 'emergency' ? alpha(ui.red, 0.25) : ui.line}` }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}><Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: job.priority === 'emergency' ? ui.red : ui.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography></Box>{job.priority === 'emergency' && <Zap color={ui.red} />}</Stack><Typography variant="body2" sx={{ color: ui.muted, mb: 2, fontWeight: 700 }}>{String(job.description || 'No description')}</Typography><Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950 }}>CLAIM MISSION</Button></SectionCard></Grid>)}</Grid></Box>}
+            {missionPool.length > 0 && isOnDuty && (
+                <Box>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                        <Navigation size={20} color={ui.gold} />
+                        <Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>{tx('tech.dash.pool_title', 'Available Mission Pool')}</Typography>
+                    </Stack>
+                    <Grid container spacing={3}>
+                        {missionPool.map((job) => (
+                            <Grid item xs={12} md={6} key={job.id}>
+                                <SectionCard sx={{ bgcolor: job.priority === 'emergency' ? alpha(ui.red, 0.055) : ui.canvas, border: `1px solid ${job.priority === 'emergency' ? alpha(ui.red, 0.25) : ui.line}` }}>
+                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <Typography variant="overline" sx={{ color: job.priority === 'emergency' ? ui.red : ui.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography>
+                                            <Typography variant="h6" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography>
+                                        </Box>
+                                        {job.priority === 'emergency' && <Zap color={ui.red} />}
+                                    </Stack>
+                                    <Typography variant="body2" sx={{ color: ui.muted, mb: 2, fontWeight: 700 }}>{String(job.description || tx('tech.dash.no_description', 'No description'))}</Typography>
+                                    <Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950 }}>{tx('tech.dash.claim_mission', 'CLAIM MISSION')}</Button>
+                                </SectionCard>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+            )}
         </Box>
     );
 }
