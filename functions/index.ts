@@ -18,7 +18,7 @@ export { deliverNotificationPush } from "./notificationDelivery";
 export { mintAdminBridgeToken } from "./adminBridgeAuth";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
-setGlobalOptions({ region: "europe-west3" });
+setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
 
 if (!admin.apps.length) {
     admin.initializeApp();

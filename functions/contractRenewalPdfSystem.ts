@@ -56,16 +56,28 @@ function normalizeEmail(value: any) {
   return safeString(value).toLowerCase();
 }
 
+function getDubaiMidnight(date: Date) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Dubai',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
+  const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1;
+  const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
+  return new Date(Date.UTC(year, month, day, 0, 0, 0));
+}
+
 function daysUntil(date: Date, now = new Date()) {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(0, 0, 0, 0);
+  const start = getDubaiMidnight(now);
+  const end = getDubaiMidnight(date);
   return Math.ceil((end.getTime() - start.getTime()) / DAY_MS);
 }
 
 function milestoneFor(daysRemaining: number) {
-  return RENEWAL_MILESTONES.find((days) => daysRemaining <= days) ?? null;
+  return RENEWAL_MILESTONES.find((days) => daysRemaining === days) ?? null;
 }
 
 function expiryDateFrom(data: any): Date | null {
@@ -308,11 +320,27 @@ async function collectRenewalRecords() {
   const output: RenewalRecord[] = [];
   const collections: RenewalSource[] = ["contracts", "leases", "tenant_ledger", "propertyPassports"];
   for (const collectionName of collections) {
-    const snap = await db.collection(collectionName).limit(1500).get();
-    snap.forEach((doc) => {
-      const normalized = normalizeRecord(collectionName, doc.id, doc.data());
-      if (normalized) output.push(normalized);
-    });
+    let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    let hasMore = true;
+    while (hasMore) {
+      let query = db.collection(collectionName).limit(500);
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
+      }
+      const snap = await query.get();
+      if (snap.empty) {
+        hasMore = false;
+        break;
+      }
+      snap.docs.forEach((doc) => {
+        const normalized = normalizeRecord(collectionName, doc.id, doc.data());
+        if (normalized) output.push(normalized);
+        lastDoc = doc;
+      });
+      if (snap.size < 500) {
+        hasMore = false;
+      }
+    }
   }
   return output;
 }
