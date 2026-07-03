@@ -39,6 +39,7 @@ import OwnerDamageEstimatePage from './pages/OwnerDamageEstimatePage';
 import OwnerPLReportPage from './pages/OwnerPLReportPage';
 import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
 import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
+import PortfolioRenewalsPage from './pages/PortfolioRenewalsPage';
 
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -77,6 +78,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         </Button>
                         <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.owner_approvals', 'Approvals')}
+                        </Button>
+                        <Button onClick={() => navigate('/owner/renewals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
+                            Renewals
                         </Button>
                         <Button onClick={() => navigate('/owner/inspections')} startIcon={renderSafeIcon(ClipboardCheck, { size: 17 })} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff', boxShadow: '0 10px 26px rgba(17,24,39,0.05)' }}>
                             {label('nav.owner_inspections', 'Handover')}
@@ -149,6 +153,7 @@ export default function OwnerApp() {
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
+                <Route path="/renewals" element={<PortfolioRenewalsPage />} />
                 <Route path="/inspections" element={<OwnerReviewQueuePage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
