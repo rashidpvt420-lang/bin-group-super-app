@@ -189,23 +189,58 @@ export const IntakeVaultPage: React.FC = () => {
                     batch.set(propRef, propertyPayload, { merge: true });
                     batch.set(companyPropRef, propertyPayload, { merge: true });
 
-                    // Provision Units placeholder
-                    const unitCount = p.units || 1;
-                    for (let i = 1; i <= unitCount; i++) {
-                        const unitRef = doc(db, 'units', safeDocId(`${propRef.id}_unit_${i}`));
-                        batch.set(unitRef, {
-                            companyId: targetCompanyId,
-                            id: unitRef.id,
-                            unitId: unitRef.id,
-                            propertyId: propRef.id,
-                            ownerId: ownerId || 'SYSTEM',
-                            unitNumber: `${p.propertyType === 'Villa' ? 'Villa' : 'Unit'} ${i}`,
-                            occupancyStatus: 'VACANT',
-                            moveInStatus: 'READY_FOR_TENANT_ASSIGNMENT',
-                            auditVersion: 1,
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp()
-                        }, { merge: true });
+                    // Provision Units — zone-aware when floorZones are defined, simple loop otherwise
+                    const floorZones: any[] = (p as any).floorZones || [];
+                    if (floorZones.length > 0) {
+                        let unitCounter = 1;
+                        for (const zone of floorZones) {
+                            const fromFloor = Math.max(1, zone.fromFloor || 1);
+                            const toFloor = Math.max(fromFloor, zone.toFloor || fromFloor);
+                            const unitsPerFloor = Math.max(1, zone.unitsPerFloor || 1);
+                            for (let floor = fromFloor; floor <= toFloor; floor++) {
+                                for (let u = 1; u <= unitsPerFloor; u++) {
+                                    const floorStr = String(floor).padStart(2, '0');
+                                    const unitStr = String(u).padStart(2, '0');
+                                    const unitRef = doc(db, 'units', safeDocId(`${propRef.id}_unit_${unitCounter}`));
+                                    batch.set(unitRef, {
+                                        companyId: targetCompanyId,
+                                        id: unitRef.id,
+                                        unitId: unitRef.id,
+                                        propertyId: propRef.id,
+                                        ownerId: ownerId || 'SYSTEM',
+                                        unitNumber: `${floorStr}${unitStr}`,
+                                        floorNumber: floor,
+                                        unitType: zone.unitType || 'Unit',
+                                        zoneLabel: zone.label || '',
+                                        avgSqftPerUnit: zone.avgSqftPerUnit || 0,
+                                        occupancyStatus: 'VACANT',
+                                        moveInStatus: 'READY_FOR_TENANT_ASSIGNMENT',
+                                        auditVersion: 1,
+                                        createdAt: serverTimestamp(),
+                                        updatedAt: serverTimestamp()
+                                    }, { merge: true });
+                                    unitCounter++;
+                                }
+                            }
+                        }
+                    } else {
+                        const unitCount = p.units || 1;
+                        for (let i = 1; i <= unitCount; i++) {
+                            const unitRef = doc(db, 'units', safeDocId(`${propRef.id}_unit_${i}`));
+                            batch.set(unitRef, {
+                                companyId: targetCompanyId,
+                                id: unitRef.id,
+                                unitId: unitRef.id,
+                                propertyId: propRef.id,
+                                ownerId: ownerId || 'SYSTEM',
+                                unitNumber: `${p.propertyType === 'Villa' ? 'Villa' : 'Unit'} ${i}`,
+                                occupancyStatus: 'VACANT',
+                                moveInStatus: 'READY_FOR_TENANT_ASSIGNMENT',
+                                auditVersion: 1,
+                                createdAt: serverTimestamp(),
+                                updatedAt: serverTimestamp()
+                            }, { merge: true });
+                        }
                     }
                 }
             }

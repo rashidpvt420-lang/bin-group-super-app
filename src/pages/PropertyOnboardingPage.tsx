@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useOnboardingStore } from '../store/onboardingStore';
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
 import AssetProfileStep from '../components/onboarding/AssetProfileStep';
+import UnitCompositionStep from '../components/onboarding/UnitCompositionStep';
 import PropertyLocationStep from '../components/onboarding/PropertyLocationStep';
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
 import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
@@ -16,11 +17,11 @@ import ContractSignatureStep from '../components/onboarding/ContractSignatureSte
 import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
 import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
 
-const INTERNAL_STEP_COUNT = 11;
+const INTERNAL_STEP_COUNT = 12;
 const VISIBLE_STAGE_COUNT = 5;
-// Groups the 11 data-collection steps into 5 owner-facing stages:
-// Company(1) | Property(2-4: asset+location+systems) | Service Plan(5) | Account(6-8: proof+signup+review) | Contract & Payment(9-11)
-const stageByInternalStep = [1, 2, 2, 2, 3, 4, 4, 4, 5, 5, 5];
+// Groups the 12 data-collection steps into 5 owner-facing stages:
+// Company(1) | Property(2-5: asset+composition+location+systems) | Service Plan(6) | Account(7-9: proof+signup+review) | Contract & Payment(10-12)
+const stageByInternalStep = [1, 2, 2, 2, 2, 3, 4, 4, 4, 5, 5, 5];
 
 const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
 const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampStep(step, INTERNAL_STEP_COUNT) - 1] || 1;
@@ -54,15 +55,16 @@ export default function PropertyOnboardingPage() {
         switch (stepIndex) {
             case 1: return <CompanyProfileStep onNext={nextStep} />;
             case 2: return <AssetProfileStep onNext={nextStep} onBack={prevStep} />;
-            case 3: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
-            case 4: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
-            case 5: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
-            case 6: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
-            case 7: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
-            case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
-            case 9: return <ContractSignatureStep onNext={nextStep} onBack={prevStep} />;
-            case 10: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
-            case 11: return <PaymentSubmissionStep onBack={prevStep} />;
+            case 3: return <UnitCompositionStep onNext={nextStep} onBack={prevStep} />;
+            case 4: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
+            case 5: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
+            case 6: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
+            case 7: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
+            case 8: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 9: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
+            case 10: return <ContractSignatureStep onNext={nextStep} onBack={prevStep} />;
+            case 11: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
+            case 12: return <PaymentSubmissionStep onBack={prevStep} />;
             default: return <CompanyProfileStep onNext={nextStep} />;
         }
     };

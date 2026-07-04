@@ -10,12 +10,23 @@ const createOnboardingSessionId = () => {
     return `onb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 };
 
+export interface FloorZone {
+    id: string;
+    label: string;
+    fromFloor: number;
+    toFloor: number;
+    unitType: string;
+    unitsPerFloor: number;
+    avgSqftPerUnit?: number;
+}
+
 export interface PropertyData {
     id: string;
     emirate: string;
     area: string;
     zone: 'A' | 'B' | 'C';
     propertyType: string;
+    floorZones?: FloorZone[];
     subType: string;
     useType: 'Rental' | 'Personal' | 'Mixed' | 'Government' | string;
     ownerType: 'Private' | 'Government' | string;
