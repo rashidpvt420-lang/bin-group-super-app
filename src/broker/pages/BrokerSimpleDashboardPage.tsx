@@ -2,7 +2,7 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
 import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
-import BrokerAttributionQuickStartCard from '../../components/BrokerAttributionQuickStartCard';
+import BrokerLiveAttributionCard from '../components/BrokerLiveAttributionCard';
 
 export default function BrokerSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export default function BrokerSimpleDashboardPage() {
 
         <RoleQuickActionsPanel role="broker" isRTL={isRTL} title={tx('broker.simple.primaryTitle', 'Main broker actions')} subtitle={tx('broker.simple.primarySubtitle', 'Lead capture, referrals, commission timeline, and documents first.')} />
 
-        <BrokerAttributionQuickStartCard isRTL={isRTL} />
+        <BrokerLiveAttributionCard isRTL={isRTL} />
 
         <Button onClick={() => navigate('/broker/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#B8932F', fontWeight: 950 }}>{tx('broker.simple.advanced', 'Open advanced dashboard')}</Button>
       </Stack>
