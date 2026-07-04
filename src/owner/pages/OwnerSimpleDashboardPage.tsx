@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
 import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
 import OwnerApprovalCommandStrip from '../../components/OwnerApprovalCommandStrip';
+import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
   const { isRTL, tx } = useLanguage();
+  const commandCounts = useOwnerCommandCounts();
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -18,7 +20,14 @@ export default function OwnerSimpleDashboardPage() {
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 760 }}>{tx('owner.simple.desc', 'See approvals, risk, maintenance cost, tenant issues, documents, and reports without searching through the full owner portal.')}</Typography>
         </Box>
 
-        <OwnerApprovalCommandStrip isRTL={isRTL} />
+        <OwnerApprovalCommandStrip
+          isRTL={isRTL}
+          pendingCostApprovals={commandCounts.pendingCostApprovals}
+          highRiskTickets={commandCounts.highRiskTickets}
+          openDisputes={commandCounts.openDisputes}
+          expiringDocuments={commandCounts.expiringDocuments}
+          monthlyCostVariancePct={commandCounts.monthlyCostVariancePct}
+        />
 
         <RoleQuickActionsPanel role="owner" isRTL={isRTL} title={tx('owner.simple.primaryTitle', 'Main owner actions')} subtitle={tx('owner.simple.primarySubtitle', 'The owner view starts with decisions, proof, money, and property health.')} />
 
@@ -26,6 +35,7 @@ export default function OwnerSimpleDashboardPage() {
           <Stack spacing={1.2} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('owner.simple.reportPromise', 'Monthly report promise')}</Typography>
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.simple.reportPromiseDesc', 'Owners should receive a monthly evidence report showing tickets, spend, photos, SLA performance, disputes, tenant satisfaction, and next-month risks.')}</Typography>
+            {commandCounts.loading && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.simple.loadingSignals', 'Loading live owner signals...')}</Typography>}
           </Stack>
         </Paper>
 
