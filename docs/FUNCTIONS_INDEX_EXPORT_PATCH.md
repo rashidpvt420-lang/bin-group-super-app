@@ -1,30 +1,23 @@
-# Required Functions Index Export Patch
+# Functions Runtime Export Status
 
-The new runtime modules are ready:
+The new runtime modules are ready and now exposed through the active Functions runtime aggregator:
 
 - `functions/slaPolicy.ts`
 - `functions/completionGuards.ts`
 - `functions/ticketLifecycleV2.ts`
+- `functions/runtimeAll.ts`
 
-To deploy the new callable, add this export near the other top-level exports in `functions/index.ts`:
+`functions/package.json` points Firebase Functions to `lib/runtimeAll.js`, so the deployable TypeScript export must live in `functions/runtimeAll.ts`.
+
+## Applied export
+
+The following export has been added to `functions/runtimeAll.ts`:
 
 ```ts
 export { updateTicketLifecycleV2 } from './ticketLifecycleV2';
 ```
 
-Recommended location:
-
-```ts
-export { deliverNotificationPush } from './notificationDelivery';
-export { mintAdminBridgeToken } from './adminBridgeAuth';
-export { updateTicketLifecycleV2 } from './ticketLifecycleV2';
-```
-
-## Why this is separate
-
-`functions/index.ts` is a large file. The GitHub connector requires complete file replacement for updates, so the safer path in this PR is to add the implementation module and verifier first, then apply this one-line export from a local checkout or a patch-capable editor.
-
-## Validation after applying
+## Validation before public launch
 
 Run:
 
@@ -35,4 +28,4 @@ node scripts/verify-functions-sla-policy.mjs
 node scripts/verify-tech-close-gates.mjs
 ```
 
-Do not mark Functions runtime complete until the export exists and the Functions build passes.
+Do not mark the Functions runtime complete until the Functions build passes and the callable is verified in Firebase after deploy.
