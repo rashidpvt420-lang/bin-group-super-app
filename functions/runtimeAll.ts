@@ -7,3 +7,4 @@ export { submitTenantMoveInspection } from './tenantHandoverInspections';
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
 export { adminCreateUser, syncStaffCustomClaims } from './adminUserProvisioning';
 export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
+export { updateTicketLifecycleV2 } from './ticketLifecycleV2';
