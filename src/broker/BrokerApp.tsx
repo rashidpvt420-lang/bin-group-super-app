@@ -1,18 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import {
-  AppBar,
-  Avatar,
-  Box,
-  Button,
-  Container,
-  IconButton,
-  Paper,
-  Stack,
-  Toolbar,
-  Typography,
-  alpha,
-} from '@mui/material';
+import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
 import { Briefcase, Building, FileUp, Home, Link2, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
@@ -21,6 +9,7 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
+import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
 import BrokerLeadsPage from './pages/BrokerLeadsPage';
 import BrokerReferralsPage from './pages/BrokerReferralsPage';
@@ -41,9 +30,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const { user } = useRole();
   const { isRTL, lang, tx } = useLanguage();
-
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
-
   const menuItems: BrokerMenuItem[] = [
     { key: 'broker.nav.dashboard', label: label('broker.nav.dashboard', 'Dashboard', 'لوحة التحكم'), path: '/broker/dashboard', icon: Home },
     { key: 'broker.nav.leads', label: label('broker.nav.leads', 'Leads', 'العملاء المحتملون'), path: '/broker/leads', icon: Users },
@@ -63,34 +50,22 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
               <SafeIcon icon={Briefcase} size={20} />
             </Box>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-              <Typography variant="h6" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>
-                {label('broker.portal.title', 'BIN BROKER', 'وسيط BIN')}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900 }}>
-                {label('broker.portal.subtitle', 'PARTNER PORTAL - MADE IN UAE', 'بوابة الشركاء - صنع في الإمارات')}
-              </Typography>
+              <Typography variant="h6" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>{label('broker.portal.title', 'BIN BROKER', 'وسيط BIN')}</Typography>
+              <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900 }}>{label('broker.portal.subtitle', 'PARTNER PORTAL - MADE IN UAE', 'بوابة الشركاء - صنع في الإمارات')}</Typography>
             </Box>
           </Stack>
-
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-            <IconButton
-              onClick={() => navigate('/broker/referrals')}
-              sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }}
-              title={label('nav.ai_studio', 'AI Studio requests are available after an owner or tenant contract is linked', 'طلبات الاستوديو متاحة بعد ربط عقد مالك أو مستأجر')}
-            >
+            <IconButton onClick={() => navigate('/broker/referrals')} sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }} title={label('broker.referrals.title', 'Broker referrals', 'إحالات الوسيط')}>
               <SafeIcon icon={Paintbrush} size={18} />
             </IconButton>
             <NotificationBell />
             <Box onClick={() => navigate('/broker/profile')} sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', px: 1 }}>
-              <Avatar sx={{ width: 36, height: 36, bgcolor: alpha('#B8932F', 0.12), color: '#B8932F', border: '1px solid rgba(184,147,47,0.3)' }}>
-                {user?.displayName?.charAt(0) || 'B'}
-              </Avatar>
+              <Avatar sx={{ width: 36, height: 36, bgcolor: alpha('#B8932F', 0.12), color: '#B8932F', border: '1px solid rgba(184,147,47,0.3)' }}>{user?.displayName?.charAt(0) || 'B'}</Avatar>
             </Box>
             <PortalSessionControls role="broker" accent="#B8932F" />
           </Stack>
         </Toolbar>
       </AppBar>
-
       <Container maxWidth="xl" sx={{ py: 5, position: 'relative', zIndex: 1 }}>
         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4 }}>
           {menuItems.map((item) => {
@@ -104,13 +79,9 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         </Stack>
         {children}
       </Container>
-
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
-        <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>
-          {label('broker.footer', '© 2026 BIN GROUP SOVEREIGN - BROKER TERMINAL - MADE IN UAE', '© 2026 BIN GROUP SOVEREIGN - محطة الوسطاء - صنع في الإمارات')}
-        </Typography>
+        <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>{label('broker.footer', '2026 BIN GROUP BROKER TERMINAL', '2026 BIN GROUP محطة الوسطاء')}</Typography>
       </Box>
-
       <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
         {menuItems.map((item) => {
           const active = location.pathname.startsWith(item.path);
@@ -130,8 +101,9 @@ export default function BrokerApp() {
   return (
     <BrokerLayout>
       <Routes>
-        <Route path="/" element={<BrokerDashboardPage />} />
-        <Route path="/dashboard" element={<BrokerDashboardPage />} />
+        <Route path="/" element={<BrokerSimpleDashboardPage />} />
+        <Route path="/dashboard" element={<BrokerSimpleDashboardPage />} />
+        <Route path="/dashboard/full" element={<BrokerDashboardPage />} />
         <Route path="/leads" element={<BrokerLeadsPage />} />
         <Route path="/leads/new" element={<BrokerLeadsPage openFormByDefault={true} />} />
         <Route path="/referrals" element={<BrokerReferralsPage />} />
