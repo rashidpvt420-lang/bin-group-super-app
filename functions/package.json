@@ -3,6 +3,7 @@
   "main": "lib/runtimeAll.js",
   "scripts": {
     "build": "tsc",
+    "test:admin-reports": "npm run build && npx firebase emulators:exec --config ../firebase.json --only firestore --project bin-group-57c60 \"node --test test/admin-reports.test.cjs\"",
     "test:ocr-guards": "node --test test/ocr-guards.test.cjs",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",

@@ -3590,7 +3590,7 @@ export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document:
         const ref8 = ticketId.substring(0, 8).toUpperCase();
         const category = after.category || after.issueType || "Maintenance";
         const propertyName = after.propertyName || "Property";
-        
+
         await dispatchOmniNotification(afterTechId, "New Job Assigned", `Job Assigned: #${ref8} at ${propertyName} (${category}).`, {
             url: `/technician/job/${ticketId}`
         });
@@ -3606,11 +3606,7 @@ export const onTicketTechnicianAssignmentChanged = onDocumentUpdated({ document:
     }
 });
 
-// ─── BIN-GPT ENGINEER COMMAND TRIGGER ────────────────────────────────────────
-// Restores the function Firebase expects in europe-west3.
-// This trigger ONLY records the command and prepares it for a secure
-// backend/GitHub Actions runner. It does NOT execute any GitHub code directly.
-
+// Restores the Firebase trigger while keeping command execution outside Functions.
 export const onBinGptEngineerCommandCreated = onDocumentCreated(
     "binGptEngineerCommands/{commandId}",
     async (event) => {
@@ -3669,5 +3665,9 @@ export { whatsappBotWebhook } from "./whatsappBot";
 
 
 export * from "./adminOwnerOperations";
+export * from "./adminReports";
 
 export * from "./technicianOfflineSync";
+export * from "./slaMapping";
+export * from "./technicianCloseProof";
+export * from "./packageVerifier";

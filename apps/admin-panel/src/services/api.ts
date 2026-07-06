@@ -83,12 +83,6 @@ class AdminApiClient {
     return this.client.post('/api/admin/technicians', data);
   }
 
-  async getReports(startDate: string, endDate: string) {
-    return this.client.get('/api/admin/reports', {
-      params: { startDate, endDate },
-    });
-  }
-
   async healthCheck() {
     return this.client.get('/health');
   }
@@ -104,6 +98,8 @@ class AdminApiClient {
 }
 
 const adminApiClient = new AdminApiClient({
+  // Legacy REST client. Reports now use the secure getAdminReports Firebase callable.
+  // Remaining /api/* calls are audited separately before they are migrated off REST.
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
   timeout: 30000,
 });
