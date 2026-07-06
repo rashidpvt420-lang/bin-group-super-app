@@ -30,10 +30,20 @@ import { collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc,
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
+const ALL_PROPERTY_TYPES = [
+    'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office',
+    'Retail Center', 'Mall', 'Hotel', 'Resort', 'Hospital', 'Clinic', 'School',
+    'Warehouse', 'Industrial Property', 'Labour Camp', 'Staff Accommodation',
+    'Government Property', 'Government Majlis', 'Private Majlis', 'Mosque / Masjid',
+    'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue', 'Farm / Estate'
+] as const;
+
+type PropertyType = typeof ALL_PROPERTY_TYPES[number];
+
 interface Property {
     id: string;
     name: string;
-    propertyType: 'Villa' | 'Tower' | 'Compound' | 'Commercial';
+    propertyType: PropertyType;
     address: string;
     coordinates?: {
         lat: number;
@@ -63,7 +73,7 @@ export default function PropertyManagementPage() {
 
     const [formData, setFormData] = useState({
         name: '',
-        propertyType: 'Villa' as 'Villa' | 'Tower' | 'Compound' | 'Commercial',
+        propertyType: 'Villa' as PropertyType,
         address: '',
         lat: '',
         lng: '',
@@ -312,12 +322,11 @@ export default function PropertyManagementPage() {
                                 label={t('admin.property_mgmt.field_property_type')}
                                 fullWidth
                                 value={formData.propertyType}
-                                onChange={(e) => setFormData({...formData, propertyType: e.target.value as any})}
+                                onChange={(e) => setFormData({...formData, propertyType: e.target.value as PropertyType})}
                             >
-                                <MenuItem value="Villa">Villa</MenuItem>
-                                <MenuItem value="Tower">Tower</MenuItem>
-                                <MenuItem value="Compound">Compound</MenuItem>
-                                <MenuItem value="Commercial">Commercial</MenuItem>
+                                {ALL_PROPERTY_TYPES.map(pt => (
+                                    <MenuItem key={pt} value={pt}>{pt}</MenuItem>
+                                ))}
                             </TextField>
                         </Grid>
                         <Grid item xs={12}>
