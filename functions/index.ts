@@ -3669,6 +3669,3 @@ export * from "./adminOwnerOperations";
 export * from "./adminReports";
 
 export * from "./technicianOfflineSync";
-export * from "./slaMapping";
-export * from "./technicianCloseProof";
-export * from "./packageVerifier";
