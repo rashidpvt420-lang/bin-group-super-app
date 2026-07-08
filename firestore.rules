@@ -824,20 +824,6 @@ service cloud.firestore {
       allow delete: if isHr() || isFinance();
     }
 
-    match /audit_logs/{logId} {
-      allow read: if isAdmin() || isHr() || isAuditor();
-      allow create: if false; // Block client writes, force through Cloud Functions
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /auditLogs/{logId} {
-      allow read: if isAdmin() || isHr() || isAuditor();
-      allow create: if false; // Block client writes, force through Cloud Functions
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
     match /notifications/{notificationId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('recipientId', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid));
       allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);
