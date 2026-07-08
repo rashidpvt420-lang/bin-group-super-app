@@ -50,19 +50,9 @@ export default function AdminTerminal() {
   const targetPath = currentAdminPath();
   const targetUrl = resolveAdminUrl(targetPath);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      const url = await withBridgeToken(targetUrl);
-      if (!cancelled) {
-        window.location.replace(url.startsWith(ADMIN_PANEL_URL) ? url : `${ADMIN_PANEL_URL}/login#sso_failed=1`);
-      }
-    }, 900);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [targetUrl]);
+  // No automatic redirect — the bridge is user-initiated only.
+  // This guarantees there can never be a redirect loop between the main app
+  // and bin-group-admin-panel.web.app: admins explicitly click through.
 
   const openAdminPanel = async () => {
     const url = await withBridgeToken(targetUrl);

@@ -4,17 +4,17 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
 
     function adminProfileGrantsAccess() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ceo == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.primaryRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('admin', false) == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('ceo', false) == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('userRole', '') in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'] ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('primaryRole', '') in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']
       );
     }
 
-    function isAdmin() {
+    function hasAdminClaim() {
       return signedIn() && (
         ('admin' in request.auth.token && request.auth.token.admin == true) ||
         ('isAdmin' in request.auth.token && request.auth.token.isAdmin == true) ||
@@ -24,9 +24,12 @@ service cloud.firestore {
         ('manager' in request.auth.token && request.auth.token.manager == true) ||
         ('role' in request.auth.token && request.auth.token.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
         ('userRole' in request.auth.token && request.auth.token.userRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
-        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
-        adminProfileGrantsAccess()
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
       );
+    }
+
+    function isAdmin() {
+      return hasAdminClaim() || adminProfileGrantsAccess();
     }
 
     function isHr() {
@@ -66,15 +69,28 @@ service cloud.firestore {
         ('role' in request.auth.token && request.auth.token.role in ['auditor', 'AUDITOR']) ||
         ('userRole' in request.auth.token && request.auth.token.userRole in ['auditor', 'AUDITOR']) ||
         ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['auditor', 'AUDITOR']) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['auditor', 'AUDITOR'])
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['auditor', 'AUDITOR'])
       ));
     }
 
     function hasPermission(permission) {
-      return isAdmin() || (signedIn() && 'permissions' in request.auth.token && permission in request.auth.token.permissions && request.auth.token.permissions[permission] == true);
+      return signedIn() && 'permissions' in request.auth.token && request.auth.token.permissions.get(permission, false) == true;
     }
 
-    function authEmail() { return (signedIn() && 'email' in request.auth.token) ? request.auth.token.email : null; }
+    function canManageProperties() { return isAdmin() || hasPermission('canManageProperties'); }
+    function canManageContracts() { return isAdmin() || hasPermission('canManageContracts'); }
+    function canManageCompanyProfile() { return isAdmin() || hasPermission('canManageCompanyProfile'); }
+    function canDispatchJobs() {
+      return hasAdminClaim() ||
+        hasPermission('canDispatchJobs') ||
+        (signedIn() && (
+          request.auth.token.get('role', '') in ['operations_manager', 'dispatcher'] ||
+          request.auth.token.get('userRole', '') in ['operations_manager', 'dispatcher'] ||
+          request.auth.token.get('primaryRole', '') in ['operations_manager', 'dispatcher']
+        ));
+    }
+
+    function authEmail() { return signedIn() ? request.auth.token.get('email', null) : null; }
     function emailMatches(value) { return signedIn() && authEmail() != null && value != null && value == authEmail(); }
     function isOwnerId(ownerId) { return signedIn() && ownerId != null && ownerId == request.auth.uid; }
     function isOwner(ownerId) { return isOwnerId(ownerId); }
@@ -82,61 +98,75 @@ service cloud.firestore {
     function isTechnicianId(techId) { return signedIn() && techId != null && techId == request.auth.uid; }
 
     function getTenantPropertyId() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId : null;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('propertyId', null) : null;
     }
     function isUnitTenant(unitId) {
       return signedIn() &&
+        unitId is string &&
         exists(/databases/$(database)/documents/units/$(unitId)) && (
-          get(/databases/$(database)/documents/units/$(unitId)).data.tenantId == request.auth.uid ||
-          get(/databases/$(database)/documents/units/$(unitId)).data.tenantUid == request.auth.uid ||
-          get(/databases/$(database)/documents/units/$(unitId)).data.userId == request.auth.uid
+          get(/databases/$(database)/documents/units/$(unitId)).data.get('tenantId', null) == request.auth.uid ||
+          get(/databases/$(database)/documents/units/$(unitId)).data.get('tenantUid', null) == request.auth.uid ||
+          get(/databases/$(database)/documents/units/$(unitId)).data.get('userId', null) == request.auth.uid ||
+          get(/databases/$(database)/documents/units/$(unitId)).data.get('authUid', null) == request.auth.uid ||
+          emailMatches(get(/databases/$(database)/documents/units/$(unitId)).data.get('tenantEmail', null))
         );
     }
     function isPropertyOwner(propertyId) {
       return signedIn() &&
         exists(/databases/$(database)/documents/properties/$(propertyId)) && (
-          get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerId == request.auth.uid ||
-          get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerUid == request.auth.uid
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.get('ownerId', null) == request.auth.uid ||
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.get('ownerUid', null) == request.auth.uid
         );
     }
 
     function owns(data) {
-      return isOwnerId(data.ownerId) || isOwnerId(data.ownerUid) || isOwnerId(data.authUid) || isOwnerId(data.userId) || isOwnerId(data.createdBy) || isOwnerId(data.createdByUid);
+      return isOwnerId(data.get('ownerId', null)) || isOwnerId(data.get('ownerUid', null)) || isOwnerId(data.get('authUid', null)) || isOwnerId(data.get('userId', null)) || isOwnerId(data.get('createdBy', null)) || isOwnerId(data.get('createdByUid', null));
     }
 
     function tenantOwns(data) {
-      return isTenantId(data.tenantId) || isTenantId(data.tenantUid) || isTenantId(data.authUid) || isTenantId(data.userId) || isTenantId(data.createdByUid);
+      return isTenantId(data.get('tenantId', null)) || isTenantId(data.get('tenantUid', null)) || isTenantId(data.get('authUid', null)) || isTenantId(data.get('userId', null)) || isTenantId(data.get('createdByUid', null));
     }
 
     function techOwns(data) {
-      return isTechnicianId(data.assignedTechnicianId) || isTechnicianId(data.technicianId) || isTechnicianId(data.techId);
+      return isTechnicianId(data.get('assignedTechnicianId', null)) || isTechnicianId(data.get('technicianId', null)) || isTechnicianId(data.get('techId', null));
     }
 
     function brokerOwns(data) {
       return signedIn() && (
-        data.brokerId == request.auth.uid ||
-        data.brokerUid == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid
+        data.get('brokerId', null) == request.auth.uid ||
+        data.get('brokerUid', null) == request.auth.uid ||
+        data.get('userId', null) == request.auth.uid ||
+        data.get('createdByUid', null) == request.auth.uid
       );
     }
 
-
-
     function emailOwns(data) {
-      return emailMatches(data.email) ||
-        emailMatches(data.ownerEmail) ||
-        emailMatches(data.tenantEmail) ||
-        emailMatches(data.technicianEmail) ||
-        emailMatches(data.staffEmail) ||
-        emailMatches(data.brokerEmail) ||
-        emailMatches(data.recipientEmail) ||
-        emailMatches(data.contactEmail);
+      return emailMatches(data.get('email', null)) ||
+        emailMatches(data.get('ownerEmail', null)) ||
+        emailMatches(data.get('tenantEmail', null)) ||
+        emailMatches(data.get('technicianEmail', null)) ||
+        emailMatches(data.get('staffEmail', null)) ||
+        emailMatches(data.get('brokerEmail', null)) ||
+        emailMatches(data.get('recipientEmail', null)) ||
+        emailMatches(data.get('contactEmail', null));
     }
 
     function ownerCanRead(data) { return signedIn() && (owns(data) || emailOwns(data)); }
-    function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
-    function staffCanCreate(data) { return signedIn() && (isTechnicianId(data.uid) || isTechnicianId(data.userId) || isTechnicianId(data.technicianId) || isTechnicianId(data.staffId) || emailOwns(data)); }
+    function staffCanRead(data) { return signedIn() && (techOwns(data) || isTechnicianId(data.get('uid', null)) || isTechnicianId(data.get('userId', null)) || isTechnicianId(data.get('technicianId', null)) || isTechnicianId(data.get('staffId', null)) || emailOwns(data)); }
+    function staffCanCreate(data) { return signedIn() && (isTechnicianId(data.get('uid', null)) || isTechnicianId(data.get('userId', null)) || isTechnicianId(data.get('technicianId', null)) || isTechnicianId(data.get('staffId', null)) || emailOwns(data)); }
+    function docPropertyId(data) { return data.get('propertyId', null); }
+    function docUnitId(data) { return data.get('unitId', null); }
+    function tenantUidOwns(data) { return isTenantId(data.get('tenantUid', null)); }
+    function propertyScopedRead(data) {
+      return signedIn() && (
+        isAdmin() ||
+        (docPropertyId(data) != null && isPropertyOwner(docPropertyId(data))) ||
+        (docPropertyId(data) != null && getTenantPropertyId() == docPropertyId(data))
+      );
+    }
+    function propertyScopedOwnerWrite(data) {
+      return isAdmin() || (docPropertyId(data) != null && isPropertyOwner(docPropertyId(data)));
+    }
     function isConfidentialRequest(data) {
       return ('requestType' in data && data.requestType == 'manager_issue') || ('category' in data && data.category == 'confidential');
     }
@@ -147,19 +177,25 @@ service cloud.firestore {
         ('userRole' in request.auth.token && request.auth.token.userRole == 'technician') ||
         ('primaryRole' in request.auth.token && request.auth.token.primaryRole == 'technician') ||
         exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'technician')
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'technician')
       );
     }
 
     function hasTechnicianDispatchAuthority() {
       return signedIn() && (
-        request.auth.token.role in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
-        request.auth.token.userRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
-        request.auth.token.primaryRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']
+        ('role' in request.auth.token && request.auth.token.role in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']) ||
+        ('userRole' in request.auth.token && request.auth.token.userRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']) ||
+        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']) ||
+        isTechnicianActor()
       );
     }
 
-    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionAvailable(data) {
+      return data.get('assignedTechnicianId', null) == null &&
+        data.get('technicianId', null) == null &&
+        data.get('techId', null) == null &&
+        data.get('status', null) in ['OPEN', 'open', 'emergency_submitted'];
+    }
     function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || techOwns(data) || brokerOwns(data); }
 
@@ -183,7 +219,7 @@ service cloud.firestore {
     }
 
     function paymentDraftCreate(data) {
-      return signedIn() && (owns(data) || tenantOwns(data) || data.payerId == request.auth.uid || data.userId == request.auth.uid) &&
+      return signedIn() && (owns(data) || tenantOwns(data) || data.get('payerId', null) == request.auth.uid || data.get('userId', null) == request.auth.uid) &&
         (!('status' in data) || data.status in ['draft', 'payment_pending', 'pending', 'PENDING_PAYMENT', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED']) &&
         (!('paymentVerified' in data) || data.paymentVerified == false) &&
         (!('approved' in data) || data.approved == false) &&
@@ -196,6 +232,20 @@ service cloud.firestore {
         (!('status' in data) || data.status in ['pending_verification', 'pending']) &&
         (!('paymentVerified' in data) || data.paymentVerified == false) &&
         (!('approved' in data) || data.approved == false);
+    }
+
+    function safeClientNotificationCreate(data) {
+      return signedIn() &&
+        (('recipientId' in data && data.recipientId == request.auth.uid) || ('userId' in data && data.userId == request.auth.uid)) &&
+        (!('recipientId' in data) || data.recipientId == request.auth.uid) &&
+        (!('userId' in data) || data.userId == request.auth.uid) &&
+        (!('createdBy' in data) || data.createdBy == request.auth.uid) &&
+        data.type in ['USER_NOTE', 'PROFILE_REMINDER', 'PREFERENCE_UPDATE', 'SUPPORT_RECEIPT'] &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
+        data.body is string && data.body.size() > 0 && data.body.size() <= 1000 &&
+        (!('read' in data) || data.read == false) &&
+        (!('priority' in data) || data.priority in ['LOW', 'NORMAL']) &&
+        request.resource.data.keys().hasOnly(['recipientId', 'userId', 'createdBy', 'type', 'title', 'body', 'read', 'priority', 'link', 'createdAt']);
     }
 
 
@@ -216,34 +266,29 @@ service cloud.firestore {
     function safeOwnerContractUpdate() {
       return signedIn() && owns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
     function safeTenantEvidenceUpdate() {
       return signedIn() && tenantOwns(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photos', 'primaryPhotoUrl', 'tenantPhotos', 'evidenceStatus', 'evidenceUploadedAt', 'evidenceUploadError', 'updatedAt']) &&
-        (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']);
+        (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photos', 'primaryPhotoUrl', 'tenantPhotos', 'evidenceStatus', 'evidenceUploadedAt', 'evidenceUploadError', 'updatedAt']);
     }
+
+
 
     function canCreateTenantBoundTicket(data) {
       return signedIn() &&
         tenantOwns(data) &&
         data.keys().hasAll(['unitId', 'propertyId']) &&
-        data.unitId is string &&
-        data.propertyId is string &&
-        data.unitId.size() > 0 &&
-        exists(/databases/$(database)/documents/units/$(data.unitId)) &&
-        (
-          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantId) ||
-          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantUid) ||
-          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.userId) ||
-          isTenantId(get(/databases/$(database)/documents/units/$(data.unitId)).data.authUid) ||
-          emailMatches(get(/databases/$(database)/documents/units/$(data.unitId)).data.tenantEmail)
-        ) &&
-        data.propertyId == get(/databases/$(database)/documents/units/$(data.unitId)).data.propertyId &&
-        (!('ownerId' in data) || !('ownerId' in get(/databases/$(database)/documents/units/$(data.unitId)).data) || data.ownerId == get(/databases/$(database)/documents/units/$(data.unitId)).data.ownerId) &&
-        (!('ownerUid' in data) || !('ownerUid' in get(/databases/$(database)/documents/units/$(data.unitId)).data) || data.ownerUid == get(/databases/$(database)/documents/units/$(data.unitId)).data.ownerUid);
+        data.get('unitId', null) is string &&
+        data.get('propertyId', null) is string &&
+        data.get('unitId', '').size() > 0 &&
+        isUnitTenant(data.get('unitId', null)) &&
+        data.get('propertyId', null) == get(/databases/$(database)/documents/units/$(data.get('unitId', null))).data.get('propertyId', null) &&
+        (!('ownerId' in data) || data.get('ownerId', null) == get(/databases/$(database)/documents/units/$(data.get('unitId', null))).data.get('ownerId', null)) &&
+        (!('ownerUid' in data) || data.get('ownerUid', null) == get(/databases/$(database)/documents/units/$(data.get('unitId', null))).data.get('ownerUid', null));
     }
 
     function safeTechnicianTicketUpdate() {
@@ -277,21 +322,24 @@ service cloud.firestore {
           'gpsVerifiedAt',
           'onSiteVerification'
         ]) &&
-        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.assignedTechnicianId) &&
-        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.technicianId) &&
-        (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.techId) &&
-        (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.priority) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified) &&
+        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)) &&
+        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.get('technicianId', null)) &&
+        (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.get('techId', null)) &&
+        (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.get('priority', null)) &&
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
         (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'COMPLETED', 'RESOLVED', 'assigned', 'in_progress', 'arrived', 'completed']);
     }
 
-    function safeOpenMissionClaim() {
-      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
+    function missionClaimFieldsLookValid() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
         (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
         (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
         (!('techId' in request.resource.data) || request.resource.data.techId == request.auth.uid) &&
         (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'assigned', 'IN_PROGRESS', 'in_progress']);
+    }
+
+    function safeOpenMissionClaim() {
+      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) && missionClaimFieldsLookValid();
     }
 
     function canAccessMaintenanceTicket(ticketId) {
@@ -307,9 +355,9 @@ service cloud.firestore {
 
     function ownerBankOwner(data) {
       return signedIn() && (
-        data.ownerId == request.auth.uid ||
-        data.ownerUid == request.auth.uid ||
-        data.ownerEmail == request.auth.token.email
+        data.get('ownerId', null) == request.auth.uid ||
+        data.get('ownerUid', null) == request.auth.uid ||
+        emailMatches(data.get('ownerEmail', null))
       );
     }
 
@@ -356,12 +404,12 @@ service cloud.firestore {
           'status',
           'updatedAt'
         ]) &&
-        (!('verified' in request.resource.data) || request.resource.data.verified == resource.data.verified) &&
-        (!('approved' in request.resource.data) || request.resource.data.approved == resource.data.approved) &&
-        (!('verifiedAt' in request.resource.data) || request.resource.data.verifiedAt == resource.data.verifiedAt) &&
-        (!('verifiedBy' in request.resource.data) || request.resource.data.verifiedBy == resource.data.verifiedBy) &&
-        (!('approvedAt' in request.resource.data) || request.resource.data.approvedAt == resource.data.approvedAt) &&
-        (!('approvedBy' in request.resource.data) || request.resource.data.approvedBy == resource.data.approvedBy) &&
+        (!('verified' in request.resource.data) || request.resource.data.verified == resource.data.get('verified', null)) &&
+        (!('approved' in request.resource.data) || request.resource.data.approved == resource.data.get('approved', null)) &&
+        (!('verifiedAt' in request.resource.data) || request.resource.data.verifiedAt == resource.data.get('verifiedAt', null)) &&
+        (!('verifiedBy' in request.resource.data) || request.resource.data.verifiedBy == resource.data.get('verifiedBy', null)) &&
+        (!('approvedAt' in request.resource.data) || request.resource.data.approvedAt == resource.data.get('approvedAt', null)) &&
+        (!('approvedBy' in request.resource.data) || request.resource.data.approvedBy == resource.data.get('approvedBy', null)) &&
         (!('status' in request.resource.data) || request.resource.data.status in ['PENDING_VERIFICATION', 'PENDING', 'SUBMITTED']) &&
         (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['PENDING', 'PENDING_VERIFICATION']);
     }
@@ -444,21 +492,21 @@ service cloud.firestore {
           'profileCompletionScore',
           'updatedAt'
         ]) &&
-        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
-        (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.userRole) &&
-        (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.primaryRole) &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
-        (!('admin' in request.resource.data) || request.resource.data.admin == resource.data.admin) &&
-        (!('superAdmin' in request.resource.data) || request.resource.data.superAdmin == resource.data.superAdmin) &&
-        (!('super_admin' in request.resource.data) || request.resource.data.super_admin == resource.data.super_admin) &&
-        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions) &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
-        (!('reraVerified' in request.resource.data) || request.resource.data.reraVerified == false || request.resource.data.reraVerified == resource.data.reraVerified) &&
-        (!('reraStatus' in request.resource.data) || request.resource.data.reraStatus in ['PENDING', 'NOT_SUBMITTED'] || request.resource.data.reraStatus == resource.data.reraStatus) &&
-        (!('brokerKycStatus' in request.resource.data) || request.resource.data.brokerKycStatus in ['INCOMPLETE', 'PENDING_REVIEW'] || request.resource.data.brokerKycStatus == resource.data.brokerKycStatus) &&
-        (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete == resource.data.onboardingComplete) &&
-        (!('propertyId' in request.resource.data) || request.resource.data.propertyId == resource.data.propertyId) &&
-        (!('unitId' in request.resource.data) || request.resource.data.unitId == resource.data.unitId);
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.get('role', null)) &&
+        (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.get('userRole', null)) &&
+        (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.get('primaryRole', null)) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.get('isAdmin', null)) &&
+        (!('admin' in request.resource.data) || request.resource.data.admin == resource.data.get('admin', null)) &&
+        (!('superAdmin' in request.resource.data) || request.resource.data.superAdmin == resource.data.get('superAdmin', null)) &&
+        (!('super_admin' in request.resource.data) || request.resource.data.super_admin == resource.data.get('super_admin', null)) &&
+        (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.get('permissions', null)) &&
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.get('status', null)) &&
+        (!('reraVerified' in request.resource.data) || request.resource.data.reraVerified == false || request.resource.data.reraVerified == resource.data.get('reraVerified', null)) &&
+        (!('reraStatus' in request.resource.data) || request.resource.data.reraStatus in ['PENDING', 'NOT_SUBMITTED'] || request.resource.data.reraStatus == resource.data.get('reraStatus', null)) &&
+        (!('brokerKycStatus' in request.resource.data) || request.resource.data.brokerKycStatus in ['INCOMPLETE', 'PENDING_REVIEW'] || request.resource.data.brokerKycStatus == resource.data.get('brokerKycStatus', null)) &&
+        (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete == resource.data.get('onboardingComplete', null)) &&
+        (!('propertyId' in request.resource.data) || request.resource.data.propertyId == resource.data.get('propertyId', null)) &&
+        (!('unitId' in request.resource.data) || request.resource.data.unitId == resource.data.get('unitId', null));
     }
 
     function safeOwnerProfileCreate(data, ownerId) {
@@ -471,19 +519,19 @@ service cloud.firestore {
 
     function safeOwnerProfileUpdate() {
       return signedIn() &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status) &&
-        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.dashboardUnlocked) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.paymentVerified);
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.get('status', null)) &&
+        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.get('dashboardUnlocked', null)) &&
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null));
     }
 
     function ownsOnboardingProof(data) {
       return signedIn() && (
-        data.ownerUid == request.auth.uid ||
-        data.ownerId == request.auth.uid ||
-        data.userId == request.auth.uid ||
-        data.createdByUid == request.auth.uid ||
-        data.email == request.auth.token.email ||
-        data.ownerEmail == request.auth.token.email
+        data.get('ownerUid', null) == request.auth.uid ||
+        data.get('ownerId', null) == request.auth.uid ||
+        data.get('userId', null) == request.auth.uid ||
+        data.get('createdByUid', null) == request.auth.uid ||
+        emailMatches(data.get('email', null)) ||
+        emailMatches(data.get('ownerEmail', null))
       );
     }
 
@@ -495,11 +543,30 @@ service cloud.firestore {
         (!('paymentVerified' in data) || data.paymentVerified == false);
     }
 
+    // ── AUDIT LOGS — server-only writes ──────────────────────────────────────
+    // Client code MUST NOT write directly to audit_logs or auditLogs.
+    // All writes must go through the logUserAuditAction Cloud Function which
+    // uses the Admin SDK and therefore bypasses these rules entirely.
+    match /audit_logs/{logId} {
+      allow read: if isAdmin() || isAuditor();
+      allow create: if false;  // server-only via Cloud Function
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    match /auditLogs/{logId} {
+      allow read: if isAdmin() || isAuditor();
+      allow create: if false;  // server-only via Cloud Function
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     match /users/{userId} {
-      allow read: if isAdmin() || isHr() || isFinance() || isOps() || (signedIn() && request.auth.uid == userId) || emailOwns(resource.data) ||
-                  (signedIn() && request.auth.uid != userId && resource.data.role == 'tenant' &&
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow get: if isAdmin() || isHr() || isFinance() || isOps() || emailOwns(resource.data) ||
+                  (signedIn() && request.auth.uid != userId && resource.data.get('role', '') == 'tenant' &&
                    ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
                     (resource.data.get('ownerEmail', '') != '' && resource.data.get('ownerEmail', '') == request.auth.token.get('email', ''))));
+      allow list: if isAdmin() || isHr() || isFinance() || isOps();
       allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
       allow update: if isAdmin() || safeUserSelfUpdate(userId);
       allow delete: if isAdmin();
@@ -533,65 +600,70 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));
-      allow create: if isAdmin() || hasPermission('canManageProperties') || ownerDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageProperties') || (owns(resource.data) && request.resource.data.ownerId == resource.data.ownerId && (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE'])));
+      allow get: if signedIn() && getTenantPropertyId() == propertyId;
+      allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));
+      allow create: if canManageProperties() || ownerDraftCreate(request.resource.data);
+      allow update: if canManageProperties() || (owns(resource.data) && request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) && (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE'])));
       allow delete: if isAdmin();
     }
 
     match /units/{unitId} {
-      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
-      allow create: if isAdmin() || hasPermission('canManageProperties');
-      allow update: if isAdmin() || hasPermission('canManageProperties');
-      allow delete: if isAdmin() || hasPermission('canManageProperties');
+      allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
+      allow list: if signedIn() && resource.data.get('tenantId', null) == request.auth.uid;
+      allow list: if signedIn() && resource.data.get('tenantUid', null) == request.auth.uid;
+      allow list: if signedIn() && emailMatches(resource.data.get('tenantEmail', null));
+      allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
+      allow create: if canManageProperties();
+      allow update: if canManageProperties();
+      allow delete: if canManageProperties();
     }
 
     match /tenant_unit_link_requests/{requestId} {
-      allow read: if isAdmin() || tenantOwns(resource.data) || emailOwns(resource.data) || (('propertyId' in resource.data) && resource.data.propertyId != null && isPropertyOwner(resource.data.propertyId));
+      allow read: if isAdmin() || tenantOwns(resource.data) || emailOwns(resource.data) || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)));
       allow create: if isAdmin() || safeTenantUnitLinkRequestCreate(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /contracts/{contractId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || ownerDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate();
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageContracts();
+      allow create: if canManageContracts() || ownerDraftCreate(request.resource.data);
+      allow update: if canManageContracts() || safeOwnerContractUpdate();
       allow delete: if isAdmin();
     }
 
     match /payments/{paymentId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts');
-      allow delete: if isAdmin() || hasPermission('canManageContracts');
+      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();
+      allow create: if canManageContracts() || paymentDraftCreate(request.resource.data);
+      allow update: if canManageContracts();
+      allow delete: if canManageContracts();
     }
 
     match /payment_transactions/{paymentId} {
-      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || hasPermission('canManageContracts');
-      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentDraftCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts');
-      allow delete: if isAdmin() || hasPermission('canManageContracts');
+      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();
+      allow create: if canManageContracts() || paymentDraftCreate(request.resource.data);
+      allow update: if canManageContracts();
+      allow delete: if canManageContracts();
     }
 
     match /paymentConfirmations/{confirmationId} {
-      allow read: if isAdmin() || hasPermission('canManageContracts') || tenantOwns(resource.data);
-      allow create: if isAdmin() || hasPermission('canManageContracts') || paymentConfirmationCreate(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageContracts');
+      allow read: if canManageContracts() || tenantOwns(resource.data);
+      allow create: if canManageContracts() || paymentConfirmationCreate(request.resource.data);
+      allow update: if canManageContracts();
       allow delete: if isAdmin();
     }
 
     match /tickets/{ticketId} {
-      allow read: if participantCanRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
+      allow read: if participantCanRead(resource.data) || canDispatchJobs();
+      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
+      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
-      allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || hasPermission('canDispatchJobs');
-      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canDispatchJobs') || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
+      allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || canDispatchJobs();
+      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
+      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -602,28 +674,28 @@ service cloud.firestore {
     }
 
     match /documents/{documentId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || hasPermission('canManageProperties');
-      allow create: if isAdmin() || hasPermission('canManageProperties') || participantCanRead(request.resource.data);
-      allow update: if isAdmin() || hasPermission('canManageProperties');
-      allow delete: if isAdmin() || hasPermission('canManageProperties');
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageProperties();
+      allow create: if canManageProperties() || participantCanRead(request.resource.data);
+      allow update: if canManageProperties();
+      allow delete: if canManageProperties();
     }
 
     match /intake_submissions/{intakeId} {
       allow read: if isAdmin() || ownerCanRead(resource.data);
-      allow create: if signedIn() && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerId == request.auth.uid || request.resource.data.ownerEmail == request.auth.token.email);
+      allow create: if signedIn() && (request.resource.data.get('ownerUid', null) == request.auth.uid || request.resource.data.get('ownerId', null) == request.auth.uid || emailMatches(request.resource.data.get('ownerEmail', null)));
       allow update: if isAdmin() || ownerCanRead(resource.data);
       allow delete: if isAdmin();
     }
 
     match /settings/{settingId} {
       allow read: if settingId == 'companyProfile' || isAdmin();
-      allow create: if isAdmin() || hasPermission('canManageCompanyProfile');
-      allow update: if isAdmin() || hasPermission('canManageCompanyProfile');
-      allow delete: if isAdmin() || hasPermission('canManageCompanyProfile');
+      allow create: if canManageCompanyProfile();
+      allow update: if canManageCompanyProfile();
+      allow delete: if canManageCompanyProfile();
     }
 
     match /systemLogs/{logId} {
-      allow read: if isAdmin() || isHr() || (signedIn() && resource.data.type == 'TENANT_NOTICE');
+      allow read: if isAdmin() || isHr() || (signedIn() && resource.data.get('type', null) == 'TENANT_NOTICE');
       allow create: if isAdmin() || isHr();
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -752,13 +824,6 @@ service cloud.firestore {
       allow delete: if isHr() || isFinance();
     }
 
-    match /auditLogs/{logId} {
-      allow read: if isAdmin() || isHr() || isAuditor();
-      allow create: if signedIn() && request.resource.data.actorId == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
     match /audit_logs/{logId} {
       allow read: if isAdmin() || isHr() || isAuditor();
       allow create: if false; // Block client writes, force through Cloud Functions
@@ -774,9 +839,9 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
-      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));
-      allow update: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('recipientId', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid));
+      allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);
+      allow update: if isAdmin() || (signedIn() && (resource.data.get('recipientId', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid));
       allow delete: if isAdmin();
     }
 
@@ -865,7 +930,7 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || (signedIn() && resource.data.payerId == request.auth.uid) || isAdmin();
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -879,31 +944,31 @@ service cloud.firestore {
     }
 
     match /gatePasses/{passId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid;
+      allow read: if isAdmin() || tenantUidOwns(resource.data);
+      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid;
       allow update: if isAdmin();
-      allow delete: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
+      allow delete: if isAdmin() || tenantUidOwns(resource.data);
     }
 
     match /amenities/{amenityId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     match /amenityBookings/{bookingId} {
-      allow read: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && (resource.data.tenantUid == request.auth.uid || getTenantPropertyId() == resource.data.propertyId));
-      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId;
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.tenantUid == request.auth.uid && getTenantPropertyId() == resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid);
+      allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && (tenantUidOwns(resource.data) || (docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data))));
+      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data);
+      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data));
+      allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
     }
 
     match /announcements/{announcementId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     // Deterministic-id slot locks that enforce one booking per amenity/date/time
@@ -911,17 +976,17 @@ service cloud.firestore {
     // can detect a conflict) but immutable once created; owner or admin may free it.
     match /amenitySlots/{slotId} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid;
-      allow delete: if isAdmin() || (signedIn() && resource.data.tenantUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid;
+      allow delete: if isAdmin() || tenantUidOwns(resource.data);
     }
 
     match /tenantDocuments/{documentId} {
       allow read: if isAdmin() || (signedIn() && (
-        resource.data.tenantId == request.auth.uid ||
-        resource.data.tenantUid == request.auth.uid ||
-        resource.data.tenantId == 'ALL' ||
-        emailMatches(resource.data.tenantEmail) ||
-        emailMatches(resource.data.recipientEmail)
+        resource.data.get('tenantId', null) == request.auth.uid ||
+        resource.data.get('tenantUid', null) == request.auth.uid ||
+        resource.data.get('tenantId', null) == 'ALL' ||
+        emailMatches(resource.data.get('tenantEmail', null)) ||
+        emailMatches(resource.data.get('recipientEmail', null))
       ));
       allow create: if isAdmin();
       allow update: if isAdmin();
@@ -929,38 +994,38 @@ service cloud.firestore {
     }
 
     match /documentLibrary/{documentId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     match /keyRegister/{keyId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || (isUnitTenant(resource.data.unitId) && getTenantPropertyId() == resource.data.propertyId));
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (docUnitId(resource.data) != null && isUnitTenant(docUnitId(resource.data)) && getTenantPropertyId() == docPropertyId(resource.data)));
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     match /keyMovements/{movementId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || (isUnitTenant(resource.data.unitId) && getTenantPropertyId() == resource.data.propertyId));
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (docUnitId(resource.data) != null && isUnitTenant(docUnitId(resource.data)) && getTenantPropertyId() == docPropertyId(resource.data)));
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     match /parcels/{parcelId} {
-      allow read: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid);
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedBy', 'collectedAt', 'notes']));
+      allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (tenantUidOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedBy', 'collectedAt', 'notes']));
       allow delete: if isAdmin();
     }
 
     match /visitorParkingRequests/{requestId} {
-      allow read: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.tenantUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId && isUnitTenant(request.resource.data.unitId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.tenantUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'visitStartAt', 'visitEndAt', 'visitorName', 'vehiclePlate']));
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && docUnitId(request.resource.data) != null && isUnitTenant(docUnitId(request.resource.data));
+      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (tenantUidOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'visitStartAt', 'visitEndAt', 'visitorName', 'vehiclePlate']));
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     match /marketplaceProviders/{providerId} {
@@ -978,51 +1043,51 @@ service cloud.firestore {
     }
 
     match /staffDirectory/{staffId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
-      allow create: if isAdmin() || isPropertyOwner(request.resource.data.propertyId);
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId);
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if propertyScopedOwnerWrite(request.resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
     match /conversations/{conversationId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.participantUids);
-      allow create: if signedIn() && request.auth.uid in request.resource.data.participantUids;
-      allow update: if isAdmin() || (signedIn() && request.auth.uid in resource.data.participantUids && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'status']));
+      allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.get('participantUids', []));
+      allow create: if signedIn() && request.auth.uid in request.resource.data.get('participantUids', []);
+      allow update: if isAdmin() || (signedIn() && request.auth.uid in resource.data.get('participantUids', []) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'status']));
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids);
-        allow create: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids) && request.resource.data.senderUid == request.auth.uid;
+        allow read: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('participantUids', []));
+        allow create: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('participantUids', [])) && request.resource.data.get('senderUid', null) == request.auth.uid;
         allow update: if isAdmin();
         allow delete: if isAdmin();
       }
     }
 
     match /communityPosts/{postId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || (getTenantPropertyId() == resource.data.propertyId && (resource.data.status == 'approved' || resource.data.authorUid == request.auth.uid)));
-      allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId && request.resource.data.status == 'pending';
-      allow update: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.authorUid == request.auth.uid && request.resource.data.authorUid == request.auth.uid && request.resource.data.status == resource.data.status && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt']));
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.authorUid == request.auth.uid);
+      allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (getTenantPropertyId() == docPropertyId(resource.data) && (resource.data.get('status', null) == 'approved' || resource.data.get('authorUid', null) == request.auth.uid)));
+      allow create: if signedIn() && request.resource.data.get('authorUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && request.resource.data.get('status', null) == 'pending';
+      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('status', null) == resource.data.get('status', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt']));
+      allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid);
     }
 
     match /communityComments/{commentId} {
-      allow read: if signedIn() && (isAdmin() || isPropertyOwner(resource.data.propertyId) || getTenantPropertyId() == resource.data.propertyId);
-      allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid && getTenantPropertyId() == request.resource.data.propertyId;
-      allow update: if isAdmin() || (signedIn() && resource.data.authorUid == request.auth.uid && request.resource.data.authorUid == request.auth.uid);
-      allow delete: if isAdmin() || isPropertyOwner(resource.data.propertyId) || (signedIn() && resource.data.authorUid == request.auth.uid);
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if signedIn() && request.resource.data.get('authorUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data);
+      allow update: if isAdmin() || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid);
+      allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid);
     }
 
     match /pricingAuditLogs/{logId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('ownerId', null) == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /turnover-quotes/{quoteId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
       allow create: if isAdmin();
-      allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.status in ['APPROVED', 'REJECTED'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      allow update: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid && request.resource.data.get('status', null) in ['APPROVED', 'REJECTED'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
@@ -1034,67 +1099,67 @@ service cloud.firestore {
     }
 
     match /propertyPassports/{passportId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.ownerEmail == request.auth.token.email));
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || emailMatches(resource.data.get('ownerEmail', null))));
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /brokerDocuments/{documentId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
       allow update: if isAdmin();
-      allow delete: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow delete: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
     }
 
     match /move_out_requests/{requestId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.tenantUid == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.tenantUid == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantUid', null) == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /tenant_ledger/{ledgerId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /design_requests/{requestId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.createdByUid == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('createdByUid', null) == request.auth.uid);
       allow update: if isAdmin() || (signedIn() && (
-        (resource.data.ownerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvalStatus', 'quoteStatus', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt'])) ||
-        ((resource.data.userId == request.auth.uid || resource.data.payerId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt']))
+        (resource.data.get('ownerId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvalStatus', 'quoteStatus', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt'])) ||
+        ((resource.data.get('userId', null) == request.auth.uid || resource.data.get('payerId', null) == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt']))
       ));
       allow delete: if isAdmin();
     }
 
     match /design_quotes/{quoteId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.createdByUid == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('createdByUid', null) == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /design_concepts/{conceptId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.userId == request.auth.uid || resource.data.ownerId == request.auth.uid || resource.data.tenantId == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.tenantId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantId', null) == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /design_approvals/{approvalId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.tenantUid == request.auth.uid || resource.data.ownerId == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.tenantUid == request.auth.uid || request.resource.data.ownerId == request.auth.uid);
-      allow update: if isAdmin() || (signedIn() && (resource.data.ownerId == request.auth.uid || resource.data.tenantUid == request.auth.uid));
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid));
+      allow create: if signedIn() && (request.resource.data.get('tenantUid', null) == request.auth.uid || request.resource.data.get('ownerId', null) == request.auth.uid);
+      allow update: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid));
       allow delete: if isAdmin();
     }
 
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
-      allow create: if signedIn() && request.resource.data.status == 'new';
+      allow create: if signedIn() && request.resource.data.get('status', null) == 'new';
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -1123,16 +1188,16 @@ service cloud.firestore {
     }
 
     match /owner_approval_requests/{requestId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
       allow create: if isAdmin();
       allow update: if isAdmin() || (
         signedIn() &&
-        resource.data.ownerId == request.auth.uid &&
-        request.resource.data.ownerId == resource.data.ownerId &&
+        resource.data.get('ownerId', null) == request.auth.uid &&
+        request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'ownerDecisionBy', 'decidedAt', 'updatedAt']) &&
-        request.resource.data.ownerDecisionBy == request.auth.uid &&
-        request.resource.data.decision in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED'] &&
-        request.resource.data.status in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested']
+        request.resource.data.get('ownerDecisionBy', null) == request.auth.uid &&
+        request.resource.data.get('decision', null) in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED'] &&
+        request.resource.data.get('status', null) in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested']
       );
       allow delete: if isAdmin();
     }
@@ -1162,19 +1227,19 @@ service cloud.firestore {
     function isBinConnectParticipant(data) {
       return signedIn() && (
         isAdmin() ||
-        (data.participantIds is list && request.auth.uid in data.participantIds) ||
-        data.createdBy == request.auth.uid ||
-        data.assignedAdminId == request.auth.uid
+        (data.get('participantIds', []) is list && request.auth.uid in data.get('participantIds', [])) ||
+        data.get('createdBy', null) == request.auth.uid ||
+        data.get('assignedAdminId', null) == request.auth.uid
       );
     }
 
     function safeBinConnectThreadCreate(data) {
       return signedIn() &&
-        data.createdBy == request.auth.uid &&
-        data.participantIds is list &&
-        request.auth.uid in data.participantIds &&
-        data.status in ['open', 'pending', 'new'] &&
-        data.channel in ['company_ceo', 'admin_support', 'owner_to_tenant', 'owner_to_technician', 'majlis_staff', 'maintenance_chat', 'feature_suggestion', 'dashboard_issue'];
+        data.get('createdBy', null) == request.auth.uid &&
+        data.get('participantIds', []) is list &&
+        request.auth.uid in data.get('participantIds', []) &&
+        data.get('status', null) in ['open', 'pending', 'new'] &&
+        data.get('channel', null) in ['company_ceo', 'admin_support', 'owner_to_tenant', 'owner_to_technician', 'majlis_staff', 'maintenance_chat', 'feature_suggestion', 'dashboard_issue'];
     }
 
     match /binConnectThreads/{threadId} {
@@ -1187,7 +1252,7 @@ service cloud.firestore {
         allow read: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) && (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data));
         allow create: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) &&
           (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data)) &&
-          request.resource.data.senderId == request.auth.uid;
+          request.resource.data.get('senderId', null) == request.auth.uid;
         allow update: if false;
         allow delete: if isAdmin();
       }
@@ -1195,57 +1260,63 @@ service cloud.firestore {
 
     // ── inspections: move-in / move-out digital inspection records ──────────
     match /inspections/{inspectionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.tenantId == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     // ── maintenanceRequests: AI concierge ticket submissions ─────────────────
     match /maintenanceRequests/{requestId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.tenantId == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.tenantId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid;
+      allow update: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
     // ── Broker Pipeline Collections ──────────────────────────────────────────
     match /brokerLeads/{leadId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid && request.resource.data.brokerId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
+      allow update: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid && request.resource.data.get('brokerId', null) == request.auth.uid);
       allow delete: if isAdmin();
     }
     match /referrals/{referralId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid && request.resource.data.brokerId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
+      allow update: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid && request.resource.data.get('brokerId', null) == request.auth.uid);
       allow delete: if isAdmin();
     }
     match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     match /contract_renewal_watch/{watchId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /document_generation_requests/{requestId} {
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     match /broker_listing_claims/{claimId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.brokerId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.brokerId == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /{document=**} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read: if hasAdminClaim();
+      allow create: if hasAdminClaim();
+      allow update: if hasAdminClaim();
+      allow delete: if hasAdminClaim();
     }
   }
 }

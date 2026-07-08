@@ -52,11 +52,13 @@ const OwnerLandingPage = lazyWithRetry(() => import('./pages/OwnerLandingPage'))
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const RoleGatewayPage = lazyWithRetry(() => import('./pages/RoleGatewayPage'));
 const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboardingPage'));
+const PilotLaunchPage = lazyWithRetry(() => import('./pages/public/PilotLaunchPage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const QrPassVerificationPage = lazyWithRetry(() => import('./pages/public/QrPassVerificationPage'));
 const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
 const TenantInvitePage = lazyWithRetry(() => import('./pages/TenantInvitePage'));
+const AccountPrivacyRequestPage = lazyWithRetry(() => import('./pages/AccountPrivacyRequestPage'));
 
 const AuthenticatedShell = lazyWithRetry(() => import('./components/AuthenticatedShell'));
 const ProtectedRoute = lazyWithRetry(() => import('./components/ProtectedRoute'));
@@ -109,6 +111,7 @@ const NOTIFICATION_ROLES = [
 ];
 
 const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/tech', '/broker', '/admin', '/auditor'];
+const PRIVATE_PRODUCTION_DEPLOY = import.meta.env.VITE_PRIVATE_PRODUCTION_DEPLOY === 'true';
 
 function runOneTimeLegacyOnboardingCleanup() {
   try {
@@ -222,6 +225,10 @@ function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
   return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
 }
 
+function publicOrPilot(children: React.ReactNode) {
+  return PRIVATE_PRODUCTION_DEPLOY ? <PilotLaunchPage /> : children;
+}
+
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
@@ -233,42 +240,44 @@ function AppContent() {
   return (
     <React.Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/owner-landing" element={withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/v1" element={withAuth(<LandingPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/gateway" element={withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/" element={publicOrPilot(withAuth(<LandingPage />, { publicAuth: true, showChrome: false }))} />
+        <Route path="/pilot" element={<PilotLaunchPage />} />
+        <Route path="/owner-landing" element={publicOrPilot(withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false }))} />
+        <Route path="/v1" element={publicOrPilot(withAuth(<LandingPage />, { publicAuth: true, showChrome: false }))} />
+        <Route path="/gateway" element={publicOrPilot(withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/account-privacy" element={withAuth(<AccountPrivacyRequestPage />, { publicAuth: false, showChrome: false })} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/feedback" element={<PilotFeedbackPage />} />
         <Route path="/pilot-feedback" element={<PilotFeedbackPage />} />
-        <Route path="/owners" element={<PublicMarketingPage page="owners" />} />
-        <Route path="/tenants" element={<PublicMarketingPage page="tenants" />} />
-        <Route path="/technicians" element={<PublicMarketingPage page="technicians" />} />
-        <Route path="/brokers" element={<PublicMarketingPage page="brokers" />} />
-        <Route path="/property-management" element={<PublicMarketingPage page="property-management" />} />
-        <Route path="/maintenance" element={<PublicMarketingPage page="maintenance" />} />
-        <Route path="/ai-design-studio" element={<Navigate to="/request-demo?demo=ai-design" replace />} />
-        <Route path="/majlis-care" element={<PublicMarketingPage page="majlis-care" />} />
-        <Route path="/stadiums" element={<PublicMarketingPage page="stadiums" />} />
-        <Route path="/hotels" element={<PublicMarketingPage page="hotels" />} />
-        <Route path="/malls" element={<PublicMarketingPage page="malls" />} />
-        <Route path="/hospitals" element={<PublicMarketingPage page="hospitals" />} />
-        <Route path="/government-properties" element={<PublicMarketingPage page="government-properties" />} />
+        <Route path="/owners" element={publicOrPilot(<PublicMarketingPage page="owners" />)} />
+        <Route path="/tenants" element={publicOrPilot(<PublicMarketingPage page="tenants" />)} />
+        <Route path="/technicians" element={publicOrPilot(<PublicMarketingPage page="technicians" />)} />
+        <Route path="/brokers" element={publicOrPilot(<PublicMarketingPage page="brokers" />)} />
+        <Route path="/property-management" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
+        <Route path="/maintenance" element={publicOrPilot(<PublicMarketingPage page="maintenance" />)} />
+        <Route path="/ai-design-studio" element={publicOrPilot(<Navigate to="/request-demo?demo=ai-design" replace />)} />
+        <Route path="/majlis-care" element={publicOrPilot(<PublicMarketingPage page="majlis-care" />)} />
+        <Route path="/stadiums" element={publicOrPilot(<PublicMarketingPage page="stadiums" />)} />
+        <Route path="/hotels" element={publicOrPilot(<PublicMarketingPage page="hotels" />)} />
+        <Route path="/malls" element={publicOrPilot(<PublicMarketingPage page="malls" />)} />
+        <Route path="/hospitals" element={publicOrPilot(<PublicMarketingPage page="hospitals" />)} />
+        <Route path="/government-properties" element={publicOrPilot(<PublicMarketingPage page="government-properties" />)} />
         <Route path="/security" element={<PublicSecurityPage />} />
-        <Route path="/services" element={<PublicMarketingPage page="property-management" />} />
-        <Route path="/contact" element={<PublicMarketingPage page="contact" />} />
-        <Route path="/request-demo" element={<DemoVideosPage />} />
-        <Route path="/videos" element={<DemoVideosPage />} />
+        <Route path="/services" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
+        <Route path="/contact" element={publicOrPilot(<PublicMarketingPage page="contact" />)} />
+        <Route path="/request-demo" element={publicOrPilot(<DemoVideosPage />)} />
+        <Route path="/videos" element={publicOrPilot(<DemoVideosPage />)} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
         <Route path="/company" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/company-profile" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/about" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/about-us" element={<Navigate to="/#company-profile" replace />} />
-        <Route path="/onboarding/*" element={withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/onboarding/*" element={publicOrPilot(withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
         <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
@@ -289,10 +298,16 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
+        {/* Admin — canonical entry point: /admin/dashboard renders AdminTerminal (bridge) */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
+        {/* ── Public verifier routes ── */}
+        <Route path="/verify" element={<InvoiceVerificationPage />} />
+        <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/verify/pass/:token" element={<QrPassVerificationPage />} />
+        <Route path="/verify-cert" element={<CertificateVerificationPage />} />
+        <Route path="/verify-cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

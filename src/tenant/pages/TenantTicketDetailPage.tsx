@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, IconButton, Paper, Rating, Stack, TextField, Typography, alpha } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, Calendar, Check, CheckCircle2, ChevronLeft, Info, X } from 'lucide-react';
-import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc, functions, httpsCallable } from '../../lib/firebase';
+import { db, doc, onSnapshot, updateDoc, functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTenantApproved, notifyTenantRejected } from '../../services/notificationService';
@@ -65,12 +65,7 @@ export default function TenantTicketDetailPage() {
         return () => unsubscribe();
     }, [id, user, navigate, rating, feedback]);
 
-    const writeAudit = async (payload: Record<string, any>) => {
-        await Promise.all([
-            addDoc(collection(db, 'audit_logs'), payload),
-            addDoc(collection(db, 'auditLogs'), { ...payload, timestamp: serverTimestamp() }),
-        ]);
-    };
+    // Audit logging is handled server-side by the Cloud Function — no client writes.
 
     const approveCompletion = async () => {
         if (!id || !user || !rating) return;

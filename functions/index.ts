@@ -16,6 +16,7 @@ import {
 import { generateContractPDF, generatePayslipPDF, generateIntegrityAuditPDF } from "./pdfEngine";
 export { deliverNotificationPush } from "./notificationDelivery";
 export { mintAdminBridgeToken } from "./adminBridgeAuth";
+export { logUserAuditAction } from "./userAuditOperations";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
