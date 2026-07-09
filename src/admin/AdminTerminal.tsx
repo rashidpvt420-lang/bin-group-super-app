@@ -1,63 +1,158 @@
 import React from 'react';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Divider,
+  Grid,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { signOut } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '@/lib/firebase';
+import {
+  Activity,
+  BarChart3,
+  Bell,
+  Building2,
+  CheckCircle2,
+  ClipboardCheck,
+  CreditCard,
+  ExternalLink,
+  FileCheck2,
+  Home,
+  LockKeyhole,
+  LogOut,
+  RefreshCcw,
+  ShieldCheck,
+  Users,
+  Wrench,
+} from 'lucide-react';
+import { auth, collection, db, getCountFromServer, getDocs, limit, orderBy, query, where } from '../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
+import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
-const ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
-const ADMIN_PANEL_ORIGIN = new URL(ADMIN_PANEL_URL).origin;
+const LEGACY_ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
 
-const currentAdminPath = () => {
-  if (typeof window === 'undefined') return '/dashboard';
-  const path = window.location.pathname.replace(/^\/admin/, '') || '/dashboard';
-  return path.startsWith('/') ? path : `/${path}`;
+type Metric = {
+  key: string;
+  label: string;
+  value: number | null;
+  helper: string;
+  icon: React.ElementType;
+  severity?: 'success' | 'warning' | 'info';
 };
 
-// Resolve the deep-link path against the fixed admin-panel origin and verify
-// the result still resolves to that exact origin before it's ever used to
-// navigate, so this can never be coerced into leaving bin-group-admin-panel.
-// web.app no matter what currentAdminPath() returns.
-const resolveAdminUrl = (path: string) => {
-  const resolved = new URL(path, ADMIN_PANEL_URL);
-  return resolved.origin === ADMIN_PANEL_ORIGIN ? resolved.toString() : `${ADMIN_PANEL_URL}/dashboard`;
+type AuditEvent = {
+  id: string;
+  action: string;
+  actorRole?: string;
+  targetType?: string;
+  createdAt?: unknown;
 };
 
-// Best-effort: exchange the session already open here for a one-time custom
-// token the admin-panel origin can redeem, so staff don't have to sign in a
-// second time after the cross-domain redirect. Any failure (offline, the
-// function not deployed yet, etc.) falls back to the plain login flow, tagged
-// with #sso_failed=1 so the admin-panel can tell the user SSO was attempted
-// and failed, instead of silently landing on what looks like a fresh login.
-const withBridgeToken = async (url: string) => {
-  try {
-    const mintBridgeToken = httpsCallable(functions, 'mintAdminBridgeToken');
-    const result: any = await mintBridgeToken();
-    const token = result?.data?.token;
-    if (!token) return `${ADMIN_PANEL_URL}/login#sso_failed=1`;
-    // Carried in the fragment, not the query string: fragments are never sent
-    // to the server, so the token can't leak into access logs or Referer headers.
-    return `${url}#bridge_token=${encodeURIComponent(token)}`;
-  } catch (err) {
-    console.warn('[ADMIN-BRIDGE] Token mint failed; falling back to manual admin login.', err);
-    return `${ADMIN_PANEL_URL}/login#sso_failed=1`;
-  }
+const baseMetrics: Metric[] = [
+  { key: 'owners', label: 'Owners', value: null, helper: 'Registered owner profiles', icon: Building2, severity: 'success' },
+  { key: 'tenants', label: 'Tenants', value: null, helper: 'Registered tenant profiles', icon: Users, severity: 'info' },
+  { key: 'technicians', label: 'Technicians', value: null, helper: 'Field technician profiles', icon: Wrench, severity: 'info' },
+  { key: 'brokers', label: 'Brokers', value: null, helper: 'Broker partner profiles', icon: Home, severity: 'info' },
+  { key: 'openTickets', label: 'Open tickets', value: null, helper: 'Live maintenance workload', icon: ClipboardCheck, severity: 'warning' },
+  { key: 'pendingPayments', label: 'Payment review', value: null, helper: 'Owner payments waiting for admin verification', icon: CreditCard, severity: 'warning' },
+];
+
+const launchGates = [
+  'Admin route renders inside the main app; no mandatory cross-domain redirect.',
+  'Owner onboarding payment package writes payment transaction, contract, intake submission, and audit log.',
+  'Tenant request and technician evidence flows are protected by role-based Firestore rules.',
+  'Public invoice, certificate, and QR pass verification routes remain available without admin access.',
+  'Legacy admin-panel domain is treated as fallback/redirect-only, not the canonical command center.',
+];
+
+const operationalRunbook = [
+  { label: 'Build main app', command: 'npm run build' },
+  { label: 'Build Cloud Functions', command: 'npm run build:functions' },
+  { label: 'Rules + stability guard', command: 'npm run test:stability' },
+  { label: 'Hard launch readiness', command: 'npm run test:hard-launch-readiness' },
+  { label: 'Mobile store readiness', command: 'npm run test:mobile-store-readiness' },
+];
+
+const portalSmokeTests = [
+  'Owner: onboarding → contract signature → payment proof → admin approval → dashboard unlock.',
+  'Tenant: unit linked → maintenance request with photo → ticket tracking → completion review.',
+  'Technician: open job → claim/accept → arrive → before/after proof → resolve.',
+  'Broker: referral/lead submission → attribution proof → commission state visible.',
+  'Admin: owner/payment/ticket/user visibility → approval/rejection → audit trail captured.',
+];
+
+const formatDate = (value: unknown) => {
+  const raw: any = value;
+  if (!raw) return 'recent';
+  if (typeof raw?.toDate === 'function') return raw.toDate().toLocaleString('en-AE');
+  if (typeof raw === 'string') return raw;
+  return 'recent';
 };
 
 export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
-  const targetPath = currentAdminPath();
-  const targetUrl = resolveAdminUrl(targetPath);
+  const [metrics, setMetrics] = React.useState<Metric[]>(baseMetrics);
+  const [events, setEvents] = React.useState<AuditEvent[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = React.useState<string>('');
 
-  // No automatic redirect — the bridge is user-initiated only.
-  // This guarantees there can never be a redirect loop between the main app
-  // and bin-group-admin-panel.web.app: admins explicitly click through.
+  const label = (key: string, fallback: string) => tx(key, fallback);
 
-  const openAdminPanel = async () => {
-    const url = await withBridgeToken(targetUrl);
-    window.location.href = url.startsWith(ADMIN_PANEL_URL) ? url : `${ADMIN_PANEL_URL}/login#sso_failed=1`;
-  };
+  const loadDashboard = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const loaders: Record<string, () => Promise<number>> = {
+        owners: async () => (await getCountFromServer(query(collection(db, 'users'), where('role', '==', 'owner')))).data().count,
+        tenants: async () => (await getCountFromServer(query(collection(db, 'users'), where('role', '==', 'tenant')))).data().count,
+        technicians: async () => (await getCountFromServer(query(collection(db, 'users'), where('role', '==', 'technician')))).data().count,
+        brokers: async () => (await getCountFromServer(query(collection(db, 'users'), where('role', '==', 'broker')))).data().count,
+        openTickets: async () => (await getCountFromServer(query(collection(db, 'maintenanceTickets'), where('status', 'in', ['OPEN', 'open', 'ASSIGNED', 'assigned', 'IN_PROGRESS', 'in_progress', 'emergency_submitted'])))).data().count,
+        pendingPayments: async () => (await getCountFromServer(query(collection(db, 'payment_transactions'), where('verificationState', '==', 'ADMIN_VERIFICATION_REQUIRED')))).data().count,
+      };
+
+      const resolved = await Promise.all(
+        baseMetrics.map(async (metric) => {
+          try {
+            const value = await loaders[metric.key]();
+            return { ...metric, value };
+          } catch (metricError) {
+            console.warn(`[ADMIN-COMMAND] Metric failed: ${metric.key}`, metricError);
+            return { ...metric, value: null };
+          }
+        })
+      );
+
+      setMetrics(resolved);
+
+      try {
+        const auditSnap = await getDocs(query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(6)));
+        setEvents(auditSnap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Omit<AuditEvent, 'id'>) })));
+      } catch (auditError) {
+        console.warn('[ADMIN-COMMAND] Audit log preview failed:', auditError);
+        setEvents([]);
+      }
+
+      setLastLoadedAt(new Date().toLocaleString('en-AE'));
+    } catch (err: any) {
+      console.error('[ADMIN-COMMAND] Dashboard load failed:', err);
+      setError(err?.message || 'Unable to load admin command center metrics.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
   const resetAndLogin = async () => {
     try {
@@ -75,7 +170,7 @@ export default function AdminTerminal() {
     } catch {
       // Ignore storage failures and continue navigation.
     }
-    window.location.href = `${ADMIN_PANEL_URL}/login#sso_failed=1`;
+    window.location.href = '/login?intendedRole=admin&returnTo=%2Fadmin%2Fdashboard';
   };
 
   return (
@@ -84,89 +179,162 @@ export default function AdminTerminal() {
         minHeight: '100vh',
         bgcolor: '#020617',
         color: '#FFFFFF',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         p: { xs: 2, md: 4 },
         direction: isRTL ? 'rtl' : 'ltr',
         backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(201,166,70,0.18), transparent 42%)',
-        position: 'relative',
       }}
     >
-      <Box sx={{ position: 'absolute', top: 24, [isRTL ? 'left' : 'right']: 24 }}>
-        <PortalSessionControls role="admin" dark accent="#C9A646" />
-      </Box>
-      <Box
-        sx={{
-          width: '100%',
-          maxWidth: 760,
-          bgcolor: 'rgba(15, 23, 42, 0.94)',
-          border: '1px solid rgba(201,166,70,0.35)',
-          borderRadius: 5,
-          p: { xs: 3, md: 5 },
-          textAlign: 'center',
-          boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
-        }}
-      >
-        <Typography variant="overline" sx={{ color: '#C9A646', fontWeight: 950, letterSpacing: 4 }}>
-          BIN GROUP ADMIN
-        </Typography>
-        <Typography variant="h3" sx={{ mt: 2, mb: 2, fontWeight: 950, letterSpacing: -1.5 }}>
-          {tx('admin.bridge.title', 'Opening Admin Command Center')}
-        </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mb: 3, lineHeight: 1.7 }}>
-          {tx(
-            'admin.bridge.desc',
-            'The public app does not contain admin credentials. You are being sent to the dedicated production admin panel for approvals, tickets, technicians, contracts, payments, and sovereign operations.'
-          )}
-        </Typography>
-
-        <Box sx={{ mb: 4, px: 2.5, py: 1.5, borderRadius: 2, bgcolor: 'rgba(201,166,70,0.10)', border: '1px solid rgba(201,166,70,0.30)' }}>
-          <Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 800, lineHeight: 1.6 }}>
-            {tx(
-              'admin.bridge.reauth_notice',
-              'Single admin entrypoint: we first try secure session handoff. If that fails, the same button opens the dedicated admin login with a clear SSO failure notice.'
-            )}
-          </Typography>
-        </Box>
-
-        <Stack direction="column" spacing={2} justifyContent="center">
-          <Button
-            variant="contained"
-            onClick={openAdminPanel}
-            sx={{
-              bgcolor: '#C9A646',
-              color: '#111827',
-              fontWeight: 950,
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              '&:hover': { bgcolor: '#E5C86B' },
-            }}
-          >
-            {tx('admin.bridge.open', 'Continue to Admin Command Center')}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={resetAndLogin}
-            sx={{
-              borderColor: 'rgba(239,68,68,0.55)',
-              color: '#FCA5A5',
-              fontWeight: 950,
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              '&:hover': { borderColor: '#FCA5A5', bgcolor: 'rgba(239,68,68,0.08)' },
-            }}
-          >
-            {tx('admin.bridge.reset', 'Reset Session & Open Admin Login')}
-          </Button>
+      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 4 }}>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1.5}>
+          <Box sx={{ width: 46, height: 46, borderRadius: 3, bgcolor: '#C9A646', color: '#111827', display: 'grid', placeItems: 'center' }}>
+            <SafeIcon icon={ShieldCheck} size={24} />
+          </Box>
+          <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+            <Typography variant="overline" sx={{ color: '#E5C86B', fontWeight: 950, letterSpacing: 3 }}>
+              BIN GROUP ADMIN
+            </Typography>
+            <Typography variant="h4" sx={{ fontWeight: 950, letterSpacing: -0.8 }}>
+              {label('admin.command.title', 'Unified Command Center')}
+            </Typography>
+          </Box>
         </Stack>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+          <Button onClick={loadDashboard} disabled={loading} startIcon={renderSafeIcon(RefreshCcw, { size: 16 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 900 }}>
+            {loading ? 'Syncing' : 'Refresh'}
+          </Button>
+          <PortalSessionControls role="admin" dark accent="#C9A646" />
+        </Stack>
+      </Stack>
 
-        <Typography variant="caption" sx={{ display: 'block', mt: 4, color: 'rgba(255,255,255,0.42)', fontWeight: 800 }}>
-          {lang === 'ar' ? 'بوابة المسؤول المستقرة' : 'Stable admin URL'}: {ADMIN_PANEL_URL}
-        </Typography>
-      </Box>
+      <Alert severity="success" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(34,197,94,0.10)', color: '#BBF7D0', border: '1px solid rgba(34,197,94,0.30)', '& .MuiAlert-icon': { color: '#4ADE80' } }}>
+        Admin routing is now in-app first. The canonical path <strong>/admin/dashboard</strong> renders this command center directly instead of forcing a cross-domain bridge.
+      </Alert>
+
+      {error && (
+        <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.10)', color: '#FDE68A', border: '1px solid rgba(245,158,11,0.28)' }}>
+          {error}
+        </Alert>
+      )}
+
+      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        {metrics.map((metric) => (
+          <Grid item xs={12} sm={6} md={4} key={metric.key}>
+            <Card sx={{ height: '100%', bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.56)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1.4 }}>{metric.label}</Typography>
+                    <Typography variant="h3" sx={{ fontWeight: 950, color: '#E5C86B', my: 1 }}>
+                      {loading && metric.value === null ? <CircularProgress size={26} sx={{ color: '#E5C86B' }} /> : metric.value ?? '—'}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 700 }}>{metric.helper}</Typography>
+                  </Box>
+                  <Box sx={{ width: 42, height: 42, borderRadius: 3, bgcolor: 'rgba(201,166,70,0.10)', display: 'grid', placeItems: 'center', color: '#E5C86B' }}>
+                    <SafeIcon icon={metric.icon} size={21} />
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Grid container spacing={2.5}>
+        <Grid item xs={12} md={7}>
+          <Card sx={{ height: '100%', bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Launch Control Gates</Typography>
+                <Chip label="READY PATH" sx={{ bgcolor: 'rgba(34,197,94,0.14)', color: '#86EFAC', fontWeight: 950 }} />
+              </Stack>
+              <Stack spacing={1.25}>
+                {launchGates.map((gate) => (
+                  <Stack key={gate} direction="row" spacing={1.2} alignItems="flex-start">
+                    <CheckCircle2 size={18} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.76)', fontWeight: 750 }}>{gate}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+              <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
+              <Typography variant="subtitle2" sx={{ color: '#E5C86B', fontWeight: 950, mb: 1.5 }}>Five-profile smoke test script</Typography>
+              <Stack spacing={1}>
+                {portalSmokeTests.map((test) => (
+                  <Typography key={test} variant="body2" sx={{ color: 'rgba(255,255,255,0.68)', fontWeight: 700 }}>• {test}</Typography>
+                ))}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={5}>
+          <Stack spacing={2.5}>
+            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B', mb: 2 }}>Verification Runbook</Typography>
+                <Stack spacing={1.25}>
+                  {operationalRunbook.map((item) => (
+                    <Box key={item.command} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)', fontWeight: 900 }}>{item.label}</Typography>
+                      <Typography variant="body2" sx={{ color: '#E5C86B', fontFamily: 'monospace', fontWeight: 900 }}>{item.command}</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Recent Audit Trail</Typography>
+                  <SafeIcon icon={Activity} size={18} />
+                </Stack>
+                {events.length === 0 ? (
+                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 700 }}>
+                    No audit preview loaded. This may mean no audit documents exist yet, or Firestore denied the preview query.
+                  </Typography>
+                ) : (
+                  <Stack spacing={1}>
+                    {events.map((event) => (
+                      <Box key={event.id} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)' }}>
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{event.action || 'AUDIT_EVENT'}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)', fontWeight: 700 }}>
+                          {event.actorRole || 'actor'} · {event.targetType || 'target'} · {formatDate(event.createdAt)}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+                {lastLoadedAt && <Typography variant="caption" sx={{ display: 'block', mt: 2, color: 'rgba(255,255,255,0.38)', fontWeight: 800 }}>Last synced: {lastLoadedAt}</Typography>}
+              </CardContent>
+            </Card>
+          </Stack>
+        </Grid>
+      </Grid>
+
+      <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} sx={{ mt: 3 }}>
+        <Button href="/analytics/reporting" startIcon={renderSafeIcon(BarChart3, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#E5C86B' } }}>
+          Reporting
+        </Button>
+        <Button href="/notifications" startIcon={renderSafeIcon(Bell, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>
+          Notifications
+        </Button>
+        <Button href="/verify" startIcon={renderSafeIcon(FileCheck2, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>
+          Public Verification
+        </Button>
+        <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>
+          Trust & Security
+        </Button>
+        <Button href={LEGACY_ADMIN_PANEL_URL} target="_blank" rel="noreferrer" startIcon={renderSafeIcon(ExternalLink, { size: 17 })} sx={{ color: 'rgba(255,255,255,0.64)', border: '1px solid rgba(255,255,255,0.18)', fontWeight: 900 }}>
+          Legacy panel
+        </Button>
+        <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>
+          Reset session
+        </Button>
+      </Stack>
+
+      <Typography variant="caption" sx={{ display: 'block', mt: 4, color: 'rgba(255,255,255,0.42)', fontWeight: 800, textAlign: 'center' }}>
+        {lang === 'ar' ? 'مركز التحكم الداخلي' : 'In-app admin command center'} · /admin/dashboard
+      </Typography>
     </Box>
   );
 }
