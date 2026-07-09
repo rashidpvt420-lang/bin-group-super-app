@@ -46,9 +46,10 @@ for (const token of forbiddenAdminTerminalTokens) {
 }
 
 const adminPanelRedirectTokens = [
-  'BIN GROUP Unified Access',
+  'legacy redirect-only',
   'MAIN_APP_URL',
   '/admin/dashboard',
+  'Continue to Admin Command Center',
 ];
 
 for (const token of adminPanelRedirectTokens) {
