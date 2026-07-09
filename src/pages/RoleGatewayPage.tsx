@@ -58,7 +58,7 @@ const RoleGatewayPage: React.FC = () => {
             id: 'admin', 
             label: tx('gateway.role.admin', 'Continue as Admin'), 
             icon: <ShieldCheck size={40} />, 
-            desc: 'Dedicated Admin Command Center bridge.'
+            desc: 'Unified in-app Admin Command Center.'
         }
     ];
 
@@ -80,152 +80,104 @@ const RoleGatewayPage: React.FC = () => {
             return;
         }
 
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-            navigate(`/login?intendedRole=${roleId}`);
+        if (role === roleId) {
+            navigate(roleHome[roleId] || '/');
             return;
         }
 
         setSavingRole(roleId);
         try {
-            const status = roleId === 'owner' ? 'onboarding' : 'active';
-            await setDoc(doc(db, 'users', currentUser.uid), {
-                uid: currentUser.uid,
-                email: (currentUser.email || '').toLowerCase(),
-                displayName: currentUser.displayName || currentUser.email || 'BIN GROUP User',
-                photoURL: currentUser.photoURL || null,
+            const activeUser = auth.currentUser || user;
+            if (!activeUser) throw new Error('No authenticated user found.');
+
+            await setDoc(doc(db, 'users', activeUser.uid), {
+                uid: activeUser.uid,
+                email: activeUser.email || '',
+                displayName: activeUser.displayName || activeUser.email || 'BIN GROUP User',
                 role: roleId,
-                status,
-                isAdmin: false,
+                status: 'active',
                 onboardingComplete: roleId !== 'owner',
-                roleSelectedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
             }, { merge: true });
 
             await refreshRole();
-            navigate(roleHome[roleId] || '/owner/dashboard', { replace: true });
-        } catch (error) {
-            console.error('[ROLE_GATEWAY] Role selection failed:', error);
-            setNotice('Role selection could not be saved. Please refresh and try again, or contact BIN GROUP support.');
+            navigate(roleHome[roleId] || '/');
+        } catch (error: any) {
+            console.error('[ROLE-GATEWAY] Failed to assign role:', error);
+            setNotice(error?.message || 'Unable to assign role. Please try again.');
         } finally {
             setSavingRole(null);
         }
     };
 
+    const canShowAdminChip = isAdmin || ['admin', 'super_admin', 'ceo', 'manager'].includes(String(role || '').toLowerCase());
+
     return (
         <Box sx={{
             minHeight: '100vh',
-            bgcolor: '#000',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundImage: 'radial-gradient(circle at 50% -20%, rgba(198, 167, 94, 0.15) 0%, transparent 50%)',
-            position: 'relative',
-            overflow: 'hidden'
+            bgcolor: '#FFFFFF',
+            color: binThemeTokens.graphite,
+            py: { xs: 4, md: 8 },
+            direction: isRTL ? 'rtl' : 'ltr'
         }}>
-            <Box sx={{ p: 4, position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', zIndex: 10, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <Chip 
-                    icon={<ArrowLeft size={16} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} 
-                    label="BACK TO HOME" 
-                    onClick={() => navigate('/')}
-                    sx={{ 
-                        bgcolor: 'rgba(255,255,255,0.05)', 
-                        color: '#FFF', 
-                        fontWeight: 900, 
-                        cursor: 'pointer',
-                        '&:hover': { bgcolor: 'rgba(198, 167, 94, 0.2)' }
-                    }} 
-                />
-                <Chip 
-                    label={isRTL ? 'EN' : 'AR'}
-                    onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                    sx={{ 
-                        bgcolor: 'rgba(255,255,255,0.05)', 
-                        color: '#FFF', 
-                        fontWeight: 900, 
-                        cursor: 'pointer',
-                        '&:hover': { bgcolor: 'rgba(198, 167, 94, 0.2)' }
-                    }} 
-                />
-            </Box>
+            <Container maxWidth="lg">
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
+                            BIN GROUP ACCESS
+                        </Typography>
+                        <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>
+                            {tx('gateway.title', 'Choose your workspace')}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: '#667085', mt: 1, maxWidth: 720, fontWeight: 700 }}>
+                            {tx('gateway.subtitle', 'Select the role that matches your work with BIN GROUP. Public roles can be selected here; admin access still requires approved admin identity.')}
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                            label={lang === 'ar' ? 'العربية' : 'English'}
+                            onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+                            sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }}
+                        />
+                        <Chip
+                            label={canShowAdminChip ? 'Admin eligible' : 'Public roles'}
+                            sx={{ bgcolor: canShowAdminChip ? alpha('#16A34A', 0.12) : alpha('#2563EB', 0.10), color: canShowAdminChip ? '#15803D' : '#1D4ED8', fontWeight: 900 }}
+                        />
+                    </Stack>
+                </Stack>
 
-            <Container maxWidth="lg" sx={{ py: { xs: 10, md: 15 }, position: 'relative', zIndex: 1 }}>
-                <Box sx={{ textAlign: 'center', mb: 10 }}>
-                    <Typography variant="h2" fontWeight="950" sx={{ 
-                        color: '#FFF', 
-                        letterSpacing: -2, 
-                        mb: 2,
-                        fontSize: { xs: '2.5rem', md: '4rem' }
-                    }}>
-                        {tx('gateway.title', 'Select Your Operational Node')}
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
-                        {tx('gateway.subtitle', 'Enter the BIN GROUP Sovereign OS via your authorized role.')}
-                    </Typography>
-                </Box>
+                {notice && <Alert severity="warning" sx={{ mb: 3 }}>{notice}</Alert>}
 
-                {notice && (
-                    <Alert severity="warning" sx={{ mb: 4, bgcolor: 'rgba(255,152,0,0.1)', color: '#ffb74d', border: '1px solid rgba(255,152,0,0.2)' }}>
-                        {notice}
-                    </Alert>
-                )}
-
-                <Grid container spacing={3} justifyContent="center">
-                    {roles.map((roleOption) => (
-                        <Grid item xs={12} sm={6} md={4} key={roleOption.id}>
-                            <Card sx={{ 
-                                bgcolor: 'rgba(22, 22, 24, 0.6)', 
-                                border: '1px solid rgba(255,255,255,0.05)', 
-                                borderRadius: 6,
-                                transition: 'all 0.3s ease',
-                                opacity: savingRole && savingRole !== roleOption.id ? 0.55 : 1,
-                                '&:hover': {
-                                    borderColor: binThemeTokens.gold,
-                                    transform: 'translateY(-10px)',
-                                    boxShadow: `0 30px 60px ${alpha(binThemeTokens.gold, 0.1)}`,
-                                    bgcolor: 'rgba(198, 167, 94, 0.03)'
-                                }
-                            }}>
-                                <CardActionArea disabled={Boolean(savingRole)} onClick={() => handleRoleSelect(roleOption.id)} sx={{ p: 4, height: '100%' }}>
-                                    <Stack spacing={3} alignItems={isRTL ? 'flex-end' : 'flex-start'} textAlign={isRTL ? 'right' : 'left'}>
-                                        <Box sx={{ 
-                                            p: 2, 
-                                            borderRadius: 4, 
-                                            bgcolor: alpha(binThemeTokens.gold, 0.1), 
-                                            color: binThemeTokens.gold 
-                                        }}>
-                                            {savingRole === roleOption.id ? <CircularProgress size={40} sx={{ color: binThemeTokens.gold }} /> : roleOption.icon}
-                                        </Box>
-                                        <Box>
-                                            <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 1 }}>
-                                                {roleOption.label}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
-                                                {roleOption.desc}
-                                            </Typography>
-                                        </Box>
-                                        <Box sx={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            gap: 1, 
-                                            color: binThemeTokens.gold, 
-                                            fontWeight: 900,
-                                            fontSize: '0.75rem',
-                                            letterSpacing: 2
-                                        }}>
-                                            ACCESS TERMINAL <ChevronRight size={14} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
-                                        </Box>
-                                    </Stack>
-                                </CardActionArea>
-                            </Card>
-                        </Grid>
-                    ))}
+                <Grid container spacing={3}>
+                    {roles.map((r) => {
+                        const isAdminRole = r.id === 'admin';
+                        const disabled = savingRole !== null || (isAdminRole && !canShowAdminChip && !!user);
+                        return (
+                            <Grid item xs={12} sm={6} md={4} key={r.id}>
+                                <Card sx={{ height: '100%', borderRadius: 5, border: '1px solid #E5E7EB', boxShadow: '0 18px 48px rgba(17,24,39,0.06)' }}>
+                                    <CardActionArea disabled={disabled} onClick={() => handleRoleSelect(r.id)} sx={{ height: '100%', p: 3 }}>
+                                        <CardContent>
+                                            <Stack spacing={2}>
+                                                <Box sx={{ width: 62, height: 62, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {savingRole === r.id ? <CircularProgress size={30} sx={{ color: binThemeTokens.gold }} /> : r.icon}
+                                                </Box>
+                                                <Box>
+                                                    <Typography variant="h5" sx={{ fontWeight: 950 }}>{r.label}</Typography>
+                                                    <Typography variant="body2" sx={{ color: '#667085', mt: 1, lineHeight: 1.7, fontWeight: 700 }}>{r.desc}</Typography>
+                                                </Box>
+                                                <Stack direction="row" alignItems="center" spacing={1} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
+                                                    <Typography variant="button" sx={{ fontWeight: 950 }}>{t('common.continue') || 'Continue'}</Typography>
+                                                    {isRTL ? <ArrowLeft size={18} /> : <ChevronRight size={18} />}
+                                                </Stack>
+                                            </Stack>
+                                        </CardContent>
+                                    </CardActionArea>
+                                </Card>
+                            </Grid>
+                        );
+                    })}
                 </Grid>
-
-                <Box sx={{ mt: 15, textAlign: 'center' }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.1)', letterSpacing: 4, textTransform: 'uppercase', fontWeight: 900 }}>
-                        ISO 27001 Certified Operational Sovereignty
-                    </Typography>
-                </Box>
             </Container>
         </Box>
     );
