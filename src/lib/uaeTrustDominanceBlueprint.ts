@@ -105,3 +105,23 @@ export const UAE_TRUST_CENTER_POLICIES = [
   'No unclear payment flow: 15% mobilization, payment plan, manual bank/admin verification, and invoices must be visible.',
   'No unbounded staff dispatch: technician readiness, safety, HR documents, and compliance status must be visible to admin.',
 ];
+
+export const UAE_ONBOARDING_TRUST_STEPS = [
+  'Owner submits company/contact profile.',
+  'Owner submits property, location, unit and systems profile.',
+  'Owner selects service model, SLA tier, add-ons and payment plan.',
+  'Owner creates secure account and uploads KYC/property proof.',
+  'Owner signs contract and submits 15% activation payment proof.',
+  'Admin reviews payment, property proof, contract and owner identity before activation.',
+  'Dashboard unlocks only after admin verification and audit entry are recorded.',
+];
+
+export const UAE_STORE_DATA_SAFETY_CATEGORIES = [
+  'Account identity: name, email, phone number, role and Firebase user ID.',
+  'Property information: address, unit, owner/tenant binding, title deed/property proof and service profile.',
+  'Identity/compliance documents: Emirates ID, passport, trade licence and tenancy support documents when required.',
+  'Payment information: activation deposit amount, proof document, invoice references and verification status.',
+  'Location data: property mapping, dispatch readiness, technician live/arrived location and GPS proof.',
+  'User-generated evidence: maintenance photos/videos, before/after photos, notes, ratings and disputes.',
+  'Device/app data: push notification token, platform, standalone/PWA state, diagnostics and support messages.',
+];
