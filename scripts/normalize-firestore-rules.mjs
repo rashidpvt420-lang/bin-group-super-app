@@ -62,7 +62,10 @@ function dedupeBrokerOwns(input) {
 function replaceLineBlock(input, startText, endText, replacement, label) {
   const start = input.indexOf(startText);
   if (start === -1) {
-    if (input.includes(replacement)) {
+    if (
+      input.includes(replacement) ||
+      input.includes('allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data)')
+    ) {
       console.log(`Already normalized/hardened: ${label}`);
       return input;
     }
@@ -84,7 +87,8 @@ function normalizeNotificationBlock(input) {
   const block = match[0];
   if (
     block.includes('allow create: if isAdmin();') ||
-    block.includes('allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid')
+    block.includes('allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid') ||
+    block.includes('allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data)')
   ) {
     console.log('Already normalized/hardened: notifications create rule');
     return input;
@@ -147,13 +151,17 @@ function insertOwnerTrustWorkflowRules(input) {
 let normalizedSource = resolveKnownConflictMarkers(source);
 let { output, seen, removed } = dedupeBrokerOwns(normalizedSource);
 
-output = replaceLineBlock(
-  output,
-  "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||",
-  "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
-  "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));",
-  'properties read rule'
-);
+if (output.includes('allow read: if canManageProperties() || ownerCanRead(resource.data)')) {
+  console.log('Already normalized/hardened: properties read rule (canManageProperties helper)');
+} else {
+  output = replaceLineBlock(
+    output,
+    "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||",
+    "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
+    "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));",
+    'properties read rule'
+  );
+}
 
 output = normalizeNotificationBlock(output);
 output = insertOwnerTrustWorkflowRules(output);

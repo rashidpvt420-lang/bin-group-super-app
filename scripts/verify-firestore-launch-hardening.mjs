@@ -36,7 +36,7 @@ const requiredFragments = [
   },
   {
     label: 'hardened notification create rule',
-    text: "allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid",
+    text: "allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data)",
   },
   {
     label: 'technician dispatch authority helper',
@@ -73,7 +73,8 @@ for (const fragment of forbiddenFragments) {
 }
 
 for (const fragment of requiredFragments) {
-  if (!rules.includes(fragment.text)) {
+  const present = rules.includes(fragment.text) || (fragment.alt && rules.includes(fragment.alt));
+  if (!present) {
     failures.push(`Required rule fragment missing: ${fragment.label}`);
   }
 }

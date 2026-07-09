@@ -1,7 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
-import https from 'https';
 // @ts-ignore
 import arabicReshaper from 'arabic-persian-reshaper';
 
@@ -16,8 +15,9 @@ async function getCairoFont(): Promise<Buffer> {
     const path = require('path');
     
     const fontPath = path.join(__dirname, '..', 'assets', 'Cairo-Regular.ttf');
-    cachedCairoFont = fs.readFileSync(fontPath);
-    return cachedCairoFont;
+    const fontBuffer: Buffer = fs.readFileSync(fontPath);
+    cachedCairoFont = fontBuffer;
+    return fontBuffer;
 }
 
 function isArabic(text: string): boolean {

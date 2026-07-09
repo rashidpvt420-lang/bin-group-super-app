@@ -16,15 +16,15 @@ service cloud.firestore {
 
     function hasAdminClaim() {
       return signedIn() && (
-        ('admin' in request.auth.token && request.auth.token.admin == true) ||
-        ('isAdmin' in request.auth.token && request.auth.token.isAdmin == true) ||
-        ('superAdmin' in request.auth.token && request.auth.token.superAdmin == true) ||
-        ('super_admin' in request.auth.token && request.auth.token.super_admin == true) ||
-        ('ceo' in request.auth.token && request.auth.token.ceo == true) ||
-        ('manager' in request.auth.token && request.auth.token.manager == true) ||
-        ('role' in request.auth.token && request.auth.token.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
-        ('userRole' in request.auth.token && request.auth.token.userRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
-        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
+        ('admin' in request.auth.token && request.auth.token.get('admin', false) == true) ||
+        ('isAdmin' in request.auth.token && request.auth.token.get('isAdmin', false) == true) ||
+        ('superAdmin' in request.auth.token && request.auth.token.get('superAdmin', false) == true) ||
+        ('super_admin' in request.auth.token && request.auth.token.get('super_admin', false) == true) ||
+        ('ceo' in request.auth.token && request.auth.token.get('ceo', false) == true) ||
+        ('manager' in request.auth.token && request.auth.token.get('manager', false) == true) ||
+        ('role' in request.auth.token && request.auth.token.get('role', '') in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
+        ('userRole' in request.auth.token && request.auth.token.get('userRole', '') in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
+        ('primaryRole' in request.auth.token && request.auth.token.get('primaryRole', '') in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'])
       );
     }
 
@@ -1296,6 +1296,89 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // ── Previously unruled collections — were silently falling through to the
+    // admin-only catch-all below. Scoped per their actual client usage. ──────
+    match /active_contracts/{contractId} {
+      allow read: if isAdmin();
+      allow write: if false; // No client writer exists today.
+    }
+
+    match /onboarding_leads/{leadId} {
+      allow read: if isAdmin();
+      allow write: if false; // No client writer exists today.
+    }
+
+    match /analytics_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if true; // Fires from public marketing pages before login.
+      allow update, delete: if false;
+    }
+
+    match /security_audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if true; // Anonymous quote/OTP/blocked-attempt logging before login.
+      allow update, delete: if false;
+    }
+
+    match /telemetry_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if true; // Client crash reporter can fire before login.
+      allow update, delete: if false;
+    }
+
+    match /jobPostings/{jobId} {
+      allow read: if isAdmin() || emailOwns(resource.data);
+      allow create: if signedIn() && emailOwns(request.resource.data);
+      allow update: if isAdmin() || emailOwns(resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /contractorBids/{bidId} {
+      allow read: if isAdmin() || (signedIn() &&
+        exists(/databases/$(database)/documents/jobPostings/$(resource.data.get('jobId', ''))) &&
+        emailOwns(get(/databases/$(database)/documents/jobPostings/$(resource.data.get('jobId', ''))).data));
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (signedIn() &&
+        exists(/databases/$(database)/documents/jobPostings/$(resource.data.get('jobId', ''))) &&
+        emailOwns(get(/databases/$(database)/documents/jobPostings/$(resource.data.get('jobId', ''))).data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['awarded']));
+      allow delete: if isAdmin();
+    }
+
+    match /contractorProfiles/{profileId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isAdmin() || emailOwns(resource.data);
+      allow write: if isAdmin();
+    }
+
+    match /payroll_entries/{entryId} {
+      allow read: if isAdmin() || isTechnicianId(resource.data.get('technicianId', null));
+      allow write: if isAdmin();
+    }
+
+    match /support_chats/{messageId} {
+      allow read: if isAdmin() || isOwnerId(resource.data.get('chatId', null));
+      allow create: if isAdmin() || (signedIn() &&
+        request.resource.data.get('chatId', null) == request.auth.uid &&
+        request.resource.data.get('senderId', null) == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /systemMetrics/{metricId} {
+      allow read: if isAdmin();
+      allow write: if false; // Written server-side via Admin SDK.
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isAdmin() || isOwnerId(resource.data.get('ownerId', null)) || isTechnicianId(resource.data.get('techId', null));
+      allow create: if isAdmin() || (signedIn() && isOwnerId(request.resource.data.get('ownerId', null)));
+      allow update, delete: if isAdmin();
     }
 
     match /{document=**} {

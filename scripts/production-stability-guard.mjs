@@ -30,7 +30,10 @@ const ownerActivationIsAdminControlled =
   (
     firestoreRules.includes('safeOwnerContractUpdate') &&
     firestoreRules.includes("!(request.resource.data.status in ['active', 'ACTIVE'])") &&
-    firestoreRules.includes("allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate()")
+    (
+      firestoreRules.includes("allow update: if isAdmin() || hasPermission('canManageContracts') || safeOwnerContractUpdate()") ||
+      firestoreRules.includes('allow update: if canManageContracts() || safeOwnerContractUpdate()')
+    )
   );
 
 const stripeReturnsToOwnerActivation =
