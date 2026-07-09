@@ -88,7 +88,7 @@ function normalizeNotificationBlock(input) {
   if (
     block.includes('allow create: if isAdmin();') ||
     block.includes('allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid') ||
-    block.includes('allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data)')
+    block.includes('allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);')
   ) {
     console.log('Already normalized/hardened: notifications create rule');
     return input;
@@ -144,25 +144,28 @@ function insertOwnerTrustWorkflowRules(input) {
       allow read, write: if isAdmin();
       allow create: if isAdmin() || signedIn();
     }
-`;
+ `;
   return input.replace(marker, `${block}\n${marker}`);
+}
+
+function normalizePropertiesReadRule(input) {
+  const legacyStart = "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) ||";
+  const legacyEnd = "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');";
+  const hardenedRule = "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));";
+  const canManageRule = "      allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));";
+
+  if (input.includes(canManageRule)) {
+    console.log('Already normalized/hardened: properties read rule uses canManageProperties() helper');
+    return input;
+  }
+
+  return replaceLineBlock(input, legacyStart, legacyEnd, hardenedRule, 'properties read rule');
 }
 
 let normalizedSource = resolveKnownConflictMarkers(source);
 let { output, seen, removed } = dedupeBrokerOwns(normalizedSource);
 
-if (output.includes('allow read: if canManageProperties() || ownerCanRead(resource.data)')) {
-  console.log('Already normalized/hardened: properties read rule (canManageProperties helper)');
-} else {
-  output = replaceLineBlock(
-    output,
-    "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || techOwns(resource.data) ||",
-    "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
-    "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));",
-    'properties read rule'
-  );
-}
-
+output = normalizePropertiesReadRule(output);
 output = normalizeNotificationBlock(output);
 output = insertOwnerTrustWorkflowRules(output);
 

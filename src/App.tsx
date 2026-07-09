@@ -9,6 +9,7 @@ import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
 import PublicSecurityPage from './pages/public/PublicSecurityPage';
+import TrustCenterPage from './pages/public/TrustCenterPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
@@ -268,6 +269,8 @@ function AppContent() {
         <Route path="/hospitals" element={publicOrPilot(<PublicMarketingPage page="hospitals" />)} />
         <Route path="/government-properties" element={publicOrPilot(<PublicMarketingPage page="government-properties" />)} />
         <Route path="/security" element={<PublicSecurityPage />} />
+        <Route path="/trust" element={<TrustCenterPage />} />
+        <Route path="/trust-center" element={<TrustCenterPage />} />
         <Route path="/services" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
         <Route path="/contact" element={publicOrPilot(<PublicMarketingPage page="contact" />)} />
         <Route path="/request-demo" element={publicOrPilot(<DemoVideosPage />)} />
@@ -278,14 +281,14 @@ function AppContent() {
         <Route path="/about" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/about-us" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/onboarding/*" element={publicOrPilot(withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false }))} />
-        <Route path="/government/:id" element={protectedRoute(['owner', 'admin'], <GovernmentPropertyPage />)} />
+        <Route path="/government/:id" element={protectedRoute(['owner', ...ADMIN_STAFF_ROLES], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
         <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
         <Route path="/financials" element={protectedRoute(['owner'], <FinancialDashboardPage />)} />
-        <Route path="/calendar" element={protectedRoute(['owner', 'admin', 'technician'], <MaintenanceCalendarPage />)} />
+        <Route path="/calendar" element={protectedRoute(['owner', 'technician', ...ADMIN_STAFF_ROLES], <MaintenanceCalendarPage />)} />
         <Route path="/properties/:id/health" element={protectedRoute(['owner'], <HealthScorePage />)} />
-        <Route path="/analytics/reporting" element={protectedRoute(['admin', 'owner'], <ReportingDashboard />)} />
-        <Route path="/analytics/executive" element={protectedRoute(['admin', 'owner'], <ExecutiveReportingPage />)} />
+        <Route path="/analytics/reporting" element={protectedRoute(['owner', ...ADMIN_STAFF_ROLES], <ReportingDashboard />)} />
+        <Route path="/analytics/executive" element={protectedRoute(['owner', ...ADMIN_STAFF_ROLES], <ExecutiveReportingPage />)} />
         <Route path="/analytics/turnover" element={protectedRoute(['owner'], <TurnoverEnginePage />)} />
         <Route path="/properties/:propertyId/units" element={protectedRoute(['owner'], <PropertyUnitsPage />)} />
         <Route path="/notifications" element={protectedRoute(NOTIFICATION_ROLES, <NotificationInboxPage />)} />
@@ -298,7 +301,7 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        {/* Admin — canonical entry point: /admin/dashboard renders AdminTerminal (bridge) */}
+        {/* Admin — canonical in-app command center. No mandatory cross-domain bridge. */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         {/* ── Public verifier routes ── */}
         <Route path="/verify" element={<InvoiceVerificationPage />} />

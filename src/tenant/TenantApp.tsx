@@ -1,9 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import {
-    Box, Container, AppBar, Toolbar, Typography, IconButton,
-    Breadcrumbs, Link as MuiLink, alpha, Stack, Button
-} from '@mui/material';
+import { Box, Container, AppBar, Toolbar, Typography, IconButton, Stack, Button, alpha } from '@mui/material';
 import { ArrowLeft, Home, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -12,6 +9,7 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon from '../components/SafeIcon';
 
+import TenantSimpleDashboardPage from './pages/TenantSimpleDashboardPage';
 import TenantDashboardPage from './pages/TenantDashboardPage';
 import TenantRequestPage from './pages/TenantRequestPage';
 import TenantTicketsPage from './pages/TenantTicketsPage';
@@ -39,10 +37,8 @@ import TenantCommunityPage from './pages/TenantCommunityPage';
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isRTL, lang, t, tx } = useLanguage();
-    const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
-
-    const pathnames = location.pathname.split('/').filter((x) => x);
+    const { isRTL, tx } = useLanguage();
+    const isHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
         color: binThemeTokens.gold,
@@ -55,94 +51,34 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     } as const;
 
     return (
-        <Box sx={{
-            minHeight: '100vh',
-            bgcolor: binThemeTokens.black,
-            color: binThemeTokens.textPrimary,
-            direction: isRTL ? 'rtl' : 'ltr',
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'relative',
-            isolation: 'isolate'
-        }}>
+        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.black, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={0.038} />
-            <AppBar
-                position="sticky"
-                elevation={0}
-                sx={{
-                    bgcolor: 'rgba(11, 11, 12, 0.9)',
-                    backdropFilter: 'blur(16px)',
-                    borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`,
-                    zIndex: 1200
-                }}
-            >
+            <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(11,11,12,0.9)', backdropFilter: 'blur(16px)', borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
-                        {location.pathname !== '/tenant' && location.pathname !== '/tenant/dashboard' && (
-                            <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary }}>
-                                <SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
-                            </IconButton>
-                        )}
-                        <IconButton onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.gold }}>
-                            <SafeIcon icon={Home} size={22} />
-                        </IconButton>
-                        <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>
-                                {label('portal.tenant.title', 'TENANT PORTAL', 'بوابة المستأجر')}
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
-                                {label('portal.tenant.subtitle', 'SOVEREIGN RESIDENCY NODE · UAE 🇦🇪', 'عقدة السكن السيادية · الإمارات 🇦🇪')}
-                            </Typography>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+                        {!isHome && <IconButton onClick={() => navigate(-1)} sx={{ color: '#fff' }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
+                        <IconButton onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.gold }}><SafeIcon icon={Home} size={22} /></IconButton>
+                        <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
+                            <Typography variant="h6" fontWeight="950" sx={{ color: '#fff', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{tx('portal.tenant.title', 'TENANT PORTAL')}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{tx('portal.tenant.subtitle', 'NO-CALL SERVICE MODE')}</Typography>
                         </Box>
-                    </Box>
-
+                    </Stack>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-                        <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{label('tenant.quick.report', 'Report Issue', 'إبلاغ عن مشكلة')}</Button>
-                        <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: '#ef4444', borderColor: alpha('#ef4444', 0.42) }}>{label('tenant.quick.emergency', 'Emergency', 'طوارئ')}</Button>
-                        <Button onClick={() => navigate('/tenant/payments')} sx={quickButtonSx}>{label('tenant.quick.payments', 'Payments', 'المدفوعات')}</Button>
-                        <Button onClick={() => navigate('/tenant/move-inspection/move-out')} sx={quickButtonSx}>{label('tenant.quick.handover', 'Move In/Out', 'تسليم الوحدة')}</Button>
+                        <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{tx('tenant.quick.report', 'Report Issue')}</Button>
+                        <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: '#ef4444', borderColor: alpha('#ef4444', 0.42) }}>{tx('tenant.quick.emergency', 'Emergency')}</Button>
+                        <Button onClick={() => navigate('/tenant/payments')} sx={quickButtonSx}>{tx('tenant.quick.payments', 'Payments')}</Button>
                         <NotificationBell />
-                        <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#FFF', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
-                            <SafeIcon icon={User} size={18} />
-                        </IconButton>
+                        <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}><SafeIcon icon={User} size={18} /></IconButton>
                         <PortalSessionControls role="tenant" dark accent={binThemeTokens.gold} />
                     </Stack>
                 </Toolbar>
             </AppBar>
-
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
-                {pathnames.length > 1 && (
-                    <Breadcrumbs
-                        sx={{
-                            mb: 4,
-                            '& .MuiBreadcrumbs-separator': { color: 'rgba(255,255,255,0.2)' },
-                            '& .MuiBreadcrumbs-ol': { flexDirection: isRTL ? 'row-reverse' : 'row' }
-                        }}
-                    >
-                        <MuiLink component="button" onClick={() => navigate('/tenant')} sx={{ color: binThemeTokens.gold, fontWeight: 900, textDecoration: 'none', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                            {t('nav.dashboard')}
-                        </MuiLink>
-                        {pathnames.slice(1).map((value, index) => {
-                            const isLast = index === pathnames.slice(1).length - 1;
-                            return (
-                                <Typography key={index} sx={{ color: isLast ? '#FFF' : 'rgba(255,255,255,0.4)', fontWeight: 900, fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                    {label(`nav.${value.replace('-', '_')}`, value.replace('-', ' '), value.replace('-', ' '))}
-                                </Typography>
-                            );
-                        })}
-                    </Breadcrumbs>
-                )}
-                <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>
-                    {children}
-                </Box>
+                <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
             </Container>
-
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11, 11, 12, 0.5)', position: 'relative', zIndex: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>
-                    © 2026 BIN GROUP SOVEREIGN · UAE PROPERTY OPERATIONS OS · MADE IN UAE 🇦🇪
-                </Typography>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OPERATIONS OS</Typography>
             </Box>
-
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </Box>
     );
@@ -152,8 +88,9 @@ export default function TenantApp() {
     return (
         <TenantLayout>
             <Routes>
-                <Route path="/" element={<TenantDashboardPage />} />
-                <Route path="/dashboard" element={<TenantDashboardPage />} />
+                <Route path="/" element={<TenantSimpleDashboardPage />} />
+                <Route path="/dashboard" element={<TenantSimpleDashboardPage />} />
+                <Route path="/dashboard/full" element={<TenantDashboardPage />} />
                 <Route path="/unit" element={<TenantUnitPage />} />
                 <Route path="/request" element={<TenantRequestPage />} />
                 <Route path="/tickets" element={<TenantTicketsPage />} />

@@ -36,7 +36,11 @@ const requiredFragments = [
   },
   {
     label: 'hardened notification create rule',
-    text: "allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data)",
+    text: 'allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);',
+  },
+  {
+    label: 'safe client notification helper',
+    text: 'function safeClientNotificationCreate(data) {',
   },
   {
     label: 'technician dispatch authority helper',

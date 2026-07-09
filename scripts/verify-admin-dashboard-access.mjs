@@ -1,89 +1,69 @@
 import { readFileSync } from 'node:fs';
 
-const app = readFileSync('apps/admin-panel/src/App.tsx', 'utf8');
-const nav = readFileSync('apps/admin-panel/src/components/Navigation.tsx', 'utf8');
-const login = readFileSync('apps/admin-panel/src/components/UnifiedLogin.tsx', 'utf8');
-const auth = readFileSync('apps/admin-panel/src/context/AuthContext.tsx', 'utf8');
-const adminPackage = JSON.parse(readFileSync('apps/admin-panel/package.json', 'utf8'));
+const mainApp = readFileSync('src/App.tsx', 'utf8');
+const adminTerminal = readFileSync('src/admin/AdminTerminal.tsx', 'utf8');
+const adminPanelApp = readFileSync('apps/admin-panel/src/App.tsx', 'utf8');
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 
-const requiredLogin = [
-  'signInWithRedirect',
-  'browserLocalPersistence',
-  'Sign in with Google',
-  'Admin Login',
-  'auth/unauthorized-domain',
-  'auth/operation-not-allowed',
+const requiredMainAppTokens = [
+  '<TrustCenterPage />',
+  'path="/trust"',
+  'path="/trust-center"',
+  'path="/admin/*"',
+  'protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)',
+  'canonical in-app command center',
 ];
 
-for (const token of requiredLogin) {
-  if (!login.includes(token)) throw new Error(`Admin login missing required token: ${token}`);
+for (const token of requiredMainAppTokens) {
+  if (!mainApp.includes(token)) throw new Error(`Main app missing admin/trust route token: ${token}`);
 }
 
-if (login.includes('signInWithPopup')) {
-  throw new Error('Admin login must not use signInWithPopup. Use redirect SSO for production/mobile.');
-}
-
-const requiredAuth = [
-  'ceo@bin-groups.com',
-  'ceo@bin-group.com',
-  'setDoc(doc(db, \'users\'',
-  'ADMIN_ACCESS_DENIED',
-  'ADMIN_PROFILE_LOOKUP_FAILED',
-  'super_admin',
+const requiredAdminTerminalTokens = [
+  'Unified Command Center',
+  'getCountFromServer',
+  "collection(db, 'users')",
+  "collection(db, 'maintenanceTickets')",
+  "collection(db, 'payment_transactions')",
+  "collection(db, 'audit_logs')",
+  'Five-profile smoke test script',
+  'Verification Runbook',
+  'no mandatory cross-domain redirect',
 ];
 
-for (const token of requiredAuth) {
-  if (!auth.includes(token)) throw new Error(`Admin auth gate missing required token: ${token}`);
+for (const token of requiredAdminTerminalTokens) {
+  if (!adminTerminal.includes(token)) throw new Error(`In-app admin command center missing token: ${token}`);
 }
 
-const requiredRoutes = [
-  "path=\"/dashboard\"",
-  "path=\"/owners\"",
-  "path=\"/tenants\"",
-  "path=\"/tickets\"",
-  "path=\"/technicians\"",
-  "path=\"/manual-approvals\"",
-  "path=\"/ops/whatsapp-triage\"",
-  "path=\"/ops/rfq\"",
-  "path=\"/ops/vendors\"",
-  "path=\"/ops/data-governance\"",
-  "path=\"/hr\"",
-  "path=\"/audit\"",
+const forbiddenAdminTerminalTokens = [
+  'window.location.href = url.startsWith(ADMIN_PANEL_URL)',
+  'withBridgeToken(targetUrl)',
+  'mintAdminBridgeToken',
+  'Opening Admin Command Center',
 ];
 
-for (const token of requiredRoutes) {
-  if (!app.includes(token)) throw new Error(`Admin App route missing: ${token}`);
+for (const token of forbiddenAdminTerminalTokens) {
+  if (adminTerminal.includes(token)) throw new Error(`Admin route still contains bridge/dead-end token: ${token}`);
 }
 
-const requiredDirectOrPrebuildRoutes = [
-  '/ops/bin-connect',
-  '/ops/pilot-completion',
-  '/ops/public-launch-command',
+const adminPanelRedirectTokens = [
+  'legacy redirect-only',
+  'MAIN_APP_URL',
+  '/admin/dashboard',
+  'Continue to Admin Command Center',
 ];
 
-const prebuild = adminPackage.scripts?.prebuild || '';
-for (const route of requiredDirectOrPrebuildRoutes) {
-  if (!app.includes(route) && !prebuild.includes(route.includes('bin-connect') ? 'wire-bin-connect-admin-inbox.mjs' : route.includes('pilot-completion') ? 'wire-pilot-completion-routes.mjs' : 'wire-public-launch-command-center.mjs')) {
-    throw new Error(`Admin route is neither directly wired nor prebuild-wired: ${route}`);
-  }
+for (const token of adminPanelRedirectTokens) {
+  if (!adminPanelApp.includes(token)) throw new Error(`Redirect-only admin panel missing token: ${token}`);
 }
 
-const requiredNavigation = [
-  'Dashboard',
-  'BIN Connect Inbox',
-  'Pilot Completion',
-  'Public Launch Command',
-  'WhatsApp Triage',
-  'RFQ Trust Workflow',
-  'Vendor Command',
-  'PDPL Governance',
-  'HR Command',
+const requiredScripts = [
+  'test:hard-launch-readiness',
+  'test:mobile-store-readiness',
+  'test:e2e:launch-audit',
 ];
 
-for (const token of requiredNavigation) {
-  if (!nav.includes(token) && !prebuild.includes(token.includes('BIN Connect') ? 'wire-bin-connect-admin-inbox.mjs' : token.includes('Pilot') ? 'wire-pilot-completion-routes.mjs' : token.includes('Public Launch') ? 'wire-public-launch-command-center.mjs' : '')) {
-    throw new Error(`Admin navigation missing: ${token}`);
-  }
+for (const scriptName of requiredScripts) {
+  if (!pkg.scripts?.[scriptName]) throw new Error(`Missing launch verification script: ${scriptName}`);
 }
 
-console.log('Admin dashboard access verification passed.');
+console.log('Admin dashboard access verification passed: /admin/* is now an in-app command center and the legacy panel is redirect-only.');

@@ -1,10 +1,15 @@
 import React from 'react';
-import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { CheckCircle2, Home, Mail, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Box, Button, Chip, Container, Divider, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { CheckCircle2, Clock3, Home, Mail, MessageSquare, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrandWatermark from '../../components/BrandWatermark';
-import { UAE_TRUST_CENTER_POLICIES, UAE_TRUST_FEATURES } from '../../lib/uaeTrustDominanceBlueprint';
+import {
+  UAE_ONBOARDING_TRUST_STEPS,
+  UAE_STORE_DATA_SAFETY_CATEGORIES,
+  UAE_TRUST_CENTER_POLICIES,
+  UAE_TRUST_FEATURES,
+} from '../../lib/uaeTrustDominanceBlueprint';
 
 const gold = binThemeTokens.gold;
 const line = '#E8E3D7';
@@ -42,7 +47,25 @@ export default function TrustCenterPage() {
         <Box sx={{ bgcolor: '#111827', py: 8 }}>
           <Container maxWidth="lg"><Typography variant="h3" fontWeight={950} textAlign="center" sx={{ color: '#fff', mb: 5 }}>Public rules of trust</Typography><Grid container spacing={2}>{UAE_TRUST_CENTER_POLICIES.map((policy) => <Grid item xs={12} md={6} key={policy}><Stack direction="row" spacing={1.4} alignItems="flex-start" sx={{ p: 2.5, borderRadius: 3, border: `1px solid ${alpha(gold, .18)}`, bgcolor: 'rgba(255,255,255,.045)' }}><CheckCircle2 color={gold} size={20} /><Typography fontWeight={850} sx={{ color: 'rgba(255,255,255,.78)', lineHeight: 1.55 }}>{policy}</Typography></Stack></Grid>)}</Grid></Container>
         </Box>
-        <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#F8F9FB', borderTop: `1px solid ${line}` }}><Container maxWidth="md"><Typography variant="h4" fontWeight={950} sx={{ mb: 1 }}>Selected UAE properties can start as controlled pilot.</Typography><Typography sx={{ color: '#667085', mb: 3 }}>Full public launch requires production proof gates. Controlled pilot builds the evidence owners need to trust the platform.</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center"><Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: gold, color: '#111827', fontWeight: 950 }}>Start onboarding</Button><Button variant="outlined" startIcon={<Mail size={18} />} onClick={() => window.open(`mailto:${CONTACT.email}`, '_blank')} sx={{ color: '#6F5522', borderColor: alpha(gold, .45), fontWeight: 950 }}>Email CEO</Button></Stack></Container></Box>
+        <Container maxWidth="lg" sx={{ py: 8 }}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', borderRadius: 4, border: `1px solid ${line}`, boxShadow: '0 16px 40px rgba(17,24,39,.06)' }}>
+                <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 2 }}><Clock3 color={gold} size={22} /><Typography variant="h4" fontWeight={950}>Owner onboarding unlock path</Typography></Stack>
+                <Typography sx={{ color: '#667085', mb: 2, lineHeight: 1.7 }}>Owner dashboards must not unlock only because a form was submitted. They unlock after admin review and audit proof.</Typography>
+                <Stack spacing={1.2}>{UAE_ONBOARDING_TRUST_STEPS.map((step, idx) => <Stack key={step} direction="row" spacing={1.2} alignItems="flex-start"><Box sx={{ width: 26, height: 26, borderRadius: '50%', bgcolor: alpha(gold, .13), color: '#6F5522', display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 950 }}>{idx + 1}</Box><Typography variant="body2" sx={{ color: '#374151', fontWeight: 800, lineHeight: 1.55 }}>{step}</Typography></Stack>)}</Stack>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: { xs: 3, md: 4 }, height: '100%', borderRadius: 4, bgcolor: '#F8F9FB', border: `1px solid ${line}` }}>
+                <Typography variant="h4" fontWeight={950} sx={{ mb: 1 }}>App-store data safety map</Typography>
+                <Typography sx={{ color: '#667085', mb: 2, lineHeight: 1.7 }}>Use these exact categories to prepare Google Play Data Safety and Apple App Privacy declarations.</Typography>
+                <Stack spacing={1.1}>{UAE_STORE_DATA_SAFETY_CATEGORIES.map((item) => <Stack key={item} direction="row" spacing={1.1} alignItems="flex-start"><CheckCircle2 color="#16A34A" size={18} style={{ marginTop: 2, flexShrink: 0 }} /><Typography variant="body2" sx={{ color: '#374151', fontWeight: 800, lineHeight: 1.55 }}>{item}</Typography></Stack>)}</Stack>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Container>
+        <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#F8F9FB', borderTop: `1px solid ${line}` }}><Container maxWidth="md"><Typography variant="h4" fontWeight={950} sx={{ mb: 1 }}>Selected UAE properties can start as controlled pilot.</Typography><Typography sx={{ color: '#667085', mb: 3 }}>Full public launch requires production proof gates. Controlled pilot builds the evidence owners need to trust the platform.</Typography><Divider sx={{ mb: 3 }} /><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center"><Button variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: gold, color: '#111827', fontWeight: 950 }}>Start onboarding</Button><Button variant="outlined" startIcon={<Mail size={18} />} onClick={() => window.open(`mailto:${CONTACT.email}`, '_blank')} sx={{ color: '#6F5522', borderColor: alpha(gold, .45), fontWeight: 950 }}>Email CEO</Button></Stack></Container></Box>
       </Box>
     </Box>
   );

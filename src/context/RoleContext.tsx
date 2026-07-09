@@ -49,6 +49,7 @@ export type SovereignPermission =
     | 'canViewFinancials'
     | 'canEditPricing'
     | 'canManageCompanyProfile'
+    | 'canManageProperties'
     | 'canDispatchJobs'
     | 'canViewAuditLogs'
     | 'canExportReports';
