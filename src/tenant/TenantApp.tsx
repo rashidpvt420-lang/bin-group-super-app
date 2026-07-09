@@ -33,6 +33,7 @@ import TenantMarketplacePage from './pages/TenantMarketplacePage';
 import TenantStaffDirectoryPage from './pages/TenantStaffDirectoryPage';
 import TenantMessagesPage from './pages/TenantMessagesPage';
 import TenantCommunityPage from './pages/TenantCommunityPage';
+import TenantRenewalsPage from './pages/TenantRenewalsPage';
 
 const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
@@ -115,6 +116,7 @@ export default function TenantApp() {
                 <Route path="/staff-directory" element={<TenantStaffDirectoryPage />} />
                 <Route path="/messages" element={<TenantMessagesPage />} />
                 <Route path="/community" element={<TenantCommunityPage />} />
+                <Route path="/renewals" element={<TenantRenewalsPage />} />
             </Routes>
         </TenantLayout>
     );

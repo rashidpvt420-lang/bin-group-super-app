@@ -1435,12 +1435,60 @@ export const processTitleDeedOCR = onCall({ cors: true }, async (request) => {
 
 export const generateInstitutionalContract = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
-    const { contractData } = request.data;
+    const contractData = assertPlainObject(request.data?.contractData, "Contract payload");
+    const propertyId = safeString(contractData.propertyId || contractData.propertyPassportId || contractData.passportId);
+    const contractId = safeString(contractData.contractId || contractData.id);
+    const requesterEmail = safeString(request.auth.token?.email).toLowerCase();
+    const hasPrivilegedAccess = await hasCallableRoleAccess(
+        request.auth,
+        new Set(["admin", "super_admin", "ceo", "operations_admin", "finance_admin", "account_manager"])
+    );
+    if (!propertyId && !contractId) {
+        throw new HttpsError("invalid-argument", "Property ID or Contract ID is required.");
+    }
+
+    if (!hasPrivilegedAccess) {
+        let authorized = false;
+
+        if (propertyId) {
+            const propertyDoc = await db.collection("properties").doc(propertyId).get();
+            if (propertyDoc.exists) {
+                const property = propertyDoc.data() || {};
+                authorized =
+                    safeString(property.ownerId) === request.auth.uid ||
+                    safeString(property.ownerUid) === request.auth.uid ||
+                    safeString(property.userId) === request.auth.uid ||
+                    safeString(property.ownerEmail).toLowerCase() === requesterEmail;
+            }
+        }
+
+        if (!authorized && contractId) {
+            const contractDoc = await db.collection("contracts").doc(contractId).get();
+            if (contractDoc.exists) {
+                const contract = contractDoc.data() || {};
+                authorized =
+                    safeString(contract.ownerId) === request.auth.uid ||
+                    safeString(contract.ownerUid) === request.auth.uid ||
+                    safeString(contract.userId) === request.auth.uid ||
+                    safeString(contract.ownerEmail).toLowerCase() === requesterEmail;
+            }
+        }
+
+        if (!authorized) {
+            throw new HttpsError("permission-denied", "You are not authorized to generate this contract.");
+        }
+    }
+
     try {
-        const pdfUrl = await generateContractPDF({ ...contractData, ownerId: request.auth.uid });
+        const payload = hasPrivilegedAccess ? contractData : { ...contractData, ownerId: request.auth.uid };
+        const pdfUrl = await generateContractPDF(payload);
         await logAudit({
-            actorId: request.auth.uid, actorRole: "owner",
-            action: "CONTRACT_GENERATE", targetType: "contracts", targetId: contractData.contractId || "new"
+            actorId: request.auth.uid,
+            actorRole: hasPrivilegedAccess ? "admin" : "owner",
+            action: "CONTRACT_GENERATE",
+            targetType: "contracts",
+            targetId: contractId || "new",
+            metadata: { propertyId: propertyId || null }
         });
         return { status: "SUCCESS", pdfUrl };
     } catch (err: any) {
