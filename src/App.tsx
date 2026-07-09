@@ -9,6 +9,7 @@ import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
 import PublicSecurityPage from './pages/public/PublicSecurityPage';
+import TrustCenterPage from './pages/public/TrustCenterPage';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { CustomThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
@@ -268,6 +269,8 @@ function AppContent() {
         <Route path="/hospitals" element={publicOrPilot(<PublicMarketingPage page="hospitals" />)} />
         <Route path="/government-properties" element={publicOrPilot(<PublicMarketingPage page="government-properties" />)} />
         <Route path="/security" element={<PublicSecurityPage />} />
+        <Route path="/trust" element={<TrustCenterPage />} />
+        <Route path="/trust-center" element={<TrustCenterPage />} />
         <Route path="/services" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
         <Route path="/contact" element={publicOrPilot(<PublicMarketingPage page="contact" />)} />
         <Route path="/request-demo" element={publicOrPilot(<DemoVideosPage />)} />
@@ -298,7 +301,7 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        {/* Admin — canonical entry point: /admin/dashboard renders AdminTerminal (bridge) */}
+        {/* Admin — canonical in-app command center. No mandatory cross-domain bridge. */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         {/* ── Public verifier routes ── */}
         <Route path="/verify" element={<InvoiceVerificationPage />} />
