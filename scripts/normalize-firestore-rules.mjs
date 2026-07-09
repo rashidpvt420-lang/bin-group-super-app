@@ -84,7 +84,8 @@ function normalizeNotificationBlock(input) {
   const block = match[0];
   if (
     block.includes('allow create: if isAdmin();') ||
-    block.includes('allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid')
+    block.includes('allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid') ||
+    block.includes('allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);')
   ) {
     console.log('Already normalized/hardened: notifications create rule');
     return input;
