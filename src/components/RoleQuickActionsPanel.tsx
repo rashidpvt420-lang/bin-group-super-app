@@ -1,6 +1,6 @@
 import { Box, Button, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, BriefcaseBusiness, Building2, CheckSquare, CreditCard, FileText, Gauge, Handshake, Map, Megaphone, ShieldCheck, WalletCards, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, Briefcase, Building2, CheckSquare, CreditCard, FileText, Gauge, Handshake, Map, Megaphone, ShieldCheck, WalletCards, Wrench } from 'lucide-react';
 import { ROLE_QUICK_ACTIONS, type PortalRole } from '../config/uaeDominationBlueprint';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
@@ -13,7 +13,7 @@ const ICONS: Record<string, JSX.Element> = {
   approvals: <CheckSquare size={22} />,
   financials: <WalletCards size={22} />,
   passport: <Building2 size={22} />,
-  jobs: <BriefcaseBusiness size={22} />,
+  jobs: <Briefcase size={22} />,
   map: <Map size={22} />,
   offline: <ShieldCheck size={22} />,
   proof: <FileText size={22} />,
