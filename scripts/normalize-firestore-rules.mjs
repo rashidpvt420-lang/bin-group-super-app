@@ -2,61 +2,93 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const path = 'firestore.rules';
 const source = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
-const brokerOwnsNeedle = '    function brokerOwns(data) {';
 
 function resolveKnownConflictMarkers(input) {
   return input
     .replace(
-      `<<<<<<< Updated upstream\n    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }\n=======\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n>>>>>>> Stashed changes`,
-      `    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }\n    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`
+      `<<<<<<< Updated upstream
+    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
+=======
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+>>>>>>> Stashed changes`,
+      `    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`
     )
     .replace(
-      `    function safeOpenMissionClaim() {\n<<<<<<< Updated upstream\n      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&\n=======\n      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&\n>>>>>>> Stashed changes`,
-      `    function safeOpenMissionClaim() {\n      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
+      `    function safeOpenMissionClaim() {
+<<<<<<< Updated upstream
+      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&
+=======
+      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&
+>>>>>>> Stashed changes`,
+      `    function safeOpenMissionClaim() {
+      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
     );
 }
 
-function dedupeBrokerOwns(input) {
+function findFunctionBlockEnd(input, start) {
+  let depth = 0;
+  for (let end = start; end < input.length; end += 1) {
+    const char = input[end];
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        end += 1;
+        while (input[end] === '\r' || input[end] === '\n') end += 1;
+        return end;
+      }
+    }
+  }
+  return -1;
+}
+
+function dedupeRuleFunction(input, functionName) {
+  const needle = `    function ${functionName}(data) {`;
   let cursor = 0;
   let seen = 0;
   let removed = 0;
   let output = '';
 
   while (true) {
-    const start = input.indexOf(brokerOwnsNeedle, cursor);
+    const start = input.indexOf(needle, cursor);
     if (start === -1) {
       output += input.slice(cursor);
       break;
     }
 
     output += input.slice(cursor, start);
-
-    let depth = 0;
-    let end = start;
-    for (; end < input.length; end += 1) {
-      const char = input[end];
-      if (char === '{') depth += 1;
-      if (char === '}') {
-        depth -= 1;
-        if (depth === 0) {
-          end += 1;
-          while (input[end] === '\r' || input[end] === '\n') end += 1;
-          break;
-        }
-      }
-    }
-
+    const end = findFunctionBlockEnd(input, start);
+    if (end === -1) throw new Error(`[rules-normalize] Could not parse ${functionName} helper block.`);
     const block = input.slice(start, end);
+
     if (seen === 0) {
       output += block.endsWith('\n\n') ? block : `${block}\n\n`;
     } else {
       removed += 1;
     }
+
     seen += 1;
     cursor = end;
   }
 
   return { output, seen, removed };
+}
+
+function dedupeLaunchHelpers(input) {
+  let output = input;
+  let totalRemoved = 0;
+  const summary = [];
+
+  for (const functionName of ['brokerOwns', 'canCreateTenantBoundTicket']) {
+    const result = dedupeRuleFunction(output, functionName);
+    output = result.output;
+    totalRemoved += result.removed;
+    summary.push(`${functionName}: kept ${result.seen > 0 ? 1 : 0}, removed ${result.removed}`);
+  }
+
+  return { output, totalRemoved, summary };
 }
 
 function replaceLineBlock(input, startText, endText, replacement, label) {
@@ -100,7 +132,12 @@ function normalizeNotificationBlock(input) {
 
   const paramMatch = block.match(/match \/notifications\/\{([^}]+)\}/);
   const paramName = paramMatch?.[1] || 'notificationId';
-  const replacement = `    match /notifications/{${paramName}} {\n      allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));\n      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));\n      allow update: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));\n      allow delete: if isAdmin();\n    }`;
+  const replacement = `    match /notifications/{${paramName}} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid));
+      allow create: if isAdmin() || (signedIn() && request.resource.data.recipientId == request.auth.uid && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid));
+      allow update: if isAdmin() || (signedIn() && (resource.data.recipientId == request.auth.uid || resource.data.userId == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      allow delete: if isAdmin();
+    }`;
 
   return input.replace(block, replacement);
 }
@@ -163,12 +200,17 @@ function normalizePropertiesReadRule(input) {
 }
 
 let normalizedSource = resolveKnownConflictMarkers(source);
-let { output, seen, removed } = dedupeBrokerOwns(normalizedSource);
+let firstDedupe = dedupeLaunchHelpers(normalizedSource);
+let output = firstDedupe.output;
 
 output = normalizePropertiesReadRule(output);
 output = normalizeNotificationBlock(output);
 output = insertOwnerTrustWorkflowRules(output);
 
+let secondDedupe = dedupeLaunchHelpers(output);
+output = secondDedupe.output;
+
 if (output !== source) writeFileSync(path, output);
 
-console.log(`Firestore rules normalization complete. Kept ${seen > 0 ? 1 : 0}, removed ${removed} duplicate brokerOwns helper(s), hardened launch-critical and Owner Trust workflow access rules.`);
+const removed = firstDedupe.totalRemoved + secondDedupe.totalRemoved;
+console.log(`Firestore rules normalization complete. ${secondDedupe.summary.join('; ')}; removed ${removed} duplicate helper(s), hardened launch-critical and Owner Trust workflow access rules.`);
