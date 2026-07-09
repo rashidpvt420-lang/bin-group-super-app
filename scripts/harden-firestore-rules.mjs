@@ -4,7 +4,77 @@ const path = 'firestore.rules';
 let rules = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 let changes = 0;
 
+function findFunctionBlockEnd(input, start) {
+  let depth = 0;
+  for (let end = start; end < input.length; end += 1) {
+    const char = input[end];
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        end += 1;
+        while (input[end] === '\r' || input[end] === '\n') end += 1;
+        return end;
+      }
+    }
+  }
+  return -1;
+}
+
+function dedupeRuleFunction(input, functionName) {
+  const needle = `    function ${functionName}(data) {`;
+  let cursor = 0;
+  let seen = 0;
+  let removed = 0;
+  let output = '';
+
+  while (true) {
+    const start = input.indexOf(needle, cursor);
+    if (start === -1) {
+      output += input.slice(cursor);
+      break;
+    }
+
+    output += input.slice(cursor, start);
+    const end = findFunctionBlockEnd(input, start);
+    if (end === -1) throw new Error(`[rules-harden] Could not parse ${functionName} helper block.`);
+    const block = input.slice(start, end);
+
+    if (seen === 0) {
+      output += block.endsWith('\n\n') ? block : `${block}\n\n`;
+    } else {
+      removed += 1;
+    }
+
+    seen += 1;
+    cursor = end;
+  }
+
+  return { output, seen, removed };
+}
+
+function dedupeLaunchHelpers() {
+  for (const functionName of ['brokerOwns', 'canCreateTenantBoundTicket']) {
+    const result = dedupeRuleFunction(rules, functionName);
+    if (result.removed > 0) {
+      rules = result.output;
+      changes += result.removed;
+      console.log(`Patched: removed ${result.removed} duplicate ${functionName} helper(s)`);
+    }
+  }
+}
+
 function patchIfNeeded(label, before, after, alreadyMarkers = []) {
+  const helperGuards = new Map([
+    ['broker ownership helpers for dashboard collections', 'function brokerOwns(data)'],
+    ['tenant-created tickets must match assigned unit and property', 'function canCreateTenantBoundTicket(data)'],
+  ]);
+  const helperGuard = helperGuards.get(label);
+  if (helperGuard && rules.includes(helperGuard)) {
+    console.log(`Already hardened: ${label}`);
+    return;
+  }
+
   const alreadyHardened = alreadyMarkers.length > 0 && alreadyMarkers.every((marker) => rules.includes(marker));
   if (alreadyHardened) {
     console.log(`Already hardened: ${label}`);
@@ -20,6 +90,8 @@ function patchIfNeeded(label, before, after, alreadyMarkers = []) {
 
   console.warn(`Firestore hardening skipped (pattern not found): ${label}. Assuming already secured manually.`);
 }
+
+dedupeLaunchHelpers();
 
 patchIfNeeded(
   'owner helper should include ownerUid',
@@ -296,6 +368,8 @@ patchIfNeeded(
       return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&`,
   ["return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&"]
 );
+
+dedupeLaunchHelpers();
 
 const isVerify = process.argv.includes('--verify');
 
