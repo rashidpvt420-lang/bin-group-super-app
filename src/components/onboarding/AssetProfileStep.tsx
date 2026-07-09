@@ -9,7 +9,7 @@ import {
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { storage, ref, uploadBytes, getDownloadURL, functions } from '../../lib/firebase';
+import { storage, ref, uploadBytes, getDownloadURL, functions, auth } from '../../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 
 const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
@@ -138,7 +138,10 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         setScanning(true);
         setOcrError(null);
         try {
-            const storageRef = ref(storage, `temp_kyc/${Date.now()}_${file.name}`);
+            const uploaderUid = auth.currentUser?.uid;
+            if (!uploaderUid) throw new Error('AUTH_REQUIRED_FOR_KYC_UPLOAD');
+            const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const storageRef = ref(storage, `temp_kyc/${uploaderUid}/${Date.now()}_${safeFileName}`);
             await uploadBytes(storageRef, file);
             const fileUrl = await getDownloadURL(storageRef);
 
