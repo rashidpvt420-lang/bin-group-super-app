@@ -12,6 +12,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyTicketCreated, notifyEmergency } from '../../services/notificationService';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
+import { CANONICAL_SLA_POLICY, slaMinutesForPriority } from '../../config/uaeDominationBlueprint';
 
 const sanitizeStorageFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
 const CATEGORY_PREFILL: Record<string, string> = {
@@ -29,6 +30,12 @@ const CATEGORY_PREFILL: Record<string, string> = {
     elevator: 'elevator',
     security: 'security',
     other: 'other',
+};
+
+const PRIORITY_TO_SLA_KEY: Record<string, keyof typeof CANONICAL_SLA_POLICY> = {
+    emergency: 'EMERGENCY',
+    urgent: 'HIGH',
+    normal: 'STANDARD',
 };
 
 const normalizeCategoryPrefill = (value: string | null) => {
@@ -61,6 +68,10 @@ export default function TenantRequestPage() {
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
     const [isOwnerSuspended, setIsOwnerSuspended] = useState(false);
+
+    const selectedSlaKey = PRIORITY_TO_SLA_KEY[priority] || 'STANDARD';
+    const selectedSlaPolicy = CANONICAL_SLA_POLICY[selectedSlaKey];
+    const selectedSlaMinutes = slaMinutesForPriority(priority);
 
     useEffect(() => {
         const fetchResidence = async () => {
@@ -214,6 +225,8 @@ export default function TenantRequestPage() {
                 floor: unitData.floorNumber || '',
                 category,
                 priority,
+                slaPriority: selectedSlaKey,
+                slaLabel: selectedSlaPolicy.label,
                 description: description.trim(),
                 specificLocation: cleanLocation,
                 serviceLocationDetail: cleanLocation,
@@ -232,7 +245,8 @@ export default function TenantRequestPage() {
                 assignedTechnicianId: null,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
-                slaMinutes: priority === 'emergency' ? 60 : priority === 'urgent' ? 240 : 1440,
+                slaMinutes: selectedSlaMinutes,
+                canonicalSlaVersion: 'uae-domination-2026-07-04',
             });
             createdTicketId = docRef.id;
 
@@ -324,9 +338,9 @@ export default function TenantRequestPage() {
                                 <FormControl fullWidth>
                                     <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{tt('dash.tenant.priority', 'Priority')}</InputLabel>
                                     <Select data-testid="tenant-request-priority" inputProps={{ 'data-testid': 'tenant-request-priority-input' }} value={priority} label={tt('dash.tenant.priority', 'Priority')} onChange={(e) => setPriority(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
-                                        <MenuItem value="normal">{tt('dash.tenant.prioNormal', 'Normal (Standard 24h)')}</MenuItem>
-                                        <MenuItem value="urgent">{tt('dash.tenant.prioUrgent', 'Urgent (Priority 4h)')}</MenuItem>
-                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>{tt('dash.tenant.prioEmerg', 'EMERGENCY (Safety/SOS 1h)')}</MenuItem>
+                                        <MenuItem value="normal">{tt('dash.tenant.prioNormal', 'Normal (Standard 8h)')}</MenuItem>
+                                        <MenuItem value="urgent">{tt('dash.tenant.prioUrgent', 'Urgent (High 2h)')}</MenuItem>
+                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>{tt('dash.tenant.prioEmerg', 'EMERGENCY (Safety/SOS 30m)')}</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Grid>
@@ -350,7 +364,8 @@ export default function TenantRequestPage() {
                                 <AlertCircle size={20} color={binThemeTokens.gold} />
                                 <Box>
                                     <Typography variant="caption" fontWeight="950" sx={{ color: binThemeTokens.gold, display: 'block' }}>{tt('dash.tenant.slaCompliance', 'SLA COMPLIANCE')}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{tt('dash.tenant.slaDesc', 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.')} {priority === 'emergency' && tt('dash.tenant.slaDescEmerg', ' EMERGENCY requests trigger immediate dispatch.')}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', mt: 0.25 }}>{selectedSlaPolicy.label}: {selectedSlaMinutes} minutes. {selectedSlaPolicy.tenantCopy}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', mt: 0.75 }}>{tt('dash.tenant.slaDesc', 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.')} {priority === 'emergency' && tt('dash.tenant.slaDescEmerg', ' EMERGENCY requests trigger immediate dispatch.')}</Typography>
                                 </Box>
                             </Stack>
                         </Box>
