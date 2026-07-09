@@ -27,7 +27,7 @@ const requiredAdminTerminalTokens = [
   "collection(db, 'audit_logs')",
   'Five-profile smoke test script',
   'Verification Runbook',
-  'No mandatory cross-domain bridge',
+  'no mandatory cross-domain redirect',
 ];
 
 for (const token of requiredAdminTerminalTokens) {
