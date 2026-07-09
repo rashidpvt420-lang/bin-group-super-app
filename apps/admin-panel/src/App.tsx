@@ -1,183 +1,117 @@
 import React from 'react';
-import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { ThemeProvider, alpha } from '@mui/material/styles';
-import { Alert, Box, Button, CircularProgress, CssBaseline, Paper, Stack, Typography } from '@mui/material';
-import { ShieldCheck } from 'lucide-react';
-import { LanguageProvider, useLanguage } from '@bin/shared';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { Alert, Box, Button, CircularProgress, CssBaseline, Stack, Typography } from '@mui/material';
 
-import { AuthProvider, useAuth } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import UnifiedLogin from './components/UnifiedLogin';
-import Navigation from './components/Navigation';
-import AdminPageFrame from './components/AdminPageFrame';
-import DashboardPage from './pages/dashboard/DashboardPage';
-import StaffAccessPage from './pages/admin/StaffAccessPage';
-import { adminTheme, binThemeTokens } from './theme/adminTheme';
+const redirectTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#DAA520' },
+    background: { default: '#020617', paper: '#0f172a' },
+  },
+  typography: {
+    fontFamily: 'Inter, system-ui, sans-serif',
+  },
+});
 
-const DRAWER_WIDTH = 280;
+const MAIN_APP_URL = (process.env.REACT_APP_MAIN_APP_URL || 'https://bin-group-57c60.web.app').replace(/\/+$/, '');
 
-function AdminLoading() {
+function buildCanonicalAdminTarget(): string {
+  if (typeof window === 'undefined') return `${MAIN_APP_URL}/admin/dashboard`;
+
+  const currentPath = window.location.pathname || '/';
+  const search = window.location.search || '';
+  const hash = window.location.hash || '';
+  const isLoginLikeRoute = currentPath === '/' || currentPath === '/login' || currentPath === '/index.html';
+
+  if (isLoginLikeRoute) {
+    const params = new URLSearchParams();
+    params.set('intendedRole', 'admin');
+    params.set('returnTo', '/admin/dashboard');
+    params.set('source', 'legacy-admin-panel');
+    return `${MAIN_APP_URL}/login?${params.toString()}`;
+  }
+
+  const normalizedPath = currentPath.replace(/^\/admin(?=\/|$)/, '') || '/dashboard';
+  const adminPath = normalizedPath === '/dashboard' ? '/admin/dashboard' : `/admin${normalizedPath}`;
+  return `${MAIN_APP_URL}${adminPath}${search}${hash}`;
+}
+
+function RedirectShell() {
+  const [seconds, setSeconds] = React.useState(3);
+  const target = React.useMemo(() => buildCanonicalAdminTarget(), []);
+
+  React.useEffect(() => {
+    const tick = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
+    const timer = window.setTimeout(() => {
+      window.location.replace(target);
+    }, 900);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(timer);
+    };
+  }, [target]);
+
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: binThemeTokens.tray,
-        color: binThemeTokens.gold,
+        bgcolor: 'background.default',
+        color: '#fff',
         display: 'grid',
         placeItems: 'center',
         px: 3,
-        textAlign: 'center',
       }}
     >
-      <Stack spacing={3} alignItems="center">
-        <CircularProgress sx={{ color: binThemeTokens.gold }} />
-        <Typography sx={{ fontWeight: 950, letterSpacing: 4, textTransform: 'uppercase' }}>
-          Authenticating Admin Command Center
+      <Stack
+        spacing={3}
+        alignItems="center"
+        sx={{
+          width: '100%',
+          maxWidth: 640,
+          p: { xs: 3, md: 5 },
+          borderRadius: 5,
+          bgcolor: 'rgba(15, 23, 42, 0.94)',
+          border: '1px solid rgba(218, 165, 32, 0.24)',
+          boxShadow: '0 30px 80px rgba(2, 6, 23, 0.45)',
+          textAlign: 'center',
+        }}
+      >
+        <CircularProgress sx={{ color: 'primary.main' }} />
+        <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950, letterSpacing: 4 }}>
+          BIN GROUP ADMIN
         </Typography>
+        <Typography variant="h4" sx={{ fontWeight: 950, letterSpacing: -0.5 }}>
+          Opening the canonical command center
+        </Typography>
+        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>
+          The dedicated admin-panel domain is now legacy redirect-only. Admin authentication and command operations run inside the main BIN GROUP app at /admin/dashboard.
+        </Typography>
+        <Alert severity="info" variant="outlined" sx={{ borderColor: 'rgba(218,165,32,0.35)', color: 'rgba(255,255,255,0.78)' }}>
+          Redirecting in {seconds}s. This prevents the old admin-panel login timeout and removes cross-domain dead-ends.
+        </Alert>
+        <Button
+          variant="contained"
+          href={target}
+          sx={{
+            bgcolor: 'primary.main',
+            color: '#020617',
+            fontWeight: 950,
+            px: 4,
+            '&:hover': { bgcolor: '#e2ba45' },
+          }}
+        >
+          Continue to Admin Command Center
+        </Button>
       </Stack>
     </Box>
   );
 }
 
-function LoginRoute() {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) return <AdminLoading />;
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
-
-  return <UnifiedLogin />;
-}
-
-function AdminShell({ children }: { children: React.ReactNode }) {
-  const { isRTL } = useLanguage();
-
-  return (
-    <ProtectedRoute adminOnly>
-      <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.tray, display: 'flex', direction: isRTL ? 'rtl' : 'ltr' }}>
-        <Navigation />
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            minHeight: '100vh',
-            bgcolor: binThemeTokens.tray,
-            ml: isRTL ? 0 : `${DRAWER_WIDTH}px`,
-            mr: isRTL ? `${DRAWER_WIDTH}px` : 0,
-            width: { xs: '100%', md: `calc(100% - ${DRAWER_WIDTH}px)` },
-            overflowX: 'hidden',
-          }}
-        >
-          {children}
-        </Box>
-      </Box>
-    </ProtectedRoute>
-  );
-}
-
-function AdminPrefixRedirect() {
-  const location = useLocation();
-  const strippedPath = location.pathname.replace(/^\/admin(?=\/|$)/, '') || '/dashboard';
-  const target = `${strippedPath}${location.search}${location.hash}`;
-  return <Navigate to={target} replace />;
-}
-
-function AdminPlaceholder({ title, body }: { title: string; body?: string }) {
-  return (
-    <AdminPageFrame title={title} subtitle="Protected admin route mounted inside the dedicated admin-panel app.">
-      <Paper
-        sx={{
-          p: { xs: 3, md: 5 },
-          borderRadius: 5,
-          bgcolor: alpha(binThemeTokens.gold, 0.04),
-          border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`,
-        }}
-      >
-        <Stack spacing={2.5} alignItems="flex-start">
-          <ShieldCheck color={binThemeTokens.gold} size={34} />
-          <Typography variant="h5" sx={{ fontWeight: 950 }}>
-            {title} is available from the admin command center.
-          </Typography>
-          <Typography sx={{ color: binThemeTokens.textSecondary, maxWidth: 760, lineHeight: 1.8 }}>
-            {body || 'This route is protected by the standalone admin Firebase Auth gate. It no longer redirects back to the public app, so admin navigation cannot dead-end between the two hosting sites.'}
-          </Typography>
-          <Alert severity="info" variant="outlined" sx={{ borderRadius: 3 }}>
-            Use the left navigation or return to the Executive Command Center while this operational module finishes loading live data.
-          </Alert>
-          <Button variant="contained" href="/dashboard">
-            Return to Command Center
-          </Button>
-        </Stack>
-      </Paper>
-    </AdminPageFrame>
-  );
-}
-
-function protectedPage(children: React.ReactNode) {
-  return <AdminShell>{children}</AdminShell>;
-}
-
-function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/login" element={<LoginRoute />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
-
-      <Route path="/owners" element={protectedPage(<AdminPlaceholder title="Owners & Client Approvals" />)} />
-      <Route path="/tenants" element={protectedPage(<AdminPlaceholder title="Tenant Operations" />)} />
-      <Route path="/tickets" element={protectedPage(<AdminPlaceholder title="Mission Tickets" />)} />
-      <Route path="/technicians" element={protectedPage(<AdminPlaceholder title="Technician Corps" />)} />
-      <Route path="/manual-approvals" element={protectedPage(<AdminPlaceholder title="Manual Payment Approvals" />)} />
-      <Route path="/ops/whatsapp-triage" element={protectedPage(<AdminPlaceholder title="WhatsApp Triage" />)} />
-      <Route path="/ops/rfq" element={protectedPage(<AdminPlaceholder title="RFQ Trust Workflow" />)} />
-      <Route path="/ops/vendors" element={protectedPage(<AdminPlaceholder title="Vendor Command" />)} />
-      <Route path="/ops/data-governance" element={protectedPage(<AdminPlaceholder title="PDPL Governance" />)} />
-      <Route path="/hr" element={protectedPage(<StaffAccessPage />)} />
-      <Route path="/audit" element={protectedPage(<AdminPlaceholder title="Systemic Audit Log" />)} />
-
-      <Route path="/financials" element={protectedPage(<AdminPlaceholder title="Treasury & Payroll Hub" />)} />
-      <Route path="/document-vault" element={protectedPage(<AdminPlaceholder title="Document Vault" />)} />
-      <Route path="/vault" element={protectedPage(<AdminPlaceholder title="Institutional Audit Vault" />)} />
-      <Route path="/design-studio" element={protectedPage(<AdminPlaceholder title="Design Studio Manager" />)} />
-      <Route path="/orphans" element={protectedPage(<AdminPlaceholder title="Orphan War Room" />)} />
-      <Route path="/control-center" element={protectedPage(<AdminPlaceholder title="Sovereign Control Center" />)} />
-      <Route path="/ops/bin-connect" element={protectedPage(<AdminPlaceholder title="BIN Connect Inbox" />)} />
-      <Route path="/ops/pilot-completion" element={protectedPage(<AdminPlaceholder title="Pilot Completion" />)} />
-      <Route path="/ops/public-launch-command" element={protectedPage(<AdminPlaceholder title="Public Launch Command" />)} />
-      <Route path="/pricing-matrix" element={protectedPage(<AdminPlaceholder title="Pricing Matrix 2026" />)} />
-      <Route path="/bin-gpt-engineer" element={protectedPage(<AdminPlaceholder title="BIN-GPT Engineer" />)} />
-      <Route path="/broker" element={protectedPage(<AdminPlaceholder title="Broker Management" />)} />
-      <Route path="/broker-attributions" element={protectedPage(<AdminPlaceholder title="Broker Attribution Queue" />)} />
-      <Route path="/broker-commissions" element={protectedPage(<AdminPlaceholder title="Broker Commission Hub" />)} />
-      <Route path="/unit-links" element={protectedPage(<AdminPlaceholder title="Tenant Unit Links" />)} />
-      <Route path="/tenant-services" element={protectedPage(<AdminPlaceholder title="Tenant Services" />)} />
-      <Route path="/ops/messages" element={protectedPage(<AdminPlaceholder title="Operations Messages" />)} />
-      <Route path="/properties/passport" element={protectedPage(<AdminPlaceholder title="Property Passports" />)} />
-      <Route path="/units" element={protectedPage(<AdminPlaceholder title="Unit Status Control" />)} />
-      <Route path="/ops/technicians" element={protectedPage(<AdminPlaceholder title="Duty Command Center" />)} />
-      <Route path="/sos" element={protectedPage(<AdminPlaceholder title="SOS Live Feed" />)} />
-      <Route path="/settings" element={protectedPage(<AdminPlaceholder title="Admin Support Settings" />)} />
-      <Route path="/reports" element={protectedPage(<AdminPlaceholder title="Admin Reports" />)} />
-      <Route path="/live-map" element={protectedPage(<AdminPlaceholder title="Live Map" />)} />
-
-      <Route path="/admin" element={<AdminPrefixRedirect />} />
-      <Route path="/admin/*" element={<AdminPrefixRedirect />} />
-      <Route path="*" element={protectedPage(<AdminPlaceholder title="Admin Command Center" />)} />
-    </Routes>
-  );
-}
-
 export default function App() {
   return (
-    <ThemeProvider theme={adminTheme}>
+    <ThemeProvider theme={redirectTheme}>
       <CssBaseline />
-      <LanguageProvider>
-        <AuthProvider>
-          <Router>
-            <AppRoutes />
-          </Router>
-        </AuthProvider>
-      </LanguageProvider>
+      <RedirectShell />
     </ThemeProvider>
   );
 }
