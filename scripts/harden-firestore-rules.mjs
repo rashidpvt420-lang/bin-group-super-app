@@ -201,7 +201,7 @@ patchIfNeeded(
     }
 
     function emailOwns(data) {`,
-  ["function brokerOwns(data)", "data.brokerId == request.auth.uid", "data.brokerUid == request.auth.uid"]
+  ["function brokerOwns(data)"]
 );
 
 patchIfNeeded(
@@ -278,7 +278,7 @@ patchIfNeeded(
     }
 
     function safeTechnicianTicketUpdate() {`,
-  ["function canCreateTenantBoundTicket(data)", "data.keys().hasAll(['unitId', 'propertyId'])", "data.propertyId == get(/databases/$(database)/documents/units/$(data.unitId)).data.propertyId"]
+  ["function canCreateTenantBoundTicket(data)"]
 );
 
 patchIfNeeded(
