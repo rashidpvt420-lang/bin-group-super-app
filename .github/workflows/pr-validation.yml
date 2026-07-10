@@ -41,6 +41,9 @@ jobs:
         id: duplicate_audit
         run: npm run audit:duplicates
 
+      - name: Canonical route architecture guard
+        run: node scripts/verify-canonical-route-architecture.mjs
+
       - name: Upload route consolidation audit
         if: always()
         uses: actions/upload-artifact@v4
