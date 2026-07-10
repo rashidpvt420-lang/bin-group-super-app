@@ -22,7 +22,6 @@ import { adminTheme } from './theme/adminTheme';
 
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
-import DashboardPageStable from './pages/dashboard/DashboardPageStable';
 import OwnerManagementPage from './pages/owners/OwnerManagementPage';
 import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
 import TenantsManagementPage from './pages/tenants/TenantsManagementPage';
@@ -134,7 +133,7 @@ function AppContent() {
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/dashboard/full" element={<ProtectedRoute><DashboardPageStable /></ProtectedRoute>} />
+          <Route path="/dashboard/full" element={<Navigate to="/dashboard" replace />} />
 
           <Route path="/owners" element={<ProtectedRoute><OwnerManagementPage /></ProtectedRoute>} />
           <Route path="/owners/:id" element={<ProtectedRoute><OwnerDetailsPage /></ProtectedRoute>} />
