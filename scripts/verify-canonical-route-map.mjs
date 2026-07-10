@@ -34,6 +34,7 @@ const tenantApp = read('src/tenant/TenantApp.tsx');
 const technicianApp = read('src/technician/TechnicianApp.tsx');
 const brokerApp = read('src/broker/BrokerApp.tsx');
 const adminApp = read('apps/admin-panel/src/App.tsx');
+const adminDashboard = read('apps/admin-panel/src/pages/dashboard/DashboardPage.tsx');
 const adminNavigation = read('apps/admin-panel/src/components/Navigation.tsx');
 const adminBridge = read('src/admin/AdminTerminal.tsx');
 const packageJson = read('package.json');
@@ -61,6 +62,7 @@ const removedLegacyRuntimeFiles = [
   'src/pages/BrokerPortalPage.tsx',
   'src/pages/TicketDetailPage.tsx',
   'apps/admin-panel/src/pages/dashboard/DashboardPageStable.tsx',
+  'apps/admin-panel/src/pages/dashboard/AdminSimpleDashboardPage.tsx',
 ];
 for (const path of removedLegacyRuntimeFiles) {
   assert(!existsSync(path), `Removed duplicate runtime file must not return: ${path}`);
@@ -73,8 +75,10 @@ assert(adminBridge.includes("const ADMIN_PANEL_URL = 'https://bin-group-admin-pa
 assert(adminBridge.includes('window.location.replace(targetUrl)'), 'The root admin bridge must preserve and transfer the requested admin path.');
 assert(!adminBridge.includes("collection(db, 'users')"), 'The root bridge must not become a second admin dashboard or data application.');
 
-assert(adminApp.includes('AdminSimpleDashboardPage'), 'The dedicated Admin Panel must mount the simple command dashboard.');
-assert(adminApp.includes('DashboardPage'), 'The dedicated Admin Panel must retain the advanced dashboard.');
+assert(adminApp.includes('<Route path="/dashboard" element={protectedPage(<DashboardPage />)} />'), 'The dedicated Admin Panel must mount one canonical dashboard.');
+assert(adminApp.includes('<Route path="/dashboard/full" element={<Navigate to="/dashboard" replace />} />'), 'The old full-dashboard route must redirect to the canonical dashboard.');
+assert(adminDashboard.includes("doc(db, 'system_health', 'admin_summaries')"), 'The Admin dashboard must read canonical production launch evidence.');
+assert(adminDashboard.includes('getCountFromServer'), 'The Admin dashboard must use live Firestore counts rather than static KPI values.');
 assert(!adminApp.includes('CANONICAL_ADMIN_BASE_URL'), 'The dedicated Admin Panel must not regress into a redirect-only shell.');
 assert(!adminApp.includes('AdminPlaceholder'), 'Operational admin routes must mount real pages rather than generic placeholders.');
 
@@ -89,15 +93,20 @@ const requiredAdminRoutes = [
   '/dashboard',
   '/dashboard/full',
   '/owners',
+  '/properties/manage',
+  '/properties/approvals',
   '/tenants',
   '/tickets',
   '/technicians',
   '/technicians/map',
+  '/technicians/performance',
   '/payments',
   '/broker-attributions',
   '/broker-commissions',
   '/unit-links',
   '/tenant-services',
+  '/ops/live',
+  '/ops/geo-repair',
   '/ops/messages',
   '/ops/whatsapp-triage',
   '/ops/rfq',
@@ -106,6 +115,17 @@ const requiredAdminRoutes = [
   '/ops/bin-connect',
   '/ops/pilot-completion',
   '/ops/public-launch-command',
+  '/ops/emergency',
+  '/ops/amenities',
+  '/ops/announcements',
+  '/ops/community-moderation',
+  '/ops/document-library',
+  '/ops/keys',
+  '/ops/marketplace',
+  '/ops/parcels',
+  '/ops/staff-directory',
+  '/ops/visitor-parking',
+  '/smoke-test',
   '/disputes',
   '/sos',
   '/audit',
