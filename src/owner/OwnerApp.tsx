@@ -22,7 +22,6 @@ import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerProfilePage from './pages/OwnerProfilePage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
-import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
 import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage';
@@ -100,7 +99,6 @@ export default function OwnerApp() {
                 <Route path="/profile" element={<OwnerProfilePage />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
                 <Route path="/units" element={<OwnerUnitRegistryPage />} />
-                <Route path="/legacy-units" element={<OwnerUnitsPage />} />
                 <Route path="/tenants" element={<OwnerTenantsPage />} />
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
