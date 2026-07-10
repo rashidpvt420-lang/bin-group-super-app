@@ -17,7 +17,7 @@ jobs:
   build-and-test:
     name: Install, build, and test
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -43,6 +43,18 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
+      - name: Admin canonicalization audit
+        run: node scripts/audit-admin-canonicalization.mjs
+
+      - name: Route and implementation duplicate audit
+        run: npm run audit:duplicates
+
+      - name: Verify duplicate resolution
+        run: node scripts/verify-duplicate-resolution.mjs
+
+      - name: Canonical route architecture guard
+        run: node scripts/verify-canonical-route-architecture.mjs
+
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
@@ -60,8 +72,16 @@ jobs:
         env:
           CI: false
 
+      - name: Build dedicated admin panel
+        run: npm run build:admin
+        env:
+          CI: false
+
       - name: Build functions
         run: npm run build --workspace=functions
 
       - name: Run security rules tests
         run: npm run test:rules
+
+      - name: Verify mobile source readiness
+        run: npm run test:mobile-store-readiness
