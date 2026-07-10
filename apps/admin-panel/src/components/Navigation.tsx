@@ -10,7 +10,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LogoutIcon from '@mui/icons-material/Logout';
 import FileTextIcon from '@mui/icons-material/Description';
-import { Building2, Map, MessageSquare, Sparkles, Users, Wrench } from 'lucide-react';
+import { Bell, Building2, Car, KeyRound, Map, MessageSquare, Package, Radio, Sparkles, Store, Users, Wrench } from 'lucide-react';
 import { CeoContactButtons, useLanguage } from '@bin/shared';
 import { signOut } from 'firebase/auth';
 
@@ -32,7 +32,6 @@ const Navigation = () => {
 
   const commandMenu: MenuItem[] = [
     { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Advanced Analytics', icon: <DashboardIcon />, path: '/dashboard/full', color: '#38bdf8' },
     { text: tx('fin.payroll', 'Treasury & Payroll'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
     { text: 'Payment Approvals', icon: <PendingActionsIcon />, path: '/payments', color: '#10b981' },
     { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
@@ -40,7 +39,10 @@ const Navigation = () => {
     { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
     { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
     { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
+    { text: 'Live Operations', icon: <Radio size={20} />, path: '/ops/live', color: '#10b981' },
+    { text: 'Geo Repair Command', icon: <Map size={20} />, path: '/ops/geo-repair', color: '#38bdf8' },
     { text: 'BIN Connect Inbox', icon: <MessageSquare size={20} />, path: '/ops/bin-connect', color: '#38bdf8' },
+    { text: 'Five-Profile Smoke Test', icon: <PendingActionsIcon />, path: '/smoke-test', color: '#10b981' },
     { text: 'Pilot Completion', icon: <PendingActionsIcon />, path: '/ops/pilot-completion', color: '#3b82f6' },
     { text: 'Public Launch Command', icon: <SecurityIcon />, path: '/ops/public-launch-command', color: binThemeTokens.gold },
     { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/pricing-matrix', color: binThemeTokens.gold },
@@ -50,6 +52,7 @@ const Navigation = () => {
 
   const operationsMenu: MenuItem[] = [
     { text: 'Owners & Activations', icon: <Building2 size={20} />, path: '/owners' },
+    { text: 'Property Management', icon: <Building2 size={20} />, path: '/properties/manage', color: '#38bdf8' },
     { text: 'Property Approvals', icon: <PendingActionsIcon />, path: '/properties/approvals', color: binThemeTokens.gold },
     { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
     { text: 'Tenant Unit Links', icon: <PendingActionsIcon />, path: '/unit-links', color: '#f59e0b' },
@@ -61,8 +64,10 @@ const Navigation = () => {
     { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
     { text: 'Unit Status Control', icon: <DashboardIcon />, path: '/units', color: binThemeTokens.gold },
     { text: tx('nav.technicians', 'Technician Corps'), icon: <Wrench size={20} />, path: '/technicians' },
+    { text: 'Technician Performance', icon: <DashboardIcon />, path: '/technicians/performance', color: '#8b5cf6' },
     { text: 'Duty Command Center', icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
     { text: 'Technician Live Map', icon: <Map size={20} />, path: '/technicians/map', color: '#38bdf8' },
+    { text: 'Emergency Command', icon: <SecurityIcon />, path: '/ops/emergency', color: '#ef4444' },
     { text: 'WhatsApp Triage', icon: <ReceiptIcon />, path: '/ops/whatsapp-triage', color: '#10b981' },
     { text: 'RFQ Trust Workflow', icon: <PendingActionsIcon />, path: '/ops/rfq', color: binThemeTokens.gold },
     { text: 'Vendor Command', icon: <Users size={20} />, path: '/ops/vendors', color: '#38bdf8' },
@@ -71,6 +76,18 @@ const Navigation = () => {
     { text: 'Dispute Queue', icon: <PendingActionsIcon />, path: '/disputes', color: '#ef4444' },
     { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos', color: '#ef4444' },
     { text: tx('nav.audit_log', 'System Audit Log'), icon: <SecurityIcon />, path: '/audit' },
+  ];
+
+  const communityMenu: MenuItem[] = [
+    { text: 'Amenities', icon: <Building2 size={20} />, path: '/ops/amenities', color: '#38bdf8' },
+    { text: 'Announcements', icon: <Bell size={20} />, path: '/ops/announcements', color: '#8b5cf6' },
+    { text: 'Community Moderation', icon: <SecurityIcon />, path: '/ops/community-moderation', color: '#f59e0b' },
+    { text: 'Document Library', icon: <FileTextIcon />, path: '/ops/document-library', color: binThemeTokens.gold },
+    { text: 'Key Register', icon: <KeyRound size={20} />, path: '/ops/keys', color: '#38bdf8' },
+    { text: 'Marketplace Approvals', icon: <Store size={20} />, path: '/ops/marketplace', color: '#10b981' },
+    { text: 'Parcel Desk', icon: <Package size={20} />, path: '/ops/parcels', color: '#8b5cf6' },
+    { text: 'Staff Directory', icon: <Users size={20} />, path: '/ops/staff-directory', color: '#38bdf8' },
+    { text: 'Visitor Parking', icon: <Car size={20} />, path: '/ops/visitor-parking', color: '#f59e0b' },
     ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
     { text: 'Staff Access', icon: <PeopleIcon />, path: '/staff-access', color: '#38bdf8' },
     { text: tx('nav.support', 'Settings & Launch Evidence'), icon: <SettingsIcon />, path: '/settings' },
@@ -132,6 +149,7 @@ const Navigation = () => {
 
       {renderMenu(t('nav.sovereign_core') || 'COMMAND', commandMenu)}
       {renderMenu(t('nav.operations') || 'OPERATIONS', operationsMenu)}
+      {renderMenu('COMMUNITY & ACCESS', communityMenu)}
 
       <Box sx={{ mt: 'auto', p: 2 }}>
         <CeoContactButtons compact />
