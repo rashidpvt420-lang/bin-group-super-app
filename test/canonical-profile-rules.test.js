@@ -1,6 +1,6 @@
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import fs from 'node:fs';
 
 let testEnv;
@@ -89,5 +89,32 @@ describe('Canonical profile workflow rules', () => {
     await assertFails(updateDoc(doc(ownerDb, 'amenityBookings/booking_other'), { status: 'approved' }));
     await assertSucceeds(updateDoc(doc(ownerDb, 'visitorParkingRequests/parking_owned'), { status: 'approved' }));
     await assertFails(updateDoc(doc(ownerDb, 'visitorParkingRequests/parking_other'), { status: 'approved' }));
+  });
+
+  it('broker can submit an attributed referral but cannot browse private owner properties', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'properties/private_owner_property'), {
+      ownerId: 'owner_a',
+      propertyName: 'Private Owner Tower',
+    });
+
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker', email: 'broker-a@example.com' }).firestore();
+    await assertFails(getDocs(collection(brokerDb, 'properties')));
+    await assertSucceeds(setDoc(doc(brokerDb, 'referrals/referral_a'), {
+      brokerId: 'broker_a',
+      brokerUid: 'broker_a',
+      brokerEmail: 'broker-a@example.com',
+      clientName: 'Owner Prospect',
+      propertyName: 'Provided Property Name',
+      propertyReferenceId: 'OWNER-PROVIDED-REF-001',
+      propertyReferenceVerification: 'PENDING_ADMIN_MATCH',
+      attributionId: 'broker_referral_broker_a_referral_a',
+      status: 'submitted',
+    }));
+    await assertSucceeds(getDoc(doc(brokerDb, 'referrals/referral_a')));
+
+    const otherBrokerDb = testEnv.authenticatedContext('broker_b', { role: 'broker' }).firestore();
+    await assertFails(getDoc(doc(otherBrokerDb, 'referrals/referral_a')));
   });
 });
