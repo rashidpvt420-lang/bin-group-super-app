@@ -10,7 +10,6 @@ import UnifiedLogin from './components/UnifiedLogin';
 import Navigation from './components/Navigation';
 import { adminTheme, binThemeTokens } from './theme/adminTheme';
 
-import AdminSimpleDashboardPage from './pages/dashboard/AdminSimpleDashboardPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import OwnersPage from './pages/owners/OwnerManagementPage';
 import OwnerDetailsPage from './pages/owners/OwnerDetailsPage';
@@ -18,6 +17,7 @@ import TenantsPage from './pages/tenants/TenantsManagementPage';
 import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import TechnicianPerformancePage from './pages/technicians/TechnicianPerformancePage';
 import LiveMapPage from './pages/map/LiveMapPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
 import SettingsPage from './pages/settings/SettingsPage';
@@ -28,6 +28,7 @@ import BrokerCommissionHubPage from './pages/brokers/BrokerCommissionHubPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import AuditLogPage from './pages/AuditLogPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
+import SmokeTestPage from './pages/smoke-test/SmokeTestPage';
 
 import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
 import PayrollManagementPage from './pages/financials/PayrollManagementPage';
@@ -40,6 +41,9 @@ import CompliancePage from './pages/admin/CompliancePage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
 import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
+import PropertyManagementPage from './pages/admin/PropertyManagementPage';
+import GeoRepairCommandCenter from './pages/admin/GeoRepairCommandCenter';
+import LiveOpsCommandCenter from './pages/admin/LiveOpsCommandCenter';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
 import PricingMatrixPage from './pages/admin/PricingMatrixPage';
@@ -61,6 +65,16 @@ import TenantUnitLinkQueuePage from './pages/ops/TenantUnitLinkQueuePage';
 import TenantServicesQueuePage from './pages/ops/TenantServicesQueuePage';
 import MessagesPage from './pages/ops/MessagesPage';
 import DisputeQueuePage from './pages/ops/DisputeQueuePage';
+import AmenityControlPage from './pages/ops/AmenityControlPage';
+import AnnouncementsPage from './pages/ops/AnnouncementsPage';
+import CommunityModerationPage from './pages/ops/CommunityModerationPage';
+import DocumentLibraryPage from './pages/ops/DocumentLibraryPage';
+import EmergencyCommandCenterPage from './pages/ops/EmergencyCommandCenterPage';
+import KeyRegisterPage from './pages/ops/KeyRegisterPage';
+import MarketplaceApprovalsPage from './pages/ops/MarketplaceApprovalsPage';
+import ParcelDeskPage from './pages/ops/ParcelDeskPage';
+import StaffDirectoryPage from './pages/ops/StaffDirectoryPage';
+import VisitorParkingPage from './pages/ops/VisitorParkingPage';
 
 import BulkImporter from './components/BulkImporter';
 import AdminPaymentApproval from './components/AdminPaymentApproval';
@@ -152,8 +166,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginRoute />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      <Route path="/dashboard" element={protectedPage(<AdminSimpleDashboardPage />)} />
-      <Route path="/dashboard/full" element={protectedPage(<DashboardPage />)} />
+      <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
+      <Route path="/dashboard/full" element={<Navigate to="/dashboard" replace />} />
 
       <Route path="/owners" element={protectedPage(<OwnersPage />)} />
       <Route path="/owners/:id" element={protectedPage(<OwnerDetailsPage />)} />
@@ -161,9 +175,11 @@ function AppRoutes() {
       <Route path="/tickets" element={protectedPage(<TicketsPage />)} />
       <Route path="/technicians" element={protectedPage(<TechniciansPage />)} />
       <Route path="/technicians/map" element={protectedPage(<LiveMapPage />)} />
+      <Route path="/technicians/performance" element={protectedPage(<TechnicianPerformancePage />, true)} />
       <Route path="/live-map" element={<Navigate to="/technicians/map" replace />} />
       <Route path="/sos" element={protectedPage(<SOSFeedPage />)} />
       <Route path="/disputes" element={protectedPage(<DisputeQueuePage />, true)} />
+      <Route path="/smoke-test" element={protectedPage(<SmokeTestPage />, true)} />
 
       <Route path="/financials" element={protectedPage(<ProfitabilityDashboardPage />, true)} />
       <Route path="/financials/payroll" element={protectedPage(<PayrollManagementPage />, true)} />
@@ -176,6 +192,7 @@ function AppRoutes() {
       <Route path="/broker-attributions" element={protectedPage(<AdminBrokerAttributionQueuePage />, true)} />
       <Route path="/broker-commissions" element={protectedPage(<BrokerCommissionHubPage />, true)} />
 
+      <Route path="/properties/manage" element={protectedPage(<PropertyManagementPage />, true)} />
       <Route path="/properties/passport" element={protectedPage(<PropertyPassportPage />)} />
       <Route path="/properties/approvals" element={protectedPage(<AdminPropertyApprovalsPage />, true)} />
       <Route path="/onboard-property" element={protectedPage(<PropertyOnboardingPage />, true)} />
@@ -192,6 +209,8 @@ function AppRoutes() {
       <Route path="/ops/data-governance" element={protectedPage(<DataGovernanceAuditPage />, true)} />
 
       <Route path="/control-center" element={protectedPage(<ProductionControlCenter />, true)} />
+      <Route path="/ops/live" element={protectedPage(<LiveOpsCommandCenter />, true)} />
+      <Route path="/ops/geo-repair" element={protectedPage(<GeoRepairCommandCenter />, true)} />
       <Route path="/ops/technicians" element={protectedPage(<TechnicianDutyMonitorPage />, true)} />
       <Route path="/ops/messages" element={protectedPage(<MessagesPage />, true)} />
       <Route path="/ops/whatsapp-triage" element={protectedPage(<WhatsAppTriageQueuePage />, true)} />
@@ -201,6 +220,16 @@ function AppRoutes() {
       <Route path="/ops/pilot-completion" element={protectedPage(<PilotCompletionCommandPage />, true)} />
       <Route path="/ops/public-launch-command" element={protectedPage(<PublicLaunchCommandCenterPage />, true)} />
       <Route path="/ops/public" element={protectedPage(<PublicLaunchOpsPanel />, true)} />
+      <Route path="/ops/emergency" element={protectedPage(<EmergencyCommandCenterPage />, true)} />
+      <Route path="/ops/amenities" element={protectedPage(<AmenityControlPage />, true)} />
+      <Route path="/ops/announcements" element={protectedPage(<AnnouncementsPage />, true)} />
+      <Route path="/ops/community-moderation" element={protectedPage(<CommunityModerationPage />, true)} />
+      <Route path="/ops/document-library" element={protectedPage(<DocumentLibraryPage />, true)} />
+      <Route path="/ops/keys" element={protectedPage(<KeyRegisterPage />, true)} />
+      <Route path="/ops/marketplace" element={protectedPage(<MarketplaceApprovalsPage />, true)} />
+      <Route path="/ops/parcels" element={protectedPage(<ParcelDeskPage />, true)} />
+      <Route path="/ops/staff-directory" element={protectedPage(<StaffDirectoryPage />, true)} />
+      <Route path="/ops/visitor-parking" element={protectedPage(<VisitorParkingPage />, true)} />
       <Route path="/pilot" element={protectedPage(<PilotCommandCenter />, true)} />
 
       <Route path="/reports" element={protectedPage(<ReportsPage />, true)} />
