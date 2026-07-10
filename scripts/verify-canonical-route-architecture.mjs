@@ -8,6 +8,7 @@ const packageJson = read('package.json');
 const rootApp = read('src/App.tsx');
 const ownerApp = read('src/owner/OwnerApp.tsx');
 const ownerCommunity = read('src/owner/pages/OwnerCommunityOperationsPage.tsx');
+const ownerTenants = read('src/owner/pages/OwnerTenantsPage.tsx');
 const tenantRequest = read('src/tenant/pages/TenantRequestPage.tsx');
 const technicianApp = read('src/technician/TechnicianApp.tsx');
 const technicianWorkforce = read('src/technician/pages/TechnicianWorkforceCenterPage.tsx');
@@ -31,6 +32,10 @@ assert(ownerCommunity.includes("usePropertyCollection('amenities'"), 'Owner Comm
 assert(ownerCommunity.includes("usePropertyCollection('announcements'"), 'Owner Community Operations must include announcements.');
 assert(ownerCommunity.includes("usePropertyCollection('parcels'"), 'Owner Community Operations must include parcels.');
 assert(ownerCommunity.includes("usePropertyCollection('visitorParkingRequests'"), 'Owner Community Operations must include visitor parking.');
+assert(ownerTenants.includes("collection(db, 'tenants')"), 'Owner tenant directory must use the owner-scoped tenants collection.');
+assert(!ownerTenants.includes("collection(db, 'users')"), 'Owner tenant directory must not list the global users collection.');
+assert(ownerTenants.includes("navigate('/owner/bin-connect')"), 'Owner tenant communication must route through BIN Connect.');
+assert(ownerTenants.includes('useLanguage') && ownerTenants.includes("lang === 'ar'"), 'Owner tenant directory must be bilingual and RTL-aware.');
 assert(!existsSync('src/owner/pages/OwnerStatementsPage.tsx'), 'Placeholder Owner statements page must not return.');
 assert(!existsSync('src/owner/pages/OwnerApprovalsPage.tsx'), 'Placeholder Owner approvals page must not return.');
 assert(!existsSync('src/owner/pages/OwnerInspectionsPage.tsx'), 'Duplicate Owner inspections page must not return.');
