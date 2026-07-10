@@ -24,11 +24,15 @@ import {
   CreditCard,
   ExternalLink,
   FileCheck2,
+  FileText,
+  Gauge,
   Home,
   LockKeyhole,
   LogOut,
+  Map,
   RefreshCcw,
   ShieldCheck,
+  TicketCheck,
   Users,
   Wrench,
 } from 'lucide-react';
@@ -36,10 +40,11 @@ import { auth, collection, db, doc, getCountFromServer, getDoc, getDocs, limit, 
 import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
 
 const LEGACY_ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
 
- type Metric = {
+type Metric = {
   key: string;
   label: string;
   value: number | null;
@@ -57,6 +62,16 @@ type AuditEvent = {
 };
 
 type LaunchSummary = Record<string, unknown>;
+
+type CoverageCard = {
+  key: string;
+  label: string;
+  value: string;
+  helper: string;
+  source: string;
+  icon: React.ElementType;
+  status: 'live' | 'proof-required' | 'software-map';
+};
 
 const baseMetrics: Metric[] = [
   { key: 'owners', label: 'Owners', value: null, helper: 'Registered owner profiles', icon: Building2, severity: 'success' },
@@ -84,6 +99,7 @@ const operationalRunbook = [
   { label: 'Build main app', command: 'npm run build' },
   { label: 'Build Cloud Functions', command: 'npm run build:functions' },
   { label: 'Rules + stability guard', command: 'npm run test:stability' },
+  { label: 'Route consolidation guard', command: 'npm run test:route-consolidation' },
   { label: 'Hard launch readiness', command: 'npm run test:hard-launch-readiness' },
   { label: 'Mobile store readiness', command: 'npm run test:mobile-store-readiness' },
 ];
@@ -94,6 +110,15 @@ const portalSmokeTests = [
   'Technician: open job → claim/accept → arrive → before/after proof → resolve.',
   'Broker: referral/lead submission → attribution proof → commission state visible.',
   'Admin: owner/payment/ticket/user visibility → approval/rejection → audit trail captured.',
+];
+
+const canonicalAdminWorkflows = [
+  { label: 'Owner activation', collection: 'users + owner activation docs', gate: 'fiveProfileSmoke' },
+  { label: 'Tenant service', collection: 'users + maintenanceTickets', gate: 'tenantNotificationDelivery' },
+  { label: 'Technician dispatch', collection: 'maintenanceTickets + technician evidence', gate: 'technicianGpsStorageProof' },
+  { label: 'Broker attribution', collection: 'broker referrals + commission locks', gate: 'brokerCommissionLock' },
+  { label: 'Payment unlock', collection: 'payment_transactions + contracts', gate: 'stripeLiveMode' },
+  { label: 'Audit evidence', collection: 'audit_logs + system_health/admin_summaries', gate: 'fiveProfileSmoke' },
 ];
 
 const formatDate = (value: unknown) => {
@@ -172,6 +197,17 @@ export default function AdminTerminal() {
 
   const passedLaunchGates = launchGates.filter((gate) => launchSummary[gate.key] === true).length;
   const allLaunchGatesPassed = passedLaunchGates === launchGates.length;
+  const metricValue = React.useCallback((key: string) => metrics.find((metric) => metric.key === key)?.value ?? null, [metrics]);
+  const coverageCards: CoverageCard[] = [
+    { key: 'owners', label: 'Owner activation', value: String(metricValue('owners') ?? '—'), helper: 'Owner profiles, properties, contracts, payment proof, dashboard unlock.', source: 'users.role=owner', icon: Building2, status: 'live' },
+    { key: 'tenants', label: 'Tenant operations', value: String(metricValue('tenants') ?? '—'), helper: 'Linked units, tickets, documents, payments, notices, and renewal workflow.', source: 'users.role=tenant', icon: Users, status: 'live' },
+    { key: 'technicians', label: 'Technician dispatch', value: String(metricValue('technicians') ?? '—'), helper: 'Jobs, map, offline queue, proof readiness, HR, and closure evidence.', source: 'users.role=technician', icon: Wrench, status: 'live' },
+    { key: 'brokers', label: 'Broker attribution', value: String(metricValue('brokers') ?? '—'), helper: 'Leads, referrals, attribution proof, commissions, documents, and profile.', source: 'users.role=broker', icon: TicketCheck, status: 'live' },
+    { key: 'tickets', label: 'Open SLA load', value: String(metricValue('openTickets') ?? '—'), helper: 'Shared maintenance workload across tenant, technician, owner, and admin views.', source: 'maintenanceTickets.status', icon: Gauge, status: 'live' },
+    { key: 'payments', label: 'Payment review', value: String(metricValue('pendingPayments') ?? '—'), helper: 'Activation must remain locked until explicit admin verification.', source: 'payment_transactions.verificationState', icon: CreditCard, status: 'live' },
+    { key: 'launch', label: 'Launch evidence', value: `${passedLaunchGates}/${launchGates.length}`, helper: 'Hard public launch stays blocked until all evidence gates are true.', source: 'system_health/admin_summaries', icon: ShieldCheck, status: allLaunchGatesPassed ? 'live' : 'proof-required' },
+    { key: 'routes', label: 'Route consolidation', value: '1 app', helper: 'Canonical role routes live in src/*. Legacy owner/admin apps are handoff-only.', source: 'scripts/verify-route-consolidation.mjs', icon: Map, status: 'software-map' },
+  ];
 
   const resetAndLogin = async () => {
     try {
@@ -226,7 +262,7 @@ export default function AdminTerminal() {
       </Stack>
 
       <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)', '& .MuiAlert-icon': { color: '#60A5FA' } }}>
-        The canonical admin route is <strong>/admin/dashboard</strong>. Public-launch readiness below is evidence-backed and is not inferred from the page rendering successfully.
+        The canonical admin route is <strong>/admin/dashboard</strong>. The old admin-panel domain is handoff-only; do not split dashboard fixes across duplicate admin folders.
       </Alert>
 
       {!loading && (
@@ -265,6 +301,38 @@ export default function AdminTerminal() {
           </Grid>
         ))}
       </Grid>
+
+      <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+        <CardContent>
+          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+              <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Canonical Admin Coverage</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>Merged command view for users, tickets, payments, proof, launch gates, and route consolidation.</Typography>
+            </Box>
+            <Chip label="single command center" sx={{ bgcolor: 'rgba(201,166,70,0.14)', color: '#E5C86B', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
+          </Stack>
+          <Grid container spacing={2}>
+            {coverageCards.map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.key}>
+                <Box sx={{ height: '100%', p: 1.6, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}>
+                    <Box sx={{ width: 34, height: 34, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'rgba(201,166,70,0.10)', color: '#E5C86B' }}>
+                      <SafeIcon icon={item.icon} size={18} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ color: '#fff', fontWeight: 950 }}>{item.label}</Typography>
+                      <Typography variant="caption" sx={{ color: item.status === 'proof-required' ? '#FDE68A' : '#86EFAC', fontWeight: 900 }}>{item.status.replace('-', ' ').toUpperCase()}</Typography>
+                    </Box>
+                  </Stack>
+                  <Typography variant="h4" sx={{ color: '#E5C86B', fontWeight: 950 }}>{item.value}</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 700, mt: 0.6 }}>{item.helper}</Typography>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 800, overflowWrap: 'anywhere' }}>{item.source}</Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={2.5}>
         <Grid item xs={12} md={7}>
@@ -327,6 +395,41 @@ export default function AdminTerminal() {
 
             <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
               <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B', mb: 2 }}>Canonical SLA Policy</Typography>
+                <Stack spacing={1}>
+                  {Object.entries(CANONICAL_SLA_POLICY).map(([priority, policy]) => (
+                    <Box key={priority} sx={{ p: 1.25, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <Stack direction="row" justifyContent="space-between" spacing={2}>
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 950 }}>{policy.label}</Typography>
+                        <Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 950 }}>{policy.minutes}m</Typography>
+                      </Stack>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)' }}>{policy.adminEscalationCopy}</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B', mb: 2 }}>Workflow ownership map</Typography>
+                <Stack spacing={1}>
+                  {canonicalAdminWorkflows.map((item) => {
+                    const passed = launchSummary[item.gate] === true;
+                    return (
+                      <Box key={item.label} sx={{ p: 1.25, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.035)', border: `1px solid ${passed ? 'rgba(34,197,94,0.18)' : 'rgba(245,158,11,0.18)'}` }}>
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 950 }}>{item.label}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)', display: 'block' }}>{item.collection}</Typography>
+                        <Typography variant="caption" sx={{ color: passed ? '#86EFAC' : '#FDE68A', fontWeight: 900 }}>Gate: {item.gate}</Typography>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+              <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                   <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Recent Audit Trail</Typography>
                   <SafeIcon icon={Activity} size={18} />
@@ -368,7 +471,7 @@ export default function AdminTerminal() {
           Trust & Security
         </Button>
         <Button href={LEGACY_ADMIN_PANEL_URL} target="_blank" rel="noreferrer" startIcon={renderSafeIcon(ExternalLink, { size: 17 })} sx={{ color: 'rgba(255,255,255,0.64)', border: '1px solid rgba(255,255,255,0.18)', fontWeight: 900 }}>
-          Legacy panel
+          Legacy handoff
         </Button>
         <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>
           Reset session
