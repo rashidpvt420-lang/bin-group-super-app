@@ -34,6 +34,9 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
+      - name: Admin canonicalization inventory
+        run: node scripts/audit-admin-canonicalization.mjs
+
       - name: Route and duplicate implementation audit
         id: duplicate_audit
         run: npm run audit:duplicates
