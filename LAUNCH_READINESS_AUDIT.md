@@ -22,8 +22,9 @@ This document is a factual audit of what works, what is broken/missing, and what
 | Repo-hygiene guard false positive resolved | `scripts/normalize-firestore-rules.mjs` | The maintenance script embedded literal git conflict-marker lines inside string literals, so `npm run test:repo-hygiene` **failed** (5 false "unresolved merge conflict marker" violations). Marker tokens are now built at runtime; behavior is unchanged and the gate passes. |
 | Onboarding success screen rendered literal quotes | `src/components/onboarding/PaymentSubmissionStep.tsx` | The final onboarding confirmation showed the raw text `'Payment Submitted Successfully'` (with surrounding quotes) instead of a proper i18n string. Now uses `t()` with a clean fallback. |
 | Owner "open property" button was a dead link | `src/owner/pages/OwnerPropertiesPage.tsx` | The property card arrow navigated to `/owner/properties/:id`, which has **no route** in `OwnerApp.tsx`, leaving a blank pane. Now routes to the existing Property Passport detail/overview. |
+| Tenant AI Concierge was built but unreachable | `src/tenant/TenantApp.tsx`, `src/tenant/pages/TenantSimpleDashboardPage.tsx`, `src/tenant/pages/TenantDashboardPage.tsx` | Added the `/tenant/ai-concierge` route plus discoverable entry points on both tenant dashboards. The page is a fully-functional, **provider-independent** guided ticket assistant (local rule-based classification, writes to `maintenanceTickets`), so no AI key is required. |
 
-All three are verified by `npm run lint`, `npm run typecheck`, `npm run build`, and `npm run test:repo-hygiene`.
+All fixes are verified by `npm run lint`, `npm run typecheck`, `npm run build`, and `npm run test:repo-hygiene`.
 
 ---
 
@@ -39,7 +40,7 @@ Portals mount under protected wildcard routes in `src/App.tsx`; post-login defau
 - **Low:** Numerous `alert()` calls used for validation/errors (functional, unpolished) — e.g. `OwnerComplaintPage.tsx:112,182`.
 
 ### Tenant (`src/tenant/`)
-- **Medium:** `TenantAIConciergePage` is fully implemented but **has no route** in `TenantApp.tsx`; the only link to it lives in `TenantSmartHomeStatus.tsx:147`, a component not imported anywhere. (Enabling it depends on an AI provider key — see §5 — so it was intentionally left unrouted in this pass.)
+- **Resolved in this PR:** `TenantAIConciergePage` was fully implemented but had **no route** in `TenantApp.tsx`. It's now routed at `/tenant/ai-concierge` with entry points on both dashboards. (It uses local rule-based classification, not an AI provider, so it works without any external key.)
 - **Low:** Simple-dashboard issue shortcuts are a static array, not Firestore-driven — `TenantSimpleDashboardPage.tsx:9-14`.
 - **Low:** Widespread `alert()` usage for errors across request/chat/gate-pass/amenities pages.
 
