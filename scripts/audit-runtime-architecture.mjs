@@ -5,6 +5,14 @@ const root = process.cwd();
 const sourceExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
 const ignoredDirectories = new Set(['node_modules', 'dist', 'build', 'coverage', '.git']);
 
+function isRuntimeSource(path) {
+  const normalizedPath = path.replaceAll('\\', '/');
+  if (normalizedPath.endsWith('.d.ts')) return false;
+  if (/(?:^|\/)setupTests\.[jt]sx?$/.test(normalizedPath)) return false;
+  if (normalizedPath.includes('/__tests__/') || /\.(test|spec)\.[jt]sx?$/.test(normalizedPath)) return false;
+  return sourceExtensions.includes(extname(path));
+}
+
 function walk(directory, files = []) {
   if (!existsSync(directory)) return files;
   for (const entry of readdirSync(directory)) {
@@ -12,7 +20,7 @@ function walk(directory, files = []) {
     const fullPath = join(directory, entry);
     const stats = statSync(fullPath);
     if (stats.isDirectory()) walk(fullPath, files);
-    else if (sourceExtensions.includes(extname(entry))) files.push(normalize(fullPath));
+    else if (isRuntimeSource(fullPath)) files.push(normalize(fullPath));
   }
   return files;
 }
@@ -87,7 +95,6 @@ const reachable = new Set([...rootReachable, ...adminReachable]);
 const unreachable = allRuntimeFiles
   .filter((file) => !reachable.has(file))
   .map((file) => relative(root, file).replaceAll('\\', '/'))
-  .filter((file) => !file.includes('/__tests__/') && !/\.(test|spec)\.[jt]sx?$/.test(file))
   .sort();
 
 const basenameGroups = new Map();
