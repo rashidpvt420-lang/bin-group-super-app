@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { signOut, getIdTokenResult, signInWithCustomToken, signInWithEmailAndPassword } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db, onAuthStateChanged } from '../lib/firebase';
+import { auth, db, onAuthStateChanged, addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from '../lib/firebase';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -218,47 +217,38 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
         const unsubscribe = onAuthStateChanged(auth, async (usr) => {
             window.clearTimeout(authStateWatchdog);
             console.log('🛡️ [AUTH] State Changed:', usr ? usr.email : 'LOGGED_OUT');
+            if (!mounted) return;
 
             if (!usr) {
                 setIsAuthenticated(false);
                 setUser(null);
+                setError(null);
                 markAuthReady();
                 return;
             }
 
             try {
-                const verifiedUser = await verifyAdminUser(usr);
+                const verified = await verifyAdminUser(usr);
                 if (!mounted) return;
-                setUser(verifiedUser);
+                setUser(verified);
                 setIsAuthenticated(true);
                 setError(null);
-            } catch (err: any) {
-                console.error('🛡️ [AUTH] Admin Auth Error:', err);
+            } catch (authError: any) {
+                console.error('[ADMIN-AUTH] Verification failed:', authError);
                 if (!mounted) return;
                 setIsAuthenticated(false);
                 setUser(null);
-
-                if (err.message === 'AUTH_TOKEN_TIMEOUT') {
-                    setError('Admin token check timed out. Use Reset & Login, then retry. If this persists, confirm bin-group-admin-panel.web.app and bin-group-admin-panel.firebaseapp.com are both listed under Firebase Authentication > Settings > Authorized domains.');
-                } else if (err.message === 'ADMIN_PROFILE_TIMEOUT' || err.message === 'ADMIN_PROFILE_LOOKUP_FAILED') {
-                    setError('Admin profile could not be verified from Firestore. Use the founder admin email or repair the /users profile/admin claims.');
-                    await signOut(auth).catch(() => undefined);
-                } else if (err.message === 'ADMIN_ACCESS_DENIED') {
-                    setError('This account does not have admin access. Use ceo@bin-groups.com or assign admin custom claims/profile role.');
-                    await signOut(auth).catch(() => undefined);
-                } else {
-                    setError('Admin login failed. Use Reset & Login, then try again.');
+                setError(authError?.message === 'ADMIN_ACCESS_DENIED'
+                    ? 'This account is not authorized for the BIN GROUP admin panel.'
+                    : 'Admin verification failed. Confirm your production claims and try again.');
+                try {
+                    await signOut(auth);
+                } catch {
+                    // Ignore sign-out cleanup errors.
                 }
             } finally {
                 markAuthReady();
             }
-        }, (authErr) => {
-            window.clearTimeout(authStateWatchdog);
-            console.error('[ADMIN-AUTH] Auth observer failed:', authErr);
-            setIsAuthenticated(false);
-            setUser(null);
-            setError('Firebase Auth observer failed. Check authorized domains and Firebase web app configuration.');
-            markAuthReady();
         });
 
         return () => {
@@ -268,31 +258,24 @@ export const AuthProvider: React.FC<{ children: any }> = ({ children }) => {
         };
     }, []);
 
-    const login = async (credentials: { email: string; password: string }) => {
-        await signInWithEmailAndPassword(auth, credentials.email.trim().toLowerCase(), credentials.password);
+    const login = async ({ email, password }: { email: string; password: string }) => {
+        setError(null);
+        await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
     };
 
     const logout = async () => {
-        try {
-            await signOut(auth);
-        } finally {
-            setIsAuthenticated(false);
-            setUser(null);
-            window.location.href = '/login';
-        }
+        await signOut(auth);
+        setIsAuthenticated(false);
+        setUser(null);
     };
 
-    const value = useMemo(() => ({ isAuthenticated, loading, error, user, login, logout }), [isAuthenticated, loading, error, user]);
+    const contextValue = useMemo(() => ({ isAuthenticated, loading, error, user, login, logout }), [isAuthenticated, loading, error, user]);
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (!context) throw new Error('useAuth must be used within AuthProvider');
+    if (!context) throw new Error('useAuth must be used within an AuthProvider');
     return context;
 };
