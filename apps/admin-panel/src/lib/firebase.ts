@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc as firestoreAddDoc,
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp,
-    Timestamp, deleteDoc, writeBatch, or, arrayUnion
+    Timestamp, deleteDoc, writeBatch, or, arrayUnion, getCountFromServer
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -26,8 +26,6 @@ const clean = (value?: string): string => {
     return normalized && !normalized.includes('REPLACE_ME') ? normalized : '';
 };
 
-// CRA/CRACO only embeds process.env.REACT_APP_* when references are static.
-// Do not use dynamic process.env[key] here; it is not replaced during build.
 const firebaseConfig: BinFirebaseConfig = {
     apiKey: clean(process.env.REACT_APP_FIREBASE_API_KEY) || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
     authDomain: clean(process.env.REACT_APP_FIREBASE_AUTH_DOMAIN) || 'bin-group-57c60.firebaseapp.com',
@@ -45,26 +43,17 @@ if (typeof window !== 'undefined') {
     const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
 
     if (enableAppCheck) {
-        if (isLocal || isAutomation) {
-            (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-            console.log('App Check debug token set for local/automation testing.');
-        }
+        if (isLocal || isAutomation) (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
         const siteKey = clean(process.env.REACT_APP_APP_CHECK_SITE_KEY);
         if (siteKey) {
             try {
-                initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider(siteKey),
-                    isTokenAutoRefreshEnabled: true
-                });
-                console.log('App Check active.');
+                initializeAppCheck(app, { provider: new ReCaptchaV3Provider(siteKey), isTokenAutoRefreshEnabled: true });
             } catch (err) {
                 console.warn('App Check initialization failed:', err);
             }
         } else {
             console.warn('App Check site key missing or placeholder. App Check not initialized.');
         }
-    } else {
-        console.log('App Check is disabled via environment configuration.');
     }
 }
 
@@ -75,38 +64,19 @@ const functions = getFunctions(app, 'europe-west3');
 
 const pendingAuditWrites = new Map<string, Promise<void>>();
 
-/**
- * Compatibility bridge for legacy screens that still call addDoc() directly on
- * audit_logs/auditLogs. Security Rules deny those client writes by design, so
- * route them through the authenticated Cloud Function instead. All other
- * collections retain the native Firestore addDoc behavior.
- */
 const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     const collectionPath = String(reference?.path || '');
-    if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
-        return firestoreAddDoc(reference, data);
-    }
+    if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') return firestoreAddDoc(reference, data);
 
     const action = String(data?.action || '').trim();
     const targetType = String(data?.targetType || '').trim();
     const targetId = String(data?.targetId || '').trim();
-    if (!action || !targetType || !targetId) {
-        throw new Error('Audit writes require action, targetType, and targetId.');
-    }
+    if (!action || !targetType || !targetId) throw new Error('Audit writes require action, targetType, and targetId.');
 
     const {
-        actorId,
-        actorRole,
-        createdAt: _createdAt,
-        timestamp: _timestamp,
-        metadata,
-        before,
-        after,
-        userAgent,
-        action: _action,
-        targetType: _targetType,
-        targetId: _targetId,
-        ...extra
+        actorId, actorRole, createdAt: _createdAt, timestamp: _timestamp, metadata,
+        before, after, userAgent, action: _action, targetType: _targetType,
+        targetId: _targetId, ...extra
     } = data || {};
 
     const auditMetadata: Record<string, unknown> = {
@@ -120,8 +90,6 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
         sourceCollection: collectionPath,
     };
 
-    // Some legacy flows wrote the same event to both audit_logs and auditLogs
-    // in one Promise.all. Deduplicate only while the first callable is pending.
     const dedupeKey = `${action}|${targetType}|${targetId}`;
     let pending = pendingAuditWrites.get(dedupeKey);
     if (!pending) {
@@ -141,7 +109,7 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
 export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
     onAuthStateChanged,
-    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
+    collection, doc, getDoc, getDocs, getCountFromServer, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
     ref, uploadBytes, getDownloadURL, signInWithRedirect, signInWithEmailAndPassword, setPersistence, browserLocalPersistence
 };
 export type { User };
