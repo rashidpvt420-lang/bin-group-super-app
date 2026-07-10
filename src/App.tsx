@@ -247,14 +247,14 @@ function AppContent() {
         <Route path="/v1" element={publicOrPilot(withAuth(<LandingPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/gateway" element={publicOrPilot(withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
-        <Route path="/terms-of-service" element={<TermsPage />} />
-        <Route path="/privacy-policy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/terms-of-service" element={<Navigate to="/terms" replace />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
         <Route path="/account-privacy" element={withAuth(<AccountPrivacyRequestPage />, { publicAuth: false, showChrome: false })} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/feedback" element={<PilotFeedbackPage />} />
-        <Route path="/pilot-feedback" element={<PilotFeedbackPage />} />
+        <Route path="/pilot-feedback" element={<Navigate to="/feedback" replace />} />
         <Route path="/owners" element={publicOrPilot(<PublicMarketingPage page="owners" />)} />
         <Route path="/tenants" element={publicOrPilot(<PublicMarketingPage page="tenants" />)} />
         <Route path="/technicians" element={publicOrPilot(<PublicMarketingPage page="technicians" />)} />
@@ -269,13 +269,13 @@ function AppContent() {
         <Route path="/hospitals" element={publicOrPilot(<PublicMarketingPage page="hospitals" />)} />
         <Route path="/government-properties" element={publicOrPilot(<PublicMarketingPage page="government-properties" />)} />
         <Route path="/security" element={<PublicSecurityPage />} />
-        <Route path="/trust" element={<TrustCenterPage />} />
         <Route path="/trust-center" element={<TrustCenterPage />} />
+        <Route path="/trust" element={<Navigate to="/trust-center" replace />} />
         <Route path="/services" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
         <Route path="/contact" element={publicOrPilot(<PublicMarketingPage page="contact" />)} />
         <Route path="/request-demo" element={publicOrPilot(<DemoVideosPage />)} />
-        <Route path="/videos" element={publicOrPilot(<DemoVideosPage />)} />
-        <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
+        <Route path="/videos" element={<Navigate to="/request-demo" replace />} />
+        <Route path="/demo-videos" element={<Navigate to="/request-demo" replace />} />
         <Route path="/company" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/company-profile" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/about" element={<Navigate to="/#company-profile" replace />} />
@@ -301,7 +301,7 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        {/* Admin — canonical in-app command center. No mandatory cross-domain bridge. */}
+        {/* Admin operations are canonical in the dedicated Admin Panel. This route preserves old links and transfers the path. */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         {/* ── Public verifier routes ── */}
         <Route path="/verify" element={<InvoiceVerificationPage />} />
