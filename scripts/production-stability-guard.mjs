@@ -24,10 +24,11 @@ function runGuard(script) {
 }
 
 // Keep these inside test:stability so CI and Firebase production validation cannot
-// accidentally bypass route, duplicate, dashboard, onboarding, or profile checks.
+// accidentally bypass route, duplicate, dashboard, onboarding, profile, or rules-access checks.
 runGuard('scripts/audit-admin-canonicalization.mjs');
 runGuard('scripts/audit-five-profile-workflows.mjs');
 runGuard('scripts/audit-route-and-file-duplicates.mjs');
+runGuard('scripts/audit-role-firestore-access.mjs');
 runGuard('scripts/verify-five-profile-workflows.mjs');
 runGuard('scripts/verify-duplicate-resolution.mjs');
 runGuard('scripts/verify-canonical-route-architecture.mjs');
