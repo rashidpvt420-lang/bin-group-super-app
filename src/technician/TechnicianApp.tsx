@@ -20,7 +20,7 @@ import TechnicianChatPage from './pages/TechnicianChatPage';
 import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
-import TechnicianHRPage from './pages/TechnicianHRPageV2';
+import TechnicianHRPage from './pages/TechnicianWorkforceCenterPage';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
 import SupportPage from '../pages/public/SupportPage';
