@@ -1,15 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Box, Typography, Button, Stack, Alert, CircularProgress, Paper, Grid, Container, Dialog, DialogTitle, DialogContent, DialogActions, TextField
+    Alert,
+    Box,
+    Button,
+    CircularProgress,
+    Container,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Grid,
+    Paper,
+    Stack,
+    TextField,
+    Typography,
 } from '@mui/material';
-import { CheckCircle, Upload, FileText } from 'lucide-react';
+import { CheckCircle, FileText, Upload } from 'lucide-react';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { storage, auth, functions, httpsCallable, signInWithEmailAndPassword } from '../../lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import { getStagedFile, clearStagedFiles } from '../../lib/onboardingDb';
+import { auth, functions, httpsCallable, signInWithEmailAndPassword, storage } from '../../lib/firebase';
+import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
 
 interface PaymentSubmissionStepProps {
     onBack: () => void;
@@ -22,8 +35,8 @@ const readable = (value: string | undefined, fallback: string) => {
 
 const resolveMoney = (...values: unknown[]): number => {
     for (const value of values) {
-        const n = typeof value === 'number' ? value : Number(value);
-        if (Number.isFinite(n) && n > 0) return Math.round(n);
+        const amount = typeof value === 'number' ? value : Number(value);
+        if (Number.isFinite(amount) && amount > 0) return Math.round(amount);
     }
     return 0;
 };
@@ -36,17 +49,23 @@ const isAuthStorageFailure = (error: any) => {
     return code.includes('storage/unauthenticated') || code.includes('unauthenticated') || message.includes('storage/unauthenticated') || message.includes('user is not authenticated');
 };
 
-const fileToBase64Payload = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const output = String(reader.result || '');
-            resolve(output.includes(',') ? output.split(',').pop() || '' : output);
-        };
-        reader.onerror = () => reject(reader.error || new Error('Unable to read file for fallback upload.'));
-        reader.readAsDataURL(file);
-    });
-};
+const fileToBase64Payload = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+        const output = String(reader.result || '');
+        resolve(output.includes(',') ? output.split(',').pop() || '' : output);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file for fallback upload.'));
+    reader.readAsDataURL(file);
+});
+
+const documentTypes = [
+    { key: 'propertyProof', label: 'Property Proof' },
+    { key: 'emiratesId', label: 'Emirates ID' },
+    { key: 'passport', label: 'Passport' },
+    { key: 'tradeLicense', label: 'Trade License' },
+    { key: 'tenancySupport', label: 'Tenancy Support (Optional)' },
+] as const;
 
 export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepProps) {
     const {
@@ -63,288 +82,224 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         properties,
         portfolioSummary,
         isContractSigned,
-        signatureName
+        signatureName,
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
     const [loading, setLoading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+    const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
-    const [uploadedUrls, setUploadedUrls] = useState<{ [key: string]: string }>({});
+    const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({});
     const [confirmDialog, setConfirmDialog] = useState(false);
-
     const [reauthRequired, setReauthRequired] = useState(false);
     const [reauthPassword, setReauthPassword] = useState('');
     const [reauthLoading, setReauthLoading] = useState(false);
-    const ownerEmail = ownerAccount?.email || companyProfile.email || '';
 
+    const ownerEmail = ownerAccount?.email || companyProfile.email || '';
     const annualContractValue = resolveMoney(
         portfolioSummary?.estimatedACV,
         paymentManifest?.annualContractValue,
         selectedPlan?.annualPrice,
         selectedPlan?.price,
-        selectedPlan?.total
+        selectedPlan?.total,
     );
     const activationDeposit = resolveMoney(
         paymentManifest?.activationDeposit,
         paymentManifest?.amount,
-        annualContractValue > 0 ? Math.round(annualContractValue * 0.15) : 0
+        annualContractValue > 0 ? Math.round(annualContractValue * 0.15) : 0,
     );
     const amountDue = activationDeposit || annualContractValue;
 
     useEffect(() => {
         if (!ownerAccount?.uid) {
             setError('Account not created. Please go back and complete Step 7.');
-        }
-        if (!paymentMethod) {
+        } else if (!paymentMethod) {
             setError('Payment method not selected. Please go back and select a payment option.');
-        }
-        if (!isContractSigned) {
+        } else if (!isContractSigned) {
             setError('Contract not signed. Please go back and sign the service agreement.');
-        }
-        if (paymentMethod && isContractSigned && ownerAccount?.uid) {
+        } else {
             setError(null);
         }
-    }, [ownerAccount, paymentMethod, isContractSigned]);
+    }, [isContractSigned, ownerAccount?.uid, paymentMethod]);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        if (params.get('payment_success') === 'true' || params.get('session_id')) {
-            setSuccess(true);
-            clearStagedFiles().catch(console.error);
-        } else if (params.get('payment_failed') === 'true') {
-            setError('Payment checkout was cancelled or failed. Please try again.');
+        if (params.get('payment_failed') === 'true') {
+            setError('Payment checkout was cancelled or failed. Your signed onboarding package remains saved; restart checkout when ready.');
         }
+        // A query parameter is never accepted as payment proof. Stripe success is
+        // processed only by the signed webhook and final admin approval workflow.
     }, []);
 
-    const uploadProofDocuments = async (activeUser: FirebaseUser): Promise<{ [key: string]: string }> => {
-        if (!activeUser?.uid) throw new Error('Authenticated owner UID missing');
+    const uploadProofDocuments = async (activeUser: FirebaseUser): Promise<Record<string, string>> => {
+        if (!activeUser.uid) throw new Error('Authenticated owner UID missing.');
 
-        const urls: { [key: string]: string } = {};
-        const docTypes = [
-            { key: 'propertyProof', label: 'Property Proof' },
-            { key: 'emiratesId', label: 'Emirates ID' },
-            { key: 'passport', label: 'Passport' },
-            { key: 'tradeLicense', label: 'Trade License' },
-            { key: 'tenancySupport', label: 'Tenancy Support' }
-        ];
-
-        for (const { key, label } of docTypes) {
-            const docMeta = proofDocuments[key as keyof typeof proofDocuments];
-            if (!docMeta) {
-                console.log(`[UPLOAD] Skipping ${label} (not provided)`);
-                continue;
-            }
+        const urls: Record<string, string> = {};
+        for (const { key, label } of documentTypes) {
+            const documentMeta = proofDocuments[key as keyof typeof proofDocuments];
+            if (!documentMeta) continue;
 
             let stagedFile: File | null = null;
             let safeFileName = `${key}.bin`;
             const safeSessionId = onboardingSessionId || intakeId || activeUser.uid;
 
             try {
-                setUploadProgress(prev => ({ ...prev, [key]: 0 }));
-
+                setUploadProgress((current) => ({ ...current, [key]: 0 }));
                 stagedFile = await getStagedFile(key);
-                if (!stagedFile) {
-                    throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
-                }
+                if (!stagedFile) throw new Error(`File binary not found for ${label}. Upload it again.`);
 
                 await activeUser.getIdToken(true);
-
                 safeFileName = stagedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
                 const storagePath = `onboarding-proof/${activeUser.uid}/${safeSessionId}/${key}/${Date.now()}_${safeFileName}`;
                 const fileRef = ref(storage, storagePath);
-
                 await uploadBytes(fileRef, stagedFile, {
                     customMetadata: {
-                        uploadedBy: activeUser.email || ownerAccount?.email || companyProfile.email || '',
+                        uploadedBy: activeUser.email || ownerEmail,
                         ownerUid: activeUser.uid,
                         uploadedAt: new Date().toISOString(),
                         docType: key,
-                        sessionId: safeSessionId
-                    }
+                        sessionId: safeSessionId,
+                    },
                 });
-
-                const downloadUrl = await getDownloadURL(fileRef);
-                urls[key] = downloadUrl;
-
-                setUploadProgress(prev => ({ ...prev, [key]: 100 }));
-                console.log(`✅ [UPLOAD] ${label} uploaded: ${downloadUrl}`);
-            } catch (uploadErr: any) {
-                console.error(`❌ [UPLOAD] ${label} failed:`, uploadErr);
-
-                if (isAuthStorageFailure(uploadErr)) {
-                    console.warn(`[UPLOAD] Browser Storage auth failed for ${label}. Trying callable backend fallback...`);
-                    try {
-                        if (!stagedFile) {
-                            stagedFile = await getStagedFile(key);
-                        }
-                        if (!stagedFile) {
-                            throw new Error(`File binary not found in local stage for ${label}. Please upload the file again.`);
-                        }
-
-                        safeFileName = stagedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                        const encodedDocument = await fileToBase64Payload(stagedFile);
-                        const uploadFallback = httpsCallable(functions, 'uploadOwnerOnboardingProofDocument');
-                        const fallbackRes = await uploadFallback({
-                            ownerUid: activeUser.uid,
-                            ownerEmail: activeUser.email || ownerAccount?.email || companyProfile.email || '',
-                            intakeId: safeSessionId,
-                            onboardingSessionId: safeSessionId,
-                            docType: key,
-                            filename: safeFileName,
-                            contentType: stagedFile.type || 'application/octet-stream',
-                            encodedDocument
-                        });
-
-                        const fallbackData = fallbackRes.data as { downloadUrl?: string };
-                        if (!fallbackData?.downloadUrl) throw new Error('Callable fallback did not return a download URL.');
-
-                        urls[key] = fallbackData.downloadUrl;
-                        setUploadProgress(prev => ({ ...prev, [key]: 100 }));
-                        console.log(`✅ [UPLOAD] ${label} uploaded through callable fallback: ${fallbackData.downloadUrl}`);
-                        continue;
-                    } catch (fallbackErr: any) {
-                        console.error(`❌ [UPLOAD] ${label} fallback failed:`, fallbackErr);
-                        throw new Error(`Failed to upload ${label}: ${fallbackErr.message || fallbackErr.code || String(fallbackErr)}`);
-                    }
+                urls[key] = await getDownloadURL(fileRef);
+                setUploadProgress((current) => ({ ...current, [key]: 100 }));
+            } catch (uploadError: any) {
+                if (!isAuthStorageFailure(uploadError)) {
+                    throw new Error(`Failed to upload ${label}: ${uploadError?.message || uploadError?.code || String(uploadError)}`);
                 }
 
-                throw new Error(`Failed to upload ${label}: ${uploadErr.message || uploadErr.code || String(uploadErr)}`);
+                if (!stagedFile) stagedFile = await getStagedFile(key);
+                if (!stagedFile) throw new Error(`File binary not found for ${label}. Upload it again.`);
+                safeFileName = stagedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const uploadFallback = httpsCallable(functions, 'uploadOwnerOnboardingProofDocument');
+                const fallbackResult = await uploadFallback({
+                    ownerUid: activeUser.uid,
+                    ownerEmail: activeUser.email || ownerEmail,
+                    intakeId: safeSessionId,
+                    onboardingSessionId: safeSessionId,
+                    docType: key,
+                    filename: safeFileName,
+                    contentType: stagedFile.type || 'application/octet-stream',
+                    encodedDocument: await fileToBase64Payload(stagedFile),
+                });
+                const fallbackData = fallbackResult.data as { downloadUrl?: string };
+                if (!fallbackData.downloadUrl) throw new Error(`Fallback upload did not return a URL for ${label}.`);
+                urls[key] = fallbackData.downloadUrl;
+                setUploadProgress((current) => ({ ...current, [key]: 100 }));
             }
         }
-
         return urls;
     };
 
-    const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => {
-        return new Promise((resolve) => {
-            if (auth.currentUser) {
-                resolve(auth.currentUser);
-                return;
-            }
-            let resolved = false;
-            const unsubscribe = onAuthStateChanged(auth, (user) => {
-                if (resolved) return;
-                resolved = true;
-                unsubscribe();
-                resolve(user);
-            });
-            setTimeout(() => {
-                if (resolved) return;
-                resolved = true;
-                unsubscribe();
-                resolve(auth.currentUser);
-            }, timeoutMs);
-        });
-    };
-
-    const submitWithUser = async (currentUser: FirebaseUser) => {
-        if (!currentUser) {
-            setError('Authenticated user missing for submission.');
+    const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => new Promise((resolve) => {
+        if (auth.currentUser) {
+            resolve(auth.currentUser);
             return;
         }
+        let resolved = false;
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (resolved) return;
+            resolved = true;
+            unsubscribe();
+            resolve(user);
+        });
+        setTimeout(() => {
+            if (resolved) return;
+            resolved = true;
+            unsubscribe();
+            resolve(auth.currentUser);
+        }, timeoutMs);
+    });
 
-        if (currentUser.uid !== ownerAccount?.uid) {
-            console.warn('[PAYMENT] Authenticated UID differs from onboarding owner uid; using authenticated UID for storage/upload.');
-        }
+    const submitWithUser = async (currentUser: FirebaseUser) => {
+        await currentUser.getIdToken(true);
+        const urls = await uploadProofDocuments(currentUser);
+        setUploadedUrls(urls);
 
-        try {
-            await currentUser.getIdToken(true);
-            const urls = await uploadProofDocuments(currentUser);
-            setUploadedUrls(urls);
+        const effectiveOwnerUid = currentUser.uid;
+        const effectiveOwnerEmail = currentUser.email || ownerEmail;
+        const effectiveIntakeId = intakeId || onboardingSessionId || effectiveOwnerUid;
+        setIntakeId(effectiveIntakeId);
 
-            const effectiveOwnerUid = currentUser.uid;
-            const effectiveOwnerEmail = currentUser.email || ownerEmail;
-            const effectiveIntakeId = intakeId || onboardingSessionId || effectiveOwnerUid;
-            setIntakeId(effectiveIntakeId);
+        if (!paymentMethod) throw new Error('Payment method not selected.');
+        if (!isContractSigned || signatureName.trim().length < 3) throw new Error('A valid owner signature is required.');
+        if (amountDue <= 0) throw new Error('Payment amount is missing. Go back and recalculate the quote.');
 
-            if (!effectiveIntakeId) throw new Error('Intake ID missing');
-            if (!paymentMethod) throw new Error('Payment method not selected');
-            if (amountDue <= 0) throw new Error('Payment amount is missing. Go back and recalculate the quote.');
+        const submissionPayload = {
+            ownerUid: effectiveOwnerUid,
+            ownerEmail: effectiveOwnerEmail,
+            intakeId: effectiveIntakeId,
+            onboardingSessionId: onboardingSessionId || effectiveIntakeId,
+            paymentMethod,
+            amount: amountDue,
+            activationDeposit: amountDue,
+            annualContractValue,
+            paymentManifest: paymentManifest || null,
+            companyProfile: {
+                name: companyProfile.name,
+                licenseNumber: companyProfile.licenseNumber,
+                contactPerson: companyProfile.contactPerson,
+                email: companyProfile.email,
+                phone: companyProfile.phone,
+            },
+            serviceDetails: {
+                properties: properties.length,
+                totalUnits: portfolioSummary.totalUnits,
+                selectedPlan: selectedPlan?.name || selectedPlan?.packageName || 'Standard',
+                selectedAddOns: selectedAddOns || [],
+            },
+            properties,
+            signatureName: signatureName.trim(),
+            documentUrls: urls,
+        };
 
-            if (paymentMethod === 'STRIPE') {
-                const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
-                const sessionRes = await createCheckout({
-                    ownerUid: effectiveOwnerUid,
-                    ownerEmail: effectiveOwnerEmail,
-                    intakeId: effectiveIntakeId,
-                    onboardingSessionId,
-                    annualContractValue,
-                    activationDeposit: amountDue,
-                    amount: amountDue
-                });
-                const sessionData = sessionRes.data as { url?: string };
-                if (sessionData?.url) {
-                    await clearStagedFiles();
-                    window.location.href = sessionData.url;
-                    return;
-                } else {
-                    throw new Error('Stripe redirect URL not returned by server.');
-                }
-            }
+        // The contract, property package, signature, proof URLs, and canonical
+        // payment transaction must exist before any external checkout redirect.
+        const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
+        await submitPackage(submissionPayload);
 
-            const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
-            await submitPackage({
+        if (paymentMethod === 'STRIPE') {
+            const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
+            const sessionResult = await createCheckout({
                 ownerUid: effectiveOwnerUid,
                 ownerEmail: effectiveOwnerEmail,
                 intakeId: effectiveIntakeId,
-                onboardingSessionId,
-                paymentMethod,
-                amount: amountDue,
-                activationDeposit: amountDue,
+                onboardingSessionId: onboardingSessionId || effectiveIntakeId,
                 annualContractValue,
-                paymentManifest: paymentManifest || null,
-                companyProfile: {
-                    name: companyProfile.name,
-                    licenseNumber: companyProfile.licenseNumber,
-                    contactPerson: companyProfile.contactPerson,
-                    email: companyProfile.email,
-                    phone: companyProfile.phone
-                },
-                serviceDetails: {
-                    properties: properties.length,
-                    totalUnits: portfolioSummary.totalUnits,
-                    selectedPlan: selectedPlan?.name || selectedPlan?.packageName || 'Standard',
-                    selectedAddOns: selectedAddOns || []
-                },
-                properties,
-                signatureName,
-                documentUrls: urls
+                activationDeposit: amountDue,
+                amount: amountDue,
             });
-
+            const sessionData = sessionResult.data as { url?: string };
+            if (!sessionData.url) throw new Error('Stripe redirect URL not returned by server.');
             await clearStagedFiles();
-            setSuccess(true);
-        } catch (err: any) {
-            console.error('[PAYMENT] submitWithUser failed:', err?.message || err);
-            throw err;
+            window.location.href = sessionData.url;
+            return;
         }
+
+        await clearStagedFiles();
+        setSuccess(true);
     };
 
     const submitPayment = async () => {
         setError(null);
         setLoading(true);
-
         try {
-            console.log('[PAYMENT] Waiting for auth hydration...');
             const currentUser = await waitForCurrentUser();
             if (!currentUser) {
                 setReauthRequired(true);
-                setError('Your secure login session is not active. Enter the owner password below to reconnect and submit without losing this onboarding form.');
-                setLoading(false);
+                setError('Your secure login session is not active. Enter the owner password below to reconnect without losing the form.');
                 return;
             }
-            if (!ownerAccount?.uid) throw new Error('Owner account not created');
-
-            console.log('[PAYMENT] Auth present — continuing submission for user', currentUser.uid);
+            if (!ownerAccount?.uid) throw new Error('Owner account not created.');
             await submitWithUser(currentUser);
-        } catch (err: any) {
-            console.error('[PAYMENT] Submission failed:', err);
-            if (isAuthStorageFailure(err)) {
+        } catch (submissionError: any) {
+            console.error('[PAYMENT] Submission failed:', submissionError);
+            if (isAuthStorageFailure(submissionError)) {
                 setReauthRequired(true);
-                setError('Your secure login session expired before the documents could upload. Re-enter the owner password below and press Sign in & Submit. Your uploaded files are still staged on this device.');
+                setError('Your secure login session expired. Re-enter the owner password and submit again; staged files remain on this device.');
             } else {
-                setError(`Payment submission failed: ${err?.message || String(err)}`);
+                setError(`Payment submission failed: ${submissionError?.message || String(submissionError)}`);
             }
         } finally {
             setLoading(false);
@@ -353,11 +308,11 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
 
     const handleInlineReauth = async () => {
         if (!ownerEmail) {
-            setError('Owner email missing; go back to account step and confirm owner email.');
+            setError('Owner email missing; return to the account step.');
             return;
         }
         if (!reauthPassword) {
-            setError('Enter the owner account password to reconnect this onboarding session.');
+            setError('Enter the owner account password.');
             return;
         }
         setReauthLoading(true);
@@ -366,9 +321,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             const credential = await signInWithEmailAndPassword(auth, ownerEmail.toLowerCase(), reauthPassword);
             await credential.user.getIdToken(true);
             await submitWithUser(credential.user);
-        } catch (err: any) {
-            console.error('[PAYMENT] Inline reauth failed:', err?.code || err?.message || err);
-            setError(err?.code === 'auth/wrong-password' ? 'Password is incorrect for this owner account.' : (err?.message || 'Unable to reconnect owner session.'));
+        } catch (reauthError: any) {
+            setError(reauthError?.code === 'auth/wrong-password' ? 'Password is incorrect for this owner account.' : (reauthError?.message || 'Unable to reconnect owner session.'));
         } finally {
             setReauthLoading(false);
         }
@@ -377,199 +331,84 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     if (success) {
         return (
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
-                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid #4ADE80', backdropFilter: 'blur(10px)' }}>
-                    <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
-                        <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(74, 222, 128, 0.1)' }}>
-                            <CheckCircle size={48} color="#4ADE80" />
+                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22,22,24,0.8)', border: '1px solid #4ADE80' }}>
+                    <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}><CheckCircle size={52} color="#4ADE80" /></Box>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>Payment Package Submitted</Typography>
+                    <Typography sx={{ color: '#4ADE80', fontWeight: 700, mb: 2 }}>Your signed contract, payment proof, property package, and documents are saved. The dashboard remains locked until admin approval.</Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Intake ID: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{intakeId || ownerAccount?.uid || onboardingSessionId}</Box></Typography>
+                    {Object.keys(uploadedUrls).length > 0 && (
+                        <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(74,222,128,0.05)', borderRadius: 2, border: '1px solid rgba(74,222,128,0.2)' }}>
+                            {Object.entries(uploadedUrls).map(([key, url]) => (
+                                <Stack key={key} direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>{key}</Typography>
+                                    <Box component="a" href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#4ADE80', fontSize: '0.75rem', fontWeight: 700 }}>VIEW</Box>
+                                </Stack>
+                            ))}
                         </Box>
-                    </Box>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                        'Payment Submitted Successfully'
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: '#4ADE80', fontWeight: 700, mb: 2 }}>
-                        'Your payment proof and documents were uploaded successfully. BIN GROUP will review and activate your owner dashboard after admin verification.'
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4 }}>
-                        Intake ID: <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{intakeId || ownerAccount?.uid || onboardingSessionId}</Box>
-                    </Typography>
-                    <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(74, 222, 128, 0.05)', borderRadius: 2, border: '1px solid rgba(74, 222, 128, 0.2)' }}>
-                        <Typography variant="caption" sx={{ color: '#4ADE80', fontWeight: 700, display: 'block', mb: 1 }}>DOCUMENTS UPLOADED:</Typography>
-                        {Object.entries(uploadedUrls).map(([key, url]) => (
-                            <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>{key}</Typography>
-                                <Box component="a" href={url} target="_blank" rel="noopener noreferrer" sx={{ color: '#4ADE80', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 700 }}>DOWNLOAD</Box>
-                            </Box>
-                        ))}
-                    </Box>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 3 }}>
-                        Our admin team will review your submission within 24-48 hours. You'll receive an email confirmation.
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        onClick={() => window.location.href = '/'}
-                        sx={{
-                            bgcolor: binThemeTokens.gold,
-                            color: '#000',
-                            fontWeight: 950,
-                            py: 1.5,
-                            px: 4,
-                            borderRadius: 100,
-                            '&:hover': { bgcolor: '#FFF' }
-                        }}
-                    >
-                        {readable(t('onboarding.return_home'), 'Return to Home')}
-                    </Button>
+                    )}
+                    <Button variant="contained" onClick={() => { window.location.href = '/owner/activation'; }} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 100, px: 4, py: 1.5 }}>Open Activation Status</Button>
                 </Paper>
             </Container>
         );
     }
 
     return (
-        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, overflow: 'visible' }}>
-            <Box sx={{ textAlign: 'center', mb: { xs: 3, md: 4 } }}>
-                <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom sx={{ fontSize: { xs: '1.8rem', md: '2.125rem' } }}>
-                    {readable(t('onboarding.payment_submission'), 'Payment Submission')}
-                </Typography>
-                <Typography variant="body1" color="rgba(255,255,255,0.5)">
-                    {readable(t('onboarding.payment_submission_desc'), 'Review and confirm your payment details. Your documents are about to be uploaded securely.')}
-                </Typography>
+        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 800, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }}>
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+                <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom>{readable(t('onboarding.payment_submission'), 'Payment Submission')}</Typography>
+                <Typography color="rgba(255,255,255,0.5)">Your signed contract and document package will be persisted before payment or checkout begins.</Typography>
             </Box>
 
-            <Paper sx={{
-                p: { xs: 2, sm: 3, md: 5 },
-                borderRadius: { xs: 4, md: 6 },
-                bgcolor: 'rgba(22, 22, 24, 0.6)',
-                border: '1px solid rgba(255,255,255,0.05)',
-                backdropFilter: 'blur(10px)',
-                overflow: 'visible'
-            }}>
-                {error && (
-                    <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}
-                        action={error?.toLowerCase().includes('session') ? (
-                            <Button color="inherit" size="small" onClick={() => { setReauthRequired(true); }}>
-                                Reconnect
-                            </Button>
-                        ) : null}
-                    >
-                        {error}
-                    </Alert>
-                )}
+            <Paper sx={{ p: { xs: 2, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
                 {reauthRequired && (
-                    <Paper sx={{ p: 2, mb: 3, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.45)' }}>
-                        <Stack spacing={1}>
-                            <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>Reconnect Owner Session</Typography>
+                    <Paper sx={{ p: 2, mb: 3, bgcolor: 'rgba(0,0,0,0.45)' }}>
+                        <Stack spacing={1.5}>
+                            <Typography sx={{ color: binThemeTokens.gold, fontWeight: 800 }}>Reconnect Owner Session</Typography>
                             <TextField fullWidth label="Owner Email" value={ownerEmail} disabled />
-                            <TextField fullWidth label="Owner Password" type="password" value={reauthPassword} onChange={(e) => setReauthPassword(e.target.value)} />
+                            <TextField fullWidth label="Owner Password" type="password" value={reauthPassword} onChange={(event) => setReauthPassword(event.target.value)} />
                             <Stack direction="row" spacing={1}>
-                                <Button variant="contained" onClick={handleInlineReauth} disabled={reauthLoading || loading} sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}>
-                                    {reauthLoading ? <CircularProgress size={18} color="inherit" /> : 'Sign in & Submit'}
-                                </Button>
+                                <Button variant="contained" onClick={handleInlineReauth} disabled={reauthLoading || loading} sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}>{reauthLoading ? <CircularProgress size={18} color="inherit" /> : 'Sign in & Submit'}</Button>
                                 <Button onClick={() => setReauthRequired(false)} disabled={reauthLoading || loading}>Cancel</Button>
                             </Stack>
                         </Stack>
                     </Paper>
                 )}
 
-                <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>
-                        {readable(t('onboarding.payment_summary'), 'Payment Summary')}
-                    </Typography>
+                <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(212,175,55,0.05)', borderRadius: 2, border: '1px solid rgba(212,175,55,0.2)' }}>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>Payment Summary</Typography>
                     <Grid container spacing={2}>
-                        <Grid item xs={6}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Amount Due</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>AED {formatMoney(amountDue)}</Typography>
-                        </Grid>
-                        <Grid item xs={6}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Payment Method</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{paymentMethod || 'Not Selected'}</Typography>
-                        </Grid>
-                        <Grid item xs={6}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Annual Contract Value</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>AED {formatMoney(annualContractValue)}</Typography>
-                        </Grid>
-                        <Grid item xs={6}>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Properties / Units</Typography>
-                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{properties.length} / {portfolioSummary.totalUnits}</Typography>
-                        </Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">Amount Due</Typography><Typography color="#FFF" fontWeight="700">AED {formatMoney(amountDue)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">Payment Method</Typography><Typography color="#FFF" fontWeight="700">{paymentMethod || 'Not Selected'}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">Annual Contract Value</Typography><Typography color="#FFF" fontWeight="700">AED {formatMoney(annualContractValue)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">Properties / Units</Typography><Typography color="#FFF" fontWeight="700">{properties.length} / {portfolioSummary.totalUnits}</Typography></Grid>
                     </Grid>
                 </Box>
 
-                <Box sx={{ mb: 4 }}>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                        {readable(t('onboarding.documents_to_upload'), 'Documents to Upload')}
-                    </Typography>
-                    <Stack spacing={2}>
-                        {[
-                            { key: 'propertyProof', label: 'Property Proof' },
-                            { key: 'emiratesId', label: 'Emirates ID' },
-                            { key: 'passport', label: 'Passport' },
-                            { key: 'tradeLicense', label: 'Trade License' },
-                            { key: 'tenancySupport', label: 'Tenancy Support (Optional)' }
-                        ].map(({ key, label }) => {
-                            const file = proofDocuments[key as keyof typeof proofDocuments];
-                            const progress = uploadProgress[key] || 0;
-                            return (
-                                <Box key={key} sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <FileText size={16} color="#C6A75E" />
-                                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{label}</Typography>
-                                        </Box>
-                                        {file ? (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <CheckCircle size={16} color="#4ADE80" />
-                                                <Typography variant="caption" sx={{ color: '#4ADE80' }}>Ready</Typography>
-                                            </Box>
-                                        ) : (
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Not provided</Typography>
-                                        )}
-                                    </Box>
-                                    {file && (
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>{file.name}</Typography>
-                                    )}
-                                    {progress > 0 && progress < 100 && (
-                                        <Box sx={{ mt: 1, bgcolor: 'rgba(0,0,0,0.5)', height: 4, borderRadius: 2, overflow: 'hidden' }}>
-                                            <Box sx={{ width: `${progress}%`, height: '100%', bgcolor: binThemeTokens.gold, transition: 'width 0.3s ease' }} />
-                                        </Box>
-                                    )}
-                                </Box>
-                            );
-                        })}
-                    </Stack>
-                </Box>
-
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 3 }}>
-                    <Button
-                        variant="outlined"
-                        onClick={onBack}
-                        disabled={loading}
-                        fullWidth
-                        sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, px: 4, borderRadius: 100, fontWeight: 950 }}
-                    >
-                        {readable(t('onboarding.back'), 'Back')}
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={() => setConfirmDialog(true)}
-                        disabled={loading || !ownerAccount?.uid || !paymentMethod || amountDue <= 0}
-                        fullWidth
-                        sx={{
-                            bgcolor: binThemeTokens.gold,
-                            color: '#000',
-                            fontWeight: 950,
-                            py: 1.5,
-                            px: 4,
-                            borderRadius: 100,
-                            '&:hover': { bgcolor: '#FFF' }
-                        }}
-                    >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Upload size={18} />
-                                {readable(t('onboarding.submit_payment'), 'Submit Payment & Documents')}
+                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>Documents to Upload</Typography>
+                <Stack spacing={1.5} sx={{ mb: 4 }}>
+                    {documentTypes.map(({ key, label }) => {
+                        const file = proofDocuments[key as keyof typeof proofDocuments];
+                        const progress = uploadProgress[key] || 0;
+                        return (
+                            <Box key={key} sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.3)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Stack direction="row" spacing={1} alignItems="center"><FileText size={16} color="#C6A75E" /><Typography color="#FFF" fontWeight="700">{label}</Typography></Stack>
+                                    <Typography variant="caption" sx={{ color: file ? '#4ADE80' : 'rgba(255,255,255,0.5)' }}>{file ? (progress === 100 ? 'Uploaded' : 'Ready') : 'Not provided'}</Typography>
+                                </Stack>
+                                {file && <Typography variant="caption" color="rgba(255,255,255,0.5)">{file.name}</Typography>}
                             </Box>
-                        )}
+                        );
+                    })}
+                </Stack>
+
+                <Alert severity="info" sx={{ mb: 3 }}>For card payments, successful checkout verifies payment but does not bypass final admin approval or unlock the dashboard directly.</Alert>
+
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <Button variant="outlined" onClick={onBack} disabled={loading} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, borderRadius: 100 }}>Back</Button>
+                    <Button variant="contained" onClick={() => setConfirmDialog(true)} disabled={loading || !ownerAccount?.uid || !paymentMethod || !isContractSigned || amountDue <= 0} fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 100 }}>
+                        {loading ? <CircularProgress size={24} color="inherit" /> : <Stack direction="row" spacing={1} alignItems="center"><Upload size={18} /><span>{paymentMethod === 'STRIPE' ? 'Save Package & Open Card Checkout' : 'Submit Payment & Documents'}</span></Stack>}
                     </Button>
                 </Stack>
             </Paper>
@@ -577,31 +416,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
                 <DialogTitle sx={{ color: '#FFF', bgcolor: '#000', fontWeight: 950 }}>Confirm Submission</DialogTitle>
                 <DialogContent sx={{ bgcolor: '#000', color: '#FFF' }}>
-                    <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 2 }}>
-                            You're about to submit your payment and upload all documents. This action cannot be undone.
-                        </Typography>
-                        <Box sx={{ p: 2, bgcolor: 'rgba(212, 175, 55, 0.05)', borderRadius: 2, border: '1px solid rgba(212, 175, 55, 0.2)' }}>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700, display: 'block', mb: 1 }}>SUBMISSION DETAILS:</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Amount Due: AED {formatMoney(amountDue)}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Annual Value: AED {formatMoney(annualContractValue)}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Method: {paymentMethod}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block' }}>Intake ID: {intakeId || ownerAccount?.uid || onboardingSessionId}</Typography>
-                        </Box>
-                    </Box>
+                    <Typography sx={{ mt: 2, mb: 2 }}>The signed contract, property data, proof documents, and canonical payment record will be saved before the payment step continues.</Typography>
+                    <Typography variant="caption" display="block">Amount Due: AED {formatMoney(amountDue)}</Typography>
+                    <Typography variant="caption" display="block">Method: {paymentMethod}</Typography>
+                    <Typography variant="caption" display="block">Intake ID: {intakeId || ownerAccount?.uid || onboardingSessionId}</Typography>
                 </DialogContent>
                 <DialogActions sx={{ bgcolor: '#000', p: 2 }}>
                     <Button onClick={() => setConfirmDialog(false)} sx={{ color: '#FFF' }}>Cancel</Button>
-                    <Button
-                        onClick={() => {
-                            setConfirmDialog(false);
-                            submitPayment();
-                        }}
-                        variant="contained"
-                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                    >
-                        Confirm & Submit
-                    </Button>
+                    <Button onClick={() => { setConfirmDialog(false); void submitPayment(); }} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Confirm & Continue</Button>
                 </DialogActions>
             </Dialog>
         </Box>
