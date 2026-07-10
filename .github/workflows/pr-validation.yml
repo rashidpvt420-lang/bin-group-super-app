@@ -37,6 +37,19 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
+      - name: Runtime architecture reachability audit
+        id: runtime_architecture
+        run: node scripts/audit-runtime-architecture.mjs
+
+      - name: Upload runtime architecture report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-architecture-audit
+          path: runtime-architecture-audit.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Production stability guard
         id: stability
         shell: bash
