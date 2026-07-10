@@ -8,6 +8,13 @@ const packageJson = read('package.json');
 const rootApp = read('src/App.tsx');
 const ownerApp = read('src/owner/OwnerApp.tsx');
 const ownerCommunity = read('src/owner/pages/OwnerCommunityOperationsPage.tsx');
+const tenantRequest = read('src/tenant/pages/TenantRequestPage.tsx');
+const technicianApp = read('src/technician/TechnicianApp.tsx');
+const technicianWorkforce = read('src/technician/pages/TechnicianWorkforceCenterPage.tsx');
+const technicianOverview = read('src/technician/components/TechnicianWorkforceOverview.tsx');
+const brokerApp = read('src/broker/BrokerApp.tsx');
+const brokerCommissions = read('src/broker/pages/BrokerCommissionsPage.tsx');
+const brokerProfile = read('src/broker/pages/BrokerProfilePage.tsx');
 const rootAdmin = read('src/admin/AdminTerminal.tsx');
 const adminApp = read('apps/admin-panel/src/App.tsx');
 const adminDashboard = read('apps/admin-panel/src/pages/dashboard/DashboardPage.tsx');
@@ -23,6 +30,30 @@ assert(ownerCommunity.includes("usePropertyCollection('amenities'"), 'Owner Comm
 assert(ownerCommunity.includes("usePropertyCollection('announcements'"), 'Owner Community Operations must include announcements.');
 assert(ownerCommunity.includes("usePropertyCollection('parcels'"), 'Owner Community Operations must include parcels.');
 assert(ownerCommunity.includes("usePropertyCollection('visitorParkingRequests'"), 'Owner Community Operations must include visitor parking.');
+assert(!existsSync('src/owner/pages/OwnerStatementsPage.tsx'), 'Placeholder Owner statements page must not return.');
+assert(!existsSync('src/owner/pages/OwnerApprovalsPage.tsx'), 'Placeholder Owner approvals page must not return.');
+assert(!existsSync('src/owner/pages/OwnerInspectionsPage.tsx'), 'Duplicate Owner inspections page must not return.');
+
+assert(!existsSync('src/tenant/pages/TenantAIConciergePage.tsx'), 'Conflicting Tenant ticket creator must not return.');
+assert(tenantRequest.includes('At least one photo is required before dispatch'), 'Canonical Tenant request must require photo evidence.');
+assert(tenantRequest.includes('slaMinutesForPriority'), 'Canonical Tenant request must use the shared SLA policy.');
+assert(tenantRequest.includes('notifyTicketCreated') && tenantRequest.includes('notifyEmergency'), 'Canonical Tenant request must trigger notifications.');
+
+assert(technicianApp.includes("from './pages/TechnicianWorkforceCenterPage'"), 'Technician App must use the consolidated Workforce Center.');
+assert(technicianWorkforce.includes('TechnicianWorkforceOverview') && technicianWorkforce.includes('TechnicianHRPageV2'), 'Workforce Center must combine employment controls with multilingual ESS.');
+assert(technicianOverview.includes('staffAgreements') && technicianOverview.includes('payrollStatus') && technicianOverview.includes('leaveBalance'), 'Technician Workforce Overview must retain agreement, payroll, and leave functions.');
+assert(!existsSync('src/technician/pages/TechnicianHRPage.tsx'), 'Superseded Technician HR duplicate must not return.');
+for (const path of ['/schedule', '/messages', '/performance', '/payroll', '/activity', '/documents', '/payments', '/safety', '/time-tracking', '/leaderboard']) {
+  assert(technicianApp.includes(`path="${path}"`), `Technician compatibility route ${path} is missing.`);
+}
+
+assert(brokerApp.includes('BinConnectInboxPage role="broker"'), 'Broker portal must expose BIN Connect.');
+assert(brokerApp.includes('PilotCompletionPage role="broker"'), 'Broker portal must expose pilot evidence.');
+for (const path of ['/submissions', '/withdrawals', '/agreement', '/onboarding', '/reports', '/earnings', '/payments', '/settings']) {
+  assert(brokerApp.includes(`path="${path}"`), `Broker compatibility route ${path} is missing.`);
+}
+assert(brokerCommissions.includes('submitBrokerPayoutRequest'), 'Canonical Broker commissions page must support payout requests.');
+assert(brokerProfile.includes('commissionAgreementAccepted') && brokerProfile.includes('bankIban') && brokerProfile.includes('reraLicense'), 'Canonical Broker profile must retain agreement, bank, and RERA readiness.');
 
 assert(rootApp.includes('<Route path="/admin/*"'), 'The unified app must preserve the /admin/* compatibility route.');
 assert(rootAdmin.includes('ADMIN_PANEL_URL'), 'Root AdminTerminal must redirect to the dedicated Admin Panel.');
@@ -36,10 +67,12 @@ assert(adminApp.includes('path="/broker-attributions"'), 'Dedicated Admin App mu
 assert(adminApp.includes('path="/tenant-services"'), 'Dedicated Admin App must register tenant services operations.');
 assert(adminDashboard.includes("doc(db, 'system_health', 'admin_summaries')"), 'Canonical Admin dashboard must read live launch evidence.');
 assert(adminDashboard.includes('getCountFromServer'), 'Canonical Admin dashboard must use live Firestore aggregate metrics.');
+assert(adminDashboard.includes('useLanguage') && adminDashboard.includes("lang === 'ar'"), 'Canonical Admin dashboard must be bilingual and RTL-aware.');
 assert(adminNavigation.includes("path: '/ops/announcements'"), 'Admin navigation must expose community operations.');
 assert(adminNavigation.includes("path: '/payments'"), 'Admin navigation must expose payment approvals.');
 assert(adminNavigation.includes("path: '/reports/institutional'"), 'Admin navigation must expose institutional reports.');
 assert(adminNavigation.includes("path: '/staff-access'"), 'Admin navigation must expose staff access controls.');
+assert(!existsSync('apps/admin-panel/src/pages/Placeholders.tsx'), 'Admin placeholder page bundle must not return.');
 
 assert(!existsSync('src/services/api.ts'), 'The unused root localhost REST client must not return.');
 assert(!adminApi.includes('http://localhost:5000'), 'The Admin compatibility adapter must not default to localhost.');
@@ -61,4 +94,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Canonical route architecture verification passed. One live Owner app, one full Admin app, shared canonical utilities, and no localhost REST fallback are enforced.');
+console.log('Canonical route architecture verification passed. One live Owner app, one full Admin app, consolidated Tenant/Technician/Broker workflows, shared utilities, and no localhost REST fallback are enforced.');
