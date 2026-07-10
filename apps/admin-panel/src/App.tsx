@@ -37,7 +37,6 @@ import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import LiveMapPage from './pages/map/LiveMapPage';
 import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
 import PayrollManagementPage from './pages/financials/PayrollManagementPage';
-import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
 import TransactionsPage from './pages/financials/TransactionsPage';
 import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
 import BrokerCommissionHubPage from './pages/brokers/BrokerCommissionHubPage';
@@ -170,13 +169,13 @@ function AppContent() {
           <Route path="/broker-attributions" element={<AdminOnly><AdminBrokerAttributionQueuePage /></AdminOnly>} />
           <Route path="/broker-commissions" element={<AdminOnly><BrokerCommissionHubPage /></AdminOnly>} />
 
-          <Route path="/financials" element={<AdminOnly><ProfitabilityDashboardPage /></AdminOnly>} />
+          <Route path="/financials" element={<AdminOnly><ProfitabilityPage /></AdminOnly>} />
           <Route path="/financials/payroll" element={<AdminOnly><PayrollManagementPage /></AdminOnly>} />
           <Route path="/transactions" element={<AdminOnly><TransactionsPage /></AdminOnly>} />
           <Route path="/manual-approvals" element={<AdminOnly><AdminPaymentApproval /></AdminOnly>} />
           <Route path="/payments" element={<AdminOnly><PaymentApprovalsPage /></AdminOnly>} />
           <Route path="/admin/payments" element={<Navigate to="/payments" replace />} />
-          <Route path="/profitability" element={<AdminOnly><ProfitabilityPage /></AdminOnly>} />
+          <Route path="/profitability" element={<Navigate to="/financials" replace />} />
 
           <Route path="/document-vault" element={<AdminOnly><InstitutionalDocumentVaultPage /></AdminOnly>} />
           <Route path="/document-library" element={<AdminOnly><DocumentLibraryPage /></AdminOnly>} />
