@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Container, IconButton, alpha, Stack, Button } from '@mui/material';
 import { ArrowLeft, Brain, ClipboardCheck, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -22,7 +22,6 @@ import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerProfilePage from './pages/OwnerProfilePage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
-import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
 import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage';
@@ -101,7 +100,7 @@ export default function OwnerApp() {
                 <Route path="/dashboard" element={<OwnerSimpleDashboardPage />} />
                 <Route path="/dashboard/full" element={<OwnerDashboardPage />} />
                 <Route path="/activation" element={<OwnerActivationPage />} />
-                <Route path="/onboarding-status" element={<OwnerActivationPage />} />
+                <Route path="/onboarding-status" element={<Navigate to="/owner/activation" replace />} />
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
@@ -110,7 +109,7 @@ export default function OwnerApp() {
                 <Route path="/profile" element={<OwnerProfilePage />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
                 <Route path="/units" element={<OwnerUnitRegistryPage />} />
-                <Route path="/legacy-units" element={<OwnerUnitsPage />} />
+                <Route path="/legacy-units" element={<Navigate to="/owner/units" replace />} />
                 <Route path="/tenants" element={<OwnerTenantsPage />} />
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
@@ -129,6 +128,7 @@ export default function OwnerApp() {
                 <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="owner" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="owner" />} />
+                <Route path="*" element={<Navigate to="/owner/dashboard" replace />} />
             </Routes>
         </OwnerLayout>
     );
