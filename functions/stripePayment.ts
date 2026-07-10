@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
 
@@ -36,7 +36,11 @@ function assertAuthenticatedOwner(request: any, ownerUid: string) {
   }
 }
 
-export const createStripeCheckoutSession = onCall({ cors: true }, async (request) => {
+export const createStripeCheckoutSession = onCall({
+  cors: true,
+  enforceAppCheck: true,
+  secrets: [stripeSecretKey],
+}, async (request) => {
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
   const ownerEmail = cleanEmail(data.ownerEmail);
@@ -128,7 +132,10 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
   }
 });
 
-export const stripeWebhook = onRequest({ cors: true }, async (request, response) => {
+export const stripeWebhook = onRequest({
+  cors: true,
+  secrets: [stripeSecretKey, stripeWebhookSecret],
+}, async (request, response) => {
   const sig = request.headers["stripe-signature"];
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
   const webhookSecret = stripeWebhookSecret.value() || process.env.STRIPE_WEBHOOK_SECRET;
