@@ -1,58 +1,65 @@
 {
-  "version": "2026.06-hard-launch-v1",
+  "version": "2026.07-hard-launch-v2",
   "product": "BIN GROUP Super App",
   "market": "United Arab Emirates",
-  "decision": "PUBLIC_LAUNCH_READY",
+  "decision": "CONTROLLED_PILOT_ONLY",
+  "evidencePolicy": {
+    "canonicalRecord": "system_health/admin_summaries",
+    "founderAttestationAcceptedAsProductionProof": false,
+    "staticGreenBadgesAcceptedAsProductionProof": false,
+    "requiredProof": "Timestamped production evidence from the real five-profile workflow and external service consoles"
+  },
   "founderAttestation": {
-    "fiveProfileLiveSmokeValidation": true,
+    "fiveProfileLiveSmokeValidation": false,
     "profiles": ["owner", "tenant", "technician", "broker", "admin"],
-    "note": "Founder reports that live 5-profile smoke validation has been completed. Evidence references are attached in the Admin Launch Command Center."
+    "note": "Previous founder-attested values were not backed by accepted production evidence. Re-run the complete live workflow and record evidence in system_health/admin_summaries."
   },
   "scores": {
-    "technicalDeploymentHealth": 9.8,
-    "fiveProfileArchitecture": 9.7,
-    "uaeMarketFit": 9.8,
-    "operationalReadinessSoftwareLayer": 9.7,
-    "controlledPilotReadiness": 9.8,
-    "hardPublicLaunchReadinessConditional": 9.8,
-    "hardPublicLaunchReadinessVerified": 9.8,
-    "overallConditional": 9.8,
-    "overallVerified": 9.8
+    "technicalDeploymentHealth": 9.2,
+    "fiveProfileArchitecture": 9.1,
+    "uaeMarketFit": 9.4,
+    "operationalReadinessSoftwareLayer": 9.0,
+    "controlledPilotReadiness": 9.1,
+    "hardPublicLaunchReadinessConditional": 9.0,
+    "hardPublicLaunchReadinessVerified": 5.5,
+    "overallConditional": 9.0,
+    "overallVerified": 5.5
   },
   "profileScores": {
-    "owner": { "conditional": 9.8, "verified": 9.8 },
-    "tenant": { "conditional": 9.8, "verified": 9.8 },
-    "technician": { "conditional": 9.8, "verified": 9.8 },
-    "broker": { "conditional": 9.8, "verified": 9.8 },
-    "admin": { "conditional": 9.8, "verified": 9.8 }
+    "owner": { "conditional": 9.1, "verified": 5.5 },
+    "tenant": { "conditional": 9.0, "verified": 5.5 },
+    "technician": { "conditional": 9.0, "verified": 5.0 },
+    "broker": { "conditional": 9.0, "verified": 5.0 },
+    "admin": { "conditional": 9.2, "verified": 6.0 }
   },
   "hardLaunchGates": [
-    { "id": "admin_login", "label": "Admin login works after hard refresh", "status": "founder_attested", "required": true },
-    { "id": "main_login", "label": "Main app login works after hard refresh", "status": "founder_attested", "required": true },
-    { "id": "owner_onboarding", "label": "Owner onboarding from landing to dashboard unlock works", "status": "founder_attested", "required": true },
-    { "id": "tenant_photo_request", "label": "Tenant creates request with photo upload", "status": "founder_attested", "required": true },
-    { "id": "technician_evidence_completion", "label": "Technician receives job and completes before/after evidence", "status": "founder_attested", "required": true },
-    { "id": "broker_commission_state", "label": "Broker creates referral and sees commission state", "status": "founder_attested", "required": true },
-    { "id": "admin_core_pages", "label": "Admin sees owners, tenants, technicians, SOS, tickets, payments", "status": "founder_attested", "required": true },
-    { "id": "admin_staff_create", "label": "Admin can add technician or staff", "status": "founder_attested", "required": true },
-    { "id": "payment_unlock", "label": "Manual payment verification unlocks owner dashboard", "status": "founder_attested", "required": true },
-    { "id": "live_billing", "label": "Live billing provider configured in production", "status": "passed", "required": true },
-    { "id": "app_integrity", "label": "Production app integrity protection active and monitored", "status": "passed", "required": true },
-    { "id": "access_rotation", "label": "Privileged access rotation completed", "status": "passed", "required": true },
-    { "id": "branded_email", "label": "Branded email sender configured", "status": "passed", "required": true },
-    { "id": "legal_pages", "label": "Privacy, Terms, support and service scope pages live", "status": "software_gate_present", "required": true },
-    { "id": "pilot_no_p0_p1", "label": "24-48h pilot has no P0/P1 blocker", "status": "passed", "required": true }
+    { "id": "admin_login", "label": "Rotated production admin credential works after hard refresh", "status": "external_verification_required", "required": true, "canonicalGate": "adminCredentialLogin" },
+    { "id": "main_login", "label": "Main app login and role routing work after hard refresh", "status": "external_verification_required", "required": true },
+    { "id": "owner_onboarding", "label": "Owner onboarding, signed package, payment verification, admin approval, and dashboard unlock work", "status": "external_verification_required", "required": true, "canonicalGate": "fiveProfileSmoke" },
+    { "id": "tenant_photo_request", "label": "Tenant linked to a real unit creates a request with production photo upload and notification delivery", "status": "external_verification_required", "required": true, "canonicalGate": "tenantNotificationDelivery" },
+    { "id": "technician_evidence_completion", "label": "Technician receives a real job and completes GPS plus before/after evidence on a physical device", "status": "external_verification_required", "required": true, "canonicalGate": "technicianGpsStorageProof" },
+    { "id": "broker_commission_state", "label": "Broker referral survives onboarding, contract activation, and one non-duplicated commission lock", "status": "external_verification_required", "required": true, "canonicalGate": "brokerCommissionLock" },
+    { "id": "admin_core_pages", "label": "Admin sees and operates owners, tenants, technicians, tickets, SOS, payments, contracts, documents, and audit evidence", "status": "external_verification_required", "required": true, "canonicalGate": "fiveProfileSmoke" },
+    { "id": "admin_staff_create", "label": "Admin creates technician or staff with correct claims and least-privilege access", "status": "external_verification_required", "required": true },
+    { "id": "payment_unlock", "label": "Verified payment remains locked until explicit admin approval, then activates exactly once", "status": "external_verification_required", "required": true, "canonicalGate": "fiveProfileSmoke" },
+    { "id": "live_billing", "label": "Stripe live Secret Manager values, real AED charge, signed webhook, amount match, and idempotency are proven", "status": "external_verification_required", "required": true, "canonicalGate": "stripeLiveMode" },
+    { "id": "app_integrity", "label": "Production App Check keys and enforcement are active for the intended Firebase services", "status": "external_verification_required", "required": true, "canonicalGate": "appCheckProduction" },
+    { "id": "access_rotation", "label": "Admin password, service secrets, and privileged access have been rotated and recorded", "status": "external_verification_required", "required": true, "canonicalGate": "adminSecretRotation" },
+    { "id": "branded_email", "label": "Approved BIN GROUP branded sender delivers onboarding, payment, and operational email", "status": "external_verification_required", "required": true, "canonicalGate": "brandedEmailSender" },
+    { "id": "renewal_watch", "label": "Renewal scheduler creates the correct watch, document queue, and notification evidence", "status": "external_verification_required", "required": true, "canonicalGate": "renewalWatch" },
+    { "id": "legal_pages", "label": "Privacy, Terms, support, and service-scope pages are present in the software", "status": "software_gate_present", "required": true },
+    { "id": "pilot_no_p0_p1", "label": "A controlled 24-48 hour production pilot completes with no P0/P1 incident", "status": "external_verification_required", "required": true }
   ],
   "marketPositioning": {
-    "dominanceThesis": "BIN GROUP can compete strongly in the UAE property operations market by combining no-call maintenance, owner proof, tenant service tracking, technician accountability, bilingual Arabic/English UX, and Admin evidence control.",
+    "dominanceThesis": "BIN GROUP can compete strongly in the UAE property operations market by combining no-call maintenance, owner proof, tenant service tracking, technician accountability, bilingual Arabic/English UX, and evidence-backed admin control.",
     "primaryDifferentiators": [
       "No-call maintenance and service tracking",
       "Property passport and evidence vault",
       "Payment approval unlock flow",
       "Technician before-after proof discipline",
       "Arabic-English RTL support",
-      "Admin launch evidence command center",
-      "Audit logs and role-based access"
+      "Evidence-backed Admin launch command center",
+      "Server-authoritative audit logs and role-based access"
     ]
   }
 }
