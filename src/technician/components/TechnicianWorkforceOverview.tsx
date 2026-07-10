@@ -61,8 +61,6 @@ export default function TechnicianWorkforceOverview() {
         status: 'accepted',
         acceptedAt: serverTimestamp(),
         acceptedBy: user.uid,
-        acceptanceMethod: 'paperless_staff_portal',
-        updatedAt: serverTimestamp(),
       });
       await addDoc(collection(db, 'auditLogs'), {
         action: 'STAFF_AGREEMENT_ACCEPTED',
