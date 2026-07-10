@@ -3,7 +3,7 @@ import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Pa
 import { Activity, AlertTriangle, Building2, CheckCircle2, CreditCard, Gauge, Map, RefreshCw, Rocket, ShieldCheck, TicketCheck, Users, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
-import { collection, db, doc, getCountFromServer, getDoc, query, where } from '../../lib/firebase';
+import { collection, db, doc, getCountFromServer, getDoc, getDocs, limit, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 const launchGates = [
@@ -22,13 +22,34 @@ const launchGates = [
 const actions = [
   { en: 'Owner Activation', ar: 'تفعيل المالك', route: '/owners', icon: Building2, enDescription: 'Onboarding, documents, payment, property and activation review.', arDescription: 'مراجعة التسجيل والمستندات والدفع والعقار والتفعيل.' },
   { en: 'SLA & Tickets', ar: 'الطلبات واتفاقية الخدمة', route: '/tickets', icon: Gauge, enDescription: 'Open workload, timers, dispatch state and breach risk.', arDescription: 'الطلبات المفتوحة والمؤقتات وحالة التوزيع ومخاطر التجاوز.' },
-  { en: 'Payment Approvals', ar: 'موافقات الدفع', route: '/payments', icon: CreditCard, enDescription: 'Verify offline payments and investigate card exceptions.', arDescription: 'التحقق من التحويلات ومراجعة استثناءات الدفع الإلكتروني.' },
+  { en: 'Payment Approvals', ar: 'موافقات الدفع', route: '/payments', icon: CreditCard, enDescription: 'Review manual proof and Stripe-paid records before unlocking owners.', arDescription: 'مراجعة الإثبات اليدوي ودفعات Stripe قبل فتح حساب المالك.' },
   { en: 'Emergency Command', ar: 'مركز الطوارئ', route: '/ops/emergency', icon: AlertTriangle, enDescription: 'SOS, critical incidents and immediate dispatch pressure.', arDescription: 'حالات الاستغاثة والحوادث الحرجة والتوزيع الفوري.' },
   { en: 'Technician Map', ar: 'خريطة الفنيين', route: '/technicians/map', icon: Map, enDescription: 'Coverage, duty status, location and assignment visibility.', arDescription: 'التغطية وحالة الدوام والموقع والمهام المسندة.' },
   { en: 'Broker Attribution', ar: 'إسناد الوسطاء', route: '/broker-attributions', icon: TicketCheck, enDescription: 'Prove source ownership before commission creation.', arDescription: 'إثبات مصدر الصفقة قبل إنشاء العمولة.' },
   { en: 'Community Operations', ar: 'عمليات المجتمع', route: '/tenant-services', icon: Users, enDescription: 'Tenant services, unit links and building operations.', arDescription: 'خدمات المستأجر وربط الوحدات وعمليات المبنى.' },
   { en: 'Public Launch Evidence', ar: 'أدلة الإطلاق العام', route: '/ops/public-launch-command', icon: Rocket, enDescription: 'Record and verify every hard-launch production gate.', arDescription: 'تسجيل والتحقق من كل بوابة للإطلاق العام.' },
 ] as const;
+
+const PENDING_PAYMENT_STATUSES = [
+  'pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_VERIFICATION',
+  'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION', 'REVIEW_REQUIRED',
+];
+const upper = (value: unknown) => String(value || '').trim().toUpperCase();
+
+async function countPaymentsAwaitingAdmin() {
+  const [pendingSnapshot, requiredSnapshot] = await Promise.all([
+    getDocs(query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), limit(250))),
+    getDocs(query(collection(db, 'payment_transactions'), where('adminApprovalRequired', '==', true), limit(250))),
+  ]);
+  const merged = new Map<string, any>();
+  [...pendingSnapshot.docs, ...requiredSnapshot.docs].forEach((item) => merged.set(item.id, item.data()));
+  return [...merged.values()].filter((payment) => {
+    const status = upper(payment.status || payment.paymentStatus);
+    return !['APPROVED', 'REJECTED', 'CANCELLED', 'REFUNDED'].includes(status)
+      && payment.dashboardUnlockApproved !== true
+      && payment.adminApproved !== true;
+  }).length;
+}
 
 type LaunchSummary = Record<string, unknown>;
 type Metric = { key: string; en: string; ar: string; value: number | null; route: string; icon: React.ElementType };
@@ -62,7 +83,7 @@ export default function DashboardPage() {
       technicians: async () => (await getCountFromServer(query(collection(db, 'users'), where('role', '==', 'technician')))).data().count,
       brokers: async () => (await getCountFromServer(query(collection(db, 'users'), where('role', '==', 'broker')))).data().count,
       openTickets: async () => (await getCountFromServer(query(collection(db, 'maintenanceTickets'), where('status', 'in', ['OPEN', 'open', 'ASSIGNED', 'assigned', 'IN_PROGRESS', 'in_progress', 'emergency_submitted'])))).data().count,
-      pendingPayments: async () => (await getCountFromServer(query(collection(db, 'payment_transactions'), where('verificationState', '==', 'ADMIN_VERIFICATION_REQUIRED')))).data().count,
+      pendingPayments: countPaymentsAwaitingAdmin,
     };
 
     try {
@@ -99,18 +120,11 @@ export default function DashboardPage() {
         </Stack>
 
         <Alert severity={publicReady ? 'success' : 'warning'} icon={publicReady ? <ShieldCheck /> : <AlertTriangle />}>
-          {publicReady
-            ? copy('All ten hard-public-launch evidence gates are verified.', 'تم التحقق من بوابات الإطلاق العام العشر بالكامل.')
-            : copy(`${passed}/${launchGates.length} hard-launch evidence gates verified. Unrestricted public launch remains NO-GO.`, `تم التحقق من ${passed}/${launchGates.length} من بوابات الإطلاق. الإطلاق العام غير المقيّد ما زال غير مسموح.`)}
+          {publicReady ? copy('All ten hard-public-launch evidence gates are verified.', 'تم التحقق من بوابات الإطلاق العام العشر بالكامل.') : copy(`${passed}/${launchGates.length} hard-launch evidence gates verified. Unrestricted public launch remains NO-GO.`, `تم التحقق من ${passed}/${launchGates.length} من بوابات الإطلاق. الإطلاق العام غير المقيّد ما زال غير مسموح.`)}
         </Alert>
         {error && <Alert severity="error">{error}</Alert>}
 
-        <Grid container spacing={2}>
-          {metrics.map((metric) => {
-            const Icon = metric.icon;
-            return <Grid item xs={12} sm={6} md={4} key={metric.key}><Card onClick={() => navigate(metric.route)} sx={{ cursor: 'pointer', height: '100%', bgcolor: 'rgba(15,23,42,0.94)', color: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 4 }}><CardContent><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center"><Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 900 }}>{copy(metric.en, metric.ar).toUpperCase()}</Typography><Typography variant="h3" sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 0.5 }}>{loading && metric.value === null ? '—' : metric.value ?? '—'}</Typography></Box><Box sx={{ color: binThemeTokens.gold, p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><Icon size={23} /></Box></Stack></CardContent></Card></Grid>;
-          })}
-        </Grid>
+        <Grid container spacing={2}>{metrics.map((metric) => { const Icon = metric.icon; return <Grid item xs={12} sm={6} md={4} key={metric.key}><Card onClick={() => navigate(metric.route)} sx={{ cursor: 'pointer', height: '100%', bgcolor: 'rgba(15,23,42,0.94)', color: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 4 }}><CardContent><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center"><Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 900 }}>{copy(metric.en, metric.ar).toUpperCase()}</Typography><Typography variant="h3" sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 0.5 }}>{loading && metric.value === null ? '—' : metric.value ?? '—'}</Typography></Box><Box sx={{ color: binThemeTokens.gold, p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><Icon size={23} /></Box></Stack></CardContent></Card></Grid>; })}</Grid>
 
         <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 5 }}>
           <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>{copy('Daily Command Actions', 'إجراءات القيادة اليومية')}</Typography>
