@@ -28,8 +28,15 @@ async function login(page: Page) {
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL('**/broker/dashboard', { timeout: 20000 });
-  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10000 });
+  await page.waitForURL('**/broker/dashboard', { timeout: 20_000 });
+
+  const identitySpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
+  await expect(
+    identitySpinner,
+    'Broker identity must resolve. If this remains visible, seed/repair the broker Auth custom claim and users/{uid} role profile.'
+  ).toBeHidden({ timeout: 15_000 });
+
+  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error|identity fault|role authorization error/i, { timeout: 10_000 });
 }
 
 async function requireVisible(page: Page, selectors: string[], label: string) {
@@ -97,8 +104,13 @@ test.describe('Broker Business Workflow', () => {
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
 
+    const commissionSurface = page
+      .locator('[data-testid*="commission" i], table, [role="table"], .MuiDataGrid-root')
+      .or(page.getByText(/commission|earned|pending/i))
+      .first();
+
     await expect(
-      page.locator('[data-testid*="commission" i], table, [role="table"], .MuiDataGrid-root, text=/commission|earned|pending/i').first(),
+      commissionSurface,
       'Broker commissions page must render commission tracking surface'
     ).toBeVisible({ timeout: 15000 });
   });
