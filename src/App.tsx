@@ -54,6 +54,7 @@ const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
 const RoleGatewayPage = lazyWithRetry(() => import('./pages/RoleGatewayPage'));
 const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboardingPage'));
 const PilotLaunchPage = lazyWithRetry(() => import('./pages/public/PilotLaunchPage'));
+const UaeMarketLeadershipPage = lazyWithRetry(() => import('./pages/public/UaeMarketLeadershipPage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const QrPassVerificationPage = lazyWithRetry(() => import('./pages/public/QrPassVerificationPage'));
@@ -271,6 +272,9 @@ function AppContent() {
         <Route path="/security" element={<PublicSecurityPage />} />
         <Route path="/trust" element={<TrustCenterPage />} />
         <Route path="/trust-center" element={<TrustCenterPage />} />
+        <Route path="/uae-market-leadership" element={publicOrPilot(<UaeMarketLeadershipPage />)} />
+        <Route path="/owner-trust-os" element={publicOrPilot(<UaeMarketLeadershipPage />)} />
+        <Route path="/workforce-os" element={publicOrPilot(<UaeMarketLeadershipPage />)} />
         <Route path="/services" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
         <Route path="/contact" element={publicOrPilot(<PublicMarketingPage page="contact" />)} />
         <Route path="/request-demo" element={publicOrPilot(<DemoVideosPage />)} />
