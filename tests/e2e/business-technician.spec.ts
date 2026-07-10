@@ -87,8 +87,13 @@ test.describe('Technician Business Workflow', () => {
     await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
 
+    const assignedJobSurface = page
+      .locator('[data-testid*="job" i], [data-testid*="ticket" i]')
+      .or(page.getByText(/assigned|dispatch|job|ticket/i))
+      .first();
+
     await expect(
-      page.locator('[data-testid*="job" i], [data-testid*="ticket" i], text=/assigned|dispatch|job|ticket/i').first(),
+      assignedJobSurface,
       'Technician dashboard must expose at least one assigned/dispatch job for launch validation.'
     ).toBeVisible({ timeout: 30_000 });
 
