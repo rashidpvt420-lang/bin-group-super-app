@@ -195,11 +195,10 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
     pending = logUserAuditAction({ action, targetType, targetId, metadata: auditMetadata }).then(() => undefined);
     pendingAuditWrites.set(dedupeKey, pending);
-    void pending.finally(() => {
-      queueMicrotask(() => {
-        if (pendingAuditWrites.get(dedupeKey) === pending) pendingAuditWrites.delete(dedupeKey);
-      });
+    const cleanup = () => queueMicrotask(() => {
+      if (pendingAuditWrites.get(dedupeKey) === pending) pendingAuditWrites.delete(dedupeKey);
     });
+    void pending.then(cleanup, cleanup);
   }
 
   await pending;
