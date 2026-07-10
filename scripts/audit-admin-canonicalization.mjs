@@ -5,7 +5,7 @@ const ROOT = process.cwd();
 const OUTPUT_DIR = resolve(ROOT, 'artifacts', 'route-consolidation');
 const ADMIN_ROOT = resolve(ROOT, 'apps', 'admin-panel');
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
-const IGNORE = new Set(['node_modules', 'build', 'dist', 'coverage']);
+const IGNORE = new Set(['node_modules', 'build', 'dist', 'coverage', 'artifacts']);
 const normalized = (value) => value.replaceAll('\\', '/');
 
 function walk(dir, output = []) {
@@ -25,6 +25,19 @@ const adminSourceFiles = adminFiles.filter((path) => SOURCE_EXTENSIONS.has(extna
 const adminPages = adminSourceFiles.filter((path) => path.startsWith('apps/admin-panel/src/pages/'));
 const adminComponents = adminSourceFiles.filter((path) => path.startsWith('apps/admin-panel/src/components/'));
 const rootSourceFiles = walk(resolve(ROOT, 'src')).filter((path) => SOURCE_EXTENSIONS.has(extname(path)));
+const adminAppPath = resolve(ROOT, 'apps/admin-panel/src/App.tsx');
+const rootAdminPath = resolve(ROOT, 'src/admin/AdminTerminal.tsx');
+const navigationPath = resolve(ROOT, 'apps/admin-panel/src/components/Navigation.tsx');
+const adminAppSource = existsSync(adminAppPath) ? readFileSync(adminAppPath, 'utf8') : '';
+const rootAdminSource = existsSync(rootAdminPath) ? readFileSync(rootAdminPath, 'utf8') : '';
+const navigationSource = existsSync(navigationPath) ? readFileSync(navigationPath, 'utf8') : '';
+
+const routePaths = [...adminAppSource.matchAll(/<Route\b[\s\S]*?\bpath=['"]([^'"]+)['"]/g)].map((match) => match[1]);
+const navigationDestinations = [...navigationSource.matchAll(/\bpath:\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
+const routeSet = new Set(routePaths);
+const navigationSet = new Set(navigationDestinations);
+const navigationMissingRoutes = [...navigationSet].filter((path) => !routeSet.has(path));
+const routesMissingNavigation = [...routeSet].filter((path) => !navigationSet.has(path) && !['/', '/login', '*'].includes(path));
 
 const rootByBasename = new Map();
 for (const path of rootSourceFiles) {
@@ -33,7 +46,6 @@ for (const path of rootSourceFiles) {
   group.push(path);
   rootByBasename.set(key, group);
 }
-
 const pageInventory = adminPages.map((path) => ({
   path,
   basename: basename(path),
@@ -41,119 +53,73 @@ const pageInventory = adminPages.map((path) => ({
   rootCandidates: rootByBasename.get(basename(path).toLowerCase()) || [],
 }));
 
-const componentInventory = adminComponents.map((path) => ({
-  path,
-  basename: basename(path),
-  bytes: statSync(resolve(ROOT, path)).size,
-  rootCandidates: rootByBasename.get(basename(path).toLowerCase()) || [],
-}));
+const fullAdminApplication = adminAppSource.includes('<Routes>') && routePaths.length >= 30 && adminAppSource.includes("from './components/Navigation'");
+const rootIsRedirectBridge = rootAdminSource.includes('ADMIN_PANEL_URL') && rootAdminSource.includes('window.location.replace') && !rootAdminSource.includes("collection(db, 'users')");
+const dashboardPath = resolve(ROOT, 'apps/admin-panel/src/pages/dashboard/DashboardPage.tsx');
+const dashboardSource = existsSync(dashboardPath) ? readFileSync(dashboardPath, 'utf8') : '';
+const dashboardIsEvidenceBacked = dashboardSource.includes("doc(db, 'system_health', 'admin_summaries')") && dashboardSource.includes('getCountFromServer');
+const mode = fullAdminApplication ? 'canonical-full-application' : adminAppSource.includes('window.location.replace') ? 'redirect-only' : 'unknown';
 
-const navigationPath = resolve(ROOT, 'apps/admin-panel/src/components/Navigation.tsx');
-const navigationSource = existsSync(navigationPath) ? readFileSync(navigationPath, 'utf8') : '';
-const navigationDestinations = [...navigationSource.matchAll(/\bpath:\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
-
-const historicalRouteManifest = [
-  '/', '/login', '/dashboard', '/dashboard/full', '/financials', '/financials/payroll', '/transactions', '/broker',
-  '/owners', '/owners/:id', '/tenants', '/control-center', '/properties/passport', '/bulk-import', '/tickets',
-  '/technicians', '/technicians/map', '/sos', '/document-vault', '/audit-shield', '/reports', '/settings',
-  '/manual-approvals', '/admin/payments', '/payments', '/profitability', '/compliance', '/pilot', '/ops/public',
-  '/ops/whatsapp-triage', '/ops/rfq', '/ops/vendors', '/ops/data-governance', '/reports/institutional',
-  '/ops/technicians', '/vault', '/orphans', '/onboard-property', '/design-studio', '/hr', '/audit',
-  '/admin/pricing-matrix', '/admin/units', '/admin/unit-status', '/admin/bin-gpt-engineer',
-];
-
-const navigationOnlyRoutes = navigationDestinations.filter((path) => !historicalRouteManifest.includes(path));
-const historicalOnlyRoutes = historicalRouteManifest.filter((path) => !navigationDestinations.includes(path) && path !== '/' && path !== '/login');
-
-const likelyRouteComponent = (routePath) => {
-  const words = routePath.split('/').filter(Boolean).map((part) => part.replace(/[:-].*$/, ''));
-  const tokens = words.flatMap((word) => word.split('-')).filter(Boolean);
-  const score = (file) => {
-    const name = file.basename.toLowerCase();
-    return tokens.reduce((total, token) => total + (name.includes(token.toLowerCase()) ? 1 : 0), 0);
-  };
-  return pageInventory
-    .map((file) => ({ ...file, score: score(file) }))
-    .filter((file) => file.score > 0)
-    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
-    .slice(0, 5);
-};
-
-const routeInventory = [...new Set([...historicalRouteManifest, ...navigationDestinations])].sort().map((path) => ({
-  path,
-  appearsInNavigation: navigationDestinations.includes(path),
-  appearsInHistoricalApp: historicalRouteManifest.includes(path),
-  likelyComponents: likelyRouteComponent(path),
-}));
+const failures = [];
+if (!fullAdminApplication) failures.push('Dedicated Admin App is not a complete routed application.');
+if (!rootIsRedirectBridge) failures.push('Root AdminTerminal must be a redirect bridge, not a competing dashboard.');
+if (!dashboardIsEvidenceBacked) failures.push('Canonical Admin dashboard must read live counts and system_health/admin_summaries.');
+if (navigationMissingRoutes.length) failures.push(`Navigation links without routes: ${navigationMissingRoutes.join(', ')}`);
 
 const report = {
   generatedAt: new Date().toISOString(),
   architecture: {
     dedicatedAdminApp: 'apps/admin-panel',
-    currentDedicatedAppMode: 'redirect-only',
-    competingUnifiedAdmin: 'src/admin/AdminTerminal.tsx',
-    canonicalRecommendation: 'Restore apps/admin-panel as the only full admin application, migrate live launch evidence into its dashboard, and reduce src/admin/AdminTerminal.tsx to a redirect bridge.',
+    currentDedicatedAppMode: mode,
+    rootAdminBridge: 'src/admin/AdminTerminal.tsx',
+    fullAdminApplication,
+    rootIsRedirectBridge,
+    dashboardIsEvidenceBacked,
+    canonicalDecision: fullAdminApplication && rootIsRedirectBridge && dashboardIsEvidenceBacked ? 'PASS' : 'FAIL',
   },
   totals: {
     adminFiles: adminFiles.length,
     adminSourceFiles: adminSourceFiles.length,
     adminPages: adminPages.length,
     adminComponents: adminComponents.length,
-    routesInNavigation: navigationDestinations.length,
-    historicalRoutes: historicalRouteManifest.length,
-    navigationOnlyRoutes: navigationOnlyRoutes.length,
-    historicalOnlyRoutes: historicalOnlyRoutes.length,
+    registeredRoutes: routePaths.length,
+    navigationRoutes: navigationDestinations.length,
+    navigationMissingRoutes: navigationMissingRoutes.length,
+    routesMissingNavigation: routesMissingNavigation.length,
     pagesWithRootBasenameCandidates: pageInventory.filter((page) => page.rootCandidates.length > 0).length,
-    pagesWithoutRootBasenameCandidates: pageInventory.filter((page) => page.rootCandidates.length === 0).length,
   },
+  routePaths,
   navigationDestinations,
-  historicalRouteManifest,
-  navigationOnlyRoutes,
-  historicalOnlyRoutes,
-  routeInventory,
+  navigationMissingRoutes,
+  routesMissingNavigation,
   pageInventory,
-  componentInventory,
-  adminFiles,
+  failures,
 };
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 writeFileSync(join(OUTPUT_DIR, 'admin-canonicalization-audit.json'), JSON.stringify(report, null, 2));
-
-const lines = [
+writeFileSync(join(OUTPUT_DIR, 'admin-canonicalization-audit.md'), [
   '# Admin Canonicalization Audit',
   '',
   `Generated: ${report.generatedAt}`,
   '',
-  '## Architecture Decision',
-  '',
-  `- Dedicated admin folder: \`${report.architecture.dedicatedAdminApp}\``,
-  `- Current mode: **${report.architecture.currentDedicatedAppMode}**`,
-  `- Competing implementation: \`${report.architecture.competingUnifiedAdmin}\``,
-  `- Recommendation: ${report.architecture.canonicalRecommendation}`,
+  `- Dedicated Admin mode: **${mode}**`,
+  `- Root admin is redirect bridge: **${rootIsRedirectBridge}**`,
+  `- Dashboard is evidence-backed: **${dashboardIsEvidenceBacked}**`,
+  `- Decision: **${report.architecture.canonicalDecision}**`,
   '',
   '## Totals',
-  '',
   ...Object.entries(report.totals).map(([key, value]) => `- **${key}:** ${value}`),
   '',
-  '## Navigation Routes Missing From Historical Full App',
+  '## Navigation Links Without Route',
+  ...(navigationMissingRoutes.length ? navigationMissingRoutes.map((path) => `- \`${path}\``) : ['None.']),
   '',
-  ...(navigationOnlyRoutes.length ? navigationOnlyRoutes.map((path) => `- \`${path}\``) : ['None.']),
+  '## Registered Routes Not Shown In Navigation',
+  ...(routesMissingNavigation.length ? routesMissingNavigation.map((path) => `- \`${path}\``) : ['None.']),
   '',
-  '## Historical Routes Missing From Current Navigation',
-  '',
-  ...(historicalOnlyRoutes.length ? historicalOnlyRoutes.map((path) => `- \`${path}\``) : ['None.']),
-  '',
-  '## Admin Pages Without Root Basename Candidate',
-  '',
-  ...pageInventory.filter((page) => page.rootCandidates.length === 0).map((page) => `- \`${page.path}\` (${page.bytes} bytes)`),
-  '',
-  '## Admin Pages With Competing Root Basename',
-  '',
-  ...pageInventory.filter((page) => page.rootCandidates.length > 0).flatMap((page) => [
-    `- \`${page.path}\``,
-    ...page.rootCandidates.map((candidate) => `  - Root candidate: \`${candidate}\``),
-  ]),
-];
-writeFileSync(join(OUTPUT_DIR, 'admin-canonicalization-audit.md'), `${lines.join('\n')}\n`);
+  '## Failures',
+  ...(failures.length ? failures.map((failure) => `- ${failure}`) : ['None.']),
+].join('\n') + '\n');
 
-console.log(JSON.stringify(report.totals, null, 2));
+console.log(JSON.stringify({ ...report.totals, architecture: report.architecture }, null, 2));
+if (failures.length) process.exit(1);
