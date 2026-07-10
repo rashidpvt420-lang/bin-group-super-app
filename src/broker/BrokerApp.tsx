@@ -1,13 +1,15 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
-import { Briefcase, Building, FileUp, Home, Link2, Paintbrush, Users, Wallet } from 'lucide-react';
+import { Briefcase, Building, FileUp, Home, Link2, MessageSquare, Paintbrush, ShieldCheck, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
+import PilotCompletionPage from '../components/PilotCompletionPage';
 
 import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
@@ -35,9 +37,11 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
     { key: 'broker.nav.dashboard', label: label('broker.nav.dashboard', 'Dashboard', 'لوحة التحكم'), path: '/broker/dashboard', icon: Home },
     { key: 'broker.nav.leads', label: label('broker.nav.leads', 'Leads', 'العملاء المحتملون'), path: '/broker/leads', icon: Users },
     { key: 'broker.nav.referrals', label: label('broker.nav.referrals', 'Referrals', 'الإحالات'), path: '/broker/referrals', icon: Building },
-    { key: 'broker.nav.commissions', label: label('broker.nav.commissions', 'Commissions', 'العمولات'), path: '/broker/commissions', icon: Wallet },
+    { key: 'broker.nav.commissions', label: label('broker.nav.commissions', 'Finance', 'المالية'), path: '/broker/commissions', icon: Wallet },
     { key: 'broker.nav.attribution', label: label('broker.nav.attribution', 'Attribution', 'الإسناد'), path: '/broker/attribution', icon: Link2 },
     { key: 'broker.nav.documents', label: label('broker.nav.documents', 'Documents', 'المستندات'), path: '/broker/documents', icon: FileUp },
+    { key: 'broker.nav.profile', label: label('broker.nav.profile', 'Compliance', 'الامتثال'), path: '/broker/profile', icon: ShieldCheck },
+    { key: 'broker.nav.connect', label: label('broker.nav.connect', 'BIN Connect', 'تواصل BIN'), path: '/broker/bin-connect', icon: MessageSquare },
   ];
 
   return (
@@ -58,6 +62,9 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
             <IconButton onClick={() => navigate('/broker/referrals')} sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }} title={label('broker.referrals.title', 'Broker referrals', 'إحالات الوسيط')}>
               <SafeIcon icon={Paintbrush} size={18} />
             </IconButton>
+            <IconButton onClick={() => navigate('/broker/bin-connect')} sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }} title={label('broker.connect.title', 'BIN Connect', 'تواصل BIN')}>
+              <SafeIcon icon={MessageSquare} size={18} />
+            </IconButton>
             <NotificationBell />
             <Box onClick={() => navigate('/broker/profile')} sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', px: 1 }}>
               <Avatar sx={{ width: 36, height: 36, bgcolor: alpha('#B8932F', 0.12), color: '#B8932F', border: '1px solid rgba(184,147,47,0.3)' }}>{user?.displayName?.charAt(0) || 'B'}</Avatar>
@@ -67,7 +74,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         </Toolbar>
       </AppBar>
       <Container maxWidth="xl" sx={{ py: 5, position: 'relative', zIndex: 1 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4 }}>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4, flexWrap: 'wrap' }} useFlexGap>
           {menuItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
@@ -82,13 +89,13 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
         <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>{label('broker.footer', '2026 BIN GROUP BROKER TERMINAL', '2026 BIN GROUP محطة الوسطاء')}</Typography>
       </Box>
-      <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
-        {menuItems.map((item) => {
+      <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr', overflowX: 'auto' }}>
+        {menuItems.slice(0, 6).map((item) => {
           const active = location.pathname.startsWith(item.path);
           return (
-            <IconButton id={`broker-mobile-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? '#B8932F' : '#667085', flexDirection: 'column', gap: 0.4 }}>
+            <IconButton id={`broker-mobile-nav-${item.path.split('/').pop()}`} key={item.key} onClick={() => navigate(item.path)} sx={{ color: active ? '#B8932F' : '#667085', flexDirection: 'column', gap: 0.4, minWidth: 58 }}>
               <SafeIcon icon={item.icon} size={18} />
-              <Typography variant="caption" sx={{ fontSize: '0.58rem', fontWeight: 900 }}>{item.label}</Typography>
+              <Typography variant="caption" sx={{ fontSize: '0.54rem', fontWeight: 900 }}>{item.label}</Typography>
             </IconButton>
           );
         })}
@@ -112,6 +119,17 @@ export default function BrokerApp() {
         <Route path="/attribution" element={<BrokerAttributionProofPage />} />
         <Route path="/documents" element={<BrokerDocumentsPage />} />
         <Route path="/profile" element={<BrokerProfilePage />} />
+        <Route path="/bin-connect" element={<BinConnectInboxPage role="broker" />} />
+        <Route path="/pilot-completion" element={<PilotCompletionPage role="broker" />} />
+
+        <Route path="/submissions" element={<Navigate to="/broker/leads" replace />} />
+        <Route path="/withdrawals" element={<Navigate to="/broker/commissions" replace />} />
+        <Route path="/reports" element={<Navigate to="/broker/commissions" replace />} />
+        <Route path="/earnings" element={<Navigate to="/broker/commissions" replace />} />
+        <Route path="/payments" element={<Navigate to="/broker/commissions" replace />} />
+        <Route path="/agreement" element={<Navigate to="/broker/profile" replace />} />
+        <Route path="/onboarding" element={<Navigate to="/broker/profile" replace />} />
+        <Route path="/settings" element={<Navigate to="/broker/profile" replace />} />
       </Routes>
     </BrokerLayout>
   );
