@@ -1,7 +1,8 @@
 import React from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Divider, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { AlertTriangle, CalendarDays, FileCheck2, ShieldCheck, UserRound, WalletCards } from 'lucide-react';
-import { addDoc, collection, db, doc, getDoc, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { db, doc, getDoc, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { logAuditAction } from '../../utils/auditLogger';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -62,14 +63,14 @@ export default function TechnicianWorkforceOverview() {
         acceptedAt: serverTimestamp(),
         acceptedBy: user.uid,
       });
-      await addDoc(collection(db, 'auditLogs'), {
+      await logAuditAction({
         action: 'STAFF_AGREEMENT_ACCEPTED',
-        actorId: user.uid,
-        actorName: user.displayName || profile.displayName || profile.fullName || 'Staff Member',
-        targetId: agreement.id,
         targetType: 'staffAgreements',
-        details: 'Accepted BIN GROUP paperless staff agreement.',
-        timestamp: serverTimestamp(),
+        targetId: agreement.id,
+        metadata: {
+          actorName: user.displayName || profile.displayName || profile.fullName || 'Staff Member',
+          acceptanceMethod: 'paperless_staff_portal',
+        },
       });
       setAgreement((current: any) => ({ ...current, status: 'accepted' }));
       setNotice({ severity: 'success', text: copy('Staff agreement accepted and recorded.', 'تم قبول اتفاقية الموظف وتسجيلها.') });
@@ -94,19 +95,19 @@ export default function TechnicianWorkforceOverview() {
 
   if (loading) return <Paper sx={{ p: 3, mb: 3, borderRadius: 5, textAlign: 'center' }}><CircularProgress size={24} /><Typography sx={{ mt: 1 }}>{copy('Loading workforce records...', 'جاري تحميل سجلات الموظف...')}</Typography></Paper>;
 
-  const rows = [
+  const rows: Array<[string, React.ReactNode]> = [
     [copy('Name', 'الاسم'), user?.displayName || profile.displayName || profile.fullName || '—'],
     [copy('Trade', 'المهنة'), profile.trade || profile.specialization || copy('General Maintenance', 'صيانة عامة')],
     [copy('Supervisor', 'المشرف'), profile.supervisorName || profile.managerName || '—'],
     [copy('Base Zone', 'منطقة العمل'), profile.baseZone || profile.emirate || '—'],
   ];
-  const shiftRows = [
+  const shiftRows: Array<[string, React.ReactNode]> = [
     [copy('Duty Status', 'حالة الدوام'), profile.dutyStatus || 'OFF'],
     [copy('Shift', 'الوردية'), profile.shiftName || profile.shift || profile.workingHours || '—'],
     [copy('Weekly Off', 'الإجازة الأسبوعية'), profile.offDay || '—'],
     [copy('Last Check-In', 'آخر تسجيل حضور'), profile.lastCheckIn || '—'],
   ];
-  const payrollRows = [
+  const payrollRows: Array<[string, React.ReactNode]> = [
     [copy('Basic Salary', 'الراتب الأساسي'), profile.basicSalary ? `AED ${Number(profile.basicSalary).toLocaleString()}` : '—'],
     [copy('Allowances', 'البدلات'), profile.allowances ? `AED ${Number(profile.allowances).toLocaleString()}` : '—'],
     [copy('Gross Salary', 'إجمالي الراتب'), grossSalary ? `AED ${grossSalary.toLocaleString()}` : '—'],
