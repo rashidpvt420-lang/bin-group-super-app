@@ -15,6 +15,7 @@ import {
 import { signOut } from 'firebase/auth';
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   Bell,
   Building2,
@@ -31,14 +32,14 @@ import {
   Users,
   Wrench,
 } from 'lucide-react';
-import { auth, collection, db, getCountFromServer, getDocs, limit, orderBy, query, where } from '../lib/firebase';
+import { auth, collection, db, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, where } from '../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 
 const LEGACY_ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
 
-type Metric = {
+ type Metric = {
   key: string;
   label: string;
   value: number | null;
@@ -55,6 +56,8 @@ type AuditEvent = {
   createdAt?: unknown;
 };
 
+type LaunchSummary = Record<string, unknown>;
+
 const baseMetrics: Metric[] = [
   { key: 'owners', label: 'Owners', value: null, helper: 'Registered owner profiles', icon: Building2, severity: 'success' },
   { key: 'tenants', label: 'Tenants', value: null, helper: 'Registered tenant profiles', icon: Users, severity: 'info' },
@@ -65,12 +68,17 @@ const baseMetrics: Metric[] = [
 ];
 
 const launchGates = [
-  'Admin route renders inside the main app; no mandatory cross-domain redirect.',
-  'Owner onboarding payment package writes payment transaction, contract, intake submission, and audit log.',
-  'Tenant request and technician evidence flows are protected by role-based Firestore rules.',
-  'Public invoice, certificate, and QR pass verification routes remain available without admin access.',
-  'Legacy admin-panel domain is treated as fallback/redirect-only, not the canonical command center.',
-];
+  { key: 'adminCredentialLogin', label: 'Admin production credential login' },
+  { key: 'fiveProfileSmoke', label: 'Five-profile live workflow smoke test' },
+  { key: 'stripeLiveMode', label: 'Stripe live payment mode' },
+  { key: 'appCheckProduction', label: 'Firebase App Check production enforcement' },
+  { key: 'brandedEmailSender', label: 'BIN GROUP branded email delivery' },
+  { key: 'adminSecretRotation', label: 'Admin credential and secret rotation' },
+  { key: 'tenantNotificationDelivery', label: 'Tenant notification delivery' },
+  { key: 'technicianGpsStorageProof', label: 'Technician GPS and evidence upload' },
+  { key: 'brokerCommissionLock', label: 'Broker attribution and commission lock' },
+  { key: 'renewalWatch', label: 'Contract renewal watch and document queue' },
+] as const;
 
 const operationalRunbook = [
   { label: 'Build main app', command: 'npm run build' },
@@ -90,16 +98,17 @@ const portalSmokeTests = [
 
 const formatDate = (value: unknown) => {
   const raw: any = value;
-  if (!raw) return 'recent';
+  if (!raw) return 'not recorded';
   if (typeof raw?.toDate === 'function') return raw.toDate().toLocaleString('en-AE');
   if (typeof raw === 'string') return raw;
-  return 'recent';
+  return 'not recorded';
 };
 
 export default function AdminTerminal() {
   const { isRTL, lang, tx } = useLanguage();
   const [metrics, setMetrics] = React.useState<Metric[]>(baseMetrics);
   const [events, setEvents] = React.useState<AuditEvent[]>([]);
+  const [launchSummary, setLaunchSummary] = React.useState<LaunchSummary>({});
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = React.useState<string>('');
@@ -128,9 +137,8 @@ export default function AdminTerminal() {
             console.warn(`[ADMIN-COMMAND] Metric failed: ${metric.key}`, metricError);
             return { ...metric, value: null };
           }
-        })
+        }),
       );
-
       setMetrics(resolved);
 
       try {
@@ -139,6 +147,14 @@ export default function AdminTerminal() {
       } catch (auditError) {
         console.warn('[ADMIN-COMMAND] Audit log preview failed:', auditError);
         setEvents([]);
+      }
+
+      try {
+        const healthSnap = await getDoc(doc(db, 'system_health', 'admin_summaries'));
+        setLaunchSummary(healthSnap.exists() ? healthSnap.data() : {});
+      } catch (healthError) {
+        console.warn('[ADMIN-COMMAND] Launch evidence load failed:', healthError);
+        setLaunchSummary({});
       }
 
       setLastLoadedAt(new Date().toLocaleString('en-AE'));
@@ -153,6 +169,9 @@ export default function AdminTerminal() {
   React.useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  const passedLaunchGates = launchGates.filter((gate) => launchSummary[gate.key] === true).length;
+  const allLaunchGatesPassed = passedLaunchGates === launchGates.length;
 
   const resetAndLogin = async () => {
     try {
@@ -206,9 +225,17 @@ export default function AdminTerminal() {
         </Stack>
       </Stack>
 
-      <Alert severity="success" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(34,197,94,0.10)', color: '#BBF7D0', border: '1px solid rgba(34,197,94,0.30)', '& .MuiAlert-icon': { color: '#4ADE80' } }}>
-        Admin routing is now in-app first. The canonical path <strong>/admin/dashboard</strong> renders this command center directly instead of forcing a cross-domain bridge.
+      <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)', '& .MuiAlert-icon': { color: '#60A5FA' } }}>
+        The canonical admin route is <strong>/admin/dashboard</strong>. Public-launch readiness below is evidence-backed and is not inferred from the page rendering successfully.
       </Alert>
+
+      {!loading && (
+        <Alert severity={allLaunchGatesPassed ? 'success' : 'warning'} sx={{ mb: 3, bgcolor: allLaunchGatesPassed ? 'rgba(34,197,94,0.10)' : 'rgba(245,158,11,0.10)', color: allLaunchGatesPassed ? '#BBF7D0' : '#FDE68A', border: `1px solid ${allLaunchGatesPassed ? 'rgba(34,197,94,0.30)' : 'rgba(245,158,11,0.30)'}` }}>
+          {allLaunchGatesPassed
+            ? 'All ten public-launch evidence gates are recorded as PASS.'
+            : `${passedLaunchGates} of ${launchGates.length} public-launch evidence gates are proven. The correct launch decision is NO-GO until all ten are verified live.`}
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(245,158,11,0.10)', color: '#FDE68A', border: '1px solid rgba(245,158,11,0.28)' }}>
@@ -244,19 +271,35 @@ export default function AdminTerminal() {
           <Card sx={{ height: '100%', bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Launch Control Gates</Typography>
-                <Chip label="READY PATH" sx={{ bgcolor: 'rgba(34,197,94,0.14)', color: '#86EFAC', fontWeight: 950 }} />
+                <Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Public-Launch Evidence Gates</Typography>
+                <Chip
+                  label={loading ? 'SYNCING' : allLaunchGatesPassed ? 'PUBLIC READY' : `${passedLaunchGates}/${launchGates.length} PASS`}
+                  sx={{ bgcolor: allLaunchGatesPassed ? 'rgba(34,197,94,0.14)' : 'rgba(245,158,11,0.14)', color: allLaunchGatesPassed ? '#86EFAC' : '#FDE68A', fontWeight: 950 }}
+                />
               </Stack>
               <Stack spacing={1.25}>
-                {launchGates.map((gate) => (
-                  <Stack key={gate} direction="row" spacing={1.2} alignItems="flex-start">
-                    <CheckCircle2 size={18} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} />
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.76)', fontWeight: 750 }}>{gate}</Typography>
-                  </Stack>
-                ))}
+                {launchGates.map((gate) => {
+                  const passed = launchSummary[gate.key] === true;
+                  const evidence = launchSummary[`${gate.key}Evidence`];
+                  const verifiedAt = launchSummary[`${gate.key}VerifiedAt`];
+                  return (
+                    <Box key={gate.key} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.035)', border: `1px solid ${passed ? 'rgba(34,197,94,0.18)' : 'rgba(245,158,11,0.18)'}` }}>
+                      <Stack direction="row" spacing={1.2} alignItems="flex-start">
+                        {passed ? <CheckCircle2 size={18} color="#4ADE80" style={{ marginTop: 2, flexShrink: 0 }} /> : <AlertTriangle size={18} color="#F59E0B" style={{ marginTop: 2, flexShrink: 0 }} />}
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.82)', fontWeight: 800 }}>{gate.label}</Typography>
+                          <Typography variant="caption" sx={{ display: 'block', color: passed ? '#86EFAC' : '#FDE68A', fontWeight: 900 }}>
+                            {passed ? `PASS · ${formatDate(verifiedAt)}` : 'PENDING · no accepted live proof'}
+                          </Typography>
+                          {evidence ? <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.52)', overflowWrap: 'anywhere' }}>{String(evidence)}</Typography> : null}
+                        </Box>
+                      </Stack>
+                    </Box>
+                  );
+                })}
               </Stack>
               <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.08)' }} />
-              <Typography variant="subtitle2" sx={{ color: '#E5C86B', fontWeight: 950, mb: 1.5 }}>Five-profile smoke test script</Typography>
+              <Typography variant="subtitle2" sx={{ color: '#E5C86B', fontWeight: 950, mb: 1.5 }}>Five-profile smoke test sequence</Typography>
               <Stack spacing={1}>
                 {portalSmokeTests.map((test) => (
                   <Typography key={test} variant="body2" sx={{ color: 'rgba(255,255,255,0.68)', fontWeight: 700 }}>• {test}</Typography>
