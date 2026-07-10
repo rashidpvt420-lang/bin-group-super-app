@@ -20,6 +20,7 @@
     "build:functions": "npm run build --workspace=functions",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "audit:duplicates": "node scripts/audit-route-and-file-duplicates.mjs",
     "preview": "vite preview",
     "repair-admin": "node scripts/repair-admin-claims.mjs",
     "deploy": "npm run prepare:rules && firebase deploy --project bin-group-57c60",
