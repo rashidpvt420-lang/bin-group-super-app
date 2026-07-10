@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { basename, extname, join, relative, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 
 const ROOT = process.cwd();
 const OUTPUT_DIR = resolve(ROOT, 'artifacts', 'route-consolidation');
+const SOURCE_SUFFIXES = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
 const normalize = (value) => value.replaceAll('\\', '/');
-const read = (path) => existsSync(resolve(ROOT, path)) ? readFileSync(resolve(ROOT, path), 'utf8') : '';
+const absolute = (path) => resolve(ROOT, path);
+const read = (path) => existsSync(absolute(path)) ? readFileSync(absolute(path), 'utf8') : '';
 
 function walk(dir, output = []) {
   if (!existsSync(dir)) return output;
@@ -19,10 +21,35 @@ function walk(dir, output = []) {
 
 function parseImports(source) {
   const imports = [];
-  const pattern = /import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/g;
+  const pattern = /(?:import\s+(?:[\s\S]*?\s+from\s+)?|export\s+(?:\*|\{[\s\S]*?\})\s+from\s+)['"]([^'"]+)['"]/g;
   let match;
   while ((match = pattern.exec(source))) imports.push(match[1]);
   return imports;
+}
+
+function resolveRelativeImport(importerPath, specifier) {
+  if (!specifier.startsWith('.')) return null;
+  const candidate = resolve(ROOT, dirname(importerPath), specifier);
+  for (const suffix of SOURCE_SUFFIXES) {
+    const full = `${candidate}${suffix}`;
+    if (existsSync(full) && statSync(full).isFile()) return normalize(relative(ROOT, full));
+  }
+  return null;
+}
+
+function reachableFiles(entryPath) {
+  const visited = new Set();
+  const pending = [entryPath];
+  while (pending.length) {
+    const current = pending.pop();
+    if (!current || visited.has(current) || !existsSync(absolute(current))) continue;
+    visited.add(current);
+    for (const specifier of parseImports(read(current))) {
+      const resolved = resolveRelativeImport(current, specifier);
+      if (resolved && !visited.has(resolved)) pending.push(resolved);
+    }
+  }
+  return visited;
 }
 
 function parseRoutes(source) {
@@ -34,23 +61,10 @@ function parseRoutes(source) {
     const pathMatch = attrs.match(/\bpath\s*=\s*(?:['"]([^'"]+)['"]|\{\s*['"]([^'"]+)['"]\s*\})/);
     if (!pathMatch) continue;
     const componentMatch = attrs.match(/\belement\s*=\s*\{\s*<([A-Za-z_$][\w$]*)/);
-    routes.push({ path: pathMatch[1] || pathMatch[2], component: componentMatch?.[1] || null });
+    const redirectMatch = attrs.match(/<Navigate\s+to=['"]([^'"]+)['"]/);
+    routes.push({ path: pathMatch[1] || pathMatch[2], component: componentMatch?.[1] || null, redirectTo: redirectMatch?.[1] || null });
   }
   return routes;
-}
-
-function resolvedImportedFiles(appPath, imports) {
-  const appDir = resolve(ROOT, appPath, '..');
-  const resolved = new Set();
-  for (const specifier of imports) {
-    if (!specifier.startsWith('.')) continue;
-    const candidate = resolve(appDir, specifier);
-    for (const suffix of ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx']) {
-      const full = `${candidate}${suffix}`;
-      if (existsSync(full) && statSync(full).isFile()) resolved.add(normalize(relative(ROOT, full)));
-    }
-  }
-  return resolved;
 }
 
 const profileDefinitions = {
@@ -91,25 +105,25 @@ const profileDefinitions = {
 const profiles = {};
 for (const [profile, definition] of Object.entries(profileDefinitions)) {
   const source = read(definition.app);
-  const imports = parseImports(source);
-  const importedFiles = resolvedImportedFiles(definition.app, imports);
+  const reachable = reachableFiles(definition.app);
   const routes = parseRoutes(source);
   const routePaths = routes.map((route) => route.path);
-  const pageFiles = walk(resolve(ROOT, definition.pageDir)).sort();
-  const unregisteredPages = pageFiles.filter((path) => !importedFiles.has(path) && !/\/index\.(ts|tsx|js|jsx)$/.test(path));
+  const pageFiles = walk(absolute(definition.pageDir)).sort();
+  const unregisteredPages = pageFiles.filter((path) => !reachable.has(path) && !/\/index\.(ts|tsx|js|jsx)$/.test(path));
   const missingRequiredRoutes = definition.requiredRoutes.filter((path) => !routePaths.includes(path));
   const missingRecommendedRoutes = (definition.recommendedRoutes || []).filter((path) => !routePaths.includes(path));
   const dashboardEvidence = definition.dashboardFiles.map((path) => {
     const dashboard = read(path);
+    const dashboardGraph = [...reachableFiles(path)].map(read).join('\n');
     return {
       path,
       exists: Boolean(dashboard),
       bytes: dashboard ? Buffer.byteLength(dashboard) : 0,
-      firestoreReads: /(?:onSnapshot|getDocs|getDoc|getCountFromServer|httpsCallable)\s*\(/.test(dashboard),
-      hardCodedSampleRisk: /Princess Tower|Marina Gate|Index Tower|Gate Tower|2450000|2520000/.test(dashboard),
-      arabicAware: /useLanguage|lang\s*===\s*['"]ar|isRTL/.test(dashboard),
-      errorState: /setError|severity=['"]error|error\s*&&/.test(dashboard),
-      loadingState: /loading|CircularProgress|Skeleton|LinearProgress/.test(dashboard),
+      firestoreReads: /(?:onSnapshot|getDocs|getDoc|getCountFromServer|httpsCallable)\s*\(/.test(dashboardGraph),
+      hardCodedSampleRisk: /Princess Tower|Marina Gate|Index Tower|Gate Tower|2450000|2520000/.test(dashboardGraph),
+      arabicAware: /useLanguage|lang\s*===\s*['"]ar|isRTL|\btx\(/.test(dashboardGraph),
+      errorState: /setError|setNotice|severity=['"]error|error\s*&&/.test(dashboardGraph),
+      loadingState: /loading|CircularProgress|Skeleton|LinearProgress/.test(dashboardGraph),
     };
   });
 
@@ -118,7 +132,7 @@ for (const [profile, definition] of Object.entries(profileDefinitions)) {
     routes,
     routePaths,
     pageFiles,
-    importedPageFiles: [...importedFiles].filter((path) => path.startsWith(definition.pageDir)).sort(),
+    reachablePageFiles: [...reachable].filter((path) => path.startsWith(definition.pageDir)).sort(),
     unregisteredPages,
     missingRequiredRoutes,
     missingRecommendedRoutes,
@@ -148,23 +162,29 @@ const onboardingFiles = [
   'functions/stripePayment.ts',
 ];
 const onboardingSources = Object.fromEntries(onboardingFiles.map((path) => [path, read(path)]));
+const persistenceSource = onboardingSources['src/store/onboardingPersistence.ts'];
+const accountSource = onboardingSources['src/components/onboarding/AccountCreationStep.tsx'];
+const registrationSource = onboardingSources['functions/ownerRegistrationRequest.ts'];
+const paymentSource = onboardingSources['src/components/onboarding/PaymentSubmissionStep.tsx'];
+const stripeSource = onboardingSources['functions/stripePayment.ts'];
+const approvalSource = onboardingSources['functions/paymentTransactionApproval.ts'];
 const onboardingChecks = {
   allFilesExist: onboardingFiles.filter((path) => !onboardingSources[path]),
   safePersistenceInstalled: onboardingSources['src/pages/PropertyOnboardingPage.tsx'].includes('installSafeOnboardingPersistence'),
-  restrictedAccountCreation: onboardingSources['src/components/onboarding/AccountCreationStep.tsx'].includes('submitPendingOwnerRegistration') && onboardingSources['src/components/onboarding/AccountCreationStep.tsx'].includes('dashboardLocked'),
+  passwordExcludedFromPersistence: persistenceSource.includes('safeSignupData') && !/signupData:\s*state\.signupData/.test(persistenceSource) && !/password:\s*state\.signupData/.test(persistenceSource),
+  restrictedAccountCreation: accountSource.includes('submitPendingOwnerRegistration') && registrationSource.includes('dashboardLocked: true') && registrationSource.includes('adminApproved: false') && registrationSource.includes('paymentVerified: false'),
   proofUploadAuthenticated: onboardingSources['functions/onboardingProofUpload.ts'].includes('assertOwner(request'),
-  signedPackagePersistedBeforeStripe: onboardingSources['src/components/onboarding/PaymentSubmissionStep.tsx'].indexOf('submitOwnerOnboardingPaymentPackage') < onboardingSources['src/components/onboarding/PaymentSubmissionStep.tsx'].indexOf('createStripeCheckoutSession'),
-  stripeAppCheck: onboardingSources['functions/stripePayment.ts'].includes('enforceAppCheck: true'),
-  stripeKeepsAdminApproval: onboardingSources['functions/stripePayment.ts'].includes('ADMIN_VERIFICATION_REQUIRED') || onboardingSources['functions/stripePayment.ts'].includes('dashboardLocked'),
-  adminPaymentCallable: onboardingSources['functions/paymentTransactionApproval.ts'].includes('adminApprovePayment'),
-  paymentIdempotency: /idempot|already.*approved|duplicate/i.test(onboardingSources['functions/paymentTransactionApproval.ts']),
+  signedPackagePersistedBeforeStripe: paymentSource.indexOf('submitOwnerOnboardingPaymentPackage') > -1 && paymentSource.indexOf('submitOwnerOnboardingPaymentPackage') < paymentSource.indexOf('createStripeCheckoutSession'),
+  stripeAppCheck: stripeSource.includes('enforceAppCheck: true'),
+  stripeKeepsAdminApproval: stripeSource.includes('ADMIN_VERIFICATION_REQUIRED') || (stripeSource.includes('dashboardLocked') && stripeSource.includes('adminApproved')),
+  adminPaymentCallable: approvalSource.includes('adminApprovePayment'),
+  paymentIdempotency: /idempot|already.*approved|duplicate/i.test(approvalSource),
 };
 
 const collectionReferences = {};
 for (const [profile, result] of Object.entries(profiles)) {
-  const files = [result.app, ...result.pageFiles, ...result.dashboardFiles];
   const collections = new Set();
-  for (const path of files) {
+  for (const path of new Set([result.app, ...result.reachablePageFiles, ...result.dashboardFiles])) {
     const source = read(path);
     for (const match of source.matchAll(/collection\(\s*db\s*,\s*['"]([^'"]+)['"]/g)) collections.add(match[1]);
     for (const match of source.matchAll(/doc\(\s*db\s*,\s*['"]([^'"]+)['"]/g)) collections.add(match[1]);
@@ -184,6 +204,7 @@ const report = {
     missingRequiredRoutes: Object.values(profiles).reduce((sum, profile) => sum + profile.missingRequiredRoutes.length, 0),
     missingRecommendedRoutes: Object.values(profiles).reduce((sum, profile) => sum + profile.missingRecommendedRoutes.length, 0),
     dashboardsWithHardCodedSampleRisk: Object.values(profiles).flatMap((profile) => profile.dashboardEvidence).filter((item) => item.hardCodedSampleRisk).length,
+    onboardingChecksFailed: Object.values(onboardingChecks).filter((value) => Array.isArray(value) ? value.length > 0 : value !== true).length,
   },
 };
 
@@ -191,13 +212,8 @@ mkdirSync(OUTPUT_DIR, { recursive: true });
 writeFileSync(join(OUTPUT_DIR, 'five-profile-workflow-audit.json'), JSON.stringify(report, null, 2));
 
 const lines = [
-  '# Five-Profile Workflow Audit',
-  '',
-  `Generated: ${report.generatedAt}`,
-  '',
-  '## Totals',
-  ...Object.entries(report.totals).map(([key, value]) => `- **${key}:** ${value}`),
-  '',
+  '# Five-Profile Workflow Audit', '', `Generated: ${report.generatedAt}`, '', '## Totals',
+  ...Object.entries(report.totals).map(([key, value]) => `- **${key}:** ${value}`), '',
 ];
 for (const [profile, result] of Object.entries(profiles)) {
   lines.push(`## ${profile[0].toUpperCase()}${profile.slice(1)}`, '');
@@ -205,7 +221,7 @@ for (const [profile, result] of Object.entries(profiles)) {
   lines.push(`- Page files: ${result.pageFiles.length}`);
   lines.push(`- Missing required routes: ${result.missingRequiredRoutes.length ? result.missingRequiredRoutes.join(', ') : 'None'}`);
   lines.push(`- Missing recommended routes: ${result.missingRecommendedRoutes.length ? result.missingRecommendedRoutes.join(', ') : 'None'}`);
-  lines.push(`- Unregistered page files: ${result.unregisteredPages.length ? result.unregisteredPages.join(', ') : 'None'}`, '');
+  lines.push(`- Unreachable page files: ${result.unregisteredPages.length ? result.unregisteredPages.join(', ') : 'None'}`, '');
 }
 lines.push('## Onboarding Checks', '');
 for (const [key, value] of Object.entries(onboardingChecks)) lines.push(`- **${key}:** ${Array.isArray(value) ? (value.length ? value.join(', ') : 'PASS') : value ? 'PASS' : 'FAIL'}`);
