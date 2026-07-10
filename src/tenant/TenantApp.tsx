@@ -11,6 +11,7 @@ import SafeIcon from '../components/SafeIcon';
 
 import TenantSimpleDashboardPage from './pages/TenantSimpleDashboardPage';
 import TenantDashboardPage from './pages/TenantDashboardPage';
+import TenantAIConciergePage from './pages/TenantAIConciergePage';
 import TenantRequestPage from './pages/TenantRequestPage';
 import TenantTicketsPage from './pages/TenantTicketsPage';
 import TenantTicketDetailPage from './pages/TenantTicketDetailPage';
@@ -93,6 +94,7 @@ export default function TenantApp() {
                 <Route path="/dashboard" element={<TenantSimpleDashboardPage />} />
                 <Route path="/dashboard/full" element={<TenantDashboardPage />} />
                 <Route path="/unit" element={<TenantUnitPage />} />
+                <Route path="/ai-concierge" element={<TenantAIConciergePage />} />
                 <Route path="/request" element={<TenantRequestPage />} />
                 <Route path="/tickets" element={<TenantTicketsPage />} />
                 <Route path="/ticket/:id" element={<TenantTicketDetailPage />} />
