@@ -19,7 +19,6 @@ async function clickFirstVisible(page: Page, selectors: string[], timeout = 1500
 
 async function fillByLabelOrSelector(page: Page, labels: RegExp[], selectors: string[], value: string) {
   await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => undefined);
-  // Wait for a VISIBLE non-hidden input (exclude type=file and hidden inputs)
   await page.waitForFunction(() => {
     const inputs = Array.from(document.querySelectorAll('input:not([type="file"]):not([type="hidden"]), textarea'));
     return inputs.some((el: any) => el.offsetParent !== null || (el.offsetWidth > 0 && el.offsetHeight > 0));
@@ -51,6 +50,7 @@ async function fillByLabelOrSelector(page: Page, labels: RegExp[], selectors: st
       id: input.id,
       placeholder: input.placeholder,
       ariaLabel: input.getAttribute('aria-label'),
+      testId: input.getAttribute('data-testid'),
       visible: !!(input.offsetWidth || input.offsetHeight || input.getClientRects().length),
     })),
   }));
@@ -58,11 +58,20 @@ async function fillByLabelOrSelector(page: Page, labels: RegExp[], selectors: st
   throw new Error(`Unable to fill ${value}; labels=${labels.map(String).join(', ')} selectors=${selectors.join(', ')} diagnostics=${JSON.stringify(diagnostics)}`);
 }
 
+async function fillCoordinate(page: Page, testId: string, value: string) {
+  const input = page.getByTestId(testId);
+  await expect(input).toBeVisible({ timeout: 15_000 });
+  await input.fill(value);
+  await input.blur();
+  await expect(input).toHaveValue(value, { timeout: 10_000 });
+}
+
 test.describe('Owner Business Workflow', () => {
   test('Owner can navigate to onboarding and generate a quote', async ({ page, context }) => {
     test.setTimeout(120000);
 
     await context.grantPermissions(['geolocation']);
+    await context.setGeolocation({ longitude: 55.2708, latitude: 25.2048 });
     await page.setViewportSize({ width: 1440, height: 1300 });
 
     await page.route('**/*.googleapis.com/**', async route => {
@@ -123,15 +132,20 @@ test.describe('Owner Business Workflow', () => {
     await clickFirstVisible(page, ['button:has-text("Continue")']);
     await expect(page.locator('body')).toContainText(/Property Location|Property Address/i, { timeout: 15000 });
 
-    await fillByLabelOrSelector(page, [/Address/i, /Property Address/i], ['[data-testid="property-address-input"]', 'input[name="address"]', 'input >> nth=0'], 'E2E Villa 45, Marina, Dubai');
-    await fillByLabelOrSelector(page, [/Latitude/i], ['[data-testid="property-latitude-input"]', 'input[name="latitude"]', 'input >> nth=1'], '25.2048');
-    await fillByLabelOrSelector(page, [/Longitude/i], ['[data-testid="property-longitude-input"]', 'input[name="longitude"]', 'input >> nth=2'], '55.2708');
-    await clickFirstVisible(page, ['button:has-text("Save Coordinates")', 'button:has-text("Continue")']);
-    if (await page.locator('text=Property Location').isVisible({ timeout: 1000 }).catch(() => false)) {
-      await clickFirstVisible(page, ['button:has-text("Continue")']);
-    }
+    const addressInput = page.getByTestId('property-address-input');
+    await expect(addressInput).toBeVisible({ timeout: 15_000 });
+    await addressInput.fill('E2E Villa 45, Marina, Dubai');
+    await addressInput.blur();
+    await expect(addressInput).toHaveValue('E2E Villa 45, Marina, Dubai');
 
-    await expect(page.locator('body')).toContainText(/Systems Matrix|Systems & Add-ons|Systems/i, { timeout: 15000 });
+    await fillCoordinate(page, 'property-latitude-input', '25.2048');
+    await fillCoordinate(page, 'property-longitude-input', '55.2708');
+
+    const locationContinue = page.getByRole('button', { name: /^Continue$/i }).last();
+    await expect(locationContinue, 'Property Location Continue must become enabled after valid address and coordinates').toBeEnabled({ timeout: 15_000 });
+    await locationContinue.click();
+
+    await expect(page.locator('body')).toContainText(/Systems Matrix|Systems & Add-ons|Systems/i, { timeout: 20_000 });
     await clickFirstVisible(page, ['button:has-text("Initialize Analysis")', 'button:has-text("Initialize System Analysis")', 'button:has-text("Continue")']);
 
     await expect(page.locator('body')).toContainText(/Commercial Service Plan|Quote Estimate|Contract model/i, { timeout: 20000 });

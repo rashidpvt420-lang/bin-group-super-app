@@ -1,17 +1,37 @@
 import admin from 'firebase-admin';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { config as loadDotenv } from 'dotenv';
+import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 
-const projectId = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
+for (const envPath of [
+  path.resolve(process.cwd(), '.env.e2e'),
+  path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),
+]) {
+  if (existsSync(envPath)) {
+    loadDotenv({ path: envPath, override: false });
+    console.log(`Loaded E2E environment from: ${envPath}`);
+    break;
+  }
+}
+
+const projectId = resolveFirebaseAdminProjectId();
 const tenantEmail = String(process.env.E2E_TENANT_EMAIL || '').trim().toLowerCase();
 const ownerEmail = String(process.env.E2E_OWNER_EMAIL || '').trim().toLowerCase();
+const technicianEmail = String(process.env.E2E_TECHNICIAN_EMAIL || '').trim().toLowerCase();
+const brokerEmail = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
 
-if (!tenantEmail) {
-  throw new Error('E2E_TENANT_EMAIL is required before seeding live role test data.');
+const missing = [
+  ['E2E_TENANT_EMAIL', tenantEmail],
+  ['E2E_TECHNICIAN_EMAIL', technicianEmail],
+  ['E2E_BROKER_EMAIL', brokerEmail],
+].filter(([, value]) => !value).map(([key]) => key);
+
+if (missing.length) {
+  throw new Error(`Missing required live-role fixture values: ${missing.join(', ')}`);
 }
 
-if (!admin.apps.length) {
-  admin.initializeApp({ projectId });
-}
-
+initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 const now = admin.firestore.FieldValue.serverTimestamp();
 
@@ -38,18 +58,27 @@ function uniqueDocs(docs) {
   });
 }
 
-const tenantUser = await getUserByEmailOrNull(tenantEmail);
-if (!tenantUser?.uid) {
-  throw new Error(`Tenant launch account does not exist in Firebase Auth: ${tenantEmail}`);
-}
+const [tenantUser, ownerUser, technicianUser, brokerUser] = await Promise.all([
+  getUserByEmailOrNull(tenantEmail),
+  getUserByEmailOrNull(ownerEmail),
+  getUserByEmailOrNull(technicianEmail),
+  getUserByEmailOrNull(brokerEmail),
+]);
 
-const ownerUser = await getUserByEmailOrNull(ownerEmail);
+if (!tenantUser?.uid) throw new Error(`Tenant launch account does not exist in Firebase Auth: ${tenantEmail}`);
+if (!technicianUser?.uid) throw new Error(`Technician launch account does not exist in Firebase Auth: ${technicianEmail}`);
+if (!brokerUser?.uid) throw new Error(`Broker launch account does not exist in Firebase Auth: ${brokerEmail}`);
+
 const ownerUid = ownerUser?.uid || 'e2e-owner-placeholder';
 const tenantUid = tenantUser.uid;
+const technicianUid = technicianUser.uid;
+const brokerUid = brokerUser.uid;
 
 const propertyId = 'e2e-live-role-property';
 const unitId = `e2e-live-role-unit-${safeId(tenantUid)}`;
 const contractId = `e2e-live-role-contract-${safeId(tenantUid)}`;
+const technicianTicketId = `e2e-live-technician-ticket-${safeId(technicianUid)}`;
+const brokerCommissionId = `e2e-live-broker-commission-${safeId(brokerUid)}`;
 
 const gps = {
   lat: 24.2075,
@@ -102,7 +131,14 @@ if (ownerUser?.uid) {
     uid: ownerUid,
     email: ownerEmail,
     role: 'owner',
+    userRole: 'owner',
+    primaryRole: 'owner',
     status: 'active',
+    onboardingComplete: true,
+    paymentVerified: true,
+    adminApproved: true,
+    dashboardUnlocked: true,
+    activeContractId: contractId,
     e2eLaunchSeed: true,
     updatedAt: now,
   }, { merge: true });
@@ -184,7 +220,10 @@ await db.collection('users').doc(tenantUid).set({
   email: tenantEmail,
   displayName: tenantUser.displayName || 'E2E Tenant',
   role: 'tenant',
+  userRole: 'tenant',
+  primaryRole: 'tenant',
   status: 'active',
+  onboardingComplete: true,
   assignedPropertyId: propertyId,
   assignedUnitId: unitId,
   activeContractId: contractId,
@@ -192,9 +231,113 @@ await db.collection('users').doc(tenantUid).set({
   updatedAt: now,
 }, { merge: true });
 
-console.log(`Seeded live role tenant data for ${tenantEmail}`);
+await db.collection('users').doc(technicianUid).set({
+  uid: technicianUid,
+  email: technicianEmail,
+  displayName: technicianUser.displayName || 'E2E Technician',
+  role: 'technician',
+  userRole: 'technician',
+  primaryRole: 'technician',
+  status: 'active',
+  onboardingComplete: true,
+  onDuty: true,
+  dutyStatus: 'ON_DUTY',
+  dispatchReady: true,
+  approvalStatus: 'APPROVED',
+  e2eLaunchSeed: true,
+  updatedAt: now,
+}, { merge: true });
+
+await db.collection('technicians').doc(technicianUid).set({
+  uid: technicianUid,
+  email: technicianEmail,
+  fullName: technicianUser.displayName || 'E2E Technician',
+  status: 'ACTIVE',
+  approvalStatus: 'APPROVED',
+  dutyStatus: 'ON_DUTY',
+  dispatchReady: true,
+  primaryTrade: 'General Maintenance',
+  serviceZone: 'Al Ain',
+  e2eLaunchSeed: true,
+  updatedAt: now,
+}, { merge: true });
+
+const beforeProof = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII=';
+await db.collection('maintenanceTickets').doc(technicianTicketId).set({
+  id: technicianTicketId,
+  ticketId: technicianTicketId,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  unitId,
+  unitNumber: 'E2E-101',
+  floorNumber: '1',
+  tenantId: tenantUid,
+  tenantUid,
+  tenantEmail,
+  tenantName: tenantUser.displayName || 'E2E Tenant',
+  assignedTechnicianId: technicianUid,
+  technicianId: technicianUid,
+  assignedTechnicianEmail: technicianEmail,
+  category: 'HVAC / AC systems',
+  complaintCategory: 'HVAC / AC systems',
+  description: 'E2E staging mission: air conditioning is not cooling.',
+  serviceLocationDetail: 'Living room indoor AC unit',
+  priority: 'HIGH',
+  status: 'ASSIGNED',
+  beforePhotoUrl: beforeProof,
+  tenantPhotos: [beforeProof],
+  initialPhotoUrls: [beforeProof],
+  permissionToEnter: 'CALL_FIRST',
+  isAnyoneHome: 'YES',
+  ...gpsPayload,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+await db.collection('users').doc(brokerUid).set({
+  uid: brokerUid,
+  email: brokerEmail,
+  displayName: brokerUser.displayName || 'E2E Broker',
+  role: 'broker',
+  userRole: 'broker',
+  primaryRole: 'broker',
+  status: 'active',
+  onboardingComplete: true,
+  adminApproved: true,
+  brokerStatus: 'ACTIVE',
+  kycStatus: 'VERIFIED',
+  e2eLaunchSeed: true,
+  updatedAt: now,
+}, { merge: true });
+
+await db.collection('broker_commissions').doc(brokerCommissionId).set({
+  id: brokerCommissionId,
+  brokerId: brokerUid,
+  brokerUid,
+  brokerEmail,
+  linkedLeadName: 'E2E Staging Attribution Fixture',
+  linkedProperty: 'E2E Live Role Tower',
+  amount: 500,
+  currency: 'AED',
+  percentage: 10,
+  status: 'pending',
+  payoutStatus: 'not_requested',
+  attributionId: `e2e_attribution_${safeId(brokerUid)}`,
+  commissionLockKey: `e2e_commission_lock_${safeId(brokerUid)}`,
+  commissionLocked: true,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+console.log(`Seeded five-role staging fixtures in project ${projectId}`);
 console.log(`tenantUid=${tenantUid}`);
+console.log(`technicianUid=${technicianUid}`);
+console.log(`brokerUid=${brokerUid}`);
 console.log(`propertyId=${propertyId}`);
 console.log(`unitId=${unitId}`);
 console.log(`contractId=${contractId}`);
+console.log(`technicianTicketId=${technicianTicketId}`);
+console.log(`brokerCommissionId=${brokerCommissionId}`);
 console.log(`repairedTenantUnits=${tenantUnitDocs.length}`);

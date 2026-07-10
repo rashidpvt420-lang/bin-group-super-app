@@ -1,11 +1,11 @@
 /**
  * business-technician.spec.ts
  * Deep E2E business flow for the Technician role.
- * Verifies: assigned job visibility, acceptance, GPS/arrival actions, proof photos, and ticket resolution.
+ * Verifies: job acceptance, GPS/arrival actions, proof upload, and ticket resolution.
  */
 import { test, expect, Page, Locator } from '@playwright/test';
 
-const EMAIL    = process.env.E2E_TECHNICIAN_EMAIL    ?? '';
+const EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
 
 function requireLaunchCredentials() {
@@ -33,14 +33,14 @@ async function firstVisible(page: Page, selectors: string[], timeout = 15_000): 
 
   const diagnostics = await page.evaluate(() => ({
     href: window.location.href,
-    bodyPreview: document.body?.innerText?.slice(0, 1200),
+    bodyPreview: document.body?.innerText?.slice(0, 1400),
     buttons: Array.from(document.querySelectorAll('button, a')).map((el: any) => ({
       text: el.innerText,
       ariaLabel: el.getAttribute('aria-label'),
       testId: el.getAttribute('data-testid'),
       disabled: el.disabled === true,
       visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
-    })).slice(0, 80),
+    })).slice(0, 100),
   }));
 
   throw new Error(`No visible target found for selectors: ${selectors.join(' | ')}. Last error: ${lastError}. Diagnostics: ${JSON.stringify(diagnostics)}`);
@@ -71,7 +71,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
   await page.waitForURL('**/technician/dashboard', { timeout: 20_000 });
-  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
+  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error|identity fault/i, { timeout: 10_000 });
 }
 
 test.describe('Technician Business Workflow', () => {
@@ -81,89 +81,82 @@ test.describe('Technician Business Workflow', () => {
     await login(page);
   });
 
-  test('Technician can accept a job, upload proofs, and resolve ticket', async ({ page }) => {
-    test.setTimeout(120_000);
+  test('Technician can accept a job, upload proof, and resolve ticket', async ({ page }) => {
+    test.setTimeout(150_000);
 
-    await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
+    await expect(page.locator('body')).toContainText(/ACTIVE ASSIGNMENTS|OPEN JOB POOL|My Jobs/i, { timeout: 20_000 });
 
-    await expect(
-      page.locator('[data-testid*="job" i], [data-testid*="ticket" i], text=/assigned|dispatch|job|ticket/i').first(),
-      'Technician dashboard must expose at least one assigned/dispatch job for launch validation.'
-    ).toBeVisible({ timeout: 30_000 });
+    const acceptFromPool = page.getByRole('button', { name: /ACCEPT JOB|ACCEPT MISSION|CLAIM MISSION/i }).first();
+    const openAssignedJob = page.getByRole('button', { name: /OPEN JOB CARD/i }).first();
+
+    if (await acceptFromPool.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await expect(acceptFromPool).toBeEnabled({ timeout: 10_000 });
+      await acceptFromPool.click();
+    } else {
+      await expect(
+        openAssignedJob,
+        'Technician launch fixture must expose either an open pool job or an assigned active job.'
+      ).toBeVisible({ timeout: 20_000 });
+      await openAssignedJob.click();
+    }
+
+    await page.waitForURL('**/technician/job/**', { timeout: 20_000 });
+    await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 20_000 });
+
+    const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
+    if (await acceptMission.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await expect(acceptMission).toBeEnabled({ timeout: 10_000 });
+      await acceptMission.click();
+      await expect(page.locator('body')).toContainText(/Mission accepted|ACCEPTED|ASSIGNED/i, { timeout: 15_000 });
+    }
 
     await clickRequired(page, [
-      '[data-testid="technician-accept-job"]',
-      '[data-testid*="accept" i]',
-      'button:has-text("Accept Job")',
-      'button:has-text("Acknowledge")',
-      'button:has-text("Accept")',
-    ], 'Accept job action');
-
-    await expect(page.locator('body')).toContainText(/accepted|acknowledged|on the way|start trip|arrived/i, { timeout: 15_000 });
-
-    await clickRequired(page, [
-      '[data-testid="technician-start-trip"]',
-      '[data-testid*="start-trip" i]',
+      'button:has-text("On The Way")',
       'button:has-text("Start Trip")',
-      'button:has-text("On the way")',
       'button:has-text("En Route")',
     ], 'Start trip action');
-
-    await expect(page.locator('body')).toContainText(/on the way|en route|arrived|gps|location/i, { timeout: 15_000 });
+    await expect(page.locator('body')).toContainText(/EN ROUTE|On The Way|Status updated/i, { timeout: 20_000 });
 
     await clickRequired(page, [
-      '[data-testid="technician-arrived"]',
-      '[data-testid*="arrived" i]',
       'button:has-text("Arrived")',
       'button:has-text("I have arrived")',
       'button:has-text("On Site")',
     ], 'Arrival action');
+    await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 20_000 });
 
-    await expect(page.locator('body')).toContainText(/arrived|on site|start work|upload/i, { timeout: 15_000 });
+    const ppe = page.locator('#ppe');
+    const safety = page.locator('#safety');
+    await expect(ppe).toBeVisible({ timeout: 10_000 });
+    await expect(safety).toBeVisible({ timeout: 10_000 });
+    await ppe.check();
+    await safety.check();
 
-    const startWork = page.locator('[data-testid="technician-start-work"], [data-testid*="start-work" i], button:has-text("Start Work")').first();
-    if (await startWork.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await expect(startWork).toBeEnabled({ timeout: 10_000 });
-      await startWork.click();
-    }
+    await clickRequired(page, ['button:has-text("Start Work")'], 'Start work action');
+    await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated/i, { timeout: 20_000 });
+
+    const notes = page.getByLabel(/Resolution notes/i).first();
+    await expect(notes).toBeVisible({ timeout: 10_000 });
+    await notes.fill('E2E completion proof: issue inspected, repaired, and verified operational.');
+
+    const materials = page.getByLabel(/Materials used|No parts required/i).first();
+    await expect(materials).toBeVisible({ timeout: 10_000 });
+    await materials.fill('No parts required');
 
     await attachRequiredImage(page, [
-      '[data-testid="technician-before-photo"] input[type="file"]',
-      'input[type="file"][name*="before" i]',
-      'input[type="file"][data-testid*="before" i]',
-      'input[type="file"][accept*="image"] >> nth=0',
-      'input[type="file"] >> nth=0',
-    ], 'Before Photo');
+      'input[type="file"][accept*="image"]',
+      'input[type="file"]',
+    ], 'After Work Proof');
 
-    await attachRequiredImage(page, [
-      '[data-testid="technician-after-photo"] input[type="file"]',
-      'input[type="file"][name*="after" i]',
-      'input[type="file"][data-testid*="after" i]',
-      'input[type="file"][accept*="image"] >> nth=1',
-      'input[type="file"] >> nth=1',
-    ], 'After Photo');
+    const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback/i }).first();
+    await expect(
+      complete,
+      'Completion must unlock after seeded tenant before-proof, resolution notes, materials disposition, and after-work proof.'
+    ).toBeEnabled({ timeout: 20_000 });
+    await complete.click();
 
-    const notes = page.locator('[data-testid="technician-completion-notes"] textarea, textarea[name*="notes" i], textarea[placeholder*="notes" i]').first();
-    if (await notes.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await notes.fill('E2E completion proof: before and after evidence uploaded, issue resolved.');
-    }
-
-    await clickRequired(page, [
-      '[data-testid="technician-resolve-ticket"]',
-      '[data-testid*="resolve" i]',
-      'button:has-text("Resolve Ticket")',
-      'button:has-text("Mark Completed")',
-      'button:has-text("Complete Job")',
-    ], 'Resolve ticket action');
-
-    const confirm = page.locator('button:has-text("Confirm"), button:has-text("Close Job"), button:has-text("Yes")').first();
-    if (await confirm.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await expect(confirm).toBeEnabled({ timeout: 10_000 });
-      await confirm.click();
-    }
-
-    await expect(page.locator('body')).toContainText(/resolved|completed|complete|success/i, { timeout: 20_000 });
+    await page.waitForURL('**/technician/jobs', { timeout: 30_000 });
     await expect(page.locator('body')).not.toContainText(/failed|permission-denied|missing or insufficient permissions/i, { timeout: 5_000 });
   });
 });
