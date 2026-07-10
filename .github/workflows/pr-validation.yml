@@ -38,7 +38,23 @@ jobs:
         run: bash scripts/npm-install-retry.sh
 
       - name: Production stability guard
-        run: npm run test:stability
+        id: stability
+        shell: bash
+        run: |
+          set +e
+          npm run test:stability > stability-output.txt 2>&1
+          status=$?
+          cat stability-output.txt
+          exit $status
+
+      - name: Upload stability diagnostics
+        if: failure() && steps.stability.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stability-diagnostics
+          path: stability-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: TypeScript check
         run: npx tsc -p tsconfig.app.json --noEmit
