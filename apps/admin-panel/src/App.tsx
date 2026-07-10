@@ -1,107 +1,259 @@
+// Dedicated BIN GROUP operational admin application.
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Alert, Box, Button, CssBaseline, Stack, Typography } from '@mui/material';
+import { Box, Button, Typography, CssBaseline, CircularProgress, Alert } from '@mui/material';
+import { LogOut, User as UserIcon } from 'lucide-react';
+import { CacheProvider } from '@emotion/react';
+import createCache from '@emotion/cache';
+import { prefixer } from 'stylis';
+import rtlPlugin from 'stylis-plugin-rtl';
 
-const redirectTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: { main: '#DAA520' },
-    background: { default: '#020617', paper: '#0f172a' },
-  },
-  typography: {
-    fontFamily: 'Inter, system-ui, sans-serif',
-  },
-});
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAlertHandler } from '@bin/shared';
+import ProtectedRoute from './components/ProtectedRoute';
+import Navigation from './components/Navigation';
+import BulkImporter from './components/BulkImporter';
+import AdminPaymentApproval from './components/AdminPaymentApproval';
+import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
+import PilotCommandCenter from './components/pilot/PilotCommandCenter';
+import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+import BrandWatermark from './components/BrandWatermark';
 
-const MAIN_APP_URL = (process.env.REACT_APP_MAIN_APP_URL || 'https://bin-group-57c60.web.app').replace(/\/+$/, '');
+import LoginPage from './pages/auth/LoginPage';
+import DashboardPage from './pages/dashboard/DashboardPage';
+import OwnersPage from './pages/owners/OwnerManagementPage';
+import TenantsPage from './pages/tenants/TenantsManagementPage';
+import TicketsPage from './pages/tickets/TicketsManagementPage';
+import TechniciansPage from './pages/technicians/TechniciansManagementPage';
+import SettingsPage from './pages/settings/SettingsPage';
+import ReportsPage from './pages/reports/ReportsPage';
+import SOSFeedPage from './pages/sos/SOSFeedPage';
+import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
+import AuditShieldPage from './pages/admin/AuditShieldPage';
+import ProfitabilityPage from './pages/admin/ProfitabilityPage';
+import CompliancePage from './pages/admin/CompliancePage';
+import BrokerManagementPage from './pages/brokers/BrokerManagementPage';
+import AuditLogPage from './pages/AuditLogPage';
+import PayrollManagementPage from './pages/financials/PayrollManagementPage';
+import TransactionsPage from './pages/financials/TransactionsPage';
+import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
+import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
+import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
+import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
+import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
+import HRManagementPage from './pages/admin/HRManagementPage';
+import PropertyPassportPage from './pages/properties/PropertyPassportPage';
+import ProductionControlCenter from './pages/ProductionControlCenter';
+import LiveMapPage from './pages/map/LiveMapPage';
+import PricingMatrixPage from './pages/admin/PricingMatrixPage';
+import TechnicianDutyMonitorPage from './pages/technicians/TechnicianDutyMonitorPage';
+import PaymentApprovalsPage from './pages/financials/PaymentApprovalsPage';
+import UnitStatusPage from './pages/admin/UnitStatusPage';
+import BinGptEngineerPage from './pages/admin/BinGptEngineerPage';
+import WhatsAppTriageQueuePage from './pages/admin/WhatsAppTriageQueuePage';
+import RfqTrustWorkflowPage from './pages/admin/RfqTrustWorkflowPage';
+import VendorCommandCenterPage from './pages/admin/VendorCommandCenterPage';
+import DataGovernanceAuditPage from './pages/admin/DataGovernanceAuditPage';
+import BinConnectInboxPage from './pages/admin/BinConnectInboxPage';
+import PilotCompletionCommandPage from './pages/admin/PilotCompletionCommandPage';
+import PublicLaunchCommandCenterPage from './pages/admin/PublicLaunchCommandCenterPage';
+import AmenityControlPage from './pages/ops/AmenityControlPage';
+import AnnouncementsPage from './pages/ops/AnnouncementsPage';
+import DocumentLibraryPage from './pages/ops/DocumentLibraryPage';
+import KeyRegisterPage from './pages/ops/KeyRegisterPage';
+import ParcelDeskPage from './pages/ops/ParcelDeskPage';
+import VisitorParkingPage from './pages/ops/VisitorParkingPage';
+import MarketplaceApprovalsPage from './pages/ops/MarketplaceApprovalsPage';
+import StaffDirectoryPage from './pages/ops/StaffDirectoryPage';
+import MessagesPage from './pages/ops/MessagesPage';
+import CommunityModerationPage from './pages/ops/CommunityModerationPage';
 
-function buildCanonicalAdminTarget(): string {
-  if (typeof window === 'undefined') return `${MAIN_APP_URL}/admin/dashboard`;
+import { adminTheme } from './theme/adminTheme';
 
-  const currentPath = window.location.pathname || '/';
-  const search = window.location.search || '';
-  const hash = window.location.hash || '';
-  const isLoginLikeRoute = currentPath === '/' || currentPath === '/login' || currentPath === '/index.html';
+const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
+const cacheLtr = createCache({ key: 'muiltr-admin' });
 
-  if (isLoginLikeRoute) {
-    const params = new URLSearchParams();
-    params.set('intendedRole', 'admin');
-    params.set('returnTo', '/admin/dashboard');
-    params.set('source', 'legacy-admin-panel');
-    return `${MAIN_APP_URL}/login?${params.toString()}`;
-  }
+function AppContent() {
+    const { isAuthenticated, loading, error } = useAuth();
+    const { t, isRTL } = useLanguage();
 
-  const normalizedPath = currentPath.replace(/^\/admin(?=\/|$)/, '') || '/dashboard';
-  const adminPath = normalizedPath === '/dashboard' ? '/admin/dashboard' : `/admin${normalizedPath}`;
-  return `${MAIN_APP_URL}${adminPath}${search}${hash}`;
+    if (loading) {
+        return (
+            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+                <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
+                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                    {t('dash.command_subtitle') || 'Authenticating Admin Command Center'}
+                </Typography>
+            </Box>
+        );
+    }
+
+    return (
+        <Routes>
+            <Route path="/login" element={<LoginPage />} />
+
+            {isAuthenticated && (
+                <Route element={<Layout />}>
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                    <Route path="/financials" element={<ProtectedRoute adminOnly><ProfitabilityDashboardPage /></ProtectedRoute>} />
+                    <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
+                    <Route path="/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
+                    <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
+                    <Route path="/broker-attributions" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
+                    <Route path="/broker-commissions" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
+                    <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
+                    <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
+                    <Route path="/unit-links" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
+                    <Route path="/tenant-services" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
+                    <Route path="/control-center" element={<ProtectedRoute adminOnly><ProductionControlCenter /></ProtectedRoute>} />
+                    <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />
+                    <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
+                    <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
+                    <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
+                    <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
+                    <Route path="/live-map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
+                    <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
+                    <Route path="/document-vault" element={<ProtectedRoute adminOnly><InstitutionalDocumentVaultPage /></ProtectedRoute>} />
+                    <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
+                    <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
+                    <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
+                    <Route path="/manual-approvals" element={<ProtectedRoute adminOnly><AdminPaymentApproval /></ProtectedRoute>} />
+                    <Route path="/admin/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />
+                    <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
+                    <Route path="/pilot" element={<ProtectedRoute adminOnly><PilotCommandCenter /></ProtectedRoute>} />
+                    <Route path="/ops/public" element={<ProtectedRoute adminOnly><PublicLaunchOpsPanel /></ProtectedRoute>} />
+                    <Route path="/ops/whatsapp-triage" element={<ProtectedRoute adminOnly><WhatsAppTriageQueuePage /></ProtectedRoute>} />
+                    <Route path="/ops/bin-connect" element={<ProtectedRoute adminOnly><BinConnectInboxPage /></ProtectedRoute>} />
+                    <Route path="/ops/pilot-completion" element={<ProtectedRoute adminOnly><PilotCompletionCommandPage /></ProtectedRoute>} />
+                    <Route path="/ops/public-launch-command" element={<ProtectedRoute adminOnly><PublicLaunchCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/rfq" element={<ProtectedRoute adminOnly><RfqTrustWorkflowPage /></ProtectedRoute>} />
+                    <Route path="/ops/vendors" element={<ProtectedRoute adminOnly><VendorCommandCenterPage /></ProtectedRoute>} />
+                    <Route path="/ops/data-governance" element={<ProtectedRoute adminOnly><DataGovernanceAuditPage /></ProtectedRoute>} />
+                    <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
+                    <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
+                    <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
+                    <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
+                    <Route path="/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
+                    <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />
+                    <Route path="/hr" element={<ProtectedRoute adminOnly extraRoles={['hr_manager', 'hr_staff']}><HRManagementPage /></ProtectedRoute>} />
+                    <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
+                    <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
+                    <Route path="/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
+                    <Route path="/admin/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
+                    <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
+                    <Route path="/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
+                    <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+                    <Route path="/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+
+                    <Route path="/ops/amenity-control" element={<ProtectedRoute adminOnly><AmenityControlPage /></ProtectedRoute>} />
+                    <Route path="/ops/announcements" element={<ProtectedRoute adminOnly><AnnouncementsPage /></ProtectedRoute>} />
+                    <Route path="/ops/document-library" element={<ProtectedRoute adminOnly><DocumentLibraryPage /></ProtectedRoute>} />
+                    <Route path="/ops/key-register" element={<ProtectedRoute adminOnly><KeyRegisterPage /></ProtectedRoute>} />
+                    <Route path="/ops/parcel-desk" element={<ProtectedRoute adminOnly><ParcelDeskPage /></ProtectedRoute>} />
+                    <Route path="/ops/visitor-parking" element={<ProtectedRoute adminOnly><VisitorParkingPage /></ProtectedRoute>} />
+                    <Route path="/ops/marketplace-approvals" element={<ProtectedRoute adminOnly><MarketplaceApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/ops/staff-directory" element={<ProtectedRoute adminOnly><StaffDirectoryPage /></ProtectedRoute>} />
+                    <Route path="/ops/messages" element={<ProtectedRoute adminOnly><MessagesPage /></ProtectedRoute>} />
+                    <Route path="/ops/community-moderation" element={<ProtectedRoute adminOnly><CommunityModerationPage /></ProtectedRoute>} />
+                </Route>
+            )}
+
+            {!isAuthenticated && error && (
+                <Route path="/auth-error" element={<Alert severity="error">{String(error)}</Alert>} />
+            )}
+            <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+        </Routes>
+    );
 }
 
-function LegacyAdminRedirectShell() {
-  const target = React.useMemo(() => buildCanonicalAdminTarget(), []);
+function Layout() {
+    const { t, isRTL } = useLanguage();
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
 
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-        color: '#fff',
-        display: 'grid',
-        placeItems: 'center',
-        px: 3,
-      }}
-    >
-      <Stack
-        spacing={3}
-        alignItems="center"
-        sx={{
-          width: '100%',
-          maxWidth: 680,
-          p: { xs: 3, md: 5 },
-          borderRadius: 5,
-          bgcolor: 'rgba(15, 23, 42, 0.94)',
-          border: '1px solid rgba(218, 165, 32, 0.24)',
-          boxShadow: '0 30px 80px rgba(2, 6, 23, 0.45)',
-          textAlign: 'center',
-        }}
-      >
-        <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950, letterSpacing: 4 }}>
-          BIN GROUP ADMIN
-        </Typography>
-        <Typography variant="h4" sx={{ fontWeight: 950, letterSpacing: -0.5 }}>
-          Legacy admin-panel domain is redirect-only
-        </Typography>
-        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>
-          The canonical admin command center now runs inside the main BIN GROUP app at <strong>/admin/dashboard</strong>. This prevents duplicate admin dashboards, stale routes, and cross-domain login dead-ends.
-        </Typography>
-        <Alert severity="info" variant="outlined" sx={{ borderColor: 'rgba(218,165,32,0.35)', color: 'rgba(255,255,255,0.78)' }}>
-          Manual handoff only. No automatic redirect timer is used, so operators stay in control during launch verification.
-        </Alert>
-        <Button
-          variant="contained"
-          href={target}
-          sx={{
-            bgcolor: 'primary.main',
-            color: '#020617',
-            fontWeight: 950,
-            px: 4,
-            '&:hover': { bgcolor: '#e2ba45' },
-          }}
-        >
-          Continue to Canonical Admin Command Center
-        </Button>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 800, overflowWrap: 'anywhere' }}>
-          Target: {target}
-        </Typography>
-      </Stack>
-    </Box>
-  );
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch (error) {
+            console.error('Admin logout failure:', error);
+            window.location.href = '/login';
+        }
+    };
+
+    return (
+        <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#020617', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr' }}>
+            <Navigation />
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+                <BrandWatermark opacity={0.035} />
+                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100 }}>
+                    <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
+                        {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND · UAE 🇦🇪</Box>
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <LanguageSwitcher />
+                        <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <UserIcon size={14} color="#000" />
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || 'ADMIN'}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || 'operator'}</Typography>
+                            </Box>
+                        </Box>
+                        <Button onClick={handleLogout} data-testid="admin-logout" startIcon={<LogOut size={16} />} sx={{ color: '#ef4444', fontWeight: 900, fontSize: '0.75rem', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>
+                            {t('nav.logout') || 'LOGOUT'}
+                        </Button>
+                    </Box>
+                </Box>
+
+                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#020617', display: 'flex', flexDirection: 'column', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+                    <Box sx={{ flexGrow: 1 }}><Outlet /></Box>
+                    <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
+                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | MADE IN UAE 🇦🇪
+                        </Typography>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box sx={{ position: 'fixed', bottom: 0, right: 0, zIndex: 9999 }}>
+                <SovereignAIChat role="admin" onNavigate={navigate} />
+            </Box>
+            <SovereignAlertHandler />
+        </Box>
+    );
 }
 
 export default function App() {
-  return (
-    <ThemeProvider theme={redirectTheme}>
-      <CssBaseline />
-      <LegacyAdminRedirectShell />
-    </ThemeProvider>
-  );
+    return (
+        <LanguageProvider>
+            <AdminThemeProviderWrapper />
+        </LanguageProvider>
+    );
+}
+
+function AdminThemeProviderWrapper() {
+    const { isRTL } = useLanguage();
+    const theme = React.useMemo(() => createTheme({ ...adminTheme as any, direction: isRTL ? 'rtl' : 'ltr' }), [isRTL]);
+
+    return (
+        <CacheProvider value={isRTL ? cacheRtl : cacheLtr}>
+            <ThemeProvider theme={theme}>
+                <CssBaseline />
+                <Router>
+                    <AuthProvider>
+                        <AIProvider>
+                            <AppContent />
+                        </AIProvider>
+                    </AuthProvider>
+                </Router>
+            </ThemeProvider>
+        </CacheProvider>
+    );
 }
