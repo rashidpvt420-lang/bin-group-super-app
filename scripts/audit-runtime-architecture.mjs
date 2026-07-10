@@ -17,9 +17,7 @@ function walk(directory, files = []) {
   return files;
 }
 
-function resolveImport(fromFile, specifier) {
-  if (!specifier.startsWith('.')) return null;
-  const candidate = resolve(dirname(fromFile), specifier);
+function resolveCandidate(candidate) {
   const attempts = [
     candidate,
     ...sourceExtensions.map((extension) => `${candidate}${extension}`),
@@ -28,11 +26,23 @@ function resolveImport(fromFile, specifier) {
   return attempts.find((attempt) => existsSync(attempt) && statSync(attempt).isFile()) || null;
 }
 
+function resolveImport(fromFile, specifier) {
+  if (specifier === '@bin/shared') {
+    const isAdminBuild = relative(root, fromFile).replaceAll('\\', '/').startsWith('apps/admin-panel/');
+    return resolve(root, isAdminBuild ? 'packages/shared/src/index.ts' : 'src/shared-exports.ts');
+  }
+  if (specifier.startsWith('@/')) return resolveCandidate(resolve(root, 'src', specifier.slice(2)));
+  if (!specifier.startsWith('.')) return null;
+  return resolveCandidate(resolve(dirname(fromFile), specifier));
+}
+
 function importsOf(file) {
   const source = readFileSync(file, 'utf8');
   const specifiers = new Set();
   const patterns = [
-    /(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g,
+    /import\s+(?:type\s+)?[\s\S]*?\s+from\s+["']([^"']+)["']/g,
+    /export\s+(?:type\s+)?[\s\S]*?\s+from\s+["']([^"']+)["']/g,
+    /import\s*["']([^"']+)["']/g,
     /import\(\s*["']([^"']+)["']\s*\)/g,
     /require\(\s*["']([^"']+)["']\s*\)/g,
   ];
@@ -95,6 +105,10 @@ const duplicateBasenames = [...basenameGroups.entries()]
 const report = {
   generatedAt: new Date().toISOString(),
   entrypoints: ['src/main.tsx', 'apps/admin-panel/src/index.tsx'],
+  aliases: {
+    rootShared: 'src/shared-exports.ts',
+    adminShared: 'packages/shared/src/index.ts',
+  },
   runtimeFileCount: allRuntimeFiles.length,
   reachableFileCount: reachable.size,
   unreachableCount: unreachable.length,
