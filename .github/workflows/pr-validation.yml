@@ -81,5 +81,13 @@ jobs:
       - name: Build unified Vite app
         run: npm run build
 
+      - name: Build dedicated admin panel
+        run: npm run build:admin
+        env:
+          CI: false
+
       - name: Build functions
         run: npm run build --workspace=functions
+
+      - name: Verify mobile store source readiness
+        run: npm run test:mobile-store-readiness
