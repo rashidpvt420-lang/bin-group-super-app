@@ -11,6 +11,7 @@
     "node": "22"
   },
   "scripts": {
+    "prepare": "node scripts/prepare-hooks.mjs",
     "dev": "vite",
     "build": "vite build",
     "build:lowmem": "VITE_SKIP_MINIFY=1 NODE_OPTIONS=--max-old-space-size=2048 vite build",
@@ -128,6 +129,7 @@
     "firebase-admin": "^13.6.0",
     "firebase-tools": "^15.19.1",
     "globals": "^13.24.0",
+    "husky": "^9.1.7",
     "typescript": "^5.9.3",
     "vite": "7.2.6"
   }
