@@ -7,15 +7,16 @@ import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const issueShortcuts = [
-  { label: 'AC not cooling', category: 'ac', icon: <Fan size={22} />, priority: 'urgent' },
-  { label: 'Water leak', category: 'plumbing', icon: <Droplets size={22} />, priority: 'urgent' },
-  { label: 'Electrical issue', category: 'electrical', icon: <PlugZap size={22} />, priority: 'urgent' },
-  { label: 'Other repair', category: 'other', icon: <Wrench size={22} />, priority: 'normal' },
+  { en: 'AC not cooling', ar: 'المكيف لا يبرد', category: 'ac', icon: <Fan size={22} />, priority: 'urgent' },
+  { en: 'Water leak', ar: 'تسرب مياه', category: 'plumbing', icon: <Droplets size={22} />, priority: 'urgent' },
+  { en: 'Electrical issue', ar: 'مشكلة كهربائية', category: 'electrical', icon: <PlugZap size={22} />, priority: 'urgent' },
+  { en: 'Other repair', ar: 'إصلاح آخر', category: 'other', icon: <Wrench size={22} />, priority: 'normal' },
 ];
 
 export default function TenantSimpleDashboardPage() {
   const navigate = useNavigate();
-  const { isRTL, tx } = useLanguage();
+  const { isRTL, tx, lang } = useLanguage();
+  const ar = lang === 'ar';
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -36,17 +37,20 @@ export default function TenantSimpleDashboardPage() {
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 0.5 }}>{tx('tenant.simple.oneTapDesc', 'Choose the issue, then add exact room/location and photo evidence before dispatch.')}</Typography>
             </Box>
             <Grid container spacing={2}>
-              {issueShortcuts.map((item) => (
-                <Grid item xs={12} sm={6} md={3} key={item.label}>
-                  <Button fullWidth onClick={() => navigate(`/tenant/request?category=${item.category}`)} sx={{ minHeight: 112, p: 2, justifyContent: 'flex-start', textAlign: isRTL ? 'right' : 'left', color: '#fff', bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1), borderColor: alpha(binThemeTokens.gold, 0.35) } }}>
-                    <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                      <Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box>
-                      <Typography sx={{ fontWeight: 950 }}>{item.label}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)' }}>{item.priority === 'urgent' ? 'High priority path' : 'Standard service path'}</Typography>
-                    </Stack>
-                  </Button>
-                </Grid>
-              ))}
+              {issueShortcuts.map((item) => {
+                const itemLabel = ar ? item.ar : item.en;
+                return (
+                  <Grid item xs={12} sm={6} md={3} key={item.category}>
+                    <Button fullWidth aria-label={itemLabel} onClick={() => navigate(`/tenant/request?category=${item.category}`)} sx={{ minHeight: 112, p: 2, justifyContent: 'flex-start', textAlign: isRTL ? 'right' : 'left', color: '#fff', bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1), borderColor: alpha(binThemeTokens.gold, 0.35) } }}>
+                      <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
+                        <Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box>
+                        <Typography sx={{ fontWeight: 950 }}>{itemLabel}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)' }}>{item.priority === 'urgent' ? (ar ? 'مسار أولوية عالية' : 'High priority path') : (ar ? 'مسار الخدمة العادي' : 'Standard service path')}</Typography>
+                      </Stack>
+                    </Button>
+                  </Grid>
+                );
+              })}
             </Grid>
           </Stack>
         </Paper>
@@ -56,7 +60,11 @@ export default function TenantSimpleDashboardPage() {
             <AlertTriangle size={22} color="#fca5a5" />
             <Box>
               <Typography sx={{ color: '#fff', fontWeight: 950 }}>{tx('tenant.simple.emergencySla', 'Emergency SLA')}</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.66)' }}>{CANONICAL_SLA_POLICY.EMERGENCY.label}: {CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes. {CANONICAL_SLA_POLICY.EMERGENCY.tenantCopy}</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.66)' }}>
+                {ar
+                  ? `طوارئ: ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة. خطر على الحياة أو السلامة، تسرب نشط، خطر كهربائي، تعطل الدخول، أو عطل شديد في التكييف يتطلب إرسالاً فورياً.`
+                  : `${CANONICAL_SLA_POLICY.EMERGENCY.label}: ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes. ${CANONICAL_SLA_POLICY.EMERGENCY.tenantCopy}`}
+              </Typography>
             </Box>
           </Stack>
         </Paper>

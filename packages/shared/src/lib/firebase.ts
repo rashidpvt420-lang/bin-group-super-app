@@ -44,7 +44,7 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  addDoc,
+  addDoc as firestoreAddDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -141,6 +141,68 @@ const db: Firestore = getFirestore(firebaseApp);
 const storage: FirebaseStorage = getStorage(firebaseApp);
 const functions: Functions = getFunctions(firebaseApp, 'europe-west3');
 const messaging: Messaging | null = getSafeMessaging();
+
+const pendingAuditWrites = new Map<string, Promise<void>>();
+
+/**
+ * Compatibility bridge for legacy shared consumers that still call addDoc()
+ * directly on audit_logs/auditLogs. Security Rules deny those client writes by
+ * design, so route them through the authenticated Cloud Function instead.
+ */
+const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
+  const collectionPath = String(reference?.path || '');
+  if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
+    return firestoreAddDoc(reference, data);
+  }
+
+  const action = String(data?.action || '').trim();
+  const targetType = String(data?.targetType || '').trim();
+  const targetId = String(data?.targetId || '').trim();
+  if (!action || !targetType || !targetId) {
+    throw new Error('Audit writes require action, targetType, and targetId.');
+  }
+
+  const {
+    actorId,
+    actorRole,
+    createdAt: _createdAt,
+    timestamp: _timestamp,
+    metadata,
+    before,
+    after,
+    userAgent,
+    action: _action,
+    targetType: _targetType,
+    targetId: _targetId,
+    ...extra
+  } = data || {};
+
+  const auditMetadata: Record<string, unknown> = {
+    ...(metadata && typeof metadata === 'object' ? metadata : {}),
+    ...extra,
+    ...(before !== undefined ? { before } : {}),
+    ...(after !== undefined ? { after } : {}),
+    ...(userAgent ? { userAgent } : {}),
+    ...(actorId ? { legacyClaimedActorId: actorId } : {}),
+    ...(actorRole ? { legacyClaimedActorRole: actorRole } : {}),
+    sourceCollection: collectionPath,
+  };
+
+  const dedupeKey = `${action}|${targetType}|${targetId}`;
+  let pending = pendingAuditWrites.get(dedupeKey);
+  if (!pending) {
+    const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
+    pending = logUserAuditAction({ action, targetType, targetId, metadata: auditMetadata }).then(() => undefined);
+    pendingAuditWrites.set(dedupeKey, pending);
+    const cleanup = () => queueMicrotask(() => {
+      if (pendingAuditWrites.get(dedupeKey) === pending) pendingAuditWrites.delete(dedupeKey);
+    });
+    void pending.then(cleanup, cleanup);
+  }
+
+  await pending;
+  return doc(reference);
+}) as typeof firestoreAddDoc;
 
 if (typeof window !== 'undefined') {
   const hostname = window.location.hostname;
