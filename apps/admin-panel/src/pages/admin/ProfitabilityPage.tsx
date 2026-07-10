@@ -37,9 +37,12 @@ const cancelledContractStatuses = new Set(['CANCELLED', 'TERMINATED', 'EXPIRED',
 const cancelledExpenseStatuses = new Set(['CANCELLED', 'REJECTED', 'VOID']);
 const dayValue = (value: any) => value?.toDate?.() || (value ? new Date(value) : null);
 const formatAed = (value: number) => `AED ${Math.round(value || 0).toLocaleString('en-AE')}`;
+const paymentKey = (row: any) => String(row.providerPaymentIntentId || row.paymentIntentId || row.stripePaymentIntentId || row.paymentReferenceId || row.paymentReference || row.referenceId || `${row.__source}:${row.id}`);
+const uniquePayments = (rows: any[]) => Array.from(new Map(rows.map((row) => [paymentKey(row), row])).values());
 
 type LedgerState = {
   payments: any[];
+  payment_transactions: any[];
   invoices: any[];
   expenses: any[];
   contracts: any[];
@@ -60,19 +63,26 @@ export default function ProfitabilityPage() {
   const { lang, isRTL } = useLanguage();
   const ar = lang === 'ar';
   const copy = (en: string, arText: string) => ar ? arText : en;
-  const [ledger, setLedger] = React.useState<LedgerState>({ payments: [], invoices: [], expenses: [], contracts: [], properties: [] });
+  const [ledger, setLedger] = React.useState<LedgerState>({ payments: [], payment_transactions: [], invoices: [], expenses: [], contracts: [], properties: [] });
   const [ready, setReady] = React.useState(new Set<string>());
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
-    const collections: Array<keyof LedgerState> = ['payments', 'invoices', 'expenses', 'contracts', 'properties'];
-    const unsubscribers = collections.map((name) => onSnapshot(collection(db, name), (snapshot) => {
-      setLedger((current) => ({ ...current, [name]: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) }));
-      setReady((current) => new Set(current).add(name));
+    const streams: Array<{ key: keyof LedgerState; collectionName: string }> = [
+      { key: 'payments', collectionName: 'payments' },
+      { key: 'payment_transactions', collectionName: 'payment_transactions' },
+      { key: 'invoices', collectionName: 'invoices' },
+      { key: 'expenses', collectionName: 'expenses' },
+      { key: 'contracts', collectionName: 'contracts' },
+      { key: 'properties', collectionName: 'properties' },
+    ];
+    const unsubscribers = streams.map(({ key, collectionName }) => onSnapshot(collection(db, collectionName), (snapshot) => {
+      setLedger((current) => ({ ...current, [key]: snapshot.docs.map((item) => ({ id: item.id, __source: collectionName, ...item.data() })) }));
+      setReady((current) => new Set(current).add(key));
       setError('');
     }, (streamError) => {
-      console.error(`[Profitability] ${name} listener failed`, streamError);
-      setReady((current) => new Set(current).add(name));
+      console.error(`[Profitability] ${collectionName} listener failed`, streamError);
+      setReady((current) => new Set(current).add(key));
       setError(copy('One or more financial ledgers could not be loaded.', 'تعذر تحميل سجل مالي واحد أو أكثر.'));
     }));
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -81,8 +91,8 @@ export default function ProfitabilityPage() {
   const data = React.useMemo(() => {
     const contractsById = new Map(ledger.contracts.map((row) => [String(row.id), row]));
     const propertyIdFor = (row: any) => String(row.propertyId || contractsById.get(String(row.contractId || ''))?.propertyId || 'unassigned');
-
-    const successfulPayments = ledger.payments.filter((row) => paidStatuses.has(upper(row.status || row.paymentStatus)));
+    const allPayments = uniquePayments([...ledger.payment_transactions, ...ledger.payments]);
+    const successfulPayments = allPayments.filter((row) => paidStatuses.has(upper(row.status || row.paymentStatus)));
     const validExpenses = ledger.expenses.filter((row) => !cancelledExpenseStatuses.has(upper(row.status)));
     const activeContracts = ledger.contracts.filter((row) => activeContractStatuses.has(upper(row.status || row.activationStatus)));
     const cancelledContracts = ledger.contracts.filter((row) => cancelledContractStatuses.has(upper(row.status || row.activationStatus)));
@@ -142,7 +152,7 @@ export default function ProfitabilityPage() {
     };
   }, [ar, ledger]);
 
-  const loading = ready.size < 5;
+  const loading = ready.size < 6;
   const expenseBreakdown = React.useMemo(() => {
     const buckets = new Map<string, number>();
     ledger.expenses.filter((row) => !cancelledExpenseStatuses.has(upper(row.status))).forEach((row) => {
