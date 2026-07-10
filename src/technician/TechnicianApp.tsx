@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
 import { ArrowLeft, Wrench, ChevronRight, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -61,10 +61,11 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
                         <Button onClick={() => navigate('/technician/map')} sx={quickButtonSx}>{label('tech.quick.map', 'Live Map', 'الخريطة')}</Button>
+                        <Button onClick={() => navigate('/technician/hr')} sx={quickButtonSx}>{label('tech.quick.workforce', 'Workforce', 'شؤون الموظفين')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'دون اتصال')}</Button>
                         <Button onClick={() => navigate('/technician/support')} sx={quickButtonSx}>{label('tech.quick.support', 'Support', 'الدعم')}</Button>
                         <NotificationBell />
-                        <Button onClick={() => navigate('/technician/proof-readiness')} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>Proof</Button>
+                        <Button onClick={() => navigate('/technician/proof-readiness')} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>{label('tech.quick.proof', 'Proof', 'الإثبات')}</Button>
                         <Button onClick={() => navigate('/technician/profile')} startIcon={renderSafeIcon(User, { size: 18 })} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>{label('nav.profile', 'Profile', 'الملف')}</Button>
                         <PortalSessionControls role="technician" accent={shell.gold} />
                     </Box>
@@ -113,6 +114,17 @@ export default function TechnicianApp() {
                 <Route path="/support" element={<SupportPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="technician" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="technician" />} />
+
+                <Route path="/schedule" element={<Navigate to="/technician/jobs" replace />} />
+                <Route path="/messages" element={<Navigate to="/technician/chat" replace />} />
+                <Route path="/performance" element={<Navigate to="/technician/dashboard/full" replace />} />
+                <Route path="/payroll" element={<Navigate to="/technician/hr" replace />} />
+                <Route path="/activity" element={<Navigate to="/technician/history" replace />} />
+                <Route path="/documents" element={<Navigate to="/technician/hr" replace />} />
+                <Route path="/payments" element={<Navigate to="/technician/hr" replace />} />
+                <Route path="/safety" element={<Navigate to="/technician/proof-readiness" replace />} />
+                <Route path="/time-tracking" element={<Navigate to="/technician/hr" replace />} />
+                <Route path="/leaderboard" element={<Navigate to="/technician/dashboard/full" replace />} />
             </Routes>
         </TechnicianLayout>
     );
