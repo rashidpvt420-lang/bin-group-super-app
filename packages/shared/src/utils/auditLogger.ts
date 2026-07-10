@@ -1,25 +1,34 @@
-import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
+import { functions, httpsCallable } from '../lib/firebase';
 
 export interface AuditLog {
-    actorId: string;
-    actorRole: string;
+    actorId?: string;
+    actorRole?: string;
     action: string;
     targetType: string;
     targetId: string;
-    before?: any;
-    after?: any;
-    metadata?: any;
+    before?: unknown;
+    after?: unknown;
+    metadata?: Record<string, unknown>;
     userAgent?: string;
 }
 
-export const logAuditAction = async (log: AuditLog) => {
+export const logAuditAction = async (log: AuditLog): Promise<void> => {
     try {
-        await addDoc(collection(db, 'audit_logs'), {
-            ...log,
-            userAgent: log.userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : 'SYSTEM'),
-            createdAt: serverTimestamp()
+        const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
+        await logUserAuditAction({
+            action: log.action,
+            targetType: log.targetType,
+            targetId: log.targetId,
+            metadata: {
+                ...(log.metadata || {}),
+                ...(log.before !== undefined ? { before: log.before } : {}),
+                ...(log.after !== undefined ? { after: log.after } : {}),
+                userAgent: log.userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : 'SYSTEM'),
+            },
         });
-    } catch (err) {
-        console.error("Critical Audit Log Failure:", err);
+    } catch (error) {
+        // Audit logging is protected and server-authoritative, but remains
+        // non-blocking so a telemetry outage cannot corrupt a business action.
+        console.warn('[AUDIT] logAuditAction failed (non-blocking):', error);
     }
 };
