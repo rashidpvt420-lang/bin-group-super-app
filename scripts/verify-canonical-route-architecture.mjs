@@ -9,6 +9,7 @@ const rootApp = read('src/App.tsx');
 const ownerApp = read('src/owner/OwnerApp.tsx');
 const ownerCommunity = read('src/owner/pages/OwnerCommunityOperationsPage.tsx');
 const ownerTenants = read('src/owner/pages/OwnerTenantsPage.tsx');
+const ownerUnits = read('src/owner/pages/OwnerUnitRegistryPage.tsx');
 const tenantRequest = read('src/tenant/pages/TenantRequestPage.tsx');
 const technicianApp = read('src/technician/TechnicianApp.tsx');
 const technicianWorkforce = read('src/technician/pages/TechnicianWorkforceCenterPage.tsx');
@@ -36,6 +37,11 @@ assert(ownerTenants.includes("collection(db, 'tenants')"), 'Owner tenant directo
 assert(!ownerTenants.includes("collection(db, 'users')"), 'Owner tenant directory must not list the global users collection.');
 assert(ownerTenants.includes("navigate('/owner/bin-connect')"), 'Owner tenant communication must route through BIN Connect.');
 assert(ownerTenants.includes('useLanguage') && ownerTenants.includes("lang === 'ar'"), 'Owner tenant directory must be bilingual and RTL-aware.');
+assert(ownerApp.includes('path="/units" element={<OwnerUnitRegistryPage />}'), 'Owner portal must use one canonical unit registry route.');
+assert(!ownerApp.includes('/legacy-units'), 'Owner portal must not expose a legacy units route.');
+assert(!existsSync('src/owner/pages/OwnerUnitsPage.tsx'), 'Superseded Owner units page must not return.');
+assert(ownerUnits.includes('paymentStatus') && ownerUnits.includes('nextPaymentDate'), 'Canonical Owner unit registry must preserve payment-cycle visibility.');
+assert(ownerUnits.includes('exportLedger') && ownerUnits.includes('text/csv'), 'Canonical Owner unit registry must provide a working ledger export.');
 assert(!existsSync('src/owner/pages/OwnerStatementsPage.tsx'), 'Placeholder Owner statements page must not return.');
 assert(!existsSync('src/owner/pages/OwnerApprovalsPage.tsx'), 'Placeholder Owner approvals page must not return.');
 assert(!existsSync('src/owner/pages/OwnerInspectionsPage.tsx'), 'Duplicate Owner inspections page must not return.');
@@ -73,6 +79,9 @@ assert(!rootAdmin.includes("collection(db, 'users')"), 'Root AdminTerminal must 
 
 assert(adminApp.includes('<Routes>'), 'Dedicated Admin App must contain a real route tree.');
 assert(adminApp.includes("from './components/Navigation'"), 'Dedicated Admin App must use the canonical Navigation component.');
+assert(adminApp.includes('path="/dashboard/full" element={<Navigate to="/dashboard" replace />}'), 'Legacy Admin dashboard URL must redirect to the canonical dashboard.');
+assert(!adminApp.includes('DashboardPageStable'), 'Dedicated Admin App must not import a duplicate dashboard alias.');
+assert(!existsSync('apps/admin-panel/src/pages/dashboard/DashboardPageStable.tsx'), 'Duplicate Admin dashboard compatibility file must not return.');
 assert(adminApp.includes('path="/ops/public-launch-command"'), 'Dedicated Admin App must register the live public-launch command route.');
 assert(adminApp.includes('path="/broker-attributions"'), 'Dedicated Admin App must register broker attribution review.');
 assert(adminApp.includes('path="/tenant-services"'), 'Dedicated Admin App must register tenant services operations.');
