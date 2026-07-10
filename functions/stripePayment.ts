@@ -339,7 +339,7 @@ export const stripeWebhook = onRequest({
       amount: expectedAmount,
       amountReceived: amount,
       currency: "AED",
-      status: "PAID",
+      status: "PENDING_ADMIN_APPROVAL",
       paymentStatus: "PAID",
       verificationState: "AUTO_VERIFIED",
       verified: true,

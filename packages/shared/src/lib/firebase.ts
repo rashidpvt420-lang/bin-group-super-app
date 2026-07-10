@@ -144,6 +144,39 @@ const messaging: Messaging | null = getSafeMessaging();
 
 const pendingAuditWrites = new Map<string, Promise<void>>();
 
+const inferLegacyAuditTarget = (data: any) => {
+  const explicitTargetType = String(data?.targetType || data?.entityType || '').trim();
+  const explicitTargetId = String(data?.targetId || data?.entityId || '').trim();
+  const legacyTargets: Array<[string, string]> = [
+    ['contractId', 'contracts'],
+    ['paymentId', 'payment_transactions'],
+    ['paymentTransactionId', 'payment_transactions'],
+    ['propertyId', 'properties'],
+    ['ownerId', 'owners'],
+    ['ownerUid', 'owners'],
+    ['tenantId', 'tenants'],
+    ['tenantUid', 'tenants'],
+    ['leadId', 'broker_leads'],
+    ['referralId', 'broker_referrals'],
+    ['staffId', 'staff'],
+    ['userId', 'users'],
+    ['actorId', 'users'],
+  ];
+
+  if (explicitTargetType && explicitTargetId) {
+    return { targetType: explicitTargetType, targetId: explicitTargetId };
+  }
+
+  for (const [field, fallbackType] of legacyTargets) {
+    const targetId = String(data?.[field] || '').trim();
+    if (targetId) {
+      return { targetType: explicitTargetType || fallbackType, targetId };
+    }
+  }
+
+  return { targetType: explicitTargetType, targetId: explicitTargetId };
+};
+
 /**
  * Compatibility bridge for legacy shared consumers that still call addDoc()
  * directly on audit_logs/auditLogs. Security Rules deny those client writes by
@@ -156,10 +189,9 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
   }
 
   const action = String(data?.action || '').trim();
-  const targetType = String(data?.targetType || '').trim();
-  const targetId = String(data?.targetId || '').trim();
+  const { targetType, targetId } = inferLegacyAuditTarget(data);
   if (!action || !targetType || !targetId) {
-    throw new Error('Audit writes require action, targetType, and targetId.');
+    throw new Error('Audit writes require action and a target identifier.');
   }
 
   const {

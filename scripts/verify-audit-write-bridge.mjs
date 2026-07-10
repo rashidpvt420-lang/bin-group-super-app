@@ -27,6 +27,9 @@ for (const path of requiredBridges) {
   assert(source.includes("httpsCallable(functions, 'logUserAuditAction')"), `${path} must route audit events through logUserAuditAction.`);
   assert(source.includes('return firestoreAddDoc(reference, data);'), `${path} must preserve native writes for non-audit collections.`);
   assert(source.includes('pendingAuditWrites'), `${path} must deduplicate simultaneous legacy dual-audit writes.`);
+  assert(source.includes('inferLegacyAuditTarget'), `${path} must normalize legacy audit target fields.`);
+  assert(source.includes('data?.entityType') && source.includes('data?.entityId'), `${path} must accept legacy entityType/entityId audit fields.`);
+  assert(source.includes("['contractId', 'contracts']"), `${path} must map legacy contractId audit fields.`);
   assert(!source.includes('void pending.finally('), `${path} must not create an unhandled rejected cleanup promise.`);
 }
 
@@ -35,11 +38,13 @@ const functionIndex = read('functions/index.ts');
 const firestoreRules = read('firestore.rules');
 
 assert(auditFunction.includes('export const logUserAuditAction'), 'The authenticated audit callable must exist.');
+assert(auditFunction.includes('region: "europe-west3"'), 'The audit callable must deploy in the client-configured europe-west3 region.');
 assert(auditFunction.includes('request.auth?.uid'), 'The audit callable must require an authenticated user.');
 assert(auditFunction.includes('db.collection("audit_logs").add'), 'The audit callable must perform the server-side audit write.');
 assert(functionIndex.includes('export { logUserAuditAction } from "./userAuditOperations";'), 'functions/index.ts must export logUserAuditAction.');
 assert(firestoreRules.includes('match /audit_logs/'), 'Firestore Rules must explicitly cover audit_logs.');
 assert(firestoreRules.includes('match /auditLogs/'), 'Firestore Rules must explicitly cover auditLogs.');
+assert(firestoreRules.includes('match /system_health/{healthDoc}') && firestoreRules.includes('allow read: if isAdmin();'), 'Firestore Rules must let admins read system_health evidence.');
 
 const sourceRoots = ['src', 'apps', 'packages'];
 const unsafeRawAuditWriters = [];
