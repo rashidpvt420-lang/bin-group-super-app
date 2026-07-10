@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { Activity, AlertTriangle, Building2, CheckCircle2, CreditCard, Gauge, Map, RefreshCw, Rocket, ShieldCheck, TicketCheck, Users, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, Building2, CheckCircle2, CreditCard, Gauge, Map as MapIcon, RefreshCw, Rocket, ShieldCheck, TicketCheck, Users, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
 import { collection, db, doc, getCountFromServer, getDoc, getDocs, limit, query, where } from '../../lib/firebase';
@@ -24,7 +24,7 @@ const actions = [
   { en: 'SLA & Tickets', ar: 'الطلبات واتفاقية الخدمة', route: '/tickets', icon: Gauge, enDescription: 'Open workload, timers, dispatch state and breach risk.', arDescription: 'الطلبات المفتوحة والمؤقتات وحالة التوزيع ومخاطر التجاوز.' },
   { en: 'Payment Approvals', ar: 'موافقات الدفع', route: '/payments', icon: CreditCard, enDescription: 'Review manual proof and Stripe-paid records before unlocking owners.', arDescription: 'مراجعة الإثبات اليدوي ودفعات Stripe قبل فتح حساب المالك.' },
   { en: 'Emergency Command', ar: 'مركز الطوارئ', route: '/ops/emergency', icon: AlertTriangle, enDescription: 'SOS, critical incidents and immediate dispatch pressure.', arDescription: 'حالات الاستغاثة والحوادث الحرجة والتوزيع الفوري.' },
-  { en: 'Technician Map', ar: 'خريطة الفنيين', route: '/technicians/map', icon: Map, enDescription: 'Coverage, duty status, location and assignment visibility.', arDescription: 'التغطية وحالة الدوام والموقع والمهام المسندة.' },
+  { en: 'Technician Map', ar: 'خريطة الفنيين', route: '/technicians/map', icon: MapIcon, enDescription: 'Coverage, duty status, location and assignment visibility.', arDescription: 'التغطية وحالة الدوام والموقع والمهام المسندة.' },
   { en: 'Broker Attribution', ar: 'إسناد الوسطاء', route: '/broker-attributions', icon: TicketCheck, enDescription: 'Prove source ownership before commission creation.', arDescription: 'إثبات مصدر الصفقة قبل إنشاء العمولة.' },
   { en: 'Community Operations', ar: 'عمليات المجتمع', route: '/tenant-services', icon: Users, enDescription: 'Tenant services, unit links and building operations.', arDescription: 'خدمات المستأجر وربط الوحدات وعمليات المبنى.' },
   { en: 'Public Launch Evidence', ar: 'أدلة الإطلاق العام', route: '/ops/public-launch-command', icon: Rocket, enDescription: 'Record and verify every hard-launch production gate.', arDescription: 'تسجيل والتحقق من كل بوابة للإطلاق العام.' },

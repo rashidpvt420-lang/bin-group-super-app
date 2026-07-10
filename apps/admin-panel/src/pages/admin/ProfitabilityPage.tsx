@@ -68,15 +68,15 @@ export default function ProfitabilityPage() {
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
-    const streams: Array<{ key: keyof LedgerState; collectionName: string }> = [
-      { key: 'payments', collectionName: 'payments' },
-      { key: 'payment_transactions', collectionName: 'payment_transactions' },
-      { key: 'invoices', collectionName: 'invoices' },
-      { key: 'expenses', collectionName: 'expenses' },
-      { key: 'contracts', collectionName: 'contracts' },
-      { key: 'properties', collectionName: 'properties' },
+    const streams: Array<{ key: keyof LedgerState; collectionName: string; ref: ReturnType<typeof collection> }> = [
+      { key: 'payments', collectionName: 'payments', ref: collection(db, 'payments') },
+      { key: 'payment_transactions', collectionName: 'payment_transactions', ref: collection(db, 'payment_transactions') },
+      { key: 'invoices', collectionName: 'invoices', ref: collection(db, 'invoices') },
+      { key: 'expenses', collectionName: 'expenses', ref: collection(db, 'expenses') },
+      { key: 'contracts', collectionName: 'contracts', ref: collection(db, 'contracts') },
+      { key: 'properties', collectionName: 'properties', ref: collection(db, 'properties') },
     ];
-    const unsubscribers = streams.map(({ key, collectionName }) => onSnapshot(collection(db, collectionName), (snapshot) => {
+    const unsubscribers = streams.map(({ key, collectionName, ref }) => onSnapshot(ref, (snapshot) => {
       setLedger((current) => ({ ...current, [key]: snapshot.docs.map((item) => ({ id: item.id, __source: collectionName, ...item.data() })) }));
       setReady((current) => new Set(current).add(key));
       setError('');
