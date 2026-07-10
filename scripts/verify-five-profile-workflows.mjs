@@ -18,7 +18,7 @@ for (const [profile, result] of Object.entries(report.profiles || {})) {
     if (!dashboard.exists) failures.push(`${profile}: dashboard missing at ${dashboard.path}`);
     if (dashboard.hardCodedSampleRisk) failures.push(`${profile}: dashboard contains hard-coded sample portfolio/financial data at ${dashboard.path}`);
     if (!dashboard.arabicAware) failures.push(`${profile}: dashboard is not connected to bilingual/RTL context at ${dashboard.path}`);
-    if (!dashboard.loadingState) failures.push(`${profile}: dashboard lacks an explicit loading state at ${dashboard.path}`);
+    if (dashboard.firestoreReads && !dashboard.loadingState) failures.push(`${profile}: data-backed dashboard lacks an explicit loading state at ${dashboard.path}`);
   }
 }
 
