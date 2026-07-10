@@ -15,6 +15,7 @@ const technicianOverview = read('src/technician/components/TechnicianWorkforceOv
 const brokerApp = read('src/broker/BrokerApp.tsx');
 const brokerCommissions = read('src/broker/pages/BrokerCommissionsPage.tsx');
 const brokerProfile = read('src/broker/pages/BrokerProfilePage.tsx');
+const brokerReferrals = read('src/broker/pages/BrokerReferralsPage.tsx');
 const rootAdmin = read('src/admin/AdminTerminal.tsx');
 const adminApp = read('apps/admin-panel/src/App.tsx');
 const adminDashboard = read('apps/admin-panel/src/pages/dashboard/DashboardPage.tsx');
@@ -42,6 +43,7 @@ assert(tenantRequest.includes('notifyTicketCreated') && tenantRequest.includes('
 assert(technicianApp.includes("from './pages/TechnicianWorkforceCenterPage'"), 'Technician App must use the consolidated Workforce Center.');
 assert(technicianWorkforce.includes('TechnicianWorkforceOverview') && technicianWorkforce.includes('TechnicianHRPageV2'), 'Workforce Center must combine employment controls with multilingual ESS.');
 assert(technicianOverview.includes('staffAgreements') && technicianOverview.includes('payrollStatus') && technicianOverview.includes('leaveBalance'), 'Technician Workforce Overview must retain agreement, payroll, and leave functions.');
+assert(technicianOverview.includes('logAuditAction'), 'Technician agreement acceptance must use the callable audit bridge.');
 assert(!existsSync('src/technician/pages/TechnicianHRPage.tsx'), 'Superseded Technician HR duplicate must not return.');
 for (const path of ['/schedule', '/messages', '/performance', '/payroll', '/activity', '/documents', '/payments', '/safety', '/time-tracking', '/leaderboard']) {
   assert(technicianApp.includes(`path="${path}"`), `Technician compatibility route ${path} is missing.`);
@@ -54,6 +56,10 @@ for (const path of ['/submissions', '/withdrawals', '/agreement', '/onboarding',
 }
 assert(brokerCommissions.includes('submitBrokerPayoutRequest'), 'Canonical Broker commissions page must support payout requests.');
 assert(brokerProfile.includes('commissionAgreementAccepted') && brokerProfile.includes('bankIban') && brokerProfile.includes('reraLicense'), 'Canonical Broker profile must retain agreement, bank, and RERA readiness.');
+assert(!brokerReferrals.includes("collection(db, 'properties')"), 'Broker referrals must not browse the private owner properties collection.');
+assert(brokerReferrals.includes('propertyReferenceVerification') && brokerReferrals.includes('PENDING_ADMIN_MATCH'), 'Broker referrals must use an Admin-verified property reference workflow.');
+assert(brokerReferrals.includes('logAuditAction'), 'Broker referrals must use the callable audit bridge.');
+assert(brokerReferrals.includes('useLanguage') && brokerReferrals.includes("lang === 'ar'"), 'Broker referral workflow must be bilingual and RTL-aware.');
 
 assert(rootApp.includes('<Route path="/admin/*"'), 'The unified app must preserve the /admin/* compatibility route.');
 assert(rootAdmin.includes('ADMIN_PANEL_URL'), 'Root AdminTerminal must redirect to the dedicated Admin Panel.');
