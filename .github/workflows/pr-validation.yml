@@ -57,7 +57,23 @@ jobs:
           retention-days: 7
 
       - name: TypeScript check
-        run: npx tsc -p tsconfig.app.json --noEmit
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npx tsc -p tsconfig.app.json --noEmit > typecheck-output.txt 2>&1
+          status=$?
+          cat typecheck-output.txt
+          exit $status
+
+      - name: Upload TypeScript diagnostics
+        if: failure() && steps.typecheck.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-diagnostics
+          path: typecheck-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Lint root app
         run: npm run lint
