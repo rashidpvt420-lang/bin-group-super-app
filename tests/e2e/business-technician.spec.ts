@@ -88,7 +88,7 @@ test.describe('Technician Business Workflow', () => {
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
 
     await expect(
-      page.locator('[data-testid*="job" i], [data-testid*="ticket" i], text=/assigned|dispatch|job|ticket/i').first(),
+      page.locator('[data-testid*="job" i], [data-testid*="ticket" i]').or(page.getByText(/assigned|dispatch|job|ticket/i)).first(),
       'Technician dashboard must expose at least one assigned/dispatch job for launch validation.'
     ).toBeVisible({ timeout: 30_000 });
 

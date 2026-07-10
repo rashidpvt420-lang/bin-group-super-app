@@ -98,7 +98,7 @@ test.describe('Broker Business Workflow', () => {
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
 
     await expect(
-      page.locator('[data-testid*="commission" i], table, [role="table"], .MuiDataGrid-root, text=/commission|earned|pending/i').first(),
+      page.locator('[data-testid*="commission" i], table, [role="table"], .MuiDataGrid-root').or(page.getByText(/commission|earned|pending/i)).first(),
       'Broker commissions page must render commission tracking surface'
     ).toBeVisible({ timeout: 15000 });
   });
