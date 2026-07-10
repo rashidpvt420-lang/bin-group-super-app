@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Container, IconButton, alpha, Stack, Button } from '@mui/material';
-import { ArrowLeft, Brain, ClipboardCheck, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
+import { ArrowLeft, Brain, Building2, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
@@ -30,6 +30,7 @@ import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContra
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
 import OwnerReviewQueuePage from './pages/OwnerReviewQueuePage';
+import OwnerCommunityOperationsPage from './pages/OwnerCommunityOperationsPage';
 import DesignStudioPage from '../pages/DesignStudioPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
 import OwnerComplaintPage from './pages/OwnerComplaintPage';
@@ -55,20 +56,15 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: alpha(binThemeTokens.canvas, 0.94), backdropFilter: 'blur(18px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17,24,39,0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
-                        {!isHome && (
-                            <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}>
-                                <SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
-                            </IconButton>
-                        )}
-                        <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-                            <SafeIcon icon={LayoutDashboard} size={22} />
-                        </IconButton>
+                        {!isHome && <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
+                        <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}><SafeIcon icon={LayoutDashboard} size={22} /></IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{label('portal.owner.title', 'OWNER PORTAL')}</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{label('portal.owner.subtitle', 'NO-CALL PROPERTY OPERATIONS')}</Typography>
                         </Box>
                     </Box>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                        <Button onClick={() => navigate('/owner/community-operations')} startIcon={renderSafeIcon(Building2, { size: 17 })} sx={{ display: { xs: 'none', lg: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.community_operations', 'Community Ops')}</Button>
                         <Button onClick={() => navigate('/owner/bin-connect')} startIcon={renderSafeIcon(MessageSquare, { size: 17 })} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>BIN Connect</Button>
                         <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
                         <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.property_passport', 'Property Passport')}</Button>
@@ -80,15 +76,9 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     </Stack>
                 </Toolbar>
             </AppBar>
-            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
-                <OwnerActivationGuard>
-                    <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
-                </OwnerActivationGuard>
-            </Container>
+            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}><OwnerActivationGuard><Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box></OwnerActivationGuard></Container>
             <BinConnectChatBox role="owner" />
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}>
-                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OS</Typography>
-            </Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OS</Typography></Box>
         </Box>
     );
 };
@@ -117,6 +107,7 @@ export default function OwnerApp() {
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
                 <Route path="/renewals" element={<PortfolioRenewalsPage />} />
                 <Route path="/inspections" element={<OwnerReviewQueuePage />} />
+                <Route path="/community-operations" element={<OwnerCommunityOperationsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 <Route path="/complaint" element={<OwnerComplaintPage />} />
