@@ -52,7 +52,20 @@ for (const [name, source] of [
 
 assert(!existsSync('apps/owner-app'), 'The undeployed duplicate apps/owner-app application must not return. Use src/owner and the unified root app.');
 assert(!packageJson.includes('build:owner'), 'package.json must not expose a build command for the removed duplicate owner application.');
-assert(!existsSync('src/owner/pages/OwnerUnitsPage.tsx'), 'The duplicate OwnerUnitsPage must not return; OwnerUnitRegistryPage is canonical.');
+
+const removedLegacyRuntimeFiles = [
+  'src/owner/pages/OwnerUnitsPage.tsx',
+  'src/pages/DashboardPage.tsx',
+  'src/pages/TenantSOSPage.tsx',
+  'src/pages/TechnicianPortalPage.tsx',
+  'src/pages/BrokerPortalPage.tsx',
+  'src/pages/TicketDetailPage.tsx',
+  'apps/admin-panel/src/pages/dashboard/DashboardPageStable.tsx',
+];
+for (const path of removedLegacyRuntimeFiles) {
+  assert(!existsSync(path), `Removed duplicate runtime file must not return: ${path}`);
+}
+
 assert(ownerApp.includes('<Route path="/units" element={<OwnerUnitRegistryPage />} />'), 'Owner /units must render OwnerUnitRegistryPage.');
 assert(ownerApp.includes('<Route path="/legacy-units" element={<Navigate to="/owner/units" replace />} />'), 'Legacy owner units URL must redirect to the canonical owner registry.');
 
