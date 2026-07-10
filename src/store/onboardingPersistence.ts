@@ -39,7 +39,9 @@ export function installSafeOnboardingPersistence() {
   sanitizePersistedOnboardingStorage();
 
   useOnboardingStore.persist.setOptions({
-    partialize: (state: any) => ({
+    // Return type is annotated `any` because `setOptions` types `partialize` as
+    // returning the full store state; we intentionally persist only a subset.
+    partialize: (state: any): any => ({
       step: state.step,
       properties: state.properties,
       portfolioSummary: state.portfolioSummary,
