@@ -40,6 +40,9 @@ jobs:
       - name: Five-profile dashboard and workflow audit
         run: node scripts/audit-five-profile-workflows.mjs
 
+      - name: Verify five-profile workflows
+        run: node scripts/verify-five-profile-workflows.mjs
+
       - name: Route and duplicate implementation audit
         id: duplicate_audit
         run: npm run audit:duplicates
