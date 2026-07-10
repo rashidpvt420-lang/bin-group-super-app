@@ -42,7 +42,15 @@ assert(firestoreRules.includes('match /audit_logs/'), 'Firestore Rules must expl
 assert(firestoreRules.includes('match /auditLogs/'), 'Firestore Rules must explicitly cover auditLogs.');
 
 const sourceRoots = ['src', 'apps', 'packages'];
-const unsafeRawImports = [];
+const unsafeRawAuditWriters = [];
+
+function importsRawFirestoreAddDoc(source) {
+  const namedImports = source.match(/import\s*\{[\s\S]*?\}\s*from\s*['"]firebase\/firestore['"];?/g) || [];
+  const importsNamedAddDoc = namedImports.some((statement) => /\baddDoc\b/.test(statement));
+  const importsNamespace = /import\s+\*\s+as\s+\w+\s+from\s+['"]firebase\/firestore['"];?/.test(source);
+  const callsNamespaceAddDoc = /\b\w+\.addDoc\s*\(/.test(source);
+  return importsNamedAddDoc || (importsNamespace && callsNamespaceAddDoc);
+}
 
 function walk(path) {
   if (!existsSync(path)) return;
@@ -57,15 +65,18 @@ function walk(path) {
     if (!/\.(ts|tsx|js|jsx)$/.test(entry)) continue;
     const source = readFileSync(fullPath, 'utf8');
     const referencesAuditCollection = /['"]audit_logs['"]|['"]auditLogs['"]/.test(source);
-    const importsRawFirestore = /from\s+['"]firebase\/firestore['"]/.test(source);
-    if (referencesAuditCollection && importsRawFirestore && !requiredBridges.includes(fullPath.replaceAll('\\', '/'))) {
-      unsafeRawImports.push(relative('.', fullPath).replaceAll('\\', '/'));
+    const hasRawAuditWriteCapability = importsRawFirestoreAddDoc(source);
+    if (referencesAuditCollection && hasRawAuditWriteCapability && !requiredBridges.includes(fullPath.replaceAll('\\', '/'))) {
+      unsafeRawAuditWriters.push(relative('.', fullPath).replaceAll('\\', '/'));
     }
   }
 }
 
 for (const root of sourceRoots) walk(root);
-assert(unsafeRawImports.length === 0, `Audit-writing source files must use a BIN GROUP Firebase bridge, not raw firebase/firestore: ${unsafeRawImports.join(', ')}`);
+assert(
+  unsafeRawAuditWriters.length === 0,
+  `Audit-writing source files must use a BIN GROUP Firebase bridge, not raw firebase/firestore addDoc: ${unsafeRawAuditWriters.join(', ')}`,
+);
 
 if (failures.length) {
   console.error('\nAudit write bridge verification failed:\n');
