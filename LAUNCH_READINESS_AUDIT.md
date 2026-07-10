@@ -102,3 +102,31 @@ From `npm run test:runtime-audit` and the README launch gates. These need accoun
 5. **Tenant AI Concierge:** route + entry point once an AI provider key is configured.
 6. **Polish:** replace `alert()` with the existing toast system across tenant/owner pages.
 7. **Provider activation** (§5) — the gating dependency for marketing anything as "live".
+
+---
+
+## 7. Duplicate files/folders — consolidation
+
+A full inventory found the codebase carries several **parallel implementations for the same purpose**. They fall into two buckets: safe dead-code that can be removed now, and high-risk live forks that must be migrated incrementally (with authenticated testing) so nothing is lost.
+
+### 7A. Removed in this PR (dead code in the canonical `src/` app — zero imports, superseded by role apps)
+- `src/pages/DashboardPage.tsx` + its only dependency `src/components/MissionGuidanceFeed.tsx` (superseded by `src/owner/…`)
+- `src/pages/BrokerPortalPage.tsx` (superseded by `src/broker/BrokerApp.tsx`)
+- `src/pages/TenantSOSPage.tsx` (superseded by `src/tenant/…`)
+- `src/pages/TechnicianPortalPage.tsx` (superseded by `src/technician/TechnicianApp.tsx`)
+- `src/pages/TicketDetailPage.tsx` (superseded by `OwnerTicketDetailPage` / `TenantTicketDetailPage` / `TechnicianJobDetailPage`)
+- `src/technician/pages/TechnicianHRPage.tsx` (v1; `TechnicianHRPageV2` is the wired one)
+- `src/owner/pages/OwnerStatementsPage.tsx`, `src/owner/pages/OwnerApprovalsPage.tsx` (placeholders; live equivalents are `OwnerFinancialsPage` / `OwnerApprovalCenterPage`)
+
+Verified with `npm run lint`, `npm run typecheck`, `npm run build`.
+
+### 7B. High-risk live forks — migrate incrementally, do NOT blind-delete
+| Duplication | Canonical | Why not yet merged |
+|-------------|-----------|--------------------|
+| **`apps/admin-panel/` (~66 ops pages) vs `src/admin/AdminTerminal.tsx`** | Port needed ops pages into an in-app `/admin/*` sub-router | The admin-panel is its own CRA app wired to a **separate Firebase hosting target** (`admin` → `apps/admin-panel/build`) and CI. Its router is currently a redirect shell, so those pages are unreachable. Porting requires re-homing pages under Vite + testing each admin flow (needs an admin login). |
+| **`apps/owner-app/` (whole owner fork)** | `src/owner/` + `src/pages/PropertyOnboardingPage.tsx` | Fork has a **different onboarding pipeline** (10 vs 11 steps, `submitOwnerOnboarding` vs `submitOwnerOnboardingPaymentPackage`) and **shares the same `bin-group-onboarding-v3` localStorage key**. Referenced by `build:owner` + a CI workflow. Retiring it must follow onboarding unification. |
+| **Onboarding submit functions** (`submitOwnerOnboarding` vs `submitOwnerOnboardingPaymentPackage`; unused `registerOwnerOnboardingAccount`/`upsertOwnerOnboardingProfile`) | `submitOwnerOnboardingPaymentPackage` | Different Firestore ID schemes; needs data-migration care + end-to-end payment testing. |
+| **`OwnerInspectionsPage` (rich) vs routed `OwnerReviewQueuePage`** | Merge richer UI into the routed page | Same backend, divergent UX — a real merge, not a delete. |
+| Shared `LanguageContext` / `RoleContext` / theme / utils duplicated across `src/`, `packages/shared`, and the two apps | `packages/shared` | Translation/logic drift; needs regression testing across all portals. |
+
+**Recommended migration order (each step testable before the next):** (1) build in-app `/admin/*` sub-router and port ops pages module-by-module from `apps/admin-panel`, verifying each with an admin login; (2) unify onboarding on `submitOwnerOnboardingPaymentPackage` and provision contract/properties on the Stripe path; (3) retire `apps/owner-app` once (2) is verified; (4) collapse shared context/util duplicates onto `@bin/shared`; (5) remove the now-unused Cloud Functions. Steps 1–3 require the authenticated test accounts.
