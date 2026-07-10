@@ -52,6 +52,18 @@ jobs:
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
+      - name: Admin canonicalization audit
+        run: node scripts/audit-admin-canonicalization.mjs
+
+      - name: Route and implementation duplicate audit
+        run: npm run audit:duplicates
+
+      - name: Verify duplicate resolution
+        run: node scripts/verify-duplicate-resolution.mjs
+
+      - name: Canonical route architecture guard
+        run: node scripts/verify-canonical-route-architecture.mjs
+
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
@@ -173,6 +185,18 @@ jobs:
 
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
+
+      - name: Admin canonicalization audit
+        run: node scripts/audit-admin-canonicalization.mjs
+
+      - name: Route and implementation duplicate audit
+        run: npm run audit:duplicates
+
+      - name: Verify duplicate resolution
+        run: node scripts/verify-duplicate-resolution.mjs
+
+      - name: Canonical route architecture guard
+        run: node scripts/verify-canonical-route-architecture.mjs
 
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
