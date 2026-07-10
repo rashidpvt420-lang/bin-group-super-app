@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Box, Divider, Drawer, List, ListItem, ListItemIcon, ListItemText, Typography, alpha } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -21,7 +22,7 @@ import CeoContactButtons from './CeoContactButtons';
 type MenuItem = {
   text: string;
   path: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   color?: string;
 };
 
