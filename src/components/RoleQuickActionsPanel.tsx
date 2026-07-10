@@ -62,13 +62,17 @@ export default function RoleQuickActionsPanel({ role, title = 'Simple Mode', sub
   const navigate = useNavigate();
   const { lang } = useLanguage();
   const actions = ROLE_QUICK_ACTIONS[role];
+  const isDarkPortal = role === 'tenant' || role === 'admin';
+  const surface = isDarkPortal ? 'rgba(201,166,70,0.045)' : '#FFFFFF';
+  const subtitleColor = isDarkPortal ? 'rgba(255,255,255,0.58)' : binThemeTokens.textSecondary;
+  const cardBackground = isDarkPortal ? 'rgba(15,23,42,0.72)' : '#111827';
 
   return (
-    <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
+    <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: surface, border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{title}</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)', mt: 0.5 }}>{subtitle}</Typography>
+          <Typography variant="body2" sx={{ color: subtitleColor, mt: 0.5 }}>{subtitle}</Typography>
         </Box>
         <Grid container spacing={2}>
           {actions.map((action) => {
@@ -87,16 +91,16 @@ export default function RoleQuickActionsPanel({ role, title = 'Simple Mode', sub
                     justifyContent: 'flex-start',
                     textAlign: isRTL ? 'right' : 'left',
                     color: '#fff',
-                    bgcolor: 'rgba(15,23,42,0.72)',
+                    bgcolor: cardBackground,
                     border: '1px solid rgba(255,255,255,0.08)',
                     borderRadius: 4,
-                    '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1), borderColor: alpha(binThemeTokens.gold, 0.35) },
+                    '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.16), borderColor: alpha(binThemeTokens.gold, 0.35) },
                   }}
                 >
                   <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
                     <Box sx={{ color: binThemeTokens.gold }}>{ICONS[action.id] || <Activity size={22} />}</Box>
                     <Typography sx={{ fontWeight: 950 }}>{copy?.label || action.label}</Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)', lineHeight: 1.45 }}>{copy?.whyItMatters || action.whyItMatters}</Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', lineHeight: 1.45 }}>{copy?.whyItMatters || action.whyItMatters}</Typography>
                   </Stack>
                 </Button>
               </Grid>

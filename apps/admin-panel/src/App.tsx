@@ -1,6 +1,6 @@
 import React from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { Alert, Box, Button, CircularProgress, CssBaseline, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, CssBaseline, Stack, Typography } from '@mui/material';
 
 const redirectTheme = createTheme({
   palette: {
@@ -36,20 +36,8 @@ function buildCanonicalAdminTarget(): string {
   return `${MAIN_APP_URL}${adminPath}${search}${hash}`;
 }
 
-function RedirectShell() {
-  const [seconds, setSeconds] = React.useState(3);
+function LegacyAdminRedirectShell() {
   const target = React.useMemo(() => buildCanonicalAdminTarget(), []);
-
-  React.useEffect(() => {
-    const tick = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
-    const timer = window.setTimeout(() => {
-      window.location.replace(target);
-    }, 900);
-    return () => {
-      window.clearInterval(tick);
-      window.clearTimeout(timer);
-    };
-  }, [target]);
 
   return (
     <Box
@@ -67,7 +55,7 @@ function RedirectShell() {
         alignItems="center"
         sx={{
           width: '100%',
-          maxWidth: 640,
+          maxWidth: 680,
           p: { xs: 3, md: 5 },
           borderRadius: 5,
           bgcolor: 'rgba(15, 23, 42, 0.94)',
@@ -76,18 +64,17 @@ function RedirectShell() {
           textAlign: 'center',
         }}
       >
-        <CircularProgress sx={{ color: 'primary.main' }} />
         <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950, letterSpacing: 4 }}>
           BIN GROUP ADMIN
         </Typography>
         <Typography variant="h4" sx={{ fontWeight: 950, letterSpacing: -0.5 }}>
-          Opening the canonical command center
+          Legacy admin-panel domain is redirect-only
         </Typography>
         <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>
-          The dedicated admin-panel domain is now legacy redirect-only. Admin authentication and command operations run inside the main BIN GROUP app at /admin/dashboard.
+          The canonical admin command center now runs inside the main BIN GROUP app at <strong>/admin/dashboard</strong>. This prevents duplicate admin dashboards, stale routes, and cross-domain login dead-ends.
         </Typography>
         <Alert severity="info" variant="outlined" sx={{ borderColor: 'rgba(218,165,32,0.35)', color: 'rgba(255,255,255,0.78)' }}>
-          Redirecting in {seconds}s. This prevents the old admin-panel login timeout and removes cross-domain dead-ends.
+          Manual handoff only. No automatic redirect timer is used, so operators stay in control during launch verification.
         </Alert>
         <Button
           variant="contained"
@@ -100,8 +87,11 @@ function RedirectShell() {
             '&:hover': { bgcolor: '#e2ba45' },
           }}
         >
-          Continue to Admin Command Center
+          Continue to Canonical Admin Command Center
         </Button>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 800, overflowWrap: 'anywhere' }}>
+          Target: {target}
+        </Typography>
       </Stack>
     </Box>
   );
@@ -111,7 +101,7 @@ export default function App() {
   return (
     <ThemeProvider theme={redirectTheme}>
       <CssBaseline />
-      <RedirectShell />
+      <LegacyAdminRedirectShell />
     </ThemeProvider>
   );
 }
