@@ -1,6 +1,6 @@
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import fs from 'node:fs';
 
 let testEnv;
@@ -89,6 +89,27 @@ describe('Canonical profile workflow rules', () => {
     await assertFails(updateDoc(doc(ownerDb, 'amenityBookings/booking_other'), { status: 'approved' }));
     await assertSucceeds(updateDoc(doc(ownerDb, 'visitorParkingRequests/parking_owned'), { status: 'approved' }));
     await assertFails(updateDoc(doc(ownerDb, 'visitorParkingRequests/parking_other'), { status: 'approved' }));
+  });
+
+  it('owner tenant directory can query tenant records but cannot list the global user directory', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'tenants/tenant_a'), {
+      tenantId: 'tenant_a',
+      ownerId: 'owner_a',
+      propertyId: 'prop_owned',
+      displayName: 'Linked Tenant',
+    });
+    await setDoc(doc(adminDb, 'users/tenant_a'), {
+      role: 'tenant',
+      ownerId: 'owner_a',
+      propertyId: 'prop_owned',
+      displayName: 'Global User Directory Tenant',
+    });
+
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    await assertSucceeds(getDocs(query(collection(ownerDb, 'tenants'), where('ownerId', '==', 'owner_a'))));
+    await assertFails(getDocs(query(collection(ownerDb, 'users'), where('ownerId', '==', 'owner_a'))));
   });
 
   it('broker can submit an attributed referral but cannot browse private owner properties', async () => {
