@@ -24,7 +24,16 @@ function cleanEmail(value: unknown) {
 }
 
 function onboardingPaymentId(intakeId: string) {
-  return `${intakeId}_mobilization`;
+  // One canonical ID across package submission, Stripe verification, admin
+  // approval, contract activation, reporting, and audit evidence.
+  return intakeId;
+}
+
+function assertAuthenticatedOwner(request: any, ownerUid: string) {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner login is required before checkout.");
+  if (String(request.auth.uid) !== ownerUid) {
+    throw new HttpsError("permission-denied", "Checkout owner does not match the authenticated account.");
+  }
 }
 
 export const createStripeCheckoutSession = onCall({ cors: true }, async (request) => {
@@ -36,13 +45,39 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
   const ticketId = String(data.ticketId || "").trim();
   const designRequestId = String(data.designRequestId || "").trim();
   const amount = Number(data.amount);
-  
+
+  assertAuthenticatedOwner(request, ownerUid);
+  const tokenEmail = String(request.auth?.token?.email || "").trim().toLowerCase();
+  if (tokenEmail && tokenEmail !== ownerEmail) {
+    throw new HttpsError("permission-denied", "Checkout email does not match the authenticated account.");
+  }
+
   if (!intakeId && !ticketId && !designRequestId) {
     throw new HttpsError("invalid-argument", "Payment must be associated with an intake, ticket, or design request.");
   }
-  
+
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpsError("invalid-argument", "Valid payment amount is required.");
+  }
+
+  if (intakeId) {
+    const paymentId = onboardingPaymentId(intakeId);
+    const [paymentSnap, contractSnap] = await Promise.all([
+      db.collection("payment_transactions").doc(paymentId).get(),
+      db.collection("contracts").doc(intakeId).get(),
+    ]);
+    if (!paymentSnap.exists || !contractSnap.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Owner onboarding package is not persisted yet. Submit the signed contract, documents, and payment package before starting checkout."
+      );
+    }
+    const payment = paymentSnap.data() || {};
+    const contract = contractSnap.data() || {};
+    const persistedOwnerUid = String(payment.ownerUid || payment.ownerId || contract.ownerUid || contract.ownerId || "").trim();
+    if (persistedOwnerUid !== ownerUid) {
+      throw new HttpsError("permission-denied", "Persisted onboarding package belongs to another owner.");
+    }
   }
 
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
@@ -88,6 +123,7 @@ export const createStripeCheckoutSession = onCall({ cors: true }, async (request
     return { id: session.id, url: session.url };
   } catch (error: any) {
     console.error("Failed to create Stripe checkout session:", error);
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", "Stripe checkout session creation failed.");
   }
 });
@@ -96,7 +132,7 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
   const sig = request.headers["stripe-signature"];
   const key = stripeSecretKey.value() || process.env.STRIPE_SECRET_KEY;
   const webhookSecret = stripeWebhookSecret.value() || process.env.STRIPE_WEBHOOK_SECRET;
-  
+
   if (!key) {
     response.status(400).send("Webhook setup error: Stripe secret key is unconfigured.");
     return;
@@ -139,6 +175,7 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
       const paymentRef = db.collection("payment_transactions").doc(paymentId);
       batch.set(paymentRef, {
         paymentId,
+        contractId: intakeId,
         ownerUid,
         ownerId: ownerUid,
         intakeId,
@@ -146,16 +183,31 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
         paymentMethod: "STRIPE",
         gateway: "STRIPE",
         amount,
+        amountReceived: amount,
         currency: "AED",
         status: "PAID",
+        paymentStatus: "PAID",
         verificationState: "AUTO_VERIFIED",
         verified: true,
-        unlocksDashboard: true,
+        paymentVerified: true,
+        adminApprovalRequired: true,
+        unlocksDashboard: false,
+        activationState: "PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL",
         stripeSessionId: session.id,
         stripePaymentIntentId: String(session.payment_intent || ""),
         submittedAt: timestamp,
         verifiedAt: timestamp,
-        createdAt: timestamp,
+        updatedAt: timestamp
+      }, { merge: true });
+
+      const contractRef = db.collection("contracts").doc(intakeId);
+      batch.set(contractRef, {
+        paymentStatus: "PAID",
+        paymentVerified: true,
+        status: "PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL",
+        activationStatus: "PENDING_ADMIN_APPROVAL",
+        dashboardUnlockApproved: false,
+        stripeSessionId: session.id,
         updatedAt: timestamp
       }, { merge: true });
 
@@ -166,43 +218,33 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
         paymentMethod: "STRIPE",
         paymentState: "PAYMENT_VERIFIED",
         paymentStatus: "PAID",
-        status: "payment_approved",
+        status: "payment_verified_pending_admin_approval",
+        adminReviewState: "PAYMENT_VERIFIED_AWAITING_APPROVAL",
         ownerUid,
         ownerId: ownerUid,
         updatedAt: timestamp
       }, { merge: true });
 
-      const userRef = db.collection("users").doc(ownerUid);
-      batch.set(userRef, {
+      const ownerPendingPatch = {
         paymentVerified: true,
-        dashboardLocked: false,
-        dashboardUnlocked: true,
-        status: "active",
+        dashboardLocked: true,
+        dashboardUnlocked: false,
+        adminApproved: false,
+        status: "pending_admin_approval",
+        latestActivationContractId: intakeId,
+        activationStatus: "PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL",
         updatedAt: timestamp
-      }, { merge: true });
+      };
+      batch.set(db.collection("users").doc(ownerUid), ownerPendingPatch, { merge: true });
+      batch.set(db.collection("owners").doc(ownerUid), { ...ownerPendingPatch, status: "PENDING_ADMIN_APPROVAL" }, { merge: true });
+      batch.set(db.collection("owner_registration_requests").doc(ownerUid), ownerPendingPatch, { merge: true });
 
-      const ownerRef = db.collection("owners").doc(ownerUid);
-      batch.set(ownerRef, {
-        paymentVerified: true,
-        dashboardLocked: false,
-        dashboardUnlocked: true,
-        paymentStatus: "PAID",
-        status: "ACTIVE",
-        updatedAt: timestamp
-      }, { merge: true });
-
-      const registrationRef = db.collection("owner_registration_requests").doc(ownerUid);
-      batch.set(registrationRef, {
-        status: "active",
-        dashboardLocked: false,
-        dashboardUnlocked: true,
-        paymentVerified: true,
-        updatedAt: timestamp
-      }, { merge: true });
-
-      const auditRef = db.collection("audit_logs").doc();
-      batch.set(auditRef, {
-        action: "STRIPE_PAYMENT_VERIFIED",
+      batch.set(db.collection("audit_logs").doc(), {
+        action: "STRIPE_PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL",
+        actorId: ownerUid,
+        actorRole: "owner",
+        targetType: "payment_transactions",
+        targetId: paymentId,
         ownerUid,
         ownerId: ownerUid,
         intakeId,
@@ -214,8 +256,22 @@ export const stripeWebhook = onRequest({ cors: true }, async (request, response)
         createdAt: timestamp
       });
 
+      if (session.customer_details?.email || session.customer_email) {
+        batch.set(db.collection("mail").doc(), {
+          to: String(session.customer_details?.email || session.customer_email).toLowerCase(),
+          message: {
+            from: "BIN GROUP <ceo@bin-groups.com>",
+            replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+            subject: "BIN GROUP Card Payment Received - Approval Pending",
+            html: `<p>Your BIN GROUP card payment has been received and verified.</p><p>Your signed contract and onboarding documents are now awaiting final admin approval. The owner dashboard remains protected until that review is complete.</p><p>Reference: ${paymentId}</p>`,
+          },
+          metadata: { type: "stripe_owner_payment_received_pending_admin", paymentId, intakeId, ownerUid },
+          createdAt: timestamp,
+        });
+      }
+
       await batch.commit();
-      console.log(`Successfully processed Stripe payment for owner ${ownerUid}, intake ${intakeId}, payment ${paymentId}`);
+      console.log(`Stripe payment verified for owner ${ownerUid}, intake ${intakeId}, payment ${paymentId}; admin activation remains required.`);
     } else if (ownerUid && designRequestId) {
       const designRef = db.collection("design_requests").doc(designRequestId);
       batch.set(designRef, {
