@@ -15,6 +15,7 @@ concurrency:
 
 env:
   E2E_BASE_URL: https://bin-group-57c60.web.app
+  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL }}
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
@@ -53,8 +54,10 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Show smoke test target
-        run: echo "Running live smoke tests against ${E2E_BASE_URL}"
+      - name: Show smoke test targets
+        run: |
+          echo "Running live smoke tests against ${E2E_BASE_URL}"
+          echo "Running admin smoke tests against ${E2E_ADMIN_BASE_URL:-not-configured}"
 
       - name: Validate public-smoke environment
         if: github.event_name != 'workflow_dispatch'
@@ -70,7 +73,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: node scripts/seed-e2e-auth.mjs
 
-      - name: Seed tenant launch residence data
+      - name: Seed five-role launch fixtures
         if: github.event_name == 'workflow_dispatch'
         run: node scripts/seed-live-role-test-data.mjs
 
@@ -106,6 +109,7 @@ jobs:
             echo "event=${GITHUB_EVENT_NAME}"
             echo "actor=${GITHUB_ACTOR}"
             echo "base_url=${E2E_BASE_URL}"
+            echo "admin_base_url=${E2E_ADMIN_BASE_URL}"
             echo "admin_secret_configured=$([[ -n "${E2E_ADMIN_EMAIL}" && -n "${E2E_ADMIN_PASSWORD}" ]] && echo true || echo false)"
             echo "owner_secret_configured=$([[ -n "${E2E_OWNER_EMAIL}" && -n "${E2E_OWNER_PASSWORD}" ]] && echo true || echo false)"
             echo "tenant_secret_configured=$([[ -n "${E2E_TENANT_EMAIL}" && -n "${E2E_TENANT_PASSWORD}" ]] && echo true || echo false)"

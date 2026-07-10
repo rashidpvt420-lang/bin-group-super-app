@@ -1,9 +1,8 @@
-import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import admin from 'firebase-admin';
 import chalk from 'chalk';
+import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 
-const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
-
+const projectId = resolveFirebaseAdminProjectId();
 const gateKey = process.argv[2];
 const verifiedBy = process.argv[3];
 const evidence = process.argv[4];
@@ -15,35 +14,27 @@ if (!gateKey || !verifiedBy || !evidence) {
     process.exit(1);
 }
 
-const appOptions = { projectId };
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    appOptions.credential = applicationDefault();
-}
-try {
-    initializeApp(appOptions);
-} catch (e) {
-    if (e.code !== 'app/duplicate-app') throw e;
-}
-
-const db = getFirestore();
+initializeFirebaseAdmin(admin, projectId);
+const db = admin.firestore();
 
 async function verifyGate() {
     console.log(chalk.blue(`==> Verifying launch gate: ${gateKey}`));
-    
+    console.log(chalk.gray(`Firebase project: ${projectId}`));
+
     const docRef = db.doc('system_health/admin_summaries');
-    
+
     const updateData = {
         [gateKey]: true,
-        [`${gateKey}VerifiedAt`]: FieldValue.serverTimestamp(),
+        [`${gateKey}VerifiedAt`]: admin.firestore.FieldValue.serverTimestamp(),
         [`${gateKey}VerifiedBy`]: verifiedBy,
         [`${gateKey}Evidence`]: evidence
     };
-    
+
     try {
         await docRef.set(updateData, { merge: true });
         console.log(chalk.green(`✅ Successfully recorded live proof for '${gateKey}'.`));
         console.log(chalk.gray(`Evidence logged: ${evidence}`));
-        console.log(chalk.green(`The Admin Launch Health panel will now display PASS for this item.`));
+        console.log(chalk.green('The Admin Launch Health panel will now display PASS for this item.'));
         process.exit(0);
     } catch (err) {
         console.error(chalk.red('❌ Failed to record evidence to Firestore:'));

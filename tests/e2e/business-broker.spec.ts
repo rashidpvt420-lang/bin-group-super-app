@@ -1,7 +1,7 @@
 /**
  * business-broker.spec.ts
  * Deep E2E business flow for the Broker role.
- * Verifies: lead submission controls and commission tracking are launch-ready.
+ * Verifies: authenticated broker identity, lead attribution, and commission visibility.
  */
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
@@ -28,28 +28,18 @@ async function login(page: Page) {
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL('**/broker/dashboard', { timeout: 20000 });
-  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10000 });
-}
+  await page.waitForURL('**/broker/dashboard', { timeout: 20_000 });
 
-async function requireVisible(page: Page, selectors: string[], label: string) {
-  for (const selector of selectors) {
-    const target = page.locator(selector).first();
-    if (await target.isVisible({ timeout: 1500 }).catch(() => false)) return target;
-  }
-  const bodyPreview = await page.locator('body').innerText({ timeout: 5000 }).catch(() => 'body unavailable');
-  throw new Error(`Missing required broker launch control: ${label}. Selectors: ${selectors.join(' | ')}. Body: ${bodyPreview.slice(0, 1200)}`);
-}
+  const identitySpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
+  await expect(
+    identitySpinner,
+    'Broker identity must resolve. Seed/repair the broker Auth role claim and users/{uid} profile when this remains visible.'
+  ).toBeHidden({ timeout: 15_000 });
 
-async function clickRequired(page: Page, selectors: string[], label: string) {
-  const target = await requireVisible(page, selectors, label);
-  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: 10000 });
-  await target.click();
-}
-
-async function fillRequired(page: Page, selectors: string[], value: string, label: string) {
-  const target = await requireVisible(page, selectors, label);
-  await target.fill(value);
+  await expect(page.locator('body')).not.toContainText(
+    /permission-denied|missing or insufficient permissions|application error|minified react error|identity fault|role authorization error/i,
+    { timeout: 10_000 },
+  );
 }
 
 test.describe('Broker Business Workflow', () => {
@@ -57,49 +47,37 @@ test.describe('Broker Business Workflow', () => {
     await login(page);
   });
 
-  test('Broker can submit a new property lead and view commissions', async ({ page }) => {
-    test.setTimeout(90000);
+  test('Broker can submit an attributed property lead and view commissions', async ({ page }) => {
+    test.setTimeout(100_000);
+    const uniqueLead = `E2E Lead ${Date.now()}`;
 
-    await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+    await page.goto('/broker/leads/new', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
 
-    await clickRequired(page, [
-      '[data-testid="broker-submit-lead"]',
-      '[data-testid*="lead" i]',
-      'button:has-text("Submit Lead")',
-      'button:has-text("New Lead")',
-      'a:has-text("Submit Lead")',
-      'a:has-text("New Lead")',
-    ], 'submit lead action');
+    const clientName = page.getByTestId('broker-lead-client-name');
+    await expect(clientName).toBeVisible({ timeout: 15_000 });
+    await clientName.fill(uniqueLead);
 
-    await fillRequired(page, [
-      '[data-testid="broker-lead-owner-name"] input',
-      'input[name="ownerName"]',
-      'input[placeholder*="owner" i]',
-      'input[placeholder*="name" i]',
-    ], 'E2E Lead Owner', 'lead owner name');
+    await page.getByLabel(/Phone Number/i).fill('+971501234567');
+    await page.getByLabel(/Email Address/i).fill(`broker-e2e-${Date.now()}@example.com`);
+    await page.getByLabel(/Property Interest|Requirement/i).fill('Full maintenance and property management for an E2E staging villa');
+    await page.getByLabel(/Location|Emirate/i).fill('Al Ain');
+    await page.getByLabel(/Budget Range/i).fill('50000');
+    await page.getByLabel(/Mission Notes/i).fill('Credentialed staging verification of broker attribution and lead creation.');
 
-    await fillRequired(page, [
-      '[data-testid="broker-lead-property-name"] input',
-      'input[name="propertyName"]',
-      'input[placeholder*="property" i]',
-    ], 'E2E Lead Property', 'lead property name');
+    const submit = page.getByTestId('broker-lead-submit');
+    await expect(submit).toBeEnabled({ timeout: 10_000 });
+    await submit.click();
 
-    await clickRequired(page, [
-      '[data-testid="broker-lead-submit"]',
-      'button:has-text("Submit")',
-      'button:has-text("Save")',
-    ], 'lead submit action');
-
-    await expect(page.locator('body')).toContainText(/success|submitted|lead|saved/i, { timeout: 20000 });
-    await expect(page.locator('body')).not.toContainText(/failed|permission-denied|missing or insufficient permissions/i, { timeout: 5000 });
+    await expect(page.getByText(/Lead recorded with attribution/i)).toBeVisible({ timeout: 25_000 });
+    const createdLeadCard = page.getByTestId('broker-lead-card').filter({ hasText: uniqueLead }).first();
+    await expect(createdLeadCard).toBeVisible({ timeout: 20_000 });
+    await expect(createdLeadCard).toContainText(/ATTRIBUTION|broker_lead_/i, { timeout: 20_000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|Lead could not be submitted/i, { timeout: 5_000 });
 
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
-
-    await expect(
-      page.locator('[data-testid*="commission" i], table, [role="table"], .MuiDataGrid-root, text=/commission|earned|pending/i').first(),
-      'Broker commissions page must render commission tracking surface'
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    await expect(page.getByText(/Finance & Payouts/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 15_000 });
   });
 });

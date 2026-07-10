@@ -6,233 +6,162 @@ Repo: `rashidpvt420-lang/bin-group-super-app`
 
 ## Decision
 
-The software route ownership has been consolidated, but the app must remain **NO-GO for unrestricted hard public launch** until live production evidence is recorded for the external gates in `launch_package/hard-launch-readiness.json`.
+The app remains **NO-GO for unrestricted hard public launch** until the production evidence gates in `launch_package/hard-launch-readiness.json` are genuinely verified.
 
-The correct current launch state remains controlled pilot / verification mode because the hard-launch register still contains required gates with `external_verification_required`.
+The credentialed staging run proved that the remaining work is now split into two classes:
 
-## What was fixed in this pass
+1. deterministic software/test defects that can be fixed in code; and
+2. production/provider/device/pilot evidence that cannot be fabricated in the repository.
 
-### 1. Legacy admin panel stopped acting like a second app
+## Correct canonical ownership
 
-File changed: `apps/admin-panel/src/App.tsx`
-
-- Converted the legacy admin-panel bundle into a manual handoff shell.
-- Removed automatic redirect behavior.
-- Removed timer-based redirect risk.
-- Stated that the canonical admin route is `/admin/dashboard` in the main app.
-- Prevents operators from editing old admin routes and thinking they are changing the real launch command center.
-
-### 2. Legacy owner app stopped acting like a second Super App
-
-File changed: `apps/owner-app/src/App.tsx`
-
-- Replaced the stale standalone owner-app router with a manual handoff shell.
-- Removed old duplicate ownership over tenant, technician, broker, and owner routes.
-- Preserved path handoff to the canonical main app.
-- Blocks the confusion where a dashboard fix lands in `apps/owner-app` but production users are actually served from `src/owner/OwnerApp.tsx`.
-
-### 3. Canonical admin dashboard now includes the missing command coverage
-
-File changed: `src/admin/AdminTerminal.tsx`
-
-Added merged operational coverage for:
-
-- Owner activation
-- Tenant operations
-- Technician dispatch
-- Broker attribution
-- Open SLA load
-- Payment review
-- Launch evidence gates
-- Route consolidation state
-
-Also added:
-
-- Canonical SLA policy display from `CANONICAL_SLA_POLICY`
-- Workflow ownership map tied to launch gates
-- Route consolidation guard in the admin verification runbook
-- Clear warning that hard public launch is blocked until evidence gates pass
-
-### 4. Role quick-action panel contrast fixed across dashboards
-
-File changed: `src/components/RoleQuickActionsPanel.tsx`
-
-- Fixed light/dark dashboard contrast issues.
-- Owner, Technician, and Broker dashboards now use a readable light-panel surface.
-- Tenant/Admin dark portals keep dark-surface behavior.
-
-### 5. Route consolidation guard added
-
-File added: `scripts/verify-route-consolidation.mjs`
-
-This script blocks future confusion by checking that:
-
-- Main app owns all five profile route shells.
-- `/owner-dashboard` and `/dashboard` redirect to `/owner/dashboard` instead of separate dashboard files.
-- Owner, Tenant, Technician, and Broker simple dashboards are the default entry points.
-- Full dashboards remain available only under `/dashboard/full`.
-- Legacy admin-panel and owner-app are handoff-only.
-- The launch register cannot claim `PUBLIC_LAUNCH_READY` while required external gates still need evidence.
-
-### 6. Hard launch test chain updated
-
-File changed: `package.json`
-
-Added:
-
-```bash
-npm run test:route-consolidation
-```
-
-Updated:
-
-```bash
-npm run test:hard-launch-readiness
-```
-
-Now hard-launch readiness runs route consolidation first, then the existing hard-launch and profile evidence checks.
-
-## Canonical route ownership after consolidation
-
-| Area | Canonical file |
+| Area | Canonical owner |
 |---|---|
-| Main shell | `src/App.tsx` |
+| Main public and role shell | `src/App.tsx` |
 | Owner portal | `src/owner/OwnerApp.tsx` |
 | Tenant portal | `src/tenant/TenantApp.tsx` |
 | Technician portal | `src/technician/TechnicianApp.tsx` |
 | Broker portal | `src/broker/BrokerApp.tsx` |
-| Admin command center | `src/admin/AdminTerminal.tsx` |
-| Legacy admin-panel | `apps/admin-panel/src/App.tsx` handoff only |
-| Legacy owner-app | `apps/owner-app/src/App.tsx` handoff only |
+| Main-app admin launch/evidence handoff | `src/admin/AdminTerminal.tsx` |
+| Dedicated operational admin application | `apps/admin-panel/src/App.tsx` |
+| Legacy owner application | `apps/owner-app/src/App.tsx` handoff only |
 
-## Dashboard status by profile
+The dedicated admin application is not a legacy duplicate. Repository history and its operational page set show that it owns owner, tenant, ticket, technician, payment, document, audit, HR, SOS, reports, map, and operations workflows. The main-app `AdminTerminal` is the protected launch/evidence overview and handoff entry.
 
-### Owner
+## Software defects fixed after credentialed staging validation
 
-Canonical entry: `/owner/dashboard`  
-File: `src/owner/pages/OwnerSimpleDashboardPage.tsx`
+### Owner onboarding stability
 
-Status:
+File: `tests/e2e/business-owner.spec.ts`
 
-- Simple dashboard is the default.
-- Full dashboard remains at `/owner/dashboard/full`.
-- Owner activation guard remains active in `src/owner/OwnerApp.tsx`.
-- Legacy units page is explicitly moved behind `/owner/legacy-units`.
+- Uses the exact Property Location test IDs.
+- Supplies and verifies valid UAE coordinates.
+- Uses the enabled canonical Continue button instead of an unstable multi-button fallback.
+- Removes the duplicate coordinate-save click path that caused intermittent step stalls.
 
-Launch-critical checks still needed live:
+### Technician workflow alignment
 
-- Onboarding → contract → payment proof → admin approval → dashboard unlock.
-- IBAN, documents, units, tenants, approvals, property passport, and tickets must be verified with production data.
+File: `tests/e2e/business-technician.spec.ts`
 
-### Tenant
+- Removed invalid mixed CSS/text Playwright selector syntax.
+- Tests the canonical `/technician/jobs` and `/technician/job/:id` workflow.
+- Covers assigned/open mission selection, travel, arrival, PPE/safety confirmation, start work, proof upload, and completion.
+- Requires seeded tenant before-proof before mission closure.
 
-Canonical entry: `/tenant/dashboard`  
-File: `src/tenant/pages/TenantSimpleDashboardPage.tsx`
+### Broker authentication, lead creation, and audit integrity
 
-Status:
+Files:
 
-- Simple dashboard is the default.
-- Full dashboard remains at `/tenant/dashboard/full`.
-- Request, tickets, emergency, documents, payments, keys, parcels, visitor parking, marketplace, staff directory, messages, community, and renewals routes are registered.
+- `tests/e2e/business-broker.spec.ts`
+- `src/broker/pages/BrokerLeadsPage.tsx`
 
-Launch-critical checks still needed live:
+Changes:
 
-- Real tenant linked to a real unit.
-- Photo upload request.
-- Notification delivery.
-- Ticket tracking and completion verification.
+- Adds a clear failure when broker role claims/profile do not resolve.
+- Uses the real `/broker/leads/new` route and actual form controls.
+- Removes direct client writes to `audit_logs` and `auditLogs`.
+- Uses the server-authoritative `logUserAuditAction` bridge.
+- Adds stable test IDs for lead creation.
+- Verifies lead attribution and commission visibility.
 
-### Technician
+### Dedicated operational admin restored
 
-Canonical entry: `/technician/dashboard`  
-File: `src/technician/pages/TechnicianSimpleDashboardPage.tsx`
+Files:
 
-Status:
+- `apps/admin-panel/src/App.tsx`
+- `tests/e2e/business-admin.spec.ts`
 
-- Simple dashboard is the default.
-- Full dashboard remains at `/technician/dashboard/full`.
-- Jobs, map, history, profile, HR, offline queue, support, and proof readiness routes are registered.
+Changes:
 
-Launch-critical checks still needed live:
+- Restores the dedicated authenticated admin router instead of a redirect-only shell.
+- Restores operational routes for dashboard, owners, tenants, tickets, technicians, payments, documents, audit, reports, HR, SOS, map, and operations modules.
+- Removes the false boot-release timer.
+- Runs admin E2E against `E2E_ADMIN_BASE_URL`, not the main role-app URL.
+- Adds injected service-account JSON/base64 support for server-side fixture setup.
 
-- Job assignment.
-- Technician accept/on-site/resolve path.
-- GPS and before/after evidence from a physical device.
-- Closure audit trail.
+### Five-role fixture and credential support
 
-### Broker
+Files:
 
-Canonical entry: `/broker/dashboard`  
-File: `src/broker/pages/BrokerSimpleDashboardPage.tsx`
+- `scripts/firebase-admin-bootstrap.mjs`
+- `scripts/seed-live-role-test-data.mjs`
+- `scripts/repair-e2e-role-claims.mjs`
+- `scripts/verify-launch-gate-live.mjs`
+- `scripts/verify-e2e-env.mjs`
+- `.github/workflows/live-role-smoke.yml`
 
-Status:
+Changes:
 
-- Simple dashboard is the default.
-- Full dashboard remains at `/broker/dashboard/full`.
-- Leads, referrals, commissions, attribution, documents, and profile routes are registered.
+- Supports GitHub Workload Identity, `GOOGLE_APPLICATION_CREDENTIALS`, or injected `FIREBASE_SERVICE_ACCOUNT_JSON`.
+- Loads `.env.e2e` inside the fixture process rather than assuming another child process can export it.
+- Seeds tenant property/unit/contract data.
+- Seeds technician profile and an assigned mission with tenant before-proof.
+- Seeds broker profile and a deterministic commission display fixture.
+- Adds a claims-only repair command that does not reset account passwords.
+- Requires `E2E_ADMIN_BASE_URL` for strict five-profile audits.
+- Records both main and dedicated-admin targets in proof manifests.
 
-Launch-critical checks still needed live:
+Fixtures are test data. Their existence is not accepted as hard-launch production proof.
 
-- Broker lead/referral survives owner onboarding.
-- Contract activation links to broker source.
-- Commission is locked once with no duplicate payout record.
+## Route guard
 
-### Admin
+`scripts/verify-route-consolidation.mjs` now enforces:
 
-Canonical entry: `/admin/dashboard`  
-File: `src/admin/AdminTerminal.tsx`
+- Owner, Tenant, Technician, and Broker routes remain in the main app.
+- The main-app admin route remains a protected launch/evidence handoff.
+- The dedicated admin application retains its real operational router.
+- The legacy owner application remains handoff-only.
+- No admin auto-redirect or false boot-release timer is allowed.
+- The launch register cannot claim `PUBLIC_LAUNCH_READY` while required external evidence is pending.
 
-Status:
+## Verified staging results already obtained
 
-- Admin dashboard is now the merged command center.
-- Legacy admin-panel is handoff-only.
-- Admin sees live counts, launch gates, workflow map, SLA policy, audit preview, and runbook.
+- Tenant request creation with photo: PASS.
+- Tenant completed-work approval: PASS.
+- Arabic/English RTL toggle: PASS.
+- Google Maps integration: PASS.
 
-Launch-critical checks still needed live:
+These results should be preserved with timestamp, staging URLs, commit SHA, and Playwright artifacts. They must not be represented as production proof unless the hard-launch evidence policy explicitly accepts staging evidence for that gate.
 
-- Rotated admin credential login.
-- Payment approval and activation.
-- Owner, tenant, technician, broker, ticket, audit, and notification visibility.
-- Production App Check, Stripe live, branded email, and secret rotation evidence.
+## Remaining live hard-launch blockers
 
-## Remaining hard public launch blockers
+1. Production admin credential works after hard refresh.
+2. Main login and role routing work after hard refresh.
+3. Owner onboarding → payment verification → admin approval → dashboard unlock.
+4. Tenant real-unit request, production upload, and notification delivery.
+5. Technician real-device GPS plus before/after evidence.
+6. Broker attribution survives contract activation and locks one non-duplicated commission.
+7. Admin core operational workflows and staff creation work in production.
+8. Payment remains locked until explicit admin approval and activates exactly once.
+9. Stripe live AED charge, signed webhook, amount verification, and idempotency.
+10. Firebase App Check production enforcement.
+11. Admin credentials, service secrets, and privileged access rotation.
+12. Approved BIN GROUP branded sender delivery.
+13. Renewal watch, document queue, and notification evidence.
+14. Controlled 24–48 hour production pilot with no P0/P1 incident.
 
-These are not code-only fixes. They require live production verification:
-
-1. Production admin credential rotated and confirmed after hard refresh.
-2. Main app login and role routing verified after hard refresh.
-3. Owner onboarding, payment verification, and dashboard unlock verified end-to-end.
-4. Tenant real-unit photo request and notification delivery verified.
-5. Technician GPS plus before/after evidence verified on a physical device.
-6. Broker commission attribution lock verified once with no duplication.
-7. Admin core operational pages and evidence visibility verified.
-8. Admin staff/technician creation with correct claims verified.
-9. Stripe live mode, webhook, AED charge, and idempotency verified.
-10. Firebase App Check production enforcement verified.
-11. Admin password, secrets, and privileged access rotated.
-12. Branded BIN GROUP email sender approved and tested.
-13. Renewal watch and document queue verified.
-14. Controlled 24–48 hour production pilot completes with no P0/P1 incident.
-
-## Required commands before merge/deploy
-
-Run locally from the repo root:
+## Required verification after this correction
 
 ```bash
 npm run test:route-consolidation
 npm run build
 npm run build:functions
+npm run build:admin
 npm run test:stability
-npm run test:hard-launch-readiness
+npm run typecheck
+npm run lint
 npm run test:mobile-store-readiness
+npm run test:e2e:env
+npm run test:e2e:business
+npm run launch:blockers
+npm run test:hard-launch-readiness
 ```
 
 Expected truth:
 
-- `test:route-consolidation` should pass.
-- `build`, `build:functions`, and `test:stability` should pass before deployment.
-- `test:hard-launch-readiness` should still fail until the external production gates are recorded as passed with real evidence.
+- All software/build/type/lint/staging workflow checks should pass after credentials and fixtures are available.
+- `launch:blockers` and `test:hard-launch-readiness` must remain NO-GO until accepted production evidence exists for every required gate.
 
 ## Audit conclusion
 
-The duplicate route/dashboard ownership problem is now addressed at the software-structure level. The remaining launch blocker is no longer “which file is real?”; it is production evidence. Do not claim full hard public launch until the hard-launch register and `system_health/admin_summaries` contain verified proof for every required gate.
+The staging run exposed real defects that a static green build could not detect. Those deterministic defects have been corrected on the PR branch. The launch register must remain `CONTROLLED_PILOT_ONLY` until the production evidence chain is completed without manual status fabrication.

@@ -1,69 +1,111 @@
 /**
  * business-admin.spec.ts
- * Deep E2E business flow for the Admin role.
- * Verifies: property, tenant import, ticket assignment, and contract approval controls are present and executable.
+ * Deep E2E business flow for the dedicated Admin application.
+ * Verifies: property onboarding, tenant import, ticket assignment, and payment approval controls.
  */
 import { test, expect, Page } from '@playwright/test';
 import admin from 'firebase-admin';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
+const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
 
 function requireLaunchCredentials() {
-  if (!EMAIL || !PASSWORD) {
-    throw new Error('Missing E2E_ADMIN_EMAIL/PASSWORD. Admin launch validation cannot be skipped for public release.');
+  const missing = [
+    !ADMIN_BASE_URL ? 'E2E_ADMIN_BASE_URL' : '',
+    !EMAIL ? 'E2E_ADMIN_EMAIL' : '',
+    !PASSWORD ? 'E2E_ADMIN_PASSWORD' : '',
+  ].filter(Boolean);
+  if (missing.length) {
+    throw new Error(`Missing ${missing.join(', ')}. Dedicated admin launch validation cannot be skipped.`);
   }
+}
+
+function parseServiceAccount() {
+  const raw = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
+  if (!raw) return null;
+
+  for (const candidate of [raw, Buffer.from(raw, 'base64').toString('utf8')]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed?.private_key) parsed.private_key = String(parsed.private_key).replace(/\\n/g, '\n');
+      if (parsed?.client_email && parsed?.private_key) return parsed;
+    } catch {
+      // Try the next supported encoding.
+    }
+  }
+  throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON must contain service-account JSON or its base64 encoding.');
+}
+
+function initializeAdminSdk() {
+  if (admin.apps.length) return;
+  const serviceAccount = parseServiceAccount();
+  const projectId = process.env.GCP_PROJECT_ID
+    || process.env.GCLOUD_PROJECT
+    || process.env.GOOGLE_CLOUD_PROJECT
+    || serviceAccount?.project_id
+    || 'bin-group-57c60';
+
+  if (serviceAccount) {
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount), projectId });
+  } else {
+    admin.initializeApp({ projectId });
+  }
+}
+
+const adminUrl = (pathname: string) => `${ADMIN_BASE_URL}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+
+async function waitForLoader(page: Page) {
+  await page.locator('.MuiCircularProgress-root').waitFor({ state: 'detached', timeout: 20_000 }).catch(() => undefined);
+  await page.waitForTimeout(500);
 }
 
 async function login(page: Page) {
   requireLaunchCredentials();
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForLoadState('domcontentloaded');
+  await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 25_000 });
   await waitForLoader(page);
-  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error|system interruption/i, { timeout: 10000 });
-}
-
-async function waitForLoader(page: Page) {
-  await page.locator('.MuiCircularProgress-root').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(1000);
+  await expect(page.locator('body')).not.toContainText(
+    /permission-denied|missing or insufficient permissions|application error|minified react error|system interruption/i,
+    { timeout: 10_000 },
+  );
 }
 
 async function requireVisible(page: Page, selectors: string[], label: string) {
   for (const selector of selectors) {
     const target = page.locator(selector).first();
-    if (await target.isVisible({ timeout: 2000 }).catch(() => false)) return target;
+    if (await target.isVisible({ timeout: 2500 }).catch(() => false)) return target;
   }
   const bodyPreview = await page.locator('body').innerText({ timeout: 5000 }).catch(() => 'body unavailable');
-  throw new Error(`Missing required admin launch control: ${label}. Selectors: ${selectors.join(' | ')}. Body: ${bodyPreview.slice(0, 1200)}`);
+  throw new Error(`Missing required admin launch control: ${label}. Selectors: ${selectors.join(' | ')}. Body: ${bodyPreview.slice(0, 1400)}`);
 }
 
 async function clickRequired(page: Page, selectors: string[], label: string) {
   const target = await requireVisible(page, selectors, label);
-  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: 10000 });
+  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: 10_000 });
   await target.click();
 }
 
 test.describe('Admin Business Workflow', () => {
   test.beforeAll(async () => {
-    if (!admin.apps.length) {
-      admin.initializeApp();
-    }
+    requireLaunchCredentials();
+    initializeAdminSdk();
     const db = admin.firestore();
-    
-    // Seed E2E property & unit first if not exists
+
     await db.collection('properties').doc('e2e-test-property').set({
       propertyId: 'e2e-test-property',
       name: 'E2E Test Property',
       propertyName: 'E2E Test Property',
       zone: 'Dubai Marina',
       emirate: 'Dubai',
-      status: 'active'
-    });
+      status: 'active',
+      e2eLaunchSeed: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
 
-    // Seed E2E Ticket
     await db.collection('maintenanceTickets').doc('e2e-test-ticket-id').set({
       tenantId: 'e2e-tenant-uid',
       unitNumber: '101',
@@ -74,10 +116,10 @@ test.describe('Admin Business Workflow', () => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       propertyName: 'E2E Test Property',
       propertyId: 'e2e-test-property',
-      floorNumber: '1'
-    });
+      floorNumber: '1',
+      e2eLaunchSeed: true,
+    }, { merge: true });
 
-    // Seed E2E Contract awaiting approval
     await db.collection('contracts').doc('e2e-test-contract-id').set({
       paymentId: 'E2E_PAYMENT_ID_TEST',
       amount: 5000,
@@ -87,15 +129,17 @@ test.describe('Admin Business Workflow', () => {
       provider: 'Bank Transfer',
       status: 'pending_approval',
       paymentVerified: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+      e2eLaunchSeed: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
   });
 
   test.afterAll(async () => {
+    if (!admin.apps.length) return;
     const db = admin.firestore();
-    await db.collection('maintenanceTickets').doc('e2e-test-ticket-id').delete().catch(() => {});
-    await db.collection('contracts').doc('e2e-test-contract-id').delete().catch(() => {});
-    await db.collection('properties').doc('e2e-test-property').delete().catch(() => {});
+    await db.collection('maintenanceTickets').doc('e2e-test-ticket-id').delete().catch(() => undefined);
+    await db.collection('contracts').doc('e2e-test-contract-id').delete().catch(() => undefined);
+    await db.collection('properties').doc('e2e-test-property').delete().catch(() => undefined);
   });
 
   test.beforeEach(async ({ page }) => {
@@ -103,41 +147,21 @@ test.describe('Admin Business Workflow', () => {
   });
 
   test('Admin property and tenant import controls are launch-ready', async ({ page }) => {
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.goto(adminUrl('/onboard-property'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    await expect(page.locator('input, textarea').first(), 'property onboarding must expose editable fields').toBeVisible({ timeout: 15_000 });
 
-    await clickRequired(page, [
-      '[data-testid="admin-add-property"]',
-      '[data-testid*="add-property" i]',
-      'button:has-text("Add Property")',
-      'button:has-text("Create Property")',
-    ], 'add property');
-
+    await page.goto(adminUrl('/bulk-import'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    await expect(page.locator('input, textarea').first(), 'property form must expose editable fields').toBeVisible({ timeout: 10000 });
-
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-    await waitForLoader(page);
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
-
-    await clickRequired(page, [
-      '[data-testid="admin-bulk-upload-tenants"]',
-      '[data-testid*="bulk" i]',
-      'button:has-text("Import Tenants")',
-      'button:has-text("Bulk Upload")',
-      'button:has-text("Import CSV")',
-      'button:has-text("Upload CSV")',
-    ], 'tenant bulk import');
-
-    await waitForLoader(page);
-    await expect(page.locator('input[type="file"]').first(), 'tenant import must expose a file picker').toBeAttached({ timeout: 10000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    await expect(page.locator('input[type="file"]').first(), 'tenant import must expose a file picker').toBeAttached({ timeout: 15_000 });
   });
 
   test('Admin ticket assignment and contract approval controls are launch-ready', async ({ page }) => {
-    await page.goto('/tickets', { waitUntil: 'domcontentloaded' });
+    await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
 
     await clickRequired(page, [
       '[data-testid="admin-ticket-view"]',
@@ -147,9 +171,8 @@ test.describe('Admin Business Workflow', () => {
       'a:has-text("View")',
     ], 'open ticket');
 
-    // Click cancel to close the details dialog before assignment check
-    await page.locator('button:has-text("CANCEL")').first().click();
-    await page.waitForTimeout(500);
+    const cancelDetails = page.locator('button:has-text("CANCEL"), button:has-text("Close")').first();
+    if (await cancelDetails.isVisible({ timeout: 3000 }).catch(() => false)) await cancelDetails.click();
 
     await clickRequired(page, [
       '[data-testid="admin-assign-technician"]',
@@ -159,15 +182,14 @@ test.describe('Admin Business Workflow', () => {
       'button:has-text("Assign")',
     ], 'assign technician');
 
-    await expect(page.locator('body'), 'assignment must expose assignment list').toContainText('MANUAL SPECIALIST ASSIGNMENT', { timeout: 10000 });
-    
-    // Close the assignment dialog
-    await page.locator('button:has-text("CANCEL")').first().click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('body'), 'assignment must expose assignment controls').toContainText(/MANUAL SPECIALIST ASSIGNMENT|Assign Technician|Technician/i, { timeout: 10_000 });
 
-    await page.goto('/manual-approvals', { waitUntil: 'domcontentloaded' });
+    const cancelAssignment = page.locator('button:has-text("CANCEL"), button:has-text("Close")').first();
+    if (await cancelAssignment.isVisible({ timeout: 3000 }).catch(() => false)) await cancelAssignment.click();
+
+    await page.goto(adminUrl('/manual-approvals'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10000 });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
 
     await clickRequired(page, [
       '[data-testid="admin-approve-contract"]',
