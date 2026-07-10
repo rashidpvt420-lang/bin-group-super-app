@@ -1,17 +1,13 @@
 // packages/shared/src/index.ts
-// console.log("⚡ [SHARED-LOAD] Exported Firebase."); (DISABLED TO PREVENT POISONING)
-// export * from './lib/firebase';
 export * from './utils/uaePricingEngine';
 export * from './pricing/uaePricingMatrix2026';
 export * from './pricing/calculateUaeQuote2026';
 export * from './utils/buildingHealthEngine';
 export * from './utils/predictiveIntelligence';
 export * from './geo/geoAnchor';
-console.log("⚡ [SHARED-LOAD] Exported Pricing Engine.");
-export * from './utils/RateLimiter';
-console.log("⚡ [SHARED-LOAD] Exported Rate Limiter.");
+export { default as RateLimiter } from './utils/RateLimiter';
 export * from './theme/binGroupTheme';
-console.log("⚡ [SHARED-LOAD] Exported Theme Tokens.");
+export * from './components/SafeIcon';
 export * from './components/SovereignAIChat';
 export * from './context/AIContext';
 export * from './lib/notificationService';
@@ -24,4 +20,3 @@ export * from './components/SovereignSupportChat';
 export * from './components/SovereignAlertHandler';
 export * from './utils/auditLogger';
 export * from './lib/firebase';
-console.log("⚡ [SHARED-LOAD] Evaluation Complete.");
