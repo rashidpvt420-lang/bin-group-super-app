@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const failures = [];
 
@@ -14,6 +15,23 @@ function assert(condition, message) {
   if (!condition) failures.push(message);
 }
 
+function runGuard(script) {
+  try {
+    execFileSync(process.execPath, [script], { stdio: 'inherit' });
+  } catch (error) {
+    failures.push(`Nested launch guard failed: ${script}`);
+  }
+}
+
+// Keep these inside test:stability so CI and Firebase production validation cannot
+// accidentally bypass route, duplicate, dashboard, onboarding, or profile checks.
+runGuard('scripts/audit-admin-canonicalization.mjs');
+runGuard('scripts/audit-five-profile-workflows.mjs');
+runGuard('scripts/audit-route-and-file-duplicates.mjs');
+runGuard('scripts/verify-five-profile-workflows.mjs');
+runGuard('scripts/verify-duplicate-resolution.mjs');
+runGuard('scripts/verify-canonical-route-architecture.mjs');
+
 const firebaseJson = read('firebase.json');
 const workflow = read('.github/workflows/firebase-production-deploy.yml');
 const app = read('src/App.tsx');
@@ -24,6 +42,7 @@ const stripePayment = read('functions/stripePayment.ts');
 const ownerDashboard = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
 const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
+const onboardingPersistence = read('src/store/onboardingPersistence.ts');
 
 const ownerActivationIsAdminControlled =
   firestoreRules.includes('adminCreateOrUpdateActivatedContract') ||
@@ -73,6 +92,7 @@ assert(firebaseJson.includes('"target": "admin"'), 'Firebase admin hosting must 
 assert(workflow.includes('Validate production build'), 'Workflow must validate production build.');
 assert(workflow.includes('Deploy Firebase production stack'), 'Workflow must include production deployment job.');
 assert(workflowDispatchOnly || deployJobHasManualGate || emergencyPushDeployIsExplicit, 'Production deploy must be manual-only or explicitly emergency push-gated with secrets preflight.');
+assert(workflow.includes('npm run test:stability'), 'Production validation must run the stability gate containing all canonical audits.');
 assert(workflow.includes('npm run build --workspace=functions'), 'Workflow must build Firebase Functions.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
 assert(workflow.includes('npm run build --workspace=@bin/shared'), 'Workflow must build the shared package.');
@@ -83,6 +103,8 @@ assert(accountStep.includes('signInWithEmailAndPassword'), 'Owner account step m
 assert(ownerRegistration.includes('dashboardLocked: true'), 'New owner registrations must default to dashboardLocked.');
 assert(ownerRegistration.includes('paymentVerified: false'), 'New owner registrations must default to paymentVerified false.');
 assert(ownerRegistration.includes('adminApproved: false'), 'New owner registrations must default to adminApproved false.');
+assert(onboardingPersistence.includes('safeSignupData'), 'Onboarding persistence must sanitize credentials.');
+assert(!onboardingPersistence.includes('password: signupData'), 'Onboarding persistence must never store the owner password.');
 
 assert(paymentStep.includes('uploadProofDocuments'), 'Payment submission must upload proof documents.');
 assert(paymentStep.includes('submitOwnerOnboardingPaymentPackage'), 'Payment submission must use backend package callable.');
