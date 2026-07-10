@@ -1,295 +1,233 @@
-// admin-panel/src/pages/settings/SettingsPage.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Container,
-  Paper,
-  TextField,
-  Button,
-  Grid,
-  Typography,
-  Box,
-  Switch,
-  FormControlLabel,
-  Divider,
   Alert,
+  Box,
+  Button,
   Card,
   CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Divider,
+  Grid,
+  Paper,
+  Stack,
+  Typography,
 } from '@mui/material';
-import { apiClient } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { db, doc, onSnapshot } from '../../lib/firebase';
 
-interface SystemSettings {
-  maintenanceMode: boolean;
-  autoDispatchEnabled: boolean;
-  maxTicketsPerTechnician: number;
-  sosResponseTimeMinutes: number;
-  turnoverQuoteAutoGeneration: boolean;
-  paymentReminderDays: number;
-  suspensionThreshold: number;
-  binGroupFeePercent: number;
-  partsMarkupPercent: number;
-  emailNotificationsEnabled: boolean;
-  smsNotificationsEnabled: boolean;
+const LAUNCH_SUMMARY_PATH = ['system_health', 'admin_summaries'] as const;
+
+const launchGates = [
+  { key: 'adminCredentialLogin', label: 'Admin production credential login' },
+  { key: 'fiveProfileSmoke', label: 'Five-profile live workflow smoke test' },
+  { key: 'stripeLiveMode', label: 'Stripe live payment mode' },
+  { key: 'appCheckProduction', label: 'Firebase App Check production enforcement' },
+  { key: 'brandedEmailSender', label: 'BIN GROUP branded email delivery' },
+  { key: 'adminSecretRotation', label: 'Admin credential and secret rotation' },
+  { key: 'tenantNotificationDelivery', label: 'Tenant notification delivery' },
+  { key: 'technicianGpsStorageProof', label: 'Technician GPS and evidence upload' },
+  { key: 'brokerCommissionLock', label: 'Broker attribution and commission lock' },
+  { key: 'renewalWatch', label: 'Contract renewal watch and document queue' },
+] as const;
+
+type LaunchSummary = Record<string, unknown>;
+
+function readableTimestamp(value: unknown): string {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate().toLocaleString();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleString();
+  }
+  return 'Not recorded';
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings>({
-    maintenanceMode: false,
-    autoDispatchEnabled: true,
-    maxTicketsPerTechnician: 8,
-    sosResponseTimeMinutes: 30,
-    turnoverQuoteAutoGeneration: true,
-    paymentReminderDays: 3,
-    suspensionThreshold: 2,
-    binGroupFeePercent: 5,
-    partsMarkupPercent: 20,
-    emailNotificationsEnabled: true,
-    smsNotificationsEnabled: true,
-  });
+  const navigate = useNavigate();
+  const [summary, setSummary] = useState<LaunchSummary>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
 
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const ref = doc(db, ...LAUNCH_SUMMARY_PATH);
+    const unsubscribe = onSnapshot(
+      ref,
+      (snapshot) => {
+        setSummary(snapshot.exists() ? snapshot.data() : {});
+        setLoading(false);
+        setError(null);
+        setLastSync(new Date());
+      },
+      (snapshotError) => {
+        console.error('Failed to load launch configuration evidence:', snapshotError);
+        setError(snapshotError.message || 'Unable to read production launch evidence.');
+        setLoading(false);
+      },
+    );
 
-  const handleChange = (key: keyof SystemSettings, value: any) => {
-    setSettings({ ...settings, [key]: value });
-    setSaved(false);
-  };
+    return () => unsubscribe();
+  }, []);
 
-  const handleSave = async () => {
-    try {
-      setLoading(true);
-      await apiClient.post('/api/admin/settings', settings);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      alert('Failed to save settings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const passedCount = useMemo(
+    () => launchGates.filter((gate) => summary[gate.key] === true).length,
+    [summary],
+  );
+  const allPassed = passedCount === launchGates.length;
+
+  const appCheckClientEnabled = process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK === 'true';
+  const appCheckSiteKeyConfigured = Boolean(
+    process.env.REACT_APP_APP_CHECK_SITE_KEY &&
+    !String(process.env.REACT_APP_APP_CHECK_SITE_KEY).includes('REPLACE_ME'),
+  );
+  const firebaseProjectId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'bin-group-57c60';
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
-        System Settings
-      </Typography>
-
-      {saved && <Alert severity="success" sx={{ mb: 2 }}>Settings saved successfully!</Alert>}
-
-      {/* System Status */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            System Status
-          </Typography>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={settings.maintenanceMode}
-                onChange={(e) => handleChange('maintenanceMode', e.target.checked)}
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body1">Maintenance Mode</Typography>
-                <Typography variant="caption" color="textSecondary">
-                  {settings.maintenanceMode
-                    ? 'Users cannot access the system'
-                    : 'System is operating normally'}
-                </Typography>
-              </Box>
-            }
-          />
-        </CardContent>
-      </Card>
-
-      {/* Operational Settings */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Operational Settings
-          </Typography>
-
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid item xs={12} sm={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.autoDispatchEnabled}
-                    onChange={(e) => handleChange('autoDispatchEnabled', e.target.checked)}
-                  />
-                }
-                label="Auto-Dispatch Tickets"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Max Tickets per Technician"
-                value={settings.maxTicketsPerTechnician}
-                onChange={(e) => handleChange('maxTicketsPerTechnician', parseInt(e.target.value))}
-              />
-            </Grid>
-          </Grid>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="SOS Response Time (minutes)"
-                value={settings.sosResponseTimeMinutes}
-                onChange={(e) => handleChange('sosResponseTimeMinutes', parseInt(e.target.value))}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={settings.turnoverQuoteAutoGeneration}
-                    onChange={(e) => handleChange('turnoverQuoteAutoGeneration', e.target.checked)}
-                  />
-                }
-                label="Auto-Generate Turnover Quotes"
-              />
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* Financial Settings */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Financial Settings
-          </Typography>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="BIN Group Fee (%)"
-                value={settings.binGroupFeePercent}
-                onChange={(e) => handleChange('binGroupFeePercent', parseFloat(e.target.value))}
-                inputProps={{ step: 0.1 }}
-              />
-              <Typography variant="caption" color="textSecondary">
-                Deducted from rent collections
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Parts Markup (%)"
-                value={settings.partsMarkupPercent}
-                onChange={(e) => handleChange('partsMarkupPercent', parseFloat(e.target.value))}
-                inputProps={{ step: 0.1 }}
-              />
-              <Typography variant="caption" color="textSecondary">
-                Added to technician costs
-              </Typography>
-            </Grid>
-          </Grid>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Payment Reminder (days)"
-                value={settings.paymentReminderDays}
-                onChange={(e) => handleChange('paymentReminderDays', parseInt(e.target.value))}
-              />
-              <Typography variant="caption" color="textSecondary">
-                Send reminder after X days
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Suspension Threshold"
-                value={settings.suspensionThreshold}
-                onChange={(e) => handleChange('suspensionThreshold', parseInt(e.target.value))}
-              />
-              <Typography variant="caption" color="textSecondary">
-                Unpaid invoices before suspension
-              </Typography>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* Notification Settings */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Notification Settings
-          </Typography>
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={settings.emailNotificationsEnabled}
-                onChange={(e) => handleChange('emailNotificationsEnabled', e.target.checked)}
-              />
-            }
-            label="Email Notifications"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={settings.smsNotificationsEnabled}
-                onChange={(e) => handleChange('smsNotificationsEnabled', e.target.checked)}
-              />
-            }
-            label="SMS Notifications"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Action Buttons */}
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        <Button variant="contained" onClick={handleSave} disabled={loading}>
-          {loading ? 'Saving...' : 'Save Settings'}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => alert('Settings reset to defaults')}
-        >
-          Reset to Defaults
-        </Button>
-      </Box>
-
-      {/* System Information */}
-      <Paper sx={{ p: 3, mt: 4, backgroundColor: '#f5f5f5' }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          System Information
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Stack spacing={1} sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+          Production Configuration & Launch Gates
         </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2">
-              <strong>Version:</strong> 1.0.0
-            </Typography>
-            <Typography variant="body2">
-              <strong>Database:</strong> Firebase Firestore
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2">
-              <strong>API Server:</strong> Production
-            </Typography>
-            <Typography variant="body2">
-              <strong>Last Updated:</strong> {new Date().toLocaleString()}
-            </Typography>
-          </Grid>
+        <Typography color="text.secondary">
+          Verified Firebase configuration and evidence-backed launch status. Operational policies are deployment-managed; this page does not use the retired localhost REST API.
+        </Typography>
+      </Stack>
+
+      <Alert severity={allPassed ? 'success' : 'warning'} sx={{ mb: 3, fontWeight: 700 }}>
+        {allPassed
+          ? 'All required public-launch evidence gates are recorded as PASS.'
+          : `${passedCount} of ${launchGates.length} public-launch evidence gates are proven. Public launch remains blocked until every gate is verified with live evidence.`}
+      </Alert>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error} Confirm that this admin account has current production claims and that Firestore is reachable.
+        </Alert>
+      )}
+
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="overline" color="text.secondary">Firebase project</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 900 }}>{firebaseProjectId}</Typography>
+              <Typography variant="body2" color="text.secondary">Functions region: europe-west3</Typography>
+            </CardContent>
+          </Card>
         </Grid>
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="overline" color="text.secondary">Admin App Check client</Typography>
+              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                <Chip
+                  label={appCheckClientEnabled ? 'ENABLED' : 'DISABLED'}
+                  color={appCheckClientEnabled ? 'success' : 'warning'}
+                  size="small"
+                />
+                <Chip
+                  label={appCheckSiteKeyConfigured ? 'SITE KEY SET' : 'SITE KEY MISSING'}
+                  color={appCheckSiteKeyConfigured ? 'success' : 'warning'}
+                  size="small"
+                />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                Console enforcement still requires separate live verification.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="overline" color="text.secondary">Evidence sync</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                {lastSync ? lastSync.toLocaleString() : 'Waiting for Firestore'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Source: system_health/admin_summaries
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Paper sx={{ p: { xs: 2, md: 3 }, mb: 3 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 900 }}>Public-launch evidence</Typography>
+            <Typography variant="body2" color="text.secondary">
+              A gate turns green only after its live proof is written by the controlled verification process.
+            </Typography>
+          </Box>
+          <Chip
+            label={`${passedCount}/${launchGates.length} PASS`}
+            color={allPassed ? 'success' : 'warning'}
+            sx={{ fontWeight: 900 }}
+          />
+        </Stack>
+
+        <Divider sx={{ my: 2 }} />
+
+        {loading ? (
+          <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Grid container spacing={2}>
+            {launchGates.map((gate) => {
+              const passed = summary[gate.key] === true;
+              const evidence = summary[`${gate.key}Evidence`];
+              const verifiedAt = summary[`${gate.key}VerifiedAt`];
+              const verifiedBy = summary[`${gate.key}VerifiedBy`];
+              return (
+                <Grid item xs={12} md={6} key={gate.key}>
+                  <Card variant="outlined" sx={{ height: '100%' }}>
+                    <CardContent>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                        <Typography sx={{ fontWeight: 800 }}>{gate.label}</Typography>
+                        <Chip label={passed ? 'PASS' : 'PENDING'} color={passed ? 'success' : 'warning'} size="small" />
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                        Verified: {readableTimestamp(verifiedAt)}
+                      </Typography>
+                      {verifiedBy ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          Verified by: {String(verifiedBy)}
+                        </Typography>
+                      ) : null}
+                      {evidence ? (
+                        <Typography variant="body2" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
+                          {String(evidence)}
+                        </Typography>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        )}
       </Paper>
+
+      <Alert severity="info" sx={{ mb: 3 }}>
+        Maintenance mode, dispatch limits, payroll values, fee percentages, and notification delivery must not be changed through unvalidated browser defaults. Those controls were removed until each policy is backed by a protected server workflow and consumed by the production services that enforce it.
+      </Alert>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Button variant="contained" onClick={() => navigate('/smoke-test')}>
+          Open Five-Profile Smoke Test
+        </Button>
+        <Button variant="outlined" onClick={() => window.location.reload()}>
+          Refresh Evidence
+        </Button>
+        <Button variant="text" onClick={() => navigate('/dashboard')}>
+          Back to Operations Dashboard
+        </Button>
+      </Stack>
     </Container>
   );
 }
