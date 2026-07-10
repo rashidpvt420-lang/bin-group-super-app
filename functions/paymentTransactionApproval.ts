@@ -59,7 +59,7 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   if (!snap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
   const payment = snap.data() || {};
-  if (roleOf(payment.status) === "approved") {
+  if (roleOf(payment.status) === "approved" || payment.dashboardUnlockApproved === true || payment.adminApproved === true) {
     return { status: "SUCCESS", paymentId, idempotent: true };
   }
 
@@ -80,6 +80,7 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
         verificationState: "ADMIN_VERIFIED",
         paymentVerified: true,
         approved: true,
+        adminApprovalRequired: false,
         paymentReferenceId: paymentReferenceId || null,
         amountReceived,
         paymentMethod: method || payment.paymentMethod || null,
@@ -122,7 +123,14 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
 
   batch.set(ref, {
     status: "APPROVED",
+    paymentStatus: "APPROVED",
     verificationState: "ADMIN_VERIFIED",
+    paymentVerified: true,
+    adminApprovalRequired: false,
+    adminApproved: true,
+    dashboardUnlockApproved: true,
+    unlocksDashboard: true,
+    activationState: "ACTIVE",
     paymentReferenceId: paymentReferenceId || payment.paymentReferenceId || null,
     amountReceived,
     paymentMethod: method || payment.paymentMethod || null,
@@ -254,6 +262,7 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
         verificationState: "ADMIN_REJECTED",
         paymentVerified: false,
         approved: false,
+        adminApprovalRequired: false,
         rejectionReason: reason,
         rejectedBy: actorId,
         rejectedAt: now,
@@ -280,7 +289,14 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
 
   batch.set(ref, {
     status: "REJECTED",
+    paymentStatus: "REJECTED",
     verificationState: "ADMIN_REJECTED",
+    paymentVerified: false,
+    adminApprovalRequired: false,
+    adminApproved: false,
+    dashboardUnlockApproved: false,
+    unlocksDashboard: false,
+    activationState: "PAYMENT_REJECTED",
     rejectionReason: reason,
     rejectedBy: actorId,
     rejectedAt: now,
@@ -304,6 +320,7 @@ export const adminRejectPayment = onCall({ cors: true }, async (request) => {
     batch.set(db.collection("intake_submissions").doc(intakeId), {
       status: "payment_rejected",
       paymentStatus: "REJECTED",
+      activationState: "PAYMENT_REJECTED",
       updatedAt: now,
     }, { merge: true });
   }
