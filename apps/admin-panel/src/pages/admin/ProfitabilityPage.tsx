@@ -1,309 +1,198 @@
-/**
- * BIN-CFO™ Alpha Dashboard — /admin/profitability
- * Layer 4: Executive Financial Intelligence
- */
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
-    Container, Typography, Box, Grid, Card, CardContent,
-    Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    LinearProgress, Skeleton, Button, Divider, Paper
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Grid,
+  LinearProgress,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+  alpha,
 } from '@mui/material';
-import {
-    AccountBalance,
-    Payments,
-    Scale,
-    PieChart,
-    NorthEast,
-    ReceiptLong,
-    Security
-} from '@mui/icons-material';
-import { collection, onSnapshot, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { AccountBalance, Payments, PieChart, ReceiptLong, Scale, Security } from '@mui/icons-material';
+import { useLanguage } from '@bin/shared';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { motion } from 'framer-motion';
 
-interface CFOStats {
-    mrr: number;
-    arr: number;
-    totalRevenue: number;
-    totalCosts: number;
-    grossProfit: number;
-    profitMargin: number;
-    outstandingInvoices: number;
-    overdueInvoices: number;
-    churnRate: number;
-    portfolioCount: number;
-    activeContracts: number;
-}
+const upper = (value: unknown) => String(value || '').trim().toUpperCase();
+const money = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const paymentAmount = (row: any) => money(row.amountReceived || row.amountPaid || row.mobilizationAmount || row.rentPaid || row.amount || row.total || 0);
+const invoiceAmount = (row: any) => money(row.balanceDue || row.amountDue || row.total || row.amount || 0);
+const expenseAmount = (row: any) => money(row.amount || row.total || row.cost || row.actualCost || 0);
+const contractAnnualValue = (row: any) => money(row.annualContractValue || row.annualValue || row.annualAMC || row.contractValue || row.totalContractValue || 0);
+const paidStatuses = new Set(['PAID', 'APPROVED', 'SUCCEEDED', 'SUCCESS', 'COMPLETED', 'SETTLED']);
+const activeContractStatuses = new Set(['ACTIVE', 'APPROVED', 'SIGNED', 'LIVE']);
+const cancelledContractStatuses = new Set(['CANCELLED', 'TERMINATED', 'EXPIRED', 'REJECTED']);
+const cancelledExpenseStatuses = new Set(['CANCELLED', 'REJECTED', 'VOID']);
+const dayValue = (value: any) => value?.toDate?.() || (value ? new Date(value) : null);
+const formatAed = (value: number) => `AED ${Math.round(value || 0).toLocaleString('en-AE')}`;
 
-export default function CFODashboard() {
-    const [stats, setStats] = useState<CFOStats | null>(null);
-    const [snapshotData, setSnapshotData] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+type LedgerState = {
+  payments: any[];
+  invoices: any[];
+  expenses: any[];
+  contracts: any[];
+  properties: any[];
+};
 
-    useEffect(() => {
-        // 💰 1. Revenue Intelligence (From Payments)
-        const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot: QuerySnapshot<DocumentData>) => {
-            const successful = snapshot.docs.filter((d: any) => d.data().status === 'SUCCEEDED' || d.data().status === 'PAID');
-            const revenue = successful.reduce((acc: number, d: any) => acc + (d.data().amount || 0), 0);
-            const overdue = snapshot.docs.filter((d: any) => d.data().status === 'OVERDUE').reduce((acc: number, d: any) => acc + (d.data().amount || 0), 0);
-            const pending = snapshot.docs.filter((d: any) => d.data().status === 'PENDING').reduce((acc: number, d: any) => acc + (d.data().amount || 0), 0);
+type PortfolioRow = {
+  id: string;
+  name: string;
+  contractValue: number;
+  revenue: number;
+  costs: number;
+  profit: number;
+  margin: number;
+};
 
-            setStats(prev => ({
-                ...(prev || {} as CFOStats),
-                totalRevenue: revenue,
-                arr: revenue * 1.05, // Institutional projection
-                mrr: revenue / 12,
-                outstandingInvoices: pending,
-                overdueInvoices: overdue,
-                totalCosts: revenue * 0.45, // OpEx model
-                grossProfit: revenue * 0.55,
-                profitMargin: 55,
-                churnRate: 1.2,
-                portfolioCount: prev?.portfolioCount || 0,
-                activeContracts: prev?.activeContracts || 0
-            }));
-            setLoading(false);
-        });
+export default function ProfitabilityPage() {
+  const { lang, isRTL } = useLanguage();
+  const ar = lang === 'ar';
+  const copy = (en: string, arText: string) => ar ? arText : en;
+  const [ledger, setLedger] = React.useState<LedgerState>({ payments: [], invoices: [], expenses: [], contracts: [], properties: [] });
+  const [ready, setReady] = React.useState(new Set<string>());
+  const [error, setError] = React.useState('');
 
-        // 🏢 2. Portfolio Intelligence (From Properties & Contracts)
-        const unsubProps = onSnapshot(collection(db, 'properties'), (snapshot: QuerySnapshot<DocumentData>) => {
-            const props = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setSnapshotData(props);
-            setStats(prev => ({
-                ...(prev || {} as CFOStats),
-                portfolioCount: snapshot.size
-            }));
-        });
+  React.useEffect(() => {
+    const collections: Array<keyof LedgerState> = ['payments', 'invoices', 'expenses', 'contracts', 'properties'];
+    const unsubscribers = collections.map((name) => onSnapshot(collection(db, name), (snapshot) => {
+      setLedger((current) => ({ ...current, [name]: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) }));
+      setReady((current) => new Set(current).add(name));
+      setError('');
+    }, (streamError) => {
+      console.error(`[Profitability] ${name} listener failed`, streamError);
+      setReady((current) => new Set(current).add(name));
+      setError(copy('One or more financial ledgers could not be loaded.', 'تعذر تحميل سجل مالي واحد أو أكثر.'));
+    }));
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [ar]);
 
-        const unsubContracts = onSnapshot(collection(db, 'contracts'), (snapshot: QuerySnapshot<DocumentData>) => {
-            setStats((prev: any) => ({
-                ...(prev || {} as CFOStats),
-                activeContracts: snapshot.docs.filter((d: any) => d.data().status === 'ACTIVE').length
-            }));
-        });
+  const data = React.useMemo(() => {
+    const contractsById = new Map(ledger.contracts.map((row) => [String(row.id), row]));
+    const propertyIdFor = (row: any) => String(row.propertyId || contractsById.get(String(row.contractId || ''))?.propertyId || 'unassigned');
 
-        return () => {
-            unsubPayments();
-            unsubProps();
-            unsubContracts();
-        };
-    }, []);
+    const successfulPayments = ledger.payments.filter((row) => paidStatuses.has(upper(row.status || row.paymentStatus)));
+    const validExpenses = ledger.expenses.filter((row) => !cancelledExpenseStatuses.has(upper(row.status)));
+    const activeContracts = ledger.contracts.filter((row) => activeContractStatuses.has(upper(row.status || row.activationStatus)));
+    const cancelledContracts = ledger.contracts.filter((row) => cancelledContractStatuses.has(upper(row.status || row.activationStatus)));
+    const totalRevenue = successfulPayments.reduce((sum, row) => sum + paymentAmount(row), 0);
+    const totalCosts = validExpenses.reduce((sum, row) => sum + expenseAmount(row), 0);
+    const grossProfit = totalRevenue - totalCosts;
+    const arr = activeContracts.reduce((sum, row) => sum + contractAnnualValue(row), 0);
+    const mrr = arr / 12;
+    const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    const churnRate = ledger.contracts.length > 0 ? (cancelledContracts.length / ledger.contracts.length) * 100 : 0;
+    const now = Date.now();
+    const outstandingInvoices = ledger.invoices.filter((row) => ['PENDING', 'UNPAID', 'OPEN', 'PARTIAL', 'OVERDUE'].includes(upper(row.status))).reduce((sum, row) => sum + invoiceAmount(row), 0);
+    const overdueInvoices = ledger.invoices.filter((row) => {
+      if (upper(row.status) === 'OVERDUE') return true;
+      const due = dayValue(row.dueDate || row.paymentDueDate);
+      return due instanceof Date && !Number.isNaN(due.getTime()) && due.getTime() < now && !paidStatuses.has(upper(row.status));
+    }).reduce((sum, row) => sum + invoiceAmount(row), 0);
 
-    if (loading) return <Skeleton variant="rectangular" height="80vh" />;
+    const revenueByProperty = new Map<string, number>();
+    successfulPayments.forEach((row) => revenueByProperty.set(propertyIdFor(row), (revenueByProperty.get(propertyIdFor(row)) || 0) + paymentAmount(row)));
+    const costsByProperty = new Map<string, number>();
+    validExpenses.forEach((row) => costsByProperty.set(propertyIdFor(row), (costsByProperty.get(propertyIdFor(row)) || 0) + expenseAmount(row)));
+    const contractsByProperty = new Map<string, number>();
+    activeContracts.forEach((row) => contractsByProperty.set(propertyIdFor(row), (contractsByProperty.get(propertyIdFor(row)) || 0) + contractAnnualValue(row)));
 
-    return (
-        <Container maxWidth={false} sx={{ py: 6, bgcolor: '#f8fafc', minHeight: '100vh' }}>
-            {/* ── 1. DASHBOARD HEADER ── */}
-            <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <Box>
-                    <Typography variant="overline" color="primary" sx={{ fontWeight: 900, letterSpacing: 4 }}>
-                        Institutional Treasury
-                    </Typography>
-                    <Typography variant="h3" fontWeight={900} sx={{ letterSpacing: -2, color: '#0f172a', mt: 1 }}>
-                        BIN-CFO<Typography component="span" sx={{ color: '#1976d2', fontWeight: 'inherit', letterSpacing: 'inherit' }}>™</Typography> Alpha
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
-                        Real-time Revenue & Portfolio Margin Orchestration · FY 2026
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button variant="outlined" startIcon={<ReceiptLong />} sx={{ borderRadius: 3, fontWeight: 900, px: 3 }}>
-                        Export Audit
-                    </Button>
-                    <Button variant="contained" startIcon={<NorthEast />} sx={{ borderRadius: 3, fontWeight: 900, px: 3, boxShadow: '0 10px 30px rgba(25,118,210,0.3)' }}>
-                        Revenue Forecast
-                    </Button>
-                </Box>
-            </Box>
+    const portfolioRows: PortfolioRow[] = ledger.properties.map((property) => {
+      const id = String(property.id);
+      const revenue = revenueByProperty.get(id) || 0;
+      const costs = costsByProperty.get(id) || 0;
+      const profit = revenue - costs;
+      return {
+        id,
+        name: property.propertyName || property.name || property.address || copy('Unnamed Property', 'عقار بدون اسم'),
+        contractValue: contractsByProperty.get(id) || 0,
+        revenue,
+        costs,
+        profit,
+        margin: revenue > 0 ? (profit / revenue) * 100 : 0,
+      };
+    }).sort((a, b) => b.revenue - a.revenue || b.contractValue - a.contractValue);
 
-            <Grid container spacing={4}>
-                {/* ── 2. TREASURY METRICS ── */}
-                <Grid item xs={12} lg={8}>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} md={4}>
-                            <MetricCard 
-                                label="Annual Recurring Revenue" 
-                                value={`AED ${(stats?.arr || 0).toLocaleString()}`} 
-                                delta="+12.4%" 
-                                icon={<AccountBalance />} 
-                                color="#1e293b" 
-                            />
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                            <MetricCard 
-                                label="Net Profit Margin" 
-                                value={`${stats?.profitMargin}%`} 
-                                delta="+2.1%" 
-                                icon={<PieChart />} 
-                                color="#16a34a" 
-                            />
-                        </Grid>
-                        <Grid item xs={12} md={4}>
-                            <MetricCard 
-                                label="Mrr (Active Coverage)" 
-                                value={`AED ${(stats?.mrr || 0).toLocaleString()}`} 
-                                icon={<Payments />} 
-                                color="#1976d2" 
-                            />
-                        </Grid>
-                    </Grid>
+    return {
+      totalRevenue,
+      totalCosts,
+      grossProfit,
+      arr,
+      mrr,
+      profitMargin,
+      churnRate,
+      outstandingInvoices,
+      overdueInvoices,
+      activeContracts: activeContracts.length,
+      portfolioCount: ledger.properties.length,
+      portfolioRows,
+      unassignedRevenue: revenueByProperty.get('unassigned') || 0,
+      unassignedCosts: costsByProperty.get('unassigned') || 0,
+    };
+  }, [ar, ledger]);
 
-                    {/* ── 3. REVENUE HORIZON ── */}
-                    <Card sx={{ mt: 4, borderRadius: 6, border: '1px solid #e2e8f0', boxShadow: 'none', overflow: 'hidden' }}>
-                        <CardContent sx={{ p: 4 }}>
-                            <Typography variant="h6" fontWeight={900} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Scale color="primary" /> Revenue Risk Horizon
-                            </Typography>
-                            <Divider sx={{ my: 2 }} />
-                            <Grid container spacing={4} sx={{ mt: 1 }}>
-                                <Grid item xs={12} md={6}>
-                                    <Box sx={{ p: 3, bgcolor: '#fff', border: '1px solid #f1f5f9', borderRadius: 4 }}>
-                                        <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>
-                                            Outstanding Invoices
-                                        </Typography>
-                                        <Typography variant="h4" fontWeight={900} color="#fbbf24">
-                                            AED {stats?.outstandingInvoices.toLocaleString()}
-                                        </Typography>
-                                        <LinearProgress variant="determinate" value={70} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Expected settlement within 14 days</Typography>
-                                    </Box>
-                                </Grid>
-                                <Grid item xs={12} md={6}>
-                                    <Box sx={{ p: 3, bgcolor: '#fff', border: '1px solid #fee2e2', borderRadius: 4 }}>
-                                        <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>
-                                            Overdue Recovery
-                                        </Typography>
-                                        <Typography variant="h4" fontWeight={900} color="#ef4444">
-                                            AED {stats?.overdueInvoices.toLocaleString()}
-                                        </Typography>
-                                        <LinearProgress variant="determinate" value={28} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fee2e2', '& .MuiLinearProgress-bar': { bgcolor: '#ef4444' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#ef4444' }}>⚠️ Enforcement actions required</Typography>
-                                    </Box>
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
-                </Grid>
+  const loading = ready.size < 5;
+  const expenseBreakdown = React.useMemo(() => {
+    const buckets = new Map<string, number>();
+    ledger.expenses.filter((row) => !cancelledExpenseStatuses.has(upper(row.status))).forEach((row) => {
+      const category = String(row.category || row.expenseType || row.type || copy('Uncategorised', 'غير مصنف'));
+      buckets.set(category, (buckets.get(category) || 0) + expenseAmount(row));
+    });
+    return [...buckets.entries()].map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount).slice(0, 8);
+  }, [ar, ledger.expenses]);
 
-                {/* ── 4. ANALYTICS SIDEBAR ── */}
-                <Grid item xs={12} lg={4}>
-                    <Card sx={{ borderRadius: 6, bgcolor: '#0f172a', color: 'white', height: '100%', p: 2 }}>
-                        <CardContent>
-                            <Typography variant="h6" fontWeight={900} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Security sx={{ color: '#fbbf24' }} /> Alpha Insights
-                            </Typography>
-                            <Box sx={{ mt: 4, spaceY: 4 }}>
-                                <InsightRow label="Client Churn Rate" value="1.25%" status="OPTIMAL" />
-                                <InsightRow label="Portfolio ARR Density" value="94.2%" status="HIGH" />
-                                <InsightRow label="Service Margin" value="55.8%" status="GROWING" />
-                                <InsightRow label="Asset Health Correlation" value="0.88" status="STRONG" />
-                            </Box>
-                            
-                            <Box sx={{ mt: 8, p: 3, bgcolor: '#1e293b', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>Forecast Alpha</Typography>
-                                <Typography variant="body2" sx={{ mt: 1, color: '#e2e8f0', lineHeight: 1.6 }}>
-                                    Predictive models suggest an <strong>8.4% increase</strong> in gross margins next quarter due to advanced preventive HVAC loops.
-                                </Typography>
-                            </Box>
-                        </CardContent>
-                    </Card>
-                </Grid>
+  if (loading) return <Box sx={{ minHeight: '70vh', display: 'grid', placeItems: 'center' }}><Stack spacing={2} alignItems="center"><CircularProgress sx={{ color: '#DAA520' }} /><Typography sx={{ color: '#fff' }}>{copy('Loading live financial ledgers...', 'جاري تحميل السجلات المالية المباشرة...')}</Typography></Stack></Box>;
 
-                {/* ── 5. PORTFOLIO PERFORMANCE ── */}
-                <Grid item xs={12}>
-                    <TableContainer component={Paper} sx={{ borderRadius: 6, boxShadow: 'none', border: '1px solid #e2e8f0' }}>
-                        <Box sx={{ p: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h6" fontWeight={900}>Portfolio Profitability Audit</Typography>
-                            <Chip label={`${stats?.portfolioCount} Active Assets`} sx={{ fontWeight: 900, bgcolor: '#f1f5f9' }} />
-                        </Box>
-                        <Table sx={{ minWidth: 650 }}>
-                            <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Property Asset</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Contract Value</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Op Costs</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Net Proft</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Margin %</TableCell>
-                                    <TableCell sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10 }}>Status</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {stats?.portfolioCount ? snapshotData.map((row: any) => (
-                                    <TableRow key={row.id} hover>
-                                        <TableCell sx={{ fontWeight: 800 }}>{row.propertyName || row.address || 'Unnamed Asset'}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>AED {(row.annualAMC || 0).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.annualAMC * 0.6).toLocaleString()}</TableCell>
-                                        <TableCell>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="body2" fontWeight={800}>60%</Typography>
-                                                <Box sx={{ flexGrow: 1, height: 4, bgcolor: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                                                    <Box sx={{ width: `60%`, height: '100%', bgcolor: '#16a34a' }} />
-                                                </Box>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip 
-                                                label="ACTIVE" 
-                                                size="small" 
-                                                sx={{ 
-                                                    fontWeight: 900, 
-                                                    fontSize: 9, 
-                                                    bgcolor: '#dcfce7',
-                                                    color: '#166534'
-                                                }} 
-                                            />
-                                        </TableCell>
-                                    </TableRow>
-                                )) : (
-                                    <TableRow>
-                                        <TableCell colSpan={6} align="center">
-                                            <Typography variant="body2" sx={{ py: 4, color: 'textSecondary' }}>No active portfolio data available.</Typography>
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Grid>
-            </Grid>
-        </Container>
-    );
-}
-
-function MetricCard({ label, value, delta, icon, color }: any) {
-    return (
-        <motion.div whileHover={{ y: -5 }} transition={{ type: 'spring', stiffness: 300 }}>
-            <Card sx={{ borderRadius: 6, border: '1px solid #e2e8f0', boxShadow: 'none', position: 'relative', overflow: 'hidden' }}>
-                <CardContent sx={{ p: 4 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                        <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: `${color}10`, color: color }}>{icon}</Box>
-                        {delta && (
-                            <Typography variant="caption" sx={{ fontWeight: 900, color: '#16a34a', bgcolor: '#dcfce7', px: 1.5, py: 0.5, borderRadius: 2 }}>
-                                {delta}
-                            </Typography>
-                        )}
-                    </Box>
-                    <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>
-                        {label}
-                    </Typography>
-                    <Typography variant="h4" fontWeight={950} sx={{ color: '#0f172a', letterSpacing: -1, mt: 0.5 }}>
-                        {value}
-                    </Typography>
-                </CardContent>
-            </Card>
-        </motion.div>
-    );
-}
-
-function InsightRow({ label, value, status }: any) {
-    return (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-            <Box>
-                <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>{label}</Typography>
-                <Typography variant="h6" fontWeight={800} sx={{ color: 'white' }}>{value}</Typography>
-            </Box>
-            <Chip label={status} size="small" sx={{ fontWeight: 900, fontSize: 8, bgcolor: 'rgba(255,255,255,0.05)', color: '#fbbf24', border: '1px solid rgba(251,158,11,0.2)' }} />
+  return (
+    <Container maxWidth={false} sx={{ py: 5, bgcolor: '#020617', minHeight: '100vh', color: '#fff', direction: isRTL ? 'rtl' : 'ltr' }}>
+      <Stack spacing={4}>
+        <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+          <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950, letterSpacing: 4 }}>{copy('LIVE FINANCIAL LEDGER', 'السجل المالي المباشر')}</Typography>
+          <Typography variant="h3" sx={{ fontWeight: 950 }}>{copy('Profitability Command', 'مركز قيادة الربحية')}</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,0.58)', mt: 1 }}>{copy('Actual payments, invoices, expenses, contracts and property records. No sample revenue or assumed margins.', 'مدفوعات وفواتير ومصروفات وعقود وعقارات فعلية، دون إيرادات تجريبية أو هوامش مفترضة.')}</Typography>
         </Box>
-    );
+        {error && <Alert severity="warning">{error}</Alert>}
+        {(data.unassignedRevenue > 0 || data.unassignedCosts > 0) && <Alert severity="warning">{copy(`Unassigned ledger records: ${formatAed(data.unassignedRevenue)} revenue and ${formatAed(data.unassignedCosts)} costs require property/contract reconciliation.`, `سجلات غير مرتبطة: إيرادات ${formatAed(data.unassignedRevenue)} وتكاليف ${formatAed(data.unassignedCosts)} تحتاج إلى ربط بالعقار أو العقد.`)}</Alert>}
+
+        <Grid container spacing={2.5}>
+          <MetricCard label={copy('Actual Revenue', 'الإيراد الفعلي')} value={formatAed(data.totalRevenue)} icon={<AccountBalance />} tone="#3b82f6" />
+          <MetricCard label={copy('Actual Costs', 'التكاليف الفعلية')} value={formatAed(data.totalCosts)} icon={<Payments />} tone="#f59e0b" />
+          <MetricCard label={copy('Gross Profit', 'إجمالي الربح')} value={formatAed(data.grossProfit)} icon={<PieChart />} tone={data.grossProfit >= 0 ? '#10b981' : '#ef4444'} />
+          <MetricCard label={copy('Profit Margin', 'هامش الربح')} value={`${data.profitMargin.toFixed(1)}%`} icon={<Scale />} tone={data.profitMargin >= 0 ? '#10b981' : '#ef4444'} />
+          <MetricCard label={copy('Contract ARR', 'قيمة العقود السنوية')} value={formatAed(data.arr)} icon={<ReceiptLong />} tone="#a78bfa" />
+          <MetricCard label={copy('Contract MRR', 'قيمة العقود الشهرية')} value={formatAed(data.mrr)} icon={<ReceiptLong />} tone="#38bdf8" />
+          <MetricCard label={copy('Outstanding Invoices', 'الفواتير المستحقة')} value={formatAed(data.outstandingInvoices)} icon={<ReceiptLong />} tone="#f59e0b" />
+          <MetricCard label={copy('Overdue Invoices', 'الفواتير المتأخرة')} value={formatAed(data.overdueInvoices)} icon={<Security />} tone="#ef4444" />
+        </Grid>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} lg={8}>
+            <Paper sx={{ bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5, overflow: 'hidden' }}>
+              <Box sx={{ p: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><Box><Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>{copy('Property Profitability', 'ربحية العقارات')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>{copy(`${data.activeContracts} active contracts · ${data.portfolioCount} properties`, `${data.activeContracts} عقود نشطة · ${data.portfolioCount} عقارات`)}</Typography></Box><Chip label={`${copy('Churn', 'الإلغاء')}: ${data.churnRate.toFixed(1)}%`} color={data.churnRate > 10 ? 'warning' : 'success'} /></Box>
+              <TableContainer><Table><TableHead><TableRow>{[copy('Property', 'العقار'), copy('Annual Contract', 'العقد السنوي'), copy('Revenue', 'الإيراد'), copy('Costs', 'التكاليف'), copy('Profit', 'الربح'), copy('Margin', 'الهامش')].map((label) => <TableCell key={label} sx={{ color: '#DAA520', fontWeight: 950 }}>{label}</TableCell>)}</TableRow></TableHead><TableBody>{data.portfolioRows.length ? data.portfolioRows.map((row) => <TableRow key={row.id} sx={{ '& td': { color: '#fff', borderColor: 'rgba(255,255,255,0.07)' } }}><TableCell sx={{ fontWeight: 900 }}>{row.name}</TableCell><TableCell>{formatAed(row.contractValue)}</TableCell><TableCell>{formatAed(row.revenue)}</TableCell><TableCell>{formatAed(row.costs)}</TableCell><TableCell sx={{ color: `${row.profit >= 0 ? '#10b981' : '#ef4444'} !important`, fontWeight: 950 }}>{formatAed(row.profit)}</TableCell><TableCell><Stack spacing={0.5}><Typography variant="caption" sx={{ fontWeight: 900 }}>{row.margin.toFixed(1)}%</Typography><LinearProgress variant="determinate" value={Math.max(0, Math.min(100, row.margin))} sx={{ height: 5, borderRadius: 5, bgcolor: 'rgba(255,255,255,0.07)', '& .MuiLinearProgress-bar': { bgcolor: row.margin >= 0 ? '#10b981' : '#ef4444' } }} /></Stack></TableCell></TableRow>) : <TableRow><TableCell colSpan={6} align="center" sx={{ color: 'rgba(255,255,255,0.5)', py: 6 }}>{copy('No property ledger data is available yet.', 'لا توجد بيانات مالية للعقارات حتى الآن.')}</TableCell></TableRow>}</TableBody></Table></TableContainer>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} lg={4}>
+            <Card sx={{ height: '100%', bgcolor: 'rgba(15,23,42,0.92)', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}><CardContent sx={{ p: 3 }}><Typography variant="h6" sx={{ fontWeight: 950, mb: 3 }}>{copy('Actual Expense Breakdown', 'توزيع المصروفات الفعلية')}</Typography><Stack spacing={2.5}>{expenseBreakdown.length ? expenseBreakdown.map((item) => { const pct = data.totalCosts > 0 ? (item.amount / data.totalCosts) * 100 : 0; return <Box key={item.label}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between"><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 900 }}>{item.label}</Typography><Typography variant="caption" sx={{ color: '#fff', fontWeight: 950 }}>{formatAed(item.amount)}</Typography></Stack><LinearProgress variant="determinate" value={pct} sx={{ mt: 1, height: 5, borderRadius: 5, bgcolor: 'rgba(255,255,255,0.07)' }} /></Box>; }) : <Typography sx={{ color: 'rgba(255,255,255,0.5)' }}>{copy('No expense records found.', 'لا توجد سجلات مصروفات.')}</Typography>}</Stack></CardContent></Card>
+          </Grid>
+        </Grid>
+      </Stack>
+    </Container>
+  );
+}
+
+function MetricCard({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone: string }) {
+  return <Grid item xs={12} sm={6} md={4} lg={3}><Card sx={{ height: '100%', bgcolor: alpha(tone, 0.07), border: `1px solid ${alpha(tone, 0.24)}`, color: '#fff', borderRadius: 4 }}><CardContent><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 900 }}>{label.toUpperCase()}</Typography><Typography variant="h5" sx={{ fontWeight: 950, mt: 0.8 }}>{value}</Typography></Box><Box sx={{ color: tone }}>{icon}</Box></Stack></CardContent></Card></Grid>;
 }
