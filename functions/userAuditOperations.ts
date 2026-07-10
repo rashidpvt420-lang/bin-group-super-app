@@ -6,7 +6,7 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const ts = admin.firestore.FieldValue.serverTimestamp;
 
-export const logUserAuditAction = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+export const logUserAuditAction = onCall({ region: "europe-west3", cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }

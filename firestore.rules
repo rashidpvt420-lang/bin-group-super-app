@@ -560,6 +560,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /system_health/{healthDoc} {
+      allow read: if isAdmin();
+      allow write: if false;  // server-only via Admin SDK launch evidence jobs
+    }
+
     match /users/{userId} {
       allow get: if signedIn() && request.auth.uid == userId;
       allow get: if isAdmin() || isHr() || isFinance() || isOps() || emailOwns(resource.data) ||

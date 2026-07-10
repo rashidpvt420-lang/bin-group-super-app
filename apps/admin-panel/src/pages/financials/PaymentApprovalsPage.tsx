@@ -18,6 +18,8 @@ type PaymentRecord = {
     status?: string;
     verificationState?: string;
     paymentStatus?: string;
+    adminApprovalRequired?: boolean;
+    unlocksDashboard?: boolean;
     paymentMethod?: string;
     paymentReference?: string;
     paymentReferenceId?: string;
@@ -52,7 +54,7 @@ type PaymentRecord = {
     activationRequestedAt?: any;
 };
 
-const PENDING_PAYMENT_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
+const PENDING_PAYMENT_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
 const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
@@ -60,6 +62,12 @@ const isRentPayment = (row: PaymentRecord) => upper(row.recordType) === 'OWNER_R
 const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.referenceFileName || row.receiptUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || 'No reference recorded';
 const referenceUrl = (row: PaymentRecord) => row.referenceFileUrl || row.receiptUrl || row.proofUrl || row.attachmentUrl || '';
 const submittedAmount = (row: PaymentRecord) => row.amountReceived || row.mobilizationAmount || row.amountPaid || row.rentPaid || row.amount || 0;
+const timestampMillis = (row: PaymentRecord) => {
+    const value = row.createdAt || row.activationRequestedAt;
+    if (value && typeof value.toMillis === 'function') return value.toMillis();
+    const parsed = Date.parse(String(value || ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+};
 
 export default function PaymentApprovalsPage() {
     const [rows, setRows] = React.useState<PaymentRecord[]>([]);
@@ -74,17 +82,44 @@ export default function PaymentApprovalsPage() {
     const [rejectReason, setRejectReason] = React.useState('');
 
     React.useEffect(() => {
-        const q = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setRows(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
+        let pendingRows: PaymentRecord[] = [];
+        let paidAwaitingApprovalRows: PaymentRecord[] = [];
+        let pendingReady = false;
+        let paidReady = false;
+
+        const publish = () => {
+            if (!pendingReady || !paidReady) return;
+            const merged = new Map<string, PaymentRecord>();
+            [...pendingRows, ...paidAwaitingApprovalRows].forEach((row) => merged.set(row.id, row));
+            setRows([...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a)));
             setLoading(false);
             setError(null);
-        }, (err) => {
+        };
+        const handleError = (err: any) => {
             console.error('[ADMIN_PAYMENTS] stream failed', err);
             setLoading(false);
             setError(err?.message || 'Payment approvals stream failed.');
-        });
-        return () => unsubscribe();
+        };
+
+        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
+        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
+        const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
+            pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+            pendingReady = true;
+            publish();
+        }, handleError);
+        const unsubscribePaidAwaitingApproval = onSnapshot(paidAwaitingApprovalQuery, (snapshot) => {
+            paidAwaitingApprovalRows = snapshot.docs
+                .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }))
+                .filter((row) => row.unlocksDashboard !== true);
+            paidReady = true;
+            publish();
+        }, handleError);
+
+        return () => {
+            unsubscribePending();
+            unsubscribePaidAwaitingApproval();
+        };
     }, []);
 
     const openApproveDialog = (row: PaymentRecord) => {
