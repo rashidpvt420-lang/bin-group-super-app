@@ -70,8 +70,9 @@ test.describe('Broker Business Workflow', () => {
     await submit.click();
 
     await expect(page.getByText(/Lead recorded with attribution/i)).toBeVisible({ timeout: 25_000 });
-    await expect(page.getByText(uniqueLead)).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator('[data-testid="broker-lead-card"]')).toContainText(/ATTRIBUTION|broker_lead_/i, { timeout: 20_000 });
+    const createdLeadCard = page.getByTestId('broker-lead-card').filter({ hasText: uniqueLead }).first();
+    await expect(createdLeadCard).toBeVisible({ timeout: 20_000 });
+    await expect(createdLeadCard).toContainText(/ATTRIBUTION|broker_lead_/i, { timeout: 20_000 });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|Lead could not be submitted/i, { timeout: 5_000 });
 
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
