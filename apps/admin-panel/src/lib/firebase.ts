@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc as firestoreAddDoc,
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp,
-    Timestamp, deleteDoc, writeBatch, or, arrayUnion
+    Timestamp, deleteDoc, writeBatch, or, arrayUnion, getCountFromServer
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -26,8 +26,6 @@ const clean = (value?: string): string => {
     return normalized && !normalized.includes('REPLACE_ME') ? normalized : '';
 };
 
-// CRA/CRACO only embeds process.env.REACT_APP_* when references are static.
-// Do not use dynamic process.env[key] here; it is not replaced during build.
 const firebaseConfig: BinFirebaseConfig = {
     apiKey: clean(process.env.REACT_APP_FIREBASE_API_KEY) || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
     authDomain: clean(process.env.REACT_APP_FIREBASE_AUTH_DOMAIN) || 'bin-group-57c60.firebaseapp.com',
@@ -75,12 +73,6 @@ const functions = getFunctions(app, 'europe-west3');
 
 const pendingAuditWrites = new Map<string, Promise<void>>();
 
-/**
- * Compatibility bridge for legacy screens that still call addDoc() directly on
- * audit_logs/auditLogs. Security Rules deny those client writes by design, so
- * route them through the authenticated Cloud Function instead. All other
- * collections retain the native Firestore addDoc behavior.
- */
 const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     const collectionPath = String(reference?.path || '');
     if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
@@ -120,8 +112,6 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
         sourceCollection: collectionPath,
     };
 
-    // Some legacy flows wrote the same event to both audit_logs and auditLogs
-    // in one Promise.all. Deduplicate only while the first callable is pending.
     const dedupeKey = `${action}|${targetType}|${targetId}`;
     let pending = pendingAuditWrites.get(dedupeKey);
     if (!pending) {
@@ -141,7 +131,7 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
 export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
     onAuthStateChanged,
-    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
+    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion, getCountFromServer,
     ref, uploadBytes, getDownloadURL, signInWithRedirect, signInWithEmailAndPassword, setPersistence, browserLocalPersistence
 };
 export type { User };
