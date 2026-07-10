@@ -11,13 +11,12 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LogoutIcon from '@mui/icons-material/Logout';
 import FileTextIcon from '@mui/icons-material/Description';
 import { Building2, Map, MessageSquare, Sparkles, Users, Wrench } from 'lucide-react';
-import { useLanguage } from '@bin/shared';
+import { CeoContactButtons, useLanguage } from '@bin/shared';
 import { signOut } from 'firebase/auth';
 
 import { auth } from '../lib/firebase';
 import { binThemeTokens } from '../theme/adminTheme';
 import { useAuth } from '../context/AuthContext';
-import CeoContactButtons from './CeoContactButtons';
 
 type MenuItem = {
   text: string;
