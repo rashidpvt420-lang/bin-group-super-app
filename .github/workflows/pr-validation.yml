@@ -41,6 +41,9 @@ jobs:
         id: duplicate_audit
         run: npm run audit:duplicates
 
+      - name: Verify duplicate resolution
+        run: node scripts/verify-duplicate-resolution.mjs
+
       - name: Canonical route architecture guard
         run: node scripts/verify-canonical-route-architecture.mjs
 
