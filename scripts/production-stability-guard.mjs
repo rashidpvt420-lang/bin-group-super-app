@@ -42,6 +42,10 @@ const stripeReturnsToOwnerActivation =
   stripePayment.includes('session_id={CHECKOUT_SESSION_ID}') &&
   app.includes('<Route path="/owner/*"');
 
+const packageCallIndex = paymentStep.indexOf("httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage')");
+const checkoutCallIndex = paymentStep.indexOf("httpsCallable(functions, 'createStripeCheckoutSession')");
+const packagePersistsBeforeCheckout = packageCallIndex >= 0 && checkoutCallIndex >= 0 && packageCallIndex < checkoutCallIndex;
+
 const workflowDispatchOnly =
   workflow.includes('workflow_dispatch:') &&
   !workflow.includes('\n  push:') &&
@@ -83,9 +87,16 @@ assert(ownerRegistration.includes('adminApproved: false'), 'New owner registrati
 assert(paymentStep.includes('uploadProofDocuments'), 'Payment submission must upload proof documents.');
 assert(paymentStep.includes('submitOwnerOnboardingPaymentPackage'), 'Payment submission must use backend package callable.');
 assert(paymentStep.includes('waitForCurrentUser'), 'Payment submission must wait for auth hydration.');
+assert(packagePersistsBeforeCheckout, 'Owner package persistence must occur before Stripe Checkout creation.');
+assert(!paymentStep.includes("params.get('payment_success') === 'true'"), 'Client query parameters must not be treated as successful payment proof.');
 
 assert(!stripePayment.includes('mock_session_id'), 'Stripe checkout must not return mock sessions.');
-assert(stripePayment.includes('failed-precondition'), 'Stripe checkout must fail closed when unconfigured.');
+assert(stripePayment.includes('failed-precondition'), 'Stripe checkout must fail closed when unconfigured or package persistence is missing.');
+assert(stripePayment.includes('assertAuthenticatedOwner(request, ownerUid)'), 'Stripe checkout must bind the caller to the authenticated owner.');
+assert(stripePayment.includes('return intakeId;'), 'Stripe onboarding must use the canonical intake ID as the payment ID.');
+assert(stripePayment.includes('adminApprovalRequired: true'), 'Stripe verification must explicitly require final admin approval.');
+assert(stripePayment.includes('unlocksDashboard: false'), 'Stripe verification must not directly unlock the owner dashboard.');
+assert(stripePayment.includes('PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL'), 'Stripe verification must preserve the pending-admin activation state.');
 assert(stripeReturnsToOwnerActivation, 'Stripe return URLs must route to the owner activation flow.');
 assert(!existsSync('src/pages/public/PaymentResultPage.tsx'), 'Legacy PaymentResultPage must be removed after Stripe owner activation routing.');
 

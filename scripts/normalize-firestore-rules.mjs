@@ -2,6 +2,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const path = 'firestore.rules';
 const source = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+const conflictStart = '<'.repeat(7);
+const conflictMiddle = '='.repeat(7);
+const conflictEnd = '>'.repeat(7);
 
 // NOTE: Git conflict-marker tokens below are constructed at runtime (never written
 // as literal marker lines) so this maintenance script does not itself trip the
@@ -13,6 +16,7 @@ const CONFLICT_END = `${'>'.repeat(7)} Stashed changes`;
 function resolveKnownConflictMarkers(input) {
   return input
     .replace(
+ cursor/launch-readiness-audit-a1f7
       [
         CONFLICT_START,
         "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
@@ -39,6 +43,26 @@ function resolveKnownConflictMarkers(input) {
         '    function safeOpenMissionClaim() {',
         '      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&',
       ].join('\n')
+
+      `${conflictStart} Updated upstream
+    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
+${conflictMiddle}
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+${conflictEnd} Stashed changes`,
+      `    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`
+    )
+    .replace(
+      `    function safeOpenMissionClaim() {
+${conflictStart} Updated upstream
+      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&
+${conflictMiddle}
+      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&
+${conflictEnd} Stashed changes`,
+      `    function safeOpenMissionClaim() {
+      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
+ main
     );
 }
 
@@ -196,7 +220,7 @@ function insertOwnerTrustWorkflowRules(input) {
       allow read, write: if isAdmin();
       allow create: if isAdmin() || signedIn();
     }
- `;
+  `;
   return input.replace(marker, `${block}\n${marker}`);
 }
 
