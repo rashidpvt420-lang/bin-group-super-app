@@ -5,13 +5,16 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertFirebaseAdminCredentials } from './lib/firebase-admin-bootstrap.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
+assertFirebaseAdminCredentials();
+
 function runStep(label, scriptName) {
   console.log(`\n=== Gate 11 seed: ${label} ===\n`);
-  const result = spawnSync('node', [path.join(__dirname, scriptName)], {
+  const result = spawnSync(process.execPath, [path.join(__dirname, scriptName)], {
     cwd: root,
     stdio: 'inherit',
     env: process.env,
@@ -24,4 +27,5 @@ function runStep(label, scriptName) {
 
 runStep('Firebase Auth + user profiles', 'seed-e2e-auth.mjs');
 runStep('Live role-linked Firestore fixtures', 'seed-live-role-test-data.mjs');
+runStep('Launch workflow fixtures (technician ticket, broker, owner)', 'seed-launch-workflow-fixtures.mjs');
 console.log('\nGate 11 fixtures seeded successfully.\n');

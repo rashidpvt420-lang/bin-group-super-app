@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { assertFirebaseAdminCredentials } from './lib/firebase-admin-bootstrap.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,8 @@ if (missingVars.length > 0) {
 }
 
 const projectId = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
+
+assertFirebaseAdminCredentials();
 
 if (!admin.apps.length) {
   admin.initializeApp({ projectId });

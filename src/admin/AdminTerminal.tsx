@@ -41,6 +41,7 @@ import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
+import AdminOwnerIntakeQueue from './AdminOwnerIntakeQueue';
 
 const LEGACY_ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
 
@@ -333,6 +334,10 @@ export default function AdminTerminal() {
           </Grid>
         </CardContent>
       </Card>
+
+      <Box sx={{ mb: 3 }}>
+        <AdminOwnerIntakeQueue />
+      </Box>
 
       <Grid container spacing={2.5}>
         <Grid item xs={12} md={7}>

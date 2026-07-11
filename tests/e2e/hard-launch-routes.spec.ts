@@ -1,8 +1,13 @@
+/**
+ * Hard-launch route audit — all five roles on the **main app** (E2E_BASE_URL).
+ * Admin `/admin/*` routes are tested here with intendedRole=admin, not the separate admin panel (E2E_ADMIN_BASE_URL).
+ */
 import { expect, Page, test } from '@playwright/test';
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { injectAppCheckDebugToken } from './helpers/appCheckDebug';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,14 +57,20 @@ async function expectNoRuntimeCrash(page: Page, route: string) {
   }
 }
 
-async function login(page: Page, email: string, password: string) {
+function roleDashboardPath(role: RoleName): string {
+  return role === 'admin' ? '/admin/dashboard' : `/${role}/dashboard`;
+}
+
+async function login(page: Page, email: string, password: string, role: RoleName) {
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
       console.log(`[BROWSER_ERROR] ${msg.text()}`);
     }
   });
 
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await injectAppCheckDebugToken(page);
+  await page.context().clearCookies();
+  await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
 
   const emailInput = page.locator('[data-testid="login-email"], input[type="email"], input[name*="email" i], input[autocomplete="email"], input:not([type="password"])').first();
   const passwordInput = page.locator('[data-testid="login-password"], input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
@@ -69,10 +80,25 @@ async function login(page: Page, email: string, password: string) {
   await passwordInput.fill(password);
   await page.locator('form button[type="submit"]').first().click();
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2_000);
-  await expectNoRuntimeCrash(page, '/login after submit');
 
-  // Verify login succeeds and page URL is not /login
+  const dashboardPath = roleDashboardPath(role);
+  try {
+    await page.waitForURL(`**${dashboardPath}`, { timeout: 35_000 });
+  } catch {
+    const postLoginText = await page.locator('body').innerText({ timeout: 10_000 }).catch(() => '');
+    if (/auth\/invalid-credential|wrong-password|user-not-found/i.test(postLoginText)) {
+      throw new Error(
+        `Login failed for ${email} (${role} on main app /login, not admin panel): Firebase rejected credentials. ` +
+        'Run npm run seed:e2e:auth and ensure VITE_FIREBASE_APPCHECK_DEBUG_TOKEN is registered in Firebase App Check debug tokens.'
+      );
+    }
+    throw new Error(
+      `Login for ${email} (${role}) did not reach ${dashboardPath} within 35s. ` +
+      `Current URL: ${page.url()}. Body preview: ${postLoginText.slice(0, 400)}`
+    );
+  }
+
+  await expectNoRuntimeCrash(page, dashboardPath);
   await expect(page, 'Should redirect away from login page after successful authentication').not.toHaveURL(/\/login/, { timeout: 15_000 });
 }
 
@@ -91,7 +117,7 @@ for (const role of Object.keys(criticalRoutes) as RoleName[]) {
     const password = process.env[passwordKey];
 
     test.beforeEach(async ({ page }) => {
-      await login(page, requireCredential(email, emailKey), requireCredential(password, passwordKey));
+      await login(page, requireCredential(email, emailKey), requireCredential(password, passwordKey), role);
     });
 
     for (const route of criticalRoutes[role]) {

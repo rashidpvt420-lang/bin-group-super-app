@@ -23,6 +23,9 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { auth, functions, httpsCallable, signInWithEmailAndPassword, storage } from '../../lib/firebase';
 import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
+import OwnerActivationTimeline from './OwnerActivationTimeline';
+
+const stripeCheckoutEnabled = import.meta.env.VITE_ENABLE_STRIPE_CHECKOUT === 'true';
 
 interface PaymentSubmissionStepProps {
     onBack: () => void;
@@ -182,7 +185,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     onboardingSessionId: onboardingSessionId || effectiveIntakeId,
                     docType: documentType.key,
                     filename: safeFileName,
-                    contentType: stagedFile.type || 'application/octet-stream',
+                    contentType: stagedFile.type,
                     encodedDocument: await fileToBase64Payload(stagedFile),
                 });
                 const data = result.data as { downloadUrl?: string };
@@ -242,6 +245,12 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         });
 
         if (paymentMethod === 'STRIPE') {
+            if (!stripeCheckoutEnabled) {
+                throw new Error(copy(
+                    'Card checkout is not enabled for the controlled bank-transfer pilot. Choose bank transfer and submit proof for admin verification.',
+                    'الدفع بالبطاقة غير مفعّل في التجربة التحكمية عبر التحويل البنكي. اختر التحويل البنكي وأرسل الإثبات لمراجعة الإدارة.',
+                ));
+            }
             const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
             const result = await createCheckout({
                 ownerUid: user.uid,
@@ -301,8 +310,11 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     };
 
     if (success) {
+        const primaryProperty = properties?.[0];
+        const needsGeoReview = Boolean(primaryProperty?.requiresGeoReview || primaryProperty?.dispatchReady === false);
         return (
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={ar ? 'rtl' : 'ltr'}>
+                <Stack spacing={3}>
                 <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.86)', border: '1px solid #4ADE80' }}>
                     <CheckCircle size={54} color="#4ADE80" />
                     <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mt: 2 }}>
@@ -318,6 +330,13 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         {copy('Open Activation Status', 'فتح حالة التفعيل')}
                     </Button>
                 </Paper>
+                <OwnerActivationTimeline
+                    activeStage="PAYMENT_PENDING"
+                    requiresGeoReview={needsGeoReview}
+                    intakeId={intakeId || ownerAccount?.uid || onboardingSessionId}
+                    slaHours={48}
+                />
+                </Stack>
             </Container>
         );
     }
@@ -393,7 +412,13 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 </Paper>
 
                 <Alert severity="info">
-                    {copy(
+                    {paymentMethod === 'BANK_TRANSFER' ? copy(
+                        'Bank transfer is awaiting admin verification. Your dashboard stays locked until BIN GROUP confirms receipt.',
+                        'التحويل البنكي بانتظار تحقق الإدارة. ستبقى لوحة التحكم مقفلة حتى يؤكد BIN GROUP استلام المبلغ.',
+                    ) : paymentMethod === 'STRIPE' && !stripeCheckoutEnabled ? copy(
+                        'Card checkout is disabled for the bank-transfer pilot. Use bank transfer instead.',
+                        'الدفع بالبطاقة معطّل في تجربة التحويل البنكي. استخدم التحويل البنكي بدلاً من ذلك.',
+                    ) : copy(
                         'A successful card charge verifies funds only. Final dashboard activation still requires admin approval.',
                         'نجاح الدفع بالبطاقة يثبت استلام المبلغ فقط. يتطلب تفعيل لوحة التحكم موافقة الإدارة النهائية.',
                     )}

@@ -6,6 +6,7 @@ import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { injectAppCheckDebugToken } from './helpers/appCheckDebug';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -24,6 +25,7 @@ const forbiddenByRole: Record<RoleName, string[]> = {
 };
 
 async function loginMainApp(page: Page, email: string, password: string, intendedRole?: string) {
+  await injectAppCheckDebugToken(page);
   const loginUrl = intendedRole ? `/login?intendedRole=${intendedRole}&refresh=${Date.now()}` : '/login';
   await page.context().clearCookies();
   await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
@@ -34,13 +36,35 @@ async function loginMainApp(page: Page, email: string, password: string, intende
   else await expect(page).not.toHaveURL(/\/login$/, { timeout: 25_000 });
 }
 
+async function assertAuthRejected(page: Page, email: string, context: string) {
+  const body = await page.locator('body').innerText({ timeout: 10_000 }).catch(() => '');
+  if (/auth\/invalid-credential|wrong-password|user-not-found|invalid credential/i.test(body)) {
+    throw new Error(
+      `Login failed for ${email} (${context}): Firebase rejected credentials (auth/invalid-credential). ` +
+      'Run npm run seed:e2e:auth or npm run gate12:rotate-admin, then update .env.e2e / GitHub secrets.'
+    );
+  }
+}
+
 async function loginAdminPanel(page: Page, email: string, password: string) {
   if (!adminBaseUrl) throw new Error('E2E_ADMIN_BASE_URL is required.');
-  await page.goto(`${adminBaseUrl}/login`, { waitUntil: 'domcontentloaded' });
+  await injectAppCheckDebugToken(page);
+  await page.context().clearCookies();
+  await page.goto(`${adminBaseUrl}/login?refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
   await page.locator('input[type="password"]').first().fill(password);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL('**/dashboard', { timeout: 25_000 });
+  try {
+    await page.waitForURL('**/dashboard', { timeout: 45_000 });
+  } catch {
+    await assertAuthRejected(page, email, 'admin panel at ' + adminBaseUrl);
+    const body = await page.locator('body').innerText({ timeout: 10_000 }).catch(() => '');
+    throw new Error(
+      `Admin panel login for ${email} did not reach /dashboard within 45s. ` +
+      `URL: ${page.url()}. Body preview: ${body.slice(0, 400)}`
+    );
+  }
+  await page.waitForLoadState('domcontentloaded');
 }
 
 async function assertHealthy(page: Page, label: string) {

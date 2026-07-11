@@ -285,6 +285,9 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const paymentManifest = cleanPlainValue(data.paymentManifest || {});
   const properties = cleanPlainValue(data.properties || []);
   const signatureName = cleanText(data.signatureName, "signatureName", 120);
+  const selectedPlan = cleanPlainValue(data.selectedPlan || serviceDetails.selectedPlan || serviceDetails.plan || {});
+  const selectedAddOns = Array.isArray(data.selectedAddOns) ? data.selectedAddOns : Array.isArray(serviceDetails.selectedAddOns) ? serviceDetails.selectedAddOns : [];
+  const portfolioSummary = cleanPlainValue(data.portfolioSummary || {});
 
   if (amount <= 0 || activationDeposit <= 0) {
     throw new HttpsError("invalid-argument", "A positive payment amount is required.");
@@ -361,11 +364,37 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentMethod,
     paymentAmount: amount,
     activationDeposit,
+    mobilizationAmount: activationDeposit,
     annualContractValue: annualContractValue || amount,
     status: "payment_pending_approval",
+    adminReviewState: "AWAITING_VERIFICATION",
     ownerUid,
     ownerId: ownerUid,
     ownerEmail,
+    ownerName: signatureName || companyProfile.contactPerson || companyProfile.name || ownerEmail,
+    ownerMobile: companyProfile.phone || companyProfile.mobile || "",
+    companyProfile,
+    selectedPlan: selectedPlan || serviceDetails.selectedPlan || serviceDetails.plan || null,
+    selectedAddOns,
+    portfolioSummary: {
+      ...(portfolioSummary || {}),
+      estimatedACV: annualContractValue || amount,
+      totalUnits: serviceDetails.totalUnits || portfolioSummary?.totalUnits || 0,
+      propertyCount: Array.isArray(properties) ? properties.length : serviceDetails.properties || 0,
+    },
+    pricing: {
+      annualContractValue: annualContractValue || amount,
+      mobilizationAmount: activationDeposit,
+      currency: "AED",
+    },
+    payment: {
+      paymentId: intakeId,
+      amount: activationDeposit,
+      method: paymentMethod,
+      annualValue: annualContractValue || amount,
+      currency: "AED",
+    },
+    contractId: intakeId,
     proofDocuments: documentUrls,
     paymentManifest,
     contractUrl,

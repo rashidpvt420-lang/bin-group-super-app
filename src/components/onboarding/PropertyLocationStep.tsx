@@ -672,6 +672,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
                         {locationError && <Alert severity="warning">{locationError}</Alert>}
 
+                        {(activeProperty?.requiresGeoReview || activeProperty?.dispatchReady === false) && (
+                            <Alert severity="warning" sx={{ border: '1px solid rgba(234, 179, 8, 0.45)' }}>
+                                <strong>Admin geo verification required before technician dispatch.</strong> Your pin is saved, but maintenance teams cannot be routed until BIN GROUP confirms the exact building location on the map.
+                            </Alert>
+                        )}
+
                         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 2 }}>
                             <Button variant="outlined" onClick={onBack} fullWidth startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF' }}>{readable(t('onboarding.back'), 'Back')}</Button>
                             <Button variant="contained" size="large" onClick={handleContinue} fullWidth disabled={!canProceed} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5 }}>{readable(t('onboarding.continue'), 'Continue')}</Button>

@@ -30,7 +30,8 @@ async function checkRoute(base, route) {
 const results = [];
 for (const route of mainRoutes) results.push(await checkRoute(mainBase, route));
 for (const route of adminRoutes) results.push(await checkRoute(adminBase, route));
-console.log('\n=== Gate 11 Staging Route Check ===\n');
+const label = mainBase.includes('--staging-') ? 'Staging' : 'Production';
+console.log(`\n=== Gate 11 ${label} Route Check ===\n`);
 for (const r of results) console.log(`[${r.pass ? 'PASS' : 'FAIL'}] ${r.base} ${r.route} -> HTTP ${r.status}${r.error ? ` (${r.error})` : ''}`);
 const failed = results.filter((r) => !r.pass);
 console.log(`\nSummary: ${results.length - failed.length}/${results.length} passed`);

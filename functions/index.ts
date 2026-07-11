@@ -5,15 +5,12 @@ import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
-import * as nodemailer from "nodemailer";
 import * as crypto from "crypto";
-import { extractTitleDeedData } from "./ocrEngine";
 import {
     parseFirebaseStoragePath,
     assertOcrCallerRole,
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
-import { generateContractPDF, generatePayslipPDF, generateIntegrityAuditPDF } from "./pdfEngine";
 export { deliverNotificationPush } from "./notificationDelivery";
 export { mintAdminBridgeToken } from "./adminBridgeAuth";
 export { logUserAuditAction } from "./userAuditOperations";
@@ -29,8 +26,6 @@ const db = admin.firestore();
 // Secrets
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
-const smtpUserSecret = defineSecret("SMTP_USER");
-const smtpPassSecret = defineSecret("SMTP_PASS");
 // Same Secret Manager names used by functions/whatsappBot.ts and functions/whatsappWebhook.ts.
 const waToken = defineSecret("WHATSAPP_TOKEN");
 const waPhoneId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
@@ -1420,6 +1415,7 @@ export const processTitleDeedOCR = onCall({ cors: true }, async (request) => {
     }
 
     try {
+        const { extractTitleDeedData } = await import("./ocrEngine");
         const extractedData = await extractTitleDeedData(normalizedUrl);
         await logAudit({
             actorId: request.auth!.uid, actorRole: isAdmin ? "admin" : "owner",
@@ -1481,6 +1477,7 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
 
     try {
         const payload = hasPrivilegedAccess ? contractData : { ...contractData, ownerId: request.auth.uid };
+        const { generateContractPDF } = await import("./pdfEngine");
         const pdfUrl = await generateContractPDF(payload);
         await logAudit({
             actorId: request.auth.uid,
@@ -1507,6 +1504,7 @@ export const generateAndEmailPayslip = onCall({
     const netSalary = Number(basicSalary) + Number(allowances) + Number(overtime) - Number(deductions);
 
     try {
+        const { generatePayslipPDF } = await import("./pdfEngine");
         const pdfUrl = await generatePayslipPDF({ staffId, staffName, payPeriod, paymentDate: new Date().toLocaleDateString(), basicSalary, allowances, overtime, deductions, netSalary });
         return { success: true, pdfUrl };
     } catch (err: any) {
@@ -1531,6 +1529,7 @@ export const generateIntegrityAudit = onCall({ cors: true }, async (request) => 
     }
 
     try {
+        const { generateIntegrityAuditPDF } = await import("./pdfEngine");
         const url = await generateIntegrityAuditPDF({
             propertyId,
             propertyName: safeString(propertyName, "Property"),
@@ -2010,31 +2009,9 @@ export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", asy
     }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: FieldValue.serverTimestamp() }));
 });
 
-export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    try {
-        const user = smtpUserSecret.value();
-        const pass = smtpPassSecret.value();
-        if (!user || !pass) {
-            await snap.ref.update({ delivery: { state: 'ERROR', error: 'SMTP credentials are not configured. Mail cannot be processed.' } });
-            return;
-        }
-        const mailTransport = nodemailer.createTransport({
-            host: 'smtp.gmail.com', port: 465, secure: true,
-            auth: { user, pass }
-        });
-        const mailData = snap.data();
-        await mailTransport.sendMail({
-            from: `"BIN GROUP" <${user}>`,
-            to: mailData.to,
-            subject: mailData.message?.subject || 'Update',
-            html: mailData.message?.html || ''
-        });
-        await snap.ref.update({ delivery: { state: 'SUCCESS', deliveredAt: FieldValue.serverTimestamp() } });
-    } catch (err: any) {
-        await snap.ref.update({ delivery: { state: 'ERROR', error: err.message } });
-    }
+/** @deprecated Mail delivery is handled by sendQueuedMailOnCreate in mailDelivery.ts. */
+export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, async () => {
+    return;
 });
 
 export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async (event) => {

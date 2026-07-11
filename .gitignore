@@ -52,6 +52,8 @@ hosting/public/
 !hosting/public/.keep
 
 # Environment files / secrets
+secrets/
+*-service-account.json
 .env
 .env.local
 .env.production

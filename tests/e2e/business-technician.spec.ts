@@ -1,9 +1,11 @@
 /**
  * business-technician.spec.ts
  * Deep E2E business flow for the Technician role.
- * Verifies: job acceptance, GPS/arrival actions, proof upload, and ticket resolution.
+ * Verifies: job acceptance, GPS/arrival within default 150m geofence (functions/geofence.ts),
+ * lifecycle transitions, PPE/safety checks, and before/after evidence requirements.
  */
 import { test, expect, Page, Locator } from '@playwright/test';
+import { injectAppCheckDebugToken, mockTechnicianGps } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
@@ -66,7 +68,9 @@ async function attachRequiredImage(page: Page, selectors: string[], label: strin
 
 async function login(page: Page) {
   requireLaunchCredentials();
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await injectAppCheckDebugToken(page);
+  await mockTechnicianGps(page);
+  await page.goto('/login?intendedRole=technician', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();

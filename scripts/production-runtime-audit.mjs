@@ -133,6 +133,10 @@ assert(runtimeExports.includes('export * from "./stripePayment"'), 'Stripe payme
 
 assert(mailDeliveryFunction.includes('defineSecret("SMTP_USER")'), 'Mail function must use Firebase Secret Manager key SMTP_USER.');
 assert(mailDeliveryFunction.includes('defineSecret("SMTP_PASS")'), 'Mail function must use Firebase Secret Manager key SMTP_PASS.');
+assert(mailDeliveryFunction.includes('defineSecret("SMTP_HOST")'), 'Mail function must use Firebase Secret Manager key SMTP_HOST.');
+assert(mailDeliveryFunction.includes('defineSecret("SMTP_PORT")'), 'Mail function must use Firebase Secret Manager key SMTP_PORT.');
+assert(mailDeliveryFunction.includes('defineSecret("SMTP_FROM")'), 'Mail function must use Firebase Secret Manager key SMTP_FROM.');
+assert(mailDeliveryFunction.includes('secrets: SMTP_SECRETS'), 'Mail trigger must bind SMTP secrets at deploy time.');
 assert(mailDeliveryFunction.includes('process.env.MAIL_FROM') || mailDeliveryFunction.includes('process.env.SMTP_FROM'), 'Mail function must support branded sender configuration.');
 assert(runtimeExports.includes('export * from "./mailDelivery"'), 'Mail delivery functions must be exported from the deployed runtime entrypoint.');
 

@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
+import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
 
@@ -10,6 +10,11 @@ const db = admin.firestore();
 
 const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
+const smtpHost = defineSecret("SMTP_HOST");
+const smtpPort = defineSecret("SMTP_PORT");
+const smtpFrom = defineSecret("SMTP_FROM");
+
+const SMTP_SECRETS = [smtpUser, smtpPass, smtpHost, smtpPort, smtpFrom];
 
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
 
@@ -45,17 +50,44 @@ async function assertAdmin(auth: any) {
   throw new HttpsError("permission-denied", "Admin access required.");
 }
 
+function isValidSmtpHost(value: string) {
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value);
+}
+
+function resolveSmtpHost() {
+  const configured = asText(smtpHost.value() || process.env.SMTP_HOST, "");
+  if (configured && isValidSmtpHost(configured)) return configured;
+  return "smtp.sendgrid.net";
+}
+
+function resolveSmtpPort() {
+  const configured = Number(smtpPort.value() || process.env.SMTP_PORT || 465);
+  return Number.isFinite(configured) && configured > 0 ? configured : 465;
+}
+
 function createTransporter() {
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
   if (!user || !pass) throw new Error("SMTP_USER/SMTP_PASS secrets are not configured.");
-  const port = Number(process.env.SMTP_PORT || 465);
+  const host = resolveSmtpHost();
+  const port = resolveSmtpPort();
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.sendgrid.net",
+    host,
     port,
     secure: port === 465,
     auth: { user, pass },
   });
+}
+
+function resolveFromAddress(message: any, data: any) {
+  const user = smtpUser.value() || process.env.SMTP_USER || "";
+  const configuredFrom = asText(
+    message?.from || data?.from || smtpFrom.value() || process.env.SMTP_FROM || process.env.MAIL_FROM,
+    ""
+  );
+  if (configuredFrom) return configuredFrom;
+  if (user.includes("@")) return `BIN GROUP <${user}>`;
+  return "BIN GROUP <noreply@bin-groups.com>";
 }
 
 async function deliverMail(mailId: string, data: any) {
@@ -67,7 +99,7 @@ async function deliverMail(mailId: string, data: any) {
   const subject = asText(message.subject || data?.subject, "BIN GROUP notification");
   const html = asText(message.html || data?.html || message.text || data?.text);
   const text = asText(message.text || data?.text || stripHtml(html));
-  const from = asText(message.from || data?.from || process.env.MAIL_FROM || process.env.SMTP_FROM, "BIN GROUP <ceo@bin-groups.com>");
+  const from = resolveFromAddress(message, data);
   const replyTo = asText(message.replyTo || message.reply_to || data?.replyTo || data?.reply_to || process.env.MAIL_REPLY_TO || process.env.SMTP_REPLY_TO, "BIN GROUP Admin <ceo@bin-groups.com>");
 
   if (!to?.length) {
@@ -110,13 +142,16 @@ async function deliverMail(mailId: string, data: any) {
   }
 }
 
-export const sendQueuedMailOnCreate = onDocumentCreated({ document: "mail/{mailId}" }, async (event) => {
-  const snap = event.data;
-  if (!snap) return;
-  await deliverMail(event.params.mailId, snap.data() || {});
-});
+export const sendQueuedMailOnCreate = onDocumentCreated(
+  { document: "mail/{mailId}", secrets: SMTP_SECRETS },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    await deliverMail(event.params.mailId, snap.data() || {});
+  }
+);
 
-export const adminRetryMailDelivery = onCall({ cors: true }, async (request) => {
+export const adminRetryMailDelivery = onCall({ cors: true, secrets: SMTP_SECRETS }, async (request) => {
   await assertAdmin(request.auth);
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
