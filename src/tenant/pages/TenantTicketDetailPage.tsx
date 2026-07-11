@@ -32,6 +32,7 @@ export default function TenantTicketDetailPage() {
     const { user } = useRole();
     const navigate = useNavigate();
     const [ticket, setTicket] = useState<any>(null);
+    const [technician, setTechnician] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [showRejectInput, setShowRejectInput] = useState(false);
@@ -56,6 +57,23 @@ export default function TenantTicketDetailPage() {
             setTicket({ id: snap.id, ...data });
             if (data.rating && !rating) setRating(Number(data.rating));
             if (data.feedback && !feedback) setFeedback(String(data.feedback));
+
+            // Fetch technician if assigned
+            const techId = data.assignedTechnicianId || data.technicianId;
+            if (techId) {
+                const unsubscribeTech = onSnapshot(doc(db, 'technicians', techId), (techSnap) => {
+                    if (techSnap.exists()) {
+                        setTechnician({ id: techSnap.id, ...techSnap.data() });
+                    }
+                }, (techErr) => {
+                    console.warn('[TenantTicketDetail] Technician listener error:', techErr);
+                });
+                setLoading(false);
+                return () => {
+                    unsubscribeTech();
+                };
+            }
+
             setLoading(false);
         }, (err) => {
             console.error('[TenantTicketDetail] Listener error:', err);
@@ -141,7 +159,7 @@ export default function TenantTicketDetailPage() {
                     {isDisputed && <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#ef4444', 0.05), border: '1px solid #ef4444', borderRadius: 6 }}><Typography variant="h6" fontWeight="950" color="#ef4444" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}><AlertCircle /> JOB DISPUTED</Typography><Typography variant="body2" color="rgba(255,255,255,0.6)">Property Management is reviewing the case.</Typography><Typography color="#FFF" sx={{ mt: 2 }}>{ticket.rejectionReason || ticket.disputeReason || ticket.feedback}</Typography></Paper>}
                     {isClosed && <Paper sx={{ p: 4, mb: 4, bgcolor: alpha('#10b981', 0.05), border: '1px solid rgba(16,185,129,0.3)', borderRadius: 6, textAlign: 'center' }}><CheckCircle2 size={48} color="#10b981" style={{ margin: '0 auto 16px' }} /><Typography variant="h6" fontWeight="950" color="#10b981">SERVICE FINALIZED</Typography>{ticket.rating && <Rating readOnly value={Number(ticket.rating)} sx={{ '& .MuiRating-iconFilled': { color: binThemeTokens.gold } }} />}{ticket.feedback && <Typography variant="body2" color="rgba(255,255,255,0.75)" sx={{ mt: 1, fontStyle: 'italic' }}>{ticket.feedback}</Typography>}</Paper>}
                 </Grid>
-                <Grid item xs={12} lg={4}><Box sx={{ mb: 3 }}><LiveTechnicianTrackingCard ticket={ticket} onChatClick={() => navigate(`/tenant/chat/${ticket.id}`)} showTimeline={true} /></Box><Paper sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.02), border: '1px solid rgba(255,255,255,0.03)', borderRadius: 5 }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}><Info size={16} /> NEED ASSISTANCE?</Typography><Typography variant="caption" color="rgba(255,255,255,0.4)" sx={{ fontWeight: 700 }}>Use chat to reach your technician. For escalations, contact BIN GROUP concierge.</Typography></Paper></Grid>
+                <Grid item xs={12} lg={4}><Box sx={{ mb: 3 }}><LiveTechnicianTrackingCard ticket={ticket} technician={technician} onChatClick={() => navigate(`/tenant/chat/${ticket.id}`)} showTimeline={true} /></Box><Paper sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.02), border: '1px solid rgba(255,255,255,0.03)', borderRadius: 5 }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}><Info size={16} /> NEED ASSISTANCE?</Typography><Typography variant="caption" color="rgba(255,255,255,0.4)" sx={{ fontWeight: 700 }}>Use chat to reach your technician. For escalations, contact BIN GROUP concierge.</Typography></Paper></Grid>
             </Grid>
         </Box>
     );

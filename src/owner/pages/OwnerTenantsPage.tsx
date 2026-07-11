@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, CircularProgress, 
     Grid, Avatar, IconButton, TextField, InputAdornment, alpha,
-    Button, Divider
+    Button, Divider, Alert, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import { 
     Users, Search, Mail, Phone, MessageSquare, 
     MapPin, Building2, ChevronRight, Filter,
-    Activity, Shield, CheckCircle2
+    Activity, Shield, CheckCircle2, UserPlus
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, onSnapshot, httpsCallable, functions } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
@@ -17,7 +17,16 @@ export default function OwnerTenantsPage() {
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
     const [tenants, setTenants] = useState<any[]>([]);
+    const [properties, setProperties] = useState<{ id: string; name: string }[]>([]);
     const [search, setSearch] = useState('');
+    const [inviteOpen, setInviteOpen] = useState(false);
+    const [invitePropertyId, setInvitePropertyId] = useState('');
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteName, setInviteName] = useState('');
+    const [inviteUnit, setInviteUnit] = useState('');
+    const [inviteBusy, setInviteBusy] = useState(false);
+    const [inviteError, setInviteError] = useState<string | null>(null);
+    const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user?.email) return;
@@ -26,6 +35,13 @@ export default function OwnerTenantsPage() {
         const propQ = query(collection(db, 'properties'), where('ownerEmail', '==', user.email.toLowerCase()));
         
         const unsubscribe = onSnapshot(propQ, async (propSnap) => {
+            const propList = propSnap.docs.map(d => ({
+                id: d.id,
+                name: d.data().name || d.data().propertyName || 'Sovereign Asset',
+            }));
+            setProperties(propList);
+            setInvitePropertyId((prev) => prev || propList[0]?.id || '');
+
             const propIds = propSnap.docs.map(d => d.id);
             if (propIds.length === 0) { 
                 setTenants([]);
@@ -53,7 +69,36 @@ export default function OwnerTenantsPage() {
         return () => unsubscribe();
     }, [user?.email]);
 
-    const filtered = tenants.filter(t => 
+    const sendInvite = async () => {
+        if (!invitePropertyId || !inviteEmail.trim()) {
+            setInviteError('Select a property and enter tenant email.');
+            return;
+        }
+        setInviteBusy(true);
+        setInviteError(null);
+        setInviteSuccess(null);
+        try {
+            const invite = httpsCallable(functions, 'ownerInviteTenantToProperty');
+            const result = await invite({
+                propertyId: invitePropertyId,
+                tenantEmail: inviteEmail.trim().toLowerCase(),
+                tenantName: inviteName.trim() || 'Tenant',
+                unitNumber: inviteUnit.trim() || 'Unit',
+            });
+            const data = result.data as { status?: string; inviteUrl?: string };
+            setInviteSuccess(data.inviteUrl ? `Invitation sent. Link: ${data.inviteUrl}` : 'Invitation sent.');
+            setInviteEmail('');
+            setInviteName('');
+            setInviteUnit('');
+            setInviteOpen(false);
+        } catch (err: any) {
+            setInviteError(err?.message || 'Failed to send tenant invitation.');
+        } finally {
+            setInviteBusy(false);
+        }
+    };
+
+    const filtered = tenants.filter(t =>
         t.displayName?.toLowerCase().includes(search.toLowerCase()) ||
         t.email?.toLowerCase().includes(search.toLowerCase()) ||
         t.propertyName?.toLowerCase().includes(search.toLowerCase())
@@ -85,7 +130,22 @@ export default function OwnerTenantsPage() {
                     }}
                     sx={{ width: { xs: '100%', sm: 300 } }}
                 />
+                <Button
+                    variant="contained"
+                    startIcon={<UserPlus size={16} />}
+                    disabled={properties.length === 0}
+                    onClick={() => { setInviteOpen(true); setInviteError(null); setInviteSuccess(null); }}
+                    sx={{ bgcolor: binThemeTokens.gold, color: '#0f172a', fontWeight: 950, borderRadius: 3, px: 3 }}
+                >
+                    Invite Tenant
+                </Button>
             </Box>
+
+            {inviteSuccess && (
+                <Alert severity="success" sx={{ mb: 3, bgcolor: alpha('#10b981', 0.1), color: '#BBF7D0' }}>
+                    {inviteSuccess}
+                </Alert>
+            )}
 
             {filtered.length === 0 ? (
                 <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
@@ -202,6 +262,35 @@ export default function OwnerTenantsPage() {
                     </Grid>
                 </Grid>
             </Paper>
+
+            <Dialog open={inviteOpen} onClose={() => !inviteBusy && setInviteOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle sx={{ fontWeight: 950 }}>Invite Tenant to Property</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        {inviteError && <Alert severity="warning">{inviteError}</Alert>}
+                        <TextField
+                            select
+                            label="Property"
+                            value={invitePropertyId}
+                            onChange={(e) => setInvitePropertyId(e.target.value)}
+                            fullWidth
+                        >
+                            {properties.map((p) => (
+                                <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                            ))}
+                        </TextField>
+                        <TextField label="Tenant email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} fullWidth required />
+                        <TextField label="Tenant name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} fullWidth />
+                        <TextField label="Unit number" value={inviteUnit} onChange={(e) => setInviteUnit(e.target.value)} fullWidth />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setInviteOpen(false)} disabled={inviteBusy}>Cancel</Button>
+                    <Button variant="contained" onClick={sendInvite} disabled={inviteBusy}>
+                        {inviteBusy ? 'Sending…' : 'Send invitation'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

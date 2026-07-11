@@ -672,7 +672,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
                         {locationError && <Alert severity="warning">{locationError}</Alert>}
 
-                        {(activeProperty?.requiresGeoReview || activeProperty?.dispatchReady === false) && (
+                        {(activeProperty?.geo?.requiresGeoReview || activeProperty?.geo?.dispatchReady === false) && (
                             <Alert severity="warning" sx={{ border: '1px solid rgba(234, 179, 8, 0.45)' }}>
                                 <strong>Admin geo verification required before technician dispatch.</strong> Your pin is saved, but maintenance teams cannot be routed until BIN GROUP confirms the exact building location on the map.
                             </Alert>

@@ -322,7 +322,7 @@ export default function TechnicianJobDetailPage() {
                 });
             }
 
-            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
+            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycleV2');
             await updateTicketLifecycle(lifecyclePayload);
             setMessage(nextStatus === 'COMPLETED' ? 'Completed. Tenant approval requested.' : `Status updated: ${nextStatus.replace(/_/g, ' ')}`);
             if (nextStatus === 'COMPLETED') navigate('/technician/jobs');

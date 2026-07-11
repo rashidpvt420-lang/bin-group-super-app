@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
+import { injectAppCheckDebugToken } from './helpers/appCheckDebug';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -24,11 +25,7 @@ function requireLaunchCredentials() {
 
 async function login(page: Page) {
   requireLaunchCredentials();
-
-  const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
-  if (appCheckToken) {
-    await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
-  }
+  await injectAppCheckDebugToken(page);
 
   await page.context().clearCookies();
 
@@ -79,7 +76,8 @@ test.describe('Tenant Business Workflow', () => {
     await page.getByTestId('tenant-request-location').locator('input, textarea').first().fill('Kitchen sink');
     await page.getByTestId('tenant-request-description').locator('input, textarea').first().fill('E2E water leakage test request with photo evidence.');
 
-    await page.locator('input[type="file"]').first().setInputFiles({
+    const photoInput = page.getByTestId('tenant-request-photo-input').or(page.locator('form input[type="file"]').first());
+    await photoInput.setInputFiles({
       name: 'tenant-request-evidence.png',
       mimeType: 'image/png',
       buffer: Buffer.from(
@@ -87,6 +85,7 @@ test.describe('Tenant Business Workflow', () => {
         'hex'
       ),
     });
+    await expect(page.getByTestId('tenant-request-submit')).toBeEnabled({ timeout: 15_000 });
 
     await page.getByTestId('tenant-request-submit').click();
 

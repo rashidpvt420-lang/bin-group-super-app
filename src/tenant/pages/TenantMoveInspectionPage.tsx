@@ -53,6 +53,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 
 const ROOMS = [
   { id: 'entrance', label: 'Entrance / Foyer', icon: '🚪', items: ['Flooring', 'Walls & Paint', 'Ceiling', 'Lighting', 'Door / Lock'] },

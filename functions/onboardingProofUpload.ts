@@ -42,10 +42,10 @@ export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, memory: "
   const onboardingSessionId = ref(request.data?.onboardingSessionId, intakeId || ownerUid);
   const docType = ref(request.data?.docType, "document");
   const filename = String(request.data?.filename || `${docType}.bin`).replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 180);
-  const contentType = text(request.data?.contentType || "application/octet-stream", "contentType", 120);
+  const contentType = text(request.data?.contentType, "contentType", 120);
   const encodedDocument = text(request.data?.encodedDocument, "encodedDocument", 12 * 1024 * 1024);
 
-  if (!contentType.match(/^image\//) && contentType !== "application/pdf" && contentType !== "application/octet-stream") {
+  if (!contentType.match(/^image\//) && contentType !== "application/pdf") {
     throw new HttpsError("invalid-argument", "Only PDF and image documents are allowed.");
   }
 

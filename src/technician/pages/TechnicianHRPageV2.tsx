@@ -168,7 +168,7 @@ export default function TechnicianHRPageV2() {
       const label = documentTypes.find(([value]) => value === documentType)?.[1] || documentType;
       const path = `staffDocuments/${user.uid}/${documentType}/${Date.now()}-${safeFileName(file.name)}`;
       const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, file, { contentType: file.type || 'application/octet-stream' });
+      await uploadBytes(fileRef, file, { contentType: file.type });
       const fileUrl = await getDownloadURL(fileRef);
       const common = {
         ...identity(),
@@ -179,7 +179,7 @@ export default function TechnicianHRPageV2() {
         fileName: file.name,
         filePath: path,
         fileUrl,
-        mimeType: file.type || 'application/octet-stream',
+        mimeType: file.type,
         sizeBytes: file.size,
         paperless: true,
         status: 'pending_hr_review',

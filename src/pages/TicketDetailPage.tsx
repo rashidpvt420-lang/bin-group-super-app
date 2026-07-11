@@ -85,7 +85,7 @@ export default function TicketDetailPage() {
             const url = await getDownloadURL(storageRef);
             
             // For now, we update the single photo fields which the UI expects
-            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle'); // Still fallback if needed, but better to use direct firestore update for photos
+            const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycleV2'); // Still fallback if needed, but better to use direct firestore update for photos
             // Actually I'll use direct update to avoid needing the old function
             const { updateDoc, doc } = await import('firebase/firestore');
             await updateDoc(doc(db, 'maintenanceTickets', id), {

@@ -60,7 +60,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
         referenceFilePath = `payment-references/owners/${user.uid}/${recordId}/${safeFileName(referenceFile.name)}`;
         try {
           const storageRef = ref(storage, referenceFilePath);
-          await uploadBytes(storageRef, referenceFile, { contentType: referenceFile.type || 'application/octet-stream' });
+          await uploadBytes(storageRef, referenceFile, { contentType: referenceFile.type });
           referenceFileUrl = await getDownloadURL(storageRef);
         } catch (error: any) {
           referenceUploadError = error?.message || 'Reference file upload failed.';

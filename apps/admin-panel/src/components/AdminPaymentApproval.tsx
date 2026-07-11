@@ -164,6 +164,7 @@ export default function AdminPaymentApproval() {
                     <TableCell align={isRTL ? 'left' : 'right'}>
                       <Button
                         variant="contained"
+                        data-testid="admin-approve-contract"
                         disabled={processingId === contract.id}
                         onClick={() => openVerification(contract)}
                         startIcon={processingId === contract.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}

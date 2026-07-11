@@ -260,8 +260,8 @@ service firebase.storage {
     }
 
     match /temp_kyc/{userId}/{fileName} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
+      allow read: if isAuth() && isAdmin();
+      allow create: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
     }
 
     match /{allPaths=**} {

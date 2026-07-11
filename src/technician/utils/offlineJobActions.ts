@@ -56,7 +56,7 @@ export async function acceptJobWithOfflineQueue(ticketId: string, technicianId?:
 
 export async function updateJobLifecycleWithOfflineQueue(params: { ticketId: string; technicianId?: string; status: string; notes?: string; materials?: string; localPhotoCount?: number }) {
   return callJobActionWithOfflineQueue({
-    functionName: 'updateTicketLifecycle',
+    functionName: 'updateTicketLifecycleV2',
     payload: { ticketId: params.ticketId, status: params.status, notes: params.notes || '' },
     meta: { ticketId: params.ticketId, technicianId: params.technicianId, label: `Mission ${String(params.status).replace(/_/g, ' ')}` },
   });

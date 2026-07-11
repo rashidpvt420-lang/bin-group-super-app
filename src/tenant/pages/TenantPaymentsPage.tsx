@@ -147,7 +147,7 @@ export default function TenantPaymentsPage() {
             const receiptPath = `receipts/${user.uid}/${Date.now()}_${sanitizeReceiptName(receiptFile.name)}`;
             const storageRef = ref(storage, receiptPath);
             await uploadBytes(storageRef, receiptFile, {
-                contentType: receiptFile.type || 'application/octet-stream',
+                contentType: receiptFile.type,
                 customMetadata: {
                     tenantId: user.uid,
                     evidenceType: 'tenant_payment_receipt',
@@ -175,7 +175,7 @@ export default function TenantPaymentsPage() {
                     receiptPath,
                     receiptHash,
                     fileName: receiptFile.name,
-                    contentType: receiptFile.type || 'application/octet-stream',
+                    contentType: receiptFile.type,
                     size: receiptFile.size,
                 },
                 status: 'PENDING_ADMIN_PAYMENT_VERIFICATION',

@@ -54,6 +54,7 @@ import {
   where,
 } from '../lib/firebase';
 import { logAuditAction } from '../utils/auditLogger';
+import { NotificationEvents } from '../services/notificationService';
 
 type ReferenceImage = {
   file: File;
@@ -435,6 +436,15 @@ export default function DesignStudioPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+
+        // Fire live push / in-app notification to the owner
+        if (ownerId) {
+          await NotificationEvents.OWNER.DESIGN_STUDIO_NOC(
+            ownerId,
+            user.displayName || user.email || 'Tenant',
+            scope.zoneType || 'requested area'
+          );
+        }
       }
 
       await logAuditAction({

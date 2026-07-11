@@ -345,6 +345,7 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                     <DialogTitle sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Register New Lead</DialogTitle>
                     <DialogContent>
                         <Stack spacing={2.2} sx={{ pt: 1 }}>
+                            {notice && <Alert severity={notice.severity} onClose={() => setNotice(null)}>{notice.message}</Alert>}
                             <TextField inputProps={{ 'data-testid': 'broker-lead-client-name' }} fullWidth required label="Client Full Name" value={leadName} onChange={(event) => setLeadName(event.target.value)} />
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}><TextField fullWidth label="Phone Number" value={phone} onChange={(event) => setPhone(event.target.value)} /></Grid>

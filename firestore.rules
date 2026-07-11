@@ -1246,19 +1246,19 @@ service cloud.firestore {
 
     // ── Broker Pipeline Collections ──────────────────────────────────────────
     match /brokerLeads/{leadId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid && request.resource.data.get('brokerId', null) == request.auth.uid);
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
+      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
       allow delete: if isAdmin();
     }
     match /referrals/{referralId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid && request.resource.data.get('brokerId', null) == request.auth.uid);
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
+      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
       allow delete: if isAdmin();
     }
     match /broker_commissions/{commissionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
+      allow read: if isAdmin() || brokerOwns(resource.data);
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -1276,8 +1276,8 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /broker_listing_claims/{claimId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if brokerOwns(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

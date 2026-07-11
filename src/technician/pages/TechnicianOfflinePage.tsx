@@ -155,7 +155,7 @@ export default function TechnicianOfflinePage() {
         const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
         await acceptTechnicianTicket({ ticketId: payload.ticketId });
       } else {
-        const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
+        const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycleV2');
         await updateTicketLifecycle({ ticketId: payload.ticketId, status, notes: payload.notes || '' });
       }
       removeItem(item.id);

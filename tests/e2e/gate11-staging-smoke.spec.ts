@@ -38,7 +38,7 @@ async function loginMainApp(page: Page, email: string, password: string, intende
 
 async function assertAuthRejected(page: Page, email: string, context: string) {
   const body = await page.locator('body').innerText({ timeout: 10_000 }).catch(() => '');
-  if (/auth\/invalid-credential|wrong-password|user-not-found|invalid credential/i.test(body)) {
+    if (/login could not be completed|auth\/invalid-credential|wrong-password|user-not-found|invalid credential/i.test(body)) {
     throw new Error(
       `Login failed for ${email} (${context}): Firebase rejected credentials (auth/invalid-credential). ` +
       'Run npm run seed:e2e:auth or npm run gate12:rotate-admin, then update .env.e2e / GitHub secrets.'

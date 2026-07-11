@@ -4,6 +4,7 @@ import { Link2, ShieldCheck } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import PropertyPicker from '../../components/PropertyPicker';
 
 type TenantUnitLinkFallbackProps = {
   message?: string;
@@ -12,6 +13,7 @@ type TenantUnitLinkFallbackProps = {
 
 export default function TenantUnitLinkFallback({ message, compact = false }: TenantUnitLinkFallbackProps) {
   const { user } = useRole();
+  const [propertyId, setPropertyId] = useState('');
   const [propertyName, setPropertyName] = useState('');
   const [unitNumber, setUnitNumber] = useState('');
   const [leaseReference, setLeaseReference] = useState('');
@@ -21,8 +23,8 @@ export default function TenantUnitLinkFallback({ message, compact = false }: Ten
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; text: string } | null>(null);
 
   const submit = async () => {
-    if (!propertyName.trim() || !unitNumber.trim()) {
-      setNotice({ type: 'warning', text: 'Property name and unit number are required before BIN GROUP can verify the link.' });
+    if ((!propertyId.trim() && !propertyName.trim()) || !unitNumber.trim()) {
+      setNotice({ type: 'warning', text: 'Property selection and unit number are required before BIN GROUP can verify the link.' });
       return;
     }
     setSaving(true);
@@ -30,6 +32,7 @@ export default function TenantUnitLinkFallback({ message, compact = false }: Ten
     try {
       const callable = httpsCallable(functions, 'tenantRequestUnitLink');
       const result = await callable({
+        propertyId: propertyId.trim(),
         propertyName: propertyName.trim(),
         unitNumber: unitNumber.trim(),
         leaseReference: leaseReference.trim(),
@@ -68,15 +71,24 @@ export default function TenantUnitLinkFallback({ message, compact = false }: Ten
         {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
         <Stack direction={{ xs: 'column', md: compact ? 'column' : 'row' }} spacing={2}>
-          <TextField label="Property / building name" value={propertyName} onChange={(event) => setPropertyName(event.target.value)} fullWidth required />
-          <TextField label="Unit number" value={unitNumber} onChange={(event) => setUnitNumber(event.target.value)} fullWidth required />
+          <Box sx={{ flex: 1 }}>
+            <PropertyPicker
+              value={propertyId}
+              onChange={(id, name) => {
+                setPropertyId(id);
+                setPropertyName(name || '');
+              }}
+              label="Select Property"
+            />
+          </Box>
+          <TextField label="Unit number" value={unitNumber} onChange={(event) => setUnitNumber(event.target.value)} fullWidth required sx={{ flex: 1 }} />
         </Stack>
         <Stack direction={{ xs: 'column', md: compact ? 'column' : 'row' }} spacing={2}>
           <TextField label="Lease / contract reference" value={leaseReference} onChange={(event) => setLeaseReference(event.target.value)} fullWidth />
           <TextField label="Invite or verification code" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} fullWidth helperText="Optional; stored hashed for admin verification." />
         </Stack>
         <TextField label="Notes for verification" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={compact ? 2 : 3} fullWidth placeholder={`Signed in as ${user?.email || 'tenant account'}`} />
-        <Button disabled={saving || !propertyName.trim() || !unitNumber.trim()} onClick={submit} variant="contained" sx={{ alignSelf: 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+        <Button disabled={saving || (!propertyId.trim() && !propertyName.trim()) || !unitNumber.trim()} onClick={submit} variant="contained" sx={{ alignSelf: 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
           {saving ? 'Submitting...' : 'Submit link request'}
         </Button>
       </Stack>

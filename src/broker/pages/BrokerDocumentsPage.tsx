@@ -63,7 +63,7 @@ export default function BrokerDocumentsPage() {
                 fileName: file.name,
                 fileUrl,
                 fileSize: file.size,
-                contentType: file.type || 'application/octet-stream',
+                contentType: file.type,
                 docType,
                 status: 'pending_review',
                 uploadedAt: serverTimestamp()

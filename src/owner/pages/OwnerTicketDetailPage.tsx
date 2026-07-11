@@ -35,10 +35,11 @@ const STATUS_COLORS: Record<string, string> = {
     emergency: '#ef4444',
 };
 
-type OwnerReviewAction = 'APPROVE_CLOSE' | 'DISPUTE' | 'REQUEST_REVISIT' | 'ESCALATE';
+type OwnerReviewAction = 'APPROVE_CLOSE' | 'APPROVE_ASSIGN' | 'DISPUTE' | 'REQUEST_REVISIT' | 'ESCALATE';
 
 const actionLabels: Record<OwnerReviewAction, string> = {
     APPROVE_CLOSE: 'Approve & Close',
+    APPROVE_ASSIGN: 'Approve & Assign',
     DISPUTE: 'Dispute Resolution',
     REQUEST_REVISIT: 'Request Revisit',
     ESCALATE: 'Escalate Ticket',
@@ -46,6 +47,7 @@ const actionLabels: Record<OwnerReviewAction, string> = {
 
 const actionNextStatus: Record<OwnerReviewAction, string> = {
     APPROVE_CLOSE: 'CLOSED',
+    APPROVE_ASSIGN: 'ASSIGNED',
     DISPUTE: 'DISPUTED',
     REQUEST_REVISIT: 'REOPENED',
     ESCALATE: 'ESCALATED',
@@ -131,7 +133,7 @@ export default function OwnerTicketDetailPage() {
     ].filter(Boolean);
     const canReviewCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'RESOLVED'].includes(normalizedStatus) && ticket.ownerApproved !== true;
     const canEscalateOpen = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(normalizedStatus);
-    const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE';
+    const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE' && reviewAction !== 'APPROVE_ASSIGN';
 
     const openReviewDialog = (action: OwnerReviewAction) => {
         setReviewAction(action);
@@ -142,7 +144,7 @@ export default function OwnerTicketDetailPage() {
     const submitReview = async () => {
         if (!reviewAction || !ticket?.id) return;
         const reason = reviewReason.trim();
-        if (reviewAction !== 'APPROVE_CLOSE' && reason.length < 8) {
+        if (reviewAction !== 'APPROVE_CLOSE' && reviewAction !== 'APPROVE_ASSIGN' && reason.length < 8) {
             setReviewError('Enter a clear reason before submitting this action.');
             return;
         }
@@ -349,7 +351,10 @@ export default function OwnerTicketDetailPage() {
                                         </>
                                     )}
                                     {canEscalateOpen && (
-                                        <Button variant="outlined" color="error" onClick={() => openReviewDialog('ESCALATE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Escalate Ticket</Button>
+                                        <>
+                                            <Button variant="contained" color="success" onClick={() => openReviewDialog('APPROVE_ASSIGN')} sx={{ fontWeight: 950, borderRadius: 3 }}>Approve & Assign Tech</Button>
+                                            <Button variant="outlined" color="error" onClick={() => openReviewDialog('ESCALATE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Escalate Ticket</Button>
+                                        </>
                                     )}
                                 </Stack>
                             </Stack>

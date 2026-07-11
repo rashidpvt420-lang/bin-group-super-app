@@ -3,6 +3,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { assertCompletionReady } from './completionGuards';
 import { buildSlaFields } from './slaPolicy';
+import { assertWithinGeofence, extractPropertyCoords, resolveGeofenceRadiusM } from './geofence';
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -75,6 +76,19 @@ export const updateTicketLifecycleV2 = onCall({ cors: true }, async (request) =>
         heading: location.heading ?? null,
         speed: location.speed ?? null,
       };
+      const propertyCoords = extractPropertyCoords(ticketData as Record<string, unknown>);
+      if (propertyCoords) {
+        const radiusM = resolveGeofenceRadiusM(ticketData as Record<string, unknown>);
+        const geofence = assertWithinGeofence(cleanLocation, propertyCoords, radiusM);
+        if (!geofence.ok) {
+          throw new HttpsError(
+            'failed-precondition',
+            `Arrival GPS is ${Math.round(geofence.distanceM)}m from property (max ${geofence.radiusM}m). Move closer and retry.`
+          );
+        }
+        updateData.arrivalDistanceM = Math.round(geofence.distanceM);
+        updateData.geofenceRadiusM = radiusM;
+      }
       updateData.arrivedLocation = cleanLocation;
       updateData.technicianLocation = cleanLocation;
       updateData.technicianLocationUpdatedAt = now;

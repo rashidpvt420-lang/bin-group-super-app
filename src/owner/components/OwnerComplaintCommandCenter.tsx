@@ -67,6 +67,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
 
   const actionForStatus = (newStatus: string) => {
     if (newStatus === 'CLOSED') return 'APPROVE_CLOSE';
+    if (newStatus === 'ASSIGNED') return 'APPROVE_ASSIGN';
     if (newStatus === 'DISPUTED') return 'DISPUTE';
     if (newStatus === 'REOPENED') return 'REQUEST_REVISIT';
     return 'ESCALATE';
@@ -82,7 +83,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
     if (!reviewStatus) return;
     const action = actionForStatus(reviewStatus);
     const reason = reviewReason.trim();
-    if (action !== 'APPROVE_CLOSE' && reason.length < 8) {
+    if (action !== 'APPROVE_CLOSE' && action !== 'APPROVE_ASSIGN' && reason.length < 8) {
       setReviewError('Enter a clear reason before submitting this owner action.');
       return;
     }
@@ -192,6 +193,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
                 )}
                 {showOpenActions && (
                   <>
+                    <Button variant="contained" color="success" size="small" onClick={() => openReview('ASSIGNED')}>Approve & Assign Tech</Button>
                     <Button variant="outlined" color="error" size="small" onClick={() => openReview('ESCALATED')}>Escalate Ticket</Button>
                     <Button variant="outlined" color="warning" size="small" onClick={() => openReview('DISPUTED')}>Dispute Ticket</Button>
                   </>
@@ -205,8 +207,8 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
         </TableCell>
       </TableRow>
       <Dialog open={Boolean(reviewStatus)} onClose={() => !reviewBusy && setReviewStatus(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-        <DialogTitle sx={{ color: reviewStatus === 'CLOSED' ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#f87171', fontWeight: 950 }}>
-          {reviewStatus === 'CLOSED' ? 'Approve and close ticket' : reviewStatus === 'REOPENED' ? 'Request technician revisit' : reviewStatus === 'ESCALATED' ? 'Escalate ticket' : 'Dispute ticket'}
+        <DialogTitle sx={{ color: (reviewStatus === 'CLOSED' || reviewStatus === 'ASSIGNED') ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#f87171', fontWeight: 950 }}>
+          {reviewStatus === 'CLOSED' ? 'Approve and close ticket' : reviewStatus === 'ASSIGNED' ? 'Approve and auto-assign technician' : reviewStatus === 'REOPENED' ? 'Request technician revisit' : reviewStatus === 'ESCALATED' ? 'Escalate ticket' : 'Dispute ticket'}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -214,13 +216,13 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
               This submits an owner review through the protected ticket callable and records the action in audit logs.
             </Typography>
             <TextField
-              label={reviewStatus === 'CLOSED' ? 'Optional owner note' : 'Reason required'}
+              label={(reviewStatus === 'CLOSED' || reviewStatus === 'ASSIGNED') ? 'Optional owner note' : 'Reason required'}
               value={reviewReason}
               onChange={(event) => setReviewReason(event.target.value)}
               fullWidth
               multiline
               minRows={4}
-              required={reviewStatus !== 'CLOSED'}
+              required={reviewStatus !== 'CLOSED' && reviewStatus !== 'ASSIGNED'}
               InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }}
               InputProps={{ sx: { color: '#fff' } }}
             />
@@ -229,7 +231,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setReviewStatus(null)} disabled={reviewBusy} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
-          <Button onClick={handleUpdateStatus} disabled={reviewBusy || Boolean(reviewStatus !== 'CLOSED' && reviewReason.trim().length < 8)} variant="contained" sx={{ bgcolor: reviewStatus === 'CLOSED' ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#ef4444', color: '#fff', fontWeight: 950 }}>
+          <Button onClick={handleUpdateStatus} disabled={reviewBusy || Boolean(reviewStatus !== 'CLOSED' && reviewStatus !== 'ASSIGNED' && reviewReason.trim().length < 8)} variant="contained" sx={{ bgcolor: (reviewStatus === 'CLOSED' || reviewStatus === 'ASSIGNED') ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#ef4444', color: '#fff', fontWeight: 950 }}>
             {reviewBusy ? 'Submitting...' : 'Submit'}
           </Button>
         </DialogActions>

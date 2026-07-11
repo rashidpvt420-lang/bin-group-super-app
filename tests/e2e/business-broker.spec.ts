@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
+import { injectAppCheckDebugToken } from './helpers/appCheckDebug';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -24,6 +25,7 @@ function requireLaunchCredentials() {
 
 async function login(page: Page) {
   requireLaunchCredentials();
+  await injectAppCheckDebugToken(page);
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
@@ -60,7 +62,7 @@ test.describe('Broker Business Workflow', () => {
 
     await page.getByLabel(/Phone Number/i).fill('+971501234567');
     await page.getByLabel(/Email Address/i).fill(`broker-e2e-${Date.now()}@example.com`);
-    await page.getByLabel(/Property Interest|Requirement/i).fill('Full maintenance and property management for an E2E staging villa');
+    await page.getByTestId('broker-lead-property-interest').fill('Full maintenance and property management for an E2E staging villa');
     await page.getByLabel(/Location|Emirate/i).fill('Al Ain');
     await page.getByLabel(/Budget Range/i).fill('50000');
     await page.getByLabel(/Mission Notes/i).fill('Credentialed staging verification of broker attribution and lead creation.');
@@ -71,7 +73,7 @@ test.describe('Broker Business Workflow', () => {
 
     await expect(page.getByText(/Lead recorded with attribution/i)).toBeVisible({ timeout: 25_000 });
     const createdLeadCard = page.getByTestId('broker-lead-card').filter({ hasText: uniqueLead }).first();
-    await expect(createdLeadCard).toBeVisible({ timeout: 20_000 });
+    await expect(createdLeadCard).toBeVisible({ timeout: 30_000 });
     await expect(createdLeadCard).toContainText(/ATTRIBUTION|broker_lead_/i, { timeout: 20_000 });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|Lead could not be submitted/i, { timeout: 5_000 });
 

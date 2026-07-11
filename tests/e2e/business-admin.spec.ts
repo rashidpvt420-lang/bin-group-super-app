@@ -5,6 +5,7 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import admin from 'firebase-admin';
+import { injectAppCheckDebugToken } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
@@ -62,6 +63,7 @@ async function waitForLoader(page: Page) {
 
 async function login(page: Page) {
   requireLaunchCredentials();
+  await injectAppCheckDebugToken(page);
   await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
@@ -107,8 +109,10 @@ test.describe('Admin Business Workflow', () => {
     }, { merge: true });
 
     await db.collection('maintenanceTickets').doc('e2e-test-ticket-id').set({
+      ticketId: 'e2e-test-ticket-id',
       tenantId: 'e2e-tenant-uid',
       unitNumber: '101',
+      unit: '101',
       category: 'HVAC / AC systems',
       description: 'AC is not cooling, E2E Test Ticket.',
       status: 'OPEN',
@@ -162,6 +166,11 @@ test.describe('Admin Business Workflow', () => {
     await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+
+    const search = page.locator('input[placeholder*="Search" i], input[type="search"]').first();
+    if (await search.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await search.fill('E2E Test');
+    }
 
     await clickRequired(page, [
       '[data-testid="admin-ticket-view"]',

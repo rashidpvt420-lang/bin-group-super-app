@@ -19,6 +19,7 @@ import {
     where,
     getDocs,
     writeBatch,
+    setDoc,
 } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
@@ -278,6 +279,52 @@ export default function DesignRequestDetailPage() {
     const referenceImages: string[] = Array.isArray(scope.referenceImages) ? scope.referenceImages : [];
     const executionScope = request.executionScope || buildExecutionScope(request);
 
+    const handleCreateWorkOrder = async () => {
+        if (!id || !request || !user?.uid) return;
+        setProcessing(true);
+        try {
+            const ticketRef = doc(collection(db, 'maintenanceTickets'));
+            await setDoc(ticketRef, {
+                id: ticketRef.id,
+                title: `AI Design Execution: ${text(scope.zoneType, 'Redesign')}`,
+                description: `Execution work order for AI Design request ${id}. Scope: ${executionScope.requiredWork}`,
+                category: 'civil',
+                status: 'OPEN',
+                priority: 'MEDIUM',
+                propertyId: request.propertyId || null,
+                propertyName: request.propertyName || 'Property',
+                ownerId: request.ownerId || null,
+                tenantId: request.tenantId || null,
+                unitNumber: executionScope.unitNumber || '',
+                designRequestId: id,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+
+            await updateDoc(doc(db, 'design_requests', id), {
+                executionTicketId: ticketRef.id,
+                status: 'IN_EXECUTION',
+                adminHandoffStatus: 'IN_EXECUTION',
+                engineerHandoffStatus: 'WORK_ORDER_CREATED',
+                updatedAt: serverTimestamp(),
+            });
+
+            await logAuditAction({
+                actorId: user.uid,
+                actorRole: role || 'admin',
+                action: 'DESIGN_EXECUTION_WORK_ORDER_CREATED',
+                targetType: 'design_requests',
+                targetId: id,
+                metadata: { ticketId: ticketRef.id },
+            });
+            alert(`Execution work order created! Ticket ID: ${ticketRef.id}`);
+        } catch (err) {
+            console.error('Work order creation failed:', err);
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     return (
         <Container maxWidth="xl" sx={{ py: 6, pr: { xs: 9, md: 3 }, pb: { xs: 14, md: 8 } }}>
             <Button startIcon={<ArrowLeft />} onClick={() => navigate(`${basePrefix}/design-studio`)} sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, fontWeight: 900 }}>
@@ -355,6 +402,20 @@ export default function DesignRequestDetailPage() {
                                     </Grid>
                                 )}
                             </Grid>
+
+                            {request.generatedImages && request.generatedImages.length > 0 && (
+                                <>
+                                    <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
+                                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 2 }}>AI GENERATED CONCEPTS</Typography>
+                                    <Grid container spacing={2}>
+                                        {request.generatedImages.map((url: string) => (
+                                            <Grid item xs={12} md={6} key={url}>
+                                                <Box component="img" src={url} sx={{ width: '100%', height: 260, objectFit: 'cover', borderRadius: 3, border: '1px solid rgba(198,167,94,0.3)' }} />
+                                            </Grid>
+                                        ))}
+                                    </Grid>
+                                </>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>
@@ -432,6 +493,20 @@ export default function DesignRequestDetailPage() {
                                 <Button fullWidth variant="contained" onClick={handleAdminEngineerHandoff} disabled={processing} sx={{ mt: 3, bgcolor: '#10b981', color: '#FFF', fontWeight: 950 }}>
                                     MARK READY FOR ENGINEER REVIEW
                                 </Button>
+                            )}
+
+                            {isAdmin && (request.status === 'READY_FOR_EXECUTION' || request.status === 'ENGINEER_REVIEW' || request.status === 'PAID') && !request.executionTicketId && (
+                                <Button fullWidth variant="contained" onClick={handleCreateWorkOrder} disabled={processing} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                    CREATE EXECUTION WORK ORDER
+                                </Button>
+                            )}
+
+                            {request.executionTicketId && (
+                                <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(34,197,94,0.1)', borderRadius: 2, border: '1px solid rgba(34,197,94,0.3)' }}>
+                                    <Typography variant="body2" sx={{ color: '#86EFAC', fontWeight: 900 }}>
+                                        Work Order Active: {request.executionTicketId}
+                                    </Typography>
+                                </Box>
                             )}
                         </Paper>
                     </Stack>

@@ -140,7 +140,7 @@ const copy = {
       ['Home OS Intake', 'One intelligent prompt instead of scattered calls', 'START'],
       ['Instant Quote', 'Maintenance, management, or hybrid contract scope', 'QUOTE'],
       ['Total Care Hybrid', 'Tenant registry, rent ledger waterfall, 5% fee logic', 'CARE'],
-      ['No-Call Operations', 'AI triage, SLA timers, photo proof, owner reports', 'LIVE'],
+      ['No-Call Operations', 'Smart triage, SLA timers, photo proof, owner reports', 'LIVE'],
     ],
     cards: [
       ['Home OS Concept', 'Replace scattered calls, chats, and invoices with one prompt-to-workflow operating layer.'],

@@ -34,6 +34,7 @@ import {
 
 interface LiveTechnicianTrackingCardProps {
     ticket: any;
+    technician?: any;
     onChatClick?: () => void;
     onCallClick?: () => void;
     showTimeline?: boolean;
@@ -94,13 +95,15 @@ function getStatusMessage(ticket: any, etaMin: number | null): string {
 
 export default function LiveTechnicianTrackingCard({
     ticket,
+    technician,
     onChatClick,
     onCallClick,
     showTimeline = true,
 }: LiveTechnicianTrackingCardProps) {
     if (!ticket) return null;
 
-    const techLoc = getTechnicianLocation(ticket);
+    // 1. Data Extractor
+    const techLoc = getTechnicianLocation(ticket) || (technician?.lastLocation ? normalizeLocation(technician.lastLocation) : technician?.currentLocation ? normalizeLocation(technician.currentLocation) : null);
     const jobLoc  = getTicketJobLocation(ticket);
 
     const distKm  = calculateDistanceKm(techLoc, jobLoc);

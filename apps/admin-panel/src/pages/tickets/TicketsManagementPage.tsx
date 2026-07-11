@@ -340,6 +340,7 @@ export default function TicketsManagementPage() {
                         <Button 
                           size="small" 
                           variant="outlined" 
+                          data-testid="admin-ticket-view"
                           onClick={() => handleOpenDetail(ticket)}
                           sx={{ fontSize: '0.7rem', fontWeight: 900 }}
                         >
@@ -348,6 +349,7 @@ export default function TicketsManagementPage() {
                         <Button 
                           size="small" 
                           variant="contained" 
+                          data-testid="admin-assign-technician"
                           onClick={() => handleOpenAssign(ticket)}
                           disabled={ticket.status === 'COMPLETED'}
                           sx={{ fontSize: '0.7rem', fontWeight: 900 }}
