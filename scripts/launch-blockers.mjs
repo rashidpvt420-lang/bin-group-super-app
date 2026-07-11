@@ -6,6 +6,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { repoRoot, runNodeScript } from './lib/run-script.mjs';
 
+const BANK_ONLY = process.env.LAUNCH_BANK_ONLY === '1' || process.env.LAUNCH_BANK_ONLY === 'true';
+
 const PRODUCTION = {
   main: 'https://bin-group-57c60.web.app',
   admin: 'https://bin-group-admin-panel.web.app',
@@ -25,6 +27,7 @@ console.log(authRest.out.trim() || '(no output)');
 console.log(authRest.ok ? '\nREST auth: PASS' : '\nREST auth: FAIL — run npm run seed:e2e:auth then retry');
 
 heading('Automated production controls');
+if (BANK_ONLY) console.log('LAUNCH_BANK_ONLY=1 — Stripe format is advisory for bank-transfer pilot.\n');
 const gate12 = runNodeScript('scripts/gate12-production-controls-check.mjs');
 console.log(gate12.out.trim() || '(no output)');
 console.log(gate12.ok ? '\nGate 12 automated: PASS' : '\nGate 12 automated: FAIL — fix blockers above');
@@ -36,6 +39,7 @@ console.log(smtpSecrets.out.trim() || '(no output)');
 heading('Stripe live key metadata');
 const stripe = runNodeScript('scripts/gate12-stripe-live-check.mjs');
 console.log(stripe.out.trim() || '(no output)');
+if (BANK_ONLY && !stripe.ok) console.log('\nStripe metadata: SKIP (LAUNCH_BANK_ONLY=1 bank-transfer pilot)');
 
 heading('Hard-launch register (read-only)');
 const registerPath = path.join(repoRoot, 'launch_package/hard-launch-readiness.json');
@@ -79,5 +83,5 @@ for (const [index, step] of steps.entries()) {
 heading('PowerShell example — record a gate (no angle brackets)');
 console.log('node scripts/verify-launch-gate-live.mjs adminCredentialLogin "Rashid AbdulGhani" "Playwright run 2026-07-11; production admin login passed"');
 
-const blocked = !authRest.ok || !gate12.ok || !smtpSecrets.ok || !stripe.ok;
+const blocked = !authRest.ok || !gate12.ok || !smtpSecrets.ok || (!stripe.ok && !BANK_ONLY);
 process.exit(blocked ? 1 : 0);

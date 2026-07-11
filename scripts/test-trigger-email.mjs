@@ -1,83 +1,72 @@
+/**
+ * Gate 12 — Production SMTP live delivery proof via Firestore mail queue.
+ * Creates a mail/{id} doc, waits for sendQueuedMailOnCreate, requires delivery.state=SUCCESS.
+ */
 import admin from 'firebase-admin';
 import chalk from 'chalk';
+import { applyFirebaseAdminEnvSanitize, initializeFirebaseAdmin } from './firebase-admin-bootstrap.mjs';
 
-// Initialize Admin SDK
-// Assumes local environment has access via firebase login / gcloud login
-if (admin.apps.length === 0) {
-    admin.initializeApp({
-        projectId: 'bin-group-57c60'
-    });
-}
+applyFirebaseAdminEnvSanitize();
+initializeFirebaseAdmin(admin);
 
 const db = admin.firestore();
+const maxWaitSec = Number(process.env.SMTP_VERIFY_MAX_SEC || 120);
+const pollSec = Number(process.env.SMTP_VERIFY_POLL_SEC || 4);
+const testTo = String(process.env.SMTP_TEST_TO || process.env.E2E_ADMIN_EMAIL || 'e2e-admin@bingroup.com').trim();
 
-async function testEmail() {
-  console.log(chalk.blue('🚀 Starting BIN GROUP Transactional Email System Verification...'));
-  console.log(chalk.gray('Note: This test uses the /mail collection schema monitored by the Firebase Trigger Email extension.'));
-  
-  const testPayload = {
-    to: "rashidpvt420@gmail.com",
-    message: {
-      subject: "BIN GROUP SMTP Verification Test",
-      text: "This is a verification test for the newly configured transactional SMTP provider.",
-      html: "<h2>BIN GROUP SMTP System Test</h2><p>This email confirms that the transactional SMTP relay is operational.</p>"
-    },
-    metadata: {
-        type: "test_verification",
-        timestamp: new Date().toISOString()
-    }
-  };
-
-  try {
-    const docRef = await db.collection('mail').add(testPayload);
-    console.log(chalk.green(`✅ Fresh test document created: /mail/${docRef.id}`));
-    console.log(chalk.yellow('⏳ Polling for delivery status (this may take 10-60 seconds)...'));
-
-    const start = Date.now();
-    const timeout = 90000;
-    const pollInterval = 5000;
-
-    return new Promise((resolve) => {
-      const interval = setInterval(async () => {
-        const docSnap = await docRef.get();
-        const data = docSnap.data();
-
-        if (Date.now() - start > timeout) {
-          clearInterval(interval);
-          console.log(chalk.red('\n❌ TIMEOUT: The extension did not update the delivery state. Check extension logs.'));
-          resolve(false);
-        }
-
-        if (data?.delivery) {
-          const { state, error, info } = data.delivery;
-          
-          if (state === 'SUCCESS') {
-            clearInterval(interval);
-            console.log(chalk.green('\n✨ SUCCESS: Email relay is functional!'));
-            console.log(chalk.cyan(`Status: ${state}`));
-            console.log(chalk.gray(`Info: ${JSON.stringify(info)}`));
-            resolve(true);
-          } else if (state === 'ERROR') {
-            clearInterval(interval);
-            console.log(chalk.red('\n🔥 ERROR: Email delivery failed.'));
-            console.log(chalk.red(`Reason: ${error}`));
-            console.log(chalk.yellow('\nACTION REQUIRED: Update extension SMTP configuration to SendGrid or Brevo.'));
-            resolve(false);
-          } else {
-            console.log(chalk.cyan(`Current State: ${state}...`));
-          }
-        } else {
-            console.log(chalk.gray('Waiting for extension to pick up document...'));
-        }
-      }, pollInterval);
-    });
-
-  } catch (err) {
-    console.error(chalk.red('💥 Error writing to Firestore:'), err);
-    process.exit(1);
-  }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-testEmail().then((success) => {
-  process.exit(success ? 0 : 1);
+console.log('\n=== Gate 12 SMTP Live Delivery ===\n');
+console.log(`Recipient: ${testTo}`);
+console.log(`Polling up to ${maxWaitSec}s for delivery.state=SUCCESS...\n`);
+
+const mailId = `gate12-smtp-proof-${Date.now()}`;
+const mailRef = db.collection('mail').doc(mailId);
+
+await mailRef.set({
+  to: testTo,
+  message: {
+    from: 'BIN GROUP <ceo@bin-groups.com>',
+    replyTo: 'BIN GROUP Admin <ceo@bin-groups.com>',
+    subject: `BIN GROUP Gate 12 SMTP proof ${new Date().toISOString()}`,
+    html: '<p>Automated Gate 12 SMTP delivery proof. Safe to ignore.</p>',
+    text: 'Automated Gate 12 SMTP delivery proof. Safe to ignore.',
+  },
+  metadata: { type: 'gate12_smtp_live_proof', automated: true },
+  createdAt: admin.firestore.FieldValue.serverTimestamp(),
 });
+
+let delivery = null;
+const deadline = Date.now() + maxWaitSec * 1000;
+
+while (Date.now() < deadline) {
+  const snap = await mailRef.get();
+  delivery = snap.data()?.delivery || null;
+  const state = String(delivery?.state || '').toUpperCase();
+  if (state === 'SUCCESS') break;
+  if (state === 'ERROR') {
+    console.error(chalk.red(`[FAIL] SMTP delivery error: ${delivery?.error || 'unknown'}`));
+    process.exit(1);
+  }
+  process.stdout.write('.');
+  await sleep(pollSec * 1000);
+}
+
+console.log('');
+
+if (!delivery || String(delivery.state || '').toUpperCase() !== 'SUCCESS') {
+  console.error(chalk.red('[FAIL] Mail queue did not reach delivery.state=SUCCESS in time.'));
+  console.error('Check Cloud Functions logs for sendQueuedMailOnCreate and SMTP secrets.');
+  process.exit(1);
+}
+
+const from = String(delivery.from || '');
+if (!/BIN GROUP/i.test(from)) {
+  console.warn(chalk.yellow(`[WARN] delivery.from may not be branded: ${from || '(missing)'}`));
+}
+
+console.log(chalk.green(`[PASS] SMTP live delivery — state=SUCCESS messageId=${delivery.messageId || 'n/a'}`));
+console.log(`from=${from || '(server default)'}`);
+process.exit(0);

@@ -95,15 +95,14 @@ test.describe('Technician Business Workflow', () => {
     const acceptFromPool = page.getByRole('button', { name: /ACCEPT JOB|ACCEPT MISSION|CLAIM MISSION/i }).first();
     const openAssignedJob = page.getByRole('button', { name: /OPEN JOB CARD/i }).first();
 
-    if (await acceptFromPool.isVisible({ timeout: 10_000 }).catch(() => false)) {
+    if (await openAssignedJob.isVisible({ timeout: 12_000 }).catch(() => false)) {
+      await expect(openAssignedJob).toBeEnabled({ timeout: 10_000 });
+      await openAssignedJob.click();
+    } else if (await acceptFromPool.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await expect(acceptFromPool).toBeEnabled({ timeout: 10_000 });
       await acceptFromPool.click();
     } else {
-      await expect(
-        openAssignedJob,
-        'Technician launch fixture must expose either an open pool job or an assigned active job.'
-      ).toBeVisible({ timeout: 20_000 });
-      await openAssignedJob.click();
+      throw new Error('Technician launch fixture must expose either an open pool job or an assigned active job.');
     }
 
     await page.waitForURL('**/technician/job/**', { timeout: 20_000 });
@@ -150,6 +149,7 @@ test.describe('Technician Business Workflow', () => {
 
     await attachRequiredImage(page, [
       'input[type="file"][accept*="image"]',
+      'label:has-text("after-work proof") input[type="file"]',
       'input[type="file"]',
     ], 'After Work Proof');
 

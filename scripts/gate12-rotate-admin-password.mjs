@@ -91,7 +91,7 @@ async function main() {
   console.log('[PASS] Firebase Auth password rotated for E2E admin.');
   console.log('[PASS] Old password rejected, new password accepted.');
   console.log('[PASS] Updated E2E_ADMIN_PASSWORD in .env.e2e (local only — not committed).');
-  console.log('\nNext: update GitHub secret E2E_ADMIN_PASSWORD for CI, then re-run npm run test:e2e:gate11:staging');
+  console.log('\nNext: npm run gate12:rotate-e2e to rotate all five roles, or update GitHub secrets, then npm run seed:e2e:auth');
 }
 
 main().catch((err) => {

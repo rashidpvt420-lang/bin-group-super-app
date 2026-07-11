@@ -28,6 +28,8 @@ import { useLanguage } from '@bin/shared';
 
 type PaymentMethod = 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'STRIPE';
 
+const stripeCheckoutEnabled = import.meta.env.VITE_ENABLE_STRIPE_CHECKOUT === 'true';
+
 const resolveMoney = (...values: unknown[]): number => {
     for (const value of values) {
         const n = typeof value === 'number' ? value : Number(value);
@@ -340,17 +342,25 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
                                             variant="outlined"
                                             fullWidth
                                             onClick={() => handleGenerateManifest('STRIPE')}
-                                            disabled={isGenerating || !hasValidAmount}
+                                            disabled={isGenerating || !hasValidAmount || !stripeCheckoutEnabled}
                                             sx={{
                                                 py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)',
                                                 color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between',
                                                 flexDirection: isRTL ? 'row-reverse' : 'row',
+                                                opacity: stripeCheckoutEnabled ? 1 : 0.45,
                                                 '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' }
                                             }}
                                         >
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                                 <ShieldCheck size={24} color={binThemeTokens.gold} />
-                                                <Typography fontWeight={700}>{readable(t('onboarding.payment.stripe'), 'Stripe')}</Typography>
+                                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                                    <Typography fontWeight={700}>{readable(t('onboarding.payment.stripe'), 'Stripe')}</Typography>
+                                                    {!stripeCheckoutEnabled && (
+                                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>
+                                                            {readable('Unavailable until live card billing is enabled', 'غير متاح حتى تفعيل الدفع بالبطاقة')}
+                                                        </Typography>
+                                                    )}
+                                                </Box>
                                             </Box>
                                             <ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
                                         </Button>

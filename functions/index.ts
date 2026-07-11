@@ -11,6 +11,7 @@ import {
     assertOcrCallerRole,
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
+import { assertWithinGeofence, extractPropertyCoords, resolveGeofenceRadiusM } from "./geofence";
 export { deliverNotificationPush } from "./notificationDelivery";
 export { mintAdminBridgeToken } from "./adminBridgeAuth";
 export { logUserAuditAction } from "./userAuditOperations";
@@ -783,6 +784,19 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
                 heading: arrivalLocation.heading ?? null,
                 speed: arrivalLocation.speed ?? null,
             };
+            const propertyCoords = extractPropertyCoords(ticketData as Record<string, unknown>);
+            if (propertyCoords) {
+                const radiusM = resolveGeofenceRadiusM(ticketData as Record<string, unknown>);
+                const geofence = assertWithinGeofence(cleanArrivalLocation, propertyCoords, radiusM);
+                if (!geofence.ok) {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        `Arrival GPS is ${Math.round(geofence.distanceM)}m from property (max ${geofence.radiusM}m). Move closer and retry.`
+                    );
+                }
+                updateData.arrivalDistanceM = Math.round(geofence.distanceM);
+                updateData.geofenceRadiusM = radiusM;
+            }
             updateData.arrivedLocation = cleanArrivalLocation;
             updateData.technicianLocation = cleanArrivalLocation;
             updateData.technicianLocationUpdatedAt = now;
@@ -857,9 +871,9 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
     const reason = safeString(request.data?.reason || request.data?.notes);
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
 
-    const allowedActions = new Set(["APPROVE_CLOSE", "DISPUTE", "REQUEST_REVISIT", "ESCALATE"]);
+    const allowedActions = new Set(["APPROVE_CLOSE", "APPROVE_ASSIGN", "DISPUTE", "REQUEST_REVISIT", "ESCALATE"]);
     if (!allowedActions.has(action)) throw new HttpsError("invalid-argument", "Invalid owner review action.");
-    if (action !== "APPROVE_CLOSE" && reason.length < 8) {
+    if (action !== "APPROVE_CLOSE" && action !== "APPROVE_ASSIGN" && reason.length < 8) {
         throw new HttpsError("invalid-argument", "A clear reason is required for dispute, revisit, or escalation.");
     }
 
@@ -898,6 +912,25 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
             tenantApprovalRequired: false,
             closedAt: now,
             closureSource: "OWNER_REVIEW"
+        });
+    }
+
+    if (action === "APPROVE_ASSIGN") {
+        const reqTechId = safeString(request.data?.technicianId);
+        let techId = reqTechId;
+        if (!techId) {
+            const techsSnap = await db.collection("users").where("role", "==", "technician").limit(1).get();
+            if (!techsSnap.empty) techId = techsSnap.docs[0].id;
+        }
+        Object.assign(baseUpdate, {
+            status: "ASSIGNED",
+            dispatchStatus: "ASSIGNED",
+            trackingStatus: "TECHNICIAN_ASSIGNED",
+            assignedTechnicianId: techId || null,
+            technicianId: techId || null,
+            ownerApproved: true,
+            assignedAt: now,
+            approvalSource: "OWNER_REVIEW"
         });
     }
 
@@ -2014,16 +2047,9 @@ export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, 
     return;
 });
 
-export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const data = snap.data();
-    try {
-        await db.collection("properties").add({ propertyName: data.propertyName || 'New Asset', ownerEmail: data.ownerEmail, status: 'PENDING_APPROVAL', createdAt: FieldValue.serverTimestamp() });
-        await snap.ref.update({ status: 'PROCESSED' });
-    } catch (err) {
-        await snap.ref.update({ status: 'ERROR', error: String(err) });
-    }
+/** @deprecated Property provisioning is handled by approveOwnerSubmissionOperationalFlow in adminOwnerOperations.ts. */
+export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async () => {
+    return;
 });
 
 // ─── TENANT INVITATION SYSTEM ───────────────────────────────────────────────
@@ -3694,3 +3720,4 @@ export * from "./adminOwnerOperations";
 export * from "./adminReports";
 
 export * from "./technicianOfflineSync";
+export * from "./ticketLifecycleV2";

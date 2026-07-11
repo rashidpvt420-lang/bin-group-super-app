@@ -8,6 +8,7 @@ import { validateStripeSecretName } from './lib/stripe-secret-format.mjs';
 
 const PROJECT = 'bin-group-57c60';
 const REGION = 'europe-west3';
+const BANK_ONLY = process.env.LAUNCH_BANK_ONLY === '1' || process.env.LAUNCH_BANK_ONLY === 'true';
 const REQUIRED_SECRETS = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
@@ -29,6 +30,14 @@ function pass(label, detail = '') {
 function fail(label, detail = '') {
   results.push({ status: 'FAIL', label, detail });
   blockers.push(`${label}: ${detail}`);
+}
+
+function stripeAdvisory(label, detail = '') {
+  if (BANK_ONLY) {
+    warn(label, `${detail} (advisory — LAUNCH_BANK_ONLY=1 bank-transfer pilot defers Stripe card billing)`);
+    return;
+  }
+  fail(label, detail);
 }
 
 function warn(label, detail = '') {
@@ -84,9 +93,9 @@ for (const secret of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']) {
     const raw = run(`gcloud secrets versions access latest --secret=${secret} --project=${PROJECT}`);
     const result = validateStripeSecretName(secret, raw);
     if (result.ok) pass(`Stripe format: ${secret}`, result.detail);
-    else fail(`Stripe format: ${secret}`, result.detail);
+    else stripeAdvisory(`Stripe format: ${secret}`, result.detail);
   } catch (err) {
-    fail(`Stripe format: ${secret}`, err.message);
+    stripeAdvisory(`Stripe format: ${secret}`, err.message);
   }
 }
 
@@ -162,6 +171,7 @@ manual.push('Admin password rotation: rotate, update .env.e2e only, re-run Gate 
 
 // ── Report ────────────────────────────────────────────────────────────────────
 console.log('\n=== Gate 12 Production Controls Check ===\n');
+if (BANK_ONLY) console.log('LAUNCH_BANK_ONLY=1 — Stripe format failures are advisory for bank-transfer pilot only.\n');
 for (const row of results) {
   console.log(`[${row.status}] ${row.label}${row.detail ? ` — ${row.detail}` : ''}`);
 }

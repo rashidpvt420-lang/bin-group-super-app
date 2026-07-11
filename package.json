@@ -78,6 +78,7 @@
     "launch:pilot:start": "node scripts/pilot-launch-watch.mjs start",
     "launch:pilot:verify": "node scripts/pilot-launch-watch.mjs verify",
     "gate12:rotate-admin": "node scripts/gate12-rotate-admin-password.mjs",
+    "gate12:rotate-e2e": "node scripts/rotate-e2e-role-passwords.mjs",
     "seed:e2e": "node scripts/seed-e2e-accounts.js",
     "seed:e2e:auth": "node scripts/seed-e2e-auth.mjs",
     "seed:e2e:live-data": "node scripts/seed-live-role-test-data.mjs",

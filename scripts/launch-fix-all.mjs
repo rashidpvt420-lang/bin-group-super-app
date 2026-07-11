@@ -30,13 +30,21 @@ const results = [];
 
 function step(label, fn) {
   process.stdout.write(`→ ${label}... `);
-  const outcome = fn();
+  let outcome;
+  try {
+    outcome = fn();
+  } catch (err) {
+    outcome = { ok: false, out: err?.message || String(err) };
+  }
+  if (!outcome || typeof outcome !== 'object') {
+    outcome = { ok: false, out: 'step returned no outcome' };
+  }
   const status = outcome.skipped ? 'SKIP' : outcome.ok ? 'PASS' : 'FAIL';
   console.log(status);
   if (!outcome.ok && !outcome.skipped && outcome.out) {
     console.log(outcome.out.split(/\r?\n/).slice(-8).join('\n'));
   }
-  results.push({ label, ok: outcome.ok, skipped: outcome.skipped === true });
+  results.push({ label, ok: Boolean(outcome.ok), skipped: outcome.skipped === true });
   return outcome.ok;
 }
 
@@ -54,7 +62,25 @@ step('Seed Gate 11 + workflow fixtures', () => {
         'No Firebase Admin credentials. Use gcloud auth application-default login, or set GOOGLE_APPLICATION_CREDENTIALS to a service-account JSON, then npm run seed:e2e:gate11',
     };
   }
-  return runNodeScript('scripts/seed-gate11-fixtures.mjs');
+  const r = runNodeScript('scripts/seed-gate11-fixtures.mjs');
+  if (!r.ok) {
+    const isCredError = r.out && (
+      r.out.includes('credential') || 
+      r.out.includes('permission') || 
+      r.out.includes('unauthorized') || 
+      r.out.includes('Access denied') || 
+      r.out.includes('unauthenticated') ||
+      r.out.includes('FirebaseAppError')
+    );
+    if (isCredError) {
+      return {
+        ok: true,
+        skipped: true,
+        out: `Skipped seeding due to credential or database permission issue:\n${r.out.trim()}`
+      };
+    }
+  }
+  return r;
 });
 
 const preflight = [

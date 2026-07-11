@@ -80,12 +80,13 @@ const contractId = `e2e-live-role-contract-${safeId(tenantUid)}`;
 const technicianTicketId = `e2e-live-technician-ticket-${safeId(technicianUid)}`;
 const brokerCommissionId = `e2e-live-broker-commission-${safeId(brokerUid)}`;
 
+// Match Playwright technician E2E geolocation mock (business-technician.spec.ts).
 const gps = {
-  lat: 24.2075,
-  lng: 55.7447,
-  latitude: 24.2075,
-  longitude: 55.7447,
-  address: 'E2E Live Role Tower, Al Ain, UAE',
+  lat: 25.2048,
+  lng: 55.2708,
+  latitude: 25.2048,
+  longitude: 55.2708,
+  address: 'E2E Live Role Tower, Dubai Marina, UAE',
 };
 
 const gpsPayload = {
@@ -284,9 +285,16 @@ await db.collection('maintenanceTickets').doc(technicianTicketId).set({
   serviceLocationDetail: 'Living room indoor AC unit',
   priority: 'HIGH',
   status: 'ASSIGNED',
+  lifecycleStatus: 'ASSIGNED',
+  proofPhotos: admin.firestore.FieldValue.delete(),
+  afterPhotos: admin.firestore.FieldValue.delete(),
+  completionPhotos: admin.firestore.FieldValue.delete(),
+  afterPhotoUrl: admin.firestore.FieldValue.delete(),
+  technicianNotes: admin.firestore.FieldValue.delete(),
   beforePhotoUrl: beforeProof,
   tenantPhotos: [beforeProof],
   initialPhotoUrls: [beforeProof],
+  photos: [beforeProof],
   permissionToEnter: 'CALL_FIRST',
   isAnyoneHome: 'YES',
   ...gpsPayload,

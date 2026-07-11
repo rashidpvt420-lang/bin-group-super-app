@@ -311,7 +311,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
 
     if (success) {
         const primaryProperty = properties?.[0];
-        const needsGeoReview = Boolean(primaryProperty?.requiresGeoReview || primaryProperty?.dispatchReady === false);
+        const needsGeoReview = Boolean(primaryProperty?.geo?.requiresGeoReview || primaryProperty?.geo?.dispatchReady === false);
         return (
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={ar ? 'rtl' : 'ltr'}>
                 <Stack spacing={3}>

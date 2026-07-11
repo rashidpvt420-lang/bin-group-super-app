@@ -22,6 +22,16 @@ function maskedPrefix(secretName, raw) {
       detail: 'contaminated — value looks like a human password, not a Stripe API key (expected sk_live_… or whsec_…).',
     };
   }
+  if (!result.ok && result.detail.includes('unrecognized format')) {
+    const expected =
+      secretName === 'STRIPE_WEBHOOK_SECRET'
+        ? 'whsec_… (Stripe Dashboard → Developers → Webhooks → signing secret)'
+        : 'sk_live_… (Stripe Dashboard → Developers → API keys → live secret key)';
+    return {
+      ok: false,
+      detail: `unrecognized format — value does not start with ${expected.split(' ')[0]}. You likely pasted the wrong thing (password, dashboard login, or non-Stripe text). Copy only from Stripe Dashboard, not from E2E or GCP login credentials.`,
+    };
+  }
   return result;
 }
 

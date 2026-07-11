@@ -3,10 +3,18 @@
  */
 export function looksLikeCredentialLeak(value) {
   if (!value) return 'empty secret value';
+  if (value.length < 10) {
+    return 'contaminated — key is too short (< 10 characters)';
+  }
   if (value.includes('@')) {
     return 'contaminated — value looks like an email/login, not a Stripe key';
   }
-  if (/^sk_(live|test)_/.test(value) || value.startsWith('whsec_')) return null;
+  if (value.includes('REPLACE_WITH_') || value.includes('REPLACE_ME') || value.includes('PLACEHOLDER')) {
+    return 'contaminated — value is a placeholder';
+  }
+  if (!(/^sk_(live|test)_/.test(value) || value.startsWith('whsec_'))) {
+    return 'contaminated — unrecognized format, must start with sk_live_, sk_test_, or whsec_';
+  }
   if (/[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value) && value.length >= 12 && !value.includes('_')) {
     return 'contaminated — value looks like a human password, not a Stripe API key';
   }
