@@ -153,4 +153,8 @@ launch_package/launch-status.json
 launch_package/launch-fix-all-report.json
 launch_package/launch-evidence-batch.json
 launch_package/pilot-start.lock.json
+launch_package/predeploy-approval.json
+launch_package/public-release-status.json
+launch_package/production-deployment.json
+launch_package/production-deployment-verify.log
 launch_package/artifacts/

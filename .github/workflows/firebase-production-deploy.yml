@@ -11,6 +11,19 @@ on:
         description: 'Full lowercase 40-character commit SHA that must equal github.sha on main'
         required: true
         type: string
+      launch_mode:
+        description: 'bank-pilot or public'
+        required: true
+        type: choice
+        options:
+          - bank-pilot
+          - public
+        default: bank-pilot
+      run_public_release_gate:
+        description: 'Run postdeploy public-release gate (requires live evidence already recorded for this SHA)'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -180,6 +193,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate-production-build
     environment: production
+    outputs:
+      validated_artifact_digest: ${{ steps.artifact_digest.outputs.digest }}
 
     steps:
       - name: Enforce production dispatch gates
@@ -333,6 +348,60 @@ jobs:
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
 
+      - name: Measure Functions discovery load
+        run: npm run measure:functions-load
+
+      - name: Compute validated artifact digest
+        id: artifact_digest
+        run: |
+          set -euo pipefail
+          DIGEST="$(node scripts/compute-artifact-digest.mjs)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "VALIDATED_ARTIFACT_DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          echo "Computed VALIDATED_ARTIFACT_DIGEST=$DIGEST"
+
+      - name: Write predeploy approval binding (SHA + digest)
+        env:
+          APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPROVED_BY}" ]]; then
+            echo "::error::Missing GitHub secret PRODUCTION_APPROVED_BY (audit trail email; authorization is the protected environment)."
+            exit 1
+          fi
+          mkdir -p launch_package
+          node <<'NODE'
+          const fs = require('fs');
+          const approvedBy = process.env.APPROVED_BY;
+          const doc = {
+            schemaVersion: 1,
+            commitSha: process.env.GITHUB_SHA,
+            artifactDigest: process.env.VALIDATED_ARTIFACT_DIGEST,
+            releaseId: process.env.RELEASE_ID,
+            approvedAt: new Date().toISOString(),
+            approvedBy,
+            approvedVia: 'github-environment-protection',
+            githubEnvironment: 'production',
+            launchMode: process.env.LAUNCH_MODE_INPUT,
+          };
+          fs.writeFileSync('launch_package/predeploy-approval.json', `${JSON.stringify(doc, null, 2)}\n`);
+          console.log('Wrote predeploy-approval.json for', doc.commitSha);
+          NODE
+
+      - name: Predeploy approval gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          LAUNCH_BANK_ONLY: ${{ inputs.launch_mode == 'bank-pilot' && '1' || '0' }}
+          PREDEPLOY_BUILD_OK: 'true'
+          PREDEPLOY_RULES_OK: 'true'
+          PREDEPLOY_FUNCTIONS_LOAD_OK: 'true'
+          PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
+        run: node scripts/predeploy-approval-gate.mjs
+
       - name: Deploy critical hosting, rules, indexes, and storage
         id: deploy_critical
         run: |
@@ -404,5 +473,50 @@ jobs:
           path: |
             launch_package/production-deployment.json
             launch_package/production-deployment-verify.log
+            launch_package/predeploy-approval.json
           if-no-files-found: error
           retention-days: 90
+
+  public-release-clearance:
+    name: Postdeploy public release gate
+    runs-on: ubuntu-latest
+    needs: deploy-firebase-production-stack
+    if: ${{ inputs.run_public_release_gate == true }}
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download production deployment metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          path: launch_package
+
+      - name: Postdeploy release gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+          POSTDEPLOY_SMTP_OK: ${{ secrets.POSTDEPLOY_SMTP_OK }}
+          POSTDEPLOY_APPCHECK_OK: ${{ secrets.POSTDEPLOY_APPCHECK_OK }}
+          POSTDEPLOY_ROUTES_OK: ${{ secrets.POSTDEPLOY_ROUTES_OK }}
+          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
+        run: |
+          set -euo pipefail
+          # Prefer digest embedded in deployment metadata when job output is unavailable.
+          if [[ -z "${VALIDATED_ARTIFACT_DIGEST}" ]]; then
+            VALIDATED_ARTIFACT_DIGEST="$(node -e "const d=require('./launch_package/production-deployment.json'); process.stdout.write(d.artifactDigest||d.validatedArtifactDigest||'')")"
+            export VALIDATED_ARTIFACT_DIGEST
+            echo "VALIDATED_ARTIFACT_DIGEST=$VALIDATED_ARTIFACT_DIGEST" >> "$GITHUB_ENV"
+          fi
+          node scripts/postdeploy-release-gate.mjs

@@ -52,6 +52,11 @@ const workflowRunId = String(process.env.GITHUB_RUN_ID || '').trim() || null;
 const workflowRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null;
 const workflowRef = String(process.env.GITHUB_REF || '').trim() || null;
 const repository = String(process.env.GITHUB_REPOSITORY || '').trim() || null;
+const artifactDigest = String(process.env.VALIDATED_ARTIFACT_DIGEST || '').trim().toLowerCase() || null;
+if (artifactDigest && !/^sha256:[a-f0-9]{64}$/.test(artifactDigest)) {
+  console.error('[write-deploy-meta] REFUSED: VALIDATED_ARTIFACT_DIGEST must be sha256:<64-hex>');
+  process.exit(1);
+}
 
 const doc = {
   status: 'passed',
@@ -65,6 +70,8 @@ const doc = {
   workflowRef,
   repository,
   successfulComponents: [...REQUIRED_COMPONENTS],
+  artifactDigest,
+  validatedArtifactDigest: artifactDigest,
   httpChecksOk: false,
   bundleVerified: false,
   verifiedAt: null,
