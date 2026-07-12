@@ -2,20 +2,30 @@ name: Live Role Smoke Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Full lowercase 40-character main SHA deployed to production'
+        required: true
+        type: string
+      production_deploy_run_id:
+        description: 'Successful Firebase Production Deploy workflow run ID for this SHA'
+        required: true
+        type: string
   schedule:
     - cron: '0 4 * * *'
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
-  group: live-role-smoke
-  cancel-in-progress: true
+  group: live-role-smoke-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   E2E_BASE_URL: https://bin-group-57c60.web.app
-  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL }}
+  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
@@ -26,15 +36,46 @@ env:
   E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
   E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
 
 jobs:
   live-role-smoke:
     name: Verify production public and role flows
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+
     steps:
-      - name: Checkout repository
+      - name: Enforce manual same-commit gates
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Live launch evidence may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_commit_sha must be a full lowercase SHA."
+            exit 1
+          fi
+          if [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must equal the workflow main SHA."
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production_deploy_run_id must be numeric."
+            exit 1
+          fi
+
+      - name: Checkout exact launch commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit_sha || github.sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -52,24 +93,43 @@ jobs:
           export_environment_variables: true
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        run: bash scripts/npm-install-retry.sh
 
-      - name: Show smoke test targets
+      - name: Download exact production deployment evidence
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore production deployment metadata
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "Running live smoke tests against ${E2E_BASE_URL}"
-          echo "Running admin smoke tests against ${E2E_ADMIN_BASE_URL:-not-configured}"
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found in the selected deployment artifact."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          test -s launch_package/production-deployment.json
 
       - name: Validate public-smoke environment
         if: github.event_name != 'workflow_dispatch'
-        run: node scripts/verify-e2e-env.mjs
+        run: node scripts/ensure-appcheck.mjs
 
-      - name: Validate full role-smoke secrets
+      - name: Validate full role-smoke secrets and App Check
         if: github.event_name == 'workflow_dispatch'
         env:
           E2E_STRICT_ROLES: 'true'
-        run: node scripts/verify-e2e-env.mjs
+        run: |
+          node scripts/verify-e2e-env.mjs
+          node scripts/ensure-appcheck.mjs
 
-      - name: Seed/repair E2E auth accounts and role claims
+      - name: Seed or repair E2E auth accounts and role claims
         if: github.event_name == 'workflow_dispatch'
         run: node scripts/seed-e2e-auth.mjs
 
@@ -77,20 +137,21 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: node scripts/seed-live-role-test-data.mjs
 
-      - name: Install Playwright browsers
+      - name: Install Playwright browser for scheduled smoke
+        if: github.event_name != 'workflow_dispatch'
         run: npx playwright install --with-deps chromium
 
-      - name: Run public smoke tests
+      - name: Run scheduled public smoke tests
         if: github.event_name != 'workflow_dispatch'
         run: npx playwright test --grep "production public smoke" --project=chromium-desktop
 
-      - name: Run full role smoke tests
+      - name: Run all current-commit launch evidence suites
         if: github.event_name == 'workflow_dispatch'
-        run: npx playwright test tests/e2e/live-role-smoke.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop
+        run: node scripts/run-critical-evidence.mjs --suite all-required
 
-      - name: Run deep business workflow tests
+      - name: Verify controlled-pilot launch status
         if: github.event_name == 'workflow_dispatch'
-        run: npm run test:e2e:business
+        run: node scripts/launch-status.mjs
 
       - name: Create launch proof manifest
         if: always()
@@ -110,40 +171,29 @@ jobs:
             echo "actor=${GITHUB_ACTOR}"
             echo "base_url=${E2E_BASE_URL}"
             echo "admin_base_url=${E2E_ADMIN_BASE_URL}"
-            echo "admin_secret_configured=$([[ -n "${E2E_ADMIN_EMAIL}" && -n "${E2E_ADMIN_PASSWORD}" ]] && echo true || echo false)"
-            echo "owner_secret_configured=$([[ -n "${E2E_OWNER_EMAIL}" && -n "${E2E_OWNER_PASSWORD}" ]] && echo true || echo false)"
-            echo "tenant_secret_configured=$([[ -n "${E2E_TENANT_EMAIL}" && -n "${E2E_TENANT_PASSWORD}" ]] && echo true || echo false)"
-            echo "technician_secret_configured=$([[ -n "${E2E_TECHNICIAN_EMAIL}" && -n "${E2E_TECHNICIAN_PASSWORD}" ]] && echo true || echo false)"
-            echo "broker_secret_configured=$([[ -n "${E2E_BROKER_EMAIL}" && -n "${E2E_BROKER_PASSWORD}" ]] && echo true || echo false)"
-            echo
-            echo "artifact_file_sha256="
           } > launch-proof/manifest.txt
-          if [ -d test-results ]; then find test-results -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
-          if [ -d playwright-report ]; then find playwright-report -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
+          if [[ -d launch_package/artifacts ]]; then find launch_package/artifacts -type f -print0 | sort -z | xargs -0 -r sha256sum >> launch-proof/manifest.txt; fi
           sha256sum launch-proof/manifest.txt > launch-proof/manifest.sha256
-          cat launch-proof/manifest.txt
-          cat launch-proof/manifest.sha256
 
-      - name: Upload launch proof manifest
-        if: always()
+      - name: Upload current-commit live launch evidence
+        if: github.event_name == 'workflow_dispatch' && success()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-proof-manifest
+          name: live-launch-evidence-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/launch-evidence-batch.json
+            launch_package/launch-status.json
+            launch_package/artifacts
+            launch-proof
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload scheduled smoke manifest
+        if: github.event_name != 'workflow_dispatch' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-public-smoke-${{ github.sha }}
           path: launch-proof
           if-no-files-found: error
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-live-role-report
-          path: playwright-report
-          if-no-files-found: ignore
-
-      - name: Upload Playwright traces
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-live-role-test-results
-          path: test-results
-          if-no-files-found: ignore
+          retention-days: 14
