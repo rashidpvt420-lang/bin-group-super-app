@@ -4,12 +4,21 @@
  * Verifies: Arabic/English language toggle (RTL/LTR switching) and Google Maps rendering.
  */
 import { test, expect } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 test.describe('Global Platform Mechanics', () => {
   test.beforeEach(async ({ page }) => {
-    await installAppCheckDebugToken(page);
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
   });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    // Global mechanics are public-route checks; still fail on App Check/429, but do not require an authenticated Firebase read.
+    monitor.assertClean(test.info().title);
+  });
+
   test('Arabic/English language toggle switches RTL/LTR mode', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('body', { timeout: 20_000 });

@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 /**
- * Idempotent launch evidence recorder.
- * Ties records to commit SHA, test name, timestamp, and successful exit code.
- * Never records adminCredentialLogin from route-only audits.
+ * Manual evidence recorder — NON-CRITICAL notes only.
+ * Critical launch evidence keys are rejected even if caller supplies exit-code 0 / source.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-
-const outDir = path.join(process.cwd(), 'launch_package');
-const evidencePath = path.join(outDir, 'launch-evidence-batch.json');
+import {
+  CRITICAL_EVIDENCE_KEYS,
+  HARD_LAUNCH_CLAIM,
+  gitSha,
+  isCriticalEvidenceKey,
+  evidencePath,
+} from './lib/launch-honesty.mjs';
 
 function usage() {
   console.error(`Usage:
-  node scripts/record-launch-evidence-batch.mjs --test <name> --exit-code <0> --proof "<text>" [--source <script>]
+  node scripts/record-launch-evidence-batch.mjs --test <nonCriticalName> --proof "<text>" [--note "..."]
 
-Rules:
-  - exit-code must be 0 to record a pass
-  - adminCredentialLogin requires --source authenticated-admin-smoke (not route-only)
+Critical keys that CANNOT be recorded manually:
+  ${CRITICAL_EVIDENCE_KEYS.join(', ')}
+
+Use: node scripts/run-critical-evidence.mjs --suite <suite>
 `);
   process.exit(1);
 }
@@ -28,63 +31,66 @@ function argValue(name) {
   return String(process.argv[idx + 1] || '').trim();
 }
 
-function gitSha() {
-  const result = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
-  return (result.stdout || '').trim() || 'unknown';
+const testName = argValue('test');
+const proof = argValue('proof') || argValue('note');
+const source = argValue('source') || 'manual';
+const exitCodeRaw = argValue('exit-code');
+const commitOverride = argValue('commit');
+
+if (!testName || !proof) usage();
+
+if (isCriticalEvidenceKey(testName)) {
+  console.error(`[evidence] REFUSED: "${testName}" is a critical evidence key.`);
+  console.error('[evidence] Critical evidence must be produced by scripts/run-critical-evidence.mjs');
+  console.error('[evidence] Manual --exit-code / --source values are ignored and cannot create this record.');
+  process.exit(1);
 }
 
-const testName = argValue('test');
-const proof = argValue('proof');
-const source = argValue('source') || 'manual';
-const exitCode = Number(argValue('exit-code'));
-const commitSha = argValue('commit') || gitSha();
-
-if (!testName || !proof || !Number.isFinite(exitCode)) usage();
+// Even for non-critical notes, reject attempts to spoof execution fields.
+if (exitCodeRaw !== '') {
+  console.error('[evidence] REFUSED: --exit-code is not accepted on the manual recorder.');
+  console.error('[evidence] Critical suites must use run-critical-evidence.mjs which captures the real exit code.');
+  process.exit(1);
+}
+if (source && source !== 'manual' && /business-|adminCredential|launchAudit|production|appCheck/i.test(source)) {
+  console.error(`[evidence] REFUSED: source "${source}" looks like a critical suite spoof.`);
+  process.exit(1);
+}
 if (proof.length < 20) {
   console.error('Proof text too short.');
   process.exit(1);
 }
 
-if (testName === 'adminCredentialLogin') {
-  const allowed = new Set(['authenticated-admin-smoke', 'business-admin', 'final-admin-login']);
-  if (!allowed.has(source)) {
-    console.error('Refusing to record adminCredentialLogin from a route-only audit.');
-    console.error(`Allowed --source values: ${[...allowed].join(', ')}`);
-    process.exit(1);
-  }
-}
+const root = process.cwd();
+const file = evidencePath(root);
+mkdirSync(path.dirname(file), { recursive: true });
+const batch = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { records: [] };
+const commitSha = gitSha(root);
 
-if (exitCode !== 0) {
-  console.error(`[evidence] refusing to record pass for ${testName} with exit-code=${exitCode}`);
+const record = {
+  fingerprint: `${commitSha}|${testName}|manual-note`,
+  commitSha,
+  testName,
+  source: 'manual',
+  executionGenerated: false,
+  proof,
+  recordedAt: new Date().toISOString(),
+  hardLaunchClaim: HARD_LAUNCH_CLAIM,
+  noteOnly: true,
+};
+
+// Never allow commit override for notes either — bind to current SHA only.
+if (commitOverride && commitOverride !== commitSha) {
+  console.error('[evidence] REFUSED: --commit override is not allowed.');
   process.exit(1);
 }
 
-mkdirSync(outDir, { recursive: true });
-const batch = existsSync(evidencePath)
-  ? JSON.parse(readFileSync(evidencePath, 'utf8'))
-  : { records: [] };
-
-const fingerprint = `${commitSha}|${testName}|${exitCode}|${source}`;
-const existingIdx = (batch.records || []).findIndex((r) => r.fingerprint === fingerprint);
-const record = {
-  fingerprint,
-  commitSha,
-  testName,
-  source,
-  exitCode,
-  proof,
-  recordedAt: new Date().toISOString(),
-};
-
-if (existingIdx >= 0) {
-  batch.records[existingIdx] = { ...batch.records[existingIdx], ...record, updatedAt: new Date().toISOString() };
-  console.log(`[evidence] updated idempotent record for ${testName}`);
-} else {
-  batch.records = [...(batch.records || []), record];
-  console.log(`[evidence] recorded ${testName}`);
-}
-
+const idx = (batch.records || []).findIndex((r) => r.testName === testName && r.commitSha === commitSha && r.noteOnly === true);
+if (idx >= 0) batch.records[idx] = { ...batch.records[idx], ...record, updatedAt: new Date().toISOString() };
+else batch.records = [...(batch.records || []), record];
 batch.updatedAt = new Date().toISOString();
-writeFileSync(evidencePath, JSON.stringify(batch, null, 2) + '\n');
-console.log(`[evidence] wrote ${evidencePath}`);
+batch.hardLaunchClaim = false;
+writeFileSync(file, `${JSON.stringify(batch, null, 2)}\n`);
+console.log(`[evidence] recorded non-critical note "${testName}" (hardLaunchClaim=false)`);
+console.log('[evidence] critical keys remain execution-only via run-critical-evidence.mjs');
 process.exit(0);

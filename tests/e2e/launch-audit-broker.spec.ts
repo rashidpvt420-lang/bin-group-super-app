@@ -5,7 +5,7 @@
  * profile, AR/EN switch (including fixed @bin/shared import).
  */
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_BROKER_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
@@ -38,10 +38,19 @@ async function assertHealthy(page: Page, context: string) {
 
 test.describe('Broker launch audit', () => {
   test.beforeEach(async ({ page }) => {
-    await installAppCheckDebugToken(page);
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
     requireAuditCredentials();
     await login(page);
   });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
 
   test('broker dashboard loads with KPI cards', async ({ page }) => {
     await assertAppCheckDebugTokenInPage(page);

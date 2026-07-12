@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
@@ -92,7 +92,9 @@ for (const role of Object.keys(criticalRoutes) as RoleName[]) {
     const password = process.env[passwordKey];
 
     test.beforeEach(async ({ page }) => {
-      await installAppCheckDebugToken(page);
+      const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+      (page as any).__binAppCheckMonitor = __appCheckMonitor;
+      await __appCheckMonitor.assertTokenFingerprint();
       await login(page, requireCredential(email, emailKey), requireCredential(password, passwordKey));
     });
 
@@ -135,5 +137,13 @@ for (const role of Object.keys(criticalRoutes) as RoleName[]) {
       await page.waitForTimeout(800);
       await expectNoRuntimeCrash(page, `${role} language switch`);
     });
+
+    test.afterEach(async ({ page }) => {
+      const monitor = (page as any).__binAppCheckMonitor;
+      if (!monitor) return;
+      monitor.assertClean(test.info().title);
+      monitor.assertAuthenticatedFirebaseRead(test.info().title);
+    });
   });
 }
+

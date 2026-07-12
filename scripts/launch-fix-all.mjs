@@ -2,6 +2,7 @@
 /**
  * Orchestrates launch repair checks without claiming hard launch.
  * Never starts pilot when smoke / launch audit / business workflows fail.
+ * Critical evidence is execution-generated only.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -26,21 +27,20 @@ function run(label, cmd, args, env = {}) {
 const steps = [];
 steps.push(run('build:functions', 'npm', ['run', 'build:functions']));
 steps.push(run('measure-functions-load', 'node', ['scripts/measure-functions-load.mjs']));
+steps.push(run('test:launch-honesty', 'npm', ['run', 'test:launch-honesty']));
 steps.push(run('ensure-appcheck', 'node', ['scripts/ensure-appcheck.mjs']));
 steps.push(run('verify-e2e-env', 'node', ['scripts/verify-e2e-env.mjs']));
 steps.push(run('verify-admin-firebase', 'node', ['scripts/verify-admin-firebase-build.mjs']));
-steps.push(run('launch-status', 'node', ['scripts/launch-status.mjs']));
+steps.push(run('verify-production-deployment', 'node', ['scripts/verify-production-deployment.mjs']));
 
 if (!skipE2E) {
-  steps.push(run('e2e:launch-audit', 'npm', ['run', 'test:e2e:launch-audit']));
+  steps.push(run('e2e:launch-audit:live', 'npm', ['run', 'test:e2e:launch-audit:live']));
 }
 if (!skipBusiness) {
-  steps.push(
-    run('e2e:business', 'npm', ['run', 'test:e2e:business'], {
-      // business suite must also see app check + env
-    }),
-  );
+  steps.push(run('e2e:business', 'npm', ['run', 'test:e2e:business']));
 }
+
+steps.push(run('launch-status', 'node', ['scripts/launch-status.mjs']));
 
 const failed = steps.filter((s) => !s.ok);
 mkdirSync(outDir, { recursive: true });
@@ -54,30 +54,30 @@ const report = {
 };
 
 if (failed.length) {
-  // Invalidate any pilot start created during a failed run.
   const lockPath = path.join(outDir, 'pilot-start.lock.json');
   if (existsSync(lockPath)) {
     try {
       const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
       writeFileSync(
         lockPath,
-        JSON.stringify({
+        `${JSON.stringify({
           ...lock,
           status: 'invalidated',
           invalidatedAt: new Date().toISOString(),
           reason: `launch-fix-all failed: ${failed.map((f) => f.label).join(', ')}`,
-        }, null, 2) + '\n',
+          hardLaunchClaim: false,
+        }, null, 2)}\n`,
       );
       report.pilotInvalidated = true;
     } catch {
       // ignore
     }
   }
-  writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
-  console.error('\n[launch-fix-all] FAIL — not starting pilot; hard-launch not claimed');
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.error('\n[launch-fix-all] FAIL — not starting pilot; hardLaunchClaim=false');
   process.exit(1);
 }
 
-writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
-console.log('\n[launch-fix-all] PASS repair checks (hard-launch still not claimed; pilot not auto-started)');
+writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+console.log('\n[launch-fix-all] PASS repair checks (hardLaunchClaim=false; pilot not auto-started)');
 process.exit(0);
