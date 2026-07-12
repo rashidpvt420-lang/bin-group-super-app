@@ -287,6 +287,28 @@ firebase deploy --only hosting --project bin-group-57c60
 node scripts/verify-hosted-appcheck.mjs
 ```
 
+**PowerShell** (quote `--only` targets; install deps first if `vite` is not recognized):
+
+```powershell
+cd "C:\Users\My-PC\Desktop\bin-app-e2e-redesign"
+git fetch origin cursor/hard-launch-gate-redesign-30e9
+git reset --hard origin/cursor/hard-launch-gate-redesign-30e9
+npm install --legacy-peer-deps
+
+# .env.e2e must include BOTH:
+# VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=878faabb-b281-4159-a84d-dc1bed73eb2e
+# VITE_APP_CHECK_SITE_KEY=6Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Register that UUID under App Check debug tokens for BOTH web apps (main + admin).
+
+npm run launch:deploy:hosting
+# or manually:
+# npm run build:live
+# firebase deploy --only "hosting" --project bin-group-57c60
+# node scripts/verify-hosted-appcheck.mjs
+```
+
+`verify-hosted-appcheck` must print `[hosted-appcheck] ok` for **main** and **admin** before running profile-gates.
+
 Then re-run `npm run test:e2e:profile-gates`.
 
 ## Notes

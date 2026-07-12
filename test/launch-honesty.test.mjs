@@ -354,6 +354,10 @@ describe('launch honesty — cryptographic artifact revalidation', () => {
   });
 
   it('rejects symlink escape outside approved artifacts directory', () => {
+    if (process.platform === 'win32') {
+      // Windows often blocks unprivileged symlink creation (EPERM).
+      return;
+    }
     const root = writeArtifactWorkspace();
     try {
       const outside = path.join(root, 'outside-secret.json');
