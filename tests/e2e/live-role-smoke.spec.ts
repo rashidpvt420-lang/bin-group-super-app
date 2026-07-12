@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
 
@@ -116,6 +117,18 @@ async function expectDashboardControls(page: Page, role: RoleName) {
 }
 
 test.describe('BIN GROUP production public smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
+  });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
   for (const route of publicRoutes) {
     test(`public route loads: ${route}`, async ({ page }) => {
       await expectHealthyPublicRoute(page, route);

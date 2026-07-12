@@ -4,6 +4,7 @@
  * Verifies: property onboarding, tenant import, ticket assignment, and payment approval controls.
  */
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import admin from 'firebase-admin';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
@@ -143,8 +144,18 @@ test.describe('Admin Business Workflow', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
     await login(page);
   });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
 
   test('Admin property and tenant import controls are launch-ready', async ({ page }) => {
     await page.goto(adminUrl('/onboard-property'), { waitUntil: 'domcontentloaded' });

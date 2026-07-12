@@ -5,12 +5,14 @@
  * history, HR, profile, AR/EN switch.
  */
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TECHNICIAN_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
-const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized/i;
+const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
+const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -42,16 +44,28 @@ test.describe('Technician launch audit', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
     requireAuditCredentials();
     await login(page);
   });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
 
   test('technician dashboard loads with duty toggle', async ({ page }) => {
+    await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     await assertHealthy(page, 'technician/dashboard');
+    expect(collectAppCheckFailures(errors), 'App Check/403/429 console failures').toEqual([]);
     expect(errors.join('\n')).not.toMatch(ACCESS_DENIED);
 
     // Verify duty toggle button is present (START DUTY / END DUTY or Arabic equivalent)

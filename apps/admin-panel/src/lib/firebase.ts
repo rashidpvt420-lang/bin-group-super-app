@@ -23,7 +23,9 @@ type BinFirebaseConfig = {
 
 const clean = (value?: string): string => {
     const normalized = String(value || '').trim();
-    return normalized && !normalized.includes('REPLACE_ME') ? normalized : '';
+    if (!normalized) return '';
+    if (normalized.includes('REPLACE_ME') || normalized.includes('REPLACE_WITH')) return '';
+    return normalized;
 };
 
 // CRA/CRACO only embeds process.env.REACT_APP_* when references are static.
@@ -42,13 +44,26 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 if (typeof window !== 'undefined') {
     const enableAppCheck = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
     const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
-    const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver;
 
     if (enableAppCheck) {
-        if (isLocal || isAutomation) {
+        const existingDebug = (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN;
+        const hasRegisteredDebug =
+            typeof existingDebug === 'string' &&
+            existingDebug.length > 8 &&
+            existingDebug !== 'true' &&
+            existingDebug !== 'false';
+
+        // Prefer Playwright-injected registered UUID. Only fall back to boolean
+        // auto-debug on localhost when no UUID is present.
+        if (!hasRegisteredDebug && isLocal) {
             (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-            console.log('App Check debug token set for local/automation testing.');
+            console.log('App Check boolean debug token set for local testing.');
         }
+        if (hasRegisteredDebug) {
+            const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
+            console.info(`[Firebase] Admin App Check debug token fingerprint=${fingerprint}`);
+        }
+
         const siteKey = clean(process.env.REACT_APP_APP_CHECK_SITE_KEY);
         if (siteKey) {
             try {

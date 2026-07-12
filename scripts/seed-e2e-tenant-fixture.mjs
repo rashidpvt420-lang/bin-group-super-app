@@ -19,8 +19,17 @@ const db = getFirestore();
 const auth = getAuth();
 
 async function run() {
-  const tenantEmail = process.env.E2E_TENANT_EMAIL || 'tenant@bin.ae';
-  
+  const tenantEmail = String(process.env.E2E_TENANT_EMAIL || '').trim();
+  const tenantPassword = String(process.env.E2E_TENANT_PASSWORD || '').trim();
+  if (!tenantEmail) {
+    console.error('Missing E2E_TENANT_EMAIL. Seed scripts fail closed without an injected credential.');
+    process.exit(1);
+  }
+  if (!tenantPassword) {
+    console.error('Missing E2E_TENANT_PASSWORD. Seed scripts fail closed without an injected credential.');
+    process.exit(1);
+  }
+
   console.log(`Looking up user by email: ${tenantEmail}`);
   let userRecord;
   try {
@@ -31,7 +40,7 @@ async function run() {
       console.log(`User ${tenantEmail} not found. Creating user...`);
       userRecord = await auth.createUser({
         email: tenantEmail,
-        password: process.env.E2E_TENANT_PASSWORD || 'Password123!',
+        password: tenantPassword,
         displayName: 'E2E Tenant'
       });
       console.log(`Created user: ${userRecord.uid}`);

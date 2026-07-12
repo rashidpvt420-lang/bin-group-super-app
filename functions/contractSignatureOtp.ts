@@ -3,7 +3,6 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
-import * as nodemailer from "nodemailer";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -31,7 +30,8 @@ function hashOtp(otp: string, salt: string) {
   return crypto.createHash("sha256").update(`${otp}:${salt}`).digest("hex");
 }
 
-function createTransporter() {
+async function createTransporter() {
+  const nodemailer = await import("nodemailer");
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
   if (!user || !pass) throw new HttpsError("failed-precondition", "SMTP secrets are not configured. Contract OTP cannot be delivered.");
@@ -59,7 +59,7 @@ async function sendOtpEmail(args: { to: string; otp: string; contractId: string;
     </div>
   `;
   const text = `BIN GROUP contract signature OTP: ${args.otp}. Expires in ${OTP_TTL_MINUTES} minutes. Contract reference: ${args.contractId || args.requestId}.`;
-  const info = await createTransporter().sendMail({ from, replyTo, to: args.to, subject, html, text });
+  const info = await (await createTransporter()).sendMail({ from, replyTo, to: args.to, subject, html, text });
   return info.messageId || "";
 }
 

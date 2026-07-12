@@ -3,6 +3,7 @@
  * Deep E2E button & page verification for all 30 menu items.
  */
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
@@ -31,6 +32,7 @@ async function waitForLoader(page: Page) {
 
 test.describe('Admin Button & Menu Verification Audit', () => {
   test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
     await login(page);
   });
 

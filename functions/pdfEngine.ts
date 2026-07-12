@@ -1,10 +1,19 @@
-import PDFDocument from 'pdfkit';
 import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
-// @ts-ignore
+// @ts-ignore — reshaper is tiny; keep sync. PDFKit is lazy-loaded below to keep Functions discovery fast.
 import arabicReshaper from 'arabic-persian-reshaper';
 
 const reshap = (arabicReshaper as any)?.ArabicReshaper || arabicReshaper;
+
+type PdfKitCtor = typeof import('pdfkit');
+let cachedPdfKit: PdfKitCtor | null = null;
+
+async function loadPdfKit(): Promise<PdfKitCtor> {
+    if (cachedPdfKit) return cachedPdfKit;
+    const mod = await import('pdfkit');
+    cachedPdfKit = (mod as any).default || mod;
+    return cachedPdfKit as PdfKitCtor;
+}
 
 let cachedCairoFont: Buffer | null = null;
 
@@ -204,7 +213,7 @@ function getScopeDetails(mode: string) {
     }
 }
 
-function section(doc: PDFKit.PDFDocument, titleEn: string, titleAr: string) {
+function section(doc: any, titleEn: string, titleAr: string) {
     if (doc.y > 690) doc.addPage();
     doc.moveDown(0.9);
     doc.fillColor(GOLD).fontSize(12).text(titleEn.toUpperCase(), { continued: false });
@@ -214,7 +223,7 @@ function section(doc: PDFKit.PDFDocument, titleEn: string, titleAr: string) {
     doc.moveDown(0.45);
 }
 
-function para(doc: PDFKit.PDFDocument, en: string, ar: string) {
+function para(doc: any, en: string, ar: string) {
     if (doc.y > 705) doc.addPage();
     doc.fillColor(INK).fontSize(8.7).text(en, { align: 'justify', lineGap: 2 });
     doc.moveDown(0.25);
@@ -222,7 +231,7 @@ function para(doc: PDFKit.PDFDocument, en: string, ar: string) {
     doc.moveDown(0.5);
 }
 
-function row(doc: PDFKit.PDFDocument, label: string, value: string) {
+function row(doc: any, label: string, value: string) {
     if (doc.y > 720) doc.addPage();
     const y = doc.y;
     doc.fillColor(MUTED).fontSize(8).text(shapeBilingualText(label), 55, y, { width: 165 });
@@ -260,6 +269,7 @@ async function savePdf(buffer: Buffer, path: string, metadata: Record<string, an
  * the same protective English/Arabic agreement stored in the document vault.
  */
 export async function generateContractPDF(data: any) {
+    const PDFDocument = await loadPdfKit();
     let fontBuffer: Buffer | null = null;
     try {
         fontBuffer = await getCairoFont();
@@ -276,7 +286,7 @@ export async function generateContractPDF(data: any) {
         const propertyPassportId = textValue(data.propertyPassportId || data.passportId || propertyId, '');
         const documentHash = crypto.createHash('sha256').update(JSON.stringify({ contractId, ownerId, propertyId, contractMode, version: AGREEMENT_VERSION, signedAt: data.signedAt || data.acceptedAt || new Date().toISOString() })).digest('hex');
 
-        const doc = new PDFDocument({
+        const doc = new (PDFDocument as any)({
             margin: 50,
             size: 'A4',
             info: { Title: '13-Month Owner Service Agreement', Author: 'BIN GROUP Super App' }
@@ -504,6 +514,7 @@ export async function generateContractPDF(data: any) {
 }
 
 export async function generatePayslipPDF(data: any) {
+    const PDFDocument = await loadPdfKit();
     let fontBuffer: Buffer | null = null;
     try {
         fontBuffer = await getCairoFont();
@@ -512,7 +523,7 @@ export async function generatePayslipPDF(data: any) {
     }
 
     return new Promise<string>((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        const doc = new (PDFDocument as any)({ margin: 50, size: 'A4' });
         if (fontBuffer) {
             try {
                 doc.registerFont('Cairo', fontBuffer);
@@ -564,6 +575,7 @@ export async function generatePayslipPDF(data: any) {
 }
 
 export async function generateIntegrityAuditPDF(data: { propertyId: string; propertyName: string; intel: any }) {
+    const PDFDocument = await loadPdfKit();
     let fontBuffer: Buffer | null = null;
     try {
         fontBuffer = await getCairoFont();
@@ -572,7 +584,7 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
     }
 
     return new Promise<string>((resolve, reject) => {
-        const doc = new PDFDocument({
+        const doc = new (PDFDocument as any)({
             margin: 50,
             size: 'A4',
             info: { Title: 'Property Integrity Audit', Author: 'BIN GROUP Super App' }

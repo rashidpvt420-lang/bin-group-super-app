@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const fatalLaunchText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|sovereign connection timeout|failed to fetch dynamically imported module/i;
 const allowedConsoleNoise = /favicon|devtools|content security policy.*font|analytics|ResizeObserver loop limit exceeded/i;
@@ -25,10 +26,15 @@ async function openAndVerify(page: Page, route: string, expectedText: RegExp) {
 
   const fatalErrors = consoleErrors.filter((error) => fatalLaunchText.test(error));
   expect(fatalErrors, `${route} should not emit fatal console errors`).toEqual([]);
+  expect(collectAppCheckFailures(consoleErrors), `${route} App Check/403/429 console failures`).toEqual([]);
 }
 
 test.describe('production public launch routes', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   test('public marketing, login, onboarding, support, and contact routes render', async ({ page }) => {
+    await assertAppCheckDebugTokenInPage(page);
     await openAndVerify(page, '/', /BIN|GROUP|Property|Operations/i);
     await openAndVerify(page, '/login', /login|email|password|identity|portal/i);
     await expect(page.locator('input[type="email"], input[name*="email" i], [data-testid="login-email"]').first(), 'login email input should be visible').toBeVisible({ timeout: 20_000 });

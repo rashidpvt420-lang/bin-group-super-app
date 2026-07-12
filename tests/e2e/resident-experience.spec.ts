@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const TENANT_EMAIL = process.env.E2E_TENANT_EMAIL ?? '';
 const TENANT_PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
@@ -7,10 +8,6 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 
 async function loginTenant(page: Page) {
-  const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
-  if (appCheckToken) {
-    await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
-  }
 
   await page.context().clearCookies();
   await page.goto('/login?intendedRole=tenant&refresh=' + Date.now(), { waitUntil: 'domcontentloaded' });
@@ -32,6 +29,9 @@ async function loginAdmin(page: Page) {
 }
 
 test.describe('Resident Experience & Building Operations E2E', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   test('Tenant can access all experience module routes', async ({ page }) => {
     test.skip(!TENANT_EMAIL || !TENANT_PASSWORD, 'Tenant credentials not set');
     test.setTimeout(90_000);

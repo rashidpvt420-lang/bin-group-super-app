@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -24,11 +25,6 @@ function requireLaunchCredentials() {
 
 async function login(page: Page) {
   requireLaunchCredentials();
-
-  const appCheckToken = process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
-  if (appCheckToken) {
-    await page.addInitScript(`window.FIREBASE_APPCHECK_DEBUG_TOKEN = "${appCheckToken}";`);
-  }
 
   await page.context().clearCookies();
 
@@ -53,8 +49,18 @@ async function login(page: Page) {
 
 test.describe('Tenant Business Workflow', () => {
   test.beforeEach(async ({ page }) => {
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
     await login(page);
   });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
 
   test('Tenant can create a service request and upload photo', async ({ page }) => {
     test.setTimeout(90_000);

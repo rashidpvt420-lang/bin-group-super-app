@@ -1,6 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
-import OpenAI from "openai";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -117,6 +116,7 @@ async function askGemini(apiKey: string, prompt: string) {
 }
 
 async function askOpenAIModel(apiKey: string, model: string, prompt: string) {
+  const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey, timeout: 22000 });
   const response = await client.responses.create({
     model,

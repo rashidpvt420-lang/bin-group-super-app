@@ -4,6 +4,7 @@
  * Verifies: owner onboarding reaches a real UAE quote estimate using the current onboarding flow.
  */
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 async function clickFirstVisible(page: Page, selectors: string[], timeout = 15000) {
   for (const selector of selectors) {
@@ -67,6 +68,18 @@ async function fillCoordinate(page: Page, testId: string, value: string) {
 }
 
 test.describe('Owner Business Workflow', () => {
+  test.beforeEach(async ({ page }) => {
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
+  });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
   test('Owner can navigate to onboarding and generate a quote', async ({ page, context }) => {
     test.setTimeout(120000);
 

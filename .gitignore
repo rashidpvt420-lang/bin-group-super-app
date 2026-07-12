@@ -147,3 +147,10 @@ apps/admin-panel/.env
 apps/admin-panel/.env.local
 apps/admin-panel/.env.*.local
 !apps/admin-panel/.env.example
+
+# Generated launch honesty artifacts (never commit secrets or forged evidence)
+launch_package/launch-status.json
+launch_package/launch-fix-all-report.json
+launch_package/launch-evidence-batch.json
+launch_package/pilot-start.lock.json
+launch_package/artifacts/

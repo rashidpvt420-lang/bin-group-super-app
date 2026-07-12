@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 import { execSync } from 'child_process';
 
 test.describe('Mosque / Masjid Onboarding and Dashboard E2E @emulator-only', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   test('Should complete Mosque onboarding, verify approval, and check Mosque Intelligence dashboard @emulator-only', async ({ page }) => {
     test.setTimeout(120000);
     // Mock Firebase Storage upload/download and override Referer for other Google APIs in one unified handler
@@ -84,9 +88,12 @@ test.describe('Mosque / Masjid Onboarding and Dashboard E2E @emulator-only', () 
       }
     });
 
-    // Unique email for E2E onboarding registration
+    // Unique email for E2E onboarding registration — password must come from env (no hardcoded secret).
     const email = `e2e-mosque-${Date.now()}@bin-groups.com`;
-    const password = 'MasjidPass123!';
+    const password = String(process.env.E2E_MOSQUE_PASSWORD || process.env.E2E_OWNER_PASSWORD || '').trim();
+    if (!password) {
+      throw new Error('Missing E2E_MOSQUE_PASSWORD or E2E_OWNER_PASSWORD. Mosque onboarding E2E fails closed without secrets.');
+    }
     console.log(`Generated test email: ${email}`);
 
     // 1. Open Onboarding page

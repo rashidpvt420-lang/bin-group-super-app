@@ -1,4 +1,3 @@
-import { VertexAI } from '@google-cloud/vertexai';
 import { validateStorageUrl, MAX_FILE_BYTES, ALLOWED_MIME_TYPES } from './ocrSecurityGuards';
 
 /**
@@ -11,12 +10,15 @@ import { validateStorageUrl, MAX_FILE_BYTES, ALLOWED_MIME_TYPES } from './ocrSec
  *  - This module enforces: Storage-origin allow-list, MIME allow-list,
  *    file size cap, and no arbitrary URL fetching.
  *  - No tools, functionDeclarations, or toolConfig are used.
+ *  - Vertex AI is loaded lazily so Functions discovery does not pay the
+ *    @google-cloud/vertexai import cost at module scope.
  */
 export async function extractTitleDeedData(fileUrl: string): Promise<unknown> {
     // ── Security: validate URL origin before any network call ──────────────
     validateStorageUrl(fileUrl);
 
-    // 1. Initialize Vertex AI
+    // 1. Initialize Vertex AI (lazy import — keep discovery/load under timeout)
+    const { VertexAI } = await import('@google-cloud/vertexai');
     const vertexAI = new VertexAI({
         project: process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'UNKNOWN_PROJECT',
         location: 'us-central1',

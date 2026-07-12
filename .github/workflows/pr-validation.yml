@@ -56,6 +56,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Launch honesty and workflow-security tests
+        run: npm run test:launch-honesty
+
       - name: TypeScript check
         id: typecheck
         shell: bash

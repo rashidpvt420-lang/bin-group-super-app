@@ -4,6 +4,7 @@
  * Verifies: job acceptance, GPS/arrival actions, proof upload, and ticket resolution.
  */
 import { test, expect, Page, Locator } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
@@ -78,8 +79,18 @@ test.describe('Technician Business Workflow', () => {
   test.use({ geolocation: { longitude: 55.2708, latitude: 25.2048 }, permissions: ['geolocation'] });
 
   test.beforeEach(async ({ page }) => {
+    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = __appCheckMonitor;
+    await __appCheckMonitor.assertTokenFingerprint();
     await login(page);
   });
+  test.afterEach(async ({ page }) => {
+    const monitor = (page as any).__binAppCheckMonitor;
+    if (!monitor) return;
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  });
+
 
   test('Technician can accept a job, upload proof, and resolve ticket', async ({ page }) => {
     test.setTimeout(150_000);
