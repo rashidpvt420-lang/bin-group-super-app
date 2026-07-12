@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
+const root = process.cwd();
 const workflowPath = '.github/workflows/firebase-production-deploy.yml';
 const workflow = readFileSync(workflowPath, 'utf8');
 
@@ -73,6 +83,7 @@ test('walkthrough does not silently reuse technician A password for technician B
     /E2E_TECHNICIAN_B_PASSWORD\s*\|\|\s*process\.env\.E2E_TECHNICIAN_PASSWORD/,
   );
   assert.match(walkthrough, /E2E_TECHNICIAN_B_PASSWORD/);
+  assert.match(walkthrough, /must both be set together/i);
 });
 
 test('production workflow run blocks never embed user-controlled github expressions', () => {
@@ -80,7 +91,48 @@ test('production workflow run blocks never embed user-controlled github expressi
     assert.doesNotMatch(block, /\$\{\{\s*github\.event\.inputs\./);
     assert.doesNotMatch(block, /\$\{\{\s*inputs\./);
   }
-  // Expressions are allowed only in env: mappings, not inline shell.
-  const envSectionMatches = [...workflow.matchAll(/env:\n((?:[ \t]+.+\n)+)/g)].map((m) => m[1]);
+  const envSectionMatches = [...workflow.matchAll(/env:\n((?:[ \t]+.+\n)+)/g)].map((match) => match[1]);
   assert.ok(envSectionMatches.some((section) => /DISPATCH_CONFIRMATION:/.test(section)));
+});
+
+test('explicit admin build verification is local-only before deployment', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'admin-local-only-'));
+  try {
+    mkdirSync(path.join(directory, 'static', 'js'), { recursive: true });
+    writeFileSync(
+      path.join(directory, 'static', 'js', 'main.js'),
+      `const firebaseConfig={
+        apiKey:"AIza1234567890abcdefghijklmnop",
+        authDomain:"bin-group-57c60.firebaseapp.com",
+        projectId:"bin-group-57c60",
+        storageBucket:"bin-group-57c60.firebasestorage.app",
+        messagingSenderId:"123413252227",
+        appId:"1:123413252227:web:285cb53bc26626d699f3b6"
+      };`,
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        'scripts/verify-admin-firebase-build.mjs',
+        '--build',
+        directory,
+        '--url',
+        'http://127.0.0.1:1/must-not-be-fetched',
+      ],
+      { cwd: root, encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stdout, /live verification deferred/i);
+    assert.doesNotMatch(`${result.stderr}\n${result.stdout}`, /live admin fetch failed/i);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('App Check helper initializes current document and future navigations', () => {
+  const helper = readFileSync('tests/e2e/helpers/appCheckDebug.ts', 'utf8');
+  assert.match(helper, /page\.addInitScript/);
+  assert.match(helper, /await page\.evaluate/);
+  assert.match(helper, /FIREBASE_APPCHECK_DEBUG_TOKEN\s*=\s*init\.debugToken/);
+  assert.doesNotMatch(helper, /addInitScript\([\s\S]*?validated\s*,\s*fingerprint\s*\)/);
 });
