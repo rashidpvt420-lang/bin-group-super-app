@@ -41,6 +41,8 @@ jobs:
   validate-production-build:
     name: Validate production build
     runs-on: ubuntu-latest
+    outputs:
+      artifact_digest: ${{ steps.artifact_digest.outputs.digest }}
 
     steps:
       - name: Enforce production dispatch gates
@@ -175,11 +177,21 @@ jobs:
           ls -la dist/index.html
           ls -la apps/admin-panel/build/index.html
 
+      - name: Compute validated artifact digest
+        id: artifact_digest
+        run: |
+          set -euo pipefail
+          digest="$(node scripts/compute-artifact-digest.mjs)"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
   deploy-firebase-production-stack:
     name: Deploy Firebase production stack
     runs-on: ubuntu-latest
     needs: validate-production-build
     environment: production
+    env:
+      VALIDATED_ARTIFACT_DIGEST: ${{ needs.validate-production-build.outputs.artifact_digest }}
+      AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
 
     steps:
       - name: Enforce production dispatch gates
@@ -276,6 +288,16 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Predeploy approval gate
+        # This step only runs at all because the job above requires the protected
+        # GitHub "production" environment to be approved by a required reviewer —
+        # that approval is the real identity proof. This gate then verifies the
+        # release CONTENT is genuinely ready: approval bound to this exact commit
+        # and artifact digest, no incident/rollback hold, and local automation
+        # gates pass. It deliberately does not require production-deployment.json,
+        # which cannot exist until after this commit is actually deployed below.
+        run: node scripts/predeploy-approval-gate.mjs
+
       - name: Create production environment files
         run: |
           set -euo pipefail
@@ -332,6 +354,20 @@ jobs:
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
+
+      - name: Verify build artifact digest matches validated build
+        # This job rebuilds rather than downloading the validate job's artifacts, so this
+        # step confirms the rebuild is byte-identical to what was already reviewed/approved
+        # before deploying it — catching any non-reproducible-build drift as a hard failure
+        # instead of silently deploying something nobody actually validated.
+        run: |
+          set -euo pipefail
+          actual="$(node scripts/compute-artifact-digest.mjs)"
+          if [[ "$actual" != "$VALIDATED_ARTIFACT_DIGEST" ]]; then
+            echo "::error::Artifact digest mismatch. validated=${VALIDATED_ARTIFACT_DIGEST} actual=${actual}. The deploy-job rebuild does not match the reviewed build — refusing to deploy."
+            exit 1
+          fi
+          echo "Artifact digest confirmed: ${actual}"
 
       - name: Deploy critical hosting, rules, indexes, and storage
         id: deploy_critical
@@ -395,6 +431,16 @@ jobs:
           if (doc.hardLaunchClaim === true) process.exit(1);
           console.log('deployment metadata verified for', doc.deployedCommitSha);
           NODE
+
+      - name: Postdeploy release gate
+        if: success()
+        # Runs against LIVE production: business E2E, launch audit, SMTP, App Check,
+        # route checks, and (for public-mode releases) Stripe live-billing attestation.
+        # This is the check that actually confirms the deployment works, not merely
+        # that the deploy commands exited 0.
+        env:
+          LAUNCH_BANK_ONLY: ${{ vars.LAUNCH_BANK_ONLY || '1' }}
+        run: node scripts/postdeploy-release-gate.mjs
 
       - name: Upload production deployment metadata artifact
         if: success()

@@ -1,312 +1,116 @@
-# Hard-Launch Control Defects — Fixed
+# Hard-Launch Control Gates — Predeploy / Postdeploy
 
-## Overview
+## Why this replaced the single `hard-launch-approval-gate.mjs`
 
-This document describes the four remaining launch-control defects and their fixes:
+The original single-gate design (commit `2da80b2d` and its predecessors) had several
+critical defects identified in review:
 
-1. **Real Hard-Launch Approval Gate** — Fail-closed enforcement of explicit approval before production deployment
-2. **Founder Authorization** — CEO/Founder must explicitly authorize each production release
-3. **Incident/Rollback Checks** — Active incidents or rollback flags block deployment automatically
-4. **Same-Commit Production Evidence Enforcement** — Each commit must be deployed independently with matching evidence
+- A missing `production-incidents.json` was treated as "production is clean" (fail-open).
+- The founder "signature" was only a regex-validated hex/UUID string — anyone who could
+  edit the JSON file could fabricate approval.
+- Approval was not bound to a specific commit SHA or build artifact — one approval could
+  authorize deploying an unrelated commit.
+- The gate required `production-deployment.json` (proof the commit is already deployed)
+  while being documented as a *pre*-deployment check — a contradiction.
+- `AUTHORIZED_FOUNDER_EMAILS` silently defaulted to `ceo@bin-groups.com` when unset.
+- Timestamp staleness checks used `age > max`, which a `NaN` (invalid/missing timestamp)
+  silently passes in JavaScript.
+- It never checked authenticated smoke, business workflows, App Check token failures,
+  Stripe proof, or pilot completion — it could approve a release while the app was still
+  failing in production.
 
-All fixes are in code. **Production credentials and the actual deployment remain external and cannot be fabricated.**
+This is fixed by splitting the single gate into two gates with different, non-overlapping
+responsibilities, and by making every check fail-closed: missing, malformed, or
+unverifiable input is always a failure, never treated as "clean".
 
----
+## `scripts/predeploy-approval-gate.mjs`
 
-## 1. Real Hard-Launch Approval Gate
+Runs as the **first step** of the `deploy-firebase-production-stack` job in
+`.github/workflows/firebase-production-deploy.yml`, which itself only starts after a
+required reviewer approves the protected GitHub `environment: production` — that
+reviewer approval, recorded in GitHub's own audit log, is the real identity proof. This
+script does not try to re-implement identity verification (no regex-validated
+"signature" is treated as proof of anything). It verifies the release content:
 
-### Problem
-The production workflow had no explicit hard-launch approval flag. Deployment could proceed without manual review.
+- `GITHUB_SHA` must be a full 40-character lowercase commit SHA.
+- `VALIDATED_ARTIFACT_DIGEST` must be present (computed by
+  `scripts/compute-artifact-digest.mjs` over `dist/`, `apps/admin-panel/build/`, and
+  `functions/lib/` in the `validate-production-build` job, and re-verified as byte-
+  identical after the deploy job's own rebuild).
+- `AUTHORIZED_FOUNDER_EMAILS` must be configured — no default fallback.
+- `launch_package/launch-proof-gates.json` must have `hardLaunchApproved: true`, a
+  recent (`hardLaunchApprovedAt`, ≤24h) approval, and a `founderAuthorization` object
+  whose `founderEmail` is on the authorized list, whose `commitSha` equals `GITHUB_SHA`,
+  and whose `artifactDigest` equals `VALIDATED_ARTIFACT_DIGEST`. A stale, missing, or
+  future timestamp fails.
+- `launch_package/production-incidents.json` must exist, parse, have a recent
+  `updatedAt`, and show no active incidents, no rollback hold, and no active
+  post-failure cooldown. **A missing file is a failure**, not "production is clean".
+- `npm run test:stability` (rules hardening, audit bridge, build/rules stability) must
+  pass. Live production evidence (business E2E, launch audit) is intentionally *not*
+  required here — it cannot exist yet for a commit that hasn't been deployed.
 
-### Fix
-**File:** `scripts/hard-launch-approval-gate.mjs`
+## `scripts/postdeploy-release-gate.mjs`
 
-- Enforces `hardLaunchApproved: true` in `launch_package/launch-proof-gates.json`
-- Requires approval timestamp within 24 hours (staleness check)
-- Cannot be bypassed with environment variables
-- Integrated as a required step before asset deployment in the workflow
+Runs **after** the deploy job has actually deployed hosting/rules/functions for this
+commit, and before the deployment artifact is uploaded / the release can be considered
+verified. Everything here targets **live production**:
 
-### Usage
-```bash
-# Before deploying, manually set in launch-proof-gates.json:
-{
-  "hardLaunchApproved": true,
-  "hardLaunchApprovedAt": "2026-07-12T10:30:00Z"
-}
-```
+- `launch_package/production-deployment.json` must exist, be workflow-generated (written
+  by `scripts/write-production-deployment-metadata.mjs`, which stamps `workflowRunId`,
+  `workflowRef`, and `source: firebase-production-deploy-workflow` — not a hand-edited
+  file), have `deployedCommitSha === GITHUB_SHA`, and `artifactDigest ===
+  VALIDATED_ARTIFACT_DIGEST`.
+- Production route check (`test:e2e:gate11:routes` against the live URLs).
+- App Check debug-token readiness (`e2e:ensure-appcheck`).
+- SMTP live delivery (`scripts/test-trigger-email.mjs`).
+- Business E2E + launch audit + deployment evidence, via the existing
+  `run-critical-evidence.mjs --suite all-required` execution-bound evidence system
+  (`scripts/lib/launch-honesty.mjs`), then re-validated with `evaluatePilotEligibility`
+  — every required suite (owner/tenant/technician/broker/admin/global business flows +
+  launch audit) must have zero failed and zero skipped tests, with the recorded
+  Playwright JSON artifact cryptographically re-hashed from disk (not trusted from the
+  evidence file alone).
+- Every recorded artifact is scanned for `appCheck/fetch-status-error` — a real App
+  Check infrastructure failure, distinct from the expected 403s produced by deliberate
+  negative-path security-rule assertions.
+- `live_billing` (Stripe) must be attested in `launch_package/hard-launch-readiness.json`
+  for **public** launches; under `LAUNCH_BANK_ONLY=1` it is explicitly deferred, not
+  silently skipped.
+- Incidents are re-checked (something could have broken *during* deployment).
+- `pilot_no_p0_p1` is read for informational purposes only — an unattested pilot window
+  does not block a controlled-pilot deploy, it only blocks marking the release
+  `PUBLIC_LAUNCH_READY`.
 
----
+## What neither gate does
 
-## 2. Founder Authorization
+- Neither stores or fabricates production credentials — secrets stay in GitHub Secrets.
+- Neither edits `launch_package/hard-launch-readiness.json` — that file is read-only from
+  these gates' perspective; it is updated by the existing, separate attestation process.
+- Neither treats a free-text "signature" field as cryptographic identity proof. The real
+  authorization boundary is the protected GitHub environment's required-reviewer gate.
 
-### Problem
-No validation that the founder/CEO explicitly authorized the deployment.
+## Operational requirements
 
-### Fix
-**File:** `scripts/hard-launch-approval-gate.mjs` → Check 2
+- Keep `launch_package/production-incidents.json`'s `updatedAt` current (≤24h old) even
+  when there are no incidents — a stale timestamp fails closed by design, so on-call
+  should "touch" this file (re-save with a fresh `updatedAt`) as part of routine
+  check-ins, not only when something breaks.
+- Founder approval in `launch_package/launch-proof-gates.json` must be re-created for
+  every release — it is bound to the exact commit SHA and artifact digest and expires
+  after 24 hours, by design.
 
-Validates `founderAuthorization` object in `launch-proof-gates.json`:
-- `founderEmail` — Must match `AUTHORIZED_FOUNDER_EMAILS` secret
-- `founderName` — Human-readable identifier
-- `authorizedAt` — ISO-8601 timestamp (must be within 7 days)
-- `signature` — Hex or UUID format (operational fingerprint)
-
-### Usage
-```bash
-# Manual authorization step:
-{
-  "founderAuthorization": {
-    "founderEmail": "rashid@bin-groups.com",
-    "founderName": "Rashid AbdulGhani",
-    "authorizedAt": "2026-07-12T10:30:00Z",
-    "signature": "deadbeef-ca11-ab1e-f00d-c0ffeebaabe1"
-  }
-}
-```
-
-### Environment Variable
-```
-AUTHORIZED_FOUNDER_EMAILS=rashid@bin-groups.com,ceo@bin-groups.com
-```
-
----
-
-## 3. Incident and Rollback Checks
-
-### Problem
-No detection of production incidents or rollback requirements. Deployment could proceed during outages.
-
-### Fix
-**File:** `launch_package/production-incidents.json` + `scripts/hard-launch-approval-gate.mjs` → Check 3
-
-Maintains operational telemetry:
-
-```json
-{
-  "activeIncidents": [
-    {
-      "id": "INC-2026-0047",
-      "severity": "critical",
-      "status": "investigating",
-      "description": "High error rate on payment processing"
-    }
-  ],
-  "requiresRollback": false,
-  "rollbackReason": null,
-  "lastDeploymentFailed": false,
-  "lastDeploymentFailedAt": null
-}
-```
-
-**Blocking Conditions:**
-- Active incidents prevent deployment
-- `requiresRollback: true` blocks deployment
-- Last deployment failure within 30 minutes enforces retry cooldown
-
-### Operations Team Workflow
-1. Incident detected → Update `production-incidents.json`
-2. Add entry to `activeIncidents` array
-3. Deployment workflow automatically blocks
-4. Once resolved, remove from `activeIncidents`
-5. Deployment can proceed
-
----
-
-## 4. Same-Commit Production Evidence Enforcement
-
-### Problem
-No validation that deployed code matches the built and tested commit. Potential for deployment skew or manual substitutions.
-
-### Fix
-**File:** `scripts/hard-launch-approval-gate.mjs` → Check 4
-
-Critical checks:
-- Deployed commit SHA must **exactly match** `GITHUB_SHA` from workflow
-- Deployment metadata (`production-deployment.json`) must be present
-- HTTP checks must have passed (`httpChecksOk: true`)
-- Bundle integrity verification must have passed (`bundleVerified: true`)
-- Deployment timestamp must be recent (within 2 hours)
-
-### Enforcement
-```yaml
-# Workflow step that generates metadata
-- name: Write production deployment metadata
-  run: node scripts/write-production-deployment-metadata.mjs
-
-# Hard-launch gate verifies exact match
-- name: Hard-launch approval gate
-  run: node scripts/hard-launch-approval-gate.mjs
-```
-
-The gate will fail if:
-```
-Commit mismatch DETECTED.
-Workflow commit: a1b2c3d4e5f6...
-Deployed commit: x9y8z7w6v5u4...
-Each commit must be deployed independently.
-```
-
----
-
-## Integration in CI/CD Pipeline
-
-### Workflow: `firebase-production-deploy.yml`
-
-The new gate is inserted **after successful deployment** but **before artifact upload**:
-
-```yaml
-deploy-firebase-production-stack:
-  steps:
-    - name: Deploy critical hosting, rules, indexes, and storage
-      # ... Firebase deploy ...
-
-    - name: Deploy Firebase Functions
-      # ... Functions deploy ...
-
-    - name: Write production deployment metadata
-      # ... Generate proof ...
-
-    - name: Verify production deployment identity
-      # ... Verify commit match ...
-
-    - name: Hard-launch approval gate  # ← NEW GATE
-      env:
-        AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
-      run: node scripts/hard-launch-approval-gate.mjs
-
-    - name: Upload production deployment metadata artifact
-      # Only reached if gate passes
-```
-
----
-
-## Configuration Checklist
-
-Before deploying, ensure:
-
-- [ ] `launch_package/launch-proof-gates.json` has `hardLaunchApproved: true`
-- [ ] Founder authorization object is complete in `launch-proof-gates.json`
-- [ ] `AUTHORIZED_FOUNDER_EMAILS` secret is set in GitHub repository
-- [ ] `production-incidents.json` has no active incidents
-- [ ] No `requiresRollback` flag is set
-- [ ] Last deployment failure cooldown (if any) has expired
-- [ ] Production credentials are stored externally in GitHub Secrets
-
----
-
-## What This Does NOT Do
-
-✗ **Does not store production credentials** — All API keys, Firebase secrets, and GCP credentials remain in GitHub Secrets
-✗ **Does not bypass actual deployment** — The workflow still requires manual `workflow_dispatch` trigger
-✗ **Does not replace ops runbooks** — Incident management and rollback procedures are separate
-✗ **Does not fabricate deployment evidence** — All metadata is generated by real deployment steps
-
----
-
-## Operations Workflow Example
-
-### Scenario: Deploy a new commit
+## Tests
 
 ```bash
-# 1. Code is merged to main
-git log --oneline -1
-# a1b2c3d (HEAD) feat: add new payment validation
-
-# 2. Get the commit SHA
-COMMIT_SHA=$(git rev-parse HEAD)
-# a1b2c3de5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c
-
-# 3. Trigger the workflow from GitHub UI
-# OR via CLI (GitHub CLI):
-gh workflow run firebase-production-deploy.yml \
-  -f confirmation=DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
-  -f expected_commit_sha=$COMMIT_SHA
-
-# 4. Before workflow starts, update launch gates
-# In GitHub: Settings → Secrets → Update AUTHORIZED_FOUNDER_EMAILS if needed
-
-# 5. Update launch-proof-gates.json with founder auth:
-cat > launch_package/founder-auth.json <<EOF
-{
-  "founderEmail": "rashid@bin-groups.com",
-  "founderName": "Rashid AbdulGhani",
-  "authorizedAt": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-  "signature": "$(uuidgen | tr '[:upper:]' '[:lower:]')"
-}
-EOF
-
-# 6. Merge this into launch-proof-gates.json manually or via PR
-# 7. Workflow proceeds through all gates
-# 8. Hard-launch approval gate checks all conditions
-# 9. If all pass → deployment artifact uploaded
-# 10. If any fail → workflow stops, no asset deployed
+node --test tests/launch/predeploy-approval-gate.test.mjs
+node --test tests/launch/postdeploy-release-gate.test.mjs
 ```
 
-### Scenario: Production incident
-
-```bash
-# 1. Incident detected
-# 2. Update production-incidents.json
-cat > launch_package/production-incidents.json <<EOF
-{
-  "activeIncidents": [
-    {
-      "id": "INC-2026-0047",
-      "severity": "critical",
-      "status": "investigating",
-      "description": "Payment gateway timeout (Stripe API)"
-    }
-  ],
-  "requiresRollback": false,
-  "lastDeploymentFailed": false
-}
-EOF
-
-# 3. Push to repo
-git add launch_package/production-incidents.json
-git commit -m "ops: incident INC-2026-0047 logged"
-git push origin main
-
-# 4. Next deployment attempt will fail at hard-launch gate:
-# ❌ Active production incidents detected: INC-2026-0047
-
-# 5. Once resolved, clear the incident:
-cat > launch_package/production-incidents.json <<EOF
-{
-  "activeIncidents": [],
-  "requiresRollback": false,
-  "lastDeploymentFailed": false
-}
-EOF
-
-# 6. Deploy as normal
-```
-
----
-
-## File Structure
-
-```
-launch_package/
-├── launch-proof-gates.json           # Add hardLaunchApproved + founderAuthorization
-├── production-incidents.json         # NEW: Incident tracking
-├── production-deployment.json        # Existing: Deployment metadata
-└── production-deployment-verify.log  # Existing: Verification log
-
-scripts/
-├── hard-launch-approval-gate.mjs     # NEW: Main gate implementation
-└── production-stability-guard.mjs    # Existing: Build stability checks
-```
-
----
-
-## Summary
-
-| Defect | Fix | File | Enforcement |
-|--------|-----|------|-------------|
-| Real approval gate | `hardLaunchApproved` flag + timestamp staleness | `launch-proof-gates.json` | Fail-closed in workflow |
-| Founder authorization | Email, name, timestamp, signature validation | `launch-proof-gates.json` + `AUTHORIZED_FOUNDER_EMAILS` secret | Hard-launch gate |
-| Incidents/rollback | Active incident registry + rollback flag | `production-incidents.json` | Hard-launch gate |
-| Same-commit evidence | Commit SHA exact match + deployment metadata | `production-deployment.json` + workflow metadata | Hard-launch gate |
-
-All four defects are now **fixed in code** and **enforced at deployment time**. Production credentials remain external.
+Covers: missing files, malformed JSON, future timestamps, stale timestamps, missing
+`AUTHORIZED_FOUNDER_EMAILS`, a garbage "signature" (confirmed to no longer cause a
+failure), wrong commit SHA, wrong artifact digest, active incidents, rollback holds,
+App Check token-fetch failures, missing/invalid business-workflow evidence, and a fully
+valid end-to-end release. Checks that spawn real E2E/SMTP/build processes are
+integration-level by nature and are exercised by actually running the gates inside the
+deploy workflow, not by these unit tests.

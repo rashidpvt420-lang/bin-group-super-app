@@ -52,6 +52,7 @@ const workflowRunId = String(process.env.GITHUB_RUN_ID || '').trim() || null;
 const workflowRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null;
 const workflowRef = String(process.env.GITHUB_REF || '').trim() || null;
 const repository = String(process.env.GITHUB_REPOSITORY || '').trim() || null;
+const artifactDigest = String(process.env.VALIDATED_ARTIFACT_DIGEST || '').trim() || null;
 
 const doc = {
   status: 'passed',
@@ -59,6 +60,7 @@ const doc = {
   mainUrl: PRODUCTION.mainUrl,
   adminUrl: PRODUCTION.adminUrl,
   deployedCommitSha: commitSha,
+  artifactDigest,
   deployedAt: new Date().toISOString(),
   workflowRunId,
   workflowRunAttempt,
