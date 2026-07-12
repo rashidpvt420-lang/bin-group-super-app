@@ -240,6 +240,35 @@ After builds pass, run a real five-profile smoke test in Firebase production or 
 4. Broker flow: referral/lead submission → attribution proof → commission queue.
 5. Admin flow: owner approval → payment verification → technician approval → broker commission review → audit log check.
 
+## Gate 11 live E2E (Windows / local against production)
+
+These scripts live on branch `cursor/hard-launch-gate-redesign-30e9` (PR #237). If `npm run` reports **Missing script: test:e2e:profile-gates**, pull that branch first:
+
+```bash
+git fetch origin
+git checkout cursor/hard-launch-gate-redesign-30e9
+git pull origin cursor/hard-launch-gate-redesign-30e9
+npm install --legacy-peer-deps
+```
+
+Copy `.env.e2e.example` → `.env.e2e` and fill all `E2E_*` credentials plus `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN`.
+
+```bash
+npm run seed:e2e:gate11
+npm run test:e2e:profile-gates
+npm run test:e2e:walkthrough
+npm run test:e2e:launch-audit:live
+```
+
+### App Check debug token limit (20 max)
+
+If `e2e:ensure-appcheck` or launch-audit fails with **Maximum number of debug tokens reached (20)**:
+
+1. Firebase Console → **App Check** → each Web App → **Debug tokens**
+2. Delete unused/old E2E tokens (keep the UUID already in `.env.e2e`, e.g. `2b99a6f4-…`)
+3. Ensure that **same** UUID is registered for **both** the main web app and the admin web app
+4. Re-run — `npm run e2e:ensure-appcheck` validates only; it does **not** auto-register new tokens
+
 ## Notes
 
 - Client Firebase config is public Web SDK configuration; service-account secrets must never be committed.
