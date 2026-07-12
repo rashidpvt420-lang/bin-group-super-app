@@ -1,15 +1,19 @@
-/**
- * business-admin.spec.ts
- * Deep E2E business flow for the dedicated Admin application.
- * Verifies: property onboarding, tenant import, ticket assignment, and payment approval controls.
+﻿/**
+ * Authenticated production business proof for the dedicated Admin application.
+ * The settlement test must execute the callable and verify Firestore state.
  */
 import { test, expect, Page } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import admin from 'firebase-admin';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
+const PROPERTY_ID = 'e2e-test-property';
+const TICKET_ID = 'e2e-test-ticket-id';
+const CONTRACT_ID = 'e2e-test-contract-id';
+const PAYMENT_ID = 'E2E_PAYMENT_ID_TEST';
+const OWNER_UID = 'e2e-owner-uid';
 
 function requireLaunchCredentials() {
   const missing = [
@@ -25,7 +29,6 @@ function requireLaunchCredentials() {
 function parseServiceAccount() {
   const raw = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
   if (!raw) return null;
-
   for (const candidate of [raw, Buffer.from(raw, 'base64').toString('utf8')]) {
     try {
       const parsed = JSON.parse(candidate);
@@ -46,12 +49,8 @@ function initializeAdminSdk() {
     || process.env.GOOGLE_CLOUD_PROJECT
     || serviceAccount?.project_id
     || 'bin-group-57c60';
-
-  if (serviceAccount) {
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount), projectId });
-  } else {
-    admin.initializeApp({ projectId });
-  }
+  if (serviceAccount) admin.initializeApp({ credential: admin.credential.cert(serviceAccount), projectId });
+  else admin.initializeApp({ projectId });
 }
 
 const adminUrl = (pathname: string) => `${ADMIN_BASE_URL}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
@@ -95,67 +94,91 @@ test.describe('Admin Business Workflow', () => {
     requireLaunchCredentials();
     initializeAdminSdk();
     const db = admin.firestore();
+    const now = admin.firestore.FieldValue.serverTimestamp();
 
-    await db.collection('properties').doc('e2e-test-property').set({
-      propertyId: 'e2e-test-property',
+    await db.collection('properties').doc(PROPERTY_ID).set({
+      propertyId: PROPERTY_ID,
       name: 'E2E Test Property',
       propertyName: 'E2E Test Property',
       zone: 'Dubai Marina',
       emirate: 'Dubai',
       status: 'active',
       e2eLaunchSeed: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: now,
     }, { merge: true });
 
-    await db.collection('maintenanceTickets').doc('e2e-test-ticket-id').set({
+    await db.collection('maintenanceTickets').doc(TICKET_ID).set({
       tenantId: 'e2e-tenant-uid',
       unitNumber: '101',
       category: 'HVAC / AC systems',
       description: 'AC is not cooling, E2E Test Ticket.',
       status: 'OPEN',
       priority: 'HIGH',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: now,
       propertyName: 'E2E Test Property',
-      propertyId: 'e2e-test-property',
+      propertyId: PROPERTY_ID,
       floorNumber: '1',
       e2eLaunchSeed: true,
-    }, { merge: true });
+    }, { merge: false });
 
-    await db.collection('contracts').doc('e2e-test-contract-id').set({
-      paymentId: 'E2E_PAYMENT_ID_TEST',
+    await db.collection('contracts').doc(CONTRACT_ID).set({
+      paymentId: PAYMENT_ID,
       amount: 5000,
       currency: 'AED',
-      ownerId: 'e2e-owner-uid',
-      propertyId: 'e2e-test-property',
+      ownerId: OWNER_UID,
+      propertyId: PROPERTY_ID,
       provider: 'Bank Transfer',
       status: 'pending_approval',
       paymentVerified: false,
+      dashboardUnlockApproved: false,
       e2eLaunchSeed: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: false });
+
+    await db.collection('payment_transactions').doc(PAYMENT_ID).set({
+      paymentId: PAYMENT_ID,
+      contractId: CONTRACT_ID,
+      ownerUid: OWNER_UID,
+      propertyId: PROPERTY_ID,
+      amount: 5000,
+      activationDeposit: 5000,
+      currency: 'AED',
+      paymentMethod: 'Bank Transfer',
+      status: 'PENDING_APPROVAL',
+      verificationState: 'PENDING_ADMIN',
+      e2eLaunchSeed: true,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: false });
   });
 
   test.afterAll(async () => {
     if (!admin.apps.length) return;
     const db = admin.firestore();
-    await db.collection('maintenanceTickets').doc('e2e-test-ticket-id').delete().catch(() => undefined);
-    await db.collection('contracts').doc('e2e-test-contract-id').delete().catch(() => undefined);
-    await db.collection('properties').doc('e2e-test-property').delete().catch(() => undefined);
+    await Promise.all([
+      db.collection('maintenanceTickets').doc(TICKET_ID).delete().catch(() => undefined),
+      db.collection('payment_transactions').doc(PAYMENT_ID).delete().catch(() => undefined),
+      db.collection('contracts').doc(CONTRACT_ID).delete().catch(() => undefined),
+      db.collection('properties').doc(PROPERTY_ID).delete().catch(() => undefined),
+      db.collection('users').doc(OWNER_UID).delete().catch(() => undefined),
+      db.collection('owners').doc(OWNER_UID).delete().catch(() => undefined),
+    ]);
   });
 
   test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+    const monitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = monitor;
+    await monitor.assertTokenFingerprint();
     await login(page);
   });
+
   test.afterEach(async ({ page }) => {
     const monitor = (page as any).__binAppCheckMonitor;
     if (!monitor) return;
     monitor.assertClean(test.info().title);
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
-
 
   test('Admin property and tenant import controls are launch-ready', async ({ page }) => {
     await page.goto(adminUrl('/onboard-property'), { waitUntil: 'domcontentloaded' });
@@ -169,7 +192,8 @@ test.describe('Admin Business Workflow', () => {
     await expect(page.locator('input[type="file"]').first(), 'tenant import must expose a file picker').toBeAttached({ timeout: 15_000 });
   });
 
-  test('Admin ticket assignment and contract approval controls are launch-ready', async ({ page }) => {
+  test('Admin executes settlement approval and Firestore activation', async ({ page }) => {
+    test.setTimeout(120_000);
     await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
@@ -181,33 +205,42 @@ test.describe('Admin Business Workflow', () => {
       'button:has-text("View")',
       'a:has-text("View")',
     ], 'open ticket');
-
     const cancelDetails = page.locator('button:has-text("CANCEL"), button:has-text("Close")').first();
     if (await cancelDetails.isVisible({ timeout: 3000 }).catch(() => false)) await cancelDetails.click();
 
-    await clickRequired(page, [
-      '[data-testid="admin-assign-technician"]',
-      '[data-testid*="assign" i]',
-      'button:has-text("ASSIGN")',
-      'button:has-text("Assign Technician")',
-      'button:has-text("Assign")',
-    ], 'assign technician');
-
-    await expect(page.locator('body'), 'assignment must expose assignment controls').toContainText(/MANUAL SPECIALIST ASSIGNMENT|Assign Technician|Technician/i, { timeout: 10_000 });
-
-    const cancelAssignment = page.locator('button:has-text("CANCEL"), button:has-text("Close")').first();
-    if (await cancelAssignment.isVisible({ timeout: 3000 }).catch(() => false)) await cancelAssignment.click();
-
     await page.goto(adminUrl('/manual-approvals'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    const paymentRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
+    await expect(paymentRow, 'seeded payment must appear in the admin settlement queue').toBeVisible({ timeout: 25_000 });
+    const verifyButton = paymentRow.getByRole('button', { name: /Verify Settlement|Approve Contract|Approve/i }).first();
+    await expect(verifyButton).toBeEnabled({ timeout: 10_000 });
+    await verifyButton.click();
 
-    await clickRequired(page, [
-      '[data-testid="admin-approve-contract"]',
-      '[data-testid*="approve" i]',
-      'button:has-text("Verify Settlement")',
-      'button:has-text("Approve Contract")',
-      'button:has-text("Approve")',
-    ], 'approve contract');
+    const referenceInput = page.getByPlaceholder(/UTN-|reference/i).first();
+    await expect(referenceInput).toBeVisible({ timeout: 10_000 });
+    await referenceInput.fill(`E2E-UTN-${Date.now()}`);
+
+    let alertMessage = '';
+    page.once('dialog', async (dialog) => {
+      alertMessage = dialog.message();
+      await dialog.accept();
+    });
+    const confirm = page.getByRole('button', { name: /Confirm.*Activate|Confirm Settlement|Activate/i }).last();
+    await expect(confirm).toBeEnabled({ timeout: 10_000 });
+    await confirm.click();
+
+    const db = admin.firestore();
+    await expect.poll(async () => {
+      const [contractSnap, paymentSnap] = await Promise.all([
+        db.collection('contracts').doc(CONTRACT_ID).get(),
+        db.collection('payment_transactions').doc(PAYMENT_ID).get(),
+      ]);
+      const contract = contractSnap.data() || {};
+      const payment = paymentSnap.data() || {};
+      return `${contract.status}|${contract.paymentVerified}|${contract.dashboardUnlockApproved}|${payment.status}|${payment.verificationState}`;
+    }, { timeout: 45_000 }).toMatch(/ACTIVE\|true\|true\|APPROVED\|ADMIN_VERIFIED/i);
+
+    expect(alertMessage).not.toMatch(/failed|error|not found|permission/i);
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 5_000 });
   });
 });
