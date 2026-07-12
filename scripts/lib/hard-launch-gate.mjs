@@ -105,8 +105,19 @@ export function validateOperationalReadinessReport(doc, commitSha, { now = Date.
     }
     if (!hasReference(gate.evidenceReference)) errors.push(`${key}.evidenceReference required`);
     if (!isSha256(gate.artifactHash)) errors.push(`${key}.artifactHash must be SHA-256`);
+    if (!isSha256(gate.sourceProofHash)) errors.push(`${key}.sourceProofHash must be SHA-256`);
+    if (!hasReference(gate.sourceSystem)) errors.push(`${key}.sourceSystem required`);
+    if (!/^\d+$/.test(String(gate.sourceWorkflowRunId || ''))) errors.push(`${key}.sourceWorkflowRunId must be numeric`);
     if (!gate.workflowRunId) errors.push(`${key}.workflowRunId required`);
     if (gate.verifiedBy !== 'workflow') errors.push(`${key}.verifiedBy must be workflow`);
+
+    const observedAt = parseTime(gate.observedAt);
+    if (!Number.isFinite(observedAt)) errors.push(`${key}.observedAt must be a valid timestamp`);
+    else {
+      if (observedAt > now + 5 * 60 * 1000) errors.push(`${key}.observedAt cannot be in the future`);
+      if (now - observedAt > MAX_OPERATIONAL_EVIDENCE_AGE_MS) errors.push(`${key} source proof is older than 7 days`);
+    }
+
     const verifiedAt = parseTime(gate.verifiedAt);
     if (!Number.isFinite(verifiedAt)) errors.push(`${key}.verifiedAt must be a valid timestamp`);
     else {
