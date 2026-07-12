@@ -49,6 +49,9 @@ jobs:
       - name: Production stability guard
         run: npm run test:stability
 
+      - name: Launch honesty and workflow-security tests
+        run: npm run test:launch-honesty
+
       - name: TypeScript check
         run: npx tsc -p tsconfig.app.json --noEmit
 
