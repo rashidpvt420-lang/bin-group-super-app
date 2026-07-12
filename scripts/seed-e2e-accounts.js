@@ -12,7 +12,11 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
-const E2E_PASSWORD = process.env.E2E_UNIVERSAL_PASSWORD || 'E2e!Test!Pass2026';
+const E2E_PASSWORD = String(process.env.E2E_UNIVERSAL_PASSWORD || '').trim();
+if (!E2E_PASSWORD) {
+  console.error('Missing E2E_UNIVERSAL_PASSWORD. Seed scripts fail closed without an injected credential.');
+  process.exit(1);
+}
 
 const PROFILES = [
   {

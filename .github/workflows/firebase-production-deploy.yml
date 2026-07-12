@@ -2,10 +2,20 @@ name: Firebase Production Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type exactly DEPLOY_PRODUCTION_BIN_GROUP_57C60 to authorize production deploy'
+        required: true
+        type: string
+      expected_commit_sha:
+        description: 'Full 40-char commit SHA that must equal github.sha on the approved production ref'
+        required: true
+        type: string
 
 permissions:
   contents: read
   id-token: write
+  actions: write
 
 concurrency:
   group: firebase-production-deploy
@@ -25,6 +35,7 @@ env:
   VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
   VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
   CI: true
+  PRODUCTION_CONFIRMATION_PHRASE: DEPLOY_PRODUCTION_BIN_GROUP_57C60
 
 jobs:
   validate-production-build:
@@ -32,6 +43,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Enforce production dispatch gates
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.confirmation }}" != "${PRODUCTION_CONFIRMATION_PHRASE}" ]; then
+            echo "::error::Confirmation phrase mismatch. Refusing production deploy."
+            exit 1
+          fi
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Production deploy is only approved from refs/heads/main (got ${{ github.ref }})."
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.expected_commit_sha }}" != "${{ github.sha }}" ]; then
+            echo "::error::expected_commit_sha must equal github.sha (${{ github.sha }})."
+            exit 1
+          fi
+          echo "Production dispatch gates passed for ${{ github.sha }}"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -77,6 +105,14 @@ jobs:
           printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
           cp apps/admin-panel/.env.production apps/admin-panel/.env.local
+          # Fail closed if required admin Firebase values are absent/malformed.
+          for key in REACT_APP_APP_CHECK_SITE_KEY REACT_APP_FIREBASE_API_KEY REACT_APP_FIREBASE_APP_ID REACT_APP_FIREBASE_MESSAGING_SENDER_ID; do
+            value="$(grep "^${key}=" apps/admin-panel/.env.production | cut -d= -f2-)"
+            if [ -z "${value}" ] || echo "${value}" | grep -qiE 'REPLACE|undefined|null'; then
+              echo "::error::Missing or malformed ${key} for admin production build"
+              exit 1
+            fi
+          done
 
       - name: Production stability guard
         run: npm run test:stability
@@ -134,6 +170,22 @@ jobs:
     needs: validate-production-build
 
     steps:
+      - name: Enforce production dispatch gates
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.confirmation }}" != "${PRODUCTION_CONFIRMATION_PHRASE}" ]; then
+            echo "::error::Confirmation phrase mismatch. Refusing production deploy."
+            exit 1
+          fi
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Production deploy is only approved from refs/heads/main (got ${{ github.ref }})."
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.expected_commit_sha }}" != "${{ github.sha }}" ]; then
+            echo "::error::expected_commit_sha must equal github.sha (${{ github.sha }})."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -203,8 +255,9 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Create production environment file
+      - name: Create production environment file (main + admin)
         run: |
+          set -euo pipefail
           printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
           printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
           printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
@@ -213,6 +266,26 @@ jobs:
           printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> .env.production
           printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "${VITE_FIREBASE_VAPID_KEY}" >> .env.production
           cp .env.production .env.local
+
+          mkdir -p apps/admin-panel
+          printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
+          printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
+          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
+          cp apps/admin-panel/.env.production apps/admin-panel/.env.local
+
+          for key in REACT_APP_APP_CHECK_SITE_KEY REACT_APP_FIREBASE_API_KEY REACT_APP_FIREBASE_APP_ID REACT_APP_FIREBASE_MESSAGING_SENDER_ID; do
+            value="$(grep "^${key}=" apps/admin-panel/.env.production | cut -d= -f2-)"
+            if [ -z "${value}" ] || echo "${value}" | grep -qiE 'REPLACE|undefined|null'; then
+              echo "::error::Missing or malformed ${key} for admin production deployment build"
+              exit 1
+            fi
+          done
 
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
@@ -224,17 +297,30 @@ jobs:
         run: npm run build:admin
         env:
           CI: false
+          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+
+      - name: Verify admin Firebase project embedding before deploy
+        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
 
       - name: Deploy critical hosting, rules, indexes, and storage
+        id: deploy_critical
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Firebase critical deploy attempt ${attempt}/3"
             if npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force; then
               echo "Firebase critical deploy succeeded on attempt ${attempt}."
+              echo "ok=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [ "${attempt}" -lt 3 ]; then
@@ -243,15 +329,18 @@ jobs:
             fi
           done
           echo "::error::Firebase critical deploy failed after 3 attempts. Review Firebase billing, service availability, and IAM permissions."
+          echo "ok=false" >> "$GITHUB_OUTPUT"
           exit 1
 
       - name: Deploy Firebase Functions
+        id: deploy_functions
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Firebase Functions deploy attempt ${attempt}/3"
             if npx firebase deploy --only functions --project "${GCP_PROJECT_ID}" --non-interactive --force; then
               echo "Firebase Functions deploy succeeded on attempt ${attempt}."
+              echo "ok=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [ "${attempt}" -lt 3 ]; then
@@ -260,4 +349,39 @@ jobs:
             fi
           done
           echo "::error::Firebase Functions deploy failed after 3 attempts. Production deployment is incomplete and must not be declared successful."
+          echo "ok=false" >> "$GITHUB_OUTPUT"
           exit 1
+
+      - name: Write production deployment metadata
+        if: success()
+        run: |
+          set -euo pipefail
+          node scripts/write-production-deployment-metadata.mjs \
+            --components hosting,firestoreRules,firestoreIndexes,storageRules,functions
+
+      - name: Verify production deployment (HTTP + bundle identity)
+        if: success()
+        run: |
+          set -euo pipefail
+          npm run verify:production-deployment -- --write-evidence | tee launch_package/production-deployment-verify.log
+          test -f launch_package/production-deployment.json
+          node -e "
+            const fs = require('fs');
+            const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json','utf8'));
+            if (doc.status !== 'passed') process.exit(1);
+            if (doc.httpChecksOk !== true || doc.bundleVerified !== true) process.exit(1);
+            if (doc.deployedCommitSha !== process.env.GITHUB_SHA) process.exit(1);
+            if (doc.hardLaunchClaim === true) process.exit(1);
+            console.log('deployment metadata verified for', doc.deployedCommitSha);
+          "
+
+      - name: Upload production deployment metadata artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/production-deployment-verify.log
+          if-no-files-found: error
+          retention-days: 90

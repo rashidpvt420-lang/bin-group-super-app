@@ -19,7 +19,6 @@ import {
   gitSha,
   parsePlaywrightJsonReport,
   sha256File,
-  sha256Text,
   upsertEvidenceRecord,
   deploymentEvidencePath,
   readJsonSafe,
@@ -114,6 +113,7 @@ function runPlaywrightSuite(suiteKey, def) {
   }
 
   const artifactHash = sha256File(reportPath);
+  const relativeArtifact = path.relative(root, reportPath).replace(/\\/g, '/');
   for (const evidenceKey of def.evidenceKeys) {
     upsertEvidenceRecord(root, {
       testName: evidenceKey,
@@ -130,8 +130,9 @@ function runPlaywrightSuite(suiteKey, def) {
       failed: parsed.failed,
       skipped: parsed.skipped,
       flaky: parsed.flaky || 0,
-      artifactPath: path.relative(root, reportPath),
+      artifactPath: relativeArtifact,
       artifactHash,
+      expectedSpecs: [...def.specs],
       proof: `Execution-generated ${evidenceKey} from ${def.suiteName} on ${mainUrl} (commit ${commitSha.slice(0, 8)}).`,
       hardLaunchClaim: HARD_LAUNCH_CLAIM,
     });
@@ -163,7 +164,13 @@ async function runProductionDeployment() {
     return { ok: false, exitCode: 1 };
   }
 
-  const artifactHash = sha256Text(JSON.stringify(deployDoc));
+  const artifactPath = 'launch_package/production-deployment.json';
+  const artifactAbs = path.join(root, artifactPath);
+  if (!existsSync(artifactAbs)) {
+    console.error('[critical-evidence] production-deployment.json missing after verify');
+    return { ok: false, exitCode: 1 };
+  }
+  const artifactHash = sha256File(artifactAbs);
   for (const key of ['productionDeployment', 'productionMainHosting', 'productionAdminHosting']) {
     upsertEvidenceRecord(root, {
       testName: key,
@@ -179,6 +186,7 @@ async function runProductionDeployment() {
       passed: 1,
       failed: 0,
       skipped: 0,
+      artifactPath,
       artifactHash,
       deploymentStatus: 'passed',
       projectId: PRODUCTION.projectId,

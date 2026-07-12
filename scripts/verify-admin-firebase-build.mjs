@@ -43,11 +43,35 @@ function isPlausible(key, value) {
 
 function extractConfig(text) {
   const found = {};
-  for (const key of ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId']) {
-    const patterns = [
-      new RegExp(`${key}\\s*:\\s*["']([^"']+)["']`, 'g'),
-      new RegExp(`["']${key}["']\\s*:\\s*["']([^"']+)["']`, 'g'),
-    ];
+  // Literal regexes only — Codacy/Semgrep rejects RegExp(non-literal).
+  const literalPatterns = {
+    apiKey: [
+      /apiKey\s*:\s*["']([^"']+)["']/g,
+      /["']apiKey["']\s*:\s*["']([^"']+)["']/g,
+    ],
+    authDomain: [
+      /authDomain\s*:\s*["']([^"']+)["']/g,
+      /["']authDomain["']\s*:\s*["']([^"']+)["']/g,
+    ],
+    projectId: [
+      /projectId\s*:\s*["']([^"']+)["']/g,
+      /["']projectId["']\s*:\s*["']([^"']+)["']/g,
+    ],
+    storageBucket: [
+      /storageBucket\s*:\s*["']([^"']+)["']/g,
+      /["']storageBucket["']\s*:\s*["']([^"']+)["']/g,
+    ],
+    messagingSenderId: [
+      /messagingSenderId\s*:\s*["']([^"']+)["']/g,
+      /["']messagingSenderId["']\s*:\s*["']([^"']+)["']/g,
+    ],
+    appId: [
+      /appId\s*:\s*["']([^"']+)["']/g,
+      /["']appId["']\s*:\s*["']([^"']+)["']/g,
+    ],
+  };
+
+  for (const [key, patterns] of Object.entries(literalPatterns)) {
     for (const pattern of patterns) {
       for (const match of text.matchAll(pattern)) {
         const value = match[1];
@@ -57,13 +81,14 @@ function extractConfig(text) {
 
     // CRA minified fallback: projectId:TS(... )||"bin-group-57c60"
     let from = 0;
+    const needle = `${key}:`;
     while (from < text.length) {
-      const idx = text.indexOf(`${key}:`, from);
+      const idx = text.indexOf(needle, from);
       if (idx === -1) break;
       const window = text.slice(idx, idx + 400);
       const orMatch = window.match(/\|\|\s*["']([^"']+)["']/);
       if (orMatch && isPlausible(key, orMatch[1])) found[key] = orMatch[1];
-      from = idx + key.length + 1;
+      from = idx + needle.length;
     }
   }
 
@@ -149,6 +174,7 @@ if (existsSync(sourceFile)) {
 }
 
 const localFiles = collectLocalJs(localBuildDir);
+const buildExplicitlyRequested = args.includes('--build');
 if (localFiles.length) {
   let merged = {};
   for (const file of localFiles.slice(0, 40)) {
@@ -157,9 +183,33 @@ if (localFiles.length) {
   }
   if (Object.keys(merged).length) {
     assertConfig('admin-local-build', merged, failures);
+    if (!merged.projectId) {
+      failures.push('admin-local-build: missing projectId in built bundle');
+    }
+    if (!merged.apiKey) {
+      failures.push('admin-local-build: missing apiKey in built bundle (REACT_APP_FIREBASE_API_KEY not embedded)');
+    }
+    if (!merged.appId) {
+      failures.push('admin-local-build: missing appId in built bundle (REACT_APP_FIREBASE_APP_ID not embedded)');
+    }
+    if (!merged.authDomain) {
+      failures.push('admin-local-build: missing authDomain in built bundle');
+    }
+    if (!merged.storageBucket) {
+      failures.push('admin-local-build: missing storageBucket in built bundle');
+    }
+    if (!merged.messagingSenderId) {
+      failures.push('admin-local-build: missing messagingSenderId in built bundle');
+    }
+  } else if (buildExplicitlyRequested) {
+    failures.push(
+      `admin-local-build: no REACT_APP_FIREBASE_* / Firebase config literals found in ${localBuildDir} (fail closed for explicit --build)`,
+    );
   } else {
     console.warn('[admin-firebase] local build present but no Firebase config literals found (may be split oddly)');
   }
+} else if (buildExplicitlyRequested) {
+  failures.push(`admin-local-build: build directory empty or missing at ${localBuildDir}`);
 } else {
   console.warn(`[admin-firebase] local build not found at ${localBuildDir} — will validate live URL if reachable`);
 }

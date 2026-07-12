@@ -141,6 +141,12 @@ const doc = {
   httpChecksOk,
   bundleVerified,
   hardLaunchClaim: HARD_LAUNCH_CLAIM,
+  workflowRunId: existing?.workflowRunId ?? null,
+  workflowRunAttempt: existing?.workflowRunAttempt ?? null,
+  workflowRef: existing?.workflowRef ?? null,
+  repository: existing?.repository ?? null,
+  successfulComponents: existing?.successfulComponents || existing?.components || null,
+  source: existing?.source || null,
 };
 
 const validationErrors = validateDeploymentDocument(
@@ -155,10 +161,12 @@ const canPass = failures.length === 0 && httpChecksOk && bundleVerified && deplo
 
 if (writeEvidence && canPass) {
   const out = {
+    ...existing,
     ...doc,
     status: 'passed',
     deployedCommitSha: commitSha,
     deployedAt,
+    verifiedAt: doc.verifiedAt,
     httpChecksOk: true,
     bundleVerified: true,
     hardLaunchClaim: false,

@@ -1,22 +1,33 @@
 import { test, expect, Page, BrowserContext } from '@playwright/test';
 import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
-// Use universal E2E credentials
-const UNIVERSAL_PASSWORD = process.env.E2E_UNIVERSAL_PASSWORD || 'E2e!Test!Pass2026';
-const OWNER_EMAIL = 'e2e-owner@bingroup.com';
-const TENANT_EMAIL = 'e2e-tenant@bingroup.com';
-const TECH_A_EMAIL = 'e2e-technician@bingroup.com';
-const TECH_B_EMAIL = 'e2e-tech-b@bingroup.com'; // Requires secondary tech for race condition
-const BROKER_EMAIL = 'e2e-broker@bingroup.com';
+function requireEnv(name: string): string {
+  const value = String(process.env[name] || '').trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable ${name}. Credentialed tests fail closed without secrets.`);
+  }
+  return value;
+}
+
+const OWNER_EMAIL = () => requireEnv('E2E_OWNER_EMAIL');
+const TENANT_EMAIL = () => requireEnv('E2E_TENANT_EMAIL');
+const TECH_A_EMAIL = () => requireEnv('E2E_TECHNICIAN_EMAIL');
+const TECH_B_EMAIL = () => requireEnv('E2E_TECHNICIAN_B_EMAIL');
+const BROKER_EMAIL = () => requireEnv('E2E_BROKER_EMAIL');
+const ADMIN_EMAIL = () => requireEnv('E2E_ADMIN_EMAIL');
+
+function rolePassword(role: 'OWNER' | 'TENANT' | 'TECHNICIAN' | 'BROKER' | 'ADMIN'): string {
+  return requireEnv(`E2E_${role}_PASSWORD`);
+}
 
 const dummyImageBuffer = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082', 'hex');
 
-async function loginToProfile(page: Page, email: string, role: string) {
+async function loginToProfile(page: Page, email: string, role: string, password: string) {
   await page.goto(`/login?intendedRole=${role}`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
   await page.goto(`/login?intendedRole=${role}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(UNIVERSAL_PASSWORD);
+  await page.locator('input[type="password"]').first().fill(password);
   await page.locator('form button[type="submit"]').first().click();
   await expect(page.locator('body')).not.toContainText(/SOVEREIGN_FAILURE/i, { timeout: 10000 });
   await page.waitForURL(`**/${role}/dashboard`, { timeout: 20000 });
@@ -50,7 +61,7 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
 
   test('1. Owner Context: Login and Check Dashboard / Vault', async () => {
     const page = await ownerContext.newPage();
-    await loginToProfile(page, OWNER_EMAIL, 'owner');
+    await loginToProfile(page, OWNER_EMAIL(), 'owner', rolePassword('OWNER'));
     await expect(page.locator('body')).toContainText(/Properties|Contract|No owner profile/i, { timeout: 15000 });
     // Check Vault link
     const vaultBtn = page.locator('text=Document Vault').or(page.locator('[data-testid="owner-vault"]')).first();
@@ -60,7 +71,7 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
 
   test('2. Tenant Context: Check More Services and no-unit fallback', async () => {
     const page = await tenantContext.newPage();
-    await loginToProfile(page, TENANT_EMAIL, 'tenant');
+    await loginToProfile(page, TENANT_EMAIL(), 'tenant', rolePassword('TENANT'));
     
     // Check More Services drawer
     const moreServicesBtn = page.locator('button:has-text("More Services")').first();
@@ -110,9 +121,14 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     const pageB = await techBContext.newPage();
 
     // Login both techs
-    await loginToProfile(pageA, TECH_A_EMAIL, 'technician');
+    await loginToProfile(pageA, TECH_A_EMAIL(), 'technician', rolePassword('TECHNICIAN'));
     try {
-      await loginToProfile(pageB, TECH_B_EMAIL, 'technician');
+      const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
+      const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || process.env.E2E_TECHNICIAN_PASSWORD || '').trim();
+      if (!techBEmail || !techBPassword) {
+        throw new Error('missing tech B credentials');
+      }
+      await loginToProfile(pageB, techBEmail, 'technician', techBPassword);
     } catch {
       test.skip(true, 'Tech B is not seeded; cannot verify ALREADY_EXISTS race-condition Snackbar.');
       return;
@@ -146,7 +162,7 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
 
   test('5. Technician A Context: Upload Before/After and Complete Job', async () => {
     const page = techAContext.pages()[0] || await techAContext.newPage();
-    if (page.url() === 'about:blank') await loginToProfile(page, TECH_A_EMAIL, 'technician');
+    if (page.url() === 'about:blank') await loginToProfile(page, TECH_A_EMAIL(), 'technician', rolePassword('TECHNICIAN'));
 
     await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
 
@@ -178,7 +194,7 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
 
   test('6. Broker Context: Add lead and check attribution', async () => {
     const page = await brokerContext.newPage();
-    await loginToProfile(page, BROKER_EMAIL, 'broker');
+    await loginToProfile(page, BROKER_EMAIL(), 'broker', rolePassword('BROKER'));
     await page.goto('/broker/leads/new', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Lead|New/i, { timeout: 15000 });
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
