@@ -24,6 +24,7 @@ export const MAX_OPERATIONAL_EVIDENCE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const REQUIRED_OPERATIONAL_GATES = Object.freeze([
   'ownerPaymentActivation',
+  'paymentUnlockExactlyOnce',
   'tenantNotificationDelivery',
   'technicianPhysicalGpsEvidence',
   'brokerCommissionLockExactlyOnce',
