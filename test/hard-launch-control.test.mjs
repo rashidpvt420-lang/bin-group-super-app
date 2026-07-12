@@ -4,18 +4,77 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  AUTHORIZATION_KIND,
+  DEPLOY_CONFIRMATION_PHRASE,
+  HARD_LAUNCH_CONFIRMATION_PHRASE,
+  HARD_LAUNCH_CONTROL_SCHEMA,
   readJsonStrict,
+  sha256Text,
+  signDocument,
+  validateAuthorizationDocument,
   validateDeploymentMetadata,
   validateIncidentDocument,
 } from '../scripts/lib/hard-launch-control.mjs';
 
 const now = Date.parse('2026-07-12T10:00:00.000Z');
 const commitSha = 'a'.repeat(40);
+const repository = 'rashidpvt420-lang/bin-group-super-app';
+const signingKey = 'unit-test-signing-key-0123456789abcdef';
+const otherKey = 'unit-test-other-key-abcdef0123456789';
 const context = {
   now,
   commitSha,
-  repository: 'rashidpvt420-lang/bin-group-super-app',
+  ref: 'refs/heads/main',
+  repository,
+  runId: '123456',
+  actor: 'rashidpvt420-lang',
+  authorizedActors: 'rashidpvt420-lang',
+  authorizedEmails: 'ceo@bin-groups.com',
+  hmacKey: signingKey,
 };
+
+function authorizationPayload() {
+  return {
+    schemaVersion: HARD_LAUNCH_CONTROL_SCHEMA,
+    kind: AUTHORIZATION_KIND,
+    approved: true,
+    scope: 'production-deploy-and-conditional-hard-launch-decision',
+    commitSha,
+    ref: 'refs/heads/main',
+    repository,
+    runId: '123456',
+    runAttempt: 1,
+    actor: 'rashidpvt420-lang',
+    founder: {
+      name: 'Rashid AbdulGhani',
+      email: 'ceo@bin-groups.com',
+    },
+    issuedAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 30 * 60_000).toISOString(),
+    deployConfirmationDigest: sha256Text(DEPLOY_CONFIRMATION_PHRASE),
+    hardLaunchConfirmationDigest: sha256Text(HARD_LAUNCH_CONFIRMATION_PHRASE),
+  };
+}
+
+test('founder authorization requires the correct signing key', () => {
+  const authorization = signDocument(authorizationPayload(), signingKey);
+  assert.deepEqual(validateAuthorizationDocument(authorization, context), []);
+
+  const errors = validateAuthorizationDocument(authorization, {
+    ...context,
+    hmacKey: otherKey,
+  }).join('\n');
+  assert.match(errors, /signature verification failed/);
+});
+
+test('founder authorization is bound to the exact workflow commit', () => {
+  const authorization = signDocument(authorizationPayload(), signingKey);
+  const errors = validateAuthorizationDocument(authorization, {
+    ...context,
+    commitSha: 'b'.repeat(40),
+  }).join('\n');
+  assert.match(errors, /commitSha does not match workflow SHA/);
+});
 
 test('missing incident telemetry fails closed', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'hard-launch-incidents-'));
@@ -79,17 +138,17 @@ test('deployment metadata must match exact commit and all required components', 
     deployedAt: new Date(now - 10 * 60_000).toISOString(),
     verifiedAt: new Date(now - 5 * 60_000).toISOString(),
     successfulComponents: ['hosting', 'firestoreRules', 'firestoreIndexes', 'storageRules', 'functions'],
-    repository: context.repository,
+    repository,
     workflowRef: 'refs/heads/main',
   };
-  assert.deepEqual(validateDeploymentMetadata(valid, context), []);
+  assert.deepEqual(validateDeploymentMetadata(valid, { now, commitSha, repository }), []);
 
   const invalid = {
     ...valid,
     deployedCommitSha: 'b'.repeat(40),
     successfulComponents: ['hosting'],
   };
-  const errors = validateDeploymentMetadata(invalid, context).join('\n');
+  const errors = validateDeploymentMetadata(invalid, { now, commitSha, repository }).join('\n');
   assert.match(errors, /does not match workflow SHA/);
   assert.match(errors, /missing successful component: functions/);
 });
