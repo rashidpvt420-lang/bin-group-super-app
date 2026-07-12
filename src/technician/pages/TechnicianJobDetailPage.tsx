@@ -417,7 +417,7 @@ export default function TechnicianJobDetailPage() {
                                 <Stack spacing={2} sx={{ width: '100%' }}>
                                     <Stack direction="row" flexWrap="wrap" gap={2}>
                                         <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
-                                        <Button variant="outlined" disabled={actionLoading || status !== 'EN_ROUTE'} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || !['EN_ROUTE', 'ON_THE_WAY'].includes(status)} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
                                         <Button variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
                                     </Stack>
                                     {status === 'ARRIVED' && (

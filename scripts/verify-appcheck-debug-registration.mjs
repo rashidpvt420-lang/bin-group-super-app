@@ -45,7 +45,10 @@ let response;
 try {
   response = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'Referer': 'https://bin-group-57c60.web.app/'
+    },
     body: JSON.stringify({ debugToken: token }),
   });
 } catch (err) {
@@ -68,6 +71,7 @@ if (response.ok && payload?.token) {
 
 if (response.status === 403) {
   console.error('[appcheck-registration] FAIL HTTP 403 exchangeDebugToken rejected.');
+  if (payload) console.error('[appcheck-registration] error details=', JSON.stringify(payload));
   console.error('[appcheck-registration] The UUID in .env.e2e is NOT registered (or was rotated without Console update).');
   console.error('[appcheck-registration] Fix: Firebase Console → App Check → BIN GROUP Web → Debug tokens');
   console.error('[appcheck-registration] Add debug token name "Playwright E2E Stable" with fingerprint', mask(token));
