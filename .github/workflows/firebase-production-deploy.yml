@@ -8,18 +8,18 @@ on:
         required: true
         type: string
       expected_commit_sha:
-        description: 'Full 40-char commit SHA that must equal github.sha on the approved production ref'
+        description: 'Full lowercase 40-character commit SHA that must equal github.sha on main'
         required: true
         type: string
 
 permissions:
   contents: read
   id-token: write
-  actions: write
 
 concurrency:
   group: firebase-production-deploy
-  cancel-in-progress: true
+  # A production deployment must never be cancelled halfway through by a newer dispatch.
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
@@ -44,21 +44,30 @@ jobs:
 
     steps:
       - name: Enforce production dispatch gates
+        env:
+          DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          CURRENT_COMMIT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event.inputs.confirmation }}" != "${PRODUCTION_CONFIRMATION_PHRASE}" ]; then
+          if [[ "$DISPATCH_CONFIRMATION" != "$PRODUCTION_CONFIRMATION_PHRASE" ]]; then
             echo "::error::Confirmation phrase mismatch. Refusing production deploy."
             exit 1
           fi
-          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "::error::Production deploy is only approved from refs/heads/main (got ${{ github.ref }})."
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Production deploy is only approved from refs/heads/main."
             exit 1
           fi
-          if [ "${{ github.event.inputs.expected_commit_sha }}" != "${{ github.sha }}" ]; then
-            echo "::error::expected_commit_sha must equal github.sha (${{ github.sha }})."
+          if [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_commit_sha must be a full lowercase 40-character Git SHA."
             exit 1
           fi
-          echo "Production dispatch gates passed for ${{ github.sha }}"
+          if [[ "$EXPECTED_COMMIT_SHA" != "$CURRENT_COMMIT_SHA" ]]; then
+            echo "::error::expected_commit_sha does not equal the workflow commit SHA."
+            exit 1
+          fi
+          echo "Production dispatch gates passed for $CURRENT_COMMIT_SHA"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -83,32 +92,33 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Create production environment file
+      - name: Create production environment files
         run: |
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
+          set -euo pipefail
+          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "$VITE_GOOGLE_MAPS_API_KEY" > .env.production
+          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.production
           printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
-          printf 'VITE_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> .env.production
-          printf 'VITE_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> .env.production
-          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> .env.production
-          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "${VITE_FIREBASE_VAPID_KEY}" >> .env.production
+          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.production
+          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.production
+          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.production
+          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "$VITE_FIREBASE_VAPID_KEY" >> .env.production
           cp .env.production .env.local
-          # Admin CRA build reads REACT_APP_* (not VITE_*). Mirror the same web app config.
+
           mkdir -p apps/admin-panel
           printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
           printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
           cp apps/admin-panel/.env.production apps/admin-panel/.env.local
-          # Fail closed if required admin Firebase values are absent/malformed.
+
           for key in REACT_APP_APP_CHECK_SITE_KEY REACT_APP_FIREBASE_API_KEY REACT_APP_FIREBASE_APP_ID REACT_APP_FIREBASE_MESSAGING_SENDER_ID; do
             value="$(grep "^${key}=" apps/admin-panel/.env.production | cut -d= -f2-)"
-            if [ -z "${value}" ] || echo "${value}" | grep -qiE 'REPLACE|undefined|null'; then
+            if [[ -z "$value" ]] || grep -qiE 'REPLACE|undefined|null' <<< "$value"; then
               echo "::error::Missing or malformed ${key} for admin production build"
               exit 1
             fi
@@ -159,6 +169,7 @@ jobs:
 
       - name: Verify Firebase hosting entrypoints
         run: |
+          set -euo pipefail
           test -f dist/index.html
           test -f apps/admin-panel/build/index.html
           ls -la dist/index.html
@@ -168,21 +179,31 @@ jobs:
     name: Deploy Firebase production stack
     runs-on: ubuntu-latest
     needs: validate-production-build
+    environment: production
 
     steps:
       - name: Enforce production dispatch gates
+        env:
+          DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          CURRENT_COMMIT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event.inputs.confirmation }}" != "${PRODUCTION_CONFIRMATION_PHRASE}" ]; then
+          if [[ "$DISPATCH_CONFIRMATION" != "$PRODUCTION_CONFIRMATION_PHRASE" ]]; then
             echo "::error::Confirmation phrase mismatch. Refusing production deploy."
             exit 1
           fi
-          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "::error::Production deploy is only approved from refs/heads/main (got ${{ github.ref }})."
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Production deploy is only approved from refs/heads/main."
             exit 1
           fi
-          if [ "${{ github.event.inputs.expected_commit_sha }}" != "${{ github.sha }}" ]; then
-            echo "::error::expected_commit_sha must equal github.sha (${{ github.sha }})."
+          if [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_commit_sha must be a full lowercase 40-character Git SHA."
+            exit 1
+          fi
+          if [[ "$EXPECTED_COMMIT_SHA" != "$CURRENT_COMMIT_SHA" ]]; then
+            echo "::error::expected_commit_sha does not equal the workflow commit SHA."
             exit 1
           fi
 
@@ -211,7 +232,7 @@ jobs:
           require_secret() {
             local key="$1"
             local value="$2"
-            if [ -z "$value" ]; then
+            if [[ -z "$value" ]]; then
               echo "::error::Missing required GitHub secret: $key"
               missing=1
             else
@@ -221,22 +242,22 @@ jobs:
           optional_secret() {
             local key="$1"
             local value="$2"
-            if [ -z "$value" ]; then
+            if [[ -z "$value" ]]; then
               echo "::warning::Optional GitHub secret is empty: $key"
             else
               echo "Found optional GitHub secret: $key"
             fi
           }
-          require_secret "GCP_WORKLOAD_IDENTITY_PROVIDER" "${WIF_PROVIDER}"
-          require_secret "GCP_SERVICE_ACCOUNT" "${GCP_SERVICE_ACCOUNT}"
-          require_secret "VITE_APP_CHECK_SITE_KEY" "${VITE_APP_CHECK_SITE_KEY_SECRET}"
-          require_secret "VITE_FIREBASE_API_KEY" "${VITE_FIREBASE_API_KEY_SECRET}"
-          require_secret "VITE_FIREBASE_APP_ID" "${VITE_FIREBASE_APP_ID_SECRET}"
-          require_secret "VITE_FIREBASE_MESSAGING_SENDER_ID" "${VITE_FIREBASE_MESSAGING_SENDER_ID_SECRET}"
-          require_secret "VITE_FIREBASE_VAPID_KEY" "${VITE_FIREBASE_VAPID_KEY_SECRET}"
-          optional_secret "GCP_PROJECT_ID" "${GCP_PROJECT_ID_SECRET}"
-          optional_secret "VITE_GOOGLE_MAPS_API_KEY" "${VITE_GOOGLE_MAPS_API_KEY_SECRET}"
-          if [ "${missing}" -ne 0 ]; then
+          require_secret "GCP_WORKLOAD_IDENTITY_PROVIDER" "$WIF_PROVIDER"
+          require_secret "GCP_SERVICE_ACCOUNT" "$GCP_SERVICE_ACCOUNT"
+          require_secret "VITE_APP_CHECK_SITE_KEY" "$VITE_APP_CHECK_SITE_KEY_SECRET"
+          require_secret "VITE_FIREBASE_API_KEY" "$VITE_FIREBASE_API_KEY_SECRET"
+          require_secret "VITE_FIREBASE_APP_ID" "$VITE_FIREBASE_APP_ID_SECRET"
+          require_secret "VITE_FIREBASE_MESSAGING_SENDER_ID" "$VITE_FIREBASE_MESSAGING_SENDER_ID_SECRET"
+          require_secret "VITE_FIREBASE_VAPID_KEY" "$VITE_FIREBASE_VAPID_KEY_SECRET"
+          optional_secret "GCP_PROJECT_ID" "$GCP_PROJECT_ID_SECRET"
+          optional_secret "VITE_GOOGLE_MAPS_API_KEY" "$VITE_GOOGLE_MAPS_API_KEY_SECRET"
+          if [[ "$missing" -ne 0 ]]; then
             echo "Deployment cannot continue until required GitHub secrets are configured."
             exit 1
           fi
@@ -255,25 +276,25 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Create production environment file (main + admin)
+      - name: Create production environment files
         run: |
           set -euo pipefail
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
+          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "$VITE_GOOGLE_MAPS_API_KEY" > .env.production
+          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.production
           printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
-          printf 'VITE_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> .env.production
-          printf 'VITE_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> .env.production
-          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> .env.production
-          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "${VITE_FIREBASE_VAPID_KEY}" >> .env.production
+          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.production
+          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.production
+          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.production
+          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "$VITE_FIREBASE_VAPID_KEY" >> .env.production
           cp .env.production .env.local
 
           mkdir -p apps/admin-panel
           printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
           printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
           printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
@@ -281,7 +302,7 @@ jobs:
 
           for key in REACT_APP_APP_CHECK_SITE_KEY REACT_APP_FIREBASE_API_KEY REACT_APP_FIREBASE_APP_ID REACT_APP_FIREBASE_MESSAGING_SENDER_ID; do
             value="$(grep "^${key}=" apps/admin-panel/.env.production | cut -d= -f2-)"
-            if [ -z "${value}" ] || echo "${value}" | grep -qiE 'REPLACE|undefined|null'; then
+            if [[ -z "$value" ]] || grep -qiE 'REPLACE|undefined|null' <<< "$value"; then
               echo "::error::Missing or malformed ${key} for admin production deployment build"
               exit 1
             fi
@@ -318,12 +339,12 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Firebase critical deploy attempt ${attempt}/3"
-            if npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive --force; then
+            if npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "$GCP_PROJECT_ID" --non-interactive --force; then
               echo "Firebase critical deploy succeeded on attempt ${attempt}."
               echo "ok=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            if [ "${attempt}" -lt 3 ]; then
+            if [[ "$attempt" -lt 3 ]]; then
               echo "Firebase deploy failed. Retrying in 30 seconds..."
               sleep 30
             fi
@@ -338,12 +359,12 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3; do
             echo "Firebase Functions deploy attempt ${attempt}/3"
-            if npx firebase deploy --only functions --project "${GCP_PROJECT_ID}" --non-interactive --force; then
+            if npx firebase deploy --only functions --project "$GCP_PROJECT_ID" --non-interactive --force; then
               echo "Firebase Functions deploy succeeded on attempt ${attempt}."
               echo "ok=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            if [ "${attempt}" -lt 3 ]; then
+            if [[ "$attempt" -lt 3 ]]; then
               echo "Functions deploy failed. Retrying in 30 seconds..."
               sleep 30
             fi
@@ -359,21 +380,21 @@ jobs:
           node scripts/write-production-deployment-metadata.mjs \
             --components hosting,firestoreRules,firestoreIndexes,storageRules,functions
 
-      - name: Verify production deployment (HTTP + bundle identity)
+      - name: Verify production deployment identity
         if: success()
         run: |
           set -euo pipefail
           npm run verify:production-deployment -- --write-evidence | tee launch_package/production-deployment-verify.log
           test -f launch_package/production-deployment.json
-          node -e "
-            const fs = require('fs');
-            const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json','utf8'));
-            if (doc.status !== 'passed') process.exit(1);
-            if (doc.httpChecksOk !== true || doc.bundleVerified !== true) process.exit(1);
-            if (doc.deployedCommitSha !== process.env.GITHUB_SHA) process.exit(1);
-            if (doc.hardLaunchClaim === true) process.exit(1);
-            console.log('deployment metadata verified for', doc.deployedCommitSha);
-          "
+          node - <<'NODE'
+          const fs = require('fs');
+          const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json', 'utf8'));
+          if (doc.status !== 'passed') process.exit(1);
+          if (doc.httpChecksOk !== true || doc.bundleVerified !== true) process.exit(1);
+          if (doc.deployedCommitSha !== process.env.GITHUB_SHA) process.exit(1);
+          if (doc.hardLaunchClaim === true) process.exit(1);
+          console.log('deployment metadata verified for', doc.deployedCommitSha);
+          NODE
 
       - name: Upload production deployment metadata artifact
         if: success()
