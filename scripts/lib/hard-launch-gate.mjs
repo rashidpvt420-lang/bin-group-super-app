@@ -212,12 +212,15 @@ export function evaluateHardLaunchEligibility({
   now = Date.now(),
 } = {}) {
   const pilot = evaluatePilotEligibility({ evidenceBatch, deploymentDoc, commitSha, root, now });
+  const resolvedOperationalReport = operationalReport === undefined
+    ? readJsonSafe(operationalReadinessPath(root), null)
+    : operationalReport;
   const errors = [];
   if (!pilot.pilotEligible) {
     errors.push(...pilot.missing.map((key) => `pilot evidence missing: ${key}`));
     errors.push(...pilot.invalid.map((item) => `pilot evidence invalid: ${item}`));
   }
-  errors.push(...validateOperationalReadinessReport(operationalReport, commitSha, { now }));
+  errors.push(...validateOperationalReadinessReport(resolvedOperationalReport, commitSha, { now }));
   errors.push(...validatePilotIncidentReport(incidentReport, commitSha, { now }));
   errors.push(...validateHardLaunchApprovalDocument(approvalDoc, commitSha, { root, now }));
   const hardLaunchEligible = pilot.pilotEligible && errors.length === 0;
