@@ -57,7 +57,23 @@ jobs:
           retention-days: 7
 
       - name: Launch honesty and workflow-security tests
-        run: npm run test:launch-honesty
+        id: launch_honesty
+        shell: bash
+        run: |
+          set +e
+          npm run test:launch-honesty > launch-honesty-output.txt 2>&1
+          status=$?
+          cat launch-honesty-output.txt
+          exit $status
+
+      - name: Upload launch-honesty diagnostics
+        if: failure() && steps.launch_honesty.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-honesty-diagnostics
+          path: launch-honesty-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: TypeScript check
         id: typecheck
