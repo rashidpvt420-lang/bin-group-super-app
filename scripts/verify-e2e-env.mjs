@@ -2,6 +2,15 @@ import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import path from 'path';
 
+const root = process.cwd();
+for (const pkg of ['dotenv', 'firebase-admin']) {
+  if (!existsSync(path.join(root, 'node_modules', pkg))) {
+    console.error(`[E2E_ENV_GUARD] missing root dependency "${pkg}".`);
+    console.error('[E2E_ENV_GUARD] Run at repo root: npm install --legacy-peer-deps');
+    process.exit(1);
+  }
+}
+
 const possibleConfigPaths = [
   path.resolve(process.cwd(), '.env.e2e'),
   path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),

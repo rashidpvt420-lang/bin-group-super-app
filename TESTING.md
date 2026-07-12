@@ -293,7 +293,7 @@ node scripts/verify-hosted-appcheck.mjs
 cd "C:\Users\My-PC\Desktop\bin-app-e2e-redesign"
 git fetch origin cursor/hard-launch-gate-redesign-30e9
 git reset --hard origin/cursor/hard-launch-gate-redesign-30e9
-npm install --legacy-peer-deps
+npm run setup:e2e
 
 # .env.e2e must include BOTH:
 # VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=878faabb-b281-4159-a84d-dc1bed73eb2e

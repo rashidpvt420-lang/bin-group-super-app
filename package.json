@@ -14,6 +14,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:live": "node scripts/prepare-production-env.mjs && vite build && npm --prefix apps/admin-panel install --legacy-peer-deps && npm --prefix apps/admin-panel run build",
+    "setup:e2e": "npm install --legacy-peer-deps",
     "launch:deploy:hosting": "node scripts/launch-deploy-hosting.mjs",
     "build:lowmem": "VITE_SKIP_MINIFY=1 NODE_OPTIONS=--max-old-space-size=2048 vite build",
     "build:shared": "npm run build --workspace=@bin/shared",
