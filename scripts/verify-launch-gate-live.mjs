@@ -3,7 +3,7 @@
  * Record one structured operational hard-launch proof in the canonical
  * Firestore record. Local text/URL attestations are intentionally rejected.
  *
- * Usage (GitHub Actions on main only):
+ * Usage (protected Operational Proof Intake workflow only):
  * node scripts/verify-launch-gate-live.mjs <gateKey> <evidenceType> <reference> <sha256>
  */
 import admin from 'firebase-admin';
@@ -30,12 +30,16 @@ function fail(message) {
 }
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('Operational proof may only be recorded by GitHub Actions.');
+if (process.env.GITHUB_WORKFLOW !== 'Operational Proof Intake') fail('Unexpected proof workflow.');
+if (process.env.GITHUB_JOB !== 'record-operational-proof') fail('Unexpected proof job.');
 if (process.env.GITHUB_REF !== 'refs/heads/main') fail('Operational proof requires refs/heads/main.');
 if (process.env.GITHUB_REPOSITORY !== 'rashidpvt420-lang/bin-group-super-app') fail('Unexpected repository.');
 if (!AUTHORIZED_HARD_LAUNCH_ACTORS.includes(String(process.env.GITHUB_ACTOR || ''))) fail('Unauthorized workflow actor.');
 if (!REQUIRED_OPERATIONAL_GATES.includes(gateKey)) fail(`Unknown operational gate: ${gateKey}`);
 if (!allowedEvidenceTypes.has(evidenceType)) fail(`Unsupported evidence type: ${evidenceType}`);
-if (evidenceReference.length < 6) fail('Evidence reference is required.');
+if (!/^github-actions:\/\/rashidpvt420-lang\/bin-group-super-app\/runs\/\d+\/artifacts\/[A-Za-z0-9._-]{1,128}$/.test(evidenceReference)) {
+  fail('Evidence reference must identify a verified same-repository GitHub Actions artifact.');
+}
 if (!/^[0-9a-f]{64}$/.test(artifactHash)) fail('Evidence artifact hash must be a SHA-256 value.');
 if (!process.env.GITHUB_RUN_ID) fail('GITHUB_RUN_ID is required.');
 
@@ -49,6 +53,7 @@ const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PRODUCTION.projectId) fail(`Unexpected Firebase project: ${projectId}`);
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
+const docRef = db.doc('system_health/admin_summaries');
 
 const proof = {
   status: 'passed',
@@ -63,13 +68,22 @@ const proof = {
   verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
 };
 
-await db.doc('system_health/admin_summaries').set({
-  operationalEvidence: {
-    [gateKey]: proof,
-  },
+await docRef.update({
+  [`operationalEvidence.${gateKey}`]: proof,
   operationalEvidenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
   operationalEvidenceCommitSha: commitSha,
-}, { merge: true });
+});
+
+const saved = await docRef.get();
+const savedProof = saved.get(`operationalEvidence.${gateKey}`) || {};
+if (
+  savedProof.status !== 'passed' ||
+  savedProof.commitSha !== commitSha ||
+  savedProof.artifactHash !== artifactHash ||
+  savedProof.evidenceReference !== evidenceReference
+) {
+  fail(`Canonical Firestore read-back verification failed for ${gateKey}.`);
+}
 
 console.log(chalk.green(`✅ Recorded structured operational proof for ${gateKey}.`));
 console.log(chalk.gray(`commit=${commitSha} run=${process.env.GITHUB_RUN_ID} hash=${artifactHash.slice(0, 12)}…`));
