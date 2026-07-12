@@ -1,0 +1,13 @@
+name: Operational Proof Intake
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  record-operational-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Operational proof intake is not configured."
