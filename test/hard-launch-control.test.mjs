@@ -112,4 +112,5 @@ test('production workflow enforces correct hard-launch order', () => {
   assert.match(workflow, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
   assert.match(workflow, /HARD_LAUNCH_APPROVAL_HMAC_KEY/);
   assert.doesNotMatch(workflow, /actions:\s*write/);
+  assert.doesNotMatch(workflow, /\$\{#APPROVAL_HMAC_KEY:-0\}/);
 });
