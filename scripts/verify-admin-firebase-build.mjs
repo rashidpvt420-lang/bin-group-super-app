@@ -2,6 +2,11 @@
 /**
  * Validate that the admin panel build/runtime targets Firebase project bin-group-57c60.
  * Does not print full API keys.
+ *
+ * Modes:
+ * - no --build: validate source, any local build found, and the live admin site;
+ * - --build <dir>: validate source + that explicit local build only (safe pre-deploy);
+ * - --build <dir> --include-live: also validate the live admin site.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -20,6 +25,8 @@ function argValue(name) {
   return String(args[idx + 1] || '').trim();
 }
 
+const buildExplicitlyRequested = args.includes('--build');
+const includeLive = args.includes('--include-live') || !buildExplicitlyRequested;
 const siteUrl = argValue('url') || process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app';
 const localBuildDir = argValue('build') || path.resolve('apps/admin-panel/build');
 const sourceFile = path.resolve('apps/admin-panel/src/lib/firebase.ts');
@@ -32,7 +39,7 @@ function mask(value) {
 
 function isPlausible(key, value) {
   if (!value || value.includes('REPLACE') || value.includes('REACT_APP') || value.includes('process.env')) return false;
-  if (key === 'projectId') return value === 'bin-group-57c60' || /^[a-z0-9-]+$/.test(value);
+  if (key === 'projectId') return value === EXPECTED.projectId || /^[a-z0-9-]+$/.test(value);
   if (key === 'authDomain') return /\.firebaseapp\.com$/.test(value);
   if (key === 'storageBucket') return /\.(firebasestorage\.app|appspot\.com)$/.test(value);
   if (key === 'apiKey') return /^AIza[0-9A-Za-z\-_]{20,}$/.test(value);
@@ -43,7 +50,6 @@ function isPlausible(key, value) {
 
 function extractConfig(text) {
   const found = {};
-  // Literal regexes only — Codacy/Semgrep rejects RegExp(non-literal).
   const literalPatterns = {
     apiKey: [
       /apiKey\s*:\s*["']([^"']+)["']/g,
@@ -79,7 +85,6 @@ function extractConfig(text) {
       }
     }
 
-    // CRA minified fallback: projectId:TS(... )||"bin-group-57c60"
     let from = 0;
     const needle = `${key}:`;
     while (from < text.length) {
@@ -92,27 +97,26 @@ function extractConfig(text) {
     }
   }
 
-  // Direct project / app id needles as last resort
-  if (!found.projectId && text.includes('bin-group-57c60')) found.projectId = 'bin-group-57c60';
+  if (!found.projectId && text.includes(EXPECTED.projectId)) found.projectId = EXPECTED.projectId;
   if (!found.authDomain) {
-    const m = text.match(/bin-group-57c60\.firebaseapp\.com/);
-    if (m) found.authDomain = m[0];
+    const match = text.match(/bin-group-57c60\.firebaseapp\.com/);
+    if (match) found.authDomain = match[0];
   }
   if (!found.appId) {
-    const m = text.match(/1:123413252227:web:[a-z0-9]+/i);
-    if (m) found.appId = m[0];
+    const match = text.match(/1:123413252227:web:[a-z0-9]+/i);
+    if (match) found.appId = match[0];
   }
   if (!found.storageBucket) {
-    const m = text.match(/bin-group-57c60\.(?:firebasestorage\.app|appspot\.com)/);
-    if (m) found.storageBucket = m[0];
+    const match = text.match(/bin-group-57c60\.(?:firebasestorage\.app|appspot\.com)/);
+    if (match) found.storageBucket = match[0];
   }
   if (!found.apiKey) {
-    const m = text.match(/AIza[0-9A-Za-z\-_]{20,}/);
-    if (m) found.apiKey = m[0];
+    const match = text.match(/AIza[0-9A-Za-z\-_]{20,}/);
+    if (match) found.apiKey = match[0];
   }
   if (!found.messagingSenderId) {
-    const m = text.match(/\b123413252227\b/);
-    if (m) found.messagingSenderId = m[0];
+    const match = text.match(/\b123413252227\b/);
+    if (match) found.messagingSenderId = match[0];
   }
   return found;
 }
@@ -132,8 +136,12 @@ function assertConfig(label, config, failures) {
   if (config.appId && !String(config.appId).includes(EXPECTED.appIdSuffix)) {
     failures.push(`${label}: appId does not match intended web app …${EXPECTED.appIdSuffix}`);
   }
-  if (config.storageBucket && config.storageBucket.includes('admin-panel-id')) {
-    failures.push(`${label}: storage/app placeholder still present`);
+  if (
+    config.storageBucket &&
+    config.storageBucket !== EXPECTED.storageBucket &&
+    config.storageBucket !== 'bin-group-57c60.appspot.com'
+  ) {
+    failures.push(`${label}: storageBucket mismatch`);
   }
   if (JSON.stringify(config).includes('REPLACE_WITH') || JSON.stringify(config).includes('REPLACE_ME')) {
     failures.push(`${label}: placeholder Firebase config embedded`);
@@ -174,33 +182,19 @@ if (existsSync(sourceFile)) {
 }
 
 const localFiles = collectLocalJs(localBuildDir);
-const buildExplicitlyRequested = args.includes('--build');
 if (localFiles.length) {
-  let merged = {};
+  const merged = {};
   for (const file of localFiles.slice(0, 40)) {
-    const text = readFileSync(file, 'utf8');
-    Object.assign(merged, extractConfig(text));
+    Object.assign(merged, extractConfig(readFileSync(file, 'utf8')));
   }
   if (Object.keys(merged).length) {
     assertConfig('admin-local-build', merged, failures);
-    if (!merged.projectId) {
-      failures.push('admin-local-build: missing projectId in built bundle');
-    }
-    if (!merged.apiKey) {
-      failures.push('admin-local-build: missing apiKey in built bundle (REACT_APP_FIREBASE_API_KEY not embedded)');
-    }
-    if (!merged.appId) {
-      failures.push('admin-local-build: missing appId in built bundle (REACT_APP_FIREBASE_APP_ID not embedded)');
-    }
-    if (!merged.authDomain) {
-      failures.push('admin-local-build: missing authDomain in built bundle');
-    }
-    if (!merged.storageBucket) {
-      failures.push('admin-local-build: missing storageBucket in built bundle');
-    }
-    if (!merged.messagingSenderId) {
-      failures.push('admin-local-build: missing messagingSenderId in built bundle');
-    }
+    if (!merged.projectId) failures.push('admin-local-build: missing projectId in built bundle');
+    if (!merged.apiKey) failures.push('admin-local-build: missing apiKey in built bundle (REACT_APP_FIREBASE_API_KEY not embedded)');
+    if (!merged.appId) failures.push('admin-local-build: missing appId in built bundle (REACT_APP_FIREBASE_APP_ID not embedded)');
+    if (!merged.authDomain) failures.push('admin-local-build: missing authDomain in built bundle');
+    if (!merged.storageBucket) failures.push('admin-local-build: missing storageBucket in built bundle');
+    if (!merged.messagingSenderId) failures.push('admin-local-build: missing messagingSenderId in built bundle');
   } else if (buildExplicitlyRequested) {
     failures.push(
       `admin-local-build: no REACT_APP_FIREBASE_* / Firebase config literals found in ${localBuildDir} (fail closed for explicit --build)`,
@@ -211,41 +205,50 @@ if (localFiles.length) {
 } else if (buildExplicitlyRequested) {
   failures.push(`admin-local-build: build directory empty or missing at ${localBuildDir}`);
 } else {
-  console.warn(`[admin-firebase] local build not found at ${localBuildDir} — will validate live URL if reachable`);
+  console.warn(`[admin-firebase] local build not found at ${localBuildDir}`);
 }
 
-try {
-  console.log(`[admin-firebase] fetching live admin site ${siteUrl}`);
-  const html = await fetchText(siteUrl);
-  const assetUrls = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|mjs))["']/g)].map((m) => new URL(m[1], siteUrl).toString());
-  const liveConfig = {};
-  for (const assetUrl of assetUrls.slice(0, 30)) {
-    try {
-      const text = await fetchText(assetUrl);
-      Object.assign(liveConfig, extractConfig(text));
-    } catch (err) {
-      console.warn(`[admin-firebase] skip asset ${assetUrl}: ${err.message}`);
+if (includeLive) {
+  try {
+    console.log(`[admin-firebase] fetching live admin site ${siteUrl}`);
+    const html = await fetchText(siteUrl);
+    const assetUrls = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|mjs))["']/g)].map((match) =>
+      new URL(match[1], siteUrl).toString(),
+    );
+    const liveConfig = {};
+    for (const assetUrl of assetUrls.slice(0, 30)) {
+      try {
+        Object.assign(liveConfig, extractConfig(await fetchText(assetUrl)));
+      } catch (error) {
+        console.warn(`[admin-firebase] skip asset ${assetUrl}: ${error.message}`);
+      }
     }
+    if (!Object.keys(liveConfig).length) {
+      failures.push('live admin site: could not extract Firebase config from bundles');
+    } else {
+      assertConfig('admin-live', liveConfig, failures);
+    }
+  } catch (error) {
+    console.warn(`[admin-firebase] live fetch failed: ${error.message}`);
+    failures.push(`live admin fetch failed: ${error.message}`);
   }
-  if (!Object.keys(liveConfig).length) {
-    failures.push('live admin site: could not extract Firebase config from bundles');
-  } else {
-    assertConfig('admin-live', liveConfig, failures);
-  }
-} catch (err) {
-  console.warn(`[admin-firebase] live fetch skipped/failed: ${err.message}`);
-  failures.push(`live admin fetch failed: ${err.message}`);
+} else {
+  console.log('[admin-firebase] explicit --build mode: live admin verification deferred until after deployment');
 }
 
 if (failures.length) {
   console.error('\n[admin-firebase] FAIL');
   for (const item of failures) console.error(`- ${item}`);
   console.error('\nDiagnosis guide:');
-  console.error('- Wrong projectId/appId in live bundle → stale hosting or wrong CI env (REACT_APP_FIREBASE_* not injected).');
-  console.error('- Correct projectId/appId but auth/invalid-credential in UI while REST/Admin SDK works → password drift / missing PASSWORD_PROVIDER (do not rotate repeatedly until project match is proven).');
-  console.error('- Source fallbacks match bin-group-57c60; compare with live extract above.');
+  console.error('- Local build mismatch → required REACT_APP_FIREBASE_* values were not embedded.');
+  console.error('- Live mismatch after deployment → stale hosting, wrong CI environment, or incorrect target.');
+  console.error('- Correct project/app but auth/invalid-credential → password drift or missing password provider.');
   process.exit(1);
 }
 
-console.log('[admin-firebase] PASS — admin build/runtime targets bin-group-57c60');
+console.log(
+  includeLive
+    ? '[admin-firebase] PASS — admin build/runtime targets bin-group-57c60'
+    : '[admin-firebase] PASS — local admin build targets bin-group-57c60 (live verification deferred)',
+);
 process.exit(0);
