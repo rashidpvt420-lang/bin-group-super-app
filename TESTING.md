@@ -269,6 +269,26 @@ If `e2e:ensure-appcheck` or launch-audit fails with **Maximum number of debug to
 3. Ensure that **same** UUID is registered for **both** the main web app and the admin web app
 4. Re-run — `npm run e2e:ensure-appcheck` validates only; it does **not** auto-register new tokens
 
+### App Check in the hosting build (required for credentialed E2E)
+
+If profile-gates fail with `[ROLE-SYNC] Missing or insufficient permissions` or `permission-denied` on every role, the **deployed** bundle likely omitted App Check while Console enforces it.
+
+Add to `.env.e2e` (public site key from Firebase Console → App Check):
+
+```env
+VITE_APP_CHECK_SITE_KEY=6Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Rebuild and redeploy hosting **from the same commit** you test:
+
+```bash
+npm run build:live
+firebase deploy --only hosting --project bin-group-57c60
+node scripts/verify-hosted-appcheck.mjs
+```
+
+Then re-run `npm run test:e2e:profile-gates`.
+
 ## Notes
 
 - Client Firebase config is public Web SDK configuration; service-account secrets must never be committed.

@@ -81,6 +81,14 @@ if (techBEmail) {
   console.log('[E2E_ENV_GUARD] TECHNICIAN_B: email=set credential=set (optional walkthrough only)');
 }
 
+if (process.env.E2E_STRICT_LIVE === 'true') {
+  if (!String(process.env.VITE_APP_CHECK_SITE_KEY || '').trim()) {
+    console.error('[E2E_ENV_GUARD] VITE_APP_CHECK_SITE_KEY is required when E2E_STRICT_LIVE=true (rebuild hosting with npm run build:live before credentialed E2E).');
+    process.exit(1);
+  }
+  console.log('[E2E_ENV_GUARD] live_build_site_key=set');
+}
+
 if (process.env.E2E_STRICT_BUSINESS === 'true') {
   if (!String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim()) {
     console.error('[E2E_ENV_GUARD] FIREBASE_SERVICE_ACCOUNT_JSON is required when E2E_STRICT_BUSINESS=true (business-admin Firestore seed).');

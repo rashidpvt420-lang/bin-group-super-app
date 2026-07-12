@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:live": "node scripts/prepare-production-env.mjs && vite build && npm --prefix apps/admin-panel install --legacy-peer-deps && npm --prefix apps/admin-panel run build",
     "build:lowmem": "VITE_SKIP_MINIFY=1 NODE_OPTIONS=--max-old-space-size=2048 vite build",
     "build:shared": "npm run build --workspace=@bin/shared",
     "build:admin": "npm --prefix apps/admin-panel install --legacy-peer-deps && npm --prefix apps/admin-panel run build",
@@ -72,7 +73,7 @@
     "test:e2e:launch-audit:live": "node scripts/run-live-launch-audit.mjs",
     "test:e2e:business": "node scripts/run-critical-evidence.mjs --suite all-business",
     "test:e2e:walkthrough": "npm run test:e2e:env && npm run e2e:ensure-appcheck && playwright install --with-deps chromium && playwright test tests/e2e/launch-five-profile-walkthrough.spec.ts --project=chromium-desktop",
-    "test:e2e:profile-gates": "npm run test:e2e:env && npm run e2e:ensure-appcheck && playwright install --with-deps chromium && playwright test tests/e2e/profile-readiness-gates.spec.ts --project=chromium-desktop",
+    "test:e2e:profile-gates": "npm run test:e2e:env && npm run e2e:ensure-appcheck && node scripts/verify-hosted-appcheck.mjs && playwright install --with-deps chromium && playwright test tests/e2e/profile-readiness-gates.spec.ts --project=chromium-desktop",
     "test:e2e:gate11:routes": "node scripts/gate11-staging-route-check.mjs",
     "test:e2e:gate11:staging": "npm run test:e2e:env && npm run e2e:ensure-appcheck && npm run test:e2e:gate11:routes && playwright install --with-deps chromium && playwright test tests/e2e/gate11-staging-smoke.spec.ts --project=chromium-desktop",
     "seed:e2e": "node scripts/seed-e2e-accounts.js",
