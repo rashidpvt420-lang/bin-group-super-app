@@ -13,6 +13,11 @@ const PLACEHOLDER_PATTERNS = [
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+type AppCheckInitPayload = {
+  debugToken: string;
+  tokenFingerprint: string;
+};
+
 export function getAppCheckDebugTokenFromEnv(): string {
   return String(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || '').trim();
 }
@@ -23,7 +28,7 @@ export function assertValidAppCheckDebugToken(token = getAppCheckDebugTokenFromE
       'Missing VITE_FIREBASE_APPCHECK_DEBUG_TOKEN. Register a debug token for both the main and admin Firebase Web Apps, then set it in .env.e2e / CI secrets.',
     );
   }
-  if (PLACEHOLDER_PATTERNS.some((re) => re.test(token)) || token.includes('YOUR_REGISTERED_UUID')) {
+  if (PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(token)) || token.includes('YOUR_REGISTERED_UUID')) {
     throw new Error(
       'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN is a placeholder (e.g. YOUR_REGISTERED_UUID). Replace it with a Console-registered UUID.',
     );
@@ -42,23 +47,46 @@ export function maskAppCheckToken(token: string): string {
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
-/**
- * Inject a registered App Check debug token BEFORE any page script runs.
- * Must be called before the first navigation that loads Firebase.
- */
-export async function installAppCheckDebugToken(page: Page, token = getAppCheckDebugTokenFromEnv()): Promise<string> {
-  const allowSkip = process.env.E2E_SKIP_APPCHECK_TOKEN === 'true' || process.env.E2E_ALLOW_MISSING_ENV === 'true';
-  if (!token && allowSkip) {
-    return '';
-  }
-  const validated = assertValidAppCheckDebugToken(token);
-  const fingerprint = maskAppCheckToken(validated);
+function installTokenInWindow(payload: AppCheckInitPayload): void {
+  (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = payload.debugToken;
+  (window as any).__BIN_APPCHECK_DEBUG_FINGERPRINT__ = payload.tokenFingerprint;
+}
 
-  await page.addInitScript((debugToken: string, tokenFingerprint: string) => {
-    (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken;
-    (window as any).__BIN_APPCHECK_DEBUG_FINGERPRINT__ = tokenFingerprint;
-    console.info(`[AppCheckDebug] token_fingerprint=${tokenFingerprint}`);
-  }, validated, fingerprint);
+/**
+ * Inject a registered App Check debug token into the current document and
+ * BEFORE every future page script. This is safe to call on about:blank before
+ * the first navigation that loads Firebase.
+ */
+export async function installAppCheckDebugToken(
+  page: Page,
+  token = getAppCheckDebugTokenFromEnv(),
+): Promise<string> {
+  const allowSkip =
+    process.env.E2E_SKIP_APPCHECK_TOKEN === 'true' ||
+    process.env.E2E_ALLOW_MISSING_ENV === 'true';
+  if (!token && allowSkip) return '';
+
+  const validated = assertValidAppCheckDebugToken(token);
+  const payload: AppCheckInitPayload = {
+    debugToken: validated,
+    tokenFingerprint: maskAppCheckToken(validated),
+  };
+
+  // One structured argument is required by Playwright's addInitScript API.
+  await page.addInitScript((init: AppCheckInitPayload) => {
+    (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = init.debugToken;
+    (window as any).__BIN_APPCHECK_DEBUG_FINGERPRINT__ = init.tokenFingerprint;
+    console.info(`[AppCheckDebug] token_fingerprint=${init.tokenFingerprint}`);
+  }, payload);
+
+  // addInitScript applies to future documents. Populate the current about:blank
+  // document as well so pre-navigation assertions are truthful and do not fail.
+  if (!page.isClosed()) {
+    await page.evaluate((init: AppCheckInitPayload) => {
+      (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = init.debugToken;
+      (window as any).__BIN_APPCHECK_DEBUG_FINGERPRINT__ = init.tokenFingerprint;
+    }, payload);
+  }
 
   return validated;
 }
@@ -93,7 +121,7 @@ const FIREBASE_NETWORK_RE =
   /firestore\.googleapis\.com|firebasestorage\.googleapis\.com|identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com|firebaseappcheck\.googleapis\.com|content-firebaseappcheck|firebaseio\.com|cloudfunctions\.net/i;
 
 export function collectAppCheckFailures(messages: string[]): string[] {
-  return messages.filter((msg) => APP_CHECK_FAILURE_RE.test(msg));
+  return messages.filter((message) => APP_CHECK_FAILURE_RE.test(message));
 }
 
 export type AppCheckMonitor = {
@@ -114,12 +142,12 @@ export async function attachAuthenticatedAppCheckMonitor(page: Page): Promise<Ap
   const successfulFirebaseReads: string[] = [];
   let authSeen = false;
 
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') failures.push(msg.text());
+  page.on('console', (message) => {
+    if (message.type() === 'error') failures.push(message.text());
   });
 
-  page.on('pageerror', (err) => {
-    failures.push(String(err?.message || err));
+  page.on('pageerror', (error) => {
+    failures.push(String(error?.message || error));
   });
 
   page.on('response', (response) => {
@@ -132,7 +160,6 @@ export async function attachAuthenticatedAppCheckMonitor(page: Page): Promise<Ap
       return;
     }
 
-    // Successful identity/firestore reads after auth count as authenticated Firebase access.
     if (status >= 200 && status < 300) {
       if (/identitytoolkit|securetoken/i.test(url)) authSeen = true;
       if (/firestore\.googleapis\.com/i.test(url) && (authSeen || /documents:/i.test(url))) {
