@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "activeIncidents": [],
+  "requiresRollback": false,
+  "rollbackReason": null,
+  "lastDeploymentFailed": false,
+  "lastDeploymentFailedAt": null,
+  "lastSuccessfulDeployment": null,
+  "lastSuccessfulCommitSha": null,
+  "notes": "Production-incidents.json must be manually maintained by operational teams. This file is the source of truth for deployment hold states. Any active incidents or rollback flags will automatically block the hard-launch gate."
+}
