@@ -3,13 +3,67 @@ name: Live Role Smoke Tests
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Choose live-evidence first; hard-clearance only after a completed 24-hour pilot'
+        required: true
+        default: live-evidence
+        type: choice
+        options:
+          - live-evidence
+          - hard-clearance
       expected_commit_sha:
-        description: 'Full lowercase 40-character main SHA deployed to production'
+        description: 'Full lowercase 40-character production main SHA'
         required: true
         type: string
       production_deploy_run_id:
-        description: 'Successful Firebase Production Deploy workflow run ID for this SHA'
-        required: true
+        description: 'For live-evidence: successful Firebase Production Deploy run ID'
+        required: false
+        type: string
+      live_evidence_run_id:
+        description: 'For hard-clearance: successful live-evidence run ID for the same SHA'
+        required: false
+        type: string
+      confirmation:
+        description: 'For hard-clearance: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
+        required: false
+        type: string
+      incident_confirmation:
+        description: 'For hard-clearance: NO_OPEN_P0_P1'
+        required: false
+        type: string
+      rollback_confirmation:
+        description: 'For hard-clearance: ROLLBACK_PLAN_VERIFIED'
+        required: false
+        type: string
+      pilot_started_at:
+        description: 'For hard-clearance: controlled pilot start ISO-8601 UTC'
+        required: false
+        type: string
+      pilot_completed_at:
+        description: 'For hard-clearance: completion ISO-8601 UTC, at least 24 hours later'
+        required: false
+        type: string
+      open_p0:
+        description: 'For hard-clearance: open P0 count, must be 0'
+        required: false
+        default: '0'
+        type: string
+      open_p1:
+        description: 'For hard-clearance: open P1 count, must be 0'
+        required: false
+        default: '0'
+        type: string
+      incident_reference:
+        description: 'For hard-clearance: incident register or operations log reference'
+        required: false
+        type: string
+      rollback_reference:
+        description: 'For hard-clearance: rollback plan or rollback test reference'
+        required: false
+        type: string
+      monitoring_reference:
+        description: 'For hard-clearance: monitoring dashboard or pilot report reference'
+        required: false
         type: string
   schedule:
     - cron: '0 4 * * *'
@@ -17,10 +71,9 @@ on:
 permissions:
   contents: read
   actions: read
-  id-token: write
 
 concurrency:
-  group: live-role-smoke-${{ github.event_name }}-${{ github.ref }}
+  group: live-role-smoke-${{ github.event_name }}-${{ github.ref }}-${{ inputs.mode || 'scheduled' }}
   cancel-in-progress: false
 
 env:
@@ -42,8 +95,13 @@ env:
 jobs:
   live-role-smoke:
     name: Verify production public and role flows
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'live-evidence'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
 
     steps:
       - name: Enforce manual same-commit gates
@@ -59,12 +117,8 @@ jobs:
             echo "::error::Live launch evidence may only run from refs/heads/main."
             exit 1
           fi
-          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_commit_sha must be a full lowercase SHA."
-            exit 1
-          fi
-          if [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
-            echo "::error::expected_commit_sha must equal the workflow main SHA."
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
             exit 1
           fi
           if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
@@ -197,3 +251,150 @@ jobs:
           path: launch-proof
           if-no-files-found: error
           retention-days: 14
+
+  hard-public-launch-clearance:
+    name: Verify and authorize hard public launch
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: hard-public-launch
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Enforce protected release inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          INCIDENT_CONFIRMATION_INPUT: ${{ inputs.incident_confirmation }}
+          ROLLBACK_CONFIRMATION_INPUT: ${{ inputs.rollback_confirmation }}
+          OPEN_P0_INPUT: ${{ inputs.open_p0 }}
+          OPEN_P1_INPUT: ${{ inputs.open_p1 }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          CURRENT_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Hard public launch clearance may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Only the authorized founder account may approve hard public launch."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
+            exit 1
+          fi
+          if [[ ! "$LIVE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::live_evidence_run_id must be numeric."
+            exit 1
+          fi
+          if [[ "$RELEASE_CONFIRMATION" != "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]]; then
+            echo "::error::Hard launch confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$INCIDENT_CONFIRMATION_INPUT" != "NO_OPEN_P0_P1" ]]; then
+            echo "::error::Incident confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$ROLLBACK_CONFIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
+            echo "::error::Rollback confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$OPEN_P0_INPUT" != "0" ]] || [[ "$OPEN_P1_INPUT" != "0" ]]; then
+            echo "::error::Hard launch requires zero open P0 and P1 incidents."
+            exit 1
+          fi
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download exact live launch evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: live-launch-evidence-${{ inputs.expected_commit_sha }}
+          path: downloaded-live-evidence
+          run-id: ${{ inputs.live_evidence_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore and validate evidence bundle
+        run: |
+          set -euo pipefail
+          deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
+          evidence_file="$(find downloaded-live-evidence -type f -name launch-evidence-batch.json -print -quit)"
+          if [[ -z "$deployment_file" ]] || [[ -z "$evidence_file" ]]; then
+            echo "::error::Selected live evidence artifact is incomplete."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$deployment_file" launch_package/production-deployment.json
+          cp "$evidence_file" launch_package/launch-evidence-batch.json
+          artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
+          if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
+          if [[ -z "$artifact_dir" ]]; then
+            echo "::error::Playwright evidence artifacts directory is missing."
+            exit 1
+          fi
+          rm -rf launch_package/artifacts
+          cp -R "$artifact_dir" launch_package/artifacts
+
+      - name: Revalidate same-commit pilot evidence
+        run: node scripts/launch-status.mjs
+
+      - name: Write workflow-bound pilot incident report
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
+          INCIDENT_CONFIRMATION: ${{ inputs.incident_confirmation }}
+          ROLLBACK_CONFIRMATION: ${{ inputs.rollback_confirmation }}
+          PILOT_STARTED_AT: ${{ inputs.pilot_started_at }}
+          PILOT_COMPLETED_AT: ${{ inputs.pilot_completed_at }}
+          OPEN_P0: ${{ inputs.open_p0 }}
+          OPEN_P1: ${{ inputs.open_p1 }}
+          INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
+          ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
+          MONITORING_REFERENCE: ${{ inputs.monitoring_reference }}
+        run: node scripts/write-pilot-incident-report.mjs
+
+      - name: Write founder-authorized hard launch approval
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
+        run: node scripts/write-hard-launch-approval.mjs
+
+      - name: Verify hard public launch status
+        run: node scripts/launch-status.mjs --hard
+
+      - name: Run complete hard launch gate
+        run: npm run launch:hard-gate
+
+      - name: Upload hard launch clearance evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hard-public-launch-clearance-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/launch-evidence-batch.json
+            launch_package/artifacts
+            launch_package/pilot-incident-report.json
+            launch_package/hard-launch-approval.json
+            launch_package/hard-launch-status.json
+            launch_package/launch-status.json
+          if-no-files-found: error
+          retention-days: 365
