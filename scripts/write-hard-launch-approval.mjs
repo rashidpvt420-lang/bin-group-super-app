@@ -14,8 +14,10 @@ import {
   AUTHORIZED_HARD_LAUNCH_ACTORS,
   HARD_LAUNCH_CONFIRMATION_PHRASE,
   hardLaunchApprovalPath,
+  operationalReadinessPath,
   pilotIncidentReportPath,
   validateHardLaunchApprovalDocument,
+  validateOperationalReadinessReport,
   validatePilotIncidentReport,
 } from './lib/hard-launch-gate.mjs';
 
@@ -45,17 +47,21 @@ if (confirmation !== HARD_LAUNCH_CONFIRMATION_PHRASE) throw new Error('Hard laun
 const evidenceFile = evidencePath(root);
 const deploymentFile = deploymentEvidencePath(root);
 const incidentFile = pilotIncidentReportPath(root);
+const operationalFile = operationalReadinessPath(root);
 const evidenceBatch = readJsonSafe(evidenceFile, { records: [] });
 const deploymentDoc = readJsonSafe(deploymentFile, null);
 const incidentReport = readJsonSafe(incidentFile, null);
+const operationalReport = readJsonSafe(operationalFile, null);
 
 const pilot = evaluatePilotEligibility({ evidenceBatch, deploymentDoc, commitSha, root });
 const incidentErrors = validatePilotIncidentReport(incidentReport, commitSha);
-if (!pilot.pilotEligible || incidentErrors.length) {
+const operationalErrors = validateOperationalReadinessReport(operationalReport, commitSha);
+if (!pilot.pilotEligible || incidentErrors.length || operationalErrors.length) {
   console.error('[hard-launch-approval] FAIL — prerequisite evidence is not launch-clear');
   for (const key of pilot.missing) console.error(`- missing pilot evidence: ${key}`);
   for (const error of pilot.invalid) console.error(`- invalid pilot evidence: ${error}`);
   for (const error of incidentErrors) console.error(`- invalid pilot report: ${error}`);
+  for (const error of operationalErrors) console.error(`- invalid operational proof: ${error}`);
   process.exit(1);
 }
 
@@ -72,12 +78,14 @@ const approval = {
   founderApproval: true,
   confirmationVerified: true,
   pilotEligibleAtApproval: true,
+  operationalReadinessAtApproval: true,
   noOpenP0P1: Number(incidentReport.openP0) === 0 && Number(incidentReport.openP1) === 0,
   rollbackPlanVerified: incidentReport.rollbackPlanVerified === true,
   monitoringVerified: incidentReport.monitoringVerified === true,
   deploymentHash: sha256File(deploymentFile),
   evidenceBatchHash: sha256File(evidenceFile),
   incidentReportHash: sha256File(incidentFile),
+  operationalReadinessHash: sha256File(operationalFile),
   approvedBy: actor,
   approvedAt: new Date().toISOString(),
   generatedByWorkflow: true,
