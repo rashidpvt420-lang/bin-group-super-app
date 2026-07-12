@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Choose live-evidence first; hard-clearance only after a completed 24-hour pilot'
+        description: 'Run live-evidence first; hard-clearance only after a completed 24-hour pilot'
         required: true
         default: live-evidence
         type: choice
@@ -93,9 +93,40 @@ env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
 
 jobs:
-  live-role-smoke:
-    name: Verify production public and role flows
-    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'live-evidence'
+  scheduled-public-smoke:
+    name: Scheduled production public smoke
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+      - name: Validate App Check debug configuration
+        run: node scripts/ensure-appcheck.mjs
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run public smoke tests
+        run: npx playwright test --grep "production public smoke" --project=chromium-desktop
+      - name: Upload scheduled smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-public-smoke-${{ github.sha }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  live-evidence:
+    name: Generate same-commit five-role production evidence
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'live-evidence'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -104,8 +135,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: Enforce manual same-commit gates
-        if: github.event_name == 'workflow_dispatch'
+      - name: Enforce same-commit deployment inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_SHA: ${{ github.sha }}
@@ -126,19 +156,17 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout exact launch commit
+      - name: Checkout exact production commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit_sha || github.sha }}
+          ref: ${{ inputs.expected_commit_sha }}
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
 
-      - name: Authenticate Google Cloud for manual launch data seed
-        if: github.event_name == 'workflow_dispatch'
+      - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -149,8 +177,7 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Download exact production deployment evidence
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download exact production deployment artifact
         uses: actions/download-artifact@v4
         with:
           name: production-deployment-${{ inputs.expected_commit_sha }}
@@ -158,79 +185,38 @@ jobs:
           run-id: ${{ inputs.production_deploy_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Restore production deployment metadata
-        if: github.event_name == 'workflow_dispatch'
+      - name: Restore deployment metadata
         run: |
           set -euo pipefail
           source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
           if [[ -z "$source_file" ]]; then
-            echo "::error::production-deployment.json was not found in the selected deployment artifact."
+            echo "::error::production-deployment.json was not found."
             exit 1
           fi
           mkdir -p launch_package
           cp "$source_file" launch_package/production-deployment.json
           test -s launch_package/production-deployment.json
 
-      - name: Validate public-smoke environment
-        if: github.event_name != 'workflow_dispatch'
-        run: node scripts/ensure-appcheck.mjs
-
-      - name: Validate full role-smoke secrets and App Check
-        if: github.event_name == 'workflow_dispatch'
+      - name: Validate role credentials and App Check
         env:
           E2E_STRICT_ROLES: 'true'
         run: |
           node scripts/verify-e2e-env.mjs
           node scripts/ensure-appcheck.mjs
 
-      - name: Seed or repair E2E auth accounts and role claims
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/seed-e2e-auth.mjs
+      - name: Seed or repair launch accounts and fixtures
+        run: |
+          node scripts/seed-e2e-auth.mjs
+          node scripts/seed-live-role-test-data.mjs
 
-      - name: Seed five-role launch fixtures
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/seed-live-role-test-data.mjs
-
-      - name: Install Playwright browser for scheduled smoke
-        if: github.event_name != 'workflow_dispatch'
-        run: npx playwright install --with-deps chromium
-
-      - name: Run scheduled public smoke tests
-        if: github.event_name != 'workflow_dispatch'
-        run: npx playwright test --grep "production public smoke" --project=chromium-desktop
-
-      - name: Run all current-commit launch evidence suites
-        if: github.event_name == 'workflow_dispatch'
+      - name: Run every required live evidence suite
         run: node scripts/run-critical-evidence.mjs --suite all-required
 
-      - name: Verify controlled-pilot launch status
-        if: github.event_name == 'workflow_dispatch'
+      - name: Verify controlled-pilot eligibility
         run: node scripts/launch-status.mjs
 
-      - name: Create launch proof manifest
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p launch-proof
-          {
-            echo "BIN GROUP launch proof manifest"
-            echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "repository=${GITHUB_REPOSITORY}"
-            echo "ref=${GITHUB_REF}"
-            echo "sha=${GITHUB_SHA}"
-            echo "run_id=${GITHUB_RUN_ID}"
-            echo "run_number=${GITHUB_RUN_NUMBER}"
-            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
-            echo "event=${GITHUB_EVENT_NAME}"
-            echo "actor=${GITHUB_ACTOR}"
-            echo "base_url=${E2E_BASE_URL}"
-            echo "admin_base_url=${E2E_ADMIN_BASE_URL}"
-          } > launch-proof/manifest.txt
-          if [[ -d launch_package/artifacts ]]; then find launch_package/artifacts -type f -print0 | sort -z | xargs -0 -r sha256sum >> launch-proof/manifest.txt; fi
-          sha256sum launch-proof/manifest.txt > launch-proof/manifest.sha256
-
-      - name: Upload current-commit live launch evidence
-        if: github.event_name == 'workflow_dispatch' && success()
+      - name: Upload live launch evidence
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
@@ -239,28 +225,19 @@ jobs:
             launch_package/launch-evidence-batch.json
             launch_package/launch-status.json
             launch_package/artifacts
-            launch-proof
           if-no-files-found: error
           retention-days: 90
-
-      - name: Upload scheduled smoke manifest
-        if: github.event_name != 'workflow_dispatch' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scheduled-public-smoke-${{ github.sha }}
-          path: launch-proof
-          if-no-files-found: error
-          retention-days: 14
 
   hard-public-launch-clearance:
     name: Verify and authorize hard public launch
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     environment: hard-public-launch
     permissions:
       contents: read
       actions: read
+      id-token: write
 
     steps:
       - name: Enforce protected release inputs
@@ -278,11 +255,11 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
-            echo "::error::Hard public launch clearance may only run from refs/heads/main."
+            echo "::error::Hard clearance may only run from refs/heads/main."
             exit 1
           fi
           if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
-            echo "::error::Only the authorized founder account may approve hard public launch."
+            echo "::error::Only the authorized founder account may approve hard launch."
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
@@ -315,11 +292,18 @@ jobs:
         with:
           ref: ${{ inputs.expected_commit_sha }}
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
@@ -337,24 +321,25 @@ jobs:
           set -euo pipefail
           deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
           evidence_file="$(find downloaded-live-evidence -type f -name launch-evidence-batch.json -print -quit)"
-          if [[ -z "$deployment_file" ]] || [[ -z "$evidence_file" ]]; then
+          artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
+          if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
+          if [[ -z "$deployment_file" ]] || [[ -z "$evidence_file" ]] || [[ -z "$artifact_dir" ]]; then
             echo "::error::Selected live evidence artifact is incomplete."
             exit 1
           fi
           mkdir -p launch_package
           cp "$deployment_file" launch_package/production-deployment.json
           cp "$evidence_file" launch_package/launch-evidence-batch.json
-          artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
-          if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
-          if [[ -z "$artifact_dir" ]]; then
-            echo "::error::Playwright evidence artifacts directory is missing."
-            exit 1
-          fi
           rm -rf launch_package/artifacts
           cp -R "$artifact_dir" launch_package/artifacts
 
       - name: Revalidate same-commit pilot evidence
         run: node scripts/launch-status.mjs
+
+      - name: Snapshot canonical operational readiness
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/verify-operational-readiness.mjs
 
       - name: Write workflow-bound pilot incident report
         env:
@@ -377,11 +362,10 @@ jobs:
           HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
         run: node scripts/write-hard-launch-approval.mjs
 
-      - name: Verify hard public launch status
-        run: node scripts/launch-status.mjs --hard
-
-      - name: Run complete hard launch gate
-        run: npm run launch:hard-gate
+      - name: Verify final hard launch status
+        run: |
+          node scripts/launch-status.mjs --hard
+          npm run launch:hard-gate
 
       - name: Upload hard launch clearance evidence
         if: success()
@@ -392,6 +376,7 @@ jobs:
             launch_package/production-deployment.json
             launch_package/launch-evidence-batch.json
             launch_package/artifacts
+            launch_package/operational-readiness.json
             launch_package/pilot-incident-report.json
             launch_package/hard-launch-approval.json
             launch_package/hard-launch-status.json
