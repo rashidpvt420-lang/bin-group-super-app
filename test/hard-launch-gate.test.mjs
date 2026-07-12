@@ -145,3 +145,37 @@ test('launch status derives hard launch claim instead of hardcoding true', () =>
   assert.match(statusScript, /--hard/);
   assert.doesNotMatch(statusScript, /const\s+hardLaunchClaim\s*=\s*true/);
 });
+
+test('launch-critical browser evidence cannot use mocked Firebase network routes', () => {
+  const criticalSpecs = [
+    'tests/e2e/business-owner.spec.ts',
+    'tests/e2e/business-tenant.spec.ts',
+    'tests/e2e/business-technician.spec.ts',
+    'tests/e2e/business-broker.spec.ts',
+    'tests/e2e/business-admin.spec.ts',
+  ];
+  for (const spec of criticalSpecs) {
+    const source = readFileSync(spec, 'utf8');
+    assert.doesNotMatch(source, /page\.route\([^\n]*(?:googleapis|firebase|firestore|storage)/i, `${spec} mocks Firebase traffic`);
+    assert.doesNotMatch(source, /route\.fulfill\(/, `${spec} uses route.fulfill in launch evidence`);
+  }
+});
+
+test('App Check monitor requires browser authentication before a Firestore read qualifies', () => {
+  const helper = readFileSync('tests/e2e/helpers/appCheckDebug.ts', 'utf8');
+  assert.match(helper, /successfulAuthResponses/);
+  assert.match(helper, /firestore\\\.googleapis\\\.com\/i\.test\(url\) && authSeen/);
+  assert.doesNotMatch(helper, /authSeen \|\| \/documents:/);
+});
+
+test('owner and tenant business proofs are mandatory and backend-verified', () => {
+  const owner = readFileSync('tests/e2e/business-owner.spec.ts', 'utf8');
+  const tenant = readFileSync('tests/e2e/business-tenant.spec.ts', 'utf8');
+  assert.match(owner, /E2E_OWNER_EMAIL/);
+  assert.match(owner, /waitForURL\('\*\*\/owner\//);
+  assert.doesNotMatch(owner, /page\.route\(/);
+  assert.match(tenant, /APPROVE, RATE & CLOSE/);
+  assert.match(tenant, /maintenanceTickets/);
+  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED/i);
+  assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
+});
