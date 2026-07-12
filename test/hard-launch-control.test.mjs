@@ -159,6 +159,14 @@ test('committed proof file is not a mutable founder approval switch', () => {
   assert.doesNotMatch(gates, /"founderAuthorization"/);
 });
 
+test('launch status builds current Functions before measuring discovery', () => {
+  const source = readFileSync('scripts/launch-status.mjs', 'utf8');
+  const build = source.indexOf("['run', 'build:functions']");
+  const discovery = source.indexOf('scripts/measure-functions-load.mjs');
+  assert.ok(build >= 0, 'launch-status must build Functions on a fresh checkout');
+  assert.ok(discovery > build, 'Functions build must occur before discovery measurement');
+});
+
 test('production workflow enforces correct hard-launch order', () => {
   const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const predeploy = workflow.indexOf('Enforce signed predeploy authorization');
