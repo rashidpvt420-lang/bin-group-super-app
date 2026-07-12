@@ -22,6 +22,7 @@ const technicianEmail = String(process.env.E2E_TECHNICIAN_EMAIL || '').trim().to
 const brokerEmail = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
 
 const missing = [
+  ['E2E_OWNER_EMAIL', ownerEmail],
   ['E2E_TENANT_EMAIL', tenantEmail],
   ['E2E_TECHNICIAN_EMAIL', technicianEmail],
   ['E2E_BROKER_EMAIL', brokerEmail],
@@ -65,11 +66,12 @@ const [tenantUser, ownerUser, technicianUser, brokerUser] = await Promise.all([
   getUserByEmailOrNull(brokerEmail),
 ]);
 
+if (!ownerUser?.uid) throw new Error(`Owner launch account does not exist in Firebase Auth: ${ownerEmail}`);
 if (!tenantUser?.uid) throw new Error(`Tenant launch account does not exist in Firebase Auth: ${tenantEmail}`);
 if (!technicianUser?.uid) throw new Error(`Technician launch account does not exist in Firebase Auth: ${technicianEmail}`);
 if (!brokerUser?.uid) throw new Error(`Broker launch account does not exist in Firebase Auth: ${brokerEmail}`);
 
-const ownerUid = ownerUser?.uid || 'e2e-owner-placeholder';
+const ownerUid = ownerUser.uid;
 const tenantUid = tenantUser.uid;
 const technicianUid = technicianUser.uid;
 const brokerUid = brokerUser.uid;
@@ -111,7 +113,7 @@ await db.collection('properties').doc(propertyId).set({
   type: 'RESIDENTIAL_BUILDING',
   ownerId: ownerUid,
   ownerUid,
-  ownerEmail: ownerEmail || null,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -126,23 +128,23 @@ await db.collection('properties').doc(propertyId).set({
   createdAt: now,
 }, { merge: true });
 
-if (ownerUser?.uid) {
-  await db.collection('users').doc(ownerUid).set({
-    uid: ownerUid,
-    email: ownerEmail,
-    role: 'owner',
-    userRole: 'owner',
-    primaryRole: 'owner',
-    status: 'active',
-    onboardingComplete: true,
-    paymentVerified: true,
-    adminApproved: true,
-    dashboardUnlocked: true,
-    activeContractId: contractId,
-    e2eLaunchSeed: true,
-    updatedAt: now,
-  }, { merge: true });
-}
+await db.collection('users').doc(ownerUid).set({
+  uid: ownerUid,
+  email: ownerEmail,
+  displayName: ownerUser.displayName || 'E2E Owner',
+  role: 'owner',
+  userRole: 'owner',
+  primaryRole: 'owner',
+  status: 'active',
+  onboardingComplete: true,
+  paymentVerified: true,
+  adminApproved: true,
+  dashboardUnlocked: true,
+  activeContractId: contractId,
+  propertyIds: [propertyId],
+  e2eLaunchSeed: true,
+  updatedAt: now,
+}, { merge: true });
 
 await db.collection('contracts').doc(contractId).set({
   id: contractId,
@@ -150,7 +152,7 @@ await db.collection('contracts').doc(contractId).set({
   propertyName: 'E2E Live Role Tower',
   ownerId: ownerUid,
   ownerUid,
-  ownerEmail: ownerEmail || null,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -174,6 +176,9 @@ const seededUnitPayload = {
   propertyId,
   propertyName: 'E2E Live Role Tower',
   ...gpsPayload,
+  ownerId: ownerUid,
+  ownerUid,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -202,6 +207,9 @@ tenantUnitDocs.forEach((docSnap) => {
     propertyId,
     propertyName: 'E2E Live Role Tower',
     ...gpsPayload,
+    ownerId: ownerUid,
+    ownerUid,
+    ownerEmail,
     tenantId: tenantUid,
     tenantUid,
     tenantEmail,
@@ -271,6 +279,9 @@ await db.collection('maintenanceTickets').doc(technicianTicketId).set({
   unitId,
   unitNumber: 'E2E-101',
   floorNumber: '1',
+  ownerId: ownerUid,
+  ownerUid,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -332,6 +343,7 @@ await db.collection('broker_commissions').doc(brokerCommissionId).set({
 }, { merge: true });
 
 console.log(`Seeded five-role staging fixtures in project ${projectId}`);
+console.log(`ownerUid=${ownerUid}`);
 console.log(`tenantUid=${tenantUid}`);
 console.log(`technicianUid=${technicianUid}`);
 console.log(`brokerUid=${brokerUid}`);
