@@ -65,3 +65,22 @@ test('five-profile optional second technician credentials are documented when re
     assert.match(example, /^E2E_TECHNICIAN_B_PASSWORD=/m);
   }
 });
+
+test('walkthrough does not silently reuse technician A password for technician B', () => {
+  const walkthrough = readFileSync('tests/e2e/launch-five-profile-walkthrough.spec.ts', 'utf8');
+  assert.doesNotMatch(
+    walkthrough,
+    /E2E_TECHNICIAN_B_PASSWORD\s*\|\|\s*process\.env\.E2E_TECHNICIAN_PASSWORD/,
+  );
+  assert.match(walkthrough, /E2E_TECHNICIAN_B_PASSWORD/);
+});
+
+test('production workflow run blocks never embed user-controlled github expressions', () => {
+  for (const block of runBlocks(workflow)) {
+    assert.doesNotMatch(block, /\$\{\{\s*github\.event\.inputs\./);
+    assert.doesNotMatch(block, /\$\{\{\s*inputs\./);
+  }
+  // Expressions are allowed only in env: mappings, not inline shell.
+  const envSectionMatches = [...workflow.matchAll(/env:\n((?:[ \t]+.+\n)+)/g)].map((m) => m[1]);
+  assert.ok(envSectionMatches.some((section) => /DISPATCH_CONFIRMATION:/.test(section)));
+});

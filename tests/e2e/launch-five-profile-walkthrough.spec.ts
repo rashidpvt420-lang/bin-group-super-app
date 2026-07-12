@@ -12,12 +12,24 @@ function requireEnv(name: string): string {
 const OWNER_EMAIL = () => requireEnv('E2E_OWNER_EMAIL');
 const TENANT_EMAIL = () => requireEnv('E2E_TENANT_EMAIL');
 const TECH_A_EMAIL = () => requireEnv('E2E_TECHNICIAN_EMAIL');
-const TECH_B_EMAIL = () => requireEnv('E2E_TECHNICIAN_B_EMAIL');
 const BROKER_EMAIL = () => requireEnv('E2E_BROKER_EMAIL');
 const ADMIN_EMAIL = () => requireEnv('E2E_ADMIN_EMAIL');
 
 function rolePassword(role: 'OWNER' | 'TENANT' | 'TECHNICIAN' | 'BROKER' | 'ADMIN'): string {
   return requireEnv(`E2E_${role}_PASSWORD`);
+}
+
+/** Optional second technician for race-condition walkthrough only (not launch-critical). */
+function optionalTechBCredentials(): { email: string; password: string } | null {
+  const email = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
+  const password = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
+  if (!email && !password) return null;
+  if (!email || !password) {
+    throw new Error(
+      'E2E_TECHNICIAN_B_EMAIL and E2E_TECHNICIAN_B_PASSWORD must both be set together. Do not reuse E2E_TECHNICIAN_PASSWORD.',
+    );
+  }
+  return { email, password };
 }
 
 const dummyImageBuffer = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082', 'hex');
@@ -120,19 +132,14 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     const pageA = await techAContext.newPage();
     const pageB = await techBContext.newPage();
 
-    // Login both techs
+    // Login both techs (Tech B is optional; when present, B password must be its own env var).
     await loginToProfile(pageA, TECH_A_EMAIL(), 'technician', rolePassword('TECHNICIAN'));
-    try {
-      const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
-      const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || process.env.E2E_TECHNICIAN_PASSWORD || '').trim();
-      if (!techBEmail || !techBPassword) {
-        throw new Error('missing tech B credentials');
-      }
-      await loginToProfile(pageB, techBEmail, 'technician', techBPassword);
-    } catch {
-      test.skip(true, 'Tech B is not seeded; cannot verify ALREADY_EXISTS race-condition Snackbar.');
+    const techB = optionalTechBCredentials();
+    if (!techB) {
+      test.skip(true, 'Tech B credentials not provided; cannot verify ALREADY_EXISTS race-condition Snackbar.');
       return;
     }
+    await loginToProfile(pageB, techB.email, 'technician', techB.password);
 
     await pageA.goto('/technician/pool', { waitUntil: 'domcontentloaded' });
     await pageB.goto('/technician/pool', { waitUntil: 'domcontentloaded' });
