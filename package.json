@@ -59,6 +59,8 @@
     "e2e:ensure-appcheck": "node scripts/ensure-e2e-appcheck-debug.mjs",
     "verify:admin-firebase": "node scripts/verify-admin-firebase-build.mjs",
     "test:launch-honesty": "node --test test/launch-honesty.test.mjs test/production-workflow-security.test.mjs tests/launch/*.test.mjs",
+    "test:gate12:smtp": "node scripts/test-trigger-email.mjs",
+    "test:gate12:appcheck": "node scripts/ensure-appcheck.mjs",
     "gate:predeploy": "node scripts/predeploy-approval-gate.mjs",
     "gate:postdeploy": "node scripts/postdeploy-release-gate.mjs",
     "artifact:digest": "node scripts/compute-artifact-digest.mjs",

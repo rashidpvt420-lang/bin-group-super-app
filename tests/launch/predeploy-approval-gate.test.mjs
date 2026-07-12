@@ -20,6 +20,8 @@ function baseEnv(overrides = {}) {
     LAUNCH_MODE: 'bank-pilot',
     LAUNCH_BANK_ONLY: '1',
     PREDEPLOY_BUILD_OK: 'true',
+    PREDEPLOY_ADMIN_BUILD_OK: 'true',
+    PREDEPLOY_FUNCTIONS_BUILD_OK: 'true',
     PREDEPLOY_RULES_OK: 'true',
     PREDEPLOY_FUNCTIONS_LOAD_OK: 'true',
     ...overrides,
@@ -198,6 +200,28 @@ describe('predeploy approval gate', () => {
       const result = runPredeployApprovalGate({ root, env: baseEnv() });
       assert.equal(result.ok, false);
       assert.ok(result.failures.some((f) => /Rollback hold/i.test(f)));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when a predeploy build marker is missing or false', () => {
+    const root = freshRoot();
+    try {
+      for (const key of [
+        'PREDEPLOY_BUILD_OK',
+        'PREDEPLOY_ADMIN_BUILD_OK',
+        'PREDEPLOY_FUNCTIONS_BUILD_OK',
+        'PREDEPLOY_RULES_OK',
+        'PREDEPLOY_FUNCTIONS_LOAD_OK',
+      ]) {
+        const result = runPredeployApprovalGate({
+          root,
+          env: baseEnv({ [key]: 'false' }),
+        });
+        assert.equal(result.ok, false, key);
+        assert.ok(result.failures.some((f) => f.includes(key)), key);
+      }
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

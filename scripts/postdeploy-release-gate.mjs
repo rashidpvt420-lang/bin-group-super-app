@@ -12,6 +12,7 @@ import {
   DEPLOYMENT_MAX_AGE_MS,
   DEPLOYMENT_META_PATH,
   EVIDENCE_BATCH_PATH,
+  PREDEPLOY_APPROVAL_PATH,
   PUBLIC_RELEASE_STATUS_PATH,
   checkProductionIncidents,
   requireArtifactDigest,
@@ -52,6 +53,34 @@ export function runPostdeployReleaseGate({
   );
 
   checkProductionIncidents(failures, { root, now });
+
+  const approvalPath = path.join(root, PREDEPLOY_APPROVAL_PATH);
+  let releaseId = String(env.RELEASE_ID || '').trim();
+  if (!existsSync(approvalPath)) {
+    failures.push(
+      `${PREDEPLOY_APPROVAL_PATH} missing. Postdeploy release clearance must bind to the predeploy releaseId.`,
+    );
+  } else {
+    try {
+      const approval = JSON.parse(readFileSync(approvalPath, 'utf8'));
+      const boundReleaseId = String(approval.releaseId || '').trim();
+      if (!boundReleaseId) {
+        failures.push('predeploy-approval.json missing releaseId binding.');
+      } else {
+        releaseId = boundReleaseId;
+        if (env.RELEASE_ID && String(env.RELEASE_ID).trim() !== boundReleaseId) {
+          failures.push(
+            `RELEASE_ID (${env.RELEASE_ID}) does not match predeploy approval releaseId (${boundReleaseId}).`,
+          );
+        }
+        if (githubSha && String(approval.commitSha || '').trim() !== githubSha) {
+          failures.push('predeploy approval commitSha does not equal GITHUB_SHA.');
+        }
+      }
+    } catch (err) {
+      failures.push(`predeploy-approval.json malformed: ${err.message}`);
+    }
+  }
 
   const deployPath = path.join(root, DEPLOYMENT_META_PATH);
   let deploymentDoc = null;
@@ -188,14 +217,17 @@ export function runPostdeployReleaseGate({
     }
   }
 
-  if (String(env.POSTDEPLOY_SMTP_OK || '') !== 'true') {
-    failures.push('POSTDEPLOY_SMTP_OK=true required (SMTP live delivery proof).');
-  }
-  if (String(env.POSTDEPLOY_APPCHECK_OK || '') !== 'true') {
-    failures.push('POSTDEPLOY_APPCHECK_OK=true required (App Check enforcement proof).');
-  }
-  if (String(env.POSTDEPLOY_ROUTES_OK || '') !== 'true') {
-    failures.push('POSTDEPLOY_ROUTES_OK=true required (production routes PASS).');
+  for (const item of [
+    { envKey: 'POSTDEPLOY_ROUTES_OK', label: 'production routes verification' },
+    { envKey: 'POSTDEPLOY_SMTP_OK', label: 'SMTP live delivery proof' },
+    { envKey: 'POSTDEPLOY_APPCHECK_OK', label: 'App Check enforcement proof' },
+    { envKey: 'POSTDEPLOY_SMOKE_OK', label: 'Gate 11 authenticated production smoke' },
+    { envKey: 'POSTDEPLOY_BUSINESS_OK', label: 'business workflows 9/9 proof' },
+    { envKey: 'POSTDEPLOY_AUDIT_OK', label: 'launch audit live evidence' },
+  ]) {
+    if (String(env[item.envKey] || '') !== 'true') {
+      failures.push(`Missing ${item.label} marker (${item.envKey}=true).`);
+    }
   }
 
   const launchMode = String(env.LAUNCH_MODE || '').trim();
@@ -220,6 +252,7 @@ export function runPostdeployReleaseGate({
     status: ok ? 'passed' : 'failed',
     stage: 'postdeploy',
     commitSha: githubSha || null,
+    releaseId: releaseId || null,
     validatedArtifactDigest: validatedDigest || null,
     publicReleaseCleared: ok,
     hardLaunchClaim: HARD_LAUNCH_CLAIM,

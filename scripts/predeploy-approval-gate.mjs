@@ -112,8 +112,10 @@ export function runPredeployApprovalGate({
   checkProductionIncidents(failures, { root, now });
 
   for (const item of [
-    { envKey: 'PREDEPLOY_BUILD_OK', label: 'build validation' },
-    { envKey: 'PREDEPLOY_RULES_OK', label: 'rules hardening / stability' },
+    { envKey: 'PREDEPLOY_BUILD_OK', label: 'main public app build validation' },
+    { envKey: 'PREDEPLOY_ADMIN_BUILD_OK', label: 'admin panel build validation' },
+    { envKey: 'PREDEPLOY_FUNCTIONS_BUILD_OK', label: 'Firebase Functions build validation' },
+    { envKey: 'PREDEPLOY_RULES_OK', label: 'Firestore rules hardening / stability' },
     { envKey: 'PREDEPLOY_FUNCTIONS_LOAD_OK', label: 'Functions load measurement' },
   ]) {
     if (String(env[item.envKey] || '') !== 'true') {

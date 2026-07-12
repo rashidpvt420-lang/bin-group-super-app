@@ -18,11 +18,37 @@ function baseEnv(overrides = {}) {
     GITHUB_SHA: SHA,
     VALIDATED_ARTIFACT_DIGEST: DIGEST,
     LAUNCH_MODE: 'bank-pilot',
+    POSTDEPLOY_ROUTES_OK: 'true',
     POSTDEPLOY_SMTP_OK: 'true',
     POSTDEPLOY_APPCHECK_OK: 'true',
-    POSTDEPLOY_ROUTES_OK: 'true',
+    POSTDEPLOY_SMOKE_OK: 'true',
+    POSTDEPLOY_BUSINESS_OK: 'true',
+    POSTDEPLOY_AUDIT_OK: 'true',
     ...overrides,
   };
+}
+
+function writeApproval(root, overrides = {}) {
+  mkdirSync(path.join(root, 'launch_package'), { recursive: true });
+  writeFileSync(
+    path.join(root, 'launch_package/predeploy-approval.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        commitSha: SHA,
+        artifactDigest: DIGEST,
+        releaseId: 'rel-test-1',
+        approvedAt: new Date().toISOString(),
+        approvedBy: 'rashid@bin-groups.com',
+        approvedVia: 'github-environment-protection',
+        githubEnvironment: 'production',
+        launchMode: 'bank-pilot',
+        ...overrides,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function writeIncidents(root) {
@@ -244,6 +270,7 @@ describe('postdeploy release gate', () => {
   it('fails when deployment metadata is not workflow-generated', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
     writeIncidents(root);
+    writeApproval(root);
     writeDeployment(root, { source: 'hand-edited' });
     try {
       const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
@@ -257,6 +284,7 @@ describe('postdeploy release gate', () => {
   it('fails failed Gate 11 smoke', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
     writeIncidents(root);
+    writeApproval(root);
     fullEvidence(root);
     const batch = JSON.parse(
       readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
@@ -277,6 +305,7 @@ describe('postdeploy release gate', () => {
   it('fails on App Check 403 contamination', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
     writeIncidents(root);
+    writeApproval(root);
     fullEvidence(root);
     const batch = JSON.parse(
       readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
@@ -297,6 +326,7 @@ describe('postdeploy release gate', () => {
   it('fails failed business workflows', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
     writeIncidents(root);
+    writeApproval(root);
     fullEvidence(root);
     const batch = JSON.parse(
       readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
@@ -317,6 +347,7 @@ describe('postdeploy release gate', () => {
   it('fails wrong artifact digest on deployment metadata', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
     writeIncidents(root);
+    writeApproval(root);
     fullEvidence(root);
     writeDeployment(root, { artifactDigest: `sha256:${'ff'.repeat(32)}` });
     // rewrite evidence deploy hash to match new file so only digest mismatch is tested via env compare
@@ -337,9 +368,50 @@ describe('postdeploy release gate', () => {
     }
   });
 
+  it('fails when a postdeploy validation marker is missing or false', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-markers-'));
+    writeIncidents(root);
+    writeApproval(root);
+    fullEvidence(root);
+    try {
+      for (const key of [
+        'POSTDEPLOY_ROUTES_OK',
+        'POSTDEPLOY_SMTP_OK',
+        'POSTDEPLOY_APPCHECK_OK',
+        'POSTDEPLOY_SMOKE_OK',
+        'POSTDEPLOY_BUSINESS_OK',
+        'POSTDEPLOY_AUDIT_OK',
+      ]) {
+        const result = runPostdeployReleaseGate({
+          root,
+          env: baseEnv({ [key]: 'false' }),
+          writeStatus: false,
+        });
+        assert.equal(result.ok, false, key);
+        assert.ok(result.failures.some((f) => f.includes(key)), key);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails when predeploy approval releaseId binding is missing', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-release-'));
+    writeIncidents(root);
+    fullEvidence(root);
+    try {
+      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+      assert.equal(result.ok, false);
+      assert.ok(result.failures.some((f) => /predeploy-approval/i.test(f)));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('passes a valid complete release fixture without claiming hard launch', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
     writeIncidents(root);
+    writeApproval(root);
     fullEvidence(root);
     try {
       const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: true });
@@ -347,6 +419,7 @@ describe('postdeploy release gate', () => {
       assert.equal(result.hardLaunchClaim, false);
       assert.equal(result.status.publicReleaseCleared, true);
       assert.equal(result.status.hardLaunchClaim, false);
+      assert.equal(result.status.releaseId, 'rel-test-1');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
