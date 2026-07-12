@@ -244,6 +244,10 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
 
     await expect(page.locator('body')).not.toContainText(/auth\/invalid-credential|permission-denied|SOVEREIGN_FAILURE/i, { timeout: 15000 });
     await expect(page.locator('body')).toContainText(/Admin|Dashboard|Command/i, { timeout: 15000 });
+
+    await page.goto(`${adminBase}/sos`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('admin-sos-feed')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/SOS|Emergency|emergency/i, { timeout: 15000 });
   });
 });
 

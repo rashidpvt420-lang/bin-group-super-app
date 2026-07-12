@@ -6,6 +6,9 @@
 import { test, expect, Page } from '@playwright/test';
 import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
+const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL ?? '';
+const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
+
 async function clickFirstVisible(page: Page, selectors: string[], timeout = 15000) {
   for (const selector of selectors) {
     const target = page.locator(selector).first();
@@ -164,5 +167,22 @@ test.describe('Owner Business Workflow', () => {
     await expect(page.locator('body')).toContainText(/Commercial Service Plan|Quote Estimate|Contract model/i, { timeout: 20000 });
     await expect(page.locator('body')).toContainText(/Quote Estimate/i, { timeout: 10000 });
     await expect(page.locator('body')).toContainText(/AED\s*[1-9][0-9,]*/i, { timeout: 10000 });
+  });
+
+  test('Credentialed owner reaches unlocked dashboard after Gate 11 seed', async ({ page }) => {
+    test.skip(!OWNER_EMAIL || !OWNER_PASSWORD, 'Missing E2E_OWNER_EMAIL/PASSWORD for credentialed owner launch proof.');
+
+    await page.goto('/login?intendedRole=owner', { waitUntil: 'domcontentloaded' });
+    await page.locator('input[type="email"], input[name*="email" i]').first().fill(OWNER_EMAIL);
+    await page.locator('input[type="password"]').first().fill(OWNER_PASSWORD);
+    await page.locator('form button[type="submit"]').first().click();
+    await page.waitForURL('**/owner/dashboard', { timeout: 25_000 });
+
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|dashboard remains locked/i, { timeout: 10_000 });
+    await expect(page.locator('body')).toContainText(/Properties|Contract|Portfolio|Document Vault|activation/i, { timeout: 15_000 });
+
+    await page.goto('/owner/activation', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/SOVEREIGN_FAILURE|application error/i, { timeout: 10_000 });
+    await expect(page.locator('body')).toContainText(/payment|contract|activation|gate/i, { timeout: 15_000 });
   });
 });

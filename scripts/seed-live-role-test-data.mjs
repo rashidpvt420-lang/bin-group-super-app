@@ -82,6 +82,10 @@ const contractId = `e2e-live-role-contract-${safeId(tenantUid)}`;
 const technicianTicketId = `e2e-live-technician-ticket-${safeId(technicianUid)}`;
 const poolTicketId = 'e2e-live-pool-ticket-open';
 const brokerCommissionId = `e2e-live-broker-commission-${safeId(brokerUid)}`;
+const sosTicketId = 'e2e-live-sos-ticket';
+const ownerPaymentPendingContractId = 'e2e-live-owner-payment-pending';
+const technicianCompletedTicketId = `e2e-live-technician-completed-${safeId(technicianUid)}`;
+const brokerDocumentId = `e2e-live-broker-document-${safeId(brokerUid)}`;
 
 const gps = {
   lat: 24.2075,
@@ -341,6 +345,93 @@ await db.collection('users').doc(brokerUid).set({
   updatedAt: now,
 }, { merge: true });
 
+// SOS ticket for tenant → admin visibility profile gate.
+await db.collection('maintenanceTickets').doc(sosTicketId).set({
+  id: sosTicketId,
+  ticketId: sosTicketId,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  unitId,
+  unitNumber: 'E2E-101',
+  floorNumber: '1',
+  tenantId: tenantUid,
+  tenantUid,
+  tenantEmail,
+  tenantName: tenantUser.displayName || 'E2E Tenant',
+  category: 'emergency',
+  priority: 'emergency',
+  description: 'TENANT TRIGGERED SOS EMERGENCY (E2E seed)',
+  status: 'emergency_submitted',
+  sosStatus: 'ACTIVE',
+  isSOS: true,
+  emergency: true,
+  requiresImmediateDispatch: true,
+  slaMinutes: 30,
+  ...gpsPayload,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+// Pending owner payment contract for admin approve/reject gate (approve path UI only; do not auto-approve).
+await db.collection('contracts').doc(ownerPaymentPendingContractId).set({
+  id: ownerPaymentPendingContractId,
+  paymentId: 'E2E_OWNER_PAYMENT_PENDING',
+  amount: 7500,
+  currency: 'AED',
+  ownerId: ownerUid,
+  ownerUid,
+  ownerEmail: ownerEmail || null,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  provider: 'Bank Transfer',
+  status: 'pending_approval',
+  paymentVerified: false,
+  paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+// Completed technician ticket for completion-audit profile gate.
+await db.collection('maintenanceTickets').doc(technicianCompletedTicketId).set({
+  id: technicianCompletedTicketId,
+  ticketId: technicianCompletedTicketId,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  unitId,
+  unitNumber: 'E2E-101',
+  tenantId: tenantUid,
+  tenantUid,
+  tenantEmail,
+  assignedTechnicianId: technicianUid,
+  technicianId: technicianUid,
+  category: 'Electrical / power systems',
+  description: 'E2E completed mission for technician completion audit proof.',
+  priority: 'MEDIUM',
+  status: 'CLOSED',
+  qualityScore: 4.8,
+  technicianScore: 4.8,
+  completionPhotos: [beforeProof],
+  afterPhotoUrl: beforeProof,
+  ...gpsPayload,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+await db.collection('brokerDocuments').doc(brokerDocumentId).set({
+  id: brokerDocumentId,
+  brokerId: brokerUid,
+  docType: 'emirates_id',
+  fileName: 'e2e-emirates-id.pdf',
+  fileUrl: 'https://bin-group-57c60.firebasestorage.app/e2e/emirates-id.pdf',
+  status: 'pending_review',
+  e2eLaunchSeed: true,
+  uploadedAt: now,
+  updatedAt: now,
+}, { merge: true });
+
 await db.collection('broker_commissions').doc(brokerCommissionId).set({
   id: brokerCommissionId,
   brokerId: brokerUid,
@@ -410,4 +501,8 @@ console.log(`contractId=${contractId}`);
 console.log(`technicianTicketId=${technicianTicketId}`);
 console.log(`poolTicketId=${poolTicketId}`);
 console.log(`brokerCommissionId=${brokerCommissionId}`);
+console.log(`sosTicketId=${sosTicketId}`);
+console.log(`ownerPaymentPendingContractId=${ownerPaymentPendingContractId}`);
+console.log(`technicianCompletedTicketId=${technicianCompletedTicketId}`);
+console.log(`brokerDocumentId=${brokerDocumentId}`);
 console.log(`repairedTenantUnits=${tenantUnitDocs.length}`);
