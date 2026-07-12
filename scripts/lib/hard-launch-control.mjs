@@ -101,7 +101,7 @@ export function validateIsoTimestamp(value, label, options = {}) {
   if (typeof value !== 'string' || !value.trim()) return [`${label} is required`];
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return [`${label} must be a valid ISO-8601 timestamp`];
-  if (timestamp > now + futureSkewMs) failures.push(`${label} is too far in the future`);
+  if (!requireFuture && timestamp > now + futureSkewMs) failures.push(`${label} is too far in the future`);
   if (maxAgeMs !== null && now - timestamp > maxAgeMs) failures.push(`${label} is stale`);
   if (requireFuture && timestamp <= now) failures.push(`${label} must be in the future`);
   return failures;
