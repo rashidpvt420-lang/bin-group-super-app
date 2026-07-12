@@ -22,6 +22,12 @@ function timestampToIso(value) {
 if (process.env.GITHUB_ACTIONS !== 'true') {
   throw new Error('Operational hard-launch evidence may only be snapshotted by GitHub Actions.');
 }
+if (process.env.GITHUB_WORKFLOW !== 'Live Role Smoke Tests') {
+  throw new Error('Operational readiness snapshot requires the protected Live Role Smoke Tests workflow.');
+}
+if (process.env.GITHUB_JOB !== 'hard-public-launch-clearance') {
+  throw new Error('Operational readiness snapshot requires the protected hard-clearance job.');
+}
 if (process.env.GITHUB_REF !== 'refs/heads/main') {
   throw new Error('Operational hard-launch evidence requires refs/heads/main.');
 }
@@ -57,6 +63,10 @@ for (const key of REQUIRED_OPERATIONAL_GATES) {
     evidenceType: String(gate.evidenceType || ''),
     evidenceReference: String(gate.evidenceReference || ''),
     artifactHash: String(gate.artifactHash || ''),
+    sourceProofHash: String(gate.sourceProofHash || ''),
+    sourceSystem: String(gate.sourceSystem || ''),
+    observedAt: timestampToIso(gate.observedAt),
+    sourceWorkflowRunId: String(gate.sourceWorkflowRunId || ''),
     workflowRunId: String(gate.workflowRunId || ''),
     verifiedBy: String(gate.verifiedBy || ''),
     verifiedAt: timestampToIso(gate.verifiedAt),
