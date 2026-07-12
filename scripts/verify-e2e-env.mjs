@@ -25,14 +25,54 @@ const keys = [
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
 
+const PLACEHOLDER_PATTERNS = [
+  /^your[_-]?registered[_-]?uuid$/i,
+  /^replace[_-]?(me|with)/i,
+  /^xxx+$/i,
+  /^todo$/i,
+  /^changeme$/i,
+  /^false$/i,
+  /^true$/i,
+];
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function maskToken(token) {
+  if (!token || token.length < 12) return '(invalid)';
+  return `${token.slice(0, 8)}…${token.slice(-4)}`;
+}
+
+function validateAppCheckToken() {
+  const token = String(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || '').trim();
+  const skip = process.env.E2E_SKIP_APPCHECK_TOKEN === 'true';
+  if (skip) {
+    console.warn('[E2E_ENV_GUARD] App Check token check skipped via E2E_SKIP_APPCHECK_TOKEN=true (not allowed for launch clearance).');
+    return [];
+  }
+  if (!token) return ['VITE_FIREBASE_APPCHECK_DEBUG_TOKEN'];
+  if (PLACEHOLDER_PATTERNS.some((re) => re.test(token)) || token.includes('YOUR_REGISTERED_UUID')) {
+    console.error('[E2E_ENV_GUARD] VITE_FIREBASE_APPCHECK_DEBUG_TOKEN is a placeholder and must be a Console-registered UUID.');
+    return ['VITE_FIREBASE_APPCHECK_DEBUG_TOKEN(placeholder)'];
+  }
+  if (!UUID_RE.test(token)) {
+    console.error('[E2E_ENV_GUARD] VITE_FIREBASE_APPCHECK_DEBUG_TOKEN is malformed; expected UUID.');
+    return ['VITE_FIREBASE_APPCHECK_DEBUG_TOKEN(malformed)'];
+  }
+  console.log('[E2E_ENV_GUARD] appcheck_token_fingerprint=' + maskToken(token));
+  return [];
+}
+
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
   console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[`E2E_${role}_EMAIL`] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
 }
 
-if (missing.length) {
-  console.error('[E2E_ENV_GUARD] missing=' + missing.join(', '));
+const appCheckMissing = validateAppCheckToken();
+const allMissing = [...missing, ...appCheckMissing];
+
+if (allMissing.length) {
+  console.error('[E2E_ENV_GUARD] missing=' + allMissing.join(', '));
   if (!allowMissing) {
     console.error('[E2E_ENV_GUARD] Launch audit blocked. Set all required E2E values in .env.e2e or injected secrets. E2E_ALLOW_MISSING_ENV=true is permitted only for non-launch local smoke work.');
     process.exit(1);

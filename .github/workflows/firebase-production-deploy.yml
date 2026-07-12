@@ -65,6 +65,18 @@ jobs:
           printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> .env.production
           printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "${VITE_FIREBASE_VAPID_KEY}" >> .env.production
           cp .env.production .env.local
+          # Admin CRA build reads REACT_APP_* (not VITE_*). Mirror the same web app config.
+          mkdir -p apps/admin-panel
+          printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
+          printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
+          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "${VITE_FIREBASE_API_KEY}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "${VITE_FIREBASE_APP_ID}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "${VITE_FIREBASE_MESSAGING_SENDER_ID}" >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
+          printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
+          cp apps/admin-panel/.env.production apps/admin-panel/.env.local
 
       - name: Production stability guard
         run: npm run test:stability
@@ -85,9 +97,23 @@ jobs:
         run: npm run build:admin
         env:
           CI: false
+          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+
+      - name: Verify admin Firebase project embedding
+        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
 
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
+
+      - name: Measure Functions discovery load
+        run: npm run measure:functions-load
 
       - name: Run Firestore rules tests
         run: npm run test:rules

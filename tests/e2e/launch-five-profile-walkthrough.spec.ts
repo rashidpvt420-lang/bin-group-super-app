@@ -1,4 +1,5 @@
 import { test, expect, Page, BrowserContext } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 // Use universal E2E credentials
 const UNIVERSAL_PASSWORD = process.env.E2E_UNIVERSAL_PASSWORD || 'E2e!Test!Pass2026';
@@ -200,4 +201,8 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     await externalBridge;
     expect(page.url()).toMatch(/^https:\/\/bin-group-admin-panel\.web\.app\/(dashboard|login)/);
   });
+});
+
+test.beforeEach(async ({ page }) => {
+  await installAppCheckDebugToken(page);
 });

@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
@@ -31,8 +32,8 @@ const criticalRoutes: Record<RoleName, string[]> = {
   broker: ['/broker/dashboard', '/broker/leads', '/broker/referrals', '/broker/commissions', '/broker/documents', '/broker/profile'],
 };
 
-const fatalRouteFailureText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|invalid-credential|wrong-password|user-not-found/i;
-const accessFailureText = /access denied|not authorized/i;
+const fatalRouteFailureText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|invalid-credential|wrong-password|user-not-found|app check|firebase.?app.?check|permission-denied|too many requests|\b429\b/i;
+const accessFailureText = /access denied|not authorized|insufficient permissions/i;
 
 function requireCredential(value: string | undefined, key: string): string {
   if (!value?.trim()) throw new Error(`Launch audit blocked: missing ${key}. Do not skip role tests during launch clearance.`);
@@ -91,15 +92,29 @@ for (const role of Object.keys(criticalRoutes) as RoleName[]) {
     const password = process.env[passwordKey];
 
     test.beforeEach(async ({ page }) => {
+      await installAppCheckDebugToken(page);
       await login(page, requireCredential(email, emailKey), requireCredential(password, passwordKey));
     });
 
     for (const route of criticalRoutes[role]) {
       test(`${role} route renders: ${route}`, async ({ page }) => {
+        await assertAppCheckDebugTokenInPage(page);
+        const appCheckErrors: string[] = [];
+        page.on('console', (msg) => {
+          if (msg.type() === 'error') appCheckErrors.push(msg.text());
+        });
+        page.on('response', (response) => {
+          const status = response.status();
+          const url = response.url();
+          if ((status === 403 || status === 429) && /firestore|firebase|googleapis|identitytoolkit|appcheck/i.test(url)) {
+            appCheckErrors.push(`HTTP ${status} ${url}`);
+          }
+        });
         const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
         expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
         await expect(page, `Should not redirect to login page for ${route}`).not.toHaveURL(/\/login/, { timeout: 15_000 });
         await expectNoRuntimeCrash(page, route);
+        expect(collectAppCheckFailures(appCheckErrors), `${route} App Check/403/429 failures`).toEqual([]);
       });
     }
 

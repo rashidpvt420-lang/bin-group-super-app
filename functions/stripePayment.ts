@@ -2,13 +2,19 @@ import { FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import Stripe from "stripe";
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
+
+type StripeCtor = typeof import("stripe").default;
+
+async function loadStripe(): Promise<StripeCtor> {
+  const mod = await import("stripe");
+  return ((mod as any).default || mod) as StripeCtor;
+}
 
 function cleanText(value: unknown, label: string, maxLength: number) {
   const output = String(value || "").trim();
@@ -150,6 +156,7 @@ export const createStripeCheckoutSession = onCall({
     );
   }
 
+  const Stripe = await loadStripe();
   const stripeInstance = new Stripe(key, { apiVersion: "2023-10-16" as any });
   const returnParams = `session_id={CHECKOUT_SESSION_ID}&ownerUid=${encodeURIComponent(ownerUid)}${intakeId ? `&intakeId=${encodeURIComponent(intakeId)}` : ''}${ticketId ? `&ticketId=${encodeURIComponent(ticketId)}` : ''}${designRequestId ? `&designRequestId=${encodeURIComponent(designRequestId)}` : ''}`;
 
@@ -210,8 +217,9 @@ export const stripeWebhook = onRequest({
     return;
   }
 
+  const Stripe = await loadStripe();
   const stripeInstance = new Stripe(key, { apiVersion: "2023-10-16" as any });
-  let event: Stripe.Event;
+  let event: import("stripe").Stripe.Event;
 
   try {
     event = stripeInstance.webhooks.constructEvent(request.rawBody, sig || "", webhookSecret);
@@ -235,7 +243,7 @@ export const stripeWebhook = onRequest({
     return;
   }
 
-  const session = event.data.object as Stripe.Checkout.Session;
+  const session = event.data.object as import("stripe").Stripe.Checkout.Session;
   if (session.payment_status !== "paid") {
     await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, reason: "PAYMENT_NOT_PAID", createdAt: FieldValue.serverTimestamp() });
     response.status(202).json({ received: true, processed: false, reason: "PAYMENT_NOT_PAID" });

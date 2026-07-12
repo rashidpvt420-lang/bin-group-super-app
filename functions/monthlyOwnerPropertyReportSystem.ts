@@ -2,13 +2,22 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { getStorage } from "firebase-admin/storage";
-import PDFDocument from "pdfkit";
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const db = admin.firestore();
+
+type PdfKitCtor = typeof import("pdfkit");
+let cachedPdfKit: PdfKitCtor | null = null;
+
+async function loadPdfKit(): Promise<PdfKitCtor> {
+  if (cachedPdfKit) return cachedPdfKit;
+  const mod = await import("pdfkit");
+  cachedPdfKit = ((mod as any).default || mod) as PdfKitCtor;
+  return cachedPdfKit;
+}
 
 type OwnerReportProperty = {
   propertyId: string;
@@ -213,13 +222,13 @@ async function aggregateMaintenance(propertyId: string, periodStart: Date, perio
   return { completedMaintenance, pendingMaintenance, maintenanceCost };
 }
 
-function drawLine(doc: PDFKit.PDFDocument) {
+function drawLine(doc: any) {
   doc.moveDown(0.2);
   doc.strokeColor("#E5E7EB").lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
   doc.moveDown(0.5);
 }
 
-function drawPropertySection(doc: PDFKit.PDFDocument, property: OwnerReportProperty) {
+function drawPropertySection(doc: any, property: OwnerReportProperty) {
   if (doc.y > 660) doc.addPage();
   doc.fillColor("#111827").fontSize(14).text(property.propertyName);
   doc.fillColor("#6B7280").fontSize(9).text(`${property.address || "Address not recorded"} · ${property.emirate || "UAE"}`);
@@ -252,7 +261,8 @@ function drawPropertySection(doc: PDFKit.PDFDocument, property: OwnerReportPrope
 }
 
 async function saveReportPdf(payload: OwnerReportPayload) {
-  const doc = new PDFDocument({ margin: 50, size: "A4", info: { Title: "Monthly Owner Property Report", Author: "BIN GROUP Super App" } });
+  const PDFDocument = await loadPdfKit();
+  const doc = new (PDFDocument as any)({ margin: 50, size: "A4", info: { Title: "Monthly Owner Property Report", Author: "BIN GROUP Super App" } });
   const chunks: Buffer[] = [];
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
 

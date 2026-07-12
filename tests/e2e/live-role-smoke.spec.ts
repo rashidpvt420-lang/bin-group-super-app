@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
 
@@ -116,6 +117,9 @@ async function expectDashboardControls(page: Page, role: RoleName) {
 }
 
 test.describe('BIN GROUP production public smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   for (const route of publicRoutes) {
     test(`public route loads: ${route}`, async ({ page }) => {
       await expectHealthyPublicRoute(page, route);

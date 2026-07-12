@@ -1,7 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
-import OpenAI from "openai";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const imageGenerationKey = defineSecret("IMAGE_GENERATION_API_KEY");
@@ -10,7 +9,9 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const storage = admin.storage();
+function getStorageBucket() {
+  return admin.storage().bucket();
+}
 
 const DESIGN_CONCEPTS = [
   {
@@ -258,6 +259,7 @@ function buildPrompt(input: GeneratePayload, concept: typeof DESIGN_CONCEPTS[num
 }
 
 async function generateImageWithOpenAI(apiKey: string, prompt: string) {
+  const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey });
   const result = await client.images.generate({
     model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
@@ -270,7 +272,7 @@ async function generateImageWithOpenAI(apiKey: string, prompt: string) {
 }
 
 async function saveRender(uid: string, requestId: string, conceptId: string, buffer: Buffer) {
-  const bucket = storage.bucket();
+  const bucket = getStorageBucket();
   const filePath = `ai_design_renders/${uid}/${requestId}/${conceptId}.png`;
   const file = bucket.file(filePath);
   await file.save(buffer, {

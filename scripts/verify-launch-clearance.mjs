@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const gatePath = 'launch_package/launch-proof-gates.json';
+const evidencePath = 'launch_package/launch-evidence-batch.json';
+const statusPath = 'launch_package/launch-status.json';
+const pilotLockPath = 'launch_package/pilot-start.lock.json';
 const failures = [];
 const warnings = [];
 const isPilotMode = process.argv.includes('--pilot') || process.env.LAUNCH_SCOPE === 'pilot';
@@ -20,6 +24,11 @@ function proofText(gate) {
 function waiverIsComplete(gate) {
   const waiver = gate?.waiver || {};
   return Boolean(waiver.waivedBy && waiver.waivedAt && waiver.riskNote && waiver.expiresAt);
+}
+
+function gitSha() {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  return (result.stdout || '').trim() || 'unknown';
 }
 
 function validateGate(groupName, name, gate) {
@@ -73,6 +82,53 @@ if (!existsSync(gatePath)) {
   for (const [groupName, group] of Object.entries(gateGroups)) {
     for (const [name, gate] of Object.entries(group)) {
       validateGate(groupName, name, gate);
+    }
+  }
+}
+
+// Automation truthfulness: never treat controlled pilot as eligible while required automation is failing.
+if (existsSync(statusPath)) {
+  try {
+    const status = JSON.parse(readFileSync(statusPath, 'utf8'));
+    if (status.automationOk === false) {
+      fail('launch-status reports automationOk=false. Pilot/public clearance blocked.');
+    }
+    if (status.hardLaunchClaim === true) {
+      fail('launch-status incorrectly claims hard launch. Hard-launch claim is forbidden until all live proofs pass.');
+    }
+  } catch {
+    warn('launch-status.json exists but could not be parsed.');
+  }
+}
+
+if (isPilotMode) {
+  const sha = gitSha();
+  let adminEvidenceOk = false;
+  if (existsSync(evidencePath)) {
+    try {
+      const batch = JSON.parse(readFileSync(evidencePath, 'utf8'));
+      adminEvidenceOk = (batch.records || []).some(
+        (r) => r.testName === 'adminCredentialLogin' && r.exitCode === 0 && r.commitSha === sha,
+      );
+    } catch {
+      adminEvidenceOk = false;
+    }
+  }
+  if (!adminEvidenceOk) {
+    fail('Controlled pilot blocked: adminCredentialLogin evidence missing for current commit (must come from authenticated admin smoke, not route-only audit).');
+  }
+
+  if (existsSync(pilotLockPath)) {
+    try {
+      const lock = JSON.parse(readFileSync(pilotLockPath, 'utf8'));
+      if (lock.status === 'invalidated') {
+        fail(`Pilot start lock is invalidated: ${lock.reason || 'unknown reason'}`);
+      }
+      if (lock.status === 'started' && lock.commitSha && lock.commitSha !== sha) {
+        fail('Pilot start lock belongs to a different commit SHA and must be revalidated.');
+      }
+    } catch {
+      warn('pilot-start.lock.json exists but could not be parsed.');
     }
   }
 }

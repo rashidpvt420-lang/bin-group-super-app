@@ -5,12 +5,14 @@
  * emergency form, chat, profile, gate pass, AR/EN switch.
  */
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TENANT_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
-const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized/i;
+const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
+const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -36,16 +38,19 @@ async function assertHealthy(page: Page, context: string) {
 
 test.describe('Tenant launch audit', () => {
   test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
     requireAuditCredentials();
     await login(page);
   });
 
   test('tenant dashboard loads with unit card', async ({ page }) => {
+    await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     await assertHealthy(page, 'tenant/dashboard');
+    expect(collectAppCheckFailures(errors), 'App Check/403/429 console failures').toEqual([]);
     expect(errors.join('\n')).not.toMatch(ACCESS_DENIED);
   });
 

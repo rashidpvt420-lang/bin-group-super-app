@@ -4,12 +4,14 @@
  * Verifies: dashboard KPIs, key nav clicks, AR/EN switch, no runtime errors.
  */
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_ADMIN_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
-const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized/i;
+const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
+const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 const RAW_I18N_KEY  = /^(nav|onboarding|dash|sos|tech|fin|admin)\.[a-z_]+$/;
 
 function requireAuditCredentials() {
@@ -32,6 +34,7 @@ async function assertHealthy(page: Page, context: string) {
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
   expect(body, `${context}: no access-denied text`).not.toMatch(ACCESS_DENIED);
+  expect(body, `${context}: no App Check / 429 text`).not.toMatch(APPCHECK_HTTP);
 }
 
 async function consoleCollector(page: Page) {
@@ -42,15 +45,18 @@ async function consoleCollector(page: Page) {
 
 test.describe('Admin launch audit', () => {
   test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
     requireAuditCredentials();
     await login(page);
   });
 
   test('admin dashboard loads with KPI cards', async ({ page }) => {
+    await assertAppCheckDebugTokenInPage(page);
     const errors = await consoleCollector(page);
     await page.goto('/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     await assertHealthy(page, 'admin/dashboard');
+    expect(collectAppCheckFailures(errors), 'App Check/403/429 console failures').toEqual([]);
     expect(errors.join('\n')).not.toMatch(ACCESS_DENIED);
   });
 

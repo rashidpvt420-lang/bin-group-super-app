@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 async function testLogin(page: Page, email: string, password: string = 'E2e!Test!Pass2026') {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
@@ -12,6 +13,9 @@ async function testLogin(page: Page, email: string, password: string = 'E2e!Test
 }
 
 test.describe('Final Admin-Login Proof', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
 
   test('Founder email login enters Command Panel', async ({ page }) => {
     // We use a dummy founder email. In our system, e2e-admin acts as admin.

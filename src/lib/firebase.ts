@@ -78,7 +78,9 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 const readEnv = (key: string): string => {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
   const value = metaEnv?.[key] || '';
-  return value.includes('REPLACE_ME') ? '' : value;
+  if (!value) return '';
+  if (value.includes('REPLACE_ME') || value.includes('REPLACE_WITH')) return '';
+  return value;
 };
 
 // Firebase Web App config is public client configuration, not a service-account
@@ -105,9 +107,20 @@ export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
 
 if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined') {
   try {
-    // Enable debug token in non-production environments for local testing
-    if (import.meta.env.DEV) {
+    // Prefer an already-injected registered debug UUID (Playwright addInitScript).
+    // Only auto-enable the boolean debug flow in local DEV when no UUID is set.
+    const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
+    const hasRegisteredDebug =
+      typeof existingDebug === 'string' &&
+      existingDebug.length > 8 &&
+      existingDebug !== 'true' &&
+      existingDebug !== 'false';
+    if (!hasRegisteredDebug && import.meta.env.DEV) {
       (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+    if (hasRegisteredDebug) {
+      const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
+      console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
     }
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaV3Provider(appCheckSiteKey),

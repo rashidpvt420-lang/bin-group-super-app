@@ -3,7 +3,6 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
-import * as nodemailer from "nodemailer";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -45,7 +44,8 @@ async function assertAdmin(auth: any) {
   throw new HttpsError("permission-denied", "Admin access required.");
 }
 
-function createTransporter() {
+async function createTransporter() {
+  const nodemailer = await import("nodemailer");
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
   if (!user || !pass) throw new Error("SMTP_USER/SMTP_PASS secrets are not configured.");
@@ -81,7 +81,7 @@ async function deliverMail(mailId: string, data: any) {
   await ref.set({ delivery: { state: "PROCESSING", provider: "cloud_function_smtp", attemptedAt: FieldValue.serverTimestamp() } }, { merge: true });
 
   try {
-    const info = await createTransporter().sendMail({ from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
+    const info = await (await createTransporter()).sendMail({ from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
     await ref.set({
       delivery: {
         state: "SUCCESS",

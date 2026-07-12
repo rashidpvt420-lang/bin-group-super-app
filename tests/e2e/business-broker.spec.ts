@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -44,6 +45,7 @@ async function login(page: Page) {
 
 test.describe('Broker Business Workflow', () => {
   test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
     await login(page);
   });
 

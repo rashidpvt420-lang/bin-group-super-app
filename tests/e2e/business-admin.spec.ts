@@ -4,6 +4,7 @@
  * Verifies: property onboarding, tenant import, ticket assignment, and payment approval controls.
  */
 import { test, expect, Page } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 import admin from 'firebase-admin';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
@@ -143,6 +144,7 @@ test.describe('Admin Business Workflow', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
     await login(page);
   });
 

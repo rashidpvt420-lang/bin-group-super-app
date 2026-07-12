@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 import { execSync } from 'child_process';
 
 test.describe('Mosque / Masjid Onboarding and Dashboard E2E @emulator-only', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   test('Should complete Mosque onboarding, verify approval, and check Mosque Intelligence dashboard @emulator-only', async ({ page }) => {
     test.setTimeout(120000);
     // Mock Firebase Storage upload/download and override Referer for other Google APIs in one unified handler

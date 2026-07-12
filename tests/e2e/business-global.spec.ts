@@ -4,8 +4,12 @@
  * Verifies: Arabic/English language toggle (RTL/LTR switching) and Google Maps rendering.
  */
 import { test, expect } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 test.describe('Global Platform Mechanics', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   test('Arabic/English language toggle switches RTL/LTR mode', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('body', { timeout: 20_000 });

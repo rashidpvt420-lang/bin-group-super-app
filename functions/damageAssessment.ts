@@ -1,6 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
 const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
-import OpenAI from "openai";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -84,6 +83,7 @@ export const assessDamage = onCall({
   // Fall back to OpenAI Vision
   const oKey = openAiKey.value();
   if (oKey) {
+    const { default: OpenAI } = await import("openai");
     const openai = new OpenAI({ apiKey: oKey, timeout: 25000 });
     for (const model of OPENAI_VISION_MODELS) {
       try {

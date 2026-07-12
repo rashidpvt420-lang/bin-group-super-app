@@ -4,6 +4,7 @@
  * Verifies: job acceptance, GPS/arrival actions, proof upload, and ticket resolution.
  */
 import { test, expect, Page, Locator } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
@@ -78,6 +79,7 @@ test.describe('Technician Business Workflow', () => {
   test.use({ geolocation: { longitude: 55.2708, latitude: 25.2048 }, permissions: ['geolocation'] });
 
   test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
     await login(page);
   });
 

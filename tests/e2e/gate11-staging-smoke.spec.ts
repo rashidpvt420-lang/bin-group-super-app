@@ -2,6 +2,7 @@
  * Gate 11: signed-in 5-profile smoke against Firebase Hosting preview channels.
  */
 import { expect, Page, test } from '@playwright/test';
+import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures } from './helpers/appCheckDebug';
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -62,6 +63,9 @@ function cred(role: string) {
 }
 
 test.describe('Gate 11 admin panel signed-in smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    await installAppCheckDebugToken(page);
+  });
   const { email, password } = cred('admin');
   test.skip(!email || !password || !adminBaseUrl, 'Missing admin staging credentials');
   test('admin lands on dashboard and can open control center + broker management', async ({ page }) => {
