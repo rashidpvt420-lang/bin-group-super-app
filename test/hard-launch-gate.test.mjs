@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PRODUCTION, sha256File } from '../scripts/lib/launch-honesty.mjs';
 import {
+  REQUIRED_OPERATIONAL_GATES,
   validateHardLaunchApprovalDocument,
+  validateOperationalReadinessReport,
   validatePilotIncidentReport,
 } from '../scripts/lib/hard-launch-gate.mjs';
 
@@ -33,6 +35,37 @@ function validIncident() {
     generatedAt: '2026-07-12T10:31:00.000Z',
     generatedByWorkflow: true,
     source: 'hard-public-launch-clearance-workflow',
+    githubRepository: 'rashidpvt420-lang/bin-group-super-app',
+    githubRef: 'refs/heads/main',
+    githubRunId: '123456',
+  };
+}
+
+function validOperational() {
+  const gates = {};
+  for (const key of REQUIRED_OPERATIONAL_GATES) {
+    gates[key] = {
+      status: 'passed',
+      commitSha,
+      projectId: PRODUCTION.projectId,
+      evidenceType: key === 'technicianPhysicalGpsEvidence' ? 'physical-device-report' : 'workflow-artifact',
+      evidenceReference: `artifact://${key}/123456`,
+      artifactHash: 'b'.repeat(64),
+      workflowRunId: '123456',
+      verifiedBy: 'workflow',
+      verifiedAt: '2026-07-12T10:00:00.000Z',
+    };
+  }
+  return {
+    schemaVersion: 1,
+    status: 'passed',
+    commitSha,
+    projectId: PRODUCTION.projectId,
+    source: 'firestore-system-health-admin-summaries',
+    sourceDocument: 'system_health/admin_summaries',
+    gates,
+    fetchedAt: '2026-07-12T10:30:00.000Z',
+    generatedByWorkflow: true,
     githubRepository: 'rashidpvt420-lang/bin-group-super-app',
     githubRef: 'refs/heads/main',
     githubRunId: '123456',
@@ -71,7 +104,19 @@ test('pilot incident report requires a real 24-hour window and zero P0/P1', () =
   assert.ok(errors.some((error) => /openP1 must equal 0/i.test(error)));
 });
 
-test('hard launch approval is bound to deployment, evidence, and incident file hashes', () => {
+test('operational readiness requires every current-commit provider and physical gate', () => {
+  assert.deepEqual(validateOperationalReadinessReport(validOperational(), commitSha, { now }), []);
+
+  const missing = validOperational();
+  delete missing.gates.stripeLiveBilling;
+  assert.ok(validateOperationalReadinessReport(missing, commitSha, { now }).includes('operational gate missing: stripeLiveBilling'));
+
+  const stale = validOperational();
+  stale.gates.appCheckEnforcement.verifiedAt = '2026-06-01T00:00:00.000Z';
+  assert.ok(validateOperationalReadinessReport(stale, commitSha, { now }).some((error) => /appCheckEnforcement evidence is older/i.test(error)));
+});
+
+test('hard launch approval is bound to deployment, browser evidence, operations, and incident hashes', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'hard-launch-gate-'));
   try {
     const launchDir = path.join(root, 'launch_package');
@@ -79,9 +124,11 @@ test('hard launch approval is bound to deployment, evidence, and incident file h
     const deploymentFile = path.join(launchDir, 'production-deployment.json');
     const evidenceFile = path.join(launchDir, 'launch-evidence-batch.json');
     const incidentFile = path.join(launchDir, 'pilot-incident-report.json');
+    const operationalFile = path.join(launchDir, 'operational-readiness.json');
     writeFileSync(deploymentFile, '{"status":"passed"}\n');
     writeFileSync(evidenceFile, '{"records":[]}\n');
     writeFileSync(incidentFile, `${JSON.stringify(validIncident())}\n`);
+    writeFileSync(operationalFile, `${JSON.stringify(validOperational())}\n`);
 
     const approval = {
       schemaVersion: 1,
@@ -96,12 +143,14 @@ test('hard launch approval is bound to deployment, evidence, and incident file h
       founderApproval: true,
       confirmationVerified: true,
       pilotEligibleAtApproval: true,
+      operationalReadinessAtApproval: true,
       noOpenP0P1: true,
       rollbackPlanVerified: true,
       monitoringVerified: true,
       deploymentHash: sha256File(deploymentFile),
       evidenceBatchHash: sha256File(evidenceFile),
       incidentReportHash: sha256File(incidentFile),
+      operationalReadinessHash: sha256File(operationalFile),
       approvedBy: 'rashidpvt420-lang',
       approvedAt: '2026-07-12T11:00:00.000Z',
       generatedByWorkflow: true,
@@ -124,10 +173,12 @@ test('live workflow enforces same-commit evidence and protected hard clearance',
   const workflow = readFileSync('.github/workflows/live-role-smoke.yml', 'utf8');
   assert.match(workflow, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN:/);
   assert.match(workflow, /actions:\s*read/);
+  assert.match(workflow, /id-token:\s*write/);
   assert.doesNotMatch(workflow, /actions:\s*write/);
   assert.match(workflow, /run-critical-evidence\.mjs --suite all-required/);
   assert.match(workflow, /production-deployment-\$\{\{ inputs\.expected_commit_sha \}\}/);
   assert.match(workflow, /live-launch-evidence-\$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(workflow, /verify-operational-readiness\.mjs/);
   assert.match(workflow, /environment:\s*hard-public-launch/);
   assert.match(workflow, /AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP/);
   assert.match(workflow, /NO_OPEN_P0_P1/);
@@ -178,4 +229,13 @@ test('owner and tenant business proofs are mandatory and backend-verified', () =
   assert.match(tenant, /maintenanceTickets/);
   assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED/i);
   assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
+});
+
+test('canonical operational writer rejects arbitrary local boolean attestations', () => {
+  const writer = readFileSync('scripts/verify-launch-gate-live.mjs', 'utf8');
+  assert.match(writer, /GITHUB_ACTIONS/);
+  assert.match(writer, /HARD_LAUNCH_EXPECTED_SHA/);
+  assert.match(writer, /artifactHash/);
+  assert.match(writer, /operationalEvidence/);
+  assert.doesNotMatch(writer, /\[gateKey\]: true/);
 });
