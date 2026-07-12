@@ -613,10 +613,14 @@ jobs:
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Run Gate 11 authenticated production smoke
+        # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
+        # plain `npm run test:e2e:gate11:staging` — postdeploy-release-gate.mjs
+        # requires that exact evidence key and nothing else was writing it, so the
+        # gate could never pass regardless of this step's own ok=true marker.
         id: postdeploy_smoke
         run: |
           set -euo pipefail
-          npm run test:e2e:gate11:staging
+          node scripts/record-postdeploy-aggregate-evidence.mjs --only gate11
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Run business workflow evidence
@@ -625,6 +629,13 @@ jobs:
           set -euo pipefail
           npm run test:e2e:business
           echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Aggregate business workflow evidence
+        # postdeploy-release-gate.mjs requires a single businessWorkflows record
+        # (passed=9/failed=0), not the six per-role records test:e2e:business
+        # writes individually. Sums the six already-written records for this
+        # commit — does not re-run anything.
+        run: node scripts/record-postdeploy-aggregate-evidence.mjs --only business
 
       - name: Run launch audit live evidence
         id: postdeploy_audit
