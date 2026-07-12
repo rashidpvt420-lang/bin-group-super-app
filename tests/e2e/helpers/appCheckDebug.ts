@@ -47,16 +47,6 @@ export function maskAppCheckToken(token: string): string {
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
-function installTokenInWindow(payload: AppCheckInitPayload): void {
-  (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = payload.debugToken;
-  (window as any).__BIN_APPCHECK_DEBUG_FINGERPRINT__ = payload.tokenFingerprint;
-}
-
-/**
- * Inject a registered App Check debug token into the current document and
- * BEFORE every future page script. This is safe to call on about:blank before
- * the first navigation that loads Firebase.
- */
 export async function installAppCheckDebugToken(
   page: Page,
   token = getAppCheckDebugTokenFromEnv(),
@@ -72,15 +62,12 @@ export async function installAppCheckDebugToken(
     tokenFingerprint: maskAppCheckToken(validated),
   };
 
-  // One structured argument is required by Playwright's addInitScript API.
   await page.addInitScript((init: AppCheckInitPayload) => {
     (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = init.debugToken;
     (window as any).__BIN_APPCHECK_DEBUG_FINGERPRINT__ = init.tokenFingerprint;
     console.info(`[AppCheckDebug] token_fingerprint=${init.tokenFingerprint}`);
   }, payload);
 
-  // addInitScript applies to future documents. Populate the current about:blank
-  // document as well so pre-navigation assertions are truthful and do not fail.
   if (!page.isClosed()) {
     await page.evaluate((init: AppCheckInitPayload) => {
       (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = init.debugToken;
@@ -113,7 +100,6 @@ export async function assertAppCheckDebugTokenInPage(page: Page, expectedToken?:
   }
 }
 
-/** Patterns that prove App Check / Firestore enforcement is rejecting the browser. */
 export const APP_CHECK_FAILURE_RE =
   /app check|firebase.?app.?check|appcheck|permission-denied|insufficient permissions|unauthenticated|too many requests|resource.?exhausted|throttl|status.?code.?(401|403|429)|\b401\b|\b403\b|\b429\b/i;
 
@@ -126,6 +112,7 @@ export function collectAppCheckFailures(messages: string[]): string[] {
 
 export type AppCheckMonitor = {
   failures: string[];
+  successfulAuthResponses: string[];
   successfulFirebaseReads: string[];
   assertClean: (context: string) => void;
   assertTokenFingerprint: () => Promise<void>;
@@ -133,12 +120,14 @@ export type AppCheckMonitor = {
 };
 
 /**
- * Attach console + network listeners BEFORE login and keep them until the test ends.
- * Route rendering alone is not App Check proof — require at least one authenticated Firebase read.
+ * Attach listeners before login. Evidence requires a successful browser Auth
+ * response followed by a successful Firestore read in the same test. Public
+ * document reads and Admin SDK seeding never qualify.
  */
 export async function attachAuthenticatedAppCheckMonitor(page: Page): Promise<AppCheckMonitor> {
   await installAppCheckDebugToken(page);
   const failures: string[] = [];
+  const successfulAuthResponses: string[] = [];
   const successfulFirebaseReads: string[] = [];
   let authSeen = false;
 
@@ -160,16 +149,22 @@ export async function attachAuthenticatedAppCheckMonitor(page: Page): Promise<Ap
       return;
     }
 
-    if (status >= 200 && status < 300) {
-      if (/identitytoolkit|securetoken/i.test(url)) authSeen = true;
-      if (/firestore\.googleapis\.com/i.test(url) && (authSeen || /documents:/i.test(url))) {
-        successfulFirebaseReads.push(url);
-      }
+    if (status < 200 || status >= 300) return;
+
+    if (/identitytoolkit|securetoken/i.test(url)) {
+      authSeen = true;
+      successfulAuthResponses.push(url);
+      return;
+    }
+
+    if (/firestore\.googleapis\.com/i.test(url) && authSeen) {
+      successfulFirebaseReads.push(url);
     }
   });
 
   return {
     failures,
+    successfulAuthResponses,
     successfulFirebaseReads,
     assertClean(context: string) {
       const matched = collectAppCheckFailures(failures);
@@ -183,9 +178,12 @@ export async function attachAuthenticatedAppCheckMonitor(page: Page): Promise<Ap
       await assertAppCheckDebugTokenInPage(page);
     },
     assertAuthenticatedFirebaseRead(context: string) {
+      if (!successfulAuthResponses.length) {
+        throw new Error(`${context}: no successful browser Firebase Auth response observed.`);
+      }
       if (!successfulFirebaseReads.length) {
         throw new Error(
-          `${context}: no authenticated Firebase read observed. Route rendering alone is not App Check proof.`,
+          `${context}: no Firestore read was observed after browser authentication. Public reads or Admin SDK writes are not App Check proof.`,
         );
       }
     },
