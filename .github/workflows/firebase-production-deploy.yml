@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       founder_name:
-        description: 'Founder/CEO legal name recorded in the signed authorization'
+        description: 'Founder/CEO legal name'
         required: true
         type: string
       founder_email:
@@ -37,14 +37,18 @@ env:
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
   VITE_ENABLE_FIREBASE_APPCHECK: 'true'
-  REACT_APP_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-  REACT_APP_FOUNDER_ADMIN_EMAILS: ${{ secrets.REACT_APP_FOUNDER_ADMIN_EMAILS || 'ceo@bin-groups.com' }}
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
   VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
   VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+  REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+  REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
   CI: true
   PRODUCTION_CONFIRMATION_PHRASE: DEPLOY_PRODUCTION_BIN_GROUP_57C60
   HARD_LAUNCH_CONFIRMATION_PHRASE: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP
@@ -53,7 +57,6 @@ jobs:
   validate-production-build:
     name: Validate production build
     runs-on: ubuntu-latest
-
     steps:
       - name: Enforce production dispatch gates
         env:
@@ -64,26 +67,11 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [[ "$DISPATCH_CONFIRMATION" != "$PRODUCTION_CONFIRMATION_PHRASE" ]]; then
-            echo "::error::Production confirmation phrase mismatch."
-            exit 1
-          fi
-          if [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" != "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]]; then
-            echo "::error::Hard-launch confirmation phrase mismatch."
-            exit 1
-          fi
-          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
-            echo "::error::Production deploy is only approved from refs/heads/main."
-            exit 1
-          fi
-          if [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_commit_sha must be a lowercase 40-character SHA."
-            exit 1
-          fi
-          if [[ "$EXPECTED_COMMIT_SHA" != "$CURRENT_COMMIT_SHA" ]]; then
-            echo "::error::expected_commit_sha does not equal the workflow commit SHA."
-            exit 1
-          fi
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]]
+          [[ "$CURRENT_REF" == "refs/heads/main" ]]
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -108,29 +96,8 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Create production environment files
-        run: |
-          set -euo pipefail
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "$VITE_GOOGLE_MAPS_API_KEY" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.production
-          printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
-          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.production
-          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.production
-          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.production
-          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "$VITE_FIREBASE_VAPID_KEY" >> .env.production
-          cp .env.production .env.local
-
-          mkdir -p apps/admin-panel
-          printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
-          printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
-          cp apps/admin-panel/.env.production apps/admin-panel/.env.local
+      - name: Create strict production environment files
+        run: node scripts/write-production-env.mjs
 
       - name: Production stability guard
         run: npm run test:stability
@@ -154,14 +121,6 @@ jobs:
         run: npm run build:admin
         env:
           CI: false
-          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
-          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
-          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
 
       - name: Verify admin Firebase project embedding
         run: npm run verify:admin-firebase -- --build apps/admin-panel/build
@@ -180,7 +139,6 @@ jobs:
 
       - name: Verify Firebase hosting entrypoints
         run: |
-          set -euo pipefail
           test -f dist/index.html
           test -f apps/admin-panel/build/index.html
 
@@ -189,7 +147,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate-production-build
     environment: production
-
     steps:
       - name: Enforce production dispatch gates
         env:
@@ -218,39 +175,16 @@ jobs:
         env:
           WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-          FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          FIREBASE_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
           APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
           FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
           FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
         run: |
           set -euo pipefail
-          missing=0
-          require_value() {
-            if [[ -z "$2" ]]; then
-              echo "::error::Missing required production secret: $1"
-              missing=1
-            fi
-          }
-          require_value GCP_WORKLOAD_IDENTITY_PROVIDER "$WIF_PROVIDER"
-          require_value GCP_SERVICE_ACCOUNT "$GCP_SERVICE_ACCOUNT"
-          require_value VITE_APP_CHECK_SITE_KEY "$APP_CHECK_SITE_KEY"
-          require_value VITE_FIREBASE_API_KEY "$FIREBASE_API_KEY"
-          require_value VITE_FIREBASE_APP_ID "$FIREBASE_APP_ID"
-          require_value VITE_FIREBASE_MESSAGING_SENDER_ID "$FIREBASE_SENDER_ID"
-          require_value VITE_FIREBASE_VAPID_KEY "$FIREBASE_VAPID_KEY"
-          require_value HARD_LAUNCH_APPROVAL_HMAC_KEY "$APPROVAL_HMAC_KEY"
-          require_value AUTHORIZED_FOUNDER_ACTORS "$FOUNDER_ACTORS"
-          require_value AUTHORIZED_FOUNDER_EMAILS "$FOUNDER_EMAILS"
-          [[ ${#APPROVAL_HMAC_KEY:-0} -ge 0 ]] || true
-          if [[ "$missing" -ne 0 ]]; then exit 1; fi
-          if [[ ${#APPROVAL_HMAC_KEY} -lt 32 ]]; then
-            echo "::error::HARD_LAUNCH_APPROVAL_HMAC_KEY must be at least 32 characters."
-            exit 1
-          fi
+          [[ -n "$WIF_PROVIDER" ]]
+          [[ -n "$GCP_SERVICE_ACCOUNT" ]]
+          [[ -n "$FOUNDER_ACTORS" ]]
+          [[ -n "$FOUNDER_EMAILS" ]]
+          [[ ${#APPROVAL_HMAC_KEY} -ge 32 ]]
 
       - name: Authenticate to Google Cloud by Workload Identity Federation
         uses: google-github-actions/auth@v2
@@ -259,9 +193,6 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
-
-      - name: Repository hygiene guard
-        run: node scripts/repo-hygiene-guard.mjs
 
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
@@ -284,92 +215,19 @@ jobs:
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
         run: npm run hard-launch:predeploy
 
-      - name: Create production environment files
+      - name: Create strict production environment files
+        run: node scripts/write-production-env.mjs
+
+      - name: Build production stack
         run: |
-          set -euo pipefail
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "$VITE_GOOGLE_MAPS_API_KEY" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.production
-          printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
-          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.production
-          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.production
-          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.production
-          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "$VITE_FIREBASE_VAPID_KEY" >> .env.production
-          cp .env.production .env.local
+          npm run build --workspace=@bin/shared
+          npm run build
+          CI=false npm run build:admin
+          npm run verify:admin-firebase -- --build apps/admin-panel/build
+          npm run build --workspace=functions
 
-          mkdir -p apps/admin-panel
-          printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
-          printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
-          cp apps/admin-panel/.env.production apps/admin-panel/.env.local
-
-      - name: Build shared package
-        run: npm run build --workspace=@bin/shared
-
-      - name: Build unified public app
-        run: npm run build
-
-      - name: Build dedicated admin panel
-        run: npm run build:admin
-        env:
-          CI: false
-          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
-          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
-          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
-
-      - name: Verify admin Firebase project embedding before deploy
-        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
-
-      - name: Build Firebase Functions
-        run: npm run build --workspace=functions
-
-      - name: Deploy critical hosting, rules, indexes, and storage
-        id: deploy_critical
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "$GCP_PROJECT_ID" --non-interactive --force; then
-              echo "ok=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            [[ "$attempt" -eq 3 ]] || sleep 30
-          done
-          echo "ok=false" >> "$GITHUB_OUTPUT"
-          exit 1
-
-      - name: Deploy Firebase Functions
-        id: deploy_functions
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if npx firebase deploy --only functions --project "$GCP_PROJECT_ID" --non-interactive --force; then
-              echo "ok=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            [[ "$attempt" -eq 3 ]] || sleep 30
-          done
-          echo "ok=false" >> "$GITHUB_OUTPUT"
-          exit 1
-
-      - name: Write production deployment metadata
-        run: |
-          node scripts/write-production-deployment-metadata.mjs \
-            --components hosting,firestoreRules,firestoreIndexes,storageRules,functions
-
-      - name: Verify production deployment identity
-        run: |
-          set -euo pipefail
-          npm run verify:production-deployment -- --write-evidence | tee launch_package/production-deployment-verify.log
+      - name: Deploy and verify Firebase production stack
+        run: node scripts/deploy-firebase-production.mjs
 
       - name: Upload production deployment proof
         uses: actions/upload-artifact@v4
@@ -379,7 +237,6 @@ jobs:
             launch_package/hard-launch-authorization.json
             launch_package/production-incidents.json
             launch_package/production-deployment.json
-            launch_package/production-deployment-verify.log
           if-no-files-found: error
           retention-days: 90
 
@@ -403,7 +260,6 @@ jobs:
       E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
       VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
       E2E_STRICT_ROLES: 'true'
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -432,16 +288,11 @@ jobs:
 
       - name: Restore deployment proof
         run: |
-          set -euo pipefail
           mkdir -p launch_package
-          for name in hard-launch-authorization.json production-incidents.json production-deployment.json production-deployment-verify.log; do
-            source_file="$(find _deployment-proof -type f -name "$name" -print -quit)"
-            if [[ -z "$source_file" ]]; then
-              echo "::error::Missing deployment proof file: $name"
-              exit 1
-            fi
-            cp "$source_file" "launch_package/$name"
-          done
+          find _deployment-proof -type f -name '*.json' -exec cp {} launch_package/ \;
+          test -f launch_package/hard-launch-authorization.json
+          test -f launch_package/production-incidents.json
+          test -f launch_package/production-deployment.json
 
       - name: Validate full live E2E secrets and App Check UUID
         run: npm run test:e2e:env
@@ -468,10 +319,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: live-launch-evidence-${{ github.sha }}
-          path: |
-            launch_package
-            playwright-report
-            test-results
+          path: launch_package
           if-no-files-found: error
           retention-days: 90
 
@@ -498,7 +346,6 @@ jobs:
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
       E2E_STRICT_ROLES: 'true'
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -519,18 +366,13 @@ jobs:
 
       - name: Restore live evidence package
         run: |
-          set -euo pipefail
           rm -rf launch_package
-          mkdir -p launch_package
           root="$(find _live-proof -type d -name launch_package -print -quit)"
           if [[ -n "$root" ]]; then
-            cp -R "$root"/. launch_package/
+            cp -R "$root" launch_package
           else
-            find _live-proof -type f | while read -r file; do
-              relative="${file#_live-proof/}"
-              mkdir -p "launch_package/$(dirname "$relative")"
-              cp "$file" "launch_package/$relative"
-            done
+            mkdir -p launch_package
+            cp -R _live-proof/. launch_package/
           fi
           test -f launch_package/launch-evidence-batch.json
           test -f launch_package/production-deployment.json
@@ -546,14 +388,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hard-launch-decision-${{ github.sha }}
-          path: |
-            launch_package/hard-launch-authorization.json
-            launch_package/production-incidents.json
-            launch_package/production-deployment.json
-            launch_package/launch-evidence-batch.json
-            launch_package/launch-status.json
-            launch_package/hard-launch-decision.json
-            launch_package/hard-launch-status.json
-            launch_package/artifacts
+          path: launch_package
           if-no-files-found: error
           retention-days: 365
