@@ -71,6 +71,24 @@ for (const role of roles) {
 const appCheckMissing = validateAppCheckToken();
 const allMissing = [...missing, ...appCheckMissing];
 
+const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
+const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
+if ((techBEmail && !techBPassword) || (!techBEmail && techBPassword)) {
+  console.error('[E2E_ENV_GUARD] E2E_TECHNICIAN_B_EMAIL and E2E_TECHNICIAN_B_PASSWORD must both be set together.');
+  process.exit(1);
+}
+if (techBEmail) {
+  console.log('[E2E_ENV_GUARD] TECHNICIAN_B: email=set credential=set (optional walkthrough only)');
+}
+
+if (process.env.E2E_STRICT_BUSINESS === 'true') {
+  if (!String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim()) {
+    console.error('[E2E_ENV_GUARD] FIREBASE_SERVICE_ACCOUNT_JSON is required when E2E_STRICT_BUSINESS=true (business-admin Firestore seed).');
+    process.exit(1);
+  }
+  console.log('[E2E_ENV_GUARD] business-admin service account: set');
+}
+
 if (allMissing.length) {
   console.error('[E2E_ENV_GUARD] missing=' + allMissing.join(', '));
   if (!allowMissing) {

@@ -71,6 +71,7 @@
     "test:e2e:launch-audit": "npm run test:e2e:env && npm run e2e:ensure-appcheck && playwright install --with-deps chromium && playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop",
     "test:e2e:launch-audit:live": "node scripts/run-critical-evidence.mjs --suite launchAuditLive",
     "test:e2e:business": "node scripts/run-critical-evidence.mjs --suite all-business",
+    "test:e2e:walkthrough": "npm run test:e2e:env && npm run e2e:ensure-appcheck && playwright install --with-deps chromium && playwright test tests/e2e/launch-five-profile-walkthrough.spec.ts --project=chromium-desktop",
     "test:e2e:gate11:routes": "node scripts/gate11-staging-route-check.mjs",
     "test:e2e:gate11:staging": "npm run test:e2e:env && npm run e2e:ensure-appcheck && npm run test:e2e:gate11:routes && playwright install --with-deps chromium && playwright test tests/e2e/gate11-staging-smoke.spec.ts --project=chromium-desktop",
     "seed:e2e": "node scripts/seed-e2e-accounts.js",
