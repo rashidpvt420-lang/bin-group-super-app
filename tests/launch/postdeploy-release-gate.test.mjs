@@ -351,4 +351,39 @@ describe('postdeploy release gate', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  // Regression coverage for the workflow-wiring defect: these three markers were
+  // previously sourced from long-lived GitHub Secrets instead of the live routes/
+  // SMTP/App-Check checks actually run during this deployment, so a stale 'true'
+  // secret would silently pass forever. Proves a missing/false marker still fails
+  // closed even when every other piece of evidence in the fixture is valid.
+  for (const marker of ['POSTDEPLOY_SMTP_OK', 'POSTDEPLOY_APPCHECK_OK', 'POSTDEPLOY_ROUTES_OK']) {
+    it(`fails closed when ${marker} is missing (live check did not run/report)`, () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+      writeIncidents(root);
+      fullEvidence(root);
+      try {
+        const env = baseEnv();
+        delete env[marker];
+        const result = runPostdeployReleaseGate({ root, env });
+        assert.equal(result.ok, false);
+        assert.ok(result.failures.some((f) => f.includes(marker)));
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it(`fails closed when ${marker} is explicitly 'false' (live check failed)`, () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+      writeIncidents(root);
+      fullEvidence(root);
+      try {
+        const result = runPostdeployReleaseGate({ root, env: baseEnv({ [marker]: 'false' }) });
+        assert.equal(result.ok, false);
+        assert.ok(result.failures.some((f) => f.includes(marker)));
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
 });

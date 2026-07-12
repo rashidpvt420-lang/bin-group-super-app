@@ -345,11 +345,30 @@ jobs:
       - name: Verify admin Firebase project embedding before deploy
         run: npm run verify:admin-firebase -- --build apps/admin-panel/build
 
+      - name: Mark predeploy build success
+        # Real evidence, not a literal: this step only runs (default `if: success()`)
+        # if every build step above actually exited 0. Consumed by the predeploy gate
+        # below instead of a hardcoded 'true'.
+        id: build_main
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify rules and production stability
+        id: rules
+        run: |
+          set -euo pipefail
+          npm run test:stability
+          npm run verify:rules-hardening
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
       - name: Build Firebase Functions
         run: npm run build --workspace=functions
 
       - name: Measure Functions discovery load
-        run: npm run measure:functions-load
+        id: functions_load
+        run: |
+          set -euo pipefail
+          npm run measure:functions-load
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Compute validated artifact digest
         id: artifact_digest
@@ -396,9 +415,9 @@ jobs:
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           LAUNCH_BANK_ONLY: ${{ inputs.launch_mode == 'bank-pilot' && '1' || '0' }}
-          PREDEPLOY_BUILD_OK: 'true'
-          PREDEPLOY_RULES_OK: 'true'
-          PREDEPLOY_FUNCTIONS_LOAD_OK: 'true'
+          PREDEPLOY_BUILD_OK: ${{ steps.build_main.outputs.ok }}
+          PREDEPLOY_RULES_OK: ${{ steps.rules.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_LOAD_OK: ${{ steps.functions_load.outputs.ok }}
           PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
         run: node scripts/predeploy-approval-gate.mjs
 
@@ -502,14 +521,63 @@ jobs:
           name: production-deployment-${{ github.sha }}
           path: launch_package
 
+      # E2E_APPCHECK_DEBUG_TOKEN is a UUID registered in Firebase Console → App Check →
+      # Manage debug tokens for BOTH the main and admin web apps, stored only as a
+      # protected-environment secret — never bundled into the production build itself.
+      - name: Production routes live check
+        id: routes
+        env:
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
+        run: |
+          set -euo pipefail
+          npm run test:e2e:gate11:routes
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: SMTP live delivery proof
+        id: smtp
+        run: |
+          set -euo pipefail
+          node scripts/test-trigger-email.mjs
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: App Check debug-token readiness
+        id: appcheck
+        env:
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.E2E_APPCHECK_DEBUG_TOKEN }}
+          FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.E2E_APPCHECK_DEBUG_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm run e2e:ensure-appcheck
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Business workflows live E2E
+        env:
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.E2E_APPCHECK_DEBUG_TOKEN }}
+          FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.E2E_APPCHECK_DEBUG_TOKEN }}
+        run: npm run test:e2e:business
+
+      - name: Record Gate 11 + business aggregate evidence
+        # Runs Gate 11 smoke against production and rolls up the six business-role
+        # evidence records written above into the businessWorkflows/gate11ProductionSmoke
+        # keys the postdeploy gate requires. Records real pass/fail counts — never assumes.
+        env:
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.E2E_APPCHECK_DEBUG_TOKEN }}
+          FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.E2E_APPCHECK_DEBUG_TOKEN }}
+        run: node scripts/record-postdeploy-aggregate-evidence.mjs
+
       - name: Postdeploy release gate
         env:
           DEPLOYMENT_ENVIRONMENT: production
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
-          POSTDEPLOY_SMTP_OK: ${{ secrets.POSTDEPLOY_SMTP_OK }}
-          POSTDEPLOY_APPCHECK_OK: ${{ secrets.POSTDEPLOY_APPCHECK_OK }}
-          POSTDEPLOY_ROUTES_OK: ${{ secrets.POSTDEPLOY_ROUTES_OK }}
+          POSTDEPLOY_SMTP_OK: ${{ steps.smtp.outputs.ok }}
+          POSTDEPLOY_APPCHECK_OK: ${{ steps.appcheck.outputs.ok }}
+          POSTDEPLOY_ROUTES_OK: ${{ steps.routes.outputs.ok }}
           POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
         run: |
           set -euo pipefail

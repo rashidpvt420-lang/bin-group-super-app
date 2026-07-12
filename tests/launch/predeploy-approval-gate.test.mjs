@@ -228,4 +228,35 @@ describe('predeploy approval gate', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  // Regression coverage for the workflow-wiring defect: these markers previously
+  // arrived as hardcoded 'true' literals in the YAML regardless of whether the
+  // real build/rules/functions-load steps actually succeeded. The gate script
+  // itself was always correct (it always required =='true'); what was missing is
+  // proof that a MISSING or FALSE marker is actually rejected, not silently passed.
+  for (const marker of ['PREDEPLOY_BUILD_OK', 'PREDEPLOY_RULES_OK', 'PREDEPLOY_FUNCTIONS_LOAD_OK']) {
+    it(`fails closed when ${marker} is missing (real step did not run/report)`, () => {
+      const root = freshRoot();
+      try {
+        const env = baseEnv();
+        delete env[marker];
+        const result = runPredeployApprovalGate({ root, env });
+        assert.equal(result.ok, false);
+        assert.ok(result.failures.some((f) => f.includes(marker)));
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it(`fails closed when ${marker} is explicitly 'false' (real step failed)`, () => {
+      const root = freshRoot();
+      try {
+        const result = runPredeployApprovalGate({ root, env: baseEnv({ [marker]: 'false' }) });
+        assert.equal(result.ok, false);
+        assert.ok(result.failures.some((f) => f.includes(marker)));
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
 });
