@@ -10,6 +10,7 @@ import {
   validateOperationalReadinessReport,
   validatePilotIncidentReport,
 } from '../scripts/lib/hard-launch-gate.mjs';
+import { validateOperationalProofDocument } from '../scripts/lib/operational-proof-schema.mjs';
 
 const commitSha = 'a'.repeat(40);
 const now = Date.parse('2026-07-12T12:00:00.000Z');
@@ -49,8 +50,12 @@ function validOperational() {
       commitSha,
       projectId: PRODUCTION.projectId,
       evidenceType: key === 'technicianPhysicalGpsEvidence' ? 'physical-device-report' : 'workflow-artifact',
-      evidenceReference: `artifact://${key}/123456`,
+      evidenceReference: `github-actions://rashidpvt420-lang/bin-group-super-app/runs/654321/artifacts/${key}`,
       artifactHash: 'b'.repeat(64),
+      sourceProofHash: 'c'.repeat(64),
+      sourceSystem: 'github-actions-source-workflow',
+      observedAt: '2026-07-12T09:55:00.000Z',
+      sourceWorkflowRunId: '654321',
       workflowRunId: '123456',
       verifiedBy: 'workflow',
       verifiedAt: '2026-07-12T10:00:00.000Z',
@@ -69,6 +74,32 @@ function validOperational() {
     githubRepository: 'rashidpvt420-lang/bin-group-super-app',
     githubRef: 'refs/heads/main',
     githubRunId: '123456',
+  };
+}
+
+function validStripeSourceProof() {
+  return {
+    schemaVersion: 1,
+    status: 'passed',
+    generatedByWorkflow: true,
+    gateKey: 'stripeLiveBilling',
+    evidenceType: 'production-transaction',
+    commitSha,
+    projectId: PRODUCTION.projectId,
+    sourceRunId: '654321',
+    sourceSystem: 'stripe-live-api-and-webhook',
+    observedAt: '2026-07-12T10:00:00.000Z',
+    checks: [
+      { name: 'live charge and signed webhook', status: 'passed', reference: 'pi_live_123456' },
+    ],
+    provider: 'stripe',
+    liveMode: true,
+    currency: 'AED',
+    chargeSucceeded: true,
+    signedWebhookVerified: true,
+    amountMatched: true,
+    idempotencyVerified: true,
+    transactionId: 'pi_live_123456',
   };
 }
 
@@ -114,6 +145,39 @@ test('operational readiness requires every current-commit provider and physical 
   const stale = validOperational();
   stale.gates.appCheckEnforcement.verifiedAt = '2026-06-01T00:00:00.000Z';
   assert.ok(validateOperationalReadinessReport(stale, commitSha, { now }).some((error) => /appCheckEnforcement evidence is older/i.test(error)));
+
+  const incomplete = validOperational();
+  incomplete.gates.paymentUnlockExactlyOnce.sourceProofHash = '';
+  assert.ok(validateOperationalReadinessReport(incomplete, commitSha, { now }).includes('paymentUnlockExactlyOnce.sourceProofHash must be SHA-256'));
+});
+
+test('gate-specific source proof rejects relabeled or incomplete artifacts', () => {
+  assert.deepEqual(validateOperationalProofDocument(validStripeSourceProof(), {
+    gateKey: 'stripeLiveBilling',
+    evidenceType: 'production-transaction',
+    commitSha,
+    sourceRunId: '654321',
+    now,
+  }), []);
+
+  const relabeled = { ...validStripeSourceProof(), gateKey: 'appCheckEnforcement' };
+  const relabeledErrors = validateOperationalProofDocument(relabeled, {
+    gateKey: 'stripeLiveBilling',
+    evidenceType: 'production-transaction',
+    commitSha,
+    sourceRunId: '654321',
+    now,
+  });
+  assert.ok(relabeledErrors.includes('gateKey mismatch'));
+
+  const incomplete = { ...validStripeSourceProof(), signedWebhookVerified: false };
+  assert.ok(validateOperationalProofDocument(incomplete, {
+    gateKey: 'stripeLiveBilling',
+    evidenceType: 'production-transaction',
+    commitSha,
+    sourceRunId: '654321',
+    now,
+  }).includes('signedWebhookVerified must be true'));
 });
 
 test('hard launch approval is bound to deployment, browser evidence, operations, and incident hashes', () => {
@@ -190,6 +254,23 @@ test('live workflow enforces same-commit evidence and protected hard clearance',
   }
 });
 
+test('operational intake verifies source run, artifact, schema, and recomputed hash', () => {
+  const workflow = readFileSync('.github/workflows/operational-proof.yml', 'utf8');
+  assert.match(workflow, /environment:\s*hard-launch-operations/);
+  assert.match(workflow, /actions:\s*read/);
+  assert.match(workflow, /id-token:\s*write/);
+  assert.doesNotMatch(workflow, /actions:\s*write/);
+  assert.match(workflow, /actions\/runs\/\$\{SOURCE_RUN_ID\}/);
+  assert.match(workflow, /run\.head_sha !== process\.env\.TARGET_SHA/);
+  assert.match(workflow, /operational-proof\.json/);
+  assert.match(workflow, /crypto\.createHash\('sha256'\)/);
+  assert.match(workflow, /verify-launch-gate-live\.mjs/);
+  for (const block of runBlocks(workflow)) {
+    assert.doesNotMatch(block, /\$\{\{\s*inputs\./);
+    assert.doesNotMatch(block, /\$\{\{\s*github\.event\.inputs\./);
+  }
+});
+
 test('launch status derives hard launch claim instead of hardcoding true', () => {
   const statusScript = readFileSync('scripts/launch-status.mjs', 'utf8');
   assert.match(statusScript, /hardLaunchClaim\s*=\s*hardLaunchEligible/);
@@ -234,7 +315,12 @@ test('owner and tenant business proofs are mandatory and backend-verified', () =
 test('canonical operational writer rejects arbitrary local boolean attestations', () => {
   const writer = readFileSync('scripts/verify-launch-gate-live.mjs', 'utf8');
   assert.match(writer, /GITHUB_ACTIONS/);
+  assert.match(writer, /GITHUB_WORKFLOW/);
+  assert.match(writer, /GITHUB_JOB/);
   assert.match(writer, /HARD_LAUNCH_EXPECTED_SHA/);
+  assert.match(writer, /operational-proof\.json/);
+  assert.match(writer, /validateOperationalProofDocument/);
+  assert.match(writer, /sourceProofHash/);
   assert.match(writer, /artifactHash/);
   assert.match(writer, /operationalEvidence/);
   assert.doesNotMatch(writer, /\[gateKey\]: true/);
