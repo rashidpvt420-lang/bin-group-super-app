@@ -24,4 +24,6 @@ function runStep(label, scriptName) {
 
 runStep('Firebase Auth + user profiles', 'seed-e2e-auth.mjs');
 runStep('Live role-linked Firestore fixtures', 'seed-live-role-test-data.mjs');
-console.log('\nGate 11 fixtures seeded successfully.\n');
+console.log('\nGate 11 fixtures seeded successfully.');
+console.log('Profiles: admin, owner, tenant, technician, broker (+ optional technician B when E2E_TECHNICIAN_B_* set).');
+console.log('Run business/walkthrough suites only after this seed completes.\n');

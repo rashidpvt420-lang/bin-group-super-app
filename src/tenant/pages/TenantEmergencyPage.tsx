@@ -88,6 +88,7 @@ export default function TenantEmergencyPage() {
                 size="large" 
                 onClick={triggerConfirm}
                 disabled={submitting || !unitData}
+                data-testid="tenant-sos-trigger"
                 sx={{ 
                     bgcolor: '#ef4444', color: '#FFF', 
                     borderRadius: '50px', px: 8, py: 3, 
@@ -106,7 +107,7 @@ export default function TenantEmergencyPage() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-                    <Button onClick={handleEmergencyTrigger} color="error" variant="contained">Trigger SOS</Button>
+                    <Button onClick={handleEmergencyTrigger} color="error" variant="contained" data-testid="tenant-sos-confirm">Trigger SOS</Button>
                 </DialogActions>
             </Dialog>
         </Box>

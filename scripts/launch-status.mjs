@@ -28,7 +28,7 @@ const pilotLockPath = path.join(outDir, 'pilot-start.lock.json');
 const hardMode = process.argv.includes('--hard') || process.env.LAUNCH_SCOPE === 'hard';
 
 function run(cmd, args) {
-  const result = spawnSync(cmd, args, { encoding: 'utf8' });
+  const result = spawnSync(cmd, args, { encoding: 'utf8', cwd: root });
   return {
     command: [cmd, ...args].join(' '),
     exitCode: result.status ?? 1,
@@ -38,6 +38,19 @@ function run(cmd, args) {
 }
 
 const checks = [];
+
+console.log('\n[launch-status] building Firebase Functions for current-commit discovery proof...');
+const functionsBuild = run(npmCommand, ['run', 'build:functions']);
+checks.push({
+  name: 'functionsBuild',
+  command: functionsBuild.command,
+  exitCode: functionsBuild.exitCode,
+  ok: functionsBuild.exitCode === 0,
+});
+if (functionsBuild.exitCode !== 0) {
+  console.error(functionsBuild.stderr || functionsBuild.stdout || 'functionsBuild failed');
+}
+
 const required = [
   { name: 'functionsLoad', cmd: 'node', args: ['scripts/measure-functions-load.mjs'] },
   { name: 'e2eEnv', cmd: 'node', args: ['scripts/verify-e2e-env.mjs'] },

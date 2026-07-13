@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "activeIncidents": [],
+  "requiresRollback": false,
+  "rollbackReason": null,
+  "lastDeploymentFailed": false,
+  "lastDeploymentFailedAt": null,
+  "lastSuccessfulDeployment": null,
+  "lastSuccessfulCommitSha": null,
+  "updatedAt": "2026-07-12T00:00:00.000Z",
+  "updatedBy": "operations"
+}

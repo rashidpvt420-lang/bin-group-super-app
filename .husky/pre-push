@@ -1,0 +1,2 @@
+echo "[pre-push] Verifying TypeScript + ESLint before push (set HUSKY=0 to skip)..."
+npm run typecheck && npm run lint

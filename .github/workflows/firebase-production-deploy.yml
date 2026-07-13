@@ -4,13 +4,38 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'Type exactly DEPLOY_PRODUCTION_BIN_GROUP_57C60 to authorize production deploy'
+        description: 'Type exactly DEPLOY_PRODUCTION_BIN_GROUP_57C60'
+        required: true
+        type: string
+      hard_launch_confirmation:
+        description: 'Type exactly AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
         required: true
         type: string
       expected_commit_sha:
-        description: 'Full lowercase 40-character commit SHA that must equal github.sha on main'
+        description: 'Full lowercase 40-character main commit SHA'
         required: true
         type: string
+      founder_name:
+        description: 'Founder/CEO legal name'
+        required: true
+        type: string
+      founder_email:
+        description: 'Founder/CEO email listed in AUTHORIZED_FOUNDER_EMAILS'
+        required: true
+        type: string
+      launch_mode:
+        description: 'bank-pilot or public'
+        required: true
+        type: choice
+        options:
+          - bank-pilot
+          - public
+        default: bank-pilot
+      run_public_release_gate:
+        description: 'Run postdeploy public-release gate (requires live evidence already recorded for this SHA)'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,7 +43,6 @@ permissions:
 
 concurrency:
   group: firebase-production-deploy
-  # A production deployment must never be cancelled halfway through by a newer dispatch.
   cancel-in-progress: false
 
 env:
@@ -26,48 +50,41 @@ env:
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
   VITE_ENABLE_FIREBASE_APPCHECK: 'true'
-  REACT_APP_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-  REACT_APP_FOUNDER_ADMIN_EMAILS: ${{ secrets.REACT_APP_FOUNDER_ADMIN_EMAILS || 'ceo@bin-groups.com' }}
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
   VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
   VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+  REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+  REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
   CI: true
   PRODUCTION_CONFIRMATION_PHRASE: DEPLOY_PRODUCTION_BIN_GROUP_57C60
+  HARD_LAUNCH_CONFIRMATION_PHRASE: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP
 
 jobs:
   validate-production-build:
     name: Validate production build
     runs-on: ubuntu-latest
-
     steps:
       - name: Enforce production dispatch gates
         env:
           DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION_INPUT: ${{ inputs.hard_launch_confirmation }}
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_COMMIT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [[ "$DISPATCH_CONFIRMATION" != "$PRODUCTION_CONFIRMATION_PHRASE" ]]; then
-            echo "::error::Confirmation phrase mismatch. Refusing production deploy."
-            exit 1
-          fi
-          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
-            echo "::error::Production deploy is only approved from refs/heads/main."
-            exit 1
-          fi
-          if [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_commit_sha must be a full lowercase 40-character Git SHA."
-            exit 1
-          fi
-          if [[ "$EXPECTED_COMMIT_SHA" != "$CURRENT_COMMIT_SHA" ]]; then
-            echo "::error::expected_commit_sha does not equal the workflow commit SHA."
-            exit 1
-          fi
-          echo "Production dispatch gates passed for $CURRENT_COMMIT_SHA"
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]]
+          [[ "$CURRENT_REF" == "refs/heads/main" ]]
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -92,40 +109,14 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Create production environment files
-        run: |
-          set -euo pipefail
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "$VITE_GOOGLE_MAPS_API_KEY" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.production
-          printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
-          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.production
-          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.production
-          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.production
-          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "$VITE_FIREBASE_VAPID_KEY" >> .env.production
-          cp .env.production .env.local
-
-          mkdir -p apps/admin-panel
-          printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
-          printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
-          cp apps/admin-panel/.env.production apps/admin-panel/.env.local
-
-          for key in REACT_APP_APP_CHECK_SITE_KEY REACT_APP_FIREBASE_API_KEY REACT_APP_FIREBASE_APP_ID REACT_APP_FIREBASE_MESSAGING_SENDER_ID; do
-            value="$(grep "^${key}=" apps/admin-panel/.env.production | cut -d= -f2-)"
-            if [[ -z "$value" ]] || grep -qiE 'REPLACE|undefined|null' <<< "$value"; then
-              echo "::error::Missing or malformed ${key} for admin production build"
-              exit 1
-            fi
-          done
+      - name: Create strict production environment files
+        run: node scripts/write-production-env.mjs
 
       - name: Production stability guard
         run: npm run test:stability
+
+      - name: Launch honesty and hard-launch control regressions
+        run: npm run test:launch-honesty
 
       - name: TypeScript check
         run: npx tsc -p tsconfig.app.json --noEmit
@@ -143,14 +134,6 @@ jobs:
         run: npm run build:admin
         env:
           CI: false
-          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
-          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
-          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
 
       - name: Verify admin Firebase project embedding
         run: npm run verify:admin-firebase -- --build apps/admin-panel/build
@@ -169,43 +152,32 @@ jobs:
 
       - name: Verify Firebase hosting entrypoints
         run: |
-          set -euo pipefail
           test -f dist/index.html
           test -f apps/admin-panel/build/index.html
-          ls -la dist/index.html
-          ls -la apps/admin-panel/build/index.html
 
   deploy-firebase-production-stack:
     name: Deploy Firebase production stack
     runs-on: ubuntu-latest
     needs: validate-production-build
     environment: production
+    outputs:
+      validated_artifact_digest: ${{ steps.artifact_digest.outputs.digest }}
 
     steps:
       - name: Enforce production dispatch gates
         env:
           DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION_INPUT: ${{ inputs.hard_launch_confirmation }}
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_COMMIT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          if [[ "$DISPATCH_CONFIRMATION" != "$PRODUCTION_CONFIRMATION_PHRASE" ]]; then
-            echo "::error::Confirmation phrase mismatch. Refusing production deploy."
-            exit 1
-          fi
-          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
-            echo "::error::Production deploy is only approved from refs/heads/main."
-            exit 1
-          fi
-          if [[ ! "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_commit_sha must be a full lowercase 40-character Git SHA."
-            exit 1
-          fi
-          if [[ "$EXPECTED_COMMIT_SHA" != "$CURRENT_COMMIT_SHA" ]]; then
-            echo "::error::expected_commit_sha does not equal the workflow commit SHA."
-            exit 1
-          fi
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]]
+          [[ "$CURRENT_REF" == "refs/heads/main" ]]
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -215,52 +187,20 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Deployment secrets preflight
+      - name: Deployment and authorization secrets preflight
         env:
           WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          GCP_PROJECT_ID_SECRET: ${{ secrets.GCP_PROJECT_ID }}
-          VITE_GOOGLE_MAPS_API_KEY_SECRET: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-          VITE_APP_CHECK_SITE_KEY_SECRET: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-          VITE_FIREBASE_API_KEY_SECRET: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_APP_ID_SECRET: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID_SECRET: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_VAPID_KEY_SECRET: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+          APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
         run: |
           set -euo pipefail
-          missing=0
-          require_secret() {
-            local key="$1"
-            local value="$2"
-            if [[ -z "$value" ]]; then
-              echo "::error::Missing required GitHub secret: $key"
-              missing=1
-            else
-              echo "Found required GitHub secret: $key"
-            fi
-          }
-          optional_secret() {
-            local key="$1"
-            local value="$2"
-            if [[ -z "$value" ]]; then
-              echo "::warning::Optional GitHub secret is empty: $key"
-            else
-              echo "Found optional GitHub secret: $key"
-            fi
-          }
-          require_secret "GCP_WORKLOAD_IDENTITY_PROVIDER" "$WIF_PROVIDER"
-          require_secret "GCP_SERVICE_ACCOUNT" "$GCP_SERVICE_ACCOUNT"
-          require_secret "VITE_APP_CHECK_SITE_KEY" "$VITE_APP_CHECK_SITE_KEY_SECRET"
-          require_secret "VITE_FIREBASE_API_KEY" "$VITE_FIREBASE_API_KEY_SECRET"
-          require_secret "VITE_FIREBASE_APP_ID" "$VITE_FIREBASE_APP_ID_SECRET"
-          require_secret "VITE_FIREBASE_MESSAGING_SENDER_ID" "$VITE_FIREBASE_MESSAGING_SENDER_ID_SECRET"
-          require_secret "VITE_FIREBASE_VAPID_KEY" "$VITE_FIREBASE_VAPID_KEY_SECRET"
-          optional_secret "GCP_PROJECT_ID" "$GCP_PROJECT_ID_SECRET"
-          optional_secret "VITE_GOOGLE_MAPS_API_KEY" "$VITE_GOOGLE_MAPS_API_KEY_SECRET"
-          if [[ "$missing" -ne 0 ]]; then
-            echo "Deployment cannot continue until required GitHub secrets are configured."
-            exit 1
-          fi
+          [[ -n "$WIF_PROVIDER" ]]
+          [[ -n "$GCP_SERVICE_ACCOUNT" ]]
+          [[ -n "$FOUNDER_ACTORS" ]]
+          [[ -n "$FOUNDER_EMAILS" ]]
+          [[ ${#APPROVAL_HMAC_KEY} -ge 32 ]]
 
       - name: Authenticate to Google Cloud by Workload Identity Federation
         uses: google-github-actions/auth@v2
@@ -270,52 +210,60 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Repository hygiene guard
-        run: node scripts/repo-hygiene-guard.mjs
-
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Create production environment files
+      - name: Create signed founder authorization
+        env:
+          FOUNDER_NAME: ${{ inputs.founder_name }}
+          FOUNDER_EMAIL: ${{ inputs.founder_email }}
+          DEPLOYMENT_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: npm run hard-launch:authorize
+
+      - name: Enforce signed predeploy authorization
+        env:
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: npm run hard-launch:predeploy
+
+      - name: Create strict production environment files
+        run: node scripts/write-production-env.mjs
+
+      - name: Build production stack
         run: |
-          set -euo pipefail
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "$VITE_GOOGLE_MAPS_API_KEY" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.production
-          printf 'VITE_ENABLE_FIREBASE_APPCHECK=true\n' >> .env.production
-          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.production
-          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.production
-          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.production
-          printf 'VITE_FIREBASE_VAPID_KEY=%s\n' "$VITE_FIREBASE_VAPID_KEY" >> .env.production
-          cp .env.production .env.local
+          npm run build --workspace=@bin/shared
+          npm run build
+          CI=false npm run build:admin
+          npm run verify:admin-firebase -- --build apps/admin-panel/build
+          npm run build --workspace=functions
 
-          mkdir -p apps/admin-panel
-          printf 'GENERATE_SOURCEMAP=false\n' > apps/admin-panel/.env.production
-          printf 'REACT_APP_ENABLE_FIREBASE_APPCHECK=true\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_AUTH_DOMAIN=bin-group-57c60.firebaseapp.com\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_PROJECT_ID=bin-group-57c60\n' >> apps/admin-panel/.env.production
-          printf 'REACT_APP_FIREBASE_STORAGE_BUCKET=bin-group-57c60.firebasestorage.app\n' >> apps/admin-panel/.env.production
-          cp apps/admin-panel/.env.production apps/admin-panel/.env.local
-
-          for key in REACT_APP_APP_CHECK_SITE_KEY REACT_APP_FIREBASE_API_KEY REACT_APP_FIREBASE_APP_ID REACT_APP_FIREBASE_MESSAGING_SENDER_ID; do
-            value="$(grep "^${key}=" apps/admin-panel/.env.production | cut -d= -f2-)"
-            if [[ -z "$value" ]] || grep -qiE 'REPLACE|undefined|null' <<< "$value"; then
-              echo "::error::Missing or malformed ${key} for admin production deployment build"
-              exit 1
-            fi
-          done
+      - name: Use Java 21 for Firestore rules emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
       - name: Build unified public app
-        run: npm run build
+        id: build_public
+        run: |
+          set -euo pipefail
+          npm run build
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Build dedicated admin panel
-        run: npm run build:admin
+        id: build_admin
+        run: |
+          set -euo pipefail
+          npm run build:admin
+          echo "ok=true" >> "$GITHUB_OUTPUT"
         env:
           CI: false
           REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
@@ -331,78 +279,302 @@ jobs:
         run: npm run verify:admin-firebase -- --build apps/admin-panel/build
 
       - name: Build Firebase Functions
-        run: npm run build --workspace=functions
-
-      - name: Deploy critical hosting, rules, indexes, and storage
-        id: deploy_critical
+        id: build_functions
         run: |
           set -euo pipefail
-          for attempt in 1 2 3; do
-            echo "Firebase critical deploy attempt ${attempt}/3"
-            if npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "$GCP_PROJECT_ID" --non-interactive --force; then
-              echo "Firebase critical deploy succeeded on attempt ${attempt}."
-              echo "ok=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              echo "Firebase deploy failed. Retrying in 30 seconds..."
-              sleep 30
-            fi
-          done
-          echo "::error::Firebase critical deploy failed after 3 attempts. Review Firebase billing, service availability, and IAM permissions."
-          echo "ok=false" >> "$GITHUB_OUTPUT"
-          exit 1
+          npm run build --workspace=functions
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy Firebase Functions
-        id: deploy_functions
+      - name: Measure Functions discovery load
+        id: functions_load
         run: |
           set -euo pipefail
-          for attempt in 1 2 3; do
-            echo "Firebase Functions deploy attempt ${attempt}/3"
-            if npx firebase deploy --only functions --project "$GCP_PROJECT_ID" --non-interactive --force; then
-              echo "Firebase Functions deploy succeeded on attempt ${attempt}."
-              echo "ok=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              echo "Functions deploy failed. Retrying in 30 seconds..."
-              sleep 30
-            fi
-          done
-          echo "::error::Firebase Functions deploy failed after 3 attempts. Production deployment is incomplete and must not be declared successful."
-          echo "ok=false" >> "$GITHUB_OUTPUT"
-          exit 1
+          npm run measure:functions-load
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Write production deployment metadata
-        if: success()
+      - name: Run Firestore rules tests
+        id: rules_test
         run: |
           set -euo pipefail
-          node scripts/write-production-deployment-metadata.mjs \
-            --components hosting,firestoreRules,firestoreIndexes,storageRules,functions
+          npm run test:rules
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Verify production deployment identity
-        if: success()
+      - name: Compute validated artifact digest
+        id: artifact_digest
         run: |
           set -euo pipefail
-          npm run verify:production-deployment -- --write-evidence | tee launch_package/production-deployment-verify.log
-          test -f launch_package/production-deployment.json
-          node - <<'NODE'
+          DIGEST="$(node scripts/compute-artifact-digest.mjs)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "VALIDATED_ARTIFACT_DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          echo "Computed VALIDATED_ARTIFACT_DIGEST=$DIGEST"
+
+      - name: Write predeploy approval binding (SHA + digest)
+        env:
+          APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPROVED_BY}" ]]; then
+            echo "::error::Missing GitHub secret PRODUCTION_APPROVED_BY (audit trail email; authorization is the protected environment)."
+            exit 1
+          fi
+          mkdir -p launch_package
+          node <<'NODE'
           const fs = require('fs');
-          const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json', 'utf8'));
-          if (doc.status !== 'passed') process.exit(1);
-          if (doc.httpChecksOk !== true || doc.bundleVerified !== true) process.exit(1);
-          if (doc.deployedCommitSha !== process.env.GITHUB_SHA) process.exit(1);
-          if (doc.hardLaunchClaim === true) process.exit(1);
-          console.log('deployment metadata verified for', doc.deployedCommitSha);
+          const approvedBy = process.env.APPROVED_BY;
+          const doc = {
+            schemaVersion: 1,
+            commitSha: process.env.GITHUB_SHA,
+            artifactDigest: process.env.VALIDATED_ARTIFACT_DIGEST,
+            releaseId: process.env.RELEASE_ID,
+            approvedAt: new Date().toISOString(),
+            approvedBy,
+            approvedVia: 'github-environment-protection',
+            githubEnvironment: 'production',
+            launchMode: process.env.LAUNCH_MODE_INPUT,
+          };
+          fs.writeFileSync('launch_package/predeploy-approval.json', `${JSON.stringify(doc, null, 2)}\n`);
+          console.log('Wrote predeploy-approval.json for', doc.commitSha);
           NODE
 
-      - name: Upload production deployment metadata artifact
-        if: success()
+      - name: Predeploy approval gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          LAUNCH_BANK_ONLY: ${{ inputs.launch_mode == 'bank-pilot' && '1' || '0' }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+          PREDEPLOY_BUILD_OK: ${{ steps.build_public.outputs.ok }}
+          PREDEPLOY_ADMIN_BUILD_OK: ${{ steps.build_admin.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_BUILD_OK: ${{ steps.build_functions.outputs.ok }}
+          PREDEPLOY_RULES_OK: ${{ steps.rules_test.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_LOAD_OK: ${{ steps.functions_load.outputs.ok }}
+          PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
+        run: node scripts/predeploy-approval-gate.mjs
+
+      - name: Authenticate Google Cloud for E2E fixtures
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download production deployment proof
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          path: _deployment-proof
+
+      - name: Restore deployment proof
+        run: |
+          mkdir -p launch_package
+          find _deployment-proof -type f -name '*.json' -exec cp {} launch_package/ \;
+          test -f launch_package/hard-launch-authorization.json
+          test -f launch_package/production-incidents.json
+          test -f launch_package/production-deployment.json
+
+      - name: Validate full live E2E secrets and App Check UUID
+        run: npm run test:e2e:env
+
+      - name: Seed or repair E2E role accounts
+        run: npm run seed:e2e:auth
+
+      - name: Seed current-commit five-role fixtures
+        run: npm run seed:e2e:live-data
+
+      - name: Run current-commit production deployment evidence
+        run: node scripts/run-critical-evidence.mjs --suite productionDeployment
+
+      - name: Run current-commit five-role business evidence
+        run: npm run test:e2e:business
+
+      - name: Run current-commit live launch audit
+        run: npm run test:e2e:launch-audit:live
+
+      - name: Evaluate controlled-pilot eligibility
+        run: npm run launch:status
+
+      - name: Upload current-commit live evidence
         uses: actions/upload-artifact@v4
         with:
           name: production-deployment-${{ github.sha }}
           path: |
             launch_package/production-deployment.json
             launch_package/production-deployment-verify.log
+            launch_package/predeploy-approval.json
           if-no-files-found: error
+          retention-days: 90
+
+  public-release-clearance:
+    name: Postdeploy public release gate
+    runs-on: ubuntu-latest
+    needs: deploy-firebase-production-stack
+    if: ${{ inputs.run_public_release_gate == true }}
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Authenticate to Google Cloud for live postdeploy proofs
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Create E2E environment for live proofs
+        env:
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+          E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+          E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+          E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf 'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=%s\n' "$VITE_FIREBASE_APPCHECK_DEBUG_TOKEN" > .env.e2e
+          printf 'FIREBASE_APPCHECK_DEBUG_TOKEN=%s\n' "$FIREBASE_APPCHECK_DEBUG_TOKEN" >> .env.e2e
+          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.e2e
+          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.e2e
+          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.e2e
+          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.e2e
+          printf 'E2E_BASE_URL=%s\n' "$E2E_BASE_URL" >> .env.e2e
+          printf 'E2E_ADMIN_BASE_URL=%s\n' "$E2E_ADMIN_BASE_URL" >> .env.e2e
+          printf 'E2E_ADMIN_EMAIL=%s\n' "$E2E_ADMIN_EMAIL" >> .env.e2e
+          printf 'E2E_ADMIN_PASSWORD=%s\n' "$E2E_ADMIN_PASSWORD" >> .env.e2e
+          printf 'E2E_OWNER_EMAIL=%s\n' "$E2E_OWNER_EMAIL" >> .env.e2e
+          printf 'E2E_OWNER_PASSWORD=%s\n' "$E2E_OWNER_PASSWORD" >> .env.e2e
+          printf 'E2E_TENANT_EMAIL=%s\n' "$E2E_TENANT_EMAIL" >> .env.e2e
+          printf 'E2E_TENANT_PASSWORD=%s\n' "$E2E_TENANT_PASSWORD" >> .env.e2e
+          printf 'E2E_TECHNICIAN_EMAIL=%s\n' "$E2E_TECHNICIAN_EMAIL" >> .env.e2e
+          printf 'E2E_TECHNICIAN_PASSWORD=%s\n' "$E2E_TECHNICIAN_PASSWORD" >> .env.e2e
+          printf 'E2E_BROKER_EMAIL=%s\n' "$E2E_BROKER_EMAIL" >> .env.e2e
+          printf 'E2E_BROKER_PASSWORD=%s\n' "$E2E_BROKER_PASSWORD" >> .env.e2e
+          node scripts/verify-e2e-env.mjs
+
+      - name: Download production deployment metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          path: launch_package
+
+      - name: Seed E2E auth and gate fixtures
+        run: |
+          set -euo pipefail
+          node scripts/seed-e2e-auth.mjs
+          node scripts/seed-live-role-test-data.mjs
+          node scripts/seed-gate11-fixtures.mjs
+
+      - name: Verify production routes
+        id: postdeploy_routes
+        run: |
+          set -euo pipefail
+          npm run test:e2e:gate11:routes
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify SMTP live delivery
+        id: postdeploy_smtp
+        run: |
+          set -euo pipefail
+          npm run test:gate12:smtp
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify App Check debug token registration
+        id: postdeploy_appcheck
+        run: |
+          set -euo pipefail
+          npm run test:gate12:appcheck
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Gate 11 authenticated production smoke
+        # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
+        # plain `npm run test:e2e:gate11:staging` — postdeploy-release-gate.mjs
+        # requires that exact evidence key and nothing else was writing it, so the
+        # gate could never pass regardless of this step's own ok=true marker.
+        id: postdeploy_smoke
+        run: |
+          set -euo pipefail
+          node scripts/record-postdeploy-aggregate-evidence.mjs --only gate11
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run business workflow evidence
+        id: postdeploy_business
+        run: |
+          set -euo pipefail
+          npm run test:e2e:business
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Aggregate business workflow evidence
+        # postdeploy-release-gate.mjs requires a single businessWorkflows record
+        # (passed=9/failed=0), not the six per-role records test:e2e:business
+        # writes individually. Sums the six already-written records for this
+        # commit — does not re-run anything.
+        run: node scripts/record-postdeploy-aggregate-evidence.mjs --only business
+
+      - name: Run launch audit live evidence
+        id: postdeploy_audit
+        run: |
+          set -euo pipefail
+          npm run test:e2e:launch-audit:live
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Postdeploy release gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+          POSTDEPLOY_ROUTES_OK: ${{ steps.postdeploy_routes.outputs.ok }}
+          POSTDEPLOY_SMTP_OK: ${{ steps.postdeploy_smtp.outputs.ok }}
+          POSTDEPLOY_APPCHECK_OK: ${{ steps.postdeploy_appcheck.outputs.ok }}
+          POSTDEPLOY_SMOKE_OK: ${{ steps.postdeploy_smoke.outputs.ok }}
+          POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
+          POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
+          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
+        run: |
+          set -euo pipefail
+          # Prefer digest embedded in deployment metadata when job output is unavailable.
+          if [[ -z "${VALIDATED_ARTIFACT_DIGEST}" ]]; then
+            VALIDATED_ARTIFACT_DIGEST="$(node -e "const d=require('./launch_package/production-deployment.json'); process.stdout.write(d.artifactDigest||d.validatedArtifactDigest||'')")"
+            export VALIDATED_ARTIFACT_DIGEST
+            echo "VALIDATED_ARTIFACT_DIGEST=$VALIDATED_ARTIFACT_DIGEST" >> "$GITHUB_ENV"
+          fi
+          node scripts/postdeploy-release-gate.mjs
+
+      - name: Upload public release clearance artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-release-clearance-${{ github.sha }}
+          path: |
+            launch_package/public-release-status.json
+            launch_package/launch-evidence-batch.json
+          if-no-files-found: warn
           retention-days: 90

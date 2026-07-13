@@ -230,6 +230,7 @@ export default function TechniciansManagementPage() {
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => { setActionError(null); setActionSuccess(null); setOpenAdd(true); }}
+          data-testid="admin-add-technician"
           sx={{ borderRadius: 100, px: 3, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}
         >
           {t('admin.tech.add_btn')}

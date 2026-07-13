@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench, Bell, Key, Package, Car, Store, Contact, MessageSquare, Users } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, CheckCircle2, CreditCard, Dumbbell, FileText, Home, MapPin, Paintbrush, ShieldCheck, Sparkles, Truck, Wrench, Bell, Key, Package, Car, Store, Contact, MessageSquare, Users } from 'lucide-react';
 import { collection, db, doc, getDoc, getDocs, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -185,6 +185,7 @@ export default function TenantDashboardPage() {
   const showLedger = contractProfile.showRentLedger && propertyProfile.tenantContractRequired;
 
   const serviceButtons = useMemo(() => [
+    { label: tx('service.aiConcierge', 'BIN AI Concierge'), icon: <Bot size={20} />, route: '/tenant/ai-concierge', visible: true },
     { label: tx('service.deep_cleaning', 'Deep Cleaning'), icon: <Sparkles size={20} />, route: '/tenant/request?category=cleaning', visible: true },
     { label: tx('service.moving', 'Moving & Packing'), icon: <Truck size={20} />, route: '/tenant/request?category=moving', visible: true },
     { label: showMaintenance ? tx('nav.maintenance', 'Maintenance') : tx('service.contactMgmt', 'Contact Management'), icon: <Wrench size={20} />, route: showMaintenance ? '/tenant/request' : '/tenant/request?category=management', visible: true },

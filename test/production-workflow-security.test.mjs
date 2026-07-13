@@ -14,6 +14,8 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const workflowPath = '.github/workflows/firebase-production-deploy.yml';
 const workflow = readFileSync(workflowPath, 'utf8');
+const legacyProductionWorkflowPath = '.github/workflows/production.yml';
+const legacyProductionWorkflow = readFileSync(legacyProductionWorkflowPath, 'utf8');
 
 function runBlocks(source) {
   const lines = source.split(/\r?\n/);
@@ -67,6 +69,18 @@ test('production deployment remains approval-gated', () => {
   assert.match(workflow, /PRODUCTION_CONFIRMATION_PHRASE:\s*DEPLOY_PRODUCTION_BIN_GROUP_57C60/);
 });
 
+test('legacy production workflow is retired and cannot deploy', () => {
+  assert.match(legacyProductionWorkflow, /Retired production entrypoint/);
+  assert.match(legacyProductionWorkflow, /signed founder authorization and live evidence gates/);
+  assert.match(legacyProductionWorkflow, /\bexit 1\b/);
+  assert.doesNotMatch(legacyProductionWorkflow, /^\s*id-token:\s*write\s*$/m);
+  assert.doesNotMatch(legacyProductionWorkflow, /google-github-actions\/auth/);
+  assert.doesNotMatch(legacyProductionWorkflow, /GCP_WORKLOAD_IDENTITY_PROVIDER/);
+  assert.doesNotMatch(legacyProductionWorkflow, /GCP_SERVICE_ACCOUNT/);
+  assert.doesNotMatch(legacyProductionWorkflow, /\bnpx\s+firebase\s+deploy\b/);
+  assert.doesNotMatch(legacyProductionWorkflow, /\bfirebase\s+deploy\b/);
+});
+
 test('five-profile optional second technician credentials are documented when referenced', () => {
   const walkthrough = readFileSync('tests/e2e/launch-five-profile-walkthrough.spec.ts', 'utf8');
   const example = readFileSync('.env.e2e.example', 'utf8');
@@ -91,8 +105,7 @@ test('production workflow run blocks never embed user-controlled github expressi
     assert.doesNotMatch(block, /\$\{\{\s*github\.event\.inputs\./);
     assert.doesNotMatch(block, /\$\{\{\s*inputs\./);
   }
-  const envSectionMatches = [...workflow.matchAll(/env:\n((?:[ \t]+.+\n)+)/g)].map((match) => match[1]);
-  assert.ok(envSectionMatches.some((section) => /DISPATCH_CONFIRMATION:/.test(section)));
+  assert.match(workflow, /DISPATCH_CONFIRMATION:\s*\$\{\{\s*inputs\.confirmation\s*\}\}/);
 });
 
 test('explicit admin build verification is local-only before deployment', () => {

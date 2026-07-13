@@ -826,7 +826,7 @@ export default function OwnerDashboardResolvedPage() {
             <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.dlAgreement', 'Download Agreement')}</Button>
           )}
           <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.contracts', 'Contracts')}</Button>
-          <Button variant="outlined" onClick={() => navigate('/owner/documents')} sx={{ borderColor: '#6366f1', color: '#6366f1', fontWeight: 950 }}>{tx('dash.owner.vault', 'Document Vault')}</Button>
+          <Button variant="outlined" data-testid="owner-vault" onClick={() => navigate('/owner/documents')} sx={{ borderColor: '#6366f1', color: '#6366f1', fontWeight: 950 }}>{tx('dash.owner.vault', 'Document Vault')}</Button>
           <Button variant="contained" onClick={() => navigate('/owner/property-passport')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.propPassport', 'Property Passport')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('owner-money-snapshot')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{tx('dash.owner.money', 'Money')}</Button>
           <Button variant="outlined" onClick={() => scrollToObject('complaints-command-center')} sx={{ borderColor: '#ef4444', color: '#ef4444', fontWeight: 950 }}>{tx('dash.owner.complaints', 'Complaints')}</Button>

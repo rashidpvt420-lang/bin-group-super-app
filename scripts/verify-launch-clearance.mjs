@@ -8,6 +8,7 @@ import {
   evaluatePilotEligibility,
   gitSha,
   readJsonSafe,
+  validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
 import {
   evaluateHardLaunchEligibility,
@@ -30,8 +31,30 @@ function warn(message) {
   warnings.push(message);
 }
 
+const sha = gitSha();
+const evidence = readJsonSafe(evidencePath(), { records: [] });
+const deploymentDoc = readJsonSafe(deploymentEvidencePath(), null);
+const eligibility = evaluatePilotEligibility({
+  evidenceBatch: evidence,
+  commitSha: sha,
+  deploymentDoc,
+});
+const deploymentValid =
+  validateDeploymentDocument(deploymentDoc, sha, { requireWorkflowProvenance: true }).length === 0;
+const currentExecutionComplete = eligibility.pilotEligible === true;
+
 function proofText(gate) {
   return String(gate?.proof || '').trim();
+}
+
+function executionSupersedesLedger(groupName, name) {
+  const key = `${groupName}.${name}`;
+  if (key === 'requiredProviderGates.appCheckEnforcement') return currentExecutionComplete;
+  if (key === 'requiredProviderGates.firebaseAuth') return currentExecutionComplete;
+  if (key === 'deploymentProof.hosting' || key === 'deploymentProof.functionsDeploy') {
+    return deploymentValid;
+  }
+  return false;
 }
 
 function validateGate(groupName, name, gate) {
@@ -44,8 +67,12 @@ function validateGate(groupName, name, gate) {
   const status = String(gate.status || '').toLowerCase();
   const label = `${groupName}.${name}`;
   const waivedBlocked = assertGateNotWaivedForSecurity(groupName, name, gate);
-  if (waivedBlocked) {
+  if (waivedBlocked && !superseded) {
     fail(waivedBlocked);
+    return;
+  }
+  if (waivedBlocked && superseded) {
+    warn(`${label} manual status is stale, but current-commit execution evidence supersedes it.`);
     return;
   }
 

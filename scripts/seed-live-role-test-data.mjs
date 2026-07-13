@@ -68,6 +68,7 @@ const [tenantUser, ownerUser, technicianUser, brokerUser] = await Promise.all([
 
 if (!ownerUser?.uid) throw new Error(`Owner launch account does not exist in Firebase Auth: ${ownerEmail}`);
 if (!tenantUser?.uid) throw new Error(`Tenant launch account does not exist in Firebase Auth: ${tenantEmail}`);
+if (!ownerUser?.uid) throw new Error(`Owner launch account does not exist in Firebase Auth: ${ownerEmail}`);
 if (!technicianUser?.uid) throw new Error(`Technician launch account does not exist in Firebase Auth: ${technicianEmail}`);
 if (!brokerUser?.uid) throw new Error(`Broker launch account does not exist in Firebase Auth: ${brokerEmail}`);
 
@@ -80,7 +81,12 @@ const propertyId = 'e2e-live-role-property';
 const unitId = `e2e-live-role-unit-${safeId(tenantUid)}`;
 const contractId = `e2e-live-role-contract-${safeId(tenantUid)}`;
 const technicianTicketId = `e2e-live-technician-ticket-${safeId(technicianUid)}`;
+const poolTicketId = 'e2e-live-pool-ticket-open';
 const brokerCommissionId = `e2e-live-broker-commission-${safeId(brokerUid)}`;
+const sosTicketId = 'e2e-live-sos-ticket';
+const ownerPaymentPendingContractId = 'e2e-live-owner-payment-pending';
+const technicianCompletedTicketId = `e2e-live-technician-completed-${safeId(technicianUid)}`;
+const brokerDocumentId = `e2e-live-broker-document-${safeId(brokerUid)}`;
 
 const gps = {
   lat: 24.2075,
@@ -175,6 +181,8 @@ const seededUnitPayload = {
   floorNumber: '1',
   propertyId,
   propertyName: 'E2E Live Role Tower',
+  ownerId: ownerUid,
+  ownerUid,
   ...gpsPayload,
   ownerId: ownerUid,
   ownerUid,
@@ -206,6 +214,8 @@ tenantUnitDocs.forEach((docSnap) => {
   batch.set(docSnap.ref, {
     propertyId,
     propertyName: 'E2E Live Role Tower',
+    ownerId: ownerUid,
+    ownerUid,
     ...gpsPayload,
     ownerId: ownerUid,
     ownerUid,
@@ -306,6 +316,35 @@ await db.collection('maintenanceTickets').doc(technicianTicketId).set({
   updatedAt: now,
 }, { merge: true });
 
+// OPEN pool ticket for optional Tech A/B race-condition walkthrough (unassigned).
+await db.collection('maintenanceTickets').doc(poolTicketId).set({
+  id: poolTicketId,
+  ticketId: poolTicketId,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  unitId,
+  unitNumber: 'E2E-101',
+  floorNumber: '1',
+  tenantId: tenantUid,
+  tenantUid,
+  tenantEmail,
+  tenantName: tenantUser.displayName || 'E2E Tenant',
+  assignedTechnicianId: null,
+  technicianId: null,
+  category: 'Plumbing / water systems',
+  complaintCategory: 'Plumbing / water systems',
+  description: 'E2E open pool mission for concurrent technician claim proof.',
+  serviceLocationDetail: 'Kitchen sink leak',
+  priority: 'MEDIUM',
+  status: 'OPEN',
+  permissionToEnter: 'CALL_FIRST',
+  isAnyoneHome: 'YES',
+  ...gpsPayload,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
 await db.collection('users').doc(brokerUid).set({
   uid: brokerUid,
   email: brokerEmail,
@@ -319,6 +358,93 @@ await db.collection('users').doc(brokerUid).set({
   brokerStatus: 'ACTIVE',
   kycStatus: 'VERIFIED',
   e2eLaunchSeed: true,
+  updatedAt: now,
+}, { merge: true });
+
+// SOS ticket for tenant → admin visibility profile gate.
+await db.collection('maintenanceTickets').doc(sosTicketId).set({
+  id: sosTicketId,
+  ticketId: sosTicketId,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  unitId,
+  unitNumber: 'E2E-101',
+  floorNumber: '1',
+  tenantId: tenantUid,
+  tenantUid,
+  tenantEmail,
+  tenantName: tenantUser.displayName || 'E2E Tenant',
+  category: 'emergency',
+  priority: 'emergency',
+  description: 'TENANT TRIGGERED SOS EMERGENCY (E2E seed)',
+  status: 'emergency_submitted',
+  sosStatus: 'ACTIVE',
+  isSOS: true,
+  emergency: true,
+  requiresImmediateDispatch: true,
+  slaMinutes: 30,
+  ...gpsPayload,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+// Pending owner payment contract for admin approve/reject gate (approve path UI only; do not auto-approve).
+await db.collection('contracts').doc(ownerPaymentPendingContractId).set({
+  id: ownerPaymentPendingContractId,
+  paymentId: 'E2E_OWNER_PAYMENT_PENDING',
+  amount: 7500,
+  currency: 'AED',
+  ownerId: ownerUid,
+  ownerUid,
+  ownerEmail: ownerEmail || null,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  provider: 'Bank Transfer',
+  status: 'pending_approval',
+  paymentVerified: false,
+  paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+// Completed technician ticket for completion-audit profile gate.
+await db.collection('maintenanceTickets').doc(technicianCompletedTicketId).set({
+  id: technicianCompletedTicketId,
+  ticketId: technicianCompletedTicketId,
+  propertyId,
+  propertyName: 'E2E Live Role Tower',
+  unitId,
+  unitNumber: 'E2E-101',
+  tenantId: tenantUid,
+  tenantUid,
+  tenantEmail,
+  assignedTechnicianId: technicianUid,
+  technicianId: technicianUid,
+  category: 'Electrical / power systems',
+  description: 'E2E completed mission for technician completion audit proof.',
+  priority: 'MEDIUM',
+  status: 'CLOSED',
+  qualityScore: 4.8,
+  technicianScore: 4.8,
+  completionPhotos: [beforeProof],
+  afterPhotoUrl: beforeProof,
+  ...gpsPayload,
+  e2eLaunchSeed: true,
+  createdAt: now,
+  updatedAt: now,
+}, { merge: true });
+
+await db.collection('brokerDocuments').doc(brokerDocumentId).set({
+  id: brokerDocumentId,
+  brokerId: brokerUid,
+  docType: 'emirates_id',
+  fileName: 'e2e-emirates-id.pdf',
+  fileUrl: 'https://bin-group-57c60.firebasestorage.app/e2e/emirates-id.pdf',
+  status: 'pending_review',
+  e2eLaunchSeed: true,
+  uploadedAt: now,
   updatedAt: now,
 }, { merge: true });
 
@@ -342,6 +468,45 @@ await db.collection('broker_commissions').doc(brokerCommissionId).set({
   updatedAt: now,
 }, { merge: true });
 
+const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim().toLowerCase();
+const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
+if (techBEmail && techBPassword) {
+  const techBUser = await getUserByEmailOrNull(techBEmail);
+  if (!techBUser?.uid) {
+    throw new Error(`Technician B account does not exist in Firebase Auth: ${techBEmail}. Run seed:e2e:gate11 first.`);
+  }
+  await db.collection('users').doc(techBUser.uid).set({
+    uid: techBUser.uid,
+    email: techBEmail,
+    displayName: techBUser.displayName || 'E2E Technician B',
+    role: 'technician',
+    userRole: 'technician',
+    primaryRole: 'technician',
+    status: 'active',
+    onboardingComplete: true,
+    onDuty: true,
+    dutyStatus: 'ON_DUTY',
+    dispatchReady: true,
+    approvalStatus: 'APPROVED',
+    e2eLaunchSeed: true,
+    updatedAt: now,
+  }, { merge: true });
+  await db.collection('technicians').doc(techBUser.uid).set({
+    uid: techBUser.uid,
+    email: techBEmail,
+    fullName: techBUser.displayName || 'E2E Technician B',
+    status: 'ACTIVE',
+    approvalStatus: 'APPROVED',
+    dutyStatus: 'ON_DUTY',
+    dispatchReady: true,
+    primaryTrade: 'General Maintenance',
+    serviceZone: 'Al Ain',
+    e2eLaunchSeed: true,
+    updatedAt: now,
+  }, { merge: true });
+  console.log(`technicianBUid=${techBUser.uid}`);
+}
+
 console.log(`Seeded five-role staging fixtures in project ${projectId}`);
 console.log(`ownerUid=${ownerUid}`);
 console.log(`tenantUid=${tenantUid}`);
@@ -351,5 +516,10 @@ console.log(`propertyId=${propertyId}`);
 console.log(`unitId=${unitId}`);
 console.log(`contractId=${contractId}`);
 console.log(`technicianTicketId=${technicianTicketId}`);
+console.log(`poolTicketId=${poolTicketId}`);
 console.log(`brokerCommissionId=${brokerCommissionId}`);
+console.log(`sosTicketId=${sosTicketId}`);
+console.log(`ownerPaymentPendingContractId=${ownerPaymentPendingContractId}`);
+console.log(`technicianCompletedTicketId=${technicianCompletedTicketId}`);
+console.log(`brokerDocumentId=${brokerDocumentId}`);
 console.log(`repairedTenantUnits=${tenantUnitDocs.length}`);

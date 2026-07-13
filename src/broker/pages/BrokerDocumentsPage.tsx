@@ -110,7 +110,7 @@ export default function BrokerDocumentsPage() {
                 MANDATORY COMPLIANCE ASSETS
             </Typography>
 
-            <Grid container spacing={3} sx={{ mb: 6 }}>
+            <Grid container spacing={3} sx={{ mb: 6 }} data-testid="broker-documents-vault">
                 {requiredDocs.map(req => {
                     const status = getDocStatus(req.type);
                     const isUploaded = status.status !== 'missing';

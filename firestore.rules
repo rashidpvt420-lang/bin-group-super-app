@@ -614,9 +614,9 @@ service cloud.firestore {
 
     match /units/{unitId} {
       allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
-      allow list: if signedIn() && resource.data.get('tenantId', null) == request.auth.uid;
-      allow list: if signedIn() && resource.data.get('tenantUid', null) == request.auth.uid;
-      allow list: if signedIn() && emailMatches(resource.data.get('tenantEmail', null));
+      allow list: if signedIn() && resource.data.tenantId == request.auth.uid;
+      allow list: if signedIn() && resource.data.tenantUid == request.auth.uid;
+      allow list: if signedIn() && resource.data.tenantEmail == request.auth.token.email;
       allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
       allow create: if canManageProperties();
       allow update: if canManageProperties();

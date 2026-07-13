@@ -302,11 +302,18 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
 
     if (success) {
         return (
-            <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={ar ? 'rtl' : 'ltr'}>
-                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.86)', border: '1px solid #4ADE80' }}>
-                    <CheckCircle size={54} color="#4ADE80" />
-                    <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mt: 2 }}>
-                        {copy('Payment Package Submitted', 'تم إرسال حزمة الدفع')}
+            <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
+                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid #4ADE80', backdropFilter: 'blur(10px)' }}>
+                    <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
+                        <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(74, 222, 128, 0.1)' }}>
+                            <CheckCircle size={48} color="#4ADE80" />
+                        </Box>
+                    </Box>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
+                        {t('onboarding.payment.success_title') || 'Payment Submitted Successfully'}
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: '#4ADE80', fontWeight: 700, mb: 2 }}>
+                        {t('onboarding.payment.success_body') || 'Your payment proof and documents were uploaded successfully. BIN GROUP will review and activate your owner dashboard after admin verification.'}
                     </Typography>
                     <Typography sx={{ color: '#4ADE80', fontWeight: 700, mt: 2 }}>
                         {copy(

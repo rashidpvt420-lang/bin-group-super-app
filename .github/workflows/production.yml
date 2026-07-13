@@ -5,75 +5,17 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: v7-enterprise-grid-production
-  cancel-in-progress: true
-
-env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
-  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  REACT_APP_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-  CI: true
+  cancel-in-progress: false
 
 jobs:
-  validate-production-grid:
-    name: Validate production grid manually
+  retired-production-entrypoint:
+    name: Retired production entrypoint
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Authenticate to Google Cloud by Workload Identity Federation
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-
-      - name: Install Monorepo Dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
-
-      - name: Create production environment file
+      - name: Stop legacy production deployment path
         run: |
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.production
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.production
-          printf 'VITE_GOOGLE_MAPS_API_KEY=%s\n' "${VITE_GOOGLE_MAPS_API_KEY}" > .env.local
-          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "${VITE_APP_CHECK_SITE_KEY}" >> .env.local
-
-      - name: Production stability guard
-        run: npm run test:stability
-
-      - name: Validate Root TypeScript
-        run: npx tsc -p tsconfig.app.json --noEmit
-
-      - name: Validate Root Lint
-        run: npm run lint
-
-      - name: Build Shared Services
-        run: npm run build --workspace=@bin/shared
-
-      - name: Build Main Public App
-        run: npm run build
-
-      - name: Build Admin Panel
-        run: npm run build --workspace=home-os-admin-panel
-
-      - name: Build Sovereign Backend Functions
-        run: npm run build --workspace=functions
-
-      - name: Run Firestore rules tests
-        run: npm run test:rules
-
-      - name: Deploy Firebase Hosting, Firestore Rules, Firestore Indexes, and Storage Rules
-        run: npx firebase deploy --only hosting,firestore:rules,firestore:indexes,storage --project "${GCP_PROJECT_ID}" --non-interactive
+          echo "::error::This legacy production entrypoint is retired. Use the Firebase Production Deploy workflow, which enforces signed founder authorization and live evidence gates."
+          exit 1
