@@ -66,6 +66,7 @@ function runPlaywrightSuite(suiteKey, def) {
   const install = spawnSync(npmCmd, ['exec', '--', 'playwright', 'install', '--with-deps', 'chromium'], {
     stdio: 'inherit',
     env: process.env,
+    shell: process.platform === 'win32',
   });
   if ((install.status ?? 1) !== 0) {
     return { ok: false, exitCode: install.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
@@ -88,7 +89,12 @@ function runPlaywrightSuite(suiteKey, def) {
   };
 
   console.log(`[critical-evidence] running ${suiteKey}: ${def.specs.join(' ')}`);
-  const result = spawnSync(npmCmd, args, { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
+  const result = spawnSync(npmCmd, args, {
+    encoding: 'utf8',
+    env,
+    maxBuffer: 64 * 1024 * 1024,
+    shell: process.platform === 'win32',
+  });
   const finishedAt = new Date().toISOString();
   const exitCode = result.status ?? 1;
   const stdout = result.stdout || '';
@@ -96,9 +102,11 @@ function runPlaywrightSuite(suiteKey, def) {
 
   let report;
   try {
-    report = JSON.parse(stdout);
-  } catch {
-    console.error('[critical-evidence] Playwright JSON report malformed or empty');
+    const startIdx = stdout.indexOf('{');
+    if (startIdx === -1) throw new Error('No JSON object found in output');
+    report = JSON.parse(stdout.slice(startIdx));
+  } catch (err) {
+    console.error(`[critical-evidence] Playwright JSON report malformed or empty: ${err.message}`);
     return { ok: false, exitCode: exitCode || 1, startedAt, finishedAt, reportPath };
   }
 
