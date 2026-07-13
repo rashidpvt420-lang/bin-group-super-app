@@ -11,6 +11,7 @@
     "node": "22"
   },
   "scripts": {
+    "prepare": "node scripts/prepare-hooks.mjs",
     "dev": "vite",
     "build": "vite build",
     "build:live": "node scripts/prepare-production-env.mjs && vite build && npm --prefix apps/admin-panel install --legacy-peer-deps && npm --prefix apps/admin-panel run build",
@@ -157,6 +158,7 @@
     "firebase-admin": "^13.6.0",
     "firebase-tools": "^15.19.1",
     "globals": "^13.24.0",
+    "husky": "^9.1.7",
     "typescript": "^5.9.3",
     "vite": "7.2.6"
   }

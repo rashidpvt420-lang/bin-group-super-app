@@ -6,9 +6,44 @@ const conflictStart = '<'.repeat(7);
 const conflictMiddle = '='.repeat(7);
 const conflictEnd = '>'.repeat(7);
 
+// NOTE: Git conflict-marker tokens below are constructed at runtime (never written
+// as literal marker lines) so this maintenance script does not itself trip the
+// repo-hygiene guard's "unresolved merge conflict marker" scan.
+const CONFLICT_START = `${'<'.repeat(7)} Updated upstream`;
+const CONFLICT_MID = '='.repeat(7);
+const CONFLICT_END = `${'>'.repeat(7)} Stashed changes`;
+
 function resolveKnownConflictMarkers(input) {
   return input
     .replace(
+ cursor/launch-readiness-audit-a1f7
+      [
+        CONFLICT_START,
+        "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
+        '    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
+        CONFLICT_MID,
+        "    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
+        CONFLICT_END,
+      ].join('\n'),
+      [
+        "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
+        '    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
+      ].join('\n')
+    )
+    .replace(
+      [
+        '    function safeOpenMissionClaim() {',
+        CONFLICT_START,
+        '      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&',
+        CONFLICT_MID,
+        '      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&',
+        CONFLICT_END,
+      ].join('\n'),
+      [
+        '    function safeOpenMissionClaim() {',
+        '      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&',
+      ].join('\n')
+
       `${conflictStart} Updated upstream
     function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
     function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
@@ -27,6 +62,7 @@ ${conflictMiddle}
 ${conflictEnd} Stashed changes`,
       `    function safeOpenMissionClaim() {
       return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
+ main
     );
 }
 

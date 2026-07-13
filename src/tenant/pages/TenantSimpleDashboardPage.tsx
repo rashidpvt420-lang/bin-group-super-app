@@ -1,6 +1,6 @@
 import { Box, Button, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Droplets, Fan, PlugZap, Wrench } from 'lucide-react';
+import { AlertTriangle, Bot, Droplets, Fan, PlugZap, Wrench } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
 import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
@@ -28,6 +28,15 @@ export default function TenantSimpleDashboardPage() {
         </Box>
 
         <RoleQuickActionsPanel role="tenant" isRTL={isRTL} title={tx('tenant.simple.primaryTitle', 'Main tenant actions')} subtitle={tx('tenant.simple.primarySubtitle', 'The fastest no-call path for maintenance and property support.')} />
+
+        <Button
+          fullWidth
+          onClick={() => navigate('/tenant/ai-concierge')}
+          startIcon={<Bot size={22} />}
+          sx={{ minHeight: 72, justifyContent: 'flex-start', textAlign: isRTL ? 'right' : 'left', color: '#000', bgcolor: binThemeTokens.gold, borderRadius: 5, fontWeight: 950, px: 3, flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: binThemeTokens.goldHover || binThemeTokens.gold } }}
+        >
+          {tx('tenant.simple.aiConcierge', 'Ask BIN AI — describe your issue, we prepare the ticket (no call)')}
+        </Button>
 
         <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(binThemeTokens.gold, 0.045), border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
           <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
