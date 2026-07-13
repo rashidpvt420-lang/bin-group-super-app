@@ -66,6 +66,7 @@ const [tenantUser, ownerUser, technicianUser, brokerUser] = await Promise.all([
   getUserByEmailOrNull(brokerEmail),
 ]);
 
+if (!ownerUser?.uid) throw new Error(`Owner launch account does not exist in Firebase Auth: ${ownerEmail}`);
 if (!tenantUser?.uid) throw new Error(`Tenant launch account does not exist in Firebase Auth: ${tenantEmail}`);
 if (!ownerUser?.uid) throw new Error(`Owner launch account does not exist in Firebase Auth: ${ownerEmail}`);
 if (!technicianUser?.uid) throw new Error(`Technician launch account does not exist in Firebase Auth: ${technicianEmail}`);
@@ -118,7 +119,7 @@ await db.collection('properties').doc(propertyId).set({
   type: 'RESIDENTIAL_BUILDING',
   ownerId: ownerUid,
   ownerUid,
-  ownerEmail: ownerEmail || null,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -136,6 +137,7 @@ await db.collection('properties').doc(propertyId).set({
 await db.collection('users').doc(ownerUid).set({
   uid: ownerUid,
   email: ownerEmail,
+  displayName: ownerUser.displayName || 'E2E Owner',
   role: 'owner',
   userRole: 'owner',
   primaryRole: 'owner',
@@ -145,6 +147,7 @@ await db.collection('users').doc(ownerUid).set({
   adminApproved: true,
   dashboardUnlocked: true,
   activeContractId: contractId,
+  propertyIds: [propertyId],
   e2eLaunchSeed: true,
   updatedAt: now,
 }, { merge: true });
@@ -155,7 +158,7 @@ await db.collection('contracts').doc(contractId).set({
   propertyName: 'E2E Live Role Tower',
   ownerId: ownerUid,
   ownerUid,
-  ownerEmail: ownerEmail || null,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -181,6 +184,9 @@ const seededUnitPayload = {
   ownerId: ownerUid,
   ownerUid,
   ...gpsPayload,
+  ownerId: ownerUid,
+  ownerUid,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -211,6 +217,9 @@ tenantUnitDocs.forEach((docSnap) => {
     ownerId: ownerUid,
     ownerUid,
     ...gpsPayload,
+    ownerId: ownerUid,
+    ownerUid,
+    ownerEmail,
     tenantId: tenantUid,
     tenantUid,
     tenantEmail,
@@ -280,6 +289,9 @@ await db.collection('maintenanceTickets').doc(technicianTicketId).set({
   unitId,
   unitNumber: 'E2E-101',
   floorNumber: '1',
+  ownerId: ownerUid,
+  ownerUid,
+  ownerEmail,
   tenantId: tenantUid,
   tenantUid,
   tenantEmail,
@@ -496,6 +508,7 @@ if (techBEmail && techBPassword) {
 }
 
 console.log(`Seeded five-role staging fixtures in project ${projectId}`);
+console.log(`ownerUid=${ownerUid}`);
 console.log(`tenantUid=${tenantUid}`);
 console.log(`technicianUid=${technicianUid}`);
 console.log(`brokerUid=${brokerUid}`);

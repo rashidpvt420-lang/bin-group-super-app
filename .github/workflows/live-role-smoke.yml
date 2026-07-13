@@ -2,20 +2,83 @@ name: Live Role Smoke Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run live-evidence first; hard-clearance only after a completed 24-hour pilot'
+        required: true
+        default: live-evidence
+        type: choice
+        options:
+          - live-evidence
+          - hard-clearance
+      expected_commit_sha:
+        description: 'Full lowercase 40-character production main SHA'
+        required: true
+        type: string
+      production_deploy_run_id:
+        description: 'For live-evidence: successful Firebase Production Deploy run ID'
+        required: false
+        type: string
+      live_evidence_run_id:
+        description: 'For hard-clearance: successful live-evidence run ID for the same SHA'
+        required: false
+        type: string
+      confirmation:
+        description: 'For hard-clearance: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
+        required: false
+        type: string
+      incident_confirmation:
+        description: 'For hard-clearance: NO_OPEN_P0_P1'
+        required: false
+        type: string
+      rollback_confirmation:
+        description: 'For hard-clearance: ROLLBACK_PLAN_VERIFIED'
+        required: false
+        type: string
+      pilot_started_at:
+        description: 'For hard-clearance: controlled pilot start ISO-8601 UTC'
+        required: false
+        type: string
+      pilot_completed_at:
+        description: 'For hard-clearance: completion ISO-8601 UTC, at least 24 hours later'
+        required: false
+        type: string
+      open_p0:
+        description: 'For hard-clearance: open P0 count, must be 0'
+        required: false
+        default: '0'
+        type: string
+      open_p1:
+        description: 'For hard-clearance: open P1 count, must be 0'
+        required: false
+        default: '0'
+        type: string
+      incident_reference:
+        description: 'For hard-clearance: incident register or operations log reference'
+        required: false
+        type: string
+      rollback_reference:
+        description: 'For hard-clearance: rollback plan or rollback test reference'
+        required: false
+        type: string
+      monitoring_reference:
+        description: 'For hard-clearance: monitoring dashboard or pilot report reference'
+        required: false
+        type: string
   schedule:
     - cron: '0 4 * * *'
 
 permissions:
   contents: read
-  id-token: write
+  actions: read
 
 concurrency:
-  group: live-role-smoke
-  cancel-in-progress: true
+  group: live-role-smoke-${{ github.event_name }}-${{ github.ref }}-${{ inputs.mode || 'scheduled' }}
+  cancel-in-progress: false
 
 env:
   E2E_BASE_URL: https://bin-group-57c60.web.app
-  E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
+  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
@@ -27,24 +90,83 @@ env:
   E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
 
 jobs:
-  live-role-smoke:
-    name: Verify production public and role flows
+  scheduled-public-smoke:
+    name: Scheduled production public smoke
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    timeout-minutes: 30
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+      - name: Validate App Check debug configuration
+        run: node scripts/ensure-appcheck.mjs
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run public smoke tests
+        run: npx playwright test --grep "production public smoke" --project=chromium-desktop
+      - name: Upload scheduled smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-public-smoke-${{ github.sha }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  live-evidence:
+    name: Generate same-commit five-role production evidence
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'live-evidence'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Enforce same-commit deployment inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Live launch evidence may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production_deploy_run_id must be numeric."
+            exit 1
+          fi
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
 
-      - name: Authenticate Google Cloud for manual launch data seed
-        if: github.event_name == 'workflow_dispatch'
+      - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -53,93 +175,211 @@ jobs:
           export_environment_variables: true
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        run: bash scripts/npm-install-retry.sh
 
-      - name: Show smoke test targets
+      - name: Download exact production deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore deployment metadata
         run: |
-          echo "Running live smoke tests against ${E2E_BASE_URL}"
-          echo "Running admin smoke tests against ${E2E_ADMIN_BASE_URL}"
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          test -s launch_package/production-deployment.json
 
-      - name: Validate public-smoke environment
-        if: github.event_name != 'workflow_dispatch'
-        run: node scripts/verify-e2e-env.mjs
-
-      - name: Validate full role-smoke secrets
-        if: github.event_name == 'workflow_dispatch'
+      - name: Validate role credentials and App Check
         env:
           E2E_STRICT_ROLES: 'true'
-        run: node scripts/verify-e2e-env.mjs
-
-      - name: Seed or repair E2E auth accounts and role claims
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/seed-e2e-auth.mjs
-
-      - name: Seed five-role launch fixtures
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/seed-live-role-test-data.mjs
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run public smoke tests
-        if: github.event_name != 'workflow_dispatch'
-        run: npx playwright test --grep "production public smoke" --project=chromium-desktop
-
-      - name: Run full role smoke tests
-        if: github.event_name == 'workflow_dispatch'
-        run: npx playwright test tests/e2e/live-role-smoke.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop
-
-      - name: Run deep business workflow evidence
-        if: github.event_name == 'workflow_dispatch'
-        run: npm run test:e2e:business
-
-      - name: Run live launch-audit evidence
-        if: github.event_name == 'workflow_dispatch'
-        run: npm run test:e2e:launch-audit:live
-
-      - name: Create launch proof manifest
-        if: always()
-        shell: bash
         run: |
-          mkdir -p launch-proof
-          {
-            echo "BIN GROUP launch proof manifest"
-            echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "repository=${GITHUB_REPOSITORY}"
-            echo "ref=${GITHUB_REF}"
-            echo "sha=${GITHUB_SHA}"
-            echo "run_id=${GITHUB_RUN_ID}"
-            echo "run_number=${GITHUB_RUN_NUMBER}"
-            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
-            echo "event=${GITHUB_EVENT_NAME}"
-            echo "actor=${GITHUB_ACTOR}"
-            echo "base_url=${E2E_BASE_URL}"
-            echo "admin_base_url=${E2E_ADMIN_BASE_URL}"
-            echo "admin_secret_configured=$([[ -n "${E2E_ADMIN_EMAIL}" && -n "${E2E_ADMIN_PASSWORD}" ]] && echo true || echo false)"
-            echo "owner_secret_configured=$([[ -n "${E2E_OWNER_EMAIL}" && -n "${E2E_OWNER_PASSWORD}" ]] && echo true || echo false)"
-            echo "tenant_secret_configured=$([[ -n "${E2E_TENANT_EMAIL}" && -n "${E2E_TENANT_PASSWORD}" ]] && echo true || echo false)"
-            echo "technician_secret_configured=$([[ -n "${E2E_TECHNICIAN_EMAIL}" && -n "${E2E_TECHNICIAN_PASSWORD}" ]] && echo true || echo false)"
-            echo "broker_secret_configured=$([[ -n "${E2E_BROKER_EMAIL}" && -n "${E2E_BROKER_PASSWORD}" ]] && echo true || echo false)"
-          } > launch-proof/manifest.txt
-          if [ -d test-results ]; then find test-results -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
-          if [ -d playwright-report ]; then find playwright-report -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
-          sha256sum launch-proof/manifest.txt > launch-proof/manifest.sha256
+          node scripts/verify-e2e-env.mjs
+          node scripts/ensure-appcheck.mjs
 
-      - name: Upload launch proof manifest
-        if: always()
+      - name: Seed or repair launch accounts and fixtures
+        run: |
+          node scripts/seed-e2e-auth.mjs
+          node scripts/seed-live-role-test-data.mjs
+
+      - name: Run every required live evidence suite
+        run: node scripts/run-critical-evidence.mjs --suite all-required
+
+      - name: Verify controlled-pilot eligibility
+        run: node scripts/launch-status.mjs
+
+      - name: Upload live launch evidence
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-proof-manifest-${{ github.sha }}
-          path: launch-proof
-          if-no-files-found: error
-
-      - name: Upload execution evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-role-execution-evidence-${{ github.sha }}
+          name: live-launch-evidence-${{ inputs.expected_commit_sha }}
           path: |
-            launch_package
-            playwright-report
-            test-results
-          if-no-files-found: ignore
+            launch_package/production-deployment.json
+            launch_package/launch-evidence-batch.json
+            launch_package/launch-status.json
+            launch_package/artifacts
+          if-no-files-found: error
+          retention-days: 90
+
+  hard-public-launch-clearance:
+    name: Verify and authorize hard public launch
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: hard-public-launch
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Enforce protected release inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          INCIDENT_CONFIRMATION_INPUT: ${{ inputs.incident_confirmation }}
+          ROLLBACK_CONFIRMATION_INPUT: ${{ inputs.rollback_confirmation }}
+          OPEN_P0_INPUT: ${{ inputs.open_p0 }}
+          OPEN_P1_INPUT: ${{ inputs.open_p1 }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          CURRENT_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Hard clearance may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Only the authorized founder account may approve hard launch."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
+            exit 1
+          fi
+          if [[ ! "$LIVE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::live_evidence_run_id must be numeric."
+            exit 1
+          fi
+          if [[ "$RELEASE_CONFIRMATION" != "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]]; then
+            echo "::error::Hard launch confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$INCIDENT_CONFIRMATION_INPUT" != "NO_OPEN_P0_P1" ]]; then
+            echo "::error::Incident confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$ROLLBACK_CONFIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
+            echo "::error::Rollback confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$OPEN_P0_INPUT" != "0" ]] || [[ "$OPEN_P1_INPUT" != "0" ]]; then
+            echo "::error::Hard launch requires zero open P0 and P1 incidents."
+            exit 1
+          fi
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download exact live launch evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: live-launch-evidence-${{ inputs.expected_commit_sha }}
+          path: downloaded-live-evidence
+          run-id: ${{ inputs.live_evidence_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore and validate evidence bundle
+        run: |
+          set -euo pipefail
+          deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
+          evidence_file="$(find downloaded-live-evidence -type f -name launch-evidence-batch.json -print -quit)"
+          artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
+          if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
+          if [[ -z "$deployment_file" ]] || [[ -z "$evidence_file" ]] || [[ -z "$artifact_dir" ]]; then
+            echo "::error::Selected live evidence artifact is incomplete."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$deployment_file" launch_package/production-deployment.json
+          cp "$evidence_file" launch_package/launch-evidence-batch.json
+          rm -rf launch_package/artifacts
+          cp -R "$artifact_dir" launch_package/artifacts
+
+      - name: Revalidate same-commit pilot evidence
+        run: node scripts/launch-status.mjs
+
+      - name: Snapshot canonical operational readiness
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/verify-operational-readiness.mjs
+
+      - name: Write workflow-bound pilot incident report
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
+          INCIDENT_CONFIRMATION: ${{ inputs.incident_confirmation }}
+          ROLLBACK_CONFIRMATION: ${{ inputs.rollback_confirmation }}
+          PILOT_STARTED_AT: ${{ inputs.pilot_started_at }}
+          PILOT_COMPLETED_AT: ${{ inputs.pilot_completed_at }}
+          OPEN_P0: ${{ inputs.open_p0 }}
+          OPEN_P1: ${{ inputs.open_p1 }}
+          INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
+          ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
+          MONITORING_REFERENCE: ${{ inputs.monitoring_reference }}
+        run: node scripts/write-pilot-incident-report.mjs
+
+      - name: Write founder-authorized hard launch approval
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
+        run: node scripts/write-hard-launch-approval.mjs
+
+      - name: Verify final hard launch status
+        run: |
+          node scripts/launch-status.mjs --hard
+          npm run launch:hard-gate
+
+      - name: Upload hard launch clearance evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hard-public-launch-clearance-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/launch-evidence-batch.json
+            launch_package/artifacts
+            launch_package/operational-readiness.json
+            launch_package/pilot-incident-report.json
+            launch_package/hard-launch-approval.json
+            launch_package/hard-launch-status.json
+            launch_package/launch-status.json
+          if-no-files-found: error
+          retention-days: 365

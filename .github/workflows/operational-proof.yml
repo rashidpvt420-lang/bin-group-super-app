@@ -1,0 +1,247 @@
+name: Operational Proof Intake
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Full lowercase 40-character production main SHA'
+        required: true
+        type: string
+      gate_key:
+        description: 'Operational hard-launch gate to prove'
+        required: true
+        type: choice
+        options:
+          - ownerPaymentActivation
+          - paymentUnlockExactlyOnce
+          - tenantNotificationDelivery
+          - technicianPhysicalGpsEvidence
+          - brokerCommissionLockExactlyOnce
+          - adminStaffClaims
+          - stripeLiveBilling
+          - appCheckEnforcement
+          - privilegedAccessRotation
+          - brandedEmailDelivery
+          - renewalScheduler
+      evidence_type:
+        description: 'Evidence classification'
+        required: true
+        type: choice
+        options:
+          - workflow-artifact
+          - provider-console-export
+          - production-transaction
+          - physical-device-report
+          - secret-rotation-record
+      source_run_id:
+        description: 'Successful GitHub Actions run ID that produced the evidence artifact'
+        required: true
+        type: string
+      source_artifact_name:
+        description: 'Exact artifact name from the successful source run'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: operational-proof-${{ inputs.expected_commit_sha }}-${{ inputs.gate_key }}
+  cancel-in-progress: false
+
+jobs:
+  record-operational-proof:
+    name: Verify artifact and record canonical proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: hard-launch-operations
+
+    steps:
+      - name: Enforce protected same-commit inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          CURRENT_ACTOR: ${{ github.actor }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          GATE_KEY: ${{ inputs.gate_key }}
+          EVIDENCE_TYPE: ${{ inputs.evidence_type }}
+        run: |
+          set -euo pipefail
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Operational proof intake may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Only the authorized founder account may submit operational launch proof."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must equal the current full main SHA."
+            exit 1
+          fi
+          if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::source_run_id must be numeric."
+            exit 1
+          fi
+          if [[ ! "$SOURCE_ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]{1,128}$ ]]; then
+            echo "::error::source_artifact_name contains unsupported characters."
+            exit 1
+          fi
+          case "$GATE_KEY" in
+            ownerPaymentActivation|paymentUnlockExactlyOnce|tenantNotificationDelivery|technicianPhysicalGpsEvidence|brokerCommissionLockExactlyOnce|adminStaffClaims|stripeLiveBilling|appCheckEnforcement|privilegedAccessRotation|brandedEmailDelivery|renewalScheduler) ;;
+            *) echo "::error::Unsupported operational gate."; exit 1 ;;
+          esac
+          case "$EVIDENCE_TYPE" in
+            workflow-artifact|provider-console-export|production-transaction|physical-device-report|secret-rotation-record) ;;
+            *) echo "::error::Unsupported evidence type."; exit 1 ;;
+          esac
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify source workflow run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" \
+            > source-run.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const run = JSON.parse(fs.readFileSync('source-run.json', 'utf8'));
+          const failures = [];
+          if (run.status !== 'completed') failures.push(`source run status=${run.status}`);
+          if (run.conclusion !== 'success') failures.push(`source run conclusion=${run.conclusion}`);
+          if (run.head_sha !== process.env.TARGET_SHA) failures.push('source run head_sha mismatch');
+          if (run.head_branch !== 'main') failures.push(`source run head_branch=${run.head_branch}`);
+          if (run.repository?.full_name !== process.env.REPOSITORY) failures.push('source run repository mismatch');
+          if (failures.length) {
+            for (const failure of failures) console.error(`::error::${failure}`);
+            process.exit(1);
+          }
+          console.log(`Verified source run ${run.id} for ${run.head_sha}`);
+          NODE
+
+      - name: Download exact evidence artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.source_artifact_name }}
+          path: downloaded-operational-proof
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Recompute artifact hash and manifest
+        id: proof_hash
+        env:
+          PROOF_ROOT: downloaded-operational-proof
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          GATE_KEY: ${{ inputs.gate_key }}
+          EVIDENCE_TYPE: ${{ inputs.evidence_type }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const crypto = require('crypto');
+
+          const root = path.resolve(process.env.PROOF_ROOT);
+          if (!fs.existsSync(root)) throw new Error('Downloaded proof directory is missing.');
+          const files = [];
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              const stat = fs.lstatSync(full);
+              if (stat.isSymbolicLink()) throw new Error(`Symlink is forbidden in proof artifact: ${full}`);
+              if (entry.isDirectory()) walk(full);
+              else if (entry.isFile()) files.push(full);
+            }
+          }
+          walk(root);
+          files.sort((a, b) => a.localeCompare(b));
+          if (!files.length) throw new Error('Evidence artifact contains no files.');
+
+          const records = files.map((file) => {
+            const bytes = fs.readFileSync(file);
+            return {
+              path: path.relative(root, file).replaceAll(path.sep, '/'),
+              sizeBytes: bytes.length,
+              sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+            };
+          });
+          const manifest = {
+            schemaVersion: 1,
+            commitSha: process.env.TARGET_SHA,
+            gateKey: process.env.GATE_KEY,
+            evidenceType: process.env.EVIDENCE_TYPE,
+            sourceRunId: process.env.SOURCE_RUN_ID,
+            sourceArtifactName: process.env.SOURCE_ARTIFACT_NAME,
+            files: records,
+          };
+          const canonical = `${JSON.stringify(manifest, null, 2)}\n`;
+          fs.mkdirSync('launch_package', { recursive: true });
+          fs.writeFileSync('launch_package/operational-proof-manifest.json', canonical);
+          const artifactHash = crypto.createHash('sha256').update(canonical).digest('hex');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `artifact_hash=${artifactHash}\n`);
+          console.log(`Artifact manifest SHA-256: ${artifactHash}`);
+          NODE
+
+      - name: Record canonical Firestore operational proof
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          GATE_KEY: ${{ inputs.gate_key }}
+          EVIDENCE_TYPE: ${{ inputs.evidence_type }}
+          ARTIFACT_HASH: ${{ steps.proof_hash.outputs.artifact_hash }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          evidence_reference="github-actions://${REPOSITORY}/runs/${SOURCE_RUN_ID}/artifacts/${SOURCE_ARTIFACT_NAME}"
+          node scripts/verify-launch-gate-live.mjs \
+            "$GATE_KEY" \
+            "$EVIDENCE_TYPE" \
+            "$evidence_reference" \
+            "$ARTIFACT_HASH"
+
+      - name: Upload verified operational proof manifest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-proof-${{ inputs.gate_key }}-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/operational-proof-manifest.json
+            source-run.json
+          if-no-files-found: error
+          retention-days: 365
