@@ -181,26 +181,32 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
             try {
                 snap = await getDoc(userDocRef);
-            } catch (err: any) {
-                console.error("[ROLE-SYNC] Firestore read permission/error:", err);
-                if (founderBootstrap || roleIsValid(claimRole)) {
-                    const recoveredRole = founderBootstrap ? 'super_admin' : claimRole;
-                    const recoveredIsAdmin = founderBootstrap || claimIsAdmin;
-                    setRole(recoveredRole);
-                    setIsAdmin(recoveredIsAdmin);
-                    setStatus('active');
-                    setUser({ ...currentUser, role: recoveredRole, isAdmin: recoveredIsAdmin, status: 'active', bootstrapAdmin: founderBootstrap } as SovereignUser);
+            } catch (firstErr: any) {
+                console.warn("[ROLE-SYNC] Firestore read failed, retrying once:", firstErr);
+                await new Promise((resolve) => setTimeout(resolve, 600));
+                try {
+                    snap = await getDoc(userDocRef);
+                } catch (err: any) {
+                    console.error("[ROLE-SYNC] Firestore read permission/error after retry:", err);
+                    if (founderBootstrap || roleIsValid(claimRole)) {
+                        const recoveredRole = founderBootstrap ? 'super_admin' : claimRole;
+                        const recoveredIsAdmin = founderBootstrap || claimIsAdmin;
+                        setRole(recoveredRole);
+                        setIsAdmin(recoveredIsAdmin);
+                        setStatus('active');
+                        setUser({ ...currentUser, role: recoveredRole, isAdmin: recoveredIsAdmin, status: 'active', bootstrapAdmin: founderBootstrap } as SovereignUser);
+                        setError(null);
+                        setLoading(false);
+                        return;
+                    }
+                    setRole(null);
+                    setIsAdmin(false);
+                    setStatus('role_required');
+                    setUser({ ...currentUser, status: 'role_required' } as SovereignUser);
                     setError(null);
                     setLoading(false);
                     return;
                 }
-                setRole(null);
-                setIsAdmin(false);
-                setStatus('role_required');
-                setUser({ ...currentUser, status: 'role_required' } as SovereignUser);
-                setError(null);
-                setLoading(false);
-                return;
             }
 
             if (snap && snap.exists()) {

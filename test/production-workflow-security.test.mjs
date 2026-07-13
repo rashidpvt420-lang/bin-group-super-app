@@ -105,8 +105,7 @@ test('production workflow run blocks never embed user-controlled github expressi
     assert.doesNotMatch(block, /\$\{\{\s*github\.event\.inputs\./);
     assert.doesNotMatch(block, /\$\{\{\s*inputs\./);
   }
-  const envSectionMatches = [...workflow.matchAll(/env:\n((?:[ \t]+.+\n)+)/g)].map((match) => match[1]);
-  assert.ok(envSectionMatches.some((section) => /DISPATCH_CONFIRMATION:/.test(section)));
+  assert.match(workflow, /DISPATCH_CONFIRMATION:\s*\$\{\{\s*inputs\.confirmation\s*\}\}/);
 });
 
 test('explicit admin build verification is local-only before deployment', () => {

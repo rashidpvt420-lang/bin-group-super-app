@@ -354,6 +354,10 @@ describe('launch honesty — cryptographic artifact revalidation', () => {
   });
 
   it('rejects symlink escape outside approved artifacts directory', () => {
+    if (process.platform === 'win32') {
+      // Windows often blocks unprivileged symlink creation (EPERM).
+      return;
+    }
     const root = writeArtifactWorkspace();
     try {
       const outside = path.join(root, 'outside-secret.json');
@@ -475,8 +479,13 @@ describe('launch honesty — deployment fail-closed', () => {
   });
 
   it('accepts strict passed deployment with workflow provenance', () => {
-    const errors = validateDeploymentDocument(validDeployment(), COMMIT, { requireWorkflowProvenance: true });
-    assert.deepEqual(errors, []);
+    const root = writeArtifactWorkspace();
+    try {
+      const errors = validateDeploymentDocument(validDeployment(), COMMIT, { root, requireWorkflowProvenance: true });
+      assert.deepEqual(errors, []);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

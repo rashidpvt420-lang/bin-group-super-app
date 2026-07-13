@@ -65,7 +65,6 @@ const usersToSeed = [
       adminApproved: true,
       onboardingComplete: true,
       dashboardUnlocked: true,
-      activeContractId: 'e2e-live-role-contract-pqhiozq7brqnm6s5vmbbvutsm2k3',
     }
   },
   {
@@ -76,9 +75,6 @@ const usersToSeed = [
     displayName: 'E2E Tenant',
     extraProfile: {
       onboardingComplete: true,
-      assignedPropertyId: 'e2e-live-role-property',
-      assignedUnitId: 'e2e-live-role-unit-pqhiozq7brqnm6s5vmbbvutsm2k3',
-      activeContractId: 'e2e-live-role-contract-pqhiozq7brqnm6s5vmbbvutsm2k3',
     }
   },
   {
@@ -100,6 +96,25 @@ const usersToSeed = [
     displayName: 'E2E Broker',
   }
 ];
+
+const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim().toLowerCase();
+const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
+if (techBEmail && techBPassword) {
+  usersToSeed.push({
+    role: 'technician',
+    email: techBEmail,
+    password: techBPassword,
+    claims: { role: 'technician', testAccount: true, technicianB: true },
+    displayName: 'E2E Technician B',
+    extraProfile: {
+      onDuty: true,
+      dutyStatus: 'ON_DUTY',
+    },
+  });
+} else if (techBEmail || techBPassword) {
+  console.error('❌ E2E_TECHNICIAN_B_EMAIL and E2E_TECHNICIAN_B_PASSWORD must both be set together.');
+  process.exit(1);
+}
 
 async function seed() {
   console.log('🚀 Seeding/Updating E2E Auth accounts in production...');

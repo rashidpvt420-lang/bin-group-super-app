@@ -140,12 +140,12 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     }
     await loginToProfile(pageB, techB.email, 'technician', techB.password);
 
-    await pageA.goto('/technician/pool', { waitUntil: 'domcontentloaded' });
-    await pageB.goto('/technician/pool', { waitUntil: 'domcontentloaded' });
+    await pageA.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
+    await pageB.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
 
-    // Wait for the ticket in the pool
-    const acceptBtnA = pageA.locator('button:has-text("Accept"), button:has-text("Claim")').first();
-    const acceptBtnB = pageB.locator('button:has-text("Accept"), button:has-text("Claim")').first();
+    // Wait for the ticket in the open job pool
+    const acceptBtnA = pageA.getByRole('button', { name: /ACCEPT JOB|Accept Job|Accept Mission|Claim/i }).first();
+    const acceptBtnB = pageB.getByRole('button', { name: /ACCEPT JOB|Accept Job|Accept Mission|Claim/i }).first();
 
     if (!(await acceptBtnA.isVisible({ timeout: 10000 }).catch(() => false))) {
       test.skip(true, 'No open mission-pool ticket is seeded for the technician race-condition proof.');
@@ -203,25 +203,51 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     await loginToProfile(page, BROKER_EMAIL(), 'broker', rolePassword('BROKER'));
     await page.goto('/broker/leads/new', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Lead|New/i, { timeout: 15000 });
+
+    const clientName = page.getByTestId('broker-lead-client-name');
+    if (await clientName.isVisible().catch(() => false)) {
+      await clientName.fill(`Walkthrough Lead ${Date.now()}`);
+      const phone = page.getByLabel(/Phone Number/i);
+      if (await phone.isVisible().catch(() => false)) await phone.fill('+971501234567');
+      const submit = page.getByTestId('broker-lead-submit');
+      if (await submit.isEnabled().catch(() => false)) {
+        await submit.click();
+        await expect(page.locator('body')).toContainText(/success|submitted|created|lead/i, { timeout: 20000 });
+      }
+    }
+
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Commissions|Referral/i, { timeout: 15000 });
   });
 
-  test('7. Admin Context: Verify standalone admin-panel bridge', async () => {
-    // The main app owns the admin bridge only; the standalone admin panel owns
-    // launch-health rows and sovereign operations after cross-domain handoff.
+  test('7. Admin Context: Verify standalone admin-panel bridge and credentialed login', async () => {
+    const adminBase = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').replace(/\/+$/, '');
     const page = await adminContext.newPage();
     await page.goto('/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Opening Admin Command Center|dedicated production admin panel/i, { timeout: 10000 });
     await expect(page.locator('body')).toContainText(/bin-group-admin-panel\.web\.app/i);
 
-    const externalBridge = page.waitForURL((url) => url.origin === 'https://bin-group-admin-panel.web.app', { timeout: 20000 });
     const continueButton = page.getByRole('button', { name: /Continue to Admin Command Center/i }).first();
     if (await continueButton.isVisible().catch(() => false)) {
       await continueButton.click();
     }
-    await externalBridge;
-    expect(page.url()).toMatch(/^https:\/\/bin-group-admin-panel\.web\.app\/(dashboard|login)/);
+
+    await page.waitForURL((url) => url.origin === new URL(adminBase).origin, { timeout: 20000 });
+    expect(page.url()).toMatch(new RegExp(`^${adminBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(dashboard|login)`));
+
+    if (page.url().includes('/login')) {
+      await page.locator('input[type="email"], input[name*="email" i]').first().fill(requireEnv('E2E_ADMIN_EMAIL'));
+      await page.locator('input[type="password"]').first().fill(rolePassword('ADMIN'));
+      await page.locator('form button[type="submit"]').first().click();
+      await page.waitForURL(`${adminBase}/dashboard`, { timeout: 25000 });
+    }
+
+    await expect(page.locator('body')).not.toContainText(/auth\/invalid-credential|permission-denied|SOVEREIGN_FAILURE/i, { timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/Admin|Dashboard|Command/i, { timeout: 15000 });
+
+    await page.goto(`${adminBase}/sos`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('admin-sos-feed')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/SOS|Emergency|emergency/i, { timeout: 15000 });
   });
 });
 

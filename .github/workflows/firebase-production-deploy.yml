@@ -23,6 +23,19 @@ on:
         description: 'Founder/CEO email listed in AUTHORIZED_FOUNDER_EMAILS'
         required: true
         type: string
+      launch_mode:
+        description: 'bank-pilot or public'
+        required: true
+        type: choice
+        options:
+          - bank-pilot
+          - public
+        default: bank-pilot
+      run_public_release_gate:
+        description: 'Run postdeploy public-release gate (requires live evidence already recorded for this SHA)'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -147,6 +160,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate-production-build
     environment: production
+    outputs:
+      validated_artifact_digest: ${{ steps.artifact_digest.outputs.digest }}
+
     steps:
       - name: Enforce production dispatch gates
         env:
@@ -226,48 +242,116 @@ jobs:
           npm run verify:admin-firebase -- --build apps/admin-panel/build
           npm run build --workspace=functions
 
-      - name: Deploy and verify Firebase production stack
-        run: node scripts/deploy-firebase-production.mjs
-
-      - name: Upload production deployment proof
-        uses: actions/upload-artifact@v4
+      - name: Use Java 21 for Firestore rules emulator
+        uses: actions/setup-java@v4
         with:
-          name: production-deployment-${{ github.sha }}
-          path: |
-            launch_package/hard-launch-authorization.json
-            launch_package/production-incidents.json
-            launch_package/production-deployment.json
-          if-no-files-found: error
-          retention-days: 90
+          distribution: temurin
+          java-version: '21'
 
-  validate-live-launch-evidence:
-    name: Validate current-commit live launch evidence
-    runs-on: ubuntu-latest
-    needs: deploy-firebase-production-stack
-    environment: production
-    env:
-      E2E_BASE_URL: https://bin-group-57c60.web.app
-      E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
-      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
-      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
-      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
-      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
-      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
-      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
-      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
-      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
-      E2E_STRICT_ROLES: 'true'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Build unified public app
+        id: build_public
+        run: |
+          set -euo pipefail
+          npm run build
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build dedicated admin panel
+        id: build_admin
+        run: |
+          set -euo pipefail
+          npm run build:admin
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        env:
+          CI: false
+          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+
+      - name: Verify admin Firebase project embedding before deploy
+        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
+
+      - name: Build Firebase Functions
+        id: build_functions
+        run: |
+          set -euo pipefail
+          npm run build --workspace=functions
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Measure Functions discovery load
+        id: functions_load
+        run: |
+          set -euo pipefail
+          npm run measure:functions-load
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Firestore rules tests
+        id: rules_test
+        run: |
+          set -euo pipefail
+          npm run test:rules
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compute validated artifact digest
+        id: artifact_digest
+        run: |
+          set -euo pipefail
+          DIGEST="$(node scripts/compute-artifact-digest.mjs)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "VALIDATED_ARTIFACT_DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          echo "Computed VALIDATED_ARTIFACT_DIGEST=$DIGEST"
+
+      - name: Write predeploy approval binding (SHA + digest)
+        env:
+          APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPROVED_BY}" ]]; then
+            echo "::error::Missing GitHub secret PRODUCTION_APPROVED_BY (audit trail email; authorization is the protected environment)."
+            exit 1
+          fi
+          mkdir -p launch_package
+          node <<'NODE'
+          const fs = require('fs');
+          const approvedBy = process.env.APPROVED_BY;
+          const doc = {
+            schemaVersion: 1,
+            commitSha: process.env.GITHUB_SHA,
+            artifactDigest: process.env.VALIDATED_ARTIFACT_DIGEST,
+            releaseId: process.env.RELEASE_ID,
+            approvedAt: new Date().toISOString(),
+            approvedBy,
+            approvedVia: 'github-environment-protection',
+            githubEnvironment: 'production',
+            launchMode: process.env.LAUNCH_MODE_INPUT,
+          };
+          fs.writeFileSync('launch_package/predeploy-approval.json', `${JSON.stringify(doc, null, 2)}\n`);
+          console.log('Wrote predeploy-approval.json for', doc.commitSha);
+          NODE
+
+      - name: Predeploy approval gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          LAUNCH_BANK_ONLY: ${{ inputs.launch_mode == 'bank-pilot' && '1' || '0' }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+          PREDEPLOY_BUILD_OK: ${{ steps.build_public.outputs.ok }}
+          PREDEPLOY_ADMIN_BUILD_OK: ${{ steps.build_admin.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_BUILD_OK: ${{ steps.build_functions.outputs.ok }}
+          PREDEPLOY_RULES_OK: ${{ steps.rules_test.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_LOAD_OK: ${{ steps.functions_load.outputs.ok }}
+          PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
+        run: node scripts/predeploy-approval-gate.mjs
 
       - name: Authenticate Google Cloud for E2E fixtures
         uses: google-github-actions/auth@v2
@@ -318,34 +402,21 @@ jobs:
       - name: Upload current-commit live evidence
         uses: actions/upload-artifact@v4
         with:
-          name: live-launch-evidence-${{ github.sha }}
-          path: launch_package
+          name: production-deployment-${{ github.sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/production-deployment-verify.log
+            launch_package/predeploy-approval.json
           if-no-files-found: error
           retention-days: 90
 
-  approve-hard-public-launch:
-    name: Create signed hard-launch decision
+  public-release-clearance:
+    name: Postdeploy public release gate
     runs-on: ubuntu-latest
-    needs: validate-live-launch-evidence
+    needs: deploy-firebase-production-stack
+    if: ${{ inputs.run_public_release_gate == true }}
     environment: production
-    env:
-      E2E_BASE_URL: https://bin-group-57c60.web.app
-      E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
-      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
-      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
-      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
-      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
-      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
-      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
-      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
-      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
-      HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
-      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
-      AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
-      E2E_STRICT_ROLES: 'true'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -358,36 +429,152 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Download current-commit live evidence
+      - name: Authenticate to Google Cloud for live postdeploy proofs
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Create E2E environment for live proofs
+        env:
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+          E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+          E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+          E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf 'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=%s\n' "$VITE_FIREBASE_APPCHECK_DEBUG_TOKEN" > .env.e2e
+          printf 'FIREBASE_APPCHECK_DEBUG_TOKEN=%s\n' "$FIREBASE_APPCHECK_DEBUG_TOKEN" >> .env.e2e
+          printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY" >> .env.e2e
+          printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID" >> .env.e2e
+          printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.e2e
+          printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY" >> .env.e2e
+          printf 'E2E_BASE_URL=%s\n' "$E2E_BASE_URL" >> .env.e2e
+          printf 'E2E_ADMIN_BASE_URL=%s\n' "$E2E_ADMIN_BASE_URL" >> .env.e2e
+          printf 'E2E_ADMIN_EMAIL=%s\n' "$E2E_ADMIN_EMAIL" >> .env.e2e
+          printf 'E2E_ADMIN_PASSWORD=%s\n' "$E2E_ADMIN_PASSWORD" >> .env.e2e
+          printf 'E2E_OWNER_EMAIL=%s\n' "$E2E_OWNER_EMAIL" >> .env.e2e
+          printf 'E2E_OWNER_PASSWORD=%s\n' "$E2E_OWNER_PASSWORD" >> .env.e2e
+          printf 'E2E_TENANT_EMAIL=%s\n' "$E2E_TENANT_EMAIL" >> .env.e2e
+          printf 'E2E_TENANT_PASSWORD=%s\n' "$E2E_TENANT_PASSWORD" >> .env.e2e
+          printf 'E2E_TECHNICIAN_EMAIL=%s\n' "$E2E_TECHNICIAN_EMAIL" >> .env.e2e
+          printf 'E2E_TECHNICIAN_PASSWORD=%s\n' "$E2E_TECHNICIAN_PASSWORD" >> .env.e2e
+          printf 'E2E_BROKER_EMAIL=%s\n' "$E2E_BROKER_EMAIL" >> .env.e2e
+          printf 'E2E_BROKER_PASSWORD=%s\n' "$E2E_BROKER_PASSWORD" >> .env.e2e
+          node scripts/verify-e2e-env.mjs
+
+      - name: Download production deployment metadata
         uses: actions/download-artifact@v4
         with:
-          name: live-launch-evidence-${{ github.sha }}
-          path: _live-proof
+          name: production-deployment-${{ github.sha }}
+          path: launch_package
 
-      - name: Restore live evidence package
+      - name: Seed E2E auth and gate fixtures
         run: |
-          rm -rf launch_package
-          root="$(find _live-proof -type d -name launch_package -print -quit)"
-          if [[ -n "$root" ]]; then
-            cp -R "$root" launch_package
-          else
-            mkdir -p launch_package
-            cp -R _live-proof/. launch_package/
+          set -euo pipefail
+          node scripts/seed-e2e-auth.mjs
+          node scripts/seed-live-role-test-data.mjs
+          node scripts/seed-gate11-fixtures.mjs
+
+      - name: Verify production routes
+        id: postdeploy_routes
+        run: |
+          set -euo pipefail
+          npm run test:e2e:gate11:routes
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify SMTP live delivery
+        id: postdeploy_smtp
+        run: |
+          set -euo pipefail
+          npm run test:gate12:smtp
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify App Check debug token registration
+        id: postdeploy_appcheck
+        run: |
+          set -euo pipefail
+          npm run test:gate12:appcheck
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Gate 11 authenticated production smoke
+        # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
+        # plain `npm run test:e2e:gate11:staging` — postdeploy-release-gate.mjs
+        # requires that exact evidence key and nothing else was writing it, so the
+        # gate could never pass regardless of this step's own ok=true marker.
+        id: postdeploy_smoke
+        run: |
+          set -euo pipefail
+          node scripts/record-postdeploy-aggregate-evidence.mjs --only gate11
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run business workflow evidence
+        id: postdeploy_business
+        run: |
+          set -euo pipefail
+          npm run test:e2e:business
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Aggregate business workflow evidence
+        # postdeploy-release-gate.mjs requires a single businessWorkflows record
+        # (passed=9/failed=0), not the six per-role records test:e2e:business
+        # writes individually. Sums the six already-written records for this
+        # commit — does not re-run anything.
+        run: node scripts/record-postdeploy-aggregate-evidence.mjs --only business
+
+      - name: Run launch audit live evidence
+        id: postdeploy_audit
+        run: |
+          set -euo pipefail
+          npm run test:e2e:launch-audit:live
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Postdeploy release gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+          POSTDEPLOY_ROUTES_OK: ${{ steps.postdeploy_routes.outputs.ok }}
+          POSTDEPLOY_SMTP_OK: ${{ steps.postdeploy_smtp.outputs.ok }}
+          POSTDEPLOY_APPCHECK_OK: ${{ steps.postdeploy_appcheck.outputs.ok }}
+          POSTDEPLOY_SMOKE_OK: ${{ steps.postdeploy_smoke.outputs.ok }}
+          POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
+          POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
+          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
+        run: |
+          set -euo pipefail
+          # Prefer digest embedded in deployment metadata when job output is unavailable.
+          if [[ -z "${VALIDATED_ARTIFACT_DIGEST}" ]]; then
+            VALIDATED_ARTIFACT_DIGEST="$(node -e "const d=require('./launch_package/production-deployment.json'); process.stdout.write(d.artifactDigest||d.validatedArtifactDigest||'')")"
+            export VALIDATED_ARTIFACT_DIGEST
+            echo "VALIDATED_ARTIFACT_DIGEST=$VALIDATED_ARTIFACT_DIGEST" >> "$GITHUB_ENV"
           fi
-          test -f launch_package/launch-evidence-batch.json
-          test -f launch_package/production-deployment.json
-          test -f launch_package/hard-launch-authorization.json
+          node scripts/postdeploy-release-gate.mjs
 
-      - name: Create signed hard-launch decision
-        run: npm run hard-launch:decision
-
-      - name: Verify final hard-launch status
-        run: npm run hard-launch:status
-
-      - name: Upload final hard-launch decision
+      - name: Upload public release clearance artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hard-launch-decision-${{ github.sha }}
-          path: launch_package
-          if-no-files-found: error
-          retention-days: 365
+          name: public-release-clearance-${{ github.sha }}
+          path: |
+            launch_package/public-release-status.json
+            launch_package/launch-evidence-batch.json
+          if-no-files-found: warn
+          retention-days: 90

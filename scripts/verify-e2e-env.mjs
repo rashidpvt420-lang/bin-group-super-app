@@ -2,6 +2,15 @@ import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import path from 'path';
 
+const root = process.cwd();
+for (const pkg of ['dotenv', 'firebase-admin']) {
+  if (!existsSync(path.join(root, 'node_modules', pkg))) {
+    console.error(`[E2E_ENV_GUARD] missing root dependency "${pkg}".`);
+    console.error('[E2E_ENV_GUARD] Run at repo root: npm install --legacy-peer-deps');
+    process.exit(1);
+  }
+}
+
 const possibleConfigPaths = [
   path.resolve(process.cwd(), '.env.e2e'),
   path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),
@@ -70,6 +79,32 @@ for (const role of roles) {
 
 const appCheckMissing = validateAppCheckToken();
 const allMissing = [...missing, ...appCheckMissing];
+
+const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
+const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
+if ((techBEmail && !techBPassword) || (!techBEmail && techBPassword)) {
+  console.error('[E2E_ENV_GUARD] E2E_TECHNICIAN_B_EMAIL and E2E_TECHNICIAN_B_PASSWORD must both be set together.');
+  process.exit(1);
+}
+if (techBEmail) {
+  console.log('[E2E_ENV_GUARD] TECHNICIAN_B: email=set credential=set (optional walkthrough only)');
+}
+
+if (process.env.E2E_STRICT_LIVE === 'true') {
+  if (!String(process.env.VITE_APP_CHECK_SITE_KEY || '').trim()) {
+    console.error('[E2E_ENV_GUARD] VITE_APP_CHECK_SITE_KEY is required when E2E_STRICT_LIVE=true (rebuild hosting with npm run build:live before credentialed E2E).');
+    process.exit(1);
+  }
+  console.log('[E2E_ENV_GUARD] live_build_site_key=set');
+}
+
+if (process.env.E2E_STRICT_BUSINESS === 'true') {
+  if (!String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim()) {
+    console.error('[E2E_ENV_GUARD] FIREBASE_SERVICE_ACCOUNT_JSON is required when E2E_STRICT_BUSINESS=true (business-admin Firestore seed).');
+    process.exit(1);
+  }
+  console.log('[E2E_ENV_GUARD] business-admin service account: set');
+}
 
 if (allMissing.length) {
   console.error('[E2E_ENV_GUARD] missing=' + allMissing.join(', '));

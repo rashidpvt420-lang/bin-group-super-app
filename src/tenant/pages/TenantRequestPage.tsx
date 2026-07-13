@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Button, TextField,
     Select, MenuItem, FormControl, InputLabel, CircularProgress,
-    IconButton, alpha
+    IconButton, alpha, Alert
 } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, X, AlertCircle, ChevronLeft } from 'lucide-react';
@@ -73,6 +73,40 @@ export default function TenantRequestPage() {
     const selectedSlaPolicy = CANONICAL_SLA_POLICY[selectedSlaKey];
     const selectedSlaMinutes = slaMinutesForPriority(priority);
 
+    // Property/unit lookup is async (see fetchResidence below); these derive whether the
+    // form has enough real data to be submitted, so the submit button itself can stay
+    // disabled during the load window instead of only failing inside handleSubmit after
+    // the user has already filled out the form and clicked dispatch.
+    const propertyLocationSource =
+        propertyData?.location ||
+        propertyData?.propertyLocation ||
+        propertyData?.geoPoint ||
+        propertyData;
+
+    const propertyLat = Number(
+        propertyLocationSource?.lat ??
+        propertyLocationSource?.latitude ??
+        0
+    );
+
+    const propertyLng = Number(
+        propertyLocationSource?.lng ??
+        propertyLocationSource?.longitude ??
+        0
+    );
+
+    const propertyContextReady =
+        residenceChecked &&
+        Boolean(unitData) &&
+        Boolean(propertyData);
+
+    const propertyGpsReady =
+        propertyContextReady &&
+        Number.isFinite(propertyLat) &&
+        Number.isFinite(propertyLng) &&
+        propertyLat !== 0 &&
+        propertyLng !== 0;
+
     useEffect(() => {
         const fetchResidence = async () => {
             if (!user?.uid) {
@@ -106,7 +140,7 @@ export default function TenantRequestPage() {
                     }
                 }
             } catch (err) {
-                console.error('Fetch failed:', err);
+                console.warn('Fetch failed:', err);
             } finally {
                 setResidenceChecked(true);
             }
@@ -180,17 +214,20 @@ export default function TenantRequestPage() {
             return;
         }
 
-        const locationSource = propertyData?.location || propertyData?.propertyLocation || propertyData?.geoPoint || null;
-        const jobLocation = locationSource ? {
-            lat: Number(locationSource.lat ?? locationSource.latitude ?? 0),
-            lng: Number(locationSource.lng ?? locationSource.longitude ?? 0),
-            latitude: Number(locationSource.lat ?? locationSource.latitude ?? 0),
-            longitude: Number(locationSource.lng ?? locationSource.longitude ?? 0),
-            address: propertyData?.address || propertyData?.locationAddress || '',
+        const jobLocation = propertyGpsReady ? {
+            lat: propertyLat,
+            lng: propertyLng,
+            latitude: propertyLat,
+            longitude: propertyLng,
+            address:
+                propertyData?.address ||
+                propertyData?.locationAddress ||
+                propertyLocationSource?.address ||
+                '',
             source: 'property',
         } : null;
 
-        if (!jobLocation || !jobLocation.lat || !jobLocation.lng) {
+        if (!jobLocation) {
             alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
             return;
         }
@@ -296,7 +333,22 @@ export default function TenantRequestPage() {
                 </Box>
             </Stack>
 
-            {residenceChecked && !unitData ? (
+            {!residenceChecked ? (
+                <Paper
+                    data-testid="tenant-residence-loading"
+                    sx={{
+                        p: 5,
+                        textAlign: 'center',
+                        bgcolor: 'rgba(22, 22, 24, 0.7)',
+                        borderRadius: 6,
+                    }}
+                >
+                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.7)' }}>
+                        Loading residence and property details…
+                    </Typography>
+                </Paper>
+            ) : !unitData ? (
                 <TenantUnitLinkFallback
                     message="A unit must be verified before maintenance, moving, cleaning, or management requests can be dispatched."
                 />
@@ -370,7 +422,14 @@ export default function TenantRequestPage() {
                             </Stack>
                         </Box>
 
-                        <Button type="submit" data-testid="tenant-request-submit" variant="contained" size="large" disabled={submitting || uploadingPhotos || isOwnerSuspended || photos.length === 0 || specificLocation.trim().length < 3} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, borderRadius: 4, fontSize: '1.1rem', boxShadow: `0 12px 24px -8px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: '#b4954e' } }}>
+                        {propertyContextReady && !propertyGpsReady && (
+                            <Alert severity="warning">
+                                Property GPS coordinates are unavailable. Contact management before
+                                dispatching this request.
+                            </Alert>
+                        )}
+
+                        <Button type="submit" data-testid="tenant-request-submit" variant="contained" size="large" disabled={submitting || uploadingPhotos || isOwnerSuspended || !propertyContextReady || !propertyGpsReady || photos.length === 0 || specificLocation.trim().length < 3} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, borderRadius: 4, fontSize: '1.1rem', boxShadow: `0 12px 24px -8px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: '#b4954e' } }}>
                             {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : tt('dash.tenant.dispatchRequest', 'DISPATCH REQUEST')}
                         </Button>
                     </Stack>

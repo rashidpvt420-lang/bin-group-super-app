@@ -166,6 +166,7 @@ export default function AdminPaymentApproval() {
                         variant="contained"
                         disabled={processingId === contract.id}
                         onClick={() => openVerification(contract)}
+                        data-testid="admin-approve-contract"
                         startIcon={processingId === contract.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
                         sx={{ bgcolor: '#C6A75E', color: '#000', '&:hover': { bgcolor: '#b59410' }, fontWeight: 900, borderRadius: 2 }}
                       >
