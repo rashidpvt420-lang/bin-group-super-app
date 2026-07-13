@@ -16,6 +16,8 @@ function baseEnv(overrides = {}) {
     DEPLOYMENT_ENVIRONMENT: 'production',
     GITHUB_REF: 'refs/heads/main',
     GITHUB_SHA: SHA,
+    GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    GITHUB_RUN_ID: '123',
     VALIDATED_ARTIFACT_DIGEST: DIGEST,
     LAUNCH_MODE: 'bank-pilot',
     POSTDEPLOY_ROUTES_OK: 'true',
@@ -58,6 +60,14 @@ function writeIncidents(root) {
     `${JSON.stringify(
       {
         schemaVersion: 1,
+        source: 'protected-workflow-dispatch-attestation',
+        repository: 'rashidpvt420-lang/bin-group-super-app',
+        commitSha: SHA,
+        ref: 'refs/heads/main',
+        workflowRunId: '123',
+        workflowRunAttempt: 1,
+        actor: 'test-actor',
+        evidenceReferences: ['ops://ticket/TEST-1'],
         activeIncidents: [],
         requiresRollback: false,
         rollbackReason: null,

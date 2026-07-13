@@ -105,6 +105,14 @@ if (evidence && deployment) {
 if (context.ref !== 'refs/heads/main') failures.push('hard-launch decision may only be created from refs/heads/main');
 if (!/^[0-9a-f]{40}$/.test(context.commitSha)) failures.push('GITHUB_SHA must be a lowercase 40-character SHA');
 
+const launchMode = String(process.env.LAUNCH_MODE || '').trim().toLowerCase();
+if (launchMode !== 'bank-pilot' && launchMode !== 'public') {
+  failures.push('LAUNCH_MODE must be bank-pilot or public');
+}
+
+const postdeployCleared = String(process.env.POSTDEPLOY_RELEASE_CLEARED || '').trim() === 'true';
+const stripeLiveOk = String(process.env.POSTDEPLOY_STRIPE_LIVE_OK || '').trim() === 'true';
+
 if (failures.length) {
   console.error('\n[hard-launch-decision] FAIL — hard public launch is not approved');
   for (const failure of [...new Set(failures)]) console.error(`- ${failure}`);
@@ -118,11 +126,33 @@ const evidenceHashes = {
   liveEvidence: sha256File(paths.evidence),
 };
 
+let status = 'recorded';
+let hardLaunchClaim = false;
+let decisionRule =
+  'same-main-commit deployment + live evidence + App Check + clear incidents + signed founder authorization';
+
+if (launchMode === 'bank-pilot') {
+  status = 'bank-pilot-no-public-claim';
+  hardLaunchClaim = false;
+  decisionRule = 'bank-pilot mode records a signed decision without claiming hard public launch';
+} else if (launchMode === 'public' && (!postdeployCleared || !stripeLiveOk)) {
+  status = 'public-awaiting-postdeploy-clearance';
+  hardLaunchClaim = false;
+  decisionRule =
+    'public mode requires postdeploy release clearance and Stripe live proof before hardLaunchClaim may become true';
+} else if (launchMode === 'public' && postdeployCleared && stripeLiveOk) {
+  status = 'approved';
+  hardLaunchClaim = true;
+  decisionRule =
+    'same-main-commit deployment + live evidence + App Check + clear incidents + signed founder authorization + postdeploy clearance + Stripe live proof';
+}
+
 const payload = {
   schemaVersion: HARD_LAUNCH_CONTROL_SCHEMA,
   kind: DECISION_KIND,
-  status: 'approved',
-  hardLaunchClaim: true,
+  status,
+  hardLaunchClaim,
+  launchMode,
   commitSha: context.commitSha,
   ref: context.ref,
   repository: context.repository,
@@ -138,12 +168,12 @@ const payload = {
   },
   requiredEvidence: [...REQUIRED_PILOT_EVIDENCE],
   evidenceHashes,
-  decisionRule: 'same-main-commit deployment + all current live evidence + App Check + clear incidents + signed founder authorization',
+  decisionRule,
 };
 
 const decision = signDocument(payload, context.hmacKey);
 mkdirSync(path.dirname(paths.decision), { recursive: true });
 writeFileSync(paths.decision, `${JSON.stringify(decision, null, 2)}\n`, { mode: 0o600 });
 console.log(`[hard-launch-decision] wrote ${paths.decision}`);
-console.log(`[hard-launch-decision] APPROVED commit=${context.commitSha}`);
-console.log('[hard-launch-decision] hardLaunchClaim=true');
+console.log(`[hard-launch-decision] status=${status} commit=${context.commitSha}`);
+console.log(`[hard-launch-decision] hardLaunchClaim=${hardLaunchClaim}`);

@@ -262,7 +262,7 @@ test('operational intake verifies source run, artifact, schema, and recomputed h
   assert.doesNotMatch(workflow, /actions:\s*write/);
   assert.match(workflow, /actions\/runs\/\$\{SOURCE_RUN_ID\}/);
   assert.match(workflow, /run\.head_sha !== process\.env\.TARGET_SHA/);
-  assert.match(workflow, /operational-proof\.json/);
+  assert.match(workflow, /operational-proof-manifest\.json/);
   assert.match(workflow, /crypto\.createHash\('sha256'\)/);
   assert.match(workflow, /verify-launch-gate-live\.mjs/);
   for (const block of runBlocks(workflow)) {

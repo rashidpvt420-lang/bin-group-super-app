@@ -36,6 +36,39 @@ on:
         required: true
         type: boolean
         default: false
+      incident_attestation:
+        description: 'Type exactly ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR or ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'
+        required: true
+        type: string
+      incident_active_json:
+        description: 'JSON array of active incidents (use [] only with CLEAR attestation)'
+        required: true
+        type: string
+        default: '[]'
+      incident_requires_rollback:
+        description: 'Whether a production rollback hold is active'
+        required: true
+        type: boolean
+        default: false
+      incident_rollback_reason:
+        description: 'Required when incident_requires_rollback is true'
+        required: false
+        type: string
+        default: ''
+      incident_last_deployment_failed:
+        description: 'Whether the last production deployment failed'
+        required: true
+        type: boolean
+        default: false
+      incident_last_deployment_failed_at:
+        description: 'ISO-8601 timestamp required when incident_last_deployment_failed is true'
+        required: false
+        type: string
+        default: ''
+      incident_evidence_refs:
+        description: 'Comma-separated evidence references for the incident attestation (required, non-empty)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -213,6 +246,17 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Create production incidents artifact from protected workflow attestation
+        env:
+          INCIDENT_ATTESTATION: ${{ inputs.incident_attestation }}
+          INCIDENT_ACTIVE_JSON: ${{ inputs.incident_active_json }}
+          INCIDENT_REQUIRES_ROLLBACK: ${{ inputs.incident_requires_rollback }}
+          INCIDENT_ROLLBACK_REASON: ${{ inputs.incident_rollback_reason }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ inputs.incident_last_deployment_failed }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ inputs.incident_last_deployment_failed_at }}
+          INCIDENT_EVIDENCE_REFS: ${{ inputs.incident_evidence_refs }}
+        run: node scripts/create-production-incidents-attestation.mjs
+
       - name: Create signed founder authorization
         env:
           FOUNDER_NAME: ${{ inputs.founder_name }}
@@ -233,14 +277,6 @@ jobs:
 
       - name: Create strict production environment files
         run: node scripts/write-production-env.mjs
-
-      - name: Build production stack
-        run: |
-          npm run build --workspace=@bin/shared
-          npm run build
-          CI=false npm run build:admin
-          npm run verify:admin-firebase -- --build apps/admin-panel/build
-          npm run build --workspace=functions
 
       - name: Use Java 21 for Firestore rules emulator
         uses: actions/setup-java@v4
@@ -353,6 +389,26 @@ jobs:
           PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
         run: node scripts/predeploy-approval-gate.mjs
 
+      - name: Deploy and verify Firebase production stack
+        env:
+          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+        run: node scripts/deploy-firebase-production.mjs
+
+      - name: Verify production deployment metadata exists after deploy
+        run: |
+          set -euo pipefail
+          test -f launch_package/production-deployment.json
+          node -e "
+            const fs = require('fs');
+            const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json', 'utf8'));
+            if (doc.source !== 'firebase-production-deploy-workflow') process.exit(1);
+            if (String(doc.deployedCommitSha || '') !== process.env.GITHUB_SHA) process.exit(1);
+            if (String(doc.workflowRunId || '') !== String(process.env.GITHUB_RUN_ID || '')) process.exit(1);
+            if (doc.hardLaunchClaim === true) process.exit(1);
+            console.log('deployment metadata verified for', doc.deployedCommitSha);
+          "
+
       - name: Authenticate Google Cloud for E2E fixtures
         uses: google-github-actions/auth@v2
         with:
@@ -360,23 +416,6 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
-
-      - name: Install dependencies with retry
-        run: bash scripts/npm-install-retry.sh
-
-      - name: Download production deployment proof
-        uses: actions/download-artifact@v4
-        with:
-          name: production-deployment-${{ github.sha }}
-          path: _deployment-proof
-
-      - name: Restore deployment proof
-        run: |
-          mkdir -p launch_package
-          find _deployment-proof -type f -name '*.json' -exec cp {} launch_package/ \;
-          test -f launch_package/hard-launch-authorization.json
-          test -f launch_package/production-incidents.json
-          test -f launch_package/production-deployment.json
 
       - name: Validate full live E2E secrets and App Check UUID
         run: npm run test:e2e:env
@@ -399,7 +438,18 @@ jobs:
       - name: Evaluate controlled-pilot eligibility
         run: npm run launch:status
 
-      - name: Upload current-commit live evidence
+      - name: Create signed hard-launch decision
+        env:
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          POSTDEPLOY_RELEASE_CLEARED: 'false'
+          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+        run: npm run hard-launch:decision
+
+      - name: Upload production deployment metadata after verification
         uses: actions/upload-artifact@v4
         with:
           name: production-deployment-${{ github.sha }}
@@ -407,6 +457,11 @@ jobs:
             launch_package/production-deployment.json
             launch_package/production-deployment-verify.log
             launch_package/predeploy-approval.json
+            launch_package/production-incidents.json
+            launch_package/hard-launch-authorization.json
+            launch_package/hard-launch-decision.json
+            launch_package/launch-evidence-batch.json
+            launch_package/launch-status.json
           if-no-files-found: error
           retention-days: 90
 
@@ -484,7 +539,32 @@ jobs:
         with:
           name: production-deployment-${{ github.sha }}
           path: launch_package
+          # Same-workflow-run only: never accept a cross-run orphan artifact.
 
+      - name: Verify downloaded deployment artifact is bound to this run and SHA
+        run: |
+          set -euo pipefail
+          test -f launch_package/production-deployment.json
+          test -f launch_package/production-incidents.json
+          test -f launch_package/predeploy-approval.json
+          node -e "
+            const fs = require('fs');
+            const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json', 'utf8'));
+            const incidents = JSON.parse(fs.readFileSync('launch_package/production-incidents.json', 'utf8'));
+            const approval = JSON.parse(fs.readFileSync('launch_package/predeploy-approval.json', 'utf8'));
+            const sha = process.env.GITHUB_SHA;
+            const runId = String(process.env.GITHUB_RUN_ID || '');
+            const repo = process.env.GITHUB_REPOSITORY;
+            if (doc.source !== 'firebase-production-deploy-workflow') throw new Error('wrong deployment source');
+            if (String(doc.deployedCommitSha || '') !== sha) throw new Error('deployment SHA mismatch');
+            if (String(doc.workflowRunId || '') !== runId) throw new Error('deployment workflowRunId mismatch');
+            if (doc.repository && String(doc.repository) !== repo) throw new Error('deployment repository mismatch');
+            if (String(incidents.commitSha || '') !== sha) throw new Error('incidents SHA mismatch');
+            if (String(incidents.workflowRunId || '') !== runId) throw new Error('incidents workflowRunId mismatch');
+            if (String(approval.commitSha || '') !== sha) throw new Error('predeploy approval SHA mismatch');
+            if (String(approval.releaseId || '').split('-')[0] !== runId) throw new Error('predeploy approval releaseId run binding mismatch');
+            console.log('postdeploy artifact binding verified for', sha, 'run', runId);
+          "
       - name: Seed E2E auth and gate fixtures
         run: |
           set -euo pipefail
@@ -546,6 +626,7 @@ jobs:
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Postdeploy release gate
+        id: postdeploy_gate
         env:
           DEPLOYMENT_ENVIRONMENT: production
           LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -567,6 +648,17 @@ jobs:
             echo "VALIDATED_ARTIFACT_DIGEST=$VALIDATED_ARTIFACT_DIGEST" >> "$GITHUB_ENV"
           fi
           node scripts/postdeploy-release-gate.mjs
+          echo "cleared=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create signed hard-launch decision after postdeploy clearance
+        env:
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
+          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
+        run: npm run hard-launch:decision
 
       - name: Upload public release clearance artifact
         if: always()
@@ -576,5 +668,7 @@ jobs:
           path: |
             launch_package/public-release-status.json
             launch_package/launch-evidence-batch.json
+            launch_package/hard-launch-decision.json
+            launch_package/production-incidents.json
           if-no-files-found: warn
           retention-days: 90
