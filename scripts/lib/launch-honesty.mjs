@@ -445,7 +445,7 @@ export function revalidateDeploymentArtifact(record, { root = process.cwd(), com
   }
 
   const doc = readJsonSafe(resolved.absolutePath, null);
-  const errors = validateDeploymentDocument(doc, commitSha || record.commitSha);
+  const errors = validateDeploymentDocument(doc, commitSha || record.commitSha, { root });
   if (errors.length) {
     return { ok: false, reason: `deployment metadata invalid: ${errors[0]}`, errors };
   }
