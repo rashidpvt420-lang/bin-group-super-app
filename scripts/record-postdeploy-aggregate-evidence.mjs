@@ -35,7 +35,8 @@ import {
 } from './lib/launch-honesty.mjs';
 import {
   evaluatePlaywrightJsonRun,
-  spawnNpmPlaywrightJson,
+  resolvePlaywrightCli,
+  spawnPlaywrightJson,
   writePlaywrightDiagnosticLog,
 } from './lib/playwright-json-artifact.mjs';
 
@@ -52,13 +53,35 @@ function argValue(name) {
 function recordGate11() {
   const mainUrl = String(process.env.E2E_BASE_URL || PRODUCTION.mainUrl).replace(/\/+$/, '');
   const adminUrl = String(process.env.E2E_ADMIN_BASE_URL || PRODUCTION.adminUrl).replace(/\/+$/, '');
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const reportPath = path.join(artifactsDir, `gate11-production-smoke-${commitSha.slice(0, 8)}.json`);
   const startedAt = new Date().toISOString();
 
-  const result = spawnNpmPlaywrightJson({
-    npmCmd,
-    args: ['exec', '--', 'playwright', 'test', 'tests/e2e/gate11-staging-smoke.spec.ts', '--project=chromium-desktop', '--reporter=json'],
+  const cliResolved = resolvePlaywrightCli({ root });
+  if (!cliResolved.ok) {
+    console.error(`[record-postdeploy-evidence] ${cliResolved.reason}`);
+    upsertEvidenceRecord(root, {
+      testName: 'gate11ProductionSmoke',
+      suiteName: 'gate11-staging-smoke',
+      source: 'record-postdeploy-aggregate-evidence',
+      executionGenerated: true,
+      exitCode: 1,
+      commitSha,
+      mainUrl,
+      adminUrl,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      proof: `Gate 11 production smoke refused: ${cliResolved.reason}`,
+      hardLaunchClaim: false,
+    });
+    return false;
+  }
+
+  const result = spawnPlaywrightJson({
+    root,
+    args: ['test', 'tests/e2e/gate11-staging-smoke.spec.ts', '--project=chromium-desktop', '--reporter=json'],
     env: { ...process.env, E2E_BASE_URL: mainUrl, E2E_ADMIN_BASE_URL: adminUrl },
     reportPath,
   });

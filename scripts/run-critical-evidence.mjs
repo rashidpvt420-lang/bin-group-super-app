@@ -25,7 +25,9 @@ import {
 } from './lib/launch-honesty.mjs';
 import {
   evaluatePlaywrightJsonRun,
-  spawnNpmPlaywrightJson,
+  resolvePlaywrightCli,
+  spawnPlaywright,
+  spawnPlaywrightJson,
   writePlaywrightDiagnosticLog,
 } from './lib/playwright-json-artifact.mjs';
 
@@ -60,25 +62,29 @@ function runPlaywrightSuite(suiteKey, def) {
   const startedAt = new Date().toISOString();
   const reportPath = path.join(artifactsDir, `${def.suiteName}-${commitSha.slice(0, 8)}.json`);
   const diagPath = `${reportPath}.stdio.log`;
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
   const envGate = spawnSync(process.execPath, ['scripts/verify-e2e-env.mjs'], { stdio: 'inherit', env: process.env });
   if ((envGate.status ?? 1) !== 0) return { ok: false, exitCode: envGate.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
   const appGate = spawnSync(process.execPath, ['scripts/ensure-appcheck.mjs'], { stdio: 'inherit', env: process.env });
   if ((appGate.status ?? 1) !== 0) return { ok: false, exitCode: appGate.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
 
-  const install = spawnSync(npmCmd, ['exec', '--', 'playwright', 'install', '--with-deps', 'chromium'], {
-    stdio: 'inherit',
+  const cliResolved = resolvePlaywrightCli({ root });
+  if (!cliResolved.ok) {
+    console.error(`[critical-evidence] ${cliResolved.reason}`);
+    return { ok: false, exitCode: 1, startedAt, finishedAt: new Date().toISOString() };
+  }
+
+  const install = spawnPlaywright({
+    root,
+    args: ['install', '--with-deps', 'chromium'],
     env: process.env,
+    stdio: 'inherit',
   });
   if ((install.status ?? 1) !== 0) {
     return { ok: false, exitCode: install.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
   }
 
   const args = [
-    'exec',
-    '--',
-    'playwright',
     'test',
     ...def.specs,
     '--project=chromium-desktop',
@@ -92,7 +98,7 @@ function runPlaywrightSuite(suiteKey, def) {
   };
 
   console.log(`[critical-evidence] running ${suiteKey}: ${def.specs.join(' ')}`);
-  const result = spawnNpmPlaywrightJson({ npmCmd, args, env, reportPath });
+  const result = spawnPlaywrightJson({ root, args, env, reportPath });
   const finishedAt = new Date().toISOString();
   const exitCode = result.status ?? 1;
   writePlaywrightDiagnosticLog(diagPath, {
