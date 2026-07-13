@@ -255,7 +255,7 @@ jobs:
           INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ inputs.incident_last_deployment_failed }}
           INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ inputs.incident_last_deployment_failed_at }}
           INCIDENT_EVIDENCE_REFS: ${{ inputs.incident_evidence_refs }}
-        run: node scripts/create-production-incidents-artifact.mjs
+        run: node scripts/create-production-incidents-attestation.mjs
 
       - name: Create signed founder authorization
         env:

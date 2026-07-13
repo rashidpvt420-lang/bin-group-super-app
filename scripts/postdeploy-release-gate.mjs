@@ -52,7 +52,7 @@ export function runPostdeployReleaseGate({
     failures,
   );
 
-  checkProductionIncidents(failures, { root, now });
+  checkProductionIncidents(failures, { root, now, env });
 
   const approvalPath = path.join(root, PREDEPLOY_APPROVAL_PATH);
   let releaseId = String(env.RELEASE_ID || '').trim();

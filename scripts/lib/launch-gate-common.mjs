@@ -119,7 +119,7 @@ export function computeValidatedArtifactDigest(root = process.cwd()) {
   return `sha256:${hash.digest('hex')}`;
 }
 
-export function checkProductionIncidents(failures, { root = process.cwd(), now = Date.now() } = {}) {
+export function checkProductionIncidents(failures, { root = process.cwd(), now = Date.now(), env = process.env } = {}) {
   const incidentPath = path.join(root, INCIDENTS_PATH);
   if (!existsSync(incidentPath)) {
     failures.push('Missing production-incidents.json. Incident state cannot be verified.');
@@ -136,6 +136,35 @@ export function checkProductionIncidents(failures, { root = process.cwd(), now =
   if (!String(incidentData.updatedBy || '').trim()) {
     failures.push('production-incidents.json updatedBy is required.');
   }
+
+  // In protected CI, reject committed/static green fixtures and require run-bound attestation.
+  if (String(env.GITHUB_ACTIONS || '') === 'true') {
+    if (incidentData.source !== 'protected-workflow-dispatch-attestation') {
+      failures.push(
+        'production-incidents.json source must be protected-workflow-dispatch-attestation (static committed fixtures are rejected in CI).',
+      );
+    }
+    const expectedSha = String(env.GITHUB_SHA || '').trim();
+    const expectedRepo = String(env.GITHUB_REPOSITORY || '').trim();
+    const expectedRunId = String(env.GITHUB_RUN_ID || '').trim();
+    const expectedRef = String(env.GITHUB_REF || '').trim();
+    if (expectedSha && String(incidentData.commitSha || '') !== expectedSha) {
+      failures.push('production-incidents.json commitSha must match GITHUB_SHA.');
+    }
+    if (expectedRepo && String(incidentData.repository || '') !== expectedRepo) {
+      failures.push('production-incidents.json repository must match GITHUB_REPOSITORY.');
+    }
+    if (expectedRunId && String(incidentData.workflowRunId || '') !== expectedRunId) {
+      failures.push('production-incidents.json workflowRunId must match GITHUB_RUN_ID.');
+    }
+    if (expectedRef && String(incidentData.ref || '') !== expectedRef) {
+      failures.push('production-incidents.json ref must match GITHUB_REF.');
+    }
+    if (!Array.isArray(incidentData.evidenceReferences) || incidentData.evidenceReferences.length === 0) {
+      failures.push('production-incidents.json evidenceReferences must be a non-empty array in CI.');
+    }
+  }
+
   if (!Array.isArray(incidentData.activeIncidents)) {
     failures.push('production-incidents.json activeIncidents must be an array.');
   } else {

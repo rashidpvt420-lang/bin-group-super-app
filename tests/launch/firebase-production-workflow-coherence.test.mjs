@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const workflowPath = path.join(root, '.github/workflows/firebase-production-deploy.yml');
 const workflow = readFileSync(workflowPath, 'utf8');
-const producerScript = path.join(root, 'scripts/create-production-incidents-artifact.mjs');
+const producerScript = path.join(root, 'scripts/create-production-incidents-attestation.mjs');
 
 function lineOf(snippet) {
   const idx = workflow.indexOf(snippet);
@@ -67,7 +67,7 @@ test('incident artifact producer precedes every consumer in the workflow', () =>
   assert.ok(producer < hmacPredeploy, 'incidents must be produced before HMAC predeploy');
   assert.ok(producer < splitPredeploy, 'incidents must be produced before split predeploy gate');
   assert.ok(producer < postdeploy, 'incidents must be produced before postdeploy (same workflow)');
-  assert.match(workflow, /create-production-incidents-artifact\.mjs/);
+  assert.match(workflow, /create-production-incidents-attestation\.mjs/);
 });
 
 test('missing incident source fails closed', () => {
@@ -152,7 +152,7 @@ test('stale and future incident records fail closed in split gate validator', as
       })}\n`,
     );
     const staleFailures = [];
-    checkProductionIncidents(staleFailures, { root: directory, now: Date.now() });
+    checkProductionIncidents(staleFailures, { root: directory, now: Date.now(), env: {} });
     assert.ok(staleFailures.some((f) => /stale|too old|updatedAt/i.test(f)));
 
     writeFileSync(
@@ -167,7 +167,7 @@ test('stale and future incident records fail closed in split gate validator', as
       })}\n`,
     );
     const futureFailures = [];
-    checkProductionIncidents(futureFailures, { root: directory, now: Date.now() });
+    checkProductionIncidents(futureFailures, { root: directory, now: Date.now(), env: {} });
     assert.ok(futureFailures.some((f) => /future/i.test(f)));
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -188,9 +188,47 @@ test('blocking P0/P1 and rollback holds are written truthfully and rejected by s
   try {
     assert.equal(result.status, 0, result.stderr);
     const failures = [];
-    checkProductionIncidents(failures, { root: directory, now: Date.now() });
+    checkProductionIncidents(failures, {
+      root: directory,
+      now: Date.now(),
+      env: {
+        GITHUB_ACTIONS: 'true',
+        GITHUB_SHA: baseProducerEnv.GITHUB_SHA,
+        GITHUB_REPOSITORY: baseProducerEnv.GITHUB_REPOSITORY,
+        GITHUB_RUN_ID: baseProducerEnv.GITHUB_RUN_ID,
+        GITHUB_REF: baseProducerEnv.GITHUB_REF,
+      },
+    });
     assert.ok(failures.some((f) => /P0\/P1|Active P0/i.test(f)));
     assert.ok(failures.some((f) => /Rollback hold/i.test(f)));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('committed static green incidents without attestation source are rejected in CI', async () => {
+  const { checkProductionIncidents } = await import('../../scripts/lib/launch-gate-common.mjs');
+  const directory = mkdtempSync(path.join(tmpdir(), 'incidents-static-'));
+  mkdirSync(path.join(directory, 'launch_package'), { recursive: true });
+  try {
+    writeFileSync(
+      path.join(directory, 'launch_package/production-incidents.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        activeIncidents: [],
+        requiresRollback: false,
+        lastDeploymentFailed: false,
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'operations',
+      })}\n`,
+    );
+    const failures = [];
+    checkProductionIncidents(failures, {
+      root: directory,
+      now: Date.now(),
+      env: { GITHUB_ACTIONS: 'true', GITHUB_SHA: 'a'.repeat(40) },
+    });
+    assert.ok(failures.some((f) => /protected-workflow-dispatch-attestation|static committed/i.test(f)));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

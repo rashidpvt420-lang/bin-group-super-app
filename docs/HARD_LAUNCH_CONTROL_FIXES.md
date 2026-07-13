@@ -11,7 +11,7 @@ compatible layers (not two competing final judges).
 
 | Gate | Script | When |
 |---|---|---|
-| Incident attestation producer | `scripts/create-production-incidents-artifact.mjs` | First artifact producer inside protected `production` job |
+| Incident attestation producer | `scripts/create-production-incidents-attestation.mjs` | First artifact producer inside protected `production` job |
 | Pre-deployment approval | `scripts/predeploy-approval-gate.mjs` | After builds + digest binding, **before** Firebase deploy |
 | Production deploy | `scripts/deploy-firebase-production.mjs` | Exactly once after predeploy gates |
 | Post-deployment release | `scripts/postdeploy-release-gate.mjs` | Optional public-release job after same-run deployment artifact + live evidence |
@@ -32,7 +32,7 @@ Why both layers: GitHub `environment: production` + split gates provide environm
 
 `production-incidents.json` is **not** accepted as a static committed green fixture for deploy.
 
-It is produced each protected run by `create-production-incidents-artifact.mjs` from explicit workflow_dispatch attestations:
+It is produced each protected run by `create-production-incidents-attestation.mjs` from explicit workflow_dispatch attestations:
 
 - `incident_attestation` must be exactly `ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR` or `ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS`
 - active incidents JSON, rollback hold, last-deploy-failure fields, and non-empty evidence references

@@ -109,7 +109,7 @@ export function runPredeployApprovalGate({
     }
   }
 
-  checkProductionIncidents(failures, { root, now });
+  checkProductionIncidents(failures, { root, now, env });
 
   for (const item of [
     { envKey: 'PREDEPLOY_BUILD_OK', label: 'main public app build validation' },
