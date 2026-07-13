@@ -14,6 +14,8 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const workflowPath = '.github/workflows/firebase-production-deploy.yml';
 const workflow = readFileSync(workflowPath, 'utf8');
+const legacyProductionWorkflowPath = '.github/workflows/production.yml';
+const legacyProductionWorkflow = readFileSync(legacyProductionWorkflowPath, 'utf8');
 
 function runBlocks(source) {
   const lines = source.split(/\r?\n/);
@@ -65,6 +67,18 @@ test('production deploy cannot be cancelled in progress', () => {
 test('production deployment remains approval-gated', () => {
   assert.match(workflow, /environment:\s*production/);
   assert.match(workflow, /PRODUCTION_CONFIRMATION_PHRASE:\s*DEPLOY_PRODUCTION_BIN_GROUP_57C60/);
+});
+
+test('legacy production workflow is retired and cannot deploy', () => {
+  assert.match(legacyProductionWorkflow, /Retired production entrypoint/);
+  assert.match(legacyProductionWorkflow, /signed founder authorization and live evidence gates/);
+  assert.match(legacyProductionWorkflow, /\bexit 1\b/);
+  assert.doesNotMatch(legacyProductionWorkflow, /^\s*id-token:\s*write\s*$/m);
+  assert.doesNotMatch(legacyProductionWorkflow, /google-github-actions\/auth/);
+  assert.doesNotMatch(legacyProductionWorkflow, /GCP_WORKLOAD_IDENTITY_PROVIDER/);
+  assert.doesNotMatch(legacyProductionWorkflow, /GCP_SERVICE_ACCOUNT/);
+  assert.doesNotMatch(legacyProductionWorkflow, /\bnpx\s+firebase\s+deploy\b/);
+  assert.doesNotMatch(legacyProductionWorkflow, /\bfirebase\s+deploy\b/);
 });
 
 test('five-profile optional second technician credentials are documented when referenced', () => {

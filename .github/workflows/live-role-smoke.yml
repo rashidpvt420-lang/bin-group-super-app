@@ -15,7 +15,7 @@ concurrency:
 
 env:
   E2E_BASE_URL: https://bin-group-57c60.web.app
-  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL }}
+  E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
@@ -26,6 +26,7 @@ env:
   E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
   E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+  VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
 jobs:
@@ -57,7 +58,7 @@ jobs:
       - name: Show smoke test targets
         run: |
           echo "Running live smoke tests against ${E2E_BASE_URL}"
-          echo "Running admin smoke tests against ${E2E_ADMIN_BASE_URL:-not-configured}"
+          echo "Running admin smoke tests against ${E2E_ADMIN_BASE_URL}"
 
       - name: Validate public-smoke environment
         if: github.event_name != 'workflow_dispatch'
@@ -69,7 +70,7 @@ jobs:
           E2E_STRICT_ROLES: 'true'
         run: node scripts/verify-e2e-env.mjs
 
-      - name: Seed/repair E2E auth accounts and role claims
+      - name: Seed or repair E2E auth accounts and role claims
         if: github.event_name == 'workflow_dispatch'
         run: node scripts/seed-e2e-auth.mjs
 
@@ -88,9 +89,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npx playwright test tests/e2e/live-role-smoke.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop
 
-      - name: Run deep business workflow tests
+      - name: Run deep business workflow evidence
         if: github.event_name == 'workflow_dispatch'
         run: npm run test:e2e:business
+
+      - name: Run live launch-audit evidence
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run test:e2e:launch-audit:live
 
       - name: Create launch proof manifest
         if: always()
@@ -115,35 +120,26 @@ jobs:
             echo "tenant_secret_configured=$([[ -n "${E2E_TENANT_EMAIL}" && -n "${E2E_TENANT_PASSWORD}" ]] && echo true || echo false)"
             echo "technician_secret_configured=$([[ -n "${E2E_TECHNICIAN_EMAIL}" && -n "${E2E_TECHNICIAN_PASSWORD}" ]] && echo true || echo false)"
             echo "broker_secret_configured=$([[ -n "${E2E_BROKER_EMAIL}" && -n "${E2E_BROKER_PASSWORD}" ]] && echo true || echo false)"
-            echo
-            echo "artifact_file_sha256="
           } > launch-proof/manifest.txt
           if [ -d test-results ]; then find test-results -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
           if [ -d playwright-report ]; then find playwright-report -type f -print0 | sort -z | xargs -0 sha256sum >> launch-proof/manifest.txt; fi
           sha256sum launch-proof/manifest.txt > launch-proof/manifest.sha256
-          cat launch-proof/manifest.txt
-          cat launch-proof/manifest.sha256
 
       - name: Upload launch proof manifest
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-proof-manifest
+          name: launch-proof-manifest-${{ github.sha }}
           path: launch-proof
           if-no-files-found: error
 
-      - name: Upload Playwright report
+      - name: Upload execution evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-live-role-report
-          path: playwright-report
-          if-no-files-found: ignore
-
-      - name: Upload Playwright traces
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-live-role-test-results
-          path: test-results
+          name: live-role-execution-evidence-${{ github.sha }}
+          path: |
+            launch_package
+            playwright-report
+            test-results
           if-no-files-found: ignore
