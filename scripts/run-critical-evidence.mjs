@@ -70,7 +70,6 @@ function runPlaywrightSuite(suiteKey, def) {
   const install = spawnSync(npmCmd, ['exec', '--', 'playwright', 'install', '--with-deps', 'chromium'], {
     stdio: 'inherit',
     env: process.env,
-    shell: process.platform === 'win32',
   });
   if ((install.status ?? 1) !== 0) {
     return { ok: false, exitCode: install.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
