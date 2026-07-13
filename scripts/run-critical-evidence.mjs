@@ -9,7 +9,7 @@
  *   node scripts/run-critical-evidence.mjs --suite productionDeployment
  *   node scripts/run-critical-evidence.mjs --suite all-business
  */
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import {
@@ -17,13 +17,17 @@ import {
   PRODUCTION,
   SUITE_SPECS,
   gitSha,
-  parsePlaywrightJsonReport,
   sha256File,
   upsertEvidenceRecord,
   deploymentEvidencePath,
   readJsonSafe,
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
+import {
+  evaluatePlaywrightJsonRun,
+  spawnNpmPlaywrightJson,
+  writePlaywrightDiagnosticLog,
+} from './lib/playwright-json-artifact.mjs';
 
 function argValue(name) {
   const idx = process.argv.indexOf(`--${name}`);
@@ -55,9 +59,9 @@ if (mainUrl !== PRODUCTION.mainUrl) {
 function runPlaywrightSuite(suiteKey, def) {
   const startedAt = new Date().toISOString();
   const reportPath = path.join(artifactsDir, `${def.suiteName}-${commitSha.slice(0, 8)}.json`);
+  const diagPath = `${reportPath}.stdio.log`;
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-  // Ensure env + appcheck gates first.
   const envGate = spawnSync(process.execPath, ['scripts/verify-e2e-env.mjs'], { stdio: 'inherit', env: process.env });
   if ((envGate.status ?? 1) !== 0) return { ok: false, exitCode: envGate.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
   const appGate = spawnSync(process.execPath, ['scripts/ensure-appcheck.mjs'], { stdio: 'inherit', env: process.env });
@@ -88,31 +92,29 @@ function runPlaywrightSuite(suiteKey, def) {
   };
 
   console.log(`[critical-evidence] running ${suiteKey}: ${def.specs.join(' ')}`);
-  const result = spawnSync(npmCmd, args, { encoding: 'utf8', env, maxBuffer: 64 * 1024 * 1024 });
+  const result = spawnNpmPlaywrightJson({ npmCmd, args, env, reportPath });
   const finishedAt = new Date().toISOString();
   const exitCode = result.status ?? 1;
-  const stdout = result.stdout || '';
-  writeFileSync(reportPath, stdout || '{"suites":[],"stats":{}}');
+  writePlaywrightDiagnosticLog(diagPath, {
+    exitCode,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  });
 
-  let report;
-  try {
-    report = JSON.parse(stdout);
-  } catch {
-    console.error('[critical-evidence] Playwright JSON report malformed or empty');
-    return { ok: false, exitCode: exitCode || 1, startedAt, finishedAt, reportPath };
+  const evaluation = evaluatePlaywrightJsonRun({ exitCode, reportPath });
+  if (!evaluation.ok) {
+    console.error(`[critical-evidence] ${evaluation.reason} — evidence not recorded`);
+    return {
+      ok: false,
+      exitCode: (evaluation.exitCode ?? exitCode) || 1,
+      startedAt,
+      finishedAt,
+      reportPath,
+      parsed: evaluation.parsed,
+    };
   }
 
-  const parsed = parsePlaywrightJsonReport(report);
-  if (!parsed.ok) {
-    console.error(`[critical-evidence] report rejected: ${parsed.reason}`);
-    return { ok: false, exitCode: exitCode || 1, startedAt, finishedAt, reportPath, parsed };
-  }
-  if (exitCode !== 0) {
-    console.error(`[critical-evidence] process exitCode=${exitCode} — evidence not recorded`);
-    return { ok: false, exitCode, startedAt, finishedAt, reportPath, parsed };
-  }
-
-  const artifactHash = sha256File(reportPath);
+  const { parsed, artifactHash } = evaluation;
   const relativeArtifact = path.relative(root, reportPath).replace(/\\/g, '/');
   for (const evidenceKey of def.evidenceKeys) {
     upsertEvidenceRecord(root, {
