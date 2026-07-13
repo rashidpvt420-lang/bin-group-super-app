@@ -178,6 +178,8 @@ const seededUnitPayload = {
   floorNumber: '1',
   propertyId,
   propertyName: 'E2E Live Role Tower',
+  ownerId: ownerUid,
+  ownerUid,
   ...gpsPayload,
   tenantId: tenantUid,
   tenantUid,
@@ -206,6 +208,8 @@ tenantUnitDocs.forEach((docSnap) => {
   batch.set(docSnap.ref, {
     propertyId,
     propertyName: 'E2E Live Role Tower',
+    ownerId: ownerUid,
+    ownerUid,
     ...gpsPayload,
     tenantId: tenantUid,
     tenantUid,

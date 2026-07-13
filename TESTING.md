@@ -264,10 +264,25 @@ npm run test:e2e:launch-audit:live
 
 If `e2e:ensure-appcheck` or launch-audit fails with **Maximum number of debug tokens reached (20)**:
 
-1. Firebase Console → **App Check** → each Web App → **Debug tokens**
-2. Delete unused/old E2E tokens (keep the UUID already in `.env.e2e`, e.g. `2b99a6f4-…`)
-3. Ensure that **same** UUID is registered for **both** the main web app and the admin web app
-4. Re-run — `npm run e2e:ensure-appcheck` validates only; it does **not** auto-register new tokens
+1. Firebase Console → **App Check** → **BIN GROUP Web** → **Debug tokens**
+2. Delete unused/old E2E tokens (keep the UUID already in `.env.e2e`)
+3. Register that **same** UUID once under BIN GROUP Web (`1:123413252227:web:285cb53bc26626d699f3b6`). Main and admin hosting share this Firebase Web App.
+4. Re-run — `npm run e2e:ensure-appcheck` validates format **and** live `exchangeDebugToken` registration
+
+### `exchangeDebugToken` HTTP 403 (profile-gates 0/14 after `build:live`)
+
+If hosted-appcheck passes but E2E shows:
+
+`HTTP 403 …/exchangeDebugToken`
+
+the UUID in `.env.e2e` is **not registered** in Console (common after `[guid]::NewGuid()` without Console update).
+
+Fix:
+
+1. Copy fingerprint from `npm run e2e:ensure-appcheck` output (`bf4cc08b…d0d3` style)
+2. Firebase Console → App Check → BIN GROUP Web → Debug tokens → Add → paste **exact** UUID
+3. Do **not** rotate `.env.e2e` again until profile-gates passes
+4. Re-run: `npm run e2e:ensure-appcheck` (must print `[appcheck-registration] ok`)
 
 ### App Check in the hosting build (required for credentialed E2E)
 

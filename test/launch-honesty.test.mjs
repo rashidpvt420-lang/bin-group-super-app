@@ -479,8 +479,13 @@ describe('launch honesty — deployment fail-closed', () => {
   });
 
   it('accepts strict passed deployment with workflow provenance', () => {
-    const errors = validateDeploymentDocument(validDeployment(), COMMIT, { requireWorkflowProvenance: true });
-    assert.deepEqual(errors, []);
+    const root = writeArtifactWorkspace();
+    try {
+      const errors = validateDeploymentDocument(validDeployment(), COMMIT, { root, requireWorkflowProvenance: true });
+      assert.deepEqual(errors, []);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

@@ -80,6 +80,10 @@ test.describe('Profile readiness gates', () => {
       test.setTimeout(120_000);
       await loginMainRole(page, 'tenant', requireEnv('E2E_TENANT_EMAIL'), requireEnv('E2E_TENANT_PASSWORD'));
       await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
+      // Wait for the residence/property lookup to actually finish before reading body
+      // text for the skip decision — immediately after navigation it's still the
+      // loading state regardless of whether a unit is linked.
+      await expect(page.getByTestId('tenant-residence-loading')).toBeHidden({ timeout: 20_000 }).catch(() => undefined);
       const body = await page.locator('body').innerText();
       test.skip(/Link my unit|No assigned unit|RESIDENCE UNASSIGNED/i.test(body), 'Tenant account has no linked unit; run seed:e2e:gate11 first.');
 
@@ -90,7 +94,13 @@ test.describe('Profile readiness gates', () => {
       await page.getByTestId('tenant-request-location').locator('input, textarea').first().fill('Profile gate E2E location');
       await page.getByTestId('tenant-request-description').locator('input, textarea').first().fill('Profile readiness photo maintenance proof.');
       await page.locator('input[type="file"]').first().setInputFiles({ name: 'gate-proof.png', mimeType: 'image/png', buffer: dummyImageBuffer });
-      await page.getByTestId('tenant-request-submit').click();
+      const submit = page.getByTestId('tenant-request-submit');
+      // Wait for the actual product-readiness condition (property + GPS loaded) rather
+      // than a fixed delay — the button is disabled until propertyContextReady &&
+      // propertyGpsReady, so an enabled state here is real proof, not a guess.
+      await expect(submit).toBeVisible({ timeout: 20_000 });
+      await expect(submit).toBeEnabled({ timeout: 20_000 });
+      await submit.click();
       await expect(page.locator('body')).toContainText(/success|created|submitted|ticket/i, { timeout: 25_000 });
     });
 
@@ -143,28 +153,72 @@ test.describe('Profile readiness gates', () => {
       await expect(accept).toBeVisible({ timeout: 20_000 });
     });
 
-    test('technicianGpsAndDeniedFallback — denied GPS shows safe guidance on arrival', async ({ browser }) => {
+    test('technicianGpsAndDeniedFallback — denied GPS shows safe guidance on arrival', async ({ browser, page: defaultPage }) => {
       const context = await browser.newContext({ geolocation: { longitude: 55.2708, latitude: 25.2048 }, permissions: [] });
-      const page = await context.newPage();
-      const monitor = await attachAuthenticatedAppCheckMonitor(page);
-      (page as any).__binAppCheckMonitor = monitor;
+      const customPage = await context.newPage();
+      const monitor = await attachAuthenticatedAppCheckMonitor(customPage);
+      (customPage as any).__binAppCheckMonitor = monitor;
       await monitor.assertTokenFingerprint();
+
+      // This test deliberately never navigates the default `page` fixture — it needs its
+      // own isolated context with geolocation permissions denied, which the shared default
+      // page (used by every other test in this file) doesn't have. Clear its monitor so
+      // `test.afterEach`'s existing `if (!monitor) return;` guard honestly skips the
+      // authenticated-read check for a page that was genuinely never used, instead of
+      // fabricating a fake read to satisfy it.
+      delete (defaultPage as any).__binAppCheckMonitor;
+
       try {
-        await loginMainRole(page, 'technician', requireEnv('E2E_TECHNICIAN_EMAIL'), requireEnv('E2E_TECHNICIAN_PASSWORD'));
-        await page.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
-        const openJob = page.getByRole('button', { name: /OPEN JOB CARD|ACCEPT JOB|Accept Mission/i }).first();
-        test.skip(!(await openJob.isVisible({ timeout: 12_000 }).catch(() => false)), 'No technician mission available for GPS fallback proof.');
-        await openJob.click();
-        await page.waitForURL('**/technician/job/**', { timeout: 20_000 });
-        const arrive = page.getByRole('button', { name: /Arrived|On Site|I have arrived/i }).first();
-        if (await arrive.isVisible({ timeout: 8_000 }).catch(() => false)) {
-          await arrive.click();
-          await expect(page.locator('body')).toContainText(/GPS|permission|location|open area/i, { timeout: 15_000 });
-        } else {
-          await expect(page.locator('body')).toContainText(/GPS|location|address|Missing/i, { timeout: 10_000 });
+        await loginMainRole(customPage, 'technician', requireEnv('E2E_TECHNICIAN_EMAIL'), requireEnv('E2E_TECHNICIAN_PASSWORD'));
+        await customPage.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
+        const openJob = customPage
+          .getByRole('button', {
+            name: /OPEN JOB CARD|ACCEPT JOB|Accept Mission|View Job|Open Mission/i,
+          })
+          .first();
+
+        // Wait for the openJob button to become visible (React chunk and Firestore load)
+        let jobVisible = true;
+        try {
+          await openJob.waitFor({ state: 'visible', timeout: 20_000 });
+        } catch {
+          jobVisible = false;
         }
+
+        if (!jobVisible) {
+          const bodyText = await customPage.locator('body').innerText().catch(() => '');
+          throw new Error(
+            `GPS fallback proof blocked: seeded technician mission was not visible.\n` +
+            `URL: ${customPage.url()}\n` +
+            `Body:\n${bodyText.slice(0, 5000)}`
+          );
+        }
+
+        await openJob.click();
+        await customPage.waitForURL('**/technician/job/**', { timeout: 20_000 });
+
+        // Wait for the details page loading spinner to disappear and content to load
+        await customPage.locator('.MuiCircularProgress-root').waitFor({ state: 'detached', timeout: 20_000 }).catch(() => undefined);
+        await customPage.getByText(/Mission Lifecycle/i).first().waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined);
+
+        // If status is ASSIGNED/ACCEPTED, click "On The Way" to enable the "Arrived" button
+        const onTheWay = customPage.getByRole('button', { name: /On The Way/i }).first();
+        if (await onTheWay.isVisible().catch(() => false) && await onTheWay.isEnabled().catch(() => false)) {
+          await onTheWay.click();
+        }
+
+        const arrive = customPage.getByRole('button', { name: /Arrived|On Site|I have arrived/i }).first();
+        await expect(arrive).toBeEnabled({ timeout: 15_000 });
+        await arrive.click();
+        await expect(customPage.locator('body')).toContainText(
+          /GPS|permission|location|open area/i,
+          { timeout: 20_000 },
+        );
+
+        monitor.assertClean(test.info().title);
+        monitor.assertAuthenticatedFirebaseRead(test.info().title);
       } finally {
-        await context.close();
+        await context.close().catch(() => undefined);
       }
     });
 

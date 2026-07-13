@@ -60,5 +60,7 @@ if (!UUID_RE.test(token)) {
 }
 
 console.log(`[APPCHECK_ENSURE] token_fingerprint=${mask(token)}`);
-console.log('[APPCHECK_ENSURE] ok — ensure this UUID is registered under App Check debug tokens for BOTH the main Firebase Web App and the admin Firebase Web App.');
+console.log(
+  '[APPCHECK_ENSURE] ok — register this UUID under Firebase Console → App Check → BIN GROUP Web → Debug tokens.',
+);
 process.exit(0);
