@@ -24,18 +24,20 @@
  * Fail-closed: a missing/malformed Playwright report, or missing prerequisite
  * business evidence, is recorded as a failure rather than silently omitted.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import {
   PRODUCTION,
   evidencePath,
   gitSha,
-  parsePlaywrightJsonReport,
   readJsonSafe,
-  sha256File,
   upsertEvidenceRecord,
 } from './lib/launch-honesty.mjs';
+import {
+  evaluatePlaywrightJsonRun,
+  spawnNpmPlaywrightJson,
+  writePlaywrightDiagnosticLog,
+} from './lib/playwright-json-artifact.mjs';
 
 const root = process.cwd();
 const commitSha = process.env.GITHUB_SHA || gitSha(root);
@@ -54,29 +56,30 @@ function recordGate11() {
   const reportPath = path.join(artifactsDir, `gate11-production-smoke-${commitSha.slice(0, 8)}.json`);
   const startedAt = new Date().toISOString();
 
-  const result = spawnSync(
+  const result = spawnNpmPlaywrightJson({
     npmCmd,
-    ['exec', '--', 'playwright', 'test', 'tests/e2e/gate11-staging-smoke.spec.ts', '--project=chromium-desktop', '--reporter=json'],
-    { encoding: 'utf8', env: { ...process.env, E2E_BASE_URL: mainUrl, E2E_ADMIN_BASE_URL: adminUrl }, maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' },
-  );
+    args: ['exec', '--', 'playwright', 'test', 'tests/e2e/gate11-staging-smoke.spec.ts', '--project=chromium-desktop', '--reporter=json'],
+    env: { ...process.env, E2E_BASE_URL: mainUrl, E2E_ADMIN_BASE_URL: adminUrl },
+    reportPath,
+  });
   const finishedAt = new Date().toISOString();
-  writeFileSync(reportPath, result.stdout || '{"suites":[],"stats":{}}');
+  const exitCode = result.status ?? 1;
+  writePlaywrightDiagnosticLog(`${reportPath}.stdio.log`, {
+    exitCode,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  });
 
-  let parsed;
-  try {
-    parsed = parsePlaywrightJsonReport(JSON.parse(result.stdout || '{}'));
-  } catch (err) {
-    console.error(`[record-postdeploy-evidence] gate11 report malformed: ${err.message}`);
-    parsed = { ok: false, passed: 0, failed: 1, skipped: 0 };
-  }
+  const evaluation = evaluatePlaywrightJsonRun({ exitCode, reportPath });
+  const parsed = evaluation.parsed || { passed: 0, failed: 1, skipped: 0 };
+  const artifactHash = evaluation.artifactHash || '';
 
-  const artifactHash = sha256File(reportPath);
   upsertEvidenceRecord(root, {
     testName: 'gate11ProductionSmoke',
     suiteName: 'gate11-staging-smoke',
     source: 'record-postdeploy-aggregate-evidence',
     executionGenerated: true,
-    exitCode: result.status ?? 1,
+    exitCode: evaluation.ok ? 0 : exitCode,
     commitSha,
     mainUrl,
     adminUrl,
@@ -85,13 +88,15 @@ function recordGate11() {
     passed: parsed.passed || 0,
     failed: parsed.failed || 0,
     skipped: parsed.skipped || 0,
-    artifactPath: path.relative(root, reportPath).replace(/\\/g, '/'),
-    artifactHash,
-    proof: `Gate 11 production smoke: passed=${parsed.passed || 0} failed=${parsed.failed || 0} on ${mainUrl} (commit ${commitSha.slice(0, 8)}).`,
+    artifactPath: evaluation.ok ? path.relative(root, reportPath).replace(/\\/g, '/') : undefined,
+    artifactHash: evaluation.ok ? artifactHash : undefined,
+    proof: evaluation.ok
+      ? `Gate 11 production smoke: passed=${parsed.passed || 0} failed=${parsed.failed || 0} on ${mainUrl} (commit ${commitSha.slice(0, 8)}).`
+      : `Gate 11 production smoke refused: ${evaluation.reason}`,
     hardLaunchClaim: false,
   });
   console.log(`[record-postdeploy-evidence] gate11ProductionSmoke passed=${parsed.passed || 0} failed=${parsed.failed || 0}`);
-  return (result.status ?? 1) === 0 && (parsed.failed || 0) === 0;
+  return evaluation.ok;
 }
 
 function recordBusinessAggregate() {
