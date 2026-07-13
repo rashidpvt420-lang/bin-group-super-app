@@ -10,6 +10,91 @@ import { spawnSync } from 'node:child_process';
 import { parsePlaywrightJsonReport, sha256File } from './launch-honesty.mjs';
 
 /**
+ * Resolve Playwright CLI from node_modules/playwright/package.json bin metadata.
+ * Never uses unexported package subpaths (e.g. playwright/cli).
+ */
+export function resolvePlaywrightCli({ root = process.cwd() } = {}) {
+  const packageDir = path.join(root, 'node_modules', 'playwright');
+  const packageJsonPath = path.join(packageDir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return { ok: false, reason: 'playwright package.json missing' };
+  }
+
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (err) {
+    return { ok: false, reason: `unable to read playwright package.json: ${err.message}` };
+  }
+
+  const bin = packageJson.bin;
+  let binRelative;
+  if (typeof bin === 'string') {
+    binRelative = bin;
+  } else if (bin && typeof bin === 'object' && typeof bin.playwright === 'string') {
+    binRelative = bin.playwright;
+  } else {
+    return { ok: false, reason: 'playwright package.json missing bin.playwright entry' };
+  }
+
+  const cliPath = path.resolve(packageDir, binRelative);
+  if (!existsSync(cliPath)) {
+    return { ok: false, reason: `playwright CLI file missing: ${cliPath}` };
+  }
+
+  return { ok: true, cliPath, packageDir };
+}
+
+function spawnPlaywrightProcess({ root, args, env, reportPath, stdio }) {
+  const resolved = resolvePlaywrightCli({ root });
+  if (!resolved.ok) {
+    return {
+      status: 1,
+      stdout: '',
+      stderr: `[playwright-json-artifact] ${resolved.reason}\n`,
+      error: new Error(resolved.reason),
+      spawnCommand: process.execPath,
+      spawnArgs: null,
+    };
+  }
+
+  const mergedEnv = reportPath
+    ? { ...env, PLAYWRIGHT_JSON_OUTPUT_FILE: reportPath }
+    : { ...env };
+  const spawnArgs = [resolved.cliPath, ...args];
+  const spawnOptions = {
+    env: mergedEnv,
+    maxBuffer: 64 * 1024 * 1024,
+  };
+  if (stdio) {
+    spawnOptions.stdio = stdio;
+  } else {
+    spawnOptions.encoding = 'utf8';
+  }
+  const result = spawnSync(process.execPath, spawnArgs, spawnOptions);
+  return {
+    ...result,
+    spawnCommand: process.execPath,
+    spawnArgs,
+  };
+}
+
+/**
+ * Spawn Playwright CLI (e.g. install) via process.execPath — no shell, no npm.
+ */
+export function spawnPlaywright({ root = process.cwd(), args, env = process.env, stdio } = {}) {
+  return spawnPlaywrightProcess({ root, args, env, stdio });
+}
+
+/**
+ * Spawn Playwright test with JSON output written directly to reportPath.
+ * Uses PLAYWRIGHT_JSON_OUTPUT_FILE so stdout/stderr cannot contaminate the artifact.
+ */
+export function spawnPlaywrightJson({ root = process.cwd(), args, env, reportPath } = {}) {
+  return spawnPlaywrightProcess({ root, args, env, reportPath });
+}
+
+/**
  * Read and validate a Playwright JSON report file (fail-closed).
  */
 export function readPlaywrightJsonArtifact(reportPath) {
@@ -46,22 +131,6 @@ export function writePlaywrightDiagnosticLog(diagPath, { exitCode, stdout = '', 
     String(stderr),
   ].join('\n');
   writeFileSync(diagPath, body);
-}
-
-/**
- * Spawn npm Playwright with JSON output written directly to reportPath.
- * Does not enable shell; caller must pass npmCmd as npm or npm.cmd with argv array.
- */
-export function spawnNpmPlaywrightJson({ npmCmd, args, env, reportPath }) {
-  const mergedEnv = {
-    ...env,
-    PLAYWRIGHT_JSON_OUTPUT_FILE: reportPath,
-  };
-  return spawnSync(npmCmd, args, {
-    encoding: 'utf8',
-    env: mergedEnv,
-    maxBuffer: 64 * 1024 * 1024,
-  });
 }
 
 /**

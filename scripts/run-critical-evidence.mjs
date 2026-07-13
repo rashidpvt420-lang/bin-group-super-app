@@ -56,6 +56,33 @@ if (mainUrl !== PRODUCTION.mainUrl) {
   process.exit(1);
 }
 
+const SUITE_FIXTURES = Object.freeze({
+  businessBroker: {
+    label: 'request-only Broker payout OTP evidence',
+    script: 'scripts/prepare-broker-payout-otp-e2e.mjs',
+  },
+  launchAuditLive: {
+    label: 'repeatable Tenant correction evidence',
+    script: 'scripts/prepare-tenant-correction-e2e.mjs',
+  },
+});
+
+function prepareSuiteFixture(suiteKey) {
+  const fixture = SUITE_FIXTURES[suiteKey];
+  if (!fixture) return 0;
+
+  console.log(`[critical-evidence] preparing ${fixture.label} fixture`);
+  const result = spawnSync(process.execPath, [fixture.script], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  const status = result.status ?? 1;
+  if (status !== 0) {
+    console.error(`[critical-evidence] ${suiteKey} fixture ${fixture.script} failed with exit code ${status}`);
+  }
+  return status;
+}
+
 function runPlaywrightSuite(suiteKey, def) {
   const startedAt = new Date().toISOString();
   const reportPath = path.join(artifactsDir, `${def.suiteName}-${commitSha.slice(0, 8)}.json`);
@@ -66,6 +93,11 @@ function runPlaywrightSuite(suiteKey, def) {
   if ((envGate.status ?? 1) !== 0) return { ok: false, exitCode: envGate.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
   const appGate = spawnSync(process.execPath, ['scripts/ensure-appcheck.mjs'], { stdio: 'inherit', env: process.env });
   if ((appGate.status ?? 1) !== 0) return { ok: false, exitCode: appGate.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
+  const fixtureStatus = prepareSuiteFixture(suiteKey);
+  if (fixtureStatus !== 0) {
+    console.error(`[critical-evidence] ${suiteKey} fixture preparation failed — evidence not recorded`);
+    return { ok: false, exitCode: fixtureStatus, startedAt, finishedAt: new Date().toISOString() };
+  }
 
   const install = spawnSync(npmCmd, ['exec', '--', 'playwright', 'install', '--with-deps', 'chromium'], {
     stdio: 'inherit',
