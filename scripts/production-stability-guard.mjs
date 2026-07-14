@@ -71,7 +71,11 @@ assert(firebaseJson.includes('"target": "app"'), 'Firebase public hosting must u
 assert(firebaseJson.includes('"target": "admin"'), 'Firebase admin hosting must use explicit admin target.');
 
 assert(workflow.includes('Validate production build'), 'Workflow must validate production build.');
-assert(workflow.includes('Deploy Firebase production stack'), 'Workflow must include production deployment job.');
+assert(
+  workflow.includes('Deploy and verify Firebase production stack') &&
+    workflow.includes('node scripts/deploy-firebase-production.mjs'),
+  'Workflow must deploy through the protected Firebase production script.',
+);
 assert(workflowDispatchOnly || deployJobHasManualGate || emergencyPushDeployIsExplicit, 'Production deploy must be manual-only or explicitly emergency push-gated with secrets preflight.');
 assert(workflow.includes('npm run build --workspace=functions'), 'Workflow must build Firebase Functions.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
