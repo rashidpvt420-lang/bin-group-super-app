@@ -1,6 +1,6 @@
 name: Tenant UI Hotfix Deploy
 
-# Scoped hosting-only release for the tenant dashboard readability correction.
+# Scoped hosting-only release for tenant portal UX corrections.
 on:
   push:
     branches:
@@ -8,6 +8,8 @@ on:
     paths:
       - '.github/workflows/tenant-ui-hotfix-deploy.yml'
       - 'src/tenant/**'
+      - 'src/components/AuthenticatedShell.tsx'
+      - 'src/components/navigation/NavigationControl.tsx'
       - 'src/components/RoleQuickActionsPanel.tsx'
       - 'src/components/RoleJourneyStrip.tsx'
       - 'src/theme/**'
@@ -19,7 +21,7 @@ permissions:
 
 concurrency:
   group: tenant-ui-hotfix-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
