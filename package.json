@@ -51,6 +51,8 @@
     "test:pilot-clearance": "node scripts/verify-launch-clearance.mjs --pilot",
     "test:route-consolidation": "node scripts/verify-route-consolidation.mjs",
     "test:hard-launch-readiness": "npm run test:route-consolidation && node scripts/verify-hard-launch-readiness.mjs && node scripts/verify-profile-evidence-coverage.mjs",
+    "test:gate12:smtp": "node scripts/verify-smtp-live-delivery.mjs",
+    "test:gate12:appcheck": "node scripts/verify-appcheck-debug-registration.mjs",
     "launch:blockers": "node scripts/print-hard-launch-blockers.mjs",
     "launch:pass": "node scripts/record-launch-proof.mjs",
     "launch:hard-gate": "npm run test:launch-clearance && npm run test:hard-launch-readiness && npm run launch:hard-status",
