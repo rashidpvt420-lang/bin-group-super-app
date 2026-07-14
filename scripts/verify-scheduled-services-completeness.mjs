@@ -158,7 +158,9 @@ const checks = [
     required: [
       "match /system_secrets/{secretId}",
       'allow read, write: if false;',
-      "const catchAll = '    match /{document=**} {'",
+      "match /{collection}/{document=**}",
+      "collection != 'system_secrets' && hasAdminClaim()",
+      'source.includes(legacyCatchAll)',
     ],
   },
   {
@@ -218,4 +220,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, client-deny rules, exports, builds and deploy targets verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, catch-all exclusion, exports, builds and deploy targets verified)`);
