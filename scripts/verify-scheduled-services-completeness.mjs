@@ -154,9 +154,26 @@ const checks = [
     required: ['"main": "lib/runtimeAll.js"'],
   },
   {
+    path: 'scripts/harden-system-secrets-rules.mjs',
+    required: [
+      "match /system_secrets/{secretId}",
+      'allow read, write: if false;',
+      "const catchAll = '    match /{document=**} {'",
+    ],
+  },
+  {
+    path: 'package.json',
+    required: [
+      '"harden:system-secrets": "node scripts/harden-system-secrets-rules.mjs"',
+      'npm run harden:system-secrets',
+    ],
+  },
+  {
     path: '.github/workflows/scheduled-services-production.yml',
     required: [
       "VITE_ENABLE_FIREBASE_APPCHECK: 'true'",
+      'npm run test:rules',
+      'firestore:rules,hosting:app,hosting:admin',
       'functions:tenantManageScheduledService',
       'functions:saveScheduledServiceAccessCode',
       'functions:adminRevealScheduledServiceAccessCode',
@@ -166,7 +183,6 @@ const checks = [
       'functions:getScheduledServiceAvailability',
       'functions:adminManageScheduledServiceAvailability',
       'functions:adminUpdateScheduledService',
-      'hosting:app,hosting:admin',
       'npm run build --workspace=functions',
     ],
     forbidden: [
@@ -202,4 +218,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, builds and deploy targets verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, client-deny rules, exports, builds and deploy targets verified)`);
