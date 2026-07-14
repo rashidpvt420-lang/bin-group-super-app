@@ -1,5 +1,6 @@
 name: Tenant UI Hotfix Deploy
 
+# Scoped hosting-only release for the tenant dashboard readability correction.
 on:
   push:
     branches:
