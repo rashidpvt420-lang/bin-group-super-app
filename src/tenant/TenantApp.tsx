@@ -43,43 +43,122 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const isHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
-        color: binThemeTokens.gold,
-        border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}`,
+        color: binThemeTokens.textPrimary,
+        border: `1px solid ${alpha(binThemeTokens.gold, 0.42)}`,
         borderRadius: 3,
         fontWeight: 950,
-        bgcolor: 'rgba(255,255,255,0.04)',
+        bgcolor: binThemeTokens.card,
         textTransform: 'none',
         whiteSpace: 'nowrap',
+        '&:hover': {
+            bgcolor: alpha(binThemeTokens.gold, 0.08),
+            borderColor: binThemeTokens.gold,
+        },
     } as const;
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.black, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
-            <BrandWatermark opacity={0.038} />
-            <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(11,11,12,0.9)', backdropFilter: 'blur(16px)', borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, zIndex: 1200 }}>
+        <Box
+            sx={{
+                minHeight: '100vh',
+                bgcolor: binThemeTokens.softCanvas,
+                color: binThemeTokens.textPrimary,
+                direction: isRTL ? 'rtl' : 'ltr',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative',
+                isolation: 'isolate',
+            }}
+        >
+            <BrandWatermark opacity={0.025} />
+            <AppBar
+                position="sticky"
+                elevation={0}
+                sx={{
+                    bgcolor: 'rgba(255,255,255,0.96)',
+                    color: binThemeTokens.textPrimary,
+                    backdropFilter: 'blur(16px)',
+                    borderBottom: `1px solid ${binThemeTokens.border}`,
+                    boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)',
+                    zIndex: 1200,
+                }}
+            >
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
-                        {!isHome && <IconButton onClick={() => navigate(-1)} sx={{ color: '#fff' }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
-                        <IconButton onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.gold }}><SafeIcon icon={Home} size={22} /></IconButton>
+                        {!isHome && (
+                            <IconButton
+                                onClick={() => navigate(-1)}
+                                sx={{ color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, bgcolor: binThemeTokens.card }}
+                            >
+                                <SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
+                            </IconButton>
+                        )}
+                        <IconButton
+                            onClick={() => navigate('/tenant/dashboard')}
+                            sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}` }}
+                        >
+                            <SafeIcon icon={Home} size={22} />
+                        </IconButton>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#fff', textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{tx('portal.tenant.title', 'TENANT PORTAL')}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{tx('portal.tenant.subtitle', 'NO-CALL SERVICE MODE')}</Typography>
+                            <Typography
+                                variant="h6"
+                                fontWeight="950"
+                                sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}
+                            >
+                                {tx('portal.tenant.title', 'TENANT PORTAL')}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>
+                                {tx('portal.tenant.subtitle', 'NO-CALL SERVICE MODE')}
+                            </Typography>
                         </Box>
                     </Stack>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{tx('tenant.quick.report', 'Report Issue')}</Button>
-                        <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: '#ef4444', borderColor: alpha('#ef4444', 0.42) }}>{tx('tenant.quick.emergency', 'Emergency')}</Button>
+                        <Button
+                            onClick={() => navigate('/tenant/emergency')}
+                            sx={{
+                                ...quickButtonSx,
+                                color: binThemeTokens.danger,
+                                borderColor: alpha(binThemeTokens.danger, 0.35),
+                                bgcolor: alpha(binThemeTokens.danger, 0.04),
+                                '&:hover': { bgcolor: alpha(binThemeTokens.danger, 0.08), borderColor: binThemeTokens.danger },
+                            }}
+                        >
+                            {tx('tenant.quick.emergency', 'Emergency')}
+                        </Button>
                         <Button onClick={() => navigate('/tenant/payments')} sx={quickButtonSx}>{tx('tenant.quick.payments', 'Payments')}</Button>
                         <NotificationBell />
-                        <IconButton onClick={() => navigate('/tenant/profile')} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 3 }}><SafeIcon icon={User} size={18} /></IconButton>
-                        <PortalSessionControls role="tenant" dark accent={binThemeTokens.gold} />
+                        <IconButton
+                            onClick={() => navigate('/tenant/profile')}
+                            sx={{
+                                color: binThemeTokens.textPrimary,
+                                bgcolor: binThemeTokens.card,
+                                border: `1px solid ${binThemeTokens.border}`,
+                                borderRadius: 3,
+                                '&:hover': { bgcolor: binThemeTokens.softCanvas },
+                            }}
+                        >
+                            <SafeIcon icon={User} size={18} />
+                        </IconButton>
+                        <PortalSessionControls role="tenant" accent={binThemeTokens.goldHover} />
                     </Stack>
                 </Toolbar>
             </AppBar>
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
                 <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
             </Container>
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', bgcolor: 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OPERATIONS OS</Typography>
+            <Box
+                sx={{
+                    py: 3,
+                    textAlign: 'center',
+                    borderTop: `1px solid ${binThemeTokens.border}`,
+                    bgcolor: binThemeTokens.card,
+                    position: 'relative',
+                    zIndex: 1,
+                }}
+            >
+                <Typography variant="caption" sx={{ color: binThemeTokens.textTertiary, fontWeight: 800, letterSpacing: 2 }}>
+                    2026 BIN GROUP PROPERTY OPERATIONS OS
+                </Typography>
             </Box>
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </Box>
