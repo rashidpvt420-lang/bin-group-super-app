@@ -36,7 +36,7 @@ const SERVICE_CATALOG = {
     label: 'Pest Control',
     category: 'pest control',
     icon: Bug,
-    description: 'Book inspection or treatment and tell the team about pests, pets, children and access.',
+    description: 'Book inspection or treatment and record pests, affected areas, pets, children and access.',
   },
   'vacation-care': {
     label: 'Vacation Home Care',
@@ -60,6 +60,7 @@ const normalizeService = (value: string | null): ServiceCode => {
 };
 
 const today = new Date().toISOString().slice(0, 10);
+const readableTextSx = { whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' } as const;
 
 export default function TenantScheduledServicePage() {
   const { user } = useRole();
@@ -88,28 +89,21 @@ export default function TenantScheduledServicePage() {
   const ServiceIcon = service.icon;
   const tenantAway = occupancyStatus === 'away' || occupancyStatus === 'vacation';
 
-  useEffect(() => {
-    setServiceCode(normalizeService(searchParams.get('service')));
-  }, [searchParams]);
+  useEffect(() => setServiceCode(normalizeService(searchParams.get('service'))), [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
-
     async function loadResidence() {
       if (!user?.uid) {
         setResidenceChecked(true);
         return;
       }
-
       try {
         let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
-        if (unitSnap.empty) {
-          unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid), limit(1)));
-        }
+        if (unitSnap.empty) unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid), limit(1)));
         if (unitSnap.empty && user.email) {
           unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase()), limit(1)));
         }
-
         if (!unitSnap.empty && !cancelled) {
           const unit: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
           setUnitData(unit);
@@ -125,7 +119,6 @@ export default function TenantScheduledServicePage() {
         if (!cancelled) setResidenceChecked(true);
       }
     }
-
     loadResidence();
     return () => { cancelled = true; };
   }, [user?.uid, user?.email, tx]);
@@ -163,9 +156,22 @@ export default function TenantScheduledServicePage() {
       return;
     }
 
+    const occupancyLabel = occupancyStatus === 'vacation' ? 'tenant on vacation' : occupancyStatus === 'away' ? 'tenant away' : 'tenant home';
+    const operationsSummary = [
+      service.label,
+      `Date: ${preferredDate}`,
+      `Time: ${timeWindow}`,
+      `Occupancy: ${occupancyLabel}`,
+      `Access: ${accessMethod}`,
+      `Scope: ${serviceScope.trim()}`,
+      serviceCode === 'pest-control' ? `Pest: ${pestTarget.trim()}` : '',
+      serviceCode === 'pest-control' ? `Sensitive occupants: ${sensitiveOccupants}` : '',
+      specialInstructions.trim() ? `Instructions: ${specialInstructions.trim()}` : '',
+    ].filter(Boolean).join(' | ');
+
     setSubmitting(true);
     try {
-      const ticketPayload = {
+      await addDoc(collection(db, 'maintenanceTickets'), {
         requesterRole: 'tenant',
         tenantId: user.uid,
         tenantUid: user.uid,
@@ -188,7 +194,8 @@ export default function TenantScheduledServicePage() {
         serviceCode,
         serviceLabel: service.label,
         category: service.category,
-        description: `${service.label}: ${serviceScope.trim()}`,
+        description: operationsSummary,
+        operationsSummary,
         specificLocation: serviceScope.trim(),
         serviceLocationDetail: serviceScope.trim(),
         preferredServiceDate: preferredDate,
@@ -209,16 +216,14 @@ export default function TenantScheduledServicePage() {
         photoEvidenceRequired: false,
         evidenceStatus: 'NOT_REQUIRED_AT_INTAKE',
         source: 'TENANT_PORTAL_SCHEDULED_SERVICE',
-        status: 'OPEN',
+        status: 'PENDING_SCHEDULING',
         dispatchStatus: 'PENDING_SCHEDULING',
         trackingStatus: 'WAITING_FOR_APPOINTMENT_CONFIRMATION',
         technicianId: null,
         assignedTechnicianId: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
-
-      await addDoc(collection(db, 'maintenanceTickets'), ticketPayload);
+      });
       navigate('/tenant/tickets');
     } catch (error) {
       console.error('[TenantScheduledService] submit failed:', error);
@@ -231,22 +236,21 @@ export default function TenantScheduledServicePage() {
   if (!residenceChecked) {
     return <Box sx={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldHover }} /></Box>;
   }
-
   if (!unitData) {
     return <TenantUnitLinkFallback message={tx('tenant.scheduled.noUnit', 'Verify your unit before scheduling cleaning, pest control, vacation care or moving services.')} />;
   }
 
   return (
-    <Box sx={{ maxWidth: 980, mx: 'auto', pb: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Stack spacing={3.5}>
-        <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+    <Box sx={{ maxWidth: 980, mx: 'auto', pb: 8, direction: isRTL ? 'rtl' : 'ltr', minWidth: 0, overflowX: 'hidden' }}>
+      <Stack spacing={3.5} sx={{ minWidth: 0 }}>
+        <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2.5 }}>
             {tx('tenant.scheduled.overline', 'PLANNED HOME SERVICES')}
           </Typography>
-          <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 0.5 }}>
+          <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 0.5, ...readableTextSx }}>
             {tx('tenant.scheduled.title', 'Schedule a service')}
           </Typography>
-          <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, lineHeight: 1.7, maxWidth: 780 }}>
+          <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, lineHeight: 1.7, maxWidth: 780, ...readableTextSx }}>
             {tx('tenant.scheduled.desc', 'Tell BIN GROUP what service you need, when it should happen, whether you are home or away, and how authorized access should work.')}
           </Typography>
         </Box>
@@ -261,7 +265,7 @@ export default function TenantScheduledServicePage() {
                   const Icon = item.icon;
                   const selected = code === serviceCode;
                   return (
-                    <Grid item xs={12} sm={6} md={3} key={code}>
+                    <Grid item xs={12} sm={6} md={3} key={code} sx={{ minWidth: 0 }}>
                       <Button
                         fullWidth
                         type="button"
@@ -269,9 +273,11 @@ export default function TenantScheduledServicePage() {
                         sx={{
                           minHeight: 118,
                           p: 2,
+                          minWidth: 0,
                           flexDirection: 'column',
                           gap: 1,
                           whiteSpace: 'normal',
+                          overflowWrap: 'anywhere',
                           textAlign: 'center',
                           color: binThemeTokens.textPrimary,
                           bgcolor: selected ? alpha(binThemeTokens.gold, 0.11) : binThemeTokens.softCanvas,
@@ -280,7 +286,7 @@ export default function TenantScheduledServicePage() {
                         }}
                       >
                         <Icon size={24} color={binThemeTokens.goldHover} />
-                        <Typography sx={{ fontWeight: 950 }}>{item.label}</Typography>
+                        <Typography sx={{ fontWeight: 950, ...readableTextSx }}>{item.label}</Typography>
                       </Button>
                     </Grid>
                   );
@@ -292,43 +298,21 @@ export default function TenantScheduledServicePage() {
                   <ServiceIcon size={24} color={binThemeTokens.goldHover} />
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{service.label}</Typography>
-                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6 }}>{service.description}</Typography>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.6, ...readableTextSx }}>{service.description}</Typography>
                   </Box>
                 </Stack>
               </Box>
 
               <Grid container spacing={2.5}>
+                <Grid item xs={12} md={6}><TextField fullWidth required type="date" label={tx('tenant.scheduled.date', 'Preferred service date')} value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} inputProps={{ min: today }} InputLabelProps={{ shrink: true }} /></Grid>
                 <Grid item xs={12} md={6}>
-                  <TextField fullWidth required type="date" label={tx('tenant.scheduled.date', 'Preferred service date')} value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} inputProps={{ min: today }} InputLabelProps={{ shrink: true }} />
+                  <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.time', 'Preferred time window')}</InputLabel><Select value={timeWindow} label={tx('tenant.scheduled.time', 'Preferred time window')} onChange={(event) => setTimeWindow(event.target.value)}><MenuItem value="09:00-12:00">09:00 – 12:00</MenuItem><MenuItem value="12:00-15:00">12:00 – 15:00</MenuItem><MenuItem value="15:00-18:00">15:00 – 18:00</MenuItem><MenuItem value="18:00-21:00">18:00 – 21:00</MenuItem></Select></FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>{tx('tenant.scheduled.time', 'Preferred time window')}</InputLabel>
-                    <Select value={timeWindow} label={tx('tenant.scheduled.time', 'Preferred time window')} onChange={(event) => setTimeWindow(event.target.value)}>
-                      <MenuItem value="09:00-12:00">09:00 – 12:00</MenuItem>
-                      <MenuItem value="12:00-15:00">12:00 – 15:00</MenuItem>
-                      <MenuItem value="15:00-18:00">15:00 – 18:00</MenuItem>
-                      <MenuItem value="18:00-21:00">18:00 – 21:00</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.occupancy', 'Will anyone be in the unit?')}</InputLabel><Select value={occupancyStatus} label={tx('tenant.scheduled.occupancy', 'Will anyone be in the unit?')} onChange={(event) => setOccupancyStatus(event.target.value)}><MenuItem value="home">{tx('tenant.scheduled.home', 'Tenant will be home')}</MenuItem><MenuItem value="away">{tx('tenant.scheduled.away', 'Tenant will be away')}</MenuItem><MenuItem value="vacation">{tx('tenant.scheduled.vacation', 'Tenant is on vacation')}</MenuItem></Select></FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>{tx('tenant.scheduled.occupancy', 'Will anyone be in the unit?')}</InputLabel>
-                    <Select value={occupancyStatus} label={tx('tenant.scheduled.occupancy', 'Will anyone be in the unit?')} onChange={(event) => setOccupancyStatus(event.target.value)}>
-                      <MenuItem value="home">{tx('tenant.scheduled.home', 'Tenant will be home')}</MenuItem>
-                      <MenuItem value="away">{tx('tenant.scheduled.away', 'Tenant will be away')}</MenuItem>
-                      <MenuItem value="vacation">{tx('tenant.scheduled.vacation', 'Tenant is on vacation')}</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>{tx('tenant.scheduled.access', 'Access method')}</InputLabel>
-                    <Select value={accessMethod} label={tx('tenant.scheduled.access', 'Access method')} onChange={(event) => setAccessMethod(event.target.value)}>
-                      {accessOptions.map(([value, label]) => <MenuItem value={value} key={value}>{label}</MenuItem>)}
-                    </Select>
-                  </FormControl>
+                  <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.access', 'Access method')}</InputLabel><Select value={accessMethod} label={tx('tenant.scheduled.access', 'Access method')} onChange={(event) => setAccessMethod(event.target.value)}>{accessOptions.map(([value, label]) => <MenuItem value={value} key={value}>{label}</MenuItem>)}</Select></FormControl>
                 </Grid>
               </Grid>
 
@@ -336,20 +320,9 @@ export default function TenantScheduledServicePage() {
 
               {serviceCode === 'pest-control' && (
                 <Grid container spacing={2.5}>
+                  <Grid item xs={12} md={6}><TextField fullWidth required label={tx('tenant.scheduled.pestType', 'Pest or signs observed')} value={pestTarget} onChange={(event) => setPestTarget(event.target.value)} placeholder="Example: cockroaches in kitchen, ants near balcony, bed-bug signs" /></Grid>
                   <Grid item xs={12} md={6}>
-                    <TextField fullWidth required label={tx('tenant.scheduled.pestType', 'Pest or signs observed')} value={pestTarget} onChange={(event) => setPestTarget(event.target.value)} placeholder="Example: cockroaches in kitchen, ants near balcony, bed-bug signs" />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>{tx('tenant.scheduled.sensitive', 'Pets, children or sensitive occupants')}</InputLabel>
-                      <Select value={sensitiveOccupants} label={tx('tenant.scheduled.sensitive', 'Pets, children or sensitive occupants')} onChange={(event) => setSensitiveOccupants(event.target.value)}>
-                        <MenuItem value="none">{tx('tenant.scheduled.none', 'None')}</MenuItem>
-                        <MenuItem value="pets">{tx('tenant.scheduled.pets', 'Pets in the unit')}</MenuItem>
-                        <MenuItem value="children">{tx('tenant.scheduled.children', 'Children in the unit')}</MenuItem>
-                        <MenuItem value="pets-and-children">{tx('tenant.scheduled.petsChildren', 'Pets and children')}</MenuItem>
-                        <MenuItem value="sensitive">{tx('tenant.scheduled.sensitivePerson', 'Sensitive / medical concern')}</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.sensitive', 'Pets, children or sensitive occupants')}</InputLabel><Select value={sensitiveOccupants} label={tx('tenant.scheduled.sensitive', 'Pets, children or sensitive occupants')} onChange={(event) => setSensitiveOccupants(event.target.value)}><MenuItem value="none">{tx('tenant.scheduled.none', 'None')}</MenuItem><MenuItem value="pets">{tx('tenant.scheduled.pets', 'Pets in the unit')}</MenuItem><MenuItem value="children">{tx('tenant.scheduled.children', 'Children in the unit')}</MenuItem><MenuItem value="pets-and-children">{tx('tenant.scheduled.petsChildren', 'Pets and children')}</MenuItem><MenuItem value="sensitive">{tx('tenant.scheduled.sensitivePerson', 'Sensitive / medical concern')}</MenuItem></Select></FormControl>
                   </Grid>
                 </Grid>
               )}
@@ -359,35 +332,14 @@ export default function TenantScheduledServicePage() {
 
               {tenantAway && (
                 <Box sx={{ p: 2.5, bgcolor: alpha('#2563EB', 0.055), border: `1px solid ${alpha('#2563EB', 0.2)}`, borderRadius: 4 }}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start">
-                    <KeyRound size={22} color="#2563EB" />
-                    <Box>
-                      <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.awayTitle', 'Away / vacation access')}</Typography>
-                      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4 }}>{tx('tenant.scheduled.awayDesc', 'The request will be marked as an unoccupied-unit service. Operations will confirm the appointment and access method before entry.')}</Typography>
-                      <FormControlLabel control={<Checkbox checked={accessAuthorized} onChange={(event) => setAccessAuthorized(event.target.checked)} />} label={tx('tenant.scheduled.authorize', 'I authorize the selected access method for the confirmed appointment.')} />
-                    </Box>
-                  </Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start"><KeyRound size={22} color="#2563EB" /><Box sx={{ minWidth: 0 }}><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.awayTitle', 'Away / vacation access')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4, ...readableTextSx }}>{tx('tenant.scheduled.awayDesc', 'The request will be marked as an unoccupied-unit service. Operations must confirm the appointment and access method before entry.')}</Typography><FormControlLabel control={<Checkbox checked={accessAuthorized} onChange={(event) => setAccessAuthorized(event.target.checked)} />} label={tx('tenant.scheduled.authorize', 'I authorize the selected access method for the confirmed appointment.')} /></Box></Stack>
                 </Box>
               )}
 
-              <Box sx={{ p: 2.25, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center">
-                  <CalendarDays size={20} color={binThemeTokens.goldHover} />
-                  <Clock3 size={20} color={binThemeTokens.goldHover} />
-                  <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                    {tx('tenant.scheduled.confirmation', 'This creates a scheduled-service request. BIN GROUP Operations confirms the date, time, price if applicable and access instructions before dispatch.')}
-                  </Typography>
-                </Stack>
-              </Box>
+              <Box sx={{ p: 2.25, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center"><CalendarDays size={20} color={binThemeTokens.goldHover} /><Clock3 size={20} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.confirmation', 'This creates a pending scheduling request. BIN GROUP Operations confirms the date, time, price if applicable and access instructions before dispatch.')}</Typography></Stack></Box>
 
-              <Button type="submit" variant="contained" size="large" disabled={submitting} sx={{ py: 1.7, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>
-                {submitting ? <CircularProgress size={24} color="inherit" /> : tx('tenant.scheduled.submit', 'SUBMIT SCHEDULED SERVICE')}
-              </Button>
-
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" justifyContent="center">
-                <CheckCircle2 size={17} color="#10B981" />
-                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{tx('tenant.scheduled.audit', 'Occupancy, access and scheduling details are saved with the request for operations and audit history.')}</Typography>
-              </Stack>
+              <Button type="submit" variant="contained" size="large" disabled={submitting} sx={{ py: 1.7, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{submitting ? <CircularProgress size={24} color="inherit" /> : tx('tenant.scheduled.submit', 'SUBMIT SCHEDULED SERVICE')}</Button>
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" justifyContent="center"><CheckCircle2 size={17} color="#10B981" /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.audit', 'Occupancy, access and scheduling details are saved with the request for Operations and audit history.')}</Typography></Stack>
             </Stack>
           </form>
         </Paper>
