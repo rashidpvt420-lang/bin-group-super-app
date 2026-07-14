@@ -26,6 +26,7 @@ export * from "./tenantTicketReview";
 export * from "./qrSecurity";
 export * from "./technicianOfflineSync";
 export * from "./scheduledServices";
+export * from "./scheduledServiceAvailability";
 
 if (!admin.apps.length) {
   admin.initializeApp();
