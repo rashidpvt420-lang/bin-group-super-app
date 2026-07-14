@@ -97,6 +97,9 @@ jobs:
       - name: Verify scheduled-services completeness
         run: node scripts/verify-scheduled-services-completeness.mjs
 
+      - name: Verify Functions compiler configuration
+        run: node --test test/functions-tsconfig.test.mjs
+
       - name: Harden and test Firestore rules
         run: npm run test:rules
 
