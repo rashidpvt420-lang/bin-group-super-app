@@ -69,6 +69,7 @@ import MarketplaceApprovalsPage from './pages/ops/MarketplaceApprovalsPage';
 import StaffDirectoryPage from './pages/ops/StaffDirectoryPage';
 import MessagesPage from './pages/ops/MessagesPage';
 import CommunityModerationPage from './pages/ops/CommunityModerationPage';
+import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperationsPage';
 
 import { adminTheme } from './theme/adminTheme';
 
@@ -107,7 +108,7 @@ function AppContent() {
                     <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
                     <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
                     <Route path="/unit-links" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
-                    <Route path="/tenant-services" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
+                    <Route path="/tenant-services" element={<ProtectedRoute><ScheduledServicesOperationsPage /></ProtectedRoute>} />
                     <Route path="/control-center" element={<ProtectedRoute adminOnly><ProductionControlCenter /></ProtectedRoute>} />
                     <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
