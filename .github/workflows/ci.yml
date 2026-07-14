@@ -49,6 +49,9 @@ jobs:
       - name: Verify scheduled-services completeness
         run: node scripts/verify-scheduled-services-completeness.mjs
 
+      - name: Verify Functions compiler configuration
+        run: node --test test/functions-tsconfig.test.mjs
+
       - name: Production stability guard
         run: npm run test:stability
 
@@ -67,7 +70,23 @@ jobs:
           CI: false
 
       - name: Build functions
-        run: npm run build --workspace=functions
+        id: build_functions
+        shell: bash
+        run: |
+          set +e
+          npm run build --workspace=functions > functions-build-output.txt 2>&1
+          status=$?
+          cat functions-build-output.txt
+          exit $status
+
+      - name: Upload Functions build diagnostics
+        if: failure() && steps.build_functions.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-build-diagnostics-${{ github.sha }}
+          path: functions-build-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Run security rules tests
         run: npm run test:rules
