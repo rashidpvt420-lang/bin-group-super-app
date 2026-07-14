@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   FormControl,
   FormControlLabel,
@@ -17,13 +18,16 @@ import {
   Typography,
   alpha,
 } from '@mui/material';
-import { Bug, CalendarDays, CheckCircle2, Clock3, KeyRound, Plane, Sparkles, Truck } from 'lucide-react';
+import { Bug, CalendarDays, CheckCircle2, Clock3, KeyRound, Plane, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { addDoc, collection, db, doc, getDoc, getDocs, limit, query, serverTimestamp, where } from '../../lib/firebase';
+import { addDoc, collection, db, doc, functions, getDoc, getDocs, httpsCallable, limit, query, serverTimestamp, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
+
+const POLICY_VERSION = 'BIN-SCHEDULED-SERVICES-2026-07';
+const POLICY_COPY = 'Cancel 24 hours or more before the confirmed appointment for full-refund review. Cancellations 6–24 hours before are eligible for 50% refund review. Cancellations within 6 hours or no-shows are normally non-refundable. Final handling follows the approved contract, payment status and vendor terms.';
 
 const SERVICE_CATALOG = {
   'deep-clean': {
@@ -53,6 +57,19 @@ const SERVICE_CATALOG = {
 } as const;
 
 type ServiceCode = keyof typeof SERVICE_CATALOG;
+type AvailabilitySlot = {
+  id: string;
+  serviceCode: string;
+  date: string;
+  timeWindow: string;
+  vendorId: string;
+  vendorName: string;
+  capacity: number;
+  remaining: number;
+  priceFrom: number;
+  currency: string;
+  notes?: string;
+};
 
 const normalizeService = (value: string | null): ServiceCode => {
   const key = String(value || '').trim().toLowerCase() as ServiceCode;
@@ -79,6 +96,15 @@ export default function TenantScheduledServicePage() {
   const [sensitiveOccupants, setSensitiveOccupants] = useState('none');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [accessAuthorized, setAccessAuthorized] = useState(false);
+  const [temporaryAccessCode, setTemporaryAccessCode] = useState('');
+  const [accessCodeExpiresAt, setAccessCodeExpiresAt] = useState('');
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState('one-time');
+  const [recurrenceOccurrences, setRecurrenceOccurrences] = useState(4);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState<AvailabilitySlot[]>([]);
+  const [selectedSlotId, setSelectedSlotId] = useState('');
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotMessage, setSlotMessage] = useState('');
   const [unitData, setUnitData] = useState<any>(null);
   const [propertyData, setPropertyData] = useState<any>(null);
   const [residenceChecked, setResidenceChecked] = useState(false);
@@ -88,8 +114,24 @@ export default function TenantScheduledServicePage() {
   const service = SERVICE_CATALOG[serviceCode];
   const ServiceIcon = service.icon;
   const tenantAway = occupancyStatus === 'away' || occupancyStatus === 'vacation';
+  const selectedSlot = availableSlots.find((slot) => slot.id === selectedSlotId) || null;
+  const recurringCleaning = serviceCode === 'deep-clean' && recurrenceFrequency !== 'one-time';
 
   useEffect(() => setServiceCode(normalizeService(searchParams.get('service'))), [searchParams]);
+
+  useEffect(() => {
+    if (serviceCode !== 'deep-clean') {
+      setRecurrenceFrequency('one-time');
+      setRecurrenceOccurrences(1);
+    } else if (recurrenceOccurrences < 2) {
+      setRecurrenceOccurrences(4);
+    }
+    setSelectedSlotId('');
+  }, [serviceCode, recurrenceOccurrences]);
+
+  useEffect(() => {
+    if (selectedSlot) setTimeWindow(selectedSlot.timeWindow);
+  }, [selectedSlot]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +165,34 @@ export default function TenantScheduledServicePage() {
     return () => { cancelled = true; };
   }, [user?.uid, user?.email, tx]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAvailability() {
+      setSelectedSlotId('');
+      setAvailableSlots([]);
+      setSlotMessage('');
+      if (!preferredDate || !user?.uid) return;
+      setLoadingSlots(true);
+      try {
+        const getAvailability = httpsCallable(functions, 'getScheduledServiceAvailability');
+        const response: any = await getAvailability({ serviceCode, date: preferredDate, propertyId: unitData?.propertyId || '' });
+        if (cancelled) return;
+        const slots = Array.isArray(response.data?.slots) ? response.data.slots : [];
+        setAvailableSlots(slots);
+        setSlotMessage(slots.length
+          ? tx('tenant.scheduled.liveSlotsFound', 'Live provider availability is shown below. Select a slot or submit your preferred time for Operations confirmation.')
+          : tx('tenant.scheduled.noLiveSlots', 'No live provider slot is published for this date. You can still submit your preferred time and Operations will confirm availability.'));
+      } catch (error) {
+        console.warn('[TenantScheduledService] availability lookup failed:', error);
+        if (!cancelled) setSlotMessage(tx('tenant.scheduled.slotFallback', 'Live availability could not be loaded. Your preferred date and time can still be submitted for confirmation.'));
+      } finally {
+        if (!cancelled) setLoadingSlots(false);
+      }
+    }
+    loadAvailability();
+    return () => { cancelled = true; };
+  }, [preferredDate, serviceCode, unitData?.propertyId, user?.uid, tx]);
+
   const accessOptions = useMemo(() => [
     ['tenant-present', tx('tenant.scheduled.accessPresent', 'Tenant will be present')],
     ['security-key', tx('tenant.scheduled.accessSecurity', 'Building security / key register')],
@@ -155,12 +225,30 @@ export default function TenantScheduledServicePage() {
       setNotice(tx('tenant.scheduled.pestRequired', 'Tell us which pest or signs you have seen.'));
       return;
     }
+    if (accessMethod === 'smart-lock') {
+      if (temporaryAccessCode.trim().length < 4) {
+        setNotice(tx('tenant.scheduled.codeRequired', 'Enter a temporary access code with at least four characters.'));
+        return;
+      }
+      if (!accessCodeExpiresAt || new Date(accessCodeExpiresAt).getTime() <= Date.now()) {
+        setNotice(tx('tenant.scheduled.codeExpiryRequired', 'Choose a future expiry for the temporary access code.'));
+        return;
+      }
+    }
+    if (!policyAccepted) {
+      setNotice(tx('tenant.scheduled.policyRequired', 'Review and accept the scheduled-service cancellation and refund policy.'));
+      return;
+    }
 
     const occupancyLabel = occupancyStatus === 'vacation' ? 'tenant on vacation' : occupancyStatus === 'away' ? 'tenant away' : 'tenant home';
+    const recurrenceLabel = recurringCleaning ? `${recurrenceFrequency}, ${recurrenceOccurrences} visits` : 'one-time';
     const operationsSummary = [
       service.label,
       `Date: ${preferredDate}`,
-      `Time: ${timeWindow}`,
+      `Time: ${selectedSlot?.timeWindow || timeWindow}`,
+      selectedSlot ? `Published slot: ${selectedSlot.vendorName}` : 'Provider: awaiting Operations confirmation',
+      selectedSlot?.priceFrom ? `Price from: AED ${selectedSlot.priceFrom.toFixed(2)}` : 'Price: quote required',
+      `Recurrence: ${recurrenceLabel}`,
       `Occupancy: ${occupancyLabel}`,
       `Access: ${accessMethod}`,
       `Scope: ${serviceScope.trim()}`,
@@ -171,7 +259,7 @@ export default function TenantScheduledServicePage() {
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'maintenanceTickets'), {
+      const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
         requesterRole: 'tenant',
         tenantId: user.uid,
         tenantUid: user.uid,
@@ -200,16 +288,35 @@ export default function TenantScheduledServicePage() {
         serviceLocationDetail: serviceScope.trim(),
         preferredServiceDate: preferredDate,
         requestedServiceDate: preferredDate,
-        preferredTimeWindow: timeWindow,
+        preferredTimeWindow: selectedSlot?.timeWindow || timeWindow,
+        availabilitySlotId: selectedSlot?.id || null,
+        availabilitySelectionStatus: selectedSlot ? 'REQUESTED_PUBLISHED_SLOT' : 'PREFERENCE_ONLY',
+        availabilityVendorId: selectedSlot?.vendorId || null,
+        availabilityVendorName: selectedSlot?.vendorName || null,
+        availabilityPriceFrom: selectedSlot?.priceFrom || null,
         occupancyStatus,
         tenantAway,
         vacationService: occupancyStatus === 'vacation' || serviceCode === 'vacation-care',
         accessMethod,
         accessAuthorized: tenantAway ? accessAuthorized : true,
+        accessCodeStatus: accessMethod === 'smart-lock' ? 'PENDING_SECURE_UPLOAD' : 'NOT_REQUIRED',
+        securityAccessStatus: accessMethod === 'smart-lock' ? 'PENDING_CONFIRMATION' : 'NOT_REQUIRED',
         contactDuringService: contactDuringService.trim(),
         pestTarget: serviceCode === 'pest-control' ? pestTarget.trim() : '',
         sensitiveOccupants: serviceCode === 'pest-control' ? sensitiveOccupants : 'not_applicable',
         specialInstructions: specialInstructions.trim(),
+        recurrenceFrequency: serviceCode === 'deep-clean' ? recurrenceFrequency : 'one-time',
+        recurrenceOccurrences: serviceCode === 'deep-clean' ? (recurrenceFrequency === 'one-time' ? 1 : recurrenceOccurrences) : 1,
+        recurrenceSequence: 1,
+        recurringPlanApproved: false,
+        pricingRequired: true,
+        quotedPrice: null,
+        currency: 'AED',
+        quoteStatus: 'PENDING_OPERATIONS_QUOTE',
+        cancellationPolicyVersion: POLICY_VERSION,
+        cancellationPolicyAccepted: true,
+        cancellationPolicyAcceptedAt: serverTimestamp(),
+        policyAcknowledgement: POLICY_COPY,
         priority: 'normal',
         slaPriority: 'SCHEDULED',
         slaStartsAt: 'CONFIRMED_APPOINTMENT',
@@ -217,14 +324,28 @@ export default function TenantScheduledServicePage() {
         evidenceStatus: 'NOT_REQUIRED_AT_INTAKE',
         source: 'TENANT_PORTAL_SCHEDULED_SERVICE',
         status: 'PENDING_SCHEDULING',
+        appointmentStatus: 'PENDING_CONFIRMATION',
         dispatchStatus: 'PENDING_SCHEDULING',
-        trackingStatus: 'WAITING_FOR_APPOINTMENT_CONFIRMATION',
+        trackingStatus: 'WAITING_FOR_APPOINTMENT_AND_QUOTE',
         technicianId: null,
         assignedTechnicianId: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      navigate('/tenant/tickets');
+
+      if (accessMethod === 'smart-lock') {
+        try {
+          const saveAccessCode = httpsCallable(functions, 'saveScheduledServiceAccessCode');
+          await saveAccessCode({ ticketId: docRef.id, code: temporaryAccessCode.trim(), expiresAt: new Date(accessCodeExpiresAt).toISOString() });
+        } catch (accessError) {
+          console.error('[TenantScheduledService] secure access code save failed:', accessError);
+          setNotice(tx('tenant.scheduled.codeSaveFailed', 'The service request was created, but the temporary access code could not be secured. Open the request and add a new code before the appointment.'));
+          navigate(`/tenant/ticket/${docRef.id}`);
+          return;
+        }
+      }
+
+      navigate(`/tenant/ticket/${docRef.id}`);
     } catch (error) {
       console.error('[TenantScheduledService] submit failed:', error);
       setNotice(tx('tenant.scheduled.submitError', 'The scheduled service could not be submitted. Please try again.'));
@@ -251,7 +372,7 @@ export default function TenantScheduledServicePage() {
             {tx('tenant.scheduled.title', 'Schedule a service')}
           </Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, lineHeight: 1.7, maxWidth: 780, ...readableTextSx }}>
-            {tx('tenant.scheduled.desc', 'Tell BIN GROUP what service you need, when it should happen, whether you are home or away, and how authorized access should work.')}
+            {tx('tenant.scheduled.desc', 'Choose the service, live provider slot or preferred time, recurrence, price approval path, occupancy and secure access instructions.')}
           </Typography>
         </Box>
 
@@ -308,6 +429,77 @@ export default function TenantScheduledServicePage() {
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.time', 'Preferred time window')}</InputLabel><Select value={timeWindow} label={tx('tenant.scheduled.time', 'Preferred time window')} onChange={(event) => setTimeWindow(event.target.value)}><MenuItem value="09:00-12:00">09:00 – 12:00</MenuItem><MenuItem value="12:00-15:00">12:00 – 15:00</MenuItem><MenuItem value="15:00-18:00">15:00 – 18:00</MenuItem><MenuItem value="18:00-21:00">18:00 – 21:00</MenuItem></Select></FormControl>
                 </Grid>
+              </Grid>
+
+              {preferredDate && (
+                <Paper sx={{ p: 2.5, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}>
+                  <Stack spacing={2}>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center">
+                      <CalendarDays size={20} color={binThemeTokens.goldHover} />
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.liveAvailability', 'Live provider availability')}</Typography>
+                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{slotMessage}</Typography>
+                      </Box>
+                    </Stack>
+                    {loadingSlots ? <CircularProgress size={24} sx={{ color: binThemeTokens.goldHover }} /> : (
+                      <Grid container spacing={1.5}>
+                        {availableSlots.map((slot) => {
+                          const selected = selectedSlotId === slot.id;
+                          return (
+                            <Grid item xs={12} md={6} key={slot.id}>
+                              <Button
+                                type="button"
+                                fullWidth
+                                onClick={() => setSelectedSlotId(selected ? '' : slot.id)}
+                                sx={{
+                                  minHeight: 116,
+                                  p: 2,
+                                  alignItems: 'flex-start',
+                                  justifyContent: 'flex-start',
+                                  textAlign: isRTL ? 'right' : 'left',
+                                  whiteSpace: 'normal',
+                                  color: binThemeTokens.textPrimary,
+                                  bgcolor: selected ? alpha(binThemeTokens.gold, 0.12) : binThemeTokens.card,
+                                  border: `1px solid ${selected ? binThemeTokens.goldHover : binThemeTokens.border}`,
+                                  borderRadius: 3,
+                                }}
+                              >
+                                <Stack spacing={0.7} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
+                                  <Typography sx={{ fontWeight: 950, ...readableTextSx }}>{slot.vendorName}</Typography>
+                                  <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{slot.timeWindow} · {slot.remaining} {tx('tenant.scheduled.remaining', 'remaining')}</Typography>
+                                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap">
+                                    {slot.priceFrom > 0 && <Chip size="small" label={`From ${slot.currency} ${slot.priceFrom.toFixed(2)}`} />}
+                                    {selected && <Chip size="small" color="success" label={tx('tenant.scheduled.selected', 'Selected')} />}
+                                  </Stack>
+                                </Stack>
+                              </Button>
+                            </Grid>
+                          );
+                        })}
+                      </Grid>
+                    )}
+                  </Stack>
+                </Paper>
+              )}
+
+              {serviceCode === 'deep-clean' && (
+                <Paper sx={{ p: 2.5, bgcolor: alpha('#10B981', 0.045), border: `1px solid ${alpha('#10B981', 0.2)}`, borderRadius: 4 }}>
+                  <Stack spacing={2}>
+                    <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.recurringTitle', 'Recurring cleaning plan')}</Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.frequency', 'Frequency')}</InputLabel><Select value={recurrenceFrequency} label={tx('tenant.scheduled.frequency', 'Frequency')} onChange={(event) => setRecurrenceFrequency(event.target.value)}><MenuItem value="one-time">{tx('tenant.scheduled.oneTime', 'One-time service')}</MenuItem><MenuItem value="weekly">{tx('tenant.scheduled.weekly', 'Weekly')}</MenuItem><MenuItem value="biweekly">{tx('tenant.scheduled.biweekly', 'Every two weeks')}</MenuItem><MenuItem value="monthly">{tx('tenant.scheduled.monthly', 'Monthly')}</MenuItem></Select></FormControl>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth disabled={recurrenceFrequency === 'one-time'}><InputLabel>{tx('tenant.scheduled.visits', 'Number of visits')}</InputLabel><Select value={recurrenceFrequency === 'one-time' ? 1 : recurrenceOccurrences} label={tx('tenant.scheduled.visits', 'Number of visits')} onChange={(event) => setRecurrenceOccurrences(Number(event.target.value))}><MenuItem value={4}>4</MenuItem><MenuItem value={8}>8</MenuItem><MenuItem value={12}>12</MenuItem><MenuItem value={24}>24</MenuItem><MenuItem value={52}>52</MenuItem></Select></FormControl>
+                      </Grid>
+                    </Grid>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.recurringDesc', 'The quote will clearly state whether the amount is per visit or for the recurring plan. After each completed visit, the next visit is created automatically until the approved visit count is reached.')}</Typography>
+                  </Stack>
+                </Paper>
+              )}
+
+              <Grid container spacing={2.5}>
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth><InputLabel>{tx('tenant.scheduled.occupancy', 'Will anyone be in the unit?')}</InputLabel><Select value={occupancyStatus} label={tx('tenant.scheduled.occupancy', 'Will anyone be in the unit?')} onChange={(event) => setOccupancyStatus(event.target.value)}><MenuItem value="home">{tx('tenant.scheduled.home', 'Tenant will be home')}</MenuItem><MenuItem value="away">{tx('tenant.scheduled.away', 'Tenant will be away')}</MenuItem><MenuItem value="vacation">{tx('tenant.scheduled.vacation', 'Tenant is on vacation')}</MenuItem></Select></FormControl>
                 </Grid>
@@ -330,16 +522,36 @@ export default function TenantScheduledServicePage() {
               <TextField fullWidth label={tx('tenant.scheduled.contact', 'Phone or WhatsApp during service')} value={contactDuringService} onChange={(event) => setContactDuringService(event.target.value)} />
               <TextField fullWidth multiline minRows={3} label={tx('tenant.scheduled.instructions', 'Special instructions')} value={specialInstructions} onChange={(event) => setSpecialInstructions(event.target.value)} placeholder="Parking, gate access, alarm, keys, restricted rooms, preferred products or anything the team must know" />
 
+              {accessMethod === 'smart-lock' && (
+                <Paper sx={{ p: 2.5, bgcolor: alpha('#7C3AED', 0.05), border: `1px solid ${alpha('#7C3AED', 0.22)}`, borderRadius: 4 }}>
+                  <Stack spacing={2}>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center"><ShieldCheck size={22} color="#7C3AED" /><Box><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.secureCode', 'Secure temporary access code')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.secureCodeDesc', 'The code is encrypted by the backend, expires automatically and can only be revealed to authorized Operations personnel with an audit record.')}</Typography></Box></Stack>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}><TextField fullWidth required type="password" label={tx('tenant.scheduled.accessCode', 'Temporary access code')} value={temporaryAccessCode} onChange={(event) => setTemporaryAccessCode(event.target.value)} inputProps={{ maxLength: 32 }} /></Grid>
+                      <Grid item xs={12} md={6}><TextField fullWidth required type="datetime-local" label={tx('tenant.scheduled.accessExpiry', 'Code expiry')} value={accessCodeExpiresAt} onChange={(event) => setAccessCodeExpiresAt(event.target.value)} InputLabelProps={{ shrink: true }} /></Grid>
+                    </Grid>
+                  </Stack>
+                </Paper>
+              )}
+
               {tenantAway && (
                 <Box sx={{ p: 2.5, bgcolor: alpha('#2563EB', 0.055), border: `1px solid ${alpha('#2563EB', 0.2)}`, borderRadius: 4 }}>
-                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start"><KeyRound size={22} color="#2563EB" /><Box sx={{ minWidth: 0 }}><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.awayTitle', 'Away / vacation access')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4, ...readableTextSx }}>{tx('tenant.scheduled.awayDesc', 'The request will be marked as an unoccupied-unit service. Operations must confirm the appointment and access method before entry.')}</Typography><FormControlLabel control={<Checkbox checked={accessAuthorized} onChange={(event) => setAccessAuthorized(event.target.checked)} />} label={tx('tenant.scheduled.authorize', 'I authorize the selected access method for the confirmed appointment.')} /></Box></Stack>
+                  <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="flex-start"><KeyRound size={22} color="#2563EB" /><Box sx={{ minWidth: 0 }}><Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.awayTitle', 'Away / vacation access')}</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4, ...readableTextSx }}>{tx('tenant.scheduled.awayDesc', 'The request is marked as an unoccupied-unit service. Operations must confirm the appointment, access method and security readiness before entry.')}</Typography><FormControlLabel control={<Checkbox checked={accessAuthorized} onChange={(event) => setAccessAuthorized(event.target.checked)} />} label={tx('tenant.scheduled.authorize', 'I authorize the selected access method for the confirmed appointment.')} /></Box></Stack>
                 </Box>
               )}
 
-              <Box sx={{ p: 2.25, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center"><CalendarDays size={20} color={binThemeTokens.goldHover} /><Clock3 size={20} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.confirmation', 'This creates a pending scheduling request. BIN GROUP Operations confirms the date, time, price if applicable and access instructions before dispatch.')}</Typography></Stack></Box>
+              <Paper sx={{ p: 2.5, bgcolor: alpha('#F59E0B', 0.055), border: `1px solid ${alpha('#F59E0B', 0.24)}`, borderRadius: 4 }}>
+                <Stack spacing={1.5}>
+                  <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.scheduled.policyTitle', 'Cancellation and refund policy')}</Typography>
+                  <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.65, ...readableTextSx }}>{tx('tenant.scheduled.policyCopy', POLICY_COPY)}</Typography>
+                  <FormControlLabel control={<Checkbox checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} />} label={tx('tenant.scheduled.policyAccept', 'I have reviewed and accept this operational cancellation and refund policy.')} />
+                </Stack>
+              </Paper>
+
+              <Box sx={{ p: 2.25, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25} alignItems="center"><CalendarDays size={20} color={binThemeTokens.goldHover} /><Clock3 size={20} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.confirmation', 'This creates a pending scheduling and quotation request. No paid service is dispatched until Operations publishes the final quote and the tenant approves it.')}</Typography></Stack></Box>
 
               <Button type="submit" variant="contained" size="large" disabled={submitting} sx={{ py: 1.7, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{submitting ? <CircularProgress size={24} color="inherit" /> : tx('tenant.scheduled.submit', 'SUBMIT SCHEDULED SERVICE')}</Button>
-              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" justifyContent="center"><CheckCircle2 size={17} color="#10B981" /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.audit', 'Occupancy, access and scheduling details are saved with the request for Operations and audit history.')}</Typography></Stack>
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" justifyContent="center"><CheckCircle2 size={17} color="#10B981" /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{tx('tenant.scheduled.audit', 'Availability, quote, recurrence, occupancy, access and policy decisions are saved with the request for Operations and audit history.')}</Typography></Stack>
             </Stack>
           </form>
         </Paper>
