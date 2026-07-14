@@ -1365,11 +1365,17 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    match /{document=**} {
-      allow read: if hasAdminClaim();
-      allow create: if hasAdminClaim();
-      allow update: if hasAdminClaim();
-      allow delete: if hasAdminClaim();
+    // Server-managed cryptographic material. Cloud Functions use the Admin SDK;
+    // no browser, tenant, owner, technician, broker, or admin client may access it.
+    match /system_secrets/{secretId} {
+      allow read, write: if false;
+    }
+
+    match /{collection}/{document=**} {
+      allow read: if collection != 'system_secrets' && hasAdminClaim();
+      allow create: if collection != 'system_secrets' && hasAdminClaim();
+      allow update: if collection != 'system_secrets' && hasAdminClaim();
+      allow delete: if collection != 'system_secrets' && hasAdminClaim();
     }
   }
 }
