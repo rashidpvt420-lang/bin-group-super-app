@@ -6,9 +6,12 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as crypto from 'crypto';
 
 if (!admin.apps.length) admin.initializeApp();
+
 const db = admin.firestore();
 const REGION = 'europe-west3';
 const POLICY_VERSION = 'BIN-SCHEDULED-SERVICES-2026-07';
+const ACCESS_KEY_DOCUMENT = 'scheduled_service_access_key';
+const ACCESS_KEY_COLLECTION = 'system_secrets';
 const ADMIN_ROLES = new Set([
   'admin',
   'super_admin',
@@ -20,9 +23,8 @@ const ADMIN_ROLES = new Set([
   'support_admin',
 ]);
 
-const clean = (value: unknown) => String(value ?? '').trim();
-const normalized = (value: unknown) => clean(value).toLowerCase();
-const nowTimestamp = () => Timestamp.now();
+const clean = (value: unknown): string => String(value ?? '').trim();
+const normalized = (value: unknown): string => clean(value).toLowerCase();
 
 function timestampFrom(value: unknown): Timestamp | null {
   if (!value) return null;
@@ -30,13 +32,14 @@ function timestampFrom(value: unknown): Timestamp | null {
   if (value instanceof Date && Number.isFinite(value.getTime())) return Timestamp.fromDate(value);
   if (typeof value === 'object' && value !== null && 'seconds' in value) {
     const seconds = Number((value as { seconds?: unknown }).seconds);
-    if (Number.isFinite(seconds)) return new Timestamp(seconds, 0);
+    const nanoseconds = Number((value as { nanoseconds?: unknown }).nanoseconds || 0);
+    if (Number.isFinite(seconds) && Number.isFinite(nanoseconds)) return new Timestamp(seconds, nanoseconds);
   }
   const date = new Date(String(value));
   return Number.isFinite(date.getTime()) ? Timestamp.fromDate(date) : null;
 }
 
-function tenantOwnsTicket(data: FirebaseFirestore.DocumentData, auth: any) {
+function tenantOwnsTicket(data: FirebaseFirestore.DocumentData, auth: any): boolean {
   if (!auth?.uid) return false;
   const uid = clean(auth.uid);
   const email = normalized(auth.token?.email);
@@ -48,13 +51,13 @@ function tenantOwnsTicket(data: FirebaseFirestore.DocumentData, auth: any) {
     data.createdByUid,
     data.requesterId,
   ].some((value) => clean(value) === uid);
-  const emailMatch = email && [
+  const emailMatch = Boolean(email) && [
     data.tenantEmail,
     data.requesterEmail,
     data.reporterEmail,
     data.email,
   ].some((value) => normalized(value) === email);
-  return idMatch || Boolean(emailMatch);
+  return idMatch || emailMatch;
 }
 
 async function assertTenantScheduledService(ticketId: string, auth: any) {
@@ -67,13 +70,20 @@ async function assertTenantScheduledService(ticketId: string, auth: any) {
   if (data.requestType !== 'SCHEDULED_SERVICE') {
     throw new HttpsError('failed-precondition', 'This action is only available for scheduled services.');
   }
-  if (!tenantOwnsTicket(data, auth)) throw new HttpsError('permission-denied', 'This request does not belong to the signed-in tenant.');
+  if (!tenantOwnsTicket(data, auth)) {
+    throw new HttpsError('permission-denied', 'This request does not belong to the signed-in tenant.');
+  }
   return { ref, data };
 }
 
-async function actorRole(auth: any) {
+async function actorRole(auth: any): Promise<string> {
   const tokenRole = normalized(auth?.token?.role || auth?.token?.userRole || auth?.token?.primaryRole);
-  if (auth?.token?.admin === true || auth?.token?.superAdmin === true || auth?.token?.super_admin === true || ADMIN_ROLES.has(tokenRole)) {
+  if (
+    auth?.token?.admin === true ||
+    auth?.token?.superAdmin === true ||
+    auth?.token?.super_admin === true ||
+    ADMIN_ROLES.has(tokenRole)
+  ) {
     return tokenRole || 'admin';
   }
   if (!auth?.uid) return '';
@@ -83,7 +93,7 @@ async function actorRole(auth: any) {
   return ADMIN_ROLES.has(profileRole) ? profileRole : '';
 }
 
-async function assertOperations(auth: any) {
+async function assertOperations(auth: any): Promise<string> {
   if (!auth?.uid) throw new HttpsError('unauthenticated', 'Sign in is required.');
   const role = await actorRole(auth);
   if (!role) throw new HttpsError('permission-denied', 'Operations access is required.');
@@ -99,7 +109,7 @@ function cancellationWindow(data: FirebaseFirestore.DocumentData) {
   return { code: 'NO_REFUND_WINDOW', refundPercent: 0, hoursUntil };
 }
 
-function paidService(data: FirebaseFirestore.DocumentData) {
+function paidService(data: FirebaseFirestore.DocumentData): boolean {
   const paymentStatus = normalized(data.paymentStatus || data.servicePaymentStatus);
   return data.paymentVerified === true || ['paid', 'captured', 'completed', 'succeeded'].includes(paymentStatus);
 }
@@ -110,7 +120,7 @@ async function writeAudit(params: {
   action: string;
   ticketId: string;
   metadata?: Record<string, unknown>;
-}) {
+}): Promise<void> {
   await db.collection('audit_logs').add({
     actorId: params.actorId,
     actorRole: params.actorRole,
@@ -128,7 +138,7 @@ export const tenantManageScheduledService = onCall(
     const action = normalized(request.data?.action);
     const ticketId = clean(request.data?.ticketId);
     const { ref, data } = await assertTenantScheduledService(ticketId, request.auth);
-    const updates: FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData> = {
+    const updates: FirebaseFirestore.DocumentData = {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
@@ -137,18 +147,26 @@ export const tenantManageScheduledService = onCall(
         throw new HttpsError('failed-precondition', 'No quote is awaiting approval.');
       }
       const quotedPrice = Number(data.quotedPrice);
-      if (!Number.isFinite(quotedPrice) || quotedPrice <= 0) throw new HttpsError('failed-precondition', 'The quote amount is invalid.');
+      if (!Number.isFinite(quotedPrice) || quotedPrice <= 0) {
+        throw new HttpsError('failed-precondition', 'The quote amount is invalid.');
+      }
       const expiry = timestampFrom(data.quoteExpiresAt);
-      if (expiry && expiry.toMillis() < Date.now()) throw new HttpsError('deadline-exceeded', 'This quote has expired.');
+      if (expiry && expiry.toMillis() < Date.now()) {
+        throw new HttpsError('deadline-exceeded', 'This quote has expired.');
+      }
       updates.quoteStatus = 'APPROVED';
       updates.tenantQuoteDecision = 'APPROVED';
       updates.tenantQuoteApprovedAt = FieldValue.serverTimestamp();
-      updates.recurringPlanApproved = data.recurrenceFrequency && data.recurrenceFrequency !== 'one-time';
+      updates.recurringPlanApproved = Boolean(data.recurrenceFrequency && data.recurrenceFrequency !== 'one-time');
       updates.status = data.appointmentStatus === 'CONFIRMED' ? 'SCHEDULED' : 'PENDING_SCHEDULING';
-      updates.trackingStatus = data.appointmentStatus === 'CONFIRMED' ? 'APPOINTMENT_CONFIRMED' : 'WAITING_FOR_APPOINTMENT_CONFIRMATION';
+      updates.trackingStatus = data.appointmentStatus === 'CONFIRMED'
+        ? 'APPOINTMENT_CONFIRMED'
+        : 'WAITING_FOR_APPOINTMENT_CONFIRMATION';
     } else if (action === 'reject_quote') {
       const reason = clean(request.data?.reason);
-      if (data.quoteStatus !== 'PENDING_TENANT_APPROVAL') throw new HttpsError('failed-precondition', 'No quote is awaiting a decision.');
+      if (data.quoteStatus !== 'PENDING_TENANT_APPROVAL') {
+        throw new HttpsError('failed-precondition', 'No quote is awaiting a decision.');
+      }
       updates.quoteStatus = 'REJECTED';
       updates.tenantQuoteDecision = 'REJECTED';
       updates.quoteRejectionReason = reason || 'Tenant declined the service quote.';
@@ -169,7 +187,7 @@ export const tenantManageScheduledService = onCall(
         preferredDate,
         preferredTimeWindow,
         reason,
-        requestedAt: nowTimestamp(),
+        requestedAt: Timestamp.now(),
         requestedBy: request.auth?.uid,
       };
       updates.status = 'RESCHEDULE_REQUESTED';
@@ -192,7 +210,11 @@ export const tenantManageScheduledService = onCall(
       updates.cancellationPolicyWindow = window.code;
       updates.refundPercentUnderPolicy = paid ? window.refundPercent : 0;
       updates.refundStatus = paid
-        ? (window.refundPercent === 100 ? 'FULL_REFUND_REVIEW' : window.refundPercent === 50 ? 'PARTIAL_REFUND_REVIEW' : 'NO_REFUND_UNDER_POLICY')
+        ? window.refundPercent === 100
+          ? 'FULL_REFUND_REVIEW'
+          : window.refundPercent === 50
+            ? 'PARTIAL_REFUND_REVIEW'
+            : 'NO_REFUND_UNDER_POLICY'
         : 'NOT_APPLICABLE_NO_PAYMENT';
       updates.cancellationStatus = immediate ? 'CONFIRMED' : 'PENDING_OPERATIONS_REVIEW';
       updates.status = immediate ? 'CANCELLED' : 'CANCELLATION_REQUESTED';
@@ -215,17 +237,35 @@ export const tenantManageScheduledService = onCall(
   },
 );
 
-function accessKey() {
-  const configured = clean(process.env.SCHEDULED_SERVICE_ACCESS_KEY);
-  if (configured.length < 32) {
-    throw new HttpsError('failed-precondition', 'Secure access-code encryption is not configured.');
-  }
-  return crypto.createHash('sha256').update(configured, 'utf8').digest();
+async function accessKey(): Promise<Buffer> {
+  const ref = db.collection(ACCESS_KEY_COLLECTION).doc(ACCESS_KEY_DOCUMENT);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (snapshot.exists) {
+      const encoded = clean(snapshot.get('keyBase64'));
+      const existing = Buffer.from(encoded, 'base64');
+      if (existing.length !== 32) {
+        throw new HttpsError('data-loss', 'The scheduled-service encryption key is invalid.');
+      }
+      return existing;
+    }
+
+    const generated = crypto.randomBytes(32);
+    transaction.create(ref, {
+      keyBase64: generated.toString('base64'),
+      algorithm: 'AES-256-GCM',
+      purpose: 'scheduled-service-temporary-access-codes',
+      createdAt: FieldValue.serverTimestamp(),
+      rotatedAt: null,
+      version: 1,
+    });
+    return generated;
+  });
 }
 
-function encryptAccessCode(code: string) {
+async function encryptAccessCode(code: string) {
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', accessKey(), iv);
+  const cipher = crypto.createCipheriv('aes-256-gcm', await accessKey(), iv);
   const ciphertext = Buffer.concat([cipher.update(code, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return {
@@ -235,8 +275,12 @@ function encryptAccessCode(code: string) {
   };
 }
 
-function decryptAccessCode(data: FirebaseFirestore.DocumentData) {
-  const decipher = crypto.createDecipheriv('aes-256-gcm', accessKey(), Buffer.from(clean(data.accessCodeIv), 'base64'));
+async function decryptAccessCode(data: FirebaseFirestore.DocumentData): Promise<string> {
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    await accessKey(),
+    Buffer.from(clean(data.accessCodeIv), 'base64'),
+  );
   decipher.setAuthTag(Buffer.from(clean(data.accessCodeAuthTag), 'base64'));
   return Buffer.concat([
     decipher.update(Buffer.from(clean(data.accessCodeCiphertext), 'base64')),
@@ -251,11 +295,20 @@ export const saveScheduledServiceAccessCode = onCall(
     const code = clean(request.data?.code);
     const expiresAt = timestampFrom(request.data?.expiresAt);
     const { ref, data } = await assertTenantScheduledService(ticketId, request.auth);
-    if (data.accessMethod !== 'smart-lock') throw new HttpsError('failed-precondition', 'This request is not using smart-lock access.');
-    if (code.length < 4 || code.length > 32) throw new HttpsError('invalid-argument', 'Access code must be between 4 and 32 characters.');
-    if (!expiresAt || expiresAt.toMillis() <= Date.now()) throw new HttpsError('invalid-argument', 'Choose a future access-code expiry.');
-    if (expiresAt.toMillis() > Date.now() + 31 * 86_400_000) throw new HttpsError('invalid-argument', 'Access-code expiry cannot be more than 31 days away.');
-    const encrypted = encryptAccessCode(code);
+    if (data.accessMethod !== 'smart-lock') {
+      throw new HttpsError('failed-precondition', 'This request is not using smart-lock access.');
+    }
+    if (code.length < 4 || code.length > 32) {
+      throw new HttpsError('invalid-argument', 'Access code must be between 4 and 32 characters.');
+    }
+    if (!expiresAt || expiresAt.toMillis() <= Date.now()) {
+      throw new HttpsError('invalid-argument', 'Choose a future access-code expiry.');
+    }
+    if (expiresAt.toMillis() > Date.now() + 31 * 86_400_000) {
+      throw new HttpsError('invalid-argument', 'Access-code expiry cannot be more than 31 days away.');
+    }
+
+    const encrypted = await encryptAccessCode(code);
     await ref.update({
       accessCodeCiphertext: encrypted.ciphertext,
       accessCodeIv: encrypted.iv,
@@ -283,11 +336,14 @@ export const adminRevealScheduledServiceAccessCode = onCall(
   async (request) => {
     const role = await assertOperations(request.auth);
     const ticketId = clean(request.data?.ticketId);
+    if (!ticketId) throw new HttpsError('invalid-argument', 'ticketId is required.');
     const ref = db.collection('maintenanceTickets').doc(ticketId);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError('not-found', 'Scheduled service request was not found.');
     const data = snap.data() || {};
-    if (data.requestType !== 'SCHEDULED_SERVICE') throw new HttpsError('failed-precondition', 'This is not a scheduled service.');
+    if (data.requestType !== 'SCHEDULED_SERVICE') {
+      throw new HttpsError('failed-precondition', 'This is not a scheduled service.');
+    }
     const expiry = timestampFrom(data.accessCodeExpiresAt);
     if (!expiry || expiry.toMillis() <= Date.now()) {
       await ref.update({ accessCodeStatus: 'EXPIRED', updatedAt: FieldValue.serverTimestamp() });
@@ -296,7 +352,8 @@ export const adminRevealScheduledServiceAccessCode = onCall(
     if (!data.accessCodeCiphertext || !data.accessCodeIv || !data.accessCodeAuthTag) {
       throw new HttpsError('failed-precondition', 'No encrypted access code is stored.');
     }
-    const code = decryptAccessCode(data);
+
+    const code = await decryptAccessCode(data);
     await ref.update({
       accessCodeLastRevealedAt: FieldValue.serverTimestamp(),
       accessCodeLastRevealedBy: request.auth!.uid,
@@ -313,7 +370,13 @@ export const adminRevealScheduledServiceAccessCode = onCall(
   },
 );
 
-async function writeTenantNotification(ticketId: string, data: FirebaseFirestore.DocumentData, key: string, title: string, body: string) {
+async function writeTenantNotification(
+  ticketId: string,
+  data: FirebaseFirestore.DocumentData,
+  key: string,
+  title: string,
+  body: string,
+): Promise<void> {
   const recipientId = clean(data.tenantId || data.tenantUid || data.requesterId);
   if (!recipientId) return;
   await db.collection('notifications').doc(`${ticketId}_${key}`).set({
@@ -333,33 +396,51 @@ async function writeTenantNotification(ticketId: string, data: FirebaseFirestore
 export const scheduledServiceReminderCron = onSchedule(
   { region: REGION, schedule: 'every 30 minutes', timeZone: 'Asia/Dubai' },
   async () => {
-    const snapshot = await db.collection('maintenanceTickets').where('appointmentStatus', '==', 'CONFIRMED').limit(500).get();
+    const snapshot = await db.collection('maintenanceTickets')
+      .where('appointmentStatus', '==', 'CONFIRMED')
+      .limit(500)
+      .get();
     const now = Date.now();
+
     for (const ticket of snapshot.docs) {
       const data = ticket.data();
       if (data.requestType !== 'SCHEDULED_SERVICE') continue;
       const start = timestampFrom(data.appointmentStart);
       if (!start) continue;
       const hours = (start.toMillis() - now) / 3_600_000;
-      const updates: Record<string, unknown> = {};
+      const updates: FirebaseFirestore.DocumentData = {};
       const serviceLabel = clean(data.serviceLabel || data.category || 'Scheduled service');
       const timeWindow = clean(data.confirmedTimeWindow || data.preferredTimeWindow);
       const vendor = clean(data.vendorName || data.confirmedVendorName || 'BIN GROUP service team');
 
       if (hours > 23 && hours <= 25 && !data.reminder24hSentAt) {
-        await writeTenantNotification(ticket.id, data, 'appointment_24h', `${serviceLabel} tomorrow`, `${vendor} is scheduled for ${timeWindow || start.toDate().toLocaleTimeString('en-AE')}. Review access and appointment details.`);
+        await writeTenantNotification(
+          ticket.id,
+          data,
+          'appointment_24h',
+          `${serviceLabel} tomorrow`,
+          `${vendor} is scheduled for ${timeWindow || start.toDate().toLocaleTimeString('en-AE')}. Review access and appointment details.`,
+        );
         updates.reminder24hSentAt = FieldValue.serverTimestamp();
       }
       if (hours > 1 && hours <= 3 && !data.reminder2hSentAt) {
-        await writeTenantNotification(ticket.id, data, 'appointment_2h', `${serviceLabel} starts soon`, `${vendor} is expected within ${timeWindow || 'the confirmed appointment window'}. Make sure access is ready.`);
+        await writeTenantNotification(
+          ticket.id,
+          data,
+          'appointment_2h',
+          `${serviceLabel} starts soon`,
+          `${vendor} is expected within ${timeWindow || 'the confirmed appointment window'}. Make sure access is ready.`,
+        );
         updates.reminder2hSentAt = FieldValue.serverTimestamp();
       }
       const accessExpiry = timestampFrom(data.accessCodeExpiresAt);
       if (accessExpiry && accessExpiry.toMillis() <= now && data.accessCodeStatus !== 'EXPIRED') {
         updates.accessCodeStatus = 'EXPIRED';
-        updates.securityAccessStatus = data.securityAccessStatus === 'CONFIRMED' ? 'EXPIRED_AFTER_CONFIRMATION' : 'EXPIRED';
+        updates.securityAccessStatus = data.securityAccessStatus === 'CONFIRMED'
+          ? 'EXPIRED_AFTER_CONFIRMATION'
+          : 'EXPIRED';
       }
-      if (Object.keys(updates).length) {
+      if (Object.keys(updates).length > 0) {
         updates.updatedAt = FieldValue.serverTimestamp();
         await ticket.ref.update(updates);
       }
@@ -376,19 +457,46 @@ export const onScheduledServiceUpdated = onDocumentUpdated(
     if (after.requestType !== 'SCHEDULED_SERVICE') return;
 
     if (before.quoteStatus !== after.quoteStatus && after.quoteStatus === 'PENDING_TENANT_APPROVAL') {
-      await writeTenantNotification(ticketId, after, `quote_${clean(after.quoteVersion || after.updatedAt?.seconds || Date.now())}`, 'Service quote ready', `${clean(after.serviceLabel || 'Scheduled service')} quote: AED ${Number(after.quotedPrice || 0).toFixed(2)}. Approve or reject it in the Tenant Portal.`);
+      await writeTenantNotification(
+        ticketId,
+        after,
+        `quote_${clean(after.quoteVersion || Date.now())}`,
+        'Service quote ready',
+        `${clean(after.serviceLabel || 'Scheduled service')} quote: AED ${Number(after.quotedPrice || 0).toFixed(2)}. Approve or reject it in the Tenant Portal.`,
+      );
     }
     if (before.appointmentStatus !== after.appointmentStatus && after.appointmentStatus === 'CONFIRMED') {
       const start = timestampFrom(after.appointmentStart);
-      await writeTenantNotification(ticketId, after, `appointment_confirmed_${start?.seconds || Date.now()}`, 'Appointment confirmed', `${clean(after.serviceLabel || 'Scheduled service')} is confirmed for ${start ? start.toDate().toLocaleString('en-AE', { timeZone: 'Asia/Dubai' }) : clean(after.confirmedTimeWindow)}.`);
+      await writeTenantNotification(
+        ticketId,
+        after,
+        `appointment_confirmed_${start?.seconds || Date.now()}`,
+        'Appointment confirmed',
+        `${clean(after.serviceLabel || 'Scheduled service')} is confirmed for ${start
+          ? start.toDate().toLocaleString('en-AE', { timeZone: 'Asia/Dubai' })
+          : clean(after.confirmedTimeWindow)}.`,
+      );
     }
-    if (before.cancellationStatus !== after.cancellationStatus && ['APPROVED', 'REJECTED', 'CONFIRMED'].includes(clean(after.cancellationStatus).toUpperCase())) {
-      await writeTenantNotification(ticketId, after, `cancellation_${clean(after.cancellationStatus)}_${Date.now()}`, 'Cancellation update', `Your ${clean(after.serviceLabel || 'scheduled service')} cancellation is ${clean(after.cancellationStatus).replaceAll('_', ' ').toLowerCase()}. Refund status: ${clean(after.refundStatus || 'not applicable').replaceAll('_', ' ').toLowerCase()}.`);
+    if (
+      before.cancellationStatus !== after.cancellationStatus &&
+      ['APPROVED', 'REJECTED', 'CONFIRMED'].includes(clean(after.cancellationStatus).toUpperCase())
+    ) {
+      await writeTenantNotification(
+        ticketId,
+        after,
+        `cancellation_${clean(after.cancellationStatus)}_${Date.now()}`,
+        'Cancellation update',
+        `Your ${clean(after.serviceLabel || 'scheduled service')} cancellation is ${clean(after.cancellationStatus)
+          .replaceAll('_', ' ')
+          .toLowerCase()}. Refund status: ${clean(after.refundStatus || 'not applicable')
+          .replaceAll('_', ' ')
+          .toLowerCase()}.`,
+      );
     }
   },
 );
 
-function addRecurrence(date: Date, frequency: string) {
+function addRecurrence(date: Date, frequency: string): Date {
   const next = new Date(date.getTime());
   if (frequency === 'weekly') next.setUTCDate(next.getUTCDate() + 7);
   else if (frequency === 'biweekly') next.setUTCDate(next.getUTCDate() + 14);
@@ -404,6 +512,7 @@ export const createNextRecurringScheduledService = onDocumentUpdated(
     const completedBefore = ['COMPLETED', 'CLOSED'].includes(clean(before.status).toUpperCase());
     const completedAfter = ['COMPLETED', 'CLOSED'].includes(clean(after.status).toUpperCase());
     if (completedBefore || !completedAfter || after.requestType !== 'SCHEDULED_SERVICE') return;
+
     const frequency = normalized(after.recurrenceFrequency || 'one-time');
     if (!['weekly', 'biweekly', 'monthly'].includes(frequency)) return;
     if (after.recurringPlanApproved !== true) return;
@@ -427,8 +536,10 @@ export const createNextRecurringScheduledService = onDocumentUpdated(
       'source', 'currency', 'quotedPrice', 'recurrenceFrequency', 'recurrenceOccurrences',
       'cancellationPolicyVersion', 'cancellationPolicyAccepted', 'policyAcknowledgement',
     ];
-    const payload: Record<string, unknown> = {};
-    for (const field of copyFields) if (after[field] !== undefined) payload[field] = after[field];
+    const payload: FirebaseFirestore.DocumentData = {};
+    for (const field of copyFields) {
+      if (after[field] !== undefined) payload[field] = after[field];
+    }
     Object.assign(payload, {
       description: `${clean(after.serviceLabel || after.category)} recurring visit ${sequence + 1} of ${total}`,
       operationsSummary: `${clean(after.operationsSummary)} | Recurring visit ${sequence + 1} of ${total}`,
@@ -452,6 +563,7 @@ export const createNextRecurringScheduledService = onDocumentUpdated(
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+
     await nextRef.set(payload);
     await event.data!.after.ref.update({
       nextRecurringTicketId: nextRef.id,
