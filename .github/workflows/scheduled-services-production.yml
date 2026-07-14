@@ -7,6 +7,9 @@ on:
     paths:
       - '.github/workflows/scheduled-services-production.yml'
       - 'scripts/verify-scheduled-services-completeness.mjs'
+      - 'scripts/harden-system-secrets-rules.mjs'
+      - 'package.json'
+      - 'firestore.rules'
       - 'src/components/AuthenticatedShell.tsx'
       - 'src/tenant/pages/TenantScheduledServicePage.tsx'
       - 'src/tenant/pages/TenantTicketDetailPage.tsx'
@@ -65,6 +68,12 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Use Java 21 for Firestore rules tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -86,6 +95,9 @@ jobs:
 
       - name: Verify scheduled-services completeness
         run: node scripts/verify-scheduled-services-completeness.mjs
+
+      - name: Harden and test Firestore rules
+        run: npm run test:rules
 
       - name: Create production environment files
         run: node scripts/write-production-env.mjs
@@ -118,7 +130,7 @@ jobs:
       - name: Deploy scheduled-services stack
         run: |
           set -euo pipefail
-          TARGETS="hosting:app,hosting:admin,functions:tenantManageScheduledService,functions:saveScheduledServiceAccessCode,functions:adminRevealScheduledServiceAccessCode,functions:scheduledServiceReminderCron,functions:onScheduledServiceUpdated,functions:createNextRecurringScheduledService,functions:getScheduledServiceAvailability,functions:adminManageScheduledServiceAvailability,functions:adminUpdateScheduledService"
+          TARGETS="firestore:rules,hosting:app,hosting:admin,functions:tenantManageScheduledService,functions:saveScheduledServiceAccessCode,functions:adminRevealScheduledServiceAccessCode,functions:scheduledServiceReminderCron,functions:onScheduledServiceUpdated,functions:createNextRecurringScheduledService,functions:getScheduledServiceAvailability,functions:adminManageScheduledServiceAvailability,functions:adminUpdateScheduledService"
           npx firebase deploy --project "$GCP_PROJECT_ID" --non-interactive --force --only "$TARGETS"
 
       - name: Verify public and admin commit markers
