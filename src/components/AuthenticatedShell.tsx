@@ -97,10 +97,11 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const navigate = useNavigate();
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const isTenantRoute = location.pathname === '/tenant' || location.pathname.startsWith('/tenant/');
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   const normalizedRole = (role || '').toLowerCase();
   const shouldRenderGlobalHeader = showChrome;
-  const shouldRenderFloatingNavigation = showChrome && !isAdminRoute;
+  const shouldRenderFloatingNavigation = showChrome && !isAdminRoute && !isTenantRoute;
   const shouldRenderSovereignAI = showChrome && isRolePortalRoute && AI_ENABLED_ROLES.includes(normalizedRole);
 
   if (roleLoading && !publicAuth) {
