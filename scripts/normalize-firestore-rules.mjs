@@ -16,7 +16,6 @@ const CONFLICT_END = `${'>'.repeat(7)} Stashed changes`;
 function resolveKnownConflictMarkers(input) {
   return input
     .replace(
- cursor/launch-readiness-audit-a1f7
       [
         CONFLICT_START,
         "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
@@ -28,7 +27,7 @@ function resolveKnownConflictMarkers(input) {
       [
         "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
         '    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
-      ].join('\n')
+      ].join('\n'),
     )
     .replace(
       [
@@ -42,27 +41,7 @@ function resolveKnownConflictMarkers(input) {
       [
         '    function safeOpenMissionClaim() {',
         '      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&',
-      ].join('\n')
-
-      `${conflictStart} Updated upstream
-    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
-    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }
-${conflictMiddle}
-    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
-${conflictEnd} Stashed changes`,
-      `    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
-    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`
-    )
-    .replace(
-      `    function safeOpenMissionClaim() {
-${conflictStart} Updated upstream
-      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&
-${conflictMiddle}
-      return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&
-${conflictEnd} Stashed changes`,
-      `    function safeOpenMissionClaim() {
-      return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&`
- main
+      ].join('\n'),
     );
 }
 
@@ -230,8 +209,8 @@ function normalizePropertiesReadRule(input) {
   const hardenedRule = "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));";
   const canManageRule = "      allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));";
 
-  if (input.includes(canManageRule)) {
-    console.log('Already normalized/hardened: properties read rule uses canManageProperties() helper');
+  if (input.includes(canManageRule) || input.includes(hardenedRule)) {
+    console.log('Already normalized/hardened: properties read rule');
     return input;
   }
 
