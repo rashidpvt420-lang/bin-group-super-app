@@ -177,7 +177,7 @@ jobs:
         run: npm run verify:admin-firebase -- --build apps/admin-panel/build
 
       - name: Build Firebase Functions
-        run: npm run build --workspace=functions
+        run: npm run build:functions
 
       - name: Measure Functions discovery load
         run: npm run measure:functions-load
@@ -361,7 +361,7 @@ jobs:
         id: build_functions
         run: |
           set -euo pipefail
-          npm run build --workspace=functions
+          npm run build:functions
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Measure Functions discovery load
