@@ -46,6 +46,9 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Verify scheduled-services completeness
+        run: node scripts/verify-scheduled-services-completeness.mjs
+
       - name: Production stability guard
         run: npm run test:stability
 
