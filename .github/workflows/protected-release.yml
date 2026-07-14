@@ -1,0 +1,78 @@
+name: BIN GROUP Protected Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_request_json:
+        description: 'Validated bank-pilot or public-release request JSON'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: bin-group-protected-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate, deploy, and clear
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      PROTECTED_RELEASE_SECRET_NAME: bin-group-production-release-env
+      PROTECTED_RELEASE_REQUEST_JSON: ${{ inputs.release_request_json }}
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Use Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Prepare protected release context
+        run: |
+          set -euo pipefail
+          bash scripts/npm-install-retry.sh
+          node scripts/load-protected-release-env.mjs
+          node scripts/apply-protected-release-request.mjs
+
+      - name: Execute protected release lifecycle
+        run: node scripts/run-protected-release-entry.mjs
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: protected-release-${{ github.sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/production-deployment-verify.log
+            launch_package/predeploy-approval.json
+            launch_package/production-incidents.json
+            launch_package/hard-launch-authorization.json
+            launch_package/launch-evidence-batch.json
+            launch_package/launch-status.json
+            launch_package/pilot-incident-report.json
+            launch_package/public-release-status.json
+            launch_package/hard-launch-decision.json
+          if-no-files-found: warn
+          retention-days: 90
