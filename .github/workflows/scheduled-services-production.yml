@@ -1,0 +1,148 @@
+name: Scheduled Services Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/scheduled-services-production.yml'
+      - 'src/tenant/pages/TenantScheduledServicePage.tsx'
+      - 'src/tenant/pages/TenantTicketDetailPage.tsx'
+      - 'src/tenant/pages/TenantTicketsPage.tsx'
+      - 'src/tenant/pages/TenantSimpleDashboardPage.tsx'
+      - 'src/tenant/pages/TenantDashboardLightPage.tsx'
+      - 'src/tenant/TenantApp.tsx'
+      - 'apps/admin-panel/src/pages/ops/ScheduledServicesOperationsPage.tsx'
+      - 'apps/admin-panel/src/App.tsx'
+      - 'apps/admin-panel/src/components/Navigation.tsx'
+      - 'functions/scheduledServices.ts'
+      - 'functions/scheduledServiceAvailability.ts'
+      - 'functions/runtime.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: scheduled-services-production
+  cancel-in-progress: true
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+  REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+  REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+  CI: true
+
+jobs:
+  validate-and-deploy:
+    name: Validate and deploy scheduled services
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Deployment secrets preflight
+        env:
+          ACCESS_KEY: ${{ secrets.SCHEDULED_SERVICE_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${ACCESS_KEY}"
+          test "${#ACCESS_KEY}" -ge 32
+          test -n "${VITE_FIREBASE_API_KEY}"
+          test -n "${VITE_FIREBASE_APP_ID}"
+          test -n "${VITE_FIREBASE_MESSAGING_SENDER_ID}"
+          test -n "${VITE_APP_CHECK_SITE_KEY}"
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Create production environment files
+        run: node scripts/write-production-env.mjs
+
+      - name: Create Functions runtime environment
+        env:
+          ACCESS_KEY: ${{ secrets.SCHEDULED_SERVICE_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          printf 'SCHEDULED_SERVICE_ACCESS_KEY=%s\n' "$ACCESS_KEY" > "functions/.env.${GCP_PROJECT_ID}"
+          chmod 600 "functions/.env.${GCP_PROJECT_ID}"
+
+      - name: TypeScript check public app
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
+      - name: Build public app
+        run: npm run build
+
+      - name: Build admin panel
+        run: npm run build:admin
+        env:
+          CI: false
+
+      - name: Verify admin Firebase embedding
+        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
+
+      - name: Build scheduled-service functions
+        run: npm run build --workspace=functions
+
+      - name: Stamp deployment commit
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > dist/deployment-sha.txt
+          printf '%s\n' "$GITHUB_SHA" > apps/admin-panel/build/deployment-sha.txt
+
+      - name: Deploy scheduled-services stack
+        run: >-
+          npx firebase deploy
+          --project "$GCP_PROJECT_ID"
+          --non-interactive
+          --force
+          --only
+          "hosting:app,hosting:admin,
+          functions:tenantManageScheduledService,
+          functions:saveScheduledServiceAccessCode,
+          functions:adminRevealScheduledServiceAccessCode,
+          functions:scheduledServiceReminderCron,
+          functions:onScheduledServiceUpdated,
+          functions:createNextRecurringScheduledService,
+          functions:getScheduledServiceAvailability,
+          functions:adminManageScheduledServiceAvailability,
+          functions:adminUpdateScheduledService"
+
+      - name: Verify public and admin commit markers
+        run: |
+          set -euo pipefail
+          PUBLIC_SHA="$(curl -fsSL --retry 8 --retry-delay 5 "https://bin-group-57c60.web.app/deployment-sha.txt?run=${GITHUB_RUN_ID}")"
+          ADMIN_SHA="$(curl -fsSL --retry 8 --retry-delay 5 "https://bin-group-admin-panel.web.app/deployment-sha.txt?run=${GITHUB_RUN_ID}")"
+          test "$PUBLIC_SHA" = "$GITHUB_SHA"
+          test "$ADMIN_SHA" = "$GITHUB_SHA"
+          echo "Verified public and admin deployment commit: $GITHUB_SHA"
