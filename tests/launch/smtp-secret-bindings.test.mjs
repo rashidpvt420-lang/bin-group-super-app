@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const mailDelivery = readFileSync('functions/mailDelivery.ts', 'utf8');
 const contractOtp = readFileSync('functions/contractSignatureOtp.ts', 'utf8');
+const runtime = readFileSync('functions/runtime.ts', 'utf8');
 
 for (const [label, source] of [
   ['mailDelivery', mailDelivery],
@@ -36,4 +37,9 @@ test('contract signature OTP request binds both SMTP secrets at deployment', () 
     contractOtp.indexOf('export const verifyContractSignatureOtp'),
   );
   assert.match(requestBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*\]/);
+});
+
+test('corrected mail and OTP functions are exported by the deployed runtime', () => {
+  assert.match(runtime, /export\s+\*\s+from\s+["']\.\/mailDelivery["']/);
+  assert.match(runtime, /export\s+\*\s+from\s+["']\.\/contractSignatureOtp["']/);
 });
