@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
+      - name: Verify Functions compiler configuration
+        run: node --test test/functions-tsconfig.test.mjs
+
       - name: Production stability guard
         id: stability
         shell: bash
@@ -106,7 +109,23 @@ jobs:
           CI: false
 
       - name: Build functions
-        run: npm run build --workspace=functions
+        id: build_functions
+        shell: bash
+        run: |
+          set +e
+          npm run build --workspace=functions > functions-build-output.txt 2>&1
+          status=$?
+          cat functions-build-output.txt
+          exit $status
+
+      - name: Upload Functions build diagnostics
+        if: failure() && steps.build_functions.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-build-diagnostics-${{ github.sha }}
+          path: functions-build-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Verify mobile store source readiness
         run: npm run test:mobile-store-readiness
