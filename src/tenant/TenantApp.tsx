@@ -11,6 +11,7 @@ import SafeIcon from '../components/SafeIcon';
 
 import TenantSimpleDashboardPage from './pages/TenantSimpleDashboardPage';
 import TenantDashboardPage from './pages/TenantDashboardLightPage';
+import TenantScheduledServicePage from './pages/TenantScheduledServicePage';
 import TenantAIConciergePage from './pages/TenantAIConciergePage';
 import TenantRequestPage from './pages/TenantRequestPage';
 import TenantTicketsPage from './pages/TenantTicketsPage';
@@ -41,7 +42,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
     const { isRTL, tx } = useLanguage();
     const isSimpleHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
-    const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full';
+    const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full' || location.pathname === '/tenant/scheduled-service';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
         color: binThemeTokens.textPrimary,
@@ -87,6 +88,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
                         {!isSimpleHome && (
                             <IconButton
+                                aria-label={tx('nav.back', 'Back')}
                                 onClick={() => navigate(-1)}
                                 sx={{ color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, bgcolor: binThemeTokens.card }}
                             >
@@ -94,6 +96,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                             </IconButton>
                         )}
                         <IconButton
+                            aria-label={tx('nav.home', 'Tenant dashboard')}
                             onClick={() => navigate('/tenant/dashboard')}
                             sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}` }}
                         >
@@ -144,8 +147,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     </Stack>
                 </Toolbar>
             </AppBar>
-            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
-                <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
+            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1, overflowX: 'hidden' }}>
+                <Box sx={{ animation: 'fadeIn 0.5s ease-out', minWidth: 0 }}>{children}</Box>
             </Container>
             <Box
                 sx={{
@@ -176,6 +179,7 @@ export default function TenantApp() {
                 <Route path="/" element={<TenantSimpleDashboardPage />} />
                 <Route path="/dashboard" element={<TenantSimpleDashboardPage />} />
                 <Route path="/dashboard/full" element={<TenantDashboardPage />} />
+                <Route path="/scheduled-service" element={<TenantScheduledServicePage />} />
                 <Route path="/unit" element={<TenantUnitPage />} />
                 <Route path="/ai-concierge" element={<TenantAIConciergePage />} />
                 <Route path="/request" element={<TenantRequestPage />} />
