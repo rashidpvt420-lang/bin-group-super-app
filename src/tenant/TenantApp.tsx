@@ -60,8 +60,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
         <Box
             sx={{
                 minHeight: '100vh',
-                bgcolor: binThemeTokens.softCanvas,
-                color: binThemeTokens.textPrimary,
+                bgcolor: isHome ? binThemeTokens.softCanvas : binThemeTokens.black,
+                color: isHome ? binThemeTokens.textPrimary : '#FFFFFF',
                 direction: isRTL ? 'rtl' : 'ltr',
                 display: 'flex',
                 flexDirection: 'column',
@@ -69,7 +69,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 isolation: 'isolate',
             }}
         >
-            <BrandWatermark opacity={0.025} />
+            <BrandWatermark opacity={isHome ? 0.025 : 0.038} />
             <AppBar
                 position="sticky"
                 elevation={0}
@@ -150,13 +150,16 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 sx={{
                     py: 3,
                     textAlign: 'center',
-                    borderTop: `1px solid ${binThemeTokens.border}`,
-                    bgcolor: binThemeTokens.card,
+                    borderTop: `1px solid ${isHome ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`,
+                    bgcolor: isHome ? binThemeTokens.card : 'rgba(11,11,12,0.5)',
                     position: 'relative',
                     zIndex: 1,
                 }}
             >
-                <Typography variant="caption" sx={{ color: binThemeTokens.textTertiary, fontWeight: 800, letterSpacing: 2 }}>
+                <Typography
+                    variant="caption"
+                    sx={{ color: isHome ? binThemeTokens.textTertiary : 'rgba(255,255,255,0.3)', fontWeight: 800, letterSpacing: 2 }}
+                >
                     2026 BIN GROUP PROPERTY OPERATIONS OS
                 </Typography>
             </Box>
