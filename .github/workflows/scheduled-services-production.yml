@@ -121,22 +121,10 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > apps/admin-panel/build/deployment-sha.txt
 
       - name: Deploy scheduled-services stack
-        run: >-
-          npx firebase deploy
-          --project "$GCP_PROJECT_ID"
-          --non-interactive
-          --force
-          --only
-          "hosting:app,hosting:admin,
-          functions:tenantManageScheduledService,
-          functions:saveScheduledServiceAccessCode,
-          functions:adminRevealScheduledServiceAccessCode,
-          functions:scheduledServiceReminderCron,
-          functions:onScheduledServiceUpdated,
-          functions:createNextRecurringScheduledService,
-          functions:getScheduledServiceAvailability,
-          functions:adminManageScheduledServiceAvailability,
-          functions:adminUpdateScheduledService"
+        run: |
+          set -euo pipefail
+          TARGETS="hosting:app,hosting:admin,functions:tenantManageScheduledService,functions:saveScheduledServiceAccessCode,functions:adminRevealScheduledServiceAccessCode,functions:scheduledServiceReminderCron,functions:onScheduledServiceUpdated,functions:createNextRecurringScheduledService,functions:getScheduledServiceAvailability,functions:adminManageScheduledServiceAvailability,functions:adminUpdateScheduledService"
+          npx firebase deploy --project "$GCP_PROJECT_ID" --non-interactive --force --only "$TARGETS"
 
       - name: Verify public and admin commit markers
         run: |
