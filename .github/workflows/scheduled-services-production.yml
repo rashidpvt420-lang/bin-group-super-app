@@ -132,10 +132,24 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > apps/admin-panel/build/deployment-sha.txt
 
       - name: Deploy scheduled-services stack
+        id: deploy_stack
+        shell: bash
         run: |
-          set -euo pipefail
+          set +e
           TARGETS="firestore:rules,hosting:app,hosting:admin,functions:tenantManageScheduledService,functions:saveScheduledServiceAccessCode,functions:adminRevealScheduledServiceAccessCode,functions:scheduledServiceReminderCron,functions:onScheduledServiceUpdated,functions:createNextRecurringScheduledService,functions:getScheduledServiceAvailability,functions:adminManageScheduledServiceAvailability,functions:adminUpdateScheduledService"
-          npx firebase deploy --project "$GCP_PROJECT_ID" --non-interactive --force --only "$TARGETS"
+          npx firebase deploy --project "$GCP_PROJECT_ID" --non-interactive --force --only "$TARGETS" > scheduled-services-deploy-output.txt 2>&1
+          status=$?
+          cat scheduled-services-deploy-output.txt
+          exit $status
+
+      - name: Upload scheduled-services deploy diagnostics
+        if: failure() && steps.deploy_stack.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-services-deploy-diagnostics-${{ github.sha }}
+          path: scheduled-services-deploy-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Verify public and admin commit markers
         run: |
