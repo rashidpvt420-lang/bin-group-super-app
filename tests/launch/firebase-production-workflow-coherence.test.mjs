@@ -22,6 +22,8 @@ const root = process.cwd();
 const workflowPath = path.join(root, '.github/workflows/firebase-production-deploy.yml');
 const workflow = readFileSync(workflowPath, 'utf8');
 const producerScript = path.join(root, 'scripts/create-production-incidents-attestation.mjs');
+const verifierScript = path.join(root, 'scripts/verify-same-run-deployment-artifact.mjs');
+const gitignore = readFileSync(path.join(root, '.gitignore'), 'utf8');
 
 function lineOf(snippet) {
   const idx = workflow.indexOf(snippet);
@@ -43,6 +45,7 @@ function runIncidentsProducer(env) {
 }
 
 const baseProducerEnv = {
+  GITHUB_ACTIONS: 'true',
   GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
   GITHUB_SHA: 'a'.repeat(40),
   GITHUB_REF: 'refs/heads/main',
@@ -50,6 +53,7 @@ const baseProducerEnv = {
   GITHUB_RUN_ATTEMPT: '1',
   GITHUB_ACTOR: 'founder-actor',
   GITHUB_WORKFLOW: 'Firebase Production Deploy',
+  AUTHORIZED_FOUNDER_ACTORS: 'founder-actor,backup-founder',
   INCIDENT_ATTESTATION: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR',
   INCIDENT_ACTIVE_JSON: '[]',
   INCIDENT_REQUIRES_ROLLBACK: 'false',
@@ -68,6 +72,16 @@ test('incident artifact producer precedes every consumer in the workflow', () =>
   assert.ok(producer < splitPredeploy, 'incidents must be produced before split predeploy gate');
   assert.ok(producer < postdeploy, 'incidents must be produced before postdeploy (same workflow)');
   assert.match(workflow, /create-production-incidents-attestation\.mjs/);
+  const producerBlock = workflow.slice(
+    workflow.indexOf(
+      '      - name: Create production incidents artifact from protected workflow attestation',
+    ),
+    workflow.indexOf('      - name: Create signed founder authorization'),
+  );
+  assert.match(
+    producerBlock,
+    /AUTHORIZED_FOUNDER_ACTORS:\s*\$\{\{\s*secrets\.AUTHORIZED_FOUNDER_ACTORS\s*\}\}/,
+  );
 });
 
 test('missing incident source fails closed', () => {
@@ -86,6 +100,22 @@ test('missing incident source fails closed', () => {
 
 test('malformed and incomplete incident attestations fail closed', () => {
   const cases = [
+    {
+      override: { GITHUB_ACTIONS: 'false' },
+      match: /GITHUB_ACTIONS must equal true/i,
+    },
+    {
+      override: { GITHUB_REPOSITORY: 'other/repository' },
+      match: /GITHUB_REPOSITORY must equal/i,
+    },
+    {
+      override: { GITHUB_RUN_ATTEMPT: '' },
+      match: /GITHUB_RUN_ATTEMPT is required/i,
+    },
+    {
+      override: { GITHUB_ACTOR: 'unauthorized-actor' },
+      match: /not authorized/i,
+    },
     {
       override: { INCIDENT_ACTIVE_JSON: '{' },
       match: /not valid JSON/i,
@@ -109,6 +139,24 @@ test('malformed and incomplete incident attestations fail closed', () => {
         INCIDENT_LAST_DEPLOYMENT_FAILED: 'false',
       },
       match: /WITH_HOLDS attestation requires/i,
+    },
+    {
+      override: {
+        INCIDENT_ATTESTATION: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR',
+        INCIDENT_LAST_DEPLOYMENT_FAILED: 'true',
+        INCIDENT_LAST_DEPLOYMENT_FAILED_AT: '2020-01-01T00:00:00.000Z',
+      },
+      match: /CLEAR attestation forbids/i,
+    },
+    {
+      override: {
+        INCIDENT_ATTESTATION: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
+        INCIDENT_LAST_DEPLOYMENT_FAILED: 'true',
+        INCIDENT_LAST_DEPLOYMENT_FAILED_AT: new Date(
+          Date.now() - 5 * 60 * 1000,
+        ).toISOString(),
+      },
+      match: /30-minute retry cooling period/i,
     },
     {
       override: {
@@ -234,6 +282,17 @@ test('committed static green incidents without attestation source are rejected i
   }
 });
 
+test('static production incident fixture is deleted and runtime path is ignored', () => {
+  assert.equal(
+    existsSync(path.join(root, 'launch_package/production-incidents.json')),
+    false,
+  );
+  assert.match(
+    gitignore,
+    /^launch_package\/production-incidents\.json$/m,
+  );
+});
+
 test('clear incident attestation produces a bound runtime artifact', () => {
   const { directory, result } = runIncidentsProducer(baseProducerEnv);
   try {
@@ -245,6 +304,7 @@ test('clear incident attestation produces a bound runtime artifact', () => {
     assert.equal(doc.source, 'protected-workflow-dispatch-attestation');
     assert.equal(doc.commitSha, baseProducerEnv.GITHUB_SHA);
     assert.equal(doc.workflowRunId, baseProducerEnv.GITHUB_RUN_ID);
+    assert.equal(doc.workflowRunAttempt, 1);
     assert.equal(doc.repository, baseProducerEnv.GITHUB_REPOSITORY);
     assert.equal(doc.hardLaunchClaim, false);
     assert.deepEqual(doc.activeIncidents, []);
@@ -282,7 +342,9 @@ test('no deployment artifact is downloaded before it is produced in the deploy j
 
 test('deployment metadata is uploaded only after deploy verification', () => {
   const deploy = lineOf('Deploy and verify Firebase production stack');
-  const verify = lineOf('Verify production deployment metadata exists after deploy');
+  const verify = lineOf(
+    'Verify production deployment metadata and same-run bindings after deploy',
+  );
   const upload = lineOf('Upload production deployment metadata after verification');
   assert.ok(deploy < verify);
   assert.ok(verify < upload);
@@ -290,9 +352,92 @@ test('deployment metadata is uploaded only after deploy verification', () => {
 
 test('postdeploy download is bound to current workflow run and SHA', () => {
   assert.match(workflow, /Verify downloaded deployment artifact is bound to this run and SHA/);
-  assert.match(workflow, /deployment workflowRunId mismatch/);
-  assert.match(workflow, /incidents workflowRunId mismatch/);
+  assert.match(workflow, /node scripts\/verify-same-run-deployment-artifact\.mjs/);
+  assert.match(
+    workflow,
+    /VALIDATED_ARTIFACT_DIGEST:\s*\$\{\{\s*needs\.deploy-firebase-production-stack\.outputs\.validated_artifact_digest\s*\}\}/,
+  );
+  assert.match(workflow, /RELEASE_ID:\s*\$\{\{\s*github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt\s*\}\}/);
+  assert.ok(existsSync(verifierScript));
   assert.match(workflow, /needs:\s*deploy-firebase-production-stack/);
+});
+
+test('protected lifecycle preserves provisional and final decision ordering', () => {
+  const producer = lineOf(
+    'Create production incidents artifact from protected workflow attestation',
+  );
+  const authorization = lineOf('Create signed founder authorization');
+  const hmacPredeploy = lineOf('Enforce signed predeploy authorization');
+  const digest = lineOf('Compute validated artifact digest');
+  const approval = lineOf('Predeploy approval gate');
+  const deploy = lineOf('Deploy and verify Firebase production stack');
+  const deploymentVerification = lineOf(
+    'Verify production deployment metadata and same-run bindings after deploy',
+  );
+  const liveEvidence = lineOf('Run current-commit five-role business evidence');
+  const provisionalDecision = lineOf('Create signed hard-launch decision');
+  const upload = lineOf('Upload production deployment metadata after verification');
+  const publicRelease = lineOf('public-release-clearance:');
+  const downloadedVerifier = lineOf(
+    'Verify downloaded deployment artifact is bound to this run and SHA',
+  );
+  const postdeployGate = lineOf('Postdeploy release gate');
+  const finalDecision = lineOf(
+    'Create signed hard-launch decision after postdeploy clearance',
+  );
+
+  assert.ok(producer < authorization);
+  assert.ok(authorization < hmacPredeploy);
+  assert.ok(hmacPredeploy < digest);
+  assert.ok(digest < approval);
+  assert.ok(approval < deploy);
+  assert.ok(deploy < deploymentVerification);
+  assert.ok(deploymentVerification < liveEvidence);
+  assert.ok(liveEvidence < provisionalDecision);
+  assert.ok(provisionalDecision < upload);
+  assert.ok(upload < publicRelease);
+  assert.ok(publicRelease < downloadedVerifier);
+  assert.ok(downloadedVerifier < postdeployGate);
+  assert.ok(postdeployGate < finalDecision);
+
+  const provisionalBlock = workflow.slice(
+    workflow.indexOf('      - name: Create signed hard-launch decision\n'),
+    workflow.indexOf('      - name: Upload production deployment metadata after verification'),
+  );
+  assert.match(provisionalBlock, /POSTDEPLOY_RELEASE_CLEARED:\s*'false'/);
+
+  const finalBlock = workflow.slice(
+    workflow.indexOf(
+      '      - name: Create signed hard-launch decision after postdeploy clearance',
+    ),
+    workflow.indexOf('      - name: Upload public release clearance artifact'),
+  );
+  assert.match(
+    finalBlock,
+    /POSTDEPLOY_RELEASE_CLEARED:\s*\$\{\{\s*steps\.postdeploy_gate\.outputs\.cleared\s*\}\}/,
+  );
+});
+
+test('same-run verifier uses required bindings without fail-open field checks', () => {
+  const verifier = readFileSync(verifierScript, 'utf8');
+  for (const binding of [
+    'deployment repository',
+    'deployment workflowRef',
+    'deployment workflowRunId',
+    'deployment workflowRunAttempt',
+    'deployment artifactDigest',
+    'deployment status',
+  ]) {
+    assert.match(verifier, new RegExp(binding));
+  }
+  assert.doesNotMatch(
+    workflow,
+    /if\s*\(\s*doc\.repository\s*&&\s*String\(doc\.repository\)/,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /validatedArtifactDigest\|\|''/,
+  );
 });
 
 test('deployment failure prevents evidence and release jobs by job dependency and step order', () => {
@@ -308,6 +453,10 @@ test('bank-pilot does not claim public launch; public mode requires Stripe live 
   assert.match(decision, /POSTDEPLOY_STRIPE_LIVE_OK/);
   assert.match(decision, /public-awaiting-postdeploy-clearance|postdeploy release clearance/);
   assert.match(workflow, /LAUNCH_MODE:\s*\$\{\{\s*inputs\.launch_mode\s*\}\}/);
+  assert.match(
+    decision,
+    /launchMode === 'public' && postdeployCleared && stripeLiveOk/,
+  );
 });
 
 test('no manual or synthetic evidence bypass exists in production workflow', () => {
