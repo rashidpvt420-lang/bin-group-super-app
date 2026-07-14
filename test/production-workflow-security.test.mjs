@@ -75,8 +75,14 @@ test('production deployment remains approval-gated and same-run bound', () => {
 
 test('protected production job receives every five-role credential and App Check UUID', () => {
   for (const role of ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER']) {
-    assert.match(workflow, new RegExp(`E2E_${role}_EMAIL:\\s*\\$\\{\\{\\s*secrets\\.E2E_${role}_EMAIL`));
-    assert.match(workflow, new RegExp(`E2E_${role}_PASSWORD:\\s*\\$\\{\\{\\s*secrets\\.E2E_${role}_PASSWORD`));
+    assert.ok(
+      workflow.includes(`E2E_${role}_EMAIL: \${{ secrets.E2E_${role}_EMAIL }}`),
+      `missing protected ${role} email mapping`,
+    );
+    assert.ok(
+      workflow.includes(`E2E_${role}_PASSWORD: \${{ secrets.E2E_${role}_PASSWORD }}`),
+      `missing protected ${role} password mapping`,
+    );
   }
   assert.match(workflow, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN:\s*\$\{\{\s*secrets\.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
   assert.match(workflow, /E2E_STRICT_ROLES:\s*'true'/);
@@ -84,18 +90,23 @@ test('protected production job receives every five-role credential and App Check
 });
 
 test('five-role and App Check validation precedes seeding and live evidence', () => {
-  const verify = workflow.indexOf('Verify five-role and App Check environment');
-  const seed = workflow.indexOf('Seed role accounts and current-commit fixtures');
-  const evidence = workflow.indexOf('Record deployment and five-role evidence');
-  const status = workflow.indexOf('Evaluate pilot eligibility');
+  const verify = workflow.indexOf('Validate full live E2E secrets and App Check UUID');
+  const seed = workflow.indexOf('Seed or repair E2E role accounts');
+  const evidence = workflow.indexOf('Run current-commit production deployment evidence');
+  const status = workflow.indexOf('Evaluate controlled-pilot eligibility');
   assert.ok(verify >= 0 && seed > verify && evidence > seed && status > evidence);
 });
 
 test('public hard launch requires postdeploy clearance before final decision and status', () => {
-  const gate = workflow.indexOf('Run final public postdeploy gate');
-  const decision = workflow.indexOf('Create final public signed decision');
-  const status = workflow.indexOf('Verify final hard-launch status');
-  assert.ok(gate >= 0 && decision > gate && status > decision);
+  const upload = workflow.indexOf('Upload production deployment metadata after verification');
+  const publicJob = workflow.indexOf('public-release-clearance:');
+  const download = workflow.indexOf('Download production deployment metadata');
+  const gate = workflow.indexOf('Postdeploy release gate');
+  const decision = workflow.indexOf('Create signed hard-launch decision after postdeploy clearance');
+  assert.ok(upload >= 0 && publicJob > upload && download > publicJob);
+  assert.ok(gate > download && decision > gate);
+  assert.match(workflow, /POSTDEPLOY_AUDIT_OK:\s*\$\{\{\s*steps\.postdeploy_audit\.outputs\.ok\s*\}\}/);
+  assert.doesNotMatch(workflow, /POSTDEPLOY_AUDIT_OK:\s*'true'/);
   assert.match(productionPreflight, /public launch mode requires RUN_PUBLIC_RELEASE_GATE=true/);
 });
 
