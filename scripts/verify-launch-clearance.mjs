@@ -16,6 +16,7 @@ import {
   pilotIncidentReportPath,
 } from './lib/hard-launch-gate.mjs';
 
+const root = process.cwd();
 const gatePath = 'launch_package/launch-proof-gates.json';
 const statusPath = 'launch_package/launch-status.json';
 const pilotLockPath = 'launch_package/pilot-start.lock.json';
@@ -31,16 +32,17 @@ function warn(message) {
   warnings.push(message);
 }
 
-const sha = gitSha();
-const evidence = readJsonSafe(evidencePath(), { records: [] });
-const deploymentDoc = readJsonSafe(deploymentEvidencePath(), null);
+const sha = gitSha(root);
+const evidence = readJsonSafe(evidencePath(root), { records: [] });
+const deploymentDoc = readJsonSafe(deploymentEvidencePath(root), null);
 const eligibility = evaluatePilotEligibility({
   evidenceBatch: evidence,
   commitSha: sha,
   deploymentDoc,
+  root,
 });
 const deploymentValid =
-  validateDeploymentDocument(deploymentDoc, sha, { requireWorkflowProvenance: true }).length === 0;
+  validateDeploymentDocument(deploymentDoc, sha, { root, requireWorkflowProvenance: true }).length === 0;
 const currentExecutionComplete = eligibility.pilotEligible === true;
 
 function proofText(gate) {
@@ -66,7 +68,9 @@ function validateGate(groupName, name, gate) {
   const required = gate.required === true;
   const status = String(gate.status || '').toLowerCase();
   const label = `${groupName}.${name}`;
+  const superseded = executionSupersedesLedger(groupName, name);
   const waivedBlocked = assertGateNotWaivedForSecurity(groupName, name, gate);
+
   if (waivedBlocked && !superseded) {
     fail(waivedBlocked);
     return;
@@ -90,20 +94,24 @@ function validateGate(groupName, name, gate) {
     return;
   }
 
-  if (required) fail(`${name} is not launch-clear. Current status: ${gate.status || 'missing'}`);
+  if (required) fail(`${label} is not launch-clear. Current status: ${gate.status || 'missing'}`);
 }
 
 if (!existsSync(gatePath)) {
   fail(`Missing launch proof gates file: ${gatePath}`);
 } else {
-  const gates = JSON.parse(readFileSync(gatePath, 'utf8'));
-  const gateGroups = {
-    deploymentProof: gates.deploymentProof || {},
-    requiredProviderGates: gates.requiredProviderGates || {},
-    requiredDeviceGates: gates.requiredDeviceGates || {},
-  };
-  for (const [groupName, group] of Object.entries(gateGroups)) {
-    for (const [name, gate] of Object.entries(group)) validateGate(groupName, name, gate);
+  try {
+    const gates = JSON.parse(readFileSync(gatePath, 'utf8'));
+    const gateGroups = {
+      deploymentProof: gates.deploymentProof || {},
+      requiredProviderGates: gates.requiredProviderGates || {},
+      requiredDeviceGates: gates.requiredDeviceGates || {},
+    };
+    for (const [groupName, group] of Object.entries(gateGroups)) {
+      for (const [name, gate] of Object.entries(group)) validateGate(groupName, name, gate);
+    }
+  } catch (error) {
+    fail(`${gatePath} is malformed JSON: ${error.message}`);
   }
 }
 
@@ -113,16 +121,13 @@ if (existsSync(statusPath)) {
     if (status.hardLaunchClaim === true && status.hardLaunchEligible !== true) {
       fail('launch-status claims hard launch without hardLaunchEligible=true.');
     }
+    if (status.commitSha && status.commitSha !== sha) {
+      warn('launch-status.json belongs to a different commit and is ignored for current clearance.');
+    }
   } catch {
     warn('launch-status.json exists but could not be parsed.');
   }
 }
-
-const root = process.cwd();
-const sha = gitSha(root);
-const evidence = readJsonSafe(evidencePath(root), { records: [] });
-const deploymentDoc = readJsonSafe(deploymentEvidencePath(root), null);
-const eligibility = evaluatePilotEligibility({ evidenceBatch: evidence, commitSha: sha, deploymentDoc, root });
 
 for (const key of eligibility.missing) {
   fail(`${isPilotMode ? 'Controlled pilot' : 'Public launch'} blocked: missing current-commit evidence for ${key}`);
@@ -131,8 +136,10 @@ for (const item of eligibility.invalid) {
   fail(`${isPilotMode ? 'Controlled pilot' : 'Public launch'} blocked: invalid evidence — ${item}`);
 }
 
-if (eligibility.missing.includes('adminCredentialLogin') === false &&
-    eligibility.missing.length === REQUIRED_PILOT_EVIDENCE.length - 1) {
+if (
+  !eligibility.missing.includes('adminCredentialLogin') &&
+  eligibility.missing.length === REQUIRED_PILOT_EVIDENCE.length - 1
+) {
   fail('Admin credential login alone cannot make pilot or public launch eligible.');
 }
 
@@ -164,21 +171,24 @@ if (!isPilotMode) {
   for (const error of hard.errors) fail(`Hard public launch blocked: ${error}`);
 }
 
-if (failures.length) {
+const uniqueFailures = [...new Set(failures)];
+const uniqueWarnings = [...new Set(warnings)];
+
+if (uniqueFailures.length) {
   console.error(`\n${isPilotMode ? 'PRIVATE PILOT CLEARANCE' : 'PUBLIC LAUNCH CLEARANCE'}: NO-GO\n`);
-  for (const item of [...new Set(failures)]) console.error(`- ${item}`);
-  if (warnings.length) {
+  for (const item of uniqueFailures) console.error(`- ${item}`);
+  if (uniqueWarnings.length) {
     console.error('\nWarnings:');
-    for (const item of [...new Set(warnings)]) console.error(`- ${item}`);
+    for (const item of uniqueWarnings) console.error(`- ${item}`);
   }
   console.error(`\nhardLaunchClaim=${hardLaunchClaim}`);
   console.error('Critical evidence must be generated by the production and live-clearance workflows.');
   process.exit(1);
 }
 
-if (warnings.length) {
+if (uniqueWarnings.length) {
   console.warn(`\n${isPilotMode ? 'PRIVATE PILOT CLEARANCE' : 'PUBLIC LAUNCH CLEARANCE'}: GO WITH WARNINGS\n`);
-  for (const item of [...new Set(warnings)]) console.warn(`- ${item}`);
+  for (const item of uniqueWarnings) console.warn(`- ${item}`);
 } else {
   console.log(`${isPilotMode ? 'PRIVATE PILOT CLEARANCE' : 'PUBLIC LAUNCH CLEARANCE'}: GO`);
 }
