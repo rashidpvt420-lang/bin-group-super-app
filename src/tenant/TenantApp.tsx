@@ -10,7 +10,7 @@ import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon from '../components/SafeIcon';
 
 import TenantSimpleDashboardPage from './pages/TenantSimpleDashboardPage';
-import TenantDashboardPage from './pages/TenantDashboardPage';
+import TenantDashboardPage from './pages/TenantDashboardLightPage';
 import TenantAIConciergePage from './pages/TenantAIConciergePage';
 import TenantRequestPage from './pages/TenantRequestPage';
 import TenantTicketsPage from './pages/TenantTicketsPage';
@@ -40,7 +40,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isRTL, tx } = useLanguage();
-    const isHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
+    const isSimpleHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
+    const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
         color: binThemeTokens.textPrimary,
@@ -60,8 +61,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
         <Box
             sx={{
                 minHeight: '100vh',
-                bgcolor: isHome ? binThemeTokens.softCanvas : binThemeTokens.black,
-                color: isHome ? binThemeTokens.textPrimary : '#FFFFFF',
+                bgcolor: isLightRoute ? binThemeTokens.softCanvas : binThemeTokens.black,
+                color: isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF',
                 direction: isRTL ? 'rtl' : 'ltr',
                 display: 'flex',
                 flexDirection: 'column',
@@ -69,7 +70,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 isolation: 'isolate',
             }}
         >
-            <BrandWatermark opacity={isHome ? 0.025 : 0.038} />
+            <BrandWatermark opacity={isLightRoute ? 0.025 : 0.038} />
             <AppBar
                 position="sticky"
                 elevation={0}
@@ -84,7 +85,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
             >
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
-                        {!isHome && (
+                        {!isSimpleHome && (
                             <IconButton
                                 onClick={() => navigate(-1)}
                                 sx={{ color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, bgcolor: binThemeTokens.card }}
@@ -150,15 +151,15 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                 sx={{
                     py: 3,
                     textAlign: 'center',
-                    borderTop: `1px solid ${isHome ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`,
-                    bgcolor: isHome ? binThemeTokens.card : 'rgba(11,11,12,0.5)',
+                    borderTop: `1px solid ${isLightRoute ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`,
+                    bgcolor: isLightRoute ? binThemeTokens.card : 'rgba(11,11,12,0.5)',
                     position: 'relative',
                     zIndex: 1,
                 }}
             >
                 <Typography
                     variant="caption"
-                    sx={{ color: isHome ? binThemeTokens.textTertiary : 'rgba(255,255,255,0.3)', fontWeight: 800, letterSpacing: 2 }}
+                    sx={{ color: isLightRoute ? binThemeTokens.textTertiary : 'rgba(255,255,255,0.3)', fontWeight: 800, letterSpacing: 2 }}
                 >
                     2026 BIN GROUP PROPERTY OPERATIONS OS
                 </Typography>
