@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const checks = [
   {
     path: 'src/tenant/TenantApp.tsx',
-    patterns: [
-      "import TenantScheduledServicePage",
+    required: [
+      'import TenantScheduledServicePage',
       '<Route path="/scheduled-service" element={<TenantScheduledServicePage />} />',
     ],
   },
   {
     path: 'src/tenant/pages/TenantSimpleDashboardPage.tsx',
-    patterns: [
+    required: [
       '/tenant/scheduled-service?service=deep-clean',
       '/tenant/scheduled-service?service=pest-control',
       '/tenant/scheduled-service?service=vacation-care&occupancy=away',
@@ -21,7 +21,7 @@ const checks = [
   },
   {
     path: 'src/tenant/pages/TenantDashboardLightPage.tsx',
-    patterns: [
+    required: [
       '/tenant/scheduled-service?service=deep-clean',
       '/tenant/scheduled-service?service=pest-control',
       '/tenant/scheduled-service?service=vacation-care&occupancy=away',
@@ -30,7 +30,7 @@ const checks = [
   },
   {
     path: 'src/tenant/pages/TenantScheduledServicePage.tsx',
-    patterns: [
+    required: [
       "httpsCallable(functions, 'getScheduledServiceAvailability')",
       "httpsCallable(functions, 'saveScheduledServiceAccessCode')",
       'recurrenceFrequency',
@@ -44,7 +44,7 @@ const checks = [
   },
   {
     path: 'src/tenant/pages/TenantTicketDetailPage.tsx',
-    patterns: [
+    required: [
       "httpsCallable(functions, 'tenantManageScheduledService')",
       "httpsCallable(functions, 'saveScheduledServiceAccessCode')",
       "runScheduledAction('approve_quote')",
@@ -57,7 +57,7 @@ const checks = [
   },
   {
     path: 'src/tenant/pages/TenantTicketsPage.tsx',
-    patterns: [
+    required: [
       "ticket.requestType === 'SCHEDULED_SERVICE'",
       'appointmentText(ticket)',
       'ticket.quoteStatus',
@@ -67,28 +67,28 @@ const checks = [
   },
   {
     path: 'src/components/AuthenticatedShell.tsx',
-    patterns: [
+    required: [
       "const isTenantRoute = location.pathname === '/tenant' || location.pathname.startsWith('/tenant/')",
       'showChrome && !isAdminRoute && !isTenantRoute',
     ],
   },
   {
     path: 'apps/admin-panel/src/App.tsx',
-    patterns: [
+    required: [
       "import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperationsPage'",
       '<Route path="/tenant-services" element={<ProtectedRoute><ScheduledServicesOperationsPage /></ProtectedRoute>} />',
     ],
   },
   {
     path: 'apps/admin-panel/src/components/Navigation.tsx',
-    patterns: [
+    required: [
       "text: 'Tenant Services'",
       "path: '/tenant-services'",
     ],
   },
   {
     path: 'apps/admin-panel/src/pages/ops/ScheduledServicesOperationsPage.tsx',
-    patterns: [
+    required: [
       "httpsCallable(functions, 'adminManageScheduledServiceAvailability')",
       "httpsCallable(functions, 'adminUpdateScheduledService')",
       "httpsCallable(functions, 'adminRevealScheduledServiceAccessCode')",
@@ -102,7 +102,7 @@ const checks = [
   },
   {
     path: 'functions/scheduledServices.ts',
-    patterns: [
+    required: [
       'export const tenantManageScheduledService',
       'export const saveScheduledServiceAccessCode',
       'export const adminRevealScheduledServiceAccessCode',
@@ -110,16 +110,23 @@ const checks = [
       'export const onScheduledServiceUpdated',
       'export const createNextRecurringScheduledService',
       "schedule: 'every 30 minutes'",
-      "crypto.createCipheriv('aes-256-gcm'",
+      "'aes-256-gcm'",
+      "const ACCESS_KEY_COLLECTION = 'system_secrets'",
+      "const ACCESS_KEY_DOCUMENT = 'scheduled_service_access_key'",
+      'transaction.create(ref',
       'accessCodeExpiresAt',
       'FULL_REFUND_WINDOW',
       'PARTIAL_REFUND_WINDOW',
       'NO_REFUND_WINDOW',
     ],
+    forbidden: [
+      'process.env.SCHEDULED_SERVICE_ACCESS_KEY',
+      'HARD_LAUNCH_APPROVAL_HMAC_KEY',
+    ],
   },
   {
     path: 'functions/scheduledServiceAvailability.ts',
-    patterns: [
+    required: [
       'export const getScheduledServiceAvailability',
       'export const adminManageScheduledServiceAvailability',
       'export const adminUpdateScheduledService',
@@ -133,16 +140,23 @@ const checks = [
   },
   {
     path: 'functions/runtime.ts',
-    patterns: [
+    required: [
       'export * from "./scheduledServices";',
       'export * from "./scheduledServiceAvailability";',
     ],
   },
   {
+    path: 'functions/runtimeAll.ts',
+    required: ["export * from './runtime';"],
+  },
+  {
+    path: 'functions/package.json',
+    required: ['"main": "lib/runtimeAll.js"'],
+  },
+  {
     path: '.github/workflows/scheduled-services-production.yml',
-    patterns: [
-      'SCHEDULED_SERVICE_ACCESS_KEY',
-      'HARD_LAUNCH_APPROVAL_HMAC_KEY',
+    required: [
+      "VITE_ENABLE_FIREBASE_APPCHECK: 'true'",
       'functions:tenantManageScheduledService',
       'functions:saveScheduledServiceAccessCode',
       'functions:adminRevealScheduledServiceAccessCode',
@@ -153,7 +167,17 @@ const checks = [
       'functions:adminManageScheduledServiceAvailability',
       'functions:adminUpdateScheduledService',
       'hosting:app,hosting:admin',
+      'npm run build --workspace=functions',
     ],
+    forbidden: [
+      'SCHEDULED_SERVICE_ACCESS_KEY',
+      'HARD_LAUNCH_APPROVAL_HMAC_KEY',
+      'continue-on-error: true',
+    ],
+  },
+  {
+    path: '.github/workflows/ci.yml',
+    required: ['node scripts/verify-scheduled-services-completeness.mjs'],
   },
 ];
 
@@ -164,8 +188,11 @@ for (const check of checks) {
     continue;
   }
   const content = readFileSync(check.path, 'utf8');
-  for (const pattern of check.patterns) {
+  for (const pattern of check.required || []) {
     if (!content.includes(pattern)) failures.push(`${check.path}: missing ${JSON.stringify(pattern)}`);
+  }
+  for (const pattern of check.forbidden || []) {
+    if (content.includes(pattern)) failures.push(`${check.path}: forbidden ${JSON.stringify(pattern)}`);
   }
 }
 
@@ -175,4 +202,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files and all required workflow controls verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, builds and deploy targets verified)`);
