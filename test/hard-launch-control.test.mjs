@@ -169,10 +169,10 @@ test('launch status builds current Functions before measuring discovery', () => 
 
 test('production workflow enforces correct hard-launch order', () => {
   const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
-  const predeploy = workflow.indexOf('Enforce signed authorization and clear incidents');
+  const predeploy = workflow.indexOf('Enforce signed predeploy authorization');
   const deploy = workflow.indexOf('Deploy and verify Firebase production stack');
-  const liveEvidence = workflow.indexOf('Record deployment and five-role evidence');
-  const decision = workflow.indexOf('Create final public signed decision');
+  const liveEvidence = workflow.indexOf('Run current-commit five-role business evidence');
+  const decision = workflow.indexOf('Create signed hard-launch decision');
   assert.ok(predeploy >= 0 && deploy > predeploy);
   assert.ok(liveEvidence > deploy);
   assert.ok(decision > liveEvidence);
