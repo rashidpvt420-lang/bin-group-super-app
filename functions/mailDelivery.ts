@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -110,13 +110,19 @@ async function deliverMail(mailId: string, data: any) {
   }
 }
 
-export const sendQueuedMailOnCreate = onDocumentCreated({ document: "mail/{mailId}" }, async (event) => {
+export const sendQueuedMailOnCreate = onDocumentCreated({
+  document: "mail/{mailId}",
+  secrets: [smtpUser, smtpPass],
+}, async (event) => {
   const snap = event.data;
   if (!snap) return;
   await deliverMail(event.params.mailId, snap.data() || {});
 });
 
-export const adminRetryMailDelivery = onCall({ cors: true }, async (request) => {
+export const adminRetryMailDelivery = onCall({
+  cors: true,
+  secrets: [smtpUser, smtpPass],
+}, async (request) => {
   await assertAdmin(request.auth);
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
