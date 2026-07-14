@@ -16,6 +16,7 @@ const workflowPath = '.github/workflows/firebase-production-deploy.yml';
 const workflow = readFileSync(workflowPath, 'utf8');
 const legacyProductionWorkflowPath = '.github/workflows/production.yml';
 const legacyProductionWorkflow = readFileSync(legacyProductionWorkflowPath, 'utf8');
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 function runBlocks(source) {
   const lines = source.split(/\r?\n/);
@@ -64,9 +65,43 @@ test('production deploy cannot be cancelled in progress', () => {
   assert.match(workflow, /cancel-in-progress:\s*false/);
 });
 
-test('production deployment remains approval-gated', () => {
+test('production deployment remains approval-gated and same-run bound', () => {
   assert.match(workflow, /environment:\s*production/);
   assert.match(workflow, /PRODUCTION_CONFIRMATION_PHRASE:\s*DEPLOY_PRODUCTION_BIN_GROUP_57C60/);
+  assert.match(workflow, /verify-production-workflow-env\.mjs/);
+  assert.match(workflow, /verify-same-run-deployment-artifact\.mjs/);
+});
+
+test('protected production job receives every five-role credential and App Check UUID', () => {
+  for (const role of ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER']) {
+    assert.match(workflow, new RegExp(`E2E_${role}_EMAIL:\\s*\\$\\{\\{\\s*secrets\\.E2E_${role}_EMAIL`));
+    assert.match(workflow, new RegExp(`E2E_${role}_PASSWORD:\\s*\\$\\{\\{\\s*secrets\\.E2E_${role}_PASSWORD`));
+  }
+  assert.match(workflow, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN:\s*\$\{\{\s*secrets\.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
+  assert.match(workflow, /E2E_STRICT_ROLES:\s*'true'/);
+  assert.match(workflow, /E2E_STRICT_LIVE:\s*'true'/);
+});
+
+test('five-role and App Check validation precedes seeding and live evidence', () => {
+  const verify = workflow.indexOf('Verify five-role and App Check environment');
+  const seed = workflow.indexOf('Seed role accounts and current-commit fixtures');
+  const evidence = workflow.indexOf('Record deployment and five-role evidence');
+  const status = workflow.indexOf('Evaluate pilot eligibility');
+  assert.ok(verify >= 0 && seed > verify && evidence > seed && status > evidence);
+});
+
+test('public hard launch requires postdeploy clearance before final decision and status', () => {
+  const gate = workflow.indexOf('Run final public postdeploy gate');
+  const decision = workflow.indexOf('Create final public signed decision');
+  const status = workflow.indexOf('Verify final hard-launch status');
+  assert.ok(gate >= 0 && decision > gate && status > decision);
+  assert.match(workflow, /public launch mode requires RUN_PUBLIC_RELEASE_GATE=true/);
+});
+
+test('public live proof commands exist and are execution-based', () => {
+  assert.equal(packageJson.scripts['test:gate12:smtp'], 'node scripts/verify-smtp-live-delivery.mjs');
+  assert.equal(packageJson.scripts['test:gate12:appcheck'], 'node scripts/verify-appcheck-debug-registration.mjs');
+  assert.match(readFileSync('scripts/verify-smtp-live-delivery.mjs', 'utf8'), /delivery\?\.state|delivery\.state/);
 });
 
 test('legacy production workflow is retired and cannot deploy', () => {
