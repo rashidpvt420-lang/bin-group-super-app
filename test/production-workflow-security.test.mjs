@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const workflowPath = '.github/workflows/firebase-production-deploy.yml';
 const workflow = readFileSync(workflowPath, 'utf8');
+const productionPreflight = readFileSync('scripts/verify-production-workflow-env.mjs', 'utf8');
 const legacyProductionWorkflowPath = '.github/workflows/production.yml';
 const legacyProductionWorkflow = readFileSync(legacyProductionWorkflowPath, 'utf8');
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -95,7 +96,7 @@ test('public hard launch requires postdeploy clearance before final decision and
   const decision = workflow.indexOf('Create final public signed decision');
   const status = workflow.indexOf('Verify final hard-launch status');
   assert.ok(gate >= 0 && decision > gate && status > decision);
-  assert.match(workflow, /public launch mode requires RUN_PUBLIC_RELEASE_GATE=true/);
+  assert.match(productionPreflight, /public launch mode requires RUN_PUBLIC_RELEASE_GATE=true/);
 });
 
 test('public live proof commands exist and are execution-based', () => {
