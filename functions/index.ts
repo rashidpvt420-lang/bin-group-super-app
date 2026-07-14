@@ -1823,6 +1823,23 @@ export const notifyRole = onCall({ cors: true }, async (request) => {
     }
 });
 
+type OpenAiChatResponse = {
+    error?: { message?: string };
+    choices?: Array<{ message?: { content?: string } }>;
+};
+
+type GeminiGenerateResponse = {
+    error?: { message?: string };
+    candidates?: Array<{
+        content?: {
+            parts?: Array<{
+                text?: string;
+                inlineData?: { data?: string };
+            }>;
+        };
+    }>;
+};
+
 export const getMissionGuidance = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
@@ -1843,7 +1860,7 @@ export const getMissionGuidance = onCall({ cors: true }, async (request) => {
                 max_tokens: 250
             })
         });
-        const data = await response.json();
+        const data = await response.json() as OpenAiChatResponse;
         if (!response.ok) {
             console.error("[getMissionGuidance] OpenAI request failed:", response.status, data?.error?.message || data);
             throw new HttpsError('internal', 'AI backend unavailable.');
@@ -1914,13 +1931,13 @@ export const generateDesignConcept = onCall({ cors: true }, async (request) => {
         });
 
         if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
+            const errData = await response.json().catch(() => ({})) as GeminiGenerateResponse;
             throw new Error(errData?.error?.message || `Gemini Error: ${response.statusText}`);
         }
 
-        const result = await response.json();
-        const textPart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.text)?.text;
-        const imagePart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData?.data;
+        const result = await response.json() as GeminiGenerateResponse;
+        const textPart = result.candidates?.[0]?.content?.parts?.find((part) => part.text)?.text;
+        const imagePart = result.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData?.data;
 
         const aiResponse = textPart ? JSON.parse(textPart) : {};
 

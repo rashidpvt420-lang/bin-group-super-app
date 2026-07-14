@@ -248,6 +248,7 @@ jobs:
 
       - name: Create production incidents artifact from protected workflow attestation
         env:
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
           INCIDENT_ATTESTATION: ${{ inputs.incident_attestation }}
           INCIDENT_ACTIVE_JSON: ${{ inputs.incident_active_json }}
           INCIDENT_REQUIRES_ROLLBACK: ${{ inputs.incident_requires_rollback }}
@@ -395,19 +396,14 @@ jobs:
           VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
         run: node scripts/deploy-firebase-production.mjs
 
-      - name: Verify production deployment metadata exists after deploy
-        run: |
-          set -euo pipefail
-          test -f launch_package/production-deployment.json
-          node -e "
-            const fs = require('fs');
-            const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json', 'utf8'));
-            if (doc.source !== 'firebase-production-deploy-workflow') process.exit(1);
-            if (String(doc.deployedCommitSha || '') !== process.env.GITHUB_SHA) process.exit(1);
-            if (String(doc.workflowRunId || '') !== String(process.env.GITHUB_RUN_ID || '')) process.exit(1);
-            if (doc.hardLaunchClaim === true) process.exit(1);
-            console.log('deployment metadata verified for', doc.deployedCommitSha);
-          "
+      - name: Verify production deployment metadata and same-run bindings after deploy
+        env:
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: node scripts/verify-same-run-deployment-artifact.mjs
 
       - name: Authenticate Google Cloud for E2E fixtures
         uses: google-github-actions/auth@v2
@@ -542,29 +538,13 @@ jobs:
           # Same-workflow-run only: never accept a cross-run orphan artifact.
 
       - name: Verify downloaded deployment artifact is bound to this run and SHA
-        run: |
-          set -euo pipefail
-          test -f launch_package/production-deployment.json
-          test -f launch_package/production-incidents.json
-          test -f launch_package/predeploy-approval.json
-          node -e "
-            const fs = require('fs');
-            const doc = JSON.parse(fs.readFileSync('launch_package/production-deployment.json', 'utf8'));
-            const incidents = JSON.parse(fs.readFileSync('launch_package/production-incidents.json', 'utf8'));
-            const approval = JSON.parse(fs.readFileSync('launch_package/predeploy-approval.json', 'utf8'));
-            const sha = process.env.GITHUB_SHA;
-            const runId = String(process.env.GITHUB_RUN_ID || '');
-            const repo = process.env.GITHUB_REPOSITORY;
-            if (doc.source !== 'firebase-production-deploy-workflow') throw new Error('wrong deployment source');
-            if (String(doc.deployedCommitSha || '') !== sha) throw new Error('deployment SHA mismatch');
-            if (String(doc.workflowRunId || '') !== runId) throw new Error('deployment workflowRunId mismatch');
-            if (doc.repository && String(doc.repository) !== repo) throw new Error('deployment repository mismatch');
-            if (String(incidents.commitSha || '') !== sha) throw new Error('incidents SHA mismatch');
-            if (String(incidents.workflowRunId || '') !== runId) throw new Error('incidents workflowRunId mismatch');
-            if (String(approval.commitSha || '') !== sha) throw new Error('predeploy approval SHA mismatch');
-            if (String(approval.releaseId || '').split('-')[0] !== runId) throw new Error('predeploy approval releaseId run binding mismatch');
-            console.log('postdeploy artifact binding verified for', sha, 'run', runId);
-          "
+        env:
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: node scripts/verify-same-run-deployment-artifact.mjs
       - name: Seed E2E auth and gate fixtures
         run: |
           set -euo pipefail
@@ -641,12 +621,6 @@ jobs:
           POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
         run: |
           set -euo pipefail
-          # Prefer digest embedded in deployment metadata when job output is unavailable.
-          if [[ -z "${VALIDATED_ARTIFACT_DIGEST}" ]]; then
-            VALIDATED_ARTIFACT_DIGEST="$(node -e "const d=require('./launch_package/production-deployment.json'); process.stdout.write(d.artifactDigest||d.validatedArtifactDigest||'')")"
-            export VALIDATED_ARTIFACT_DIGEST
-            echo "VALIDATED_ARTIFACT_DIGEST=$VALIDATED_ARTIFACT_DIGEST" >> "$GITHUB_ENV"
-          fi
           node scripts/postdeploy-release-gate.mjs
           echo "cleared=true" >> "$GITHUB_OUTPUT"
 
