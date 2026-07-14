@@ -428,7 +428,7 @@ test('same-run verifier uses required bindings without fail-open field checks', 
     'deployment artifactDigest',
     'deployment status',
   ]) {
-    assert.match(verifier, new RegExp(binding));
+    assert.ok(verifier.includes(binding), `verifier missing binding: ${binding}`);
   }
   assert.doesNotMatch(
     workflow,
