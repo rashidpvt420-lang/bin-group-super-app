@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 
@@ -64,7 +64,11 @@ async function sendOtpEmail(args: { to: string; otp: string; contractId: string;
 }
 
 export const requestContractSignatureOtp = onCall(
-  { cors: true, region: "europe-west3" },
+  {
+    cors: true,
+    region: "europe-west3",
+    secrets: [smtpUser, smtpPass],
+  },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before requesting a contract signature OTP.");
 
