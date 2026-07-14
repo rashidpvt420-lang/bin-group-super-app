@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - '.github/workflows/scheduled-services-production.yml'
+      - 'scripts/verify-scheduled-services-completeness.mjs'
+      - 'src/components/AuthenticatedShell.tsx'
       - 'src/tenant/pages/TenantScheduledServicePage.tsx'
       - 'src/tenant/pages/TenantTicketDetailPage.tsx'
       - 'src/tenant/pages/TenantTicketsPage.tsx'
@@ -71,7 +73,7 @@ jobs:
 
       - name: Deployment secrets preflight
         env:
-          ACCESS_KEY: ${{ secrets.SCHEDULED_SERVICE_ACCESS_KEY }}
+          ACCESS_KEY: ${{ secrets.SCHEDULED_SERVICE_ACCESS_KEY || secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
         run: |
           set -euo pipefail
           test -n "${ACCESS_KEY}"
@@ -84,12 +86,15 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
+      - name: Verify scheduled-services completeness
+        run: node scripts/verify-scheduled-services-completeness.mjs
+
       - name: Create production environment files
         run: node scripts/write-production-env.mjs
 
       - name: Create Functions runtime environment
         env:
-          ACCESS_KEY: ${{ secrets.SCHEDULED_SERVICE_ACCESS_KEY }}
+          ACCESS_KEY: ${{ secrets.SCHEDULED_SERVICE_ACCESS_KEY || secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
         run: |
           set -euo pipefail
           printf 'SCHEDULED_SERVICE_ACCESS_KEY=%s\n' "$ACCESS_KEY" > "functions/.env.${GCP_PROJECT_ID}"
