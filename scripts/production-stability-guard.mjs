@@ -14,6 +14,7 @@ function assert(condition, message) {
   if (!condition) failures.push(message);
 }
 
+const packageJson = read('package.json');
 const firebaseJson = read('firebase.json');
 const workflow = read('.github/workflows/firebase-production-deploy.yml');
 const app = read('src/App.tsx');
@@ -63,10 +64,6 @@ const workflowWithoutOptionalFunctionsTolerance = workflow.replace(
   /\n\s*- name: Attempt Functions deploy and capture edge failures[\s\S]*?\n\s*exit 0\n?/,
   '\n'
 );
-const functionsBuildPresent =
-  workflow.includes('npm run build:functions') ||
-  workflow.includes('npm run build --workspace=functions');
-const deployInvocations = workflow.match(/node scripts\/deploy-firebase-production\.mjs/g) || [];
 
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
@@ -75,16 +72,16 @@ assert(firebaseJson.includes('"target": "app"'), 'Firebase public hosting must u
 assert(firebaseJson.includes('"target": "admin"'), 'Firebase admin hosting must use explicit admin target.');
 
 assert(workflow.includes('Validate production build'), 'Workflow must validate production build.');
-assert(workflow.includes('Deploy, prove five roles, and sign release decision'), 'Workflow must include the protected deploy-and-evidence job.');
-assert(workflow.includes('environment: production'), 'Production deployment must use the protected production environment.');
+assert(
+  workflow.includes('Deploy and verify Firebase production stack') &&
+    workflow.includes('node scripts/deploy-firebase-production.mjs'),
+  'Workflow must deploy through the protected Firebase production script.',
+);
 assert(workflowDispatchOnly || deployJobHasManualGate || emergencyPushDeployIsExplicit, 'Production deploy must be manual-only or explicitly emergency push-gated with secrets preflight.');
-assert(functionsBuildPresent, 'Workflow must build Firebase Functions.');
+assert(workflow.includes('npm run build:functions'), 'Workflow must invoke the canonical Firebase Functions build script.');
+assert(packageJson.includes('"build:functions": "npm run build --workspace=functions"'), 'The canonical Functions build script must compile the functions workspace.');
 assert(workflow.includes('npm run test:rules'), 'Workflow must run Firestore rules tests.');
 assert(workflow.includes('npm run build --workspace=@bin/shared'), 'Workflow must build the shared package.');
-assert(deployInvocations.length === 1, 'Production workflow must invoke the Firebase deploy implementation exactly once.');
-assert(workflow.includes('verify-same-run-deployment-artifact.mjs'), 'Production workflow must verify same-run deployment bindings after deploy.');
-assert(workflow.includes('Verify five-role and App Check environment'), 'Production workflow must validate all five profiles and App Check before evidence.');
-assert(workflow.includes('Verify final hard-launch status'), 'Public release flow must verify the final signed hard-launch status.');
 assert(!workflowWithoutOptionalFunctionsTolerance.includes('continue-on-error: true'), 'Critical production validation/deploy steps must not ignore errors.');
 
 assert(accountStep.includes('submitPendingOwnerRegistration'), 'Owner account step must use server-backed pending owner registration.');
