@@ -26,52 +26,56 @@ const outDir = path.join(root, 'launch_package');
 const statusPath = path.join(outDir, 'launch-status.json');
 const pilotLockPath = path.join(outDir, 'pilot-start.lock.json');
 const hardMode = process.argv.includes('--hard') || process.env.LAUNCH_SCOPE === 'hard';
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const nodeCommand = process.execPath;
 
 function run(cmd, args) {
-  const result = spawnSync(cmd, args, { encoding: 'utf8', cwd: root });
+  const result = spawnSync(cmd, args, {
+    encoding: 'utf8',
+    cwd: root,
+    env: process.env,
+    shell: false,
+  });
   return {
     command: [cmd, ...args].join(' '),
     exitCode: result.status ?? 1,
     stdout: result.stdout || '',
     stderr: result.stderr || '',
+    spawnError: result.error?.message || '',
   };
+}
+
+function recordCheck(checks, name, result) {
+  const check = {
+    name,
+    command: result.command,
+    exitCode: result.exitCode,
+    ok: result.exitCode === 0,
+  };
+  if (result.spawnError) check.spawnError = result.spawnError;
+  checks.push(check);
+  if (!check.ok) {
+    console.error(result.stderr || result.stdout || result.spawnError || `${name} failed`);
+  }
 }
 
 const checks = [];
 
 console.log('\n[launch-status] building Firebase Functions for current-commit discovery proof...');
-const functionsBuild = run(npmCommand, ['run', 'build:functions']);
-checks.push({
-  name: 'functionsBuild',
-  command: functionsBuild.command,
-  exitCode: functionsBuild.exitCode,
-  ok: functionsBuild.exitCode === 0,
-});
-if (functionsBuild.exitCode !== 0) {
-  console.error(functionsBuild.stderr || functionsBuild.stdout || 'functionsBuild failed');
-}
+recordCheck(checks, 'functionsBuild', run(npmCommand, ['run', 'build:functions']));
 
 const required = [
-  { name: 'functionsLoad', cmd: 'node', args: ['scripts/measure-functions-load.mjs'] },
-  { name: 'e2eEnv', cmd: 'node', args: ['scripts/verify-e2e-env.mjs'] },
-  { name: 'appCheckEnsure', cmd: 'node', args: ['scripts/ensure-appcheck.mjs'] },
-  { name: 'adminFirebase', cmd: 'node', args: ['scripts/verify-admin-firebase-build.mjs'] },
-  { name: 'productionDeployment', cmd: 'node', args: ['scripts/verify-production-deployment.mjs'] },
-  { name: 'pilotClearance', cmd: 'node', args: ['scripts/verify-launch-clearance.mjs', '--pilot'] },
+  { name: 'functionsLoad', cmd: nodeCommand, args: ['scripts/measure-functions-load.mjs'] },
+  { name: 'e2eEnv', cmd: nodeCommand, args: ['scripts/verify-e2e-env.mjs'] },
+  { name: 'appCheckEnsure', cmd: nodeCommand, args: ['scripts/ensure-appcheck.mjs'] },
+  { name: 'adminFirebase', cmd: nodeCommand, args: ['scripts/verify-admin-firebase-build.mjs'] },
+  { name: 'productionDeployment', cmd: nodeCommand, args: ['scripts/verify-production-deployment.mjs'] },
+  { name: 'pilotClearance', cmd: nodeCommand, args: ['scripts/verify-launch-clearance.mjs', '--pilot'] },
 ];
 
 for (const item of required) {
   console.log(`\n[launch-status] running ${item.name}...`);
-  const result = run(item.cmd, item.args);
-  checks.push({
-    name: item.name,
-    command: result.command,
-    exitCode: result.exitCode,
-    ok: result.exitCode === 0,
-  });
-  if (result.exitCode !== 0) {
-    console.error(result.stderr || result.stdout || `${item.name} failed`);
-  }
+  recordCheck(checks, item.name, run(item.cmd, item.args));
 }
 
 const sha = gitSha(root);
@@ -103,7 +107,7 @@ const automationOk =
   invalidEvidence.length === 0;
 const pilotEligible = automationOk && eligibility.pilotEligible === true;
 const hardLaunchEligible = pilotEligible && hardEligibility.hardLaunchEligible === true;
-const hardLaunchClaim = hardLaunchEligible;
+const hardLaunchClaim = hardMode && hardLaunchEligible;
 
 if (!pilotEligible && existsSync(pilotLockPath)) {
   const lock = readJsonSafe(pilotLockPath, {});
@@ -166,5 +170,5 @@ if (hardMode && !hardLaunchEligible) {
 if (hardMode) {
   console.log('[launch-status] HARD PUBLIC LAUNCH: GO — protected approval chain verified');
 } else {
-  console.log(`[launch-status] CONTROLLED PILOT: GO; hardLaunchClaim=${hardLaunchClaim}`);
+  console.log('[launch-status] CONTROLLED PILOT: GO; hardLaunchClaim=false');
 }
