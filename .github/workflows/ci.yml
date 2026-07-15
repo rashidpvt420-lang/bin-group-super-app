@@ -23,14 +23,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Export exact Firestore rule test source
-        uses: actions/upload-artifact@v4
-        with:
-          name: firestore-rule-test-source-${{ github.sha }}
-          path: test/security-rules.test.js
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
