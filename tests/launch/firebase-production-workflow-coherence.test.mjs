@@ -467,14 +467,22 @@ test('bank-pilot does not claim public launch; public mode requires Stripe live 
 });
 
 test('same-run deployment artifact downloads without nesting launch_package twice', () => {
+  const stepStart = workflow.indexOf(
+    '      - name: Download production deployment metadata',
+  );
+  assert.ok(stepStart >= 0, 'deployment metadata download step missing');
+  const nextStep = workflow.indexOf('\n      - name:', stepStart + 1);
+  const stepBlock = workflow.slice(
+    stepStart,
+    nextStep >= 0 ? nextStep : workflow.length,
+  );
+
   assert.match(
-    workflow,
-    /name: Download production deployment metadata[\s\S]{0,300}name: production-deployment-\$\{\{ github\.sha \}\}[\s\S]{0,120}path: \./,
+    stepBlock,
+    /name:\s*production-deployment-\$\{\{\s*github\.sha\s*\}\}/,
   );
-  assert.doesNotMatch(
-    workflow,
-    /name: Download production deployment metadata[\s\S]{0,300}path: launch_package/,
-  );
+  assert.match(stepBlock, /^\s*path:\s*\.\s*$/m);
+  assert.doesNotMatch(stepBlock, /^\s*path:\s*launch_package\s*$/m);
 });
 
 test('no manual or synthetic evidence bypass exists in production workflow', () => {

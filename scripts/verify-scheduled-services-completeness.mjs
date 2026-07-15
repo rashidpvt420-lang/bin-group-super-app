@@ -159,6 +159,7 @@ const checks = [
       'export * from "./scheduledServiceAvailability";',
       'export * from "./paymentEvidence";',
       'export * from "./ticketDispatchOperations";',
+      'export * from "./tenantTicketOperations";',
       'export * from "./aiUsageQuota";',
       'export * from "./hrAutomation";',
     ],
