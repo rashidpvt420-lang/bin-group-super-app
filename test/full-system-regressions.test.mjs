@@ -170,3 +170,15 @@ test('runtimeAll does not re-export functions already exported by runtime', () =
   assert.doesNotMatch(runtimeAll, /listOwnerHandoverInspections|updateOwnerHandoverInspection/);
   assert.doesNotMatch(runtimeAll, /submitTenantMoveInspection/);
 });
+
+test('Firestore and Storage rules suites cannot clear shared emulator fixtures concurrently', () => {
+  const packageJson = read('package.json');
+  assert.match(
+    packageJson,
+    /"test:rules":\s*"[^"]*node --test --test-concurrency=1 test\/security-rules\.test\.js test\/storage-rules\.test\.js/,
+  );
+  assert.match(
+    packageJson,
+    /"test:rules:node":\s*"[^"]*node --test --test-concurrency=1 test\/security-rules\.test\.js test\/storage-rules\.test\.js/,
+  );
+});
