@@ -37,10 +37,6 @@ async function assertAdmin(auth: any) {
   const token = auth.token || {};
   const tokenRole = asText(token.role || token.userRole || token.primaryRole).toLowerCase();
   if (token.admin === true || token.isAdmin === true || token.superAdmin === true || token.super_admin === true || ADMIN_ROLES.has(tokenRole)) return;
-  const userSnap = await db.collection("users").doc(auth.uid).get();
-  const user = userSnap.data() || {};
-  const userRole = asText(user.role || user.userRole || user.primaryRole).toLowerCase();
-  if (user.admin === true || user.isAdmin === true || user.superAdmin === true || user.super_admin === true || ADMIN_ROLES.has(userRole)) return;
   throw new HttpsError("permission-denied", "Admin access required.");
 }
 
@@ -82,11 +78,15 @@ async function deliverMail(mailId: string, data: any) {
 
   try {
     const info = await (await createTransporter()).sendMail({ from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
+    const messageId = asText(info.messageId);
+    if (!messageId) {
+      throw new Error("SMTP provider did not return a message ID.");
+    }
     await ref.set({
       delivery: {
         state: "SUCCESS",
         provider: "cloud_function_smtp",
-        messageId: info.messageId || "",
+        messageId,
         accepted: info.accepted || [],
         rejected: info.rejected || [],
         from,
@@ -95,7 +95,7 @@ async function deliverMail(mailId: string, data: any) {
       },
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { delivered: true, messageId: info.messageId || "" };
+    return { delivered: true, messageId };
   } catch (error: any) {
     await ref.set({
       delivery: {

@@ -86,11 +86,7 @@ async function actorRole(auth: any): Promise<string> {
   ) {
     return tokenRole || 'admin';
   }
-  if (!auth?.uid) return '';
-  const profile = await db.collection('users').doc(auth.uid).get();
-  const data = profile.data() || {};
-  const profileRole = normalized(data.role || data.userRole || data.primaryRole);
-  return ADMIN_ROLES.has(profileRole) ? profileRole : '';
+  return '';
 }
 
 async function assertOperations(auth: any): Promise<string> {

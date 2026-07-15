@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useRole, type SovereignPermission } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
-import { Box, Typography, Button, Stack } from '@mui/material';
+import { Box, Typography, Button, Stack, CircularProgress } from '@mui/material';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { Lock, LogOut } from 'lucide-react';
 import { auth } from '../lib/firebase';
@@ -36,12 +36,21 @@ const ROLE_HOME_PATHS: Record<string, string> = {
 const resolveRoleHomePath = (normalizedRole: string) => ROLE_HOME_PATHS[normalizedRole] || '/gateway';
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, requiredPermission }) => {
-    const { user, role, status, isAdmin, loading, hasPermission } = useRole();
-    const { t } = useLanguage();
+    const { user, role, status, isAdmin, loading, hasPermission, refreshRole } = useRole();
+    const { t, lang } = useLanguage();
     const location = useLocation();
 
     if (loading) {
-        return null;
+        return (
+            <Box role="status" aria-live="polite" sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', bgcolor: binThemeTokens.canvas }}>
+                <Stack spacing={2} alignItems="center">
+                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <Typography color={binThemeTokens.textSecondary}>
+                        {lang === 'ar' ? 'جارٍ التحقق من حالة الحساب…' : 'Verifying account status…'}
+                    </Typography>
+                </Stack>
+            </Box>
+        );
     }
 
     if (!user) {
@@ -64,8 +73,81 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         return <Navigate to="/gateway" state={{ reason: 'role_required', from: location }} replace />;
     }
 
-    if (allowedRoles && !allowedRoles.includes(normalizedRole) && !isAdmin) {
+    if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
         return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
+    }
+
+    if (currentStatus === 'profile_unavailable' || currentStatus === 'profile_missing') {
+        return (
+            <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', bgcolor: binThemeTokens.canvas, p: 4 }}>
+                <Stack spacing={3} alignItems="center" sx={{ maxWidth: 560, textAlign: 'center' }}>
+                    <Lock size={56} color={binThemeTokens.gold} />
+                    <Typography variant="h4" fontWeight={900}>
+                        {lang === 'ar' ? 'تعذر التحقق من حالة الحساب' : 'ACCOUNT STATUS UNVERIFIED'}
+                    </Typography>
+                    <Typography color={binThemeTokens.textSecondary}>
+                        {lang === 'ar'
+                            ? 'تم إيقاف الوصول لحماية بياناتك. أعد المحاولة بعد استعادة الاتصال أو تواصل مع الدعم إذا استمرت المشكلة.'
+                            : 'Portal access is paused because the server profile could not be verified. Retry after restoring connectivity or contact support if this continues.'}
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        <Button variant="contained" onClick={() => void refreshRole()}>
+                            {lang === 'ar' ? 'إعادة المحاولة' : 'RETRY VERIFICATION'}
+                        </Button>
+                        <Button variant="outlined" startIcon={<LogOut size={18} />} onClick={() => auth.signOut()}>
+                            {lang === 'ar' ? 'تسجيل الخروج' : 'SIGN OUT'}
+                        </Button>
+                    </Stack>
+                </Stack>
+            </Box>
+        );
+    }
+
+    const pendingPortalStatuses: Record<string, Set<string>> = {
+        tenant: new Set(['pending_invitation', 'suspended', 'rejected']),
+        technician: new Set(['pending', 'pending_approval', 'suspended', 'rejected']),
+        broker: new Set(['pending', 'pending_kyc', 'pending_approval', 'suspended', 'rejected']),
+    };
+    const pendingProfilePaths: Record<string, string> = {
+        technician: '/technician/profile',
+        broker: '/broker/profile',
+    };
+    const pendingStatuses = pendingPortalStatuses[normalizedRole];
+    const pendingProfilePath = pendingProfilePaths[normalizedRole];
+    if (
+        !isAdmin &&
+        pendingStatuses?.has(currentStatus) &&
+        (!pendingProfilePath || location.pathname !== pendingProfilePath)
+    ) {
+        return (
+            <Box sx={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: binThemeTokens.canvas,
+                color: binThemeTokens.textPrimary,
+                p: 4,
+            }}>
+                <Stack spacing={3} sx={{ maxWidth: 560, textAlign: 'center', alignItems: 'center' }}>
+                    <Lock size={56} color={binThemeTokens.gold} />
+                    <Typography variant="h4" fontWeight={900}>ACCOUNT REVIEW REQUIRED</Typography>
+                    <Typography color={binThemeTokens.textSecondary}>
+                        This portal remains locked while account verification is pending. No operational or financial action is available in this state.
+                    </Typography>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                        {pendingProfilePath && (
+                            <Button variant="contained" href={pendingProfilePath}>
+                                REVIEW PROFILE
+                            </Button>
+                        )}
+                        <Button variant="outlined" startIcon={<LogOut size={18} />} onClick={() => auth.signOut()}>
+                            {t('lock.signout')}
+                        </Button>
+                    </Stack>
+                </Stack>
+            </Box>
+        );
     }
 
     if (requiredPermission && !hasPermission(requiredPermission)) {
@@ -99,16 +181,35 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         );
     }
 
-    const ownerLockedStatuses = ['pending', 'pending_approval', 'payment_pending', 'awaiting_verification', 'awaiting_approval', 'rejected', 'onboarding'];
+    const ownerLockedStatuses = [
+        'pending',
+        'pending_approval',
+        'pending_admin_approval',
+        'payment_pending',
+        'payment_pending_approval',
+        'payment_pending_admin_verification',
+        'awaiting_verification',
+        'awaiting_approval',
+        'rejected',
+        'onboarding',
+    ];
 
-    const isProtectedPortal = location.pathname.startsWith('/admin') ||
-                              location.pathname.startsWith('/tenant') ||
-                              location.pathname.startsWith('/technician') ||
-                              location.pathname.startsWith('/broker');
+    const ownerStatusAllowedPaths = new Set([
+        '/owner/activation',
+        '/owner/onboarding-status',
+        '/owner/contracts',
+        '/owner/documents',
+    ]);
+    const ownerStatusPathAllowed = ownerStatusAllowedPaths.has(location.pathname);
 
-    if (normalizedRole === 'owner' && ownerLockedStatuses.includes(currentStatus) && !isAdmin && !isProtectedPortal) {
-        if (!location.pathname.startsWith('/onboarding') && !user?.onboardingComplete) {
-            const isPendingApproval = currentStatus === 'pending_approval' || currentStatus === 'awaiting_verification' || currentStatus === 'payment_pending';
+    if (
+        normalizedRole === 'owner' &&
+        ownerLockedStatuses.includes(currentStatus) &&
+        !isAdmin &&
+        location.pathname.startsWith('/owner') &&
+        !ownerStatusPathAllowed
+    ) {
+            const isPendingApproval = ['pending', 'pending_approval', 'pending_admin_approval', 'awaiting_verification', 'payment_pending', 'payment_pending_approval', 'payment_pending_admin_verification'].includes(currentStatus);
 
             return (
                 <Box sx={{
@@ -161,7 +262,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                     </Stack>
                 </Box>
             );
-        }
     }
 
     return <>{children}</>;

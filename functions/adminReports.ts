@@ -149,12 +149,7 @@ const tokenHasAdminRole = (token: AnyRecord): boolean => {
 async function assertAdmin(auth: AdminReportAuth, firestore: admin.firestore.Firestore): Promise<void> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   if (tokenHasAdminRole(asRecord(auth.token))) return;
-
-  const userSnap = await firestore.collection("users").doc(auth.uid).get();
-  const user = userSnap.exists ? asRecord(userSnap.data()) : {};
-  const role = lower(user.role || user.userRole || user.primaryRole);
-  if (user.admin === true || user.isAdmin === true || user.superAdmin === true || user.super_admin === true || adminRoles.has(role)) return;
-
+  void firestore;
   throw new HttpsError("permission-denied", "Admin access required.");
 }
 

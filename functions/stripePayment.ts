@@ -231,21 +231,43 @@ export const stripeWebhook = onRequest({
 
   const eventId = safeId(event.id);
   const eventRef = db.collection("stripe_webhook_events").doc(eventId);
-  const existingEvent = await eventRef.get();
-  if (existingEvent.exists) {
+  const claim = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(eventRef);
+    const data = snap.data() || {};
+    if (data.processed === true || data.ignored === true) return "DUPLICATE";
+    const processingStartedAt = data.processingStartedAt?.toMillis?.() || 0;
+    if (data.processing === true && Date.now() - processingStartedAt < 10 * 60 * 1000) {
+      return "IN_PROGRESS";
+    }
+    transaction.set(eventRef, {
+      eventId: event.id,
+      eventType: event.type,
+      processing: true,
+      processingStartedAt: FieldValue.serverTimestamp(),
+      attempts: Number(data.attempts || 0) + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+    return "CLAIMED";
+  });
+  if (claim === "DUPLICATE") {
     response.status(200).json({ received: true, duplicate: true });
+    return;
+  }
+  if (claim === "IN_PROGRESS") {
+    response.status(202).json({ received: true, processing: true });
     return;
   }
 
   if (event.type !== "checkout.session.completed") {
-    await eventRef.set({ eventId: event.id, eventType: event.type, processed: false, ignored: true, createdAt: FieldValue.serverTimestamp() });
+    await eventRef.set({ eventId: event.id, eventType: event.type, processed: false, ignored: true, processing: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     response.status(200).json({ received: true, ignored: true });
     return;
   }
 
   const session = event.data.object as import("stripe").Stripe.Checkout.Session;
   if (session.payment_status !== "paid") {
-    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, reason: "PAYMENT_NOT_PAID", createdAt: FieldValue.serverTimestamp() });
+    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, processing: false, reason: "PAYMENT_NOT_PAID", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     response.status(202).json({ received: true, processed: false, reason: "PAYMENT_NOT_PAID" });
     return;
   }
@@ -285,6 +307,8 @@ export const stripeWebhook = onRequest({
     amount,
     currency,
     processed: true,
+    processing: false,
+    processedAt: timestamp,
     createdAt: timestamp,
   };
 

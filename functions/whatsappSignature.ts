@@ -3,14 +3,13 @@ import type { Request } from "firebase-functions/v2/https";
 
 /**
  * Verifies Meta's X-Hub-Signature-256 HMAC on an inbound WhatsApp Cloud API webhook.
- * Fails open (logging a warning) only when WHATSAPP_APP_SECRET has not been provisioned
- * yet, so this check can ship ahead of the Secret Manager value without dropping live
- * traffic. Once the secret is set, every request is verified and mismatches are rejected.
+ * Fails closed when WHATSAPP_APP_SECRET is unavailable. Production traffic
+ * must never bypass provider authentication because configuration is missing.
  */
 export function verifyWhatsAppSignature(req: Request, appSecret: string | undefined): boolean {
   if (!appSecret) {
-    console.warn("WhatsApp webhook: WHATSAPP_APP_SECRET not configured — skipping signature verification.");
-    return true;
+    console.error("WhatsApp webhook: WHATSAPP_APP_SECRET is not configured.");
+    return false;
   }
 
   const header = req.headers["x-hub-signature-256"];

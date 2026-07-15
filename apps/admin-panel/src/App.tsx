@@ -70,6 +70,7 @@ import StaffDirectoryPage from './pages/ops/StaffDirectoryPage';
 import MessagesPage from './pages/ops/MessagesPage';
 import CommunityModerationPage from './pages/ops/CommunityModerationPage';
 import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperationsPage';
+import TenantUnitLinkQueuePage from './pages/ops/TenantUnitLinkQueuePage';
 
 import { adminTheme } from './theme/adminTheme';
 
@@ -105,9 +106,9 @@ function AppContent() {
                     <Route path="/broker" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/broker-attributions" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
                     <Route path="/broker-commissions" element={<ProtectedRoute adminOnly><BrokerManagementPage /></ProtectedRoute>} />
-                    <Route path="/owners" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
+                    <Route path="/owners" element={<ProtectedRoute adminOnly><OwnersPage /></ProtectedRoute>} />
                     <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
-                    <Route path="/unit-links" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
+                    <Route path="/unit-links" element={<ProtectedRoute adminOnly><TenantUnitLinkQueuePage /></ProtectedRoute>} />
                     <Route path="/tenant-services" element={<ProtectedRoute><ScheduledServicesOperationsPage /></ProtectedRoute>} />
                     <Route path="/control-center" element={<ProtectedRoute adminOnly><ProductionControlCenter /></ProtectedRoute>} />
                     <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />

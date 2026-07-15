@@ -21,6 +21,7 @@ export * from "./contractSignatureOtp";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
 export * from "./profileP1Workflows";
+export * from "./publicRoleAssignment";
 export * from "./userAuditOperations";
 export * from "./tenantTicketReview";
 export * from "./qrSecurity";

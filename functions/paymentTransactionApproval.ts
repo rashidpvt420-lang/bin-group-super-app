@@ -16,11 +16,6 @@ async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const claims = auth.token || {};
   if (claims.admin === true || claims.isAdmin === true || ADMIN_ROLES.has(roleOf(claims.role))) return;
-
-  const profile = await db.collection("users").doc(auth.uid).get();
-  const data = profile.data() || {};
-  if (data.isAdmin === true || data.admin === true || ADMIN_ROLES.has(roleOf(data.role))) return;
-
   throw new HttpsError("permission-denied", "Admin permission required.");
 }
 
@@ -115,105 +110,177 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   }
 
   const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
-  const contractSnap = contractId ? await db.collection("contracts").doc(contractId).get() : null;
-  const contractData = contractSnap?.data() || {};
-  const ownerUid = String(request.data?.ownerUid || payment.ownerUid || payment.ownerId || "").trim();
-  const batch = db.batch();
+  if (!contractId || !intakeId) {
+    throw new HttpsError("failed-precondition", "Payment is not bound to a canonical intake and contract.");
+  }
+  const contractRef = db.collection("contracts").doc(contractId);
+  const contractSnap = await contractRef.get();
+  if (!contractSnap.exists) throw new HttpsError("failed-precondition", "Bound contract does not exist.");
+  const contractData = contractSnap.data() || {};
+  const ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
+  const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || "").trim();
+  if (!ownerUid || contractOwnerUid !== ownerUid) {
+    throw new HttpsError("failed-precondition", "Payment and contract owner bindings do not match.");
+  }
+  if (!payment.quoteHash || payment.quoteHash !== contractData.quoteHash) {
+    throw new HttpsError("failed-precondition", "Payment and contract quote hashes do not match.");
+  }
+  if (
+    contractData.ownerSigned !== true ||
+    !String(contractData.otpVerificationId || payment.otpVerificationId || "").trim()
+  ) {
+    throw new HttpsError("failed-precondition", "A verified owner signature is required before payment approval.");
+  }
+  const expectedAnnual = Number(payment.quoteSnapshot?.annualContractValue || contractData.quoteSnapshot?.annualContractValue || contractData.annualContractValue || 0);
+  const expectedAmount = Number(payment.quoteSnapshot?.activationDeposit || contractData.quoteSnapshot?.activationDeposit || payment.activationDeposit || payment.amount || 0);
+  if (
+    !Number.isFinite(expectedAnnual) ||
+    expectedAnnual <= 0 ||
+    !Number.isFinite(expectedAmount) ||
+    expectedAmount <= 0 ||
+    Math.abs(expectedAmount - Math.round(expectedAnnual * 0.15)) > 0.01
+  ) {
+    throw new HttpsError("failed-precondition", "The locked 15% mobilization schedule is invalid.");
+  }
+  if (Number.isFinite(Number(request.data?.amountReceived)) && Math.abs(Number(request.data.amountReceived) - expectedAmount) > 0.01) {
+    throw new HttpsError("failed-precondition", "Received amount does not match the locked mobilization deposit.");
+  }
+  const normalizedMethod = upper(payment.paymentMethod || method);
+  const stripeVerified = normalizedMethod === "STRIPE" &&
+    upper(payment.paymentStatus) === "PAID" &&
+    payment.verified === true &&
+    Boolean(payment.stripeSessionId);
+  const manualReference = paymentReferenceId || String(payment.paymentReferenceId || "").trim();
+  const manualVerified = ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(normalizedMethod) && Boolean(manualReference);
+  if (!stripeVerified && !manualVerified) {
+    throw new HttpsError("failed-precondition", "Verified Stripe evidence or a manual payment receipt reference is required.");
+  }
 
-  batch.set(ref, {
-    status: "APPROVED",
-    verificationState: "ADMIN_VERIFIED",
-    paymentReferenceId: paymentReferenceId || payment.paymentReferenceId || null,
-    amountReceived,
-    paymentMethod: method || payment.paymentMethod || null,
-    receivedAt: receivedAt || null,
-    adminNotes: notes,
-    approvedBy: actorId,
-    approvedByEmail: actorEmail,
-    approvedAt: now,
-    updatedAt: now,
-  }, { merge: true });
+  const propertySnap = await db.collection("properties").where("intakeId", "==", intakeId).limit(100).get();
+  await db.runTransaction(async (transaction) => {
+    const [freshPaymentSnap, freshContractSnap] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(contractRef),
+    ]);
+    if (!freshPaymentSnap.exists || !freshContractSnap.exists) {
+      throw new HttpsError("failed-precondition", "Payment or contract disappeared during approval.");
+    }
+    const freshPayment = freshPaymentSnap.data() || {};
+    const freshContract = freshContractSnap.data() || {};
+    if (roleOf(freshPayment.status) === "approved" && roleOf(freshContract.status) === "active") return;
+    if (freshPayment.quoteHash !== payment.quoteHash || freshContract.quoteHash !== payment.quoteHash) {
+      throw new HttpsError("aborted", "Quote evidence changed during approval.");
+    }
 
-  if (contractId) {
-    const contractRef = db.collection("contracts").doc(contractId);
-    batch.set(contractRef, {
+    transaction.set(ref, {
+      status: "APPROVED",
+      paymentStatus: "APPROVED",
+      verificationState: stripeVerified ? "STRIPE_VERIFIED_ADMIN_APPROVED" : "ADMIN_VERIFIED",
+      paymentVerified: true,
+      unlocksDashboard: true,
+      paymentReferenceId: manualReference || payment.stripeSessionId,
+      amountReceived: expectedAmount,
+      paymentMethod: normalizedMethod,
+      receivedAt: receivedAt || null,
+      adminNotes: notes,
+      approvedBy: actorId,
+      approvedByEmail: actorEmail,
+      approvedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+
+    transaction.set(contractRef, {
       status: "ACTIVE",
+      contractStatus: "active",
       paymentStatus: "APPROVED",
       activationStatus: "ACTIVE",
       paymentVerified: true,
+      adminApproved: true,
       dashboardUnlockApproved: true,
-      paymentReferenceId: paymentReferenceId || payment.paymentReferenceId || null,
-      amountReceived,
+      paymentReferenceId: manualReference || payment.stripeSessionId,
+      amountReceived: expectedAmount,
       approvedBy: actorId,
       approvedAt: now,
       updatedAt: now,
     }, { merge: true });
-  }
-
-  if (intakeId) {
-    batch.set(db.collection("intake_submissions").doc(intakeId), {
+    transaction.set(db.collection("intake_submissions").doc(intakeId), {
       status: "ACTIVE",
       paymentStatus: "APPROVED",
       activationState: "ACTIVE",
+      approvedAt: now,
+      approvedBy: actorId,
       updatedAt: now,
     }, { merge: true });
-  }
 
-  if (ownerUid) {
     const ownerPatch = {
       status: "active",
       paymentVerified: true,
       adminApproved: true,
       dashboardUnlocked: true,
       dashboardLocked: false,
-      activeContractId: contractId || null,
-      latestActivationContractId: contractId || null,
+      activeContractId: contractId,
+      latestActivationContractId: contractId,
       activationStatus: "ACTIVE",
       approvedBy: actorId,
       approvedAt: now,
       updatedAt: now,
     };
-    batch.set(db.collection("users").doc(ownerUid), ownerPatch, { merge: true });
-    batch.set(db.collection("owners").doc(ownerUid), { ...ownerPatch, status: "ACTIVE" }, { merge: true });
-  }
+    transaction.set(db.collection("users").doc(ownerUid), ownerPatch, { merge: true });
+    transaction.set(db.collection("owners").doc(ownerUid), { ...ownerPatch, status: "ACTIVE" }, { merge: true });
+    propertySnap.docs.forEach((propertyDoc) => {
+      const property = propertyDoc.data() || {};
+      if (String(property.ownerUid || property.ownerId || "") !== ownerUid || property.quoteHash !== payment.quoteHash) {
+        throw new HttpsError("failed-precondition", "A property binding does not match the approved owner quote.");
+      }
+      transaction.set(propertyDoc.ref, {
+        status: "ACTIVE",
+        activationStatus: "ACTIVE",
+        activatedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(db.collection("propertyPassports").doc(propertyDoc.id), {
+        status: "ACTIVE",
+        activated: true,
+        activatedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+    });
 
-  batch.set(db.collection("auditLogs").doc(), {
-    action: "ADMIN_APPROVE_PAYMENT",
-    actorId,
-    actorEmail,
-    paymentId,
-    contractId: contractId || null,
-    intakeId: intakeId || null,
-    ownerUid: ownerUid || null,
-    paymentReferenceId: paymentReferenceId || null,
-    amountReceived,
-    createdAt: now,
-  });
-
-  if (payment.ownerEmail) {
-    batch.set(db.collection("mail").doc(), {
-      to: String(payment.ownerEmail).toLowerCase(),
-      message: {
-        from: "BIN GROUP <ceo@bin-groups.com>",
-        replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
-        subject: "BIN GROUP Payment Verified - Owner Dashboard Activated",
-        html: `<p>Dear ${payment.signatureName || "Owner"},</p>
+    transaction.set(db.collection("auditLogs").doc(), {
+      action: "ADMIN_APPROVE_PAYMENT",
+      actorId,
+      actorEmail,
+      paymentId,
+      contractId,
+      intakeId,
+      ownerUid,
+      paymentReferenceId: manualReference || payment.stripeSessionId,
+      amountReceived: expectedAmount,
+      createdAt: now,
+    });
+    if (payment.ownerEmail) {
+      transaction.set(db.collection("mail").doc(`owner_payment_approved_${paymentId}`), {
+        to: String(payment.ownerEmail).toLowerCase(),
+        message: {
+          from: "BIN GROUP <ceo@bin-groups.com>",
+          replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+          subject: "BIN GROUP Payment Verified - Owner Dashboard Activated",
+          html: `<p>Dear ${payment.signatureName || "Owner"},</p>
 <p><b>Your BIN GROUP payment has been verified and your owner dashboard is now active.</b></p>
 <p>You can now access your property passport, contracts, documents, tickets, tenants and financial records.</p>
 <p>Support: support@bin-groups.com</p>
 <p>BIN GROUP - Made in UAE 🇦🇪</p>`,
-      },
-      metadata: { type: "owner_payment_approved_dashboard_activated", paymentId, contractId, intakeId, ownerUid },
-      createdAt: now,
-    });
-  }
-
-  await batch.commit();
+        },
+        metadata: { type: "owner_payment_approved_dashboard_activated", paymentId, contractId, intakeId, ownerUid },
+        createdAt: now,
+      }, { merge: true });
+    }
+  });
 
   if (contractId && contractData.commissionGenerated !== true) {
     try {
       const commissionResult = await createBrokerCommissionForContract(contractId, contractData, {
-        amountReceived,
+        amountReceived: expectedAmount,
         annualContractValue: Number(contractData.annualContractValue || 0),
       });
       if (commissionResult) {

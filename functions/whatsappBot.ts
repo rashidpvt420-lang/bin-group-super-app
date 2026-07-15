@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import { verifyWhatsAppSignature } from "./whatsappSignature";
 
@@ -121,6 +121,7 @@ export const whatsappBotWebhook = onRequest({
   cors: false,
   timeoutSeconds: 30,
   maxInstances: 20,
+  secrets: [waToken, waVerifyToken, waPhoneId, waAppSecret],
 }, async (req, res) => {
   // GET — Meta webhook verification
   if (req.method === "GET") {

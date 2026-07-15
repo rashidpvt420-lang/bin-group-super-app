@@ -15,11 +15,6 @@ async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const claims = auth.token || {};
   if (claims.admin === true || claims.isAdmin === true || ADMIN_ROLES.has(roleOf(claims.role))) return;
-
-  const profile = await db.collection("users").doc(auth.uid).get();
-  const data = profile.data() || {};
-  if (data.isAdmin === true || data.admin === true || ADMIN_ROLES.has(roleOf(data.role))) return;
-
   throw new HttpsError("permission-denied", "Admin permission required.");
 }
 
@@ -35,6 +30,10 @@ async function findOwnerUid(contract: FirebaseFirestore.DocumentData) {
 
 export const adminApproveContractActivation = onCall({ cors: true }, async (request) => {
   await requireAdmin(request.auth);
+  throw new HttpsError(
+    "failed-precondition",
+    "Legacy contract activation is disabled. Approve the bound payment transaction with adminApprovePayment.",
+  );
 
   const contractId = String(request.data?.contractId || "").trim();
   if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
@@ -152,7 +151,10 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
   const ownerUid = String(contract.ownerId || contract.ownerUid || "").trim();
   const requesterEmail = String(request.auth.token?.email || "").trim().toLowerCase();
   const contractEmail = String(contract.ownerEmail || "").trim().toLowerCase();
-  if (ownerUid && ownerUid !== request.auth.uid && contractEmail !== requesterEmail) {
+  if (!ownerUid) {
+    throw new HttpsError("failed-precondition", "Contract owner binding is missing.");
+  }
+  if (ownerUid !== request.auth.uid || (contractEmail && contractEmail !== requesterEmail)) {
     throw new HttpsError("permission-denied", "This contract belongs to another owner.");
   }
 
@@ -169,21 +171,37 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
 
   const signed = SIGNED_AWAITING_PAYMENT_STATUSES.has(roleOf(contract.status)) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
   if (!signed) throw new HttpsError("failed-precondition", "Contract must be signed before submitting a payment verification request.");
+  if (!String(contract.otpVerificationId || "").trim()) {
+    throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required before payment submission.");
+  }
 
   const method = String(request.data?.method || "BANK_TRANSFER").trim().toUpperCase();
   const provider = String(request.data?.provider || "MANUAL").trim().toUpperCase();
-  const amount = Number(request.data?.amount || request.data?.mobilizationAmount || 0);
   const currency = String(request.data?.currency || "AED").trim().toUpperCase();
+  if (currency !== "AED") throw new HttpsError("invalid-argument", "Owner activation payments must use AED.");
   const reference = String(request.data?.reference || request.data?.paymentReferenceId || "").trim();
   const paymentReferenceId = String(request.data?.paymentReferenceId || reference || `OWNER_PORTAL_${Date.now()}`).trim();
-  const annualContractValue = Number(request.data?.annualContractValue || contract.annualContractValue || 0);
-  const mobilizationAmount = Number(request.data?.mobilizationAmount || amount || 0);
-  const paymentPlan = String(request.data?.paymentPlan || "").trim();
-  const amountSource = String(request.data?.amountSource || "").trim();
-  const commercialScheduleLocked = Boolean(request.data?.commercialScheduleLocked);
+  const annualContractValue = Number(contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);
+  const mobilizationAmount = Number(
+    contract.quoteSnapshot?.activationDeposit ||
+    contract.activationDeposit ||
+    contract.mobilizationAmount ||
+    (annualContractValue > 0 ? Math.round(annualContractValue * 0.15) : 0),
+  );
+  if (!Number.isFinite(annualContractValue) || annualContractValue <= 0 || !Number.isFinite(mobilizationAmount) || mobilizationAmount <= 0) {
+    throw new HttpsError("failed-precondition", "The contract has no locked server payment schedule.");
+  }
+  const submittedAmount = Number(request.data?.amount || request.data?.mobilizationAmount || mobilizationAmount);
+  if (!Number.isFinite(submittedAmount) || Math.abs(submittedAmount - mobilizationAmount) > 0.01) {
+    throw new HttpsError("failed-precondition", "Submitted amount does not match the locked 15% mobilization deposit.");
+  }
+  const amount = mobilizationAmount;
+  const paymentPlan = String(contract.paymentPlan || contract.quoteSnapshot?.paymentPlan || "").trim();
+  const amountSource = "LOCKED_CONTRACT_SCHEDULE";
+  const commercialScheduleLocked = true;
 
   const now = ts();
-  const paymentRef = db.collection("payment_transactions").doc();
+  const paymentRef = db.collection("payment_transactions").doc(`owner_activation_${contractId}`);
   const batch = db.batch();
 
   batch.set(paymentRef, {
@@ -195,10 +213,19 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
     method,
     provider,
     amount,
+    activationDeposit: mobilizationAmount,
     currency,
     reference,
     paymentReferenceId,
     annualContractValue,
+    quoteSnapshot: contract.quoteSnapshot || {
+      annualContractValue,
+      activationDeposit: mobilizationAmount,
+      currency,
+    },
+    quoteHash: contract.quoteHash,
+    quoteVersion: contract.quoteVersion,
+    otpVerificationId: contract.otpVerificationId,
     mobilizationAmount,
     paymentPlan,
     amountSource,

@@ -10,7 +10,7 @@ import {
     ShieldAlert, Link as LinkIcon, 
     Search, Wrench, CheckCircle2
 } from 'lucide-react';
-import { db, collection, query, where, doc, writeBatch, serverTimestamp, onSnapshot, auth, functions, httpsCallable } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, auth, functions, httpsCallable } from '../../lib/firebase';
 import { useAI } from '@bin/shared';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
@@ -136,50 +136,13 @@ export default function OrphanWarRoomPage() {
         if (!selectedOrphan || !targetPropId || !targetUnitId) return;
         setFixing(selectedOrphan.id);
         try {
-            const prop = properties.find(p => p.id === targetPropId);
-            const unit = units.find(u => u.id === targetUnitId);
-            const adminId = auth.currentUser?.uid || 'SYSTEM_ADMIN';
-            
-            const batch = writeBatch(db);
-            const docRef = doc(db, selectedOrphan.type === 'TICKET' ? 'maintenanceTickets' : 'users', selectedOrphan.id);
-            
-            const commonData = {
-                propertyId: targetPropId,
-                unitId: targetUnitId,
-                propertyName: prop?.name || prop?.propertyName,
-                unitNumber: unit?.unitNumber,
-                ownerId: prop?.ownerId || 'SYSTEM',
-                updatedAt: serverTimestamp(),
-                repairedAt: serverTimestamp(),
-                repairSource: 'ADMIN_WAR_ROOM'
-            };
-
-            if (selectedOrphan.type === 'TICKET') {
-                batch.update(docRef, { ...commonData, status: 'OPEN' });
-            } else {
-                batch.update(docRef, { ...commonData });
-                batch.update(doc(db, 'units', targetUnitId), {
-                    occupancyStatus: 'OCCUPIED',
-                    currentTenantId: selectedOrphan.id,
-                    tenantId: selectedOrphan.id,
-                    updatedAt: serverTimestamp()
-                });
-            }
-
-            // 📜 AUDIT LOGGING
-            const logRef = doc(collection(db, 'audit_logs'));
-            batch.set(logRef, {
-                action: 'SECURE_LINKAGE_REPAIR',
-                adminId,
-                timestamp: serverTimestamp(),
+            const repairLinkage = httpsCallable(functions, 'adminRepairOrphanLinkage');
+            await repairLinkage({
                 orphanId: selectedOrphan.id,
                 orphanType: selectedOrphan.type,
-                previousState: { propertyId: 'UNASSOCIATED', unitId: 'UNASSOCIATED' },
-                newState: { propertyId: targetPropId, unitId: targetUnitId },
-                reason: 'ADMIN_WAR_ROOM_MANUAL_FIX'
+                propertyId: targetPropId,
+                unitId: targetUnitId,
             });
-            
-            await batch.commit();
             setSelectedOrphan(null);
             setTargetPropId('');
             setTargetUnitId('');
@@ -192,7 +155,6 @@ export default function OrphanWarRoomPage() {
     };
 
     const repairLegacyGeo = async (property: any) => {
-        const adminId = auth.currentUser?.uid || 'SYSTEM_ADMIN';
         try {
             const geoSource = property.geo || property.location || property.coordinates;
             const geo = buildGeoAnchor({
@@ -203,40 +165,18 @@ export default function OrphanWarRoomPage() {
                 city: property.city || property.area || property.serviceZone || property.geo?.city,
                 area: property.area || property.serviceZone || property.city || property.geo?.area,
                 placeId: property.googlePlaceId || property.placeId || property.geo?.placeId,
-                verifiedBy: adminId
+                verifiedBy: auth.currentUser?.uid || 'SYSTEM_ADMIN'
             });
-            const companyId = property.companyId || 'BIN_GROUP';
-            const payload = {
-                companyId,
-                geo,
-                location: { lat: geo.lat, lng: geo.lng },
-                coordinates: { lat: geo.lat, lng: geo.lng },
-                addressLine: property.addressLine || property.address || geo.address,
-                googlePlaceId: property.googlePlaceId || geo.placeId || '',
+            const repairGeo = httpsCallable(functions, 'adminRepairPropertyGeo');
+            await repairGeo({
+                propertyId: property.id,
+                lat: geo.lat,
+                lng: geo.lng,
+                address: property.addressLine || property.address || geo.address,
                 city: property.city || geo.city,
                 area: property.area || geo.area,
                 emirate: property.emirate || geo.emirate,
-                geoAnchorStatus: 'admin_repaired',
-                updatedAt: serverTimestamp()
-            };
-            const batch = writeBatch(db);
-            batch.set(doc(db, 'properties', property.id), payload, { merge: true });
-            batch.set(doc(db, 'companies', companyId, 'properties', property.id), { ...property, ...payload, propertyId: property.id }, { merge: true });
-            batch.set(doc(collection(db, 'audit_logs')), {
-                action: 'GEO_ANCHOR_REPAIR',
-                adminId,
-                propertyId: property.id,
-                companyId,
-                previousState: {
-                    geo: property.geo || null,
-                    location: property.location || null,
-                    coordinates: property.coordinates || null
-                },
-                newState: { lat: geo.lat, lng: geo.lng, geohash: geo.geohash },
-                createdAt: serverTimestamp(),
-                auditVersion: 1
             });
-            await batch.commit();
         } catch (err: any) {
             alert(err?.message || 'Open map and select a verified pin before repairing this property.');
         }

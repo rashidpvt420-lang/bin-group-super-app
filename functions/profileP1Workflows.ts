@@ -79,19 +79,6 @@ async function requireAdmin(auth: any) {
   ) {
     return;
   }
-
-  const profile = await profileFor(auth.uid);
-  const data = profile.data;
-  if (
-    data.admin === true ||
-    data.isAdmin === true ||
-    data.superAdmin === true ||
-    data.super_admin === true ||
-    ADMIN_ROLES.has(normalizedRole(data.role || data.userRole || data.primaryRole))
-  ) {
-    return;
-  }
-
   throw new HttpsError("permission-denied", "Admin permission required.");
 }
 
@@ -100,10 +87,6 @@ async function requireProfileRole(auth: any, allowed: Set<string>, label: string
   if (hasRole(auth.token || {}, allowed)) {
     return (await profileFor(auth.uid)).data;
   }
-
-  const profile = await profileFor(auth.uid);
-  const role = normalizedRole(profile.data.role || profile.data.userRole || profile.data.primaryRole);
-  if (allowed.has(role)) return profile.data;
   throw new HttpsError("permission-denied", `${label} role required.`);
 }
 
@@ -256,70 +239,68 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
 
   if (!commissionIds.length) throw new HttpsError("failed-precondition", "No approved unpaid commissions are available for payout.");
 
-  const commissionDocs = await Promise.all(commissionIds.map((id) => db.collection("broker_commissions").doc(id).get()));
-  const invalid = commissionDocs.find((docSnap) => {
-    if (!docSnap.exists) return true;
-    const data = docSnap.data() || {};
-    const payoutStatus = text(data.payoutStatus).toUpperCase();
-    return data.brokerId !== uid ||
-      text(data.status).toUpperCase() !== "APPROVED" ||
-      ["REQUESTED", "APPROVED", "PAID"].includes(payoutStatus);
-  });
-  if (invalid) throw new HttpsError("permission-denied", "One or more commissions are not eligible for this broker payout request.");
-
-  const amount = commissionDocs.reduce((sum, docSnap) => sum + numberValue(docSnap.data()?.amount), 0);
-  if (amount <= 0) throw new HttpsError("failed-precondition", "Payout amount must be greater than zero.");
-
   const now = ts();
   const payoutRef = db.collection("broker_payout_requests").doc();
-  const batch = db.batch();
   const notes = text(request.data?.notes);
+  const commissionRefs = commissionIds.map((commissionId) => db.collection("broker_commissions").doc(commissionId));
+  const amount = await db.runTransaction(async (transaction) => {
+    const commissionDocs = await Promise.all(commissionRefs.map((commissionRef) => transaction.get(commissionRef)));
+    const invalid = commissionDocs.find((docSnap) => {
+      if (!docSnap.exists) return true;
+      const data = docSnap.data() || {};
+      const payoutStatus = text(data.payoutStatus).toUpperCase();
+      return data.brokerId !== uid ||
+        text(data.status).toUpperCase() !== "APPROVED" ||
+        ["REQUESTED", "APPROVED", "PAID"].includes(payoutStatus);
+    });
+    if (invalid) throw new HttpsError("permission-denied", "One or more commissions are not eligible for this broker payout request.");
 
-  batch.set(payoutRef, clean({
-    brokerId: uid,
-    brokerUid: uid,
-    brokerEmail: email,
-    brokerName: text(broker.displayName || broker.name || request.auth?.token?.name, "Broker"),
-    brokerCode: text(broker.brokerCode || broker.affiliateCode || `BIN-${uid.slice(0, 8).toUpperCase()}`),
-    amount,
-    currency: "AED",
-    commissionIds,
-    commissionCount: commissionIds.length,
-    bankName: text(broker.bankName),
-    bankAccountHolder: text(broker.bankAccountHolder || broker.displayName || broker.name),
-    bankIban: text(broker.bankIban || broker.iban),
-    status: "PENDING_ADMIN_REVIEW",
-    approvalStatus: "PENDING",
-    paymentStatus: "REQUESTED",
-    verificationState: "ADMIN_FINANCE_REVIEW_REQUIRED",
-    notes: notes || null,
-    requestedBy: uid,
-    requestedAt: now,
-    createdAt: now,
-    updatedAt: now,
-  }));
+    const total = commissionDocs.reduce((sum, docSnap) => sum + numberValue(docSnap.data()?.amount), 0);
+    if (total <= 0) throw new HttpsError("failed-precondition", "Payout amount must be greater than zero.");
 
-  commissionDocs.forEach((docSnap) => {
-    batch.set(docSnap.ref, {
-      payoutStatus: "REQUESTED",
-      payoutRequestId: payoutRef.id,
-      payoutRequestedAt: now,
+    transaction.set(payoutRef, clean({
+      brokerId: uid,
+      brokerUid: uid,
+      brokerEmail: email,
+      brokerName: text(broker.displayName || broker.name || request.auth?.token?.name, "Broker"),
+      brokerCode: text(broker.brokerCode || broker.affiliateCode || `BIN-${uid.slice(0, 8).toUpperCase()}`),
+      amount: total,
+      currency: "AED",
+      commissionIds,
+      commissionCount: commissionIds.length,
+      bankName: text(broker.bankName),
+      bankAccountHolder: text(broker.bankAccountHolder || broker.displayName || broker.name),
+      bankIban: text(broker.bankIban || broker.iban),
+      status: "PENDING_ADMIN_REVIEW",
+      approvalStatus: "PENDING",
+      paymentStatus: "REQUESTED",
+      verificationState: "ADMIN_FINANCE_REVIEW_REQUIRED",
+      notes: notes || null,
+      requestedBy: uid,
+      requestedAt: now,
+      createdAt: now,
       updatedAt: now,
-    }, { merge: true });
+    }));
+    commissionDocs.forEach((docSnap) => {
+      transaction.set(docSnap.ref, {
+        payoutStatus: "REQUESTED",
+        payoutRequestId: payoutRef.id,
+        payoutRequestedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+    });
+    transaction.set(db.collection("auditLogs").doc(), clean({
+      action: "BROKER_PAYOUT_REQUEST_SUBMITTED",
+      actorId: uid,
+      actorEmail: email,
+      brokerId: uid,
+      payoutRequestId: payoutRef.id,
+      commissionIds,
+      amount: total,
+      createdAt: now,
+    }));
+    return total;
   });
-
-  batch.set(db.collection("auditLogs").doc(), clean({
-    action: "BROKER_PAYOUT_REQUEST_SUBMITTED",
-    actorId: uid,
-    actorEmail: email,
-    brokerId: uid,
-    payoutRequestId: payoutRef.id,
-    commissionIds,
-    amount,
-    createdAt: now,
-  }));
-
-  await batch.commit();
   return { status: "SUCCESS", payoutRequestId: payoutRef.id, amount, commissionCount: commissionIds.length };
 });
 
@@ -559,4 +540,264 @@ export const tenantRequestUnitLink = onCall({ cors: true, region: "europe-west3"
   }));
 
   return { status: "PENDING_ADMIN_REVIEW", requestId: requestRef.id };
+});
+
+export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+  await requireAdmin(request.auth);
+
+  const requestId = text(request.data?.requestId);
+  const decision = text(request.data?.decision).toUpperCase();
+  if (!requestId) throw new HttpsError("invalid-argument", "requestId is required.");
+  if (!["APPROVE", "REJECT"].includes(decision)) {
+    throw new HttpsError("invalid-argument", "decision must be APPROVE or REJECT.");
+  }
+
+  const requestRef = db.collection("tenant_unit_link_requests").doc(requestId);
+  const initialRequest = await requestRef.get();
+  if (!initialRequest.exists) throw new HttpsError("not-found", "Tenant unit-link request not found.");
+  const initialData = initialRequest.data() || {};
+  const requestedPropertyId = text(initialData.propertyId);
+  const requestedUnitNumber = text(initialData.unitNumber);
+  let unitId = text(request.data?.unitId || initialData.candidateUnitId);
+
+  if (decision === "APPROVE" && !unitId && requestedPropertyId && requestedUnitNumber) {
+    const candidates = await db.collection("units")
+      .where("propertyId", "==", requestedPropertyId)
+      .where("unitNumber", "==", requestedUnitNumber)
+      .limit(1)
+      .get();
+    unitId = candidates.docs[0]?.id || "";
+  }
+  if (decision === "APPROVE" && !unitId) {
+    throw new HttpsError("failed-precondition", "No existing unit matches this request.");
+  }
+
+  const actorId = request.auth?.uid || "admin";
+  const now = ts();
+  await db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(requestRef);
+    if (!requestSnap.exists) throw new HttpsError("not-found", "Tenant unit-link request not found.");
+    const data = requestSnap.data() || {};
+    if (text(data.status).toUpperCase() !== "PENDING_ADMIN_REVIEW") {
+      throw new HttpsError("failed-precondition", "Tenant unit-link request has already been resolved.");
+    }
+
+    const tenantId = text(data.tenantUid || data.tenantId);
+    if (!tenantId) throw new HttpsError("failed-precondition", "Tenant identity is missing from the request.");
+
+    if (decision === "REJECT") {
+      transaction.set(requestRef, {
+        status: "REJECTED",
+        verificationState: "ADMIN_REJECTED",
+        resolvedAt: now,
+        resolvedBy: actorId,
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(db.collection("audit_logs").doc(), {
+        action: "ADMIN_REJECTED_TENANT_UNIT_LINK",
+        actorId,
+        actorRole: "admin",
+        targetType: "tenant_unit_link_requests",
+        targetId: requestId,
+        createdAt: now,
+      });
+      return;
+    }
+
+    const unitRef = db.collection("units").doc(unitId);
+    const unitSnap = await transaction.get(unitRef);
+    if (!unitSnap.exists) throw new HttpsError("not-found", "Selected unit does not exist.");
+    const unit = unitSnap.data() || {};
+    if (text(unit.propertyId) !== text(data.propertyId)) {
+      throw new HttpsError("failed-precondition", "Selected unit is not part of the requested property.");
+    }
+    const existingTenantId = text(unit.tenantUid || unit.tenantId || unit.currentTenantId);
+    if (existingTenantId && existingTenantId !== tenantId) {
+      throw new HttpsError("already-exists", "Selected unit is already linked to another tenant.");
+    }
+
+    transaction.set(unitRef, {
+      tenantId,
+      tenantUid: tenantId,
+      currentTenantId: tenantId,
+      tenantEmail: normalizedEmail(data.tenantEmail),
+      tenantName: text(data.tenantName),
+      occupancyStatus: "occupied",
+      tenantStatus: "linked",
+      status: "OCCUPIED",
+      linkedBy: actorId,
+      linkedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    transaction.set(db.collection("users").doc(tenantId), {
+      unitId,
+      propertyId: text(data.propertyId),
+      tenantUnitLinkVerified: true,
+      tenantUnitLinkedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    transaction.set(requestRef, {
+      status: "APPROVED",
+      verificationState: "ADMIN_VERIFIED",
+      linkedUnitId: unitId,
+      linkedAt: now,
+      resolvedAt: now,
+      resolvedBy: actorId,
+      updatedAt: now,
+    }, { merge: true });
+    transaction.set(db.collection("audit_logs").doc(), {
+      action: "ADMIN_APPROVED_TENANT_UNIT_LINK",
+      actorId,
+      actorRole: "admin",
+      targetType: "tenant_unit_link_requests",
+      targetId: requestId,
+      metadata: { propertyId: text(data.propertyId), unitId, tenantId },
+      createdAt: now,
+    });
+  });
+
+  return { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", requestId, unitId: unitId || null };
+});
+
+export const adminRepairOrphanLinkage = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+  await requireAdmin(request.auth);
+
+  const orphanId = text(request.data?.orphanId);
+  const orphanType = text(request.data?.orphanType).toUpperCase();
+  const propertyId = text(request.data?.propertyId);
+  const unitId = text(request.data?.unitId);
+  if (!orphanId || !["TICKET", "TENANT"].includes(orphanType) || !propertyId || !unitId) {
+    throw new HttpsError("invalid-argument", "orphanId, orphanType, propertyId, and unitId are required.");
+  }
+
+  const propertyRef = db.collection("properties").doc(propertyId);
+  const unitRef = db.collection("units").doc(unitId);
+  const targetRef = db.collection(orphanType === "TICKET" ? "maintenanceTickets" : "users").doc(orphanId);
+  const actorId = request.auth?.uid || "admin";
+  const now = ts();
+
+  await db.runTransaction(async (transaction) => {
+    const [propertySnap, unitSnap, targetSnap] = await Promise.all([
+      transaction.get(propertyRef),
+      transaction.get(unitRef),
+      transaction.get(targetRef),
+    ]);
+    if (!propertySnap.exists || !unitSnap.exists || !targetSnap.exists) {
+      throw new HttpsError("not-found", "Property, unit, or orphan record no longer exists.");
+    }
+    const property = propertySnap.data() || {};
+    const unit = unitSnap.data() || {};
+    if (text(unit.propertyId) !== propertyId) {
+      throw new HttpsError("failed-precondition", "Selected unit does not belong to the selected property.");
+    }
+
+    const commonPatch = {
+      propertyId,
+      unitId,
+      propertyName: text(property.name || property.propertyName),
+      unitNumber: text(unit.unitNumber),
+      ownerId: text(property.ownerId || property.ownerUid),
+      repairedAt: now,
+      repairedBy: actorId,
+      repairSource: "ADMIN_WAR_ROOM_CALLABLE",
+      updatedAt: now,
+    };
+
+    if (orphanType === "TICKET") {
+      transaction.set(targetRef, { ...commonPatch, status: "OPEN" }, { merge: true });
+    } else {
+      const existingTenantId = text(unit.tenantUid || unit.tenantId || unit.currentTenantId);
+      if (existingTenantId && existingTenantId !== orphanId) {
+        throw new HttpsError("already-exists", "Selected unit is already linked to another tenant.");
+      }
+      transaction.set(targetRef, commonPatch, { merge: true });
+      transaction.set(unitRef, {
+        occupancyStatus: "OCCUPIED",
+        currentTenantId: orphanId,
+        tenantId: orphanId,
+        tenantUid: orphanId,
+        linkedBy: actorId,
+        linkedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+    }
+
+    transaction.set(db.collection("audit_logs").doc(), {
+      action: "SECURE_LINKAGE_REPAIR",
+      actorId,
+      actorRole: "admin",
+      targetType: orphanType === "TICKET" ? "maintenanceTickets" : "users",
+      targetId: orphanId,
+      metadata: { orphanType, propertyId, unitId },
+      createdAt: now,
+    });
+  });
+
+  return { status: "REPAIRED", orphanId, orphanType, propertyId, unitId };
+});
+
+export const adminRepairPropertyGeo = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+  await requireAdmin(request.auth);
+
+  const propertyId = text(request.data?.propertyId);
+  const lat = numberValue(request.data?.lat, Number.NaN);
+  const lng = numberValue(request.data?.lng, Number.NaN);
+  if (!propertyId || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new HttpsError("invalid-argument", "A propertyId and valid latitude/longitude are required.");
+  }
+  const propertyRef = db.collection("properties").doc(propertyId);
+  const propertySnap = await propertyRef.get();
+  if (!propertySnap.exists) throw new HttpsError("not-found", "Property not found.");
+  const property = propertySnap.data() || {};
+  const actorId = request.auth?.uid || "admin";
+  const now = ts();
+  const address = text(request.data?.address || property.addressLine || property.address);
+  const emirate = text(request.data?.emirate || property.emirate);
+  const city = text(request.data?.city || property.city || property.area);
+  const area = text(request.data?.area || property.area || property.city);
+  const companyId = text(property.companyId, "BIN_GROUP");
+  const geo = {
+    lat,
+    lng,
+    latitude: lat,
+    longitude: lng,
+    point: new admin.firestore.GeoPoint(lat, lng),
+    address,
+    emirate,
+    city,
+    area,
+    source: "ADMIN_WAR_ROOM_CALLABLE",
+    verified: true,
+  };
+
+  const batch = db.batch();
+  const patch = {
+    geo,
+    location: { lat, lng },
+    coordinates: { lat, lng },
+    addressLine: address,
+    emirate,
+    city,
+    area,
+    geoAnchorStatus: "admin_repaired",
+    updatedAt: now,
+  };
+  batch.set(propertyRef, patch, { merge: true });
+  batch.set(db.collection("companies").doc(companyId).collection("properties").doc(propertyId), {
+    ...patch,
+    propertyId,
+    companyId,
+  }, { merge: true });
+  batch.set(db.collection("audit_logs").doc(), {
+    action: "GEO_ANCHOR_REPAIR",
+    actorId,
+    actorRole: "admin",
+    targetType: "properties",
+    targetId: propertyId,
+    metadata: { companyId, lat, lng },
+    createdAt: now,
+  });
+  await batch.commit();
+
+  return { status: "REPAIRED", propertyId };
 });

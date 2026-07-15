@@ -81,6 +81,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         portfolioSummary,
         isContractSigned,
         signatureName,
+        contractOtpVerificationId,
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
     const ar = isRTL;
@@ -200,6 +201,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         if (!ownerAccount?.uid) throw new Error(copy('Owner account is missing. Return to the account step.', 'حساب المالك غير موجود. ارجع إلى خطوة إنشاء الحساب.'));
         if (!paymentMethod) throw new Error(copy('Select a payment method first.', 'اختر طريقة الدفع أولاً.'));
         if (!isContractSigned || signatureName.trim().length < 3) throw new Error(copy('A valid signed agreement is required.', 'يلزم توقيع صحيح على الاتفاقية.'));
+        if (!contractOtpVerificationId) throw new Error(copy('Verify the contract email OTP before payment.', 'تحقق من رمز توقيع العقد عبر البريد الإلكتروني قبل الدفع.'));
+        const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);
+        if (!proofDocuments.propertyProof || (!hasIndividualIdentity && !proofDocuments.tradeLicense)) {
+            throw new Error(copy(
+                'Property proof and either Emirates ID plus passport or a trade license are required.',
+                'يلزم إثبات ملكية العقار وإما الهوية الإماراتية مع جواز السفر أو الرخصة التجارية.',
+            ));
+        }
         if (amountDue <= 0) throw new Error(copy('The payable amount is missing. Recalculate the quotation.', 'مبلغ الدفع غير موجود. أعد احتساب عرض السعر.'));
     };
 
@@ -238,6 +247,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             },
             properties,
             signatureName: signatureName.trim(),
+            otpVerificationId: contractOtpVerificationId,
             documentUrls: urls,
         });
 

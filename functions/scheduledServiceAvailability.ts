@@ -29,11 +29,7 @@ async function operationsRole(auth: any) {
   if (token.admin === true || token.superAdmin === true || token.super_admin === true || ADMIN_ROLES.has(tokenRole)) {
     return tokenRole || 'admin';
   }
-  const profile = await db.collection('users').doc(auth.uid).get();
-  const data = profile.data() || {};
-  const profileRole = normalized(data.role || data.userRole || data.primaryRole);
-  if (!ADMIN_ROLES.has(profileRole)) throw new HttpsError('permission-denied', 'Operations access is required.');
-  return profileRole;
+  throw new HttpsError('permission-denied', 'Operations custom claim is required.');
 }
 
 async function audit(actorId: string, actorRole: string, action: string, targetId: string, metadata: Record<string, unknown> = {}) {

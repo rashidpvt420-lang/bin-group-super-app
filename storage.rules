@@ -159,8 +159,6 @@ service firebase.storage {
       allow write: if isAuth() && ticketExists(ticketId) && (
         ticket(ticketId).tenantId == request.auth.uid ||
         ticket(ticketId).tenantUid == request.auth.uid ||
-        ticket(ticketId).ownerId == request.auth.uid ||
-        ticket(ticketId).ownerUid == request.auth.uid ||
         isAdmin()
       ) && isImageUpload(10);
     }
@@ -181,13 +179,13 @@ service firebase.storage {
     }
 
     match /design_requests/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(50);
       allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
     match /ai_design_renders/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow create, update, delete: if isAdmin();
     }
 

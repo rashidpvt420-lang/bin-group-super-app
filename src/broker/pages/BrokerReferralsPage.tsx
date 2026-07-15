@@ -21,9 +21,10 @@ import {
   alpha,
 } from '@mui/material';
 import { AlertCircle, Building, Building2, CheckCircle2, Clock, DollarSign, FileText, Info, Plus } from 'lucide-react';
-import { addDoc, collection, db, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from '../../lib/firebase';
+import { collection, db, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { logAuditAction } from '../../utils/auditLogger';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
@@ -57,23 +58,10 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
   const [selectedPropertyId, setSelectedPropertyId] = useState('');
   const [contractType, setContractType] = useState('annual_lease');
   const [signedDate, setSignedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [brokerCommissionRate, setBrokerCommissionRate] = useState(0.10);
 
   useEffect(() => {
     if (openFormByDefault) setOpenAdd(true);
   }, [openFormByDefault]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'companyProfile'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (typeof data.brokerCommissionRate === 'number') {
-          setBrokerCommissionRate(data.brokerCommissionRate);
-        }
-      }
-    }, (err) => console.warn('[BrokerReferrals] settings listener failed:', err));
-    return () => unsub();
-  }, []);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -203,10 +191,6 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         referralData.contractType = contractType;
         referralData.estimatedValue = estimatedAmount;
         referralData.signedDate = signedDate;
-        referralData.commissionStatus = 'PENDING';
-        referralData.commissionRate = brokerCommissionRate;
-        referralData.commissionAmount = Math.round(estimatedAmount * brokerCommissionRate);
-        referralData.commissionCreationStatus = 'PENDING_ADMIN_CONTRACT_MATCH';
       } else {
         referralData.propertyName = clean(propertyName);
         referralData.propertyType = clean(propertyType);
@@ -217,19 +201,16 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
 
       await setDoc(refRef, referralData);
 
-      const auditPayload = {
-        actorId: brokerId,
-        actorRole: 'broker',
+      await logAuditAction({
         action: 'BROKER_REFERRAL_SUBMITTED',
         targetType: 'BROKER_REFERRAL',
         targetId: refRef.id,
-        module: 'broker_referrals',
-        status: 'RECORDED',
-        brokerId,
-        brokerUid: brokerId,
-        brokerEmail,
-        attributionId,
         metadata: {
+          module: 'broker_referrals',
+          status: 'RECORDED',
+          brokerId,
+          brokerEmail,
+          attributionId,
           referralType,
           clientName: clean(clientName),
           propertyId: selectedPropertyId,
@@ -237,13 +218,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
           estimatedAmount,
           contractType: referralType === 'contract' ? contractType : null,
         },
-        createdAt: serverTimestamp(),
-      };
-
-      await Promise.all([
-        addDoc(collection(db, 'audit_logs'), auditPayload),
-        addDoc(collection(db, 'auditLogs'), { ...auditPayload, referralId: refRef.id, timestamp: serverTimestamp() }),
-      ]);
+      });
 
       setOpenAdd(false);
       resetForm();

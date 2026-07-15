@@ -317,7 +317,6 @@ export default function TechnicianJobDetailPage() {
                     completionPhotos: mergedCompletion,
                     afterPhotos: mergedCompletion,
                     afterPhotoUrl: mergedCompletion[0] || ticket?.afterPhotoUrl || null,
-                    tenantApprovalStatus: ticket?.tenantApprovalStatus || 'PENDING_TENANT_REVIEW',
                     updatedAt: serverTimestamp()
                 });
             }

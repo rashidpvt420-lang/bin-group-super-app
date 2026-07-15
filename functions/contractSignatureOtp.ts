@@ -12,6 +12,7 @@ const smtpPass = defineSecret("SMTP_PASS");
 
 const OTP_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
+const MAX_REQUESTS_PER_HOUR = 5;
 
 function asText(value: unknown, fallback = "") {
   const text = String(value ?? "").trim();
@@ -60,7 +61,32 @@ async function sendOtpEmail(args: { to: string; otp: string; contractId: string;
   `;
   const text = `BIN GROUP contract signature OTP: ${args.otp}. Expires in ${OTP_TTL_MINUTES} minutes. Contract reference: ${args.contractId || args.requestId}.`;
   const info = await (await createTransporter()).sendMail({ from, replyTo, to: args.to, subject, html, text });
-  return info.messageId || "";
+  const messageId = asText(info.messageId);
+  if (!messageId) throw new Error("SMTP provider did not return a message ID.");
+  return messageId;
+}
+
+async function enforceOtpRequestRate(uid: string) {
+  const ref = db.collection("contract_signature_otp_rate_limits").doc(uid);
+  const nowMs = Date.now();
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const data = snap.data() || {};
+    const windowStartedAt = data.windowStartedAt?.toMillis?.() || 0;
+    const inCurrentWindow = windowStartedAt > 0 && nowMs - windowStartedAt < 60 * 60 * 1000;
+    const count = inCurrentWindow ? Number(data.count || 0) : 0;
+    if (count >= MAX_REQUESTS_PER_HOUR) {
+      throw new HttpsError("resource-exhausted", "Too many OTP requests. Try again after one hour.");
+    }
+    transaction.set(ref, {
+      uid,
+      count: count + 1,
+      windowStartedAt: inCurrentWindow
+        ? data.windowStartedAt
+        : admin.firestore.Timestamp.fromMillis(nowMs),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
 }
 
 export const requestContractSignatureOtp = onCall(
@@ -79,8 +105,16 @@ export const requestContractSignatureOtp = onCall(
     }
 
     const uid = request.auth.uid;
-    const email = normalizeEmail(request.data?.email || request.auth.token?.email);
-    if (!email) throw new HttpsError("invalid-argument", "A verified email address is required to deliver the OTP.");
+    const authEmail = normalizeEmail(request.auth.token?.email);
+    const requestedEmail = normalizeEmail(request.data?.email);
+    if (!authEmail) {
+      throw new HttpsError("failed-precondition", "An Auth email is required to deliver the OTP.");
+    }
+    if (requestedEmail && requestedEmail !== authEmail) {
+      throw new HttpsError("permission-denied", "OTP email must match the authenticated account.");
+    }
+    const email = authEmail;
+    await enforceOtpRequestRate(uid);
 
     const contractId = asText(request.data?.contractId || request.data?.propertyId || "contract-pending", "contract-pending").slice(0, 120);
     const propertyName = asText(request.data?.propertyName || request.data?.address || "BIN GROUP contract", "BIN GROUP contract").slice(0, 180);
@@ -161,55 +195,120 @@ export const verifyContractSignatureOtp = onCall(
     if (!signature) throw new HttpsError("invalid-argument", "Digital signature name is required.");
 
     const ref = db.collection("contract_signature_otps").doc(requestId);
-    const snap = await ref.get();
-    if (!snap.exists) throw new HttpsError("not-found", "OTP request not found.");
-    const data = snap.data() || {};
-    if (data.uid !== uid) throw new HttpsError("permission-denied", "OTP request does not belong to this user.");
-    if (data.status === "VERIFIED") return { ok: true, alreadyVerified: true, verificationId: requestId, channel: data.channel || "email" };
+    const result = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) return { outcome: "NOT_FOUND" as const, data: {} as FirebaseFirestore.DocumentData };
+      const data = snap.data() || {};
+      if (data.uid !== uid) return { outcome: "FORBIDDEN" as const, data };
+      if (data.status === "VERIFIED") return { outcome: "ALREADY_VERIFIED" as const, data };
 
-    const attempts = Number(data.attempts || 0);
-    if (attempts >= MAX_ATTEMPTS) throw new HttpsError("resource-exhausted", "Maximum OTP attempts exceeded. Request a new code.");
-    const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
-    if (!expiresAt || Date.now() > expiresAt) {
-      await ref.set({ status: "EXPIRED", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      throw new HttpsError("deadline-exceeded", "OTP expired. Request a new code.");
-    }
+      const attempts = Number(data.attempts || 0);
+      if (attempts >= MAX_ATTEMPTS) return { outcome: "MAX_ATTEMPTS" as const, data };
+      const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
+      if (!expiresAt || Date.now() > expiresAt) {
+        transaction.set(ref, { status: "EXPIRED", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        return { outcome: "EXPIRED" as const, data };
+      }
 
-    const expectedHash = asText(data.otpHash);
-    const salt = asText(data.salt);
-    const submittedHash = hashOtp(otp, salt);
-    if (submittedHash !== expectedHash) {
-      await ref.set({
-        attempts: FieldValue.increment(1),
-        lastFailedAt: FieldValue.serverTimestamp(),
+      const expectedHash = asText(data.otpHash);
+      const submittedHash = hashOtp(otp, asText(data.salt));
+      const expectedBuffer = Buffer.from(expectedHash, "hex");
+      const submittedBuffer = Buffer.from(submittedHash, "hex");
+      const matches = expectedBuffer.length === submittedBuffer.length &&
+        expectedBuffer.length > 0 &&
+        crypto.timingSafeEqual(expectedBuffer, submittedBuffer);
+      if (!matches) {
+        transaction.set(ref, {
+          attempts: attempts + 1,
+          lastFailedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return { outcome: "INVALID" as const, data };
+      }
+
+      transaction.set(ref, {
+        status: "VERIFIED",
+        signature,
+        verifiedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      throw new HttpsError("permission-denied", "Invalid OTP.");
-    }
+      return { outcome: "VERIFIED" as const, data };
+    });
 
-    await ref.set({
-      status: "VERIFIED",
-      signature,
-      verifiedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    if (result.outcome === "NOT_FOUND") throw new HttpsError("not-found", "OTP request not found.");
+    if (result.outcome === "FORBIDDEN") throw new HttpsError("permission-denied", "OTP request does not belong to this user.");
+    if (result.outcome === "MAX_ATTEMPTS") throw new HttpsError("resource-exhausted", "Maximum OTP attempts exceeded. Request a new code.");
+    if (result.outcome === "EXPIRED") throw new HttpsError("deadline-exceeded", "OTP expired. Request a new code.");
+    if (result.outcome === "INVALID") throw new HttpsError("permission-denied", "Invalid OTP.");
+    if (result.outcome === "ALREADY_VERIFIED") {
+      return {
+        ok: true,
+        alreadyVerified: true,
+        verificationId: requestId,
+        channel: result.data.channel || "email",
+        contractId: result.data.contractId || "",
+      };
+    }
 
     await db.collection("contract_signature_otp_audit").add({
       uid,
-      contractId: data.contractId || "",
-      propertyName: data.propertyName || "",
+      contractId: result.data.contractId || "",
+      propertyName: result.data.propertyName || "",
       otpRequestId: requestId,
       status: "OTP_VERIFIED",
-      channel: data.channel || "email",
+      channel: result.data.channel || "email",
       createdAt: FieldValue.serverTimestamp(),
     });
 
     return {
       ok: true,
       verificationId: requestId,
-      channel: data.channel || "email",
-      contractId: data.contractId || "",
+      channel: result.data.channel || "email",
+      contractId: result.data.contractId || "",
       verifiedAt: Date.now(),
     };
   }
 );
+
+export async function assertVerifiedContractSignatureOtp(args: {
+  verificationId: string;
+  uid: string;
+  contractId: string;
+  signature: string;
+}) {
+  const verificationId = asText(args.verificationId);
+  const contractId = asText(args.contractId);
+  const signature = asText(args.signature);
+  if (!verificationId || !contractId || !signature) {
+    throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required.");
+  }
+
+  const ref = db.collection("contract_signature_otps").doc(verificationId);
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new HttpsError("failed-precondition", "Contract OTP verification was not found.");
+    const data = snap.data() || {};
+    const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
+    if (
+      data.status !== "VERIFIED" ||
+      data.uid !== args.uid ||
+      asText(data.contractId) !== contractId ||
+      asText(data.signature) !== signature ||
+      !expiresAt ||
+      Date.now() > expiresAt
+    ) {
+      throw new HttpsError("failed-precondition", "Contract OTP evidence is invalid, expired, or belongs to another contract.");
+    }
+    const consumedFor = asText(data.consumedFor);
+    if (consumedFor && consumedFor !== contractId) {
+      throw new HttpsError("failed-precondition", "Contract OTP evidence has already been consumed.");
+    }
+    transaction.set(ref, {
+      consumedFor: contractId,
+      consumedAt: data.consumedAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+
+  return { verificationId, contractId };
+}

@@ -1,5 +1,5 @@
-import { onCall } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
+import { defineSecret } from "firebase-functions/params";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -42,7 +42,11 @@ export const assessDamage = onCall({
   cors: true,
   timeoutSeconds: 60,
   maxInstances: 10,
+  secrets: [openAiKey, geminiApiKey],
 }, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Sign in before requesting damage assessment.");
+  }
   const { imageBase64, mimeType = "image/jpeg", propertyId, notes } = request.data || {};
 
   if (!imageBase64) return { success: false, error: "No image provided", assessment: FALLBACK_RESPONSE };

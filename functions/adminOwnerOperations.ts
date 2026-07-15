@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPDF } from "./pdfEngine";
 import { termFieldsFromStart } from "./ownerContractTerm";
+import { assertVerifiedContractSignatureOtp } from "./contractSignatureOtp";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -258,6 +259,10 @@ export const adminCreateOwnerPropertyInspection = onCall({ cors: true }, async (
 
 export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, async (request) => {
   await assertAdmin(request.auth);
+  throw new HttpsError(
+    "failed-precondition",
+    "Legacy intake conversion is disabled. Approve the canonical server-quoted payment transaction with adminApprovePayment.",
+  );
   const intakeId = s(request.data?.intakeId || request.data?.id);
   if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");
   const { ref, data } = await intakeById(intakeId);
@@ -390,12 +395,20 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
   const ownerId = s(contract.ownerId || contract.ownerUid);
   const ownerEmail = s(contract.ownerEmail || request.auth.token?.email).toLowerCase();
   const requesterEmail = s(request.auth.token?.email).toLowerCase();
-  if (ownerId && ownerId !== request.auth.uid && ownerEmail !== requesterEmail) throw new HttpsError("permission-denied", "This contract belongs to another owner.");
+  if (!ownerId || ownerId !== request.auth.uid || (ownerEmail && ownerEmail !== requesterEmail)) {
+    throw new HttpsError("permission-denied", "This contract belongs to another owner.");
+  }
 
   const alreadySigned = ALREADY_SIGNED_STATUSES.has(s(contract.status).toUpperCase()) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
   if (alreadySigned) {
     return { status: s(contract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: contract.signedPdfUrl || contract.pdfUrl || "", idempotent: true };
   }
+  await assertVerifiedContractSignatureOtp({
+    verificationId: s(request.data?.otpVerificationId),
+    uid: request.auth.uid,
+    contractId,
+    signature: signatureName,
+  });
 
   const signedAtDate = new Date();
   const termFields = termFieldsFromStart(signedAtDate);
@@ -404,7 +417,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
   // NOTE: signing only marks the contract ready for activation. Payment verification
   // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
   // dashboard - signing must never set paymentVerified/dashboardUnlocked on its own.
-  batch.set(ref, { status: "READY_FOR_ACTIVATION", contractStatus: "signed_awaiting_payment_verification", activationStatus: "PENDING_PAYMENT_VERIFICATION", ownerSigned: true, signatureStatus: "OWNER_SIGNED", signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+  batch.set(ref, { status: "READY_FOR_ACTIVATION", contractStatus: "signed_awaiting_payment_verification", activationStatus: "PENDING_PAYMENT_VERIFICATION", ownerSigned: true, signatureStatus: "OWNER_SIGNED", otpVerificationId: s(request.data?.otpVerificationId), signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
   batch.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
   if (ownerId) {
     const ownerPatch = {
@@ -514,13 +527,12 @@ export const adminResumeOwner = onCall({ cors: true }, async (request) => {
 });
 
 export const approveOwnerActivation = onCall({ cors: true }, async (request) => {
-  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "User must be authenticated.");
+  await assertAdmin(request.auth);
+  throw new HttpsError(
+    "failed-precondition",
+    "Legacy activation is disabled. Use adminApprovePayment so payment, quote, contract, owner, and property evidence are verified atomically.",
+  );
   const adminId = request.auth.uid;
-  const adminDoc = await db.collection("users").doc(adminId).get();
-  const adminData = adminDoc.data();
-  if (!adminData || !adminRoles.has(adminData.role)) {
-    throw new HttpsError("permission-denied", "Only administrators can perform final owner activation.");
-  }
 
   const { intakeId, ownerId, contractId, paymentId, propertyIds } = request.data;
   if (!intakeId || !ownerId) throw new HttpsError("invalid-argument", "Missing required fields: intakeId, ownerId");
@@ -537,8 +549,12 @@ export const approveOwnerActivation = onCall({ cors: true }, async (request) => 
 
   // 2. Update users
   batch.set(db.collection("users").doc(ownerId), {
-    status: "ACTIVE",
+    status: "active",
+    adminApproved: true,
+    paymentVerified: true,
     dashboardUnlocked: true,
+    dashboardLocked: false,
+    activeContractId: contractId || null,
     activationStatus: "ACTIVE",
     updatedAt: now
   }, { merge: true });

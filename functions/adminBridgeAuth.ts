@@ -16,6 +16,33 @@ export const mintAdminBridgeToken = onCall({ cors: true, region: "europe-west3" 
   if (!authContext) {
     throw new HttpsError("unauthenticated", "Sign-in required before bridging to the admin panel.");
   }
+  const claims = authContext.token || {};
+  const role = String(claims.role || claims.userRole || claims.primaryRole || "").trim().toLowerCase();
+  const allowedRoles = new Set([
+    "admin",
+    "super_admin",
+    "ceo",
+    "manager",
+    "operations_admin",
+    "finance_admin",
+    "hr_admin",
+    "support_admin",
+    "hr_manager",
+    "hr_staff",
+    "finance_staff",
+    "account_manager",
+    "dispatcher",
+    "operations_manager",
+  ]);
+  if (
+    claims.admin !== true &&
+    claims.isAdmin !== true &&
+    claims.superAdmin !== true &&
+    claims.super_admin !== true &&
+    !allowedRoles.has(role)
+  ) {
+    throw new HttpsError("permission-denied", "An admin or staff custom claim is required.");
+  }
 
   const token = await admin.auth().createCustomToken(authContext.uid);
   return { token };

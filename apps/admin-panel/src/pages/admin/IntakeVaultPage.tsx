@@ -32,12 +32,9 @@ import {
     ShieldCheck,
     Gem
 } from 'lucide-react';
-import { db, auth } from '../../lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { db, functions, httpsCallable } from '../../lib/firebase';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { binThemeTokens } from '../../theme/adminTheme';
-import { buildGeoAnchor } from '../../utils/geoAnchor';
-
-const safeDocId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
 
 interface IntakeSubmission {
     id: string;
@@ -113,174 +110,21 @@ export const IntakeVaultPage: React.FC = () => {
     }, []);
 
     const handleApprove = async (intake: IntakeSubmission) => {
-        if (!intake.payment?.paymentId && !window.confirm("This legacy intake has no linked payment transaction. Continue only if finance has verified the mobilization payment offline.")) {
-            return;
-        }
-
         try {
-            const batch = writeBatch(db);
-            const intakeRef = doc(db, 'intake_submissions', intake.id);
-            const adminId = auth.currentUser?.uid || 'ADMIN_HUB_V7';
-            
-            // 1. Update Intake Status
-            batch.update(intakeRef, {
-                status: 'CONVERTED_TO_OWNER',
-                adminReviewState: 'APPROVED',
-                activationState: 'ACTIVE',
-                paymentStatus: 'RECONCILED',
-                paymentState: 'PAYMENT_VERIFIED',
-                approvedAt: serverTimestamp(),
-                approvedBy: adminId,
-                updatedAt: serverTimestamp()
-            });
-
-            const ownerId = intake.userId || (intake as any).ownerId;
-            const ownerEmail = intake.contactInfo?.email || (intake as any).ownerAccount?.email;
-            const ownerName = intake.contactInfo?.contactPerson || intake.contactInfo?.name || (intake as any).ownerAccount?.fullName || 'BIN Owner';
-            const contractId = intake.payment?.contractId;
-            const paymentId = intake.payment?.paymentId;
-            const propertyIds: string[] = [];
-            const companyId = (intake as any).companyId || 'BIN_GROUP';
-
-            // 2. Provision Property Node (if properties exist in intake)
-            if (intake.properties && intake.properties.length > 0) {
-                for (const [index, p] of intake.properties.entries()) {
-                    const sourcePropertyId = p.id || p.propertyId || `property_${index + 1}`;
-                    const propRef = doc(db, 'properties', safeDocId(`${intake.id}_${sourcePropertyId}`));
-                    const targetCompanyId = p.companyId || companyId;
-                    const companyPropRef = doc(db, 'companies', targetCompanyId, 'properties', propRef.id);
-                    propertyIds.push(propRef.id);
-                    
-                    const geoSource = p.geo || p.location || p.coordinates;
-                    const geoData = buildGeoAnchor({
-                        lat: geoSource?.lat ?? geoSource?.latitude,
-                        lng: geoSource?.lng ?? geoSource?.longitude,
-                        address: p.addressLine || p.address || p.geo?.address,
-                        emirate: p.emirate || p.geo?.emirate,
-                        city: p.city || p.area || p.geo?.city,
-                        area: p.area || p.city || p.geo?.area,
-                        placeId: p.googlePlaceId || p.placeId || p.geo?.placeId,
-                        verifiedBy: adminId
-                    });
-
-                    const propertyPayload = {
-                        ...p,
-                        companyId: targetCompanyId,
-                        id: propRef.id,
-                        propertyId: propRef.id,
-                        propertyName: p.propertyName || p.name || `${p.propertyType || 'Property'} ${index + 1}`,
-                        ownerId: ownerId || 'SYSTEM',
-                        ownerEmail,
-                        addressLine: p.addressLine || p.address || (geoData ? geoData.address : ''),
-                        googlePlaceId: p.googlePlaceId || (geoData ? geoData.placeId : ''),
-                        geo: geoData,
-                        status: 'ACTIVE',
-                        verified: true,
-                        geoAnchorStatus: 'admin_verified',
-                        verificationSource: 'ADMIN_INTAKE_APPROVAL',
-                        auditVersion: 1,
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        source: `INTAKE_CONVERSION_${intake.id}`
-                    };
-
-                    batch.set(propRef, propertyPayload, { merge: true });
-                    batch.set(companyPropRef, propertyPayload, { merge: true });
-
-                    // Provision Units placeholder
-                    const unitCount = p.units || 1;
-                    for (let i = 1; i <= unitCount; i++) {
-                        const unitRef = doc(db, 'units', safeDocId(`${propRef.id}_unit_${i}`));
-                        batch.set(unitRef, {
-                            companyId: targetCompanyId,
-                            id: unitRef.id,
-                            unitId: unitRef.id,
-                            propertyId: propRef.id,
-                            ownerId: ownerId || 'SYSTEM',
-                            unitNumber: `${p.propertyType === 'Villa' ? 'Villa' : 'Unit'} ${i}`,
-                            occupancyStatus: 'VACANT',
-                            moveInStatus: 'READY_FOR_TENANT_ASSIGNMENT',
-                            auditVersion: 1,
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp()
-                        }, { merge: true });
-                    }
-                }
-            }
-
-            // 3. Activate User Role
-            if (ownerId) {
-                const userRef = doc(db, 'users', ownerId);
-                batch.set(userRef, {
-                    role: 'owner',
-                    status: 'active',
-                    dashboardUnlocked: true,
-                    paymentVerified: true,
-                    adminApproved: true,
-                    activatedAt: serverTimestamp()
-                }, { merge: true });
-
-                batch.set(doc(db, 'owners', ownerId), {
-                    ownerId,
-                    name: ownerName,
-                    email: ownerEmail,
-                    phone: intake.contactInfo?.phone || (intake as any).ownerAccount?.mobile || '',
-                    status: 'active',
-                    dashboardUnlocked: true,
-                    paymentVerified: true,
-                    adminApproved: true,
-                    propertyIds,
-                    activeContractId: contractId || null,
-                    latestIntakeId: intake.id,
-                    activatedAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                }, { merge: true });
-            }
-
-            if (contractId) {
-                batch.update(doc(db, 'contracts', contractId), {
-                    status: 'ACTIVE',
-                    contractStatus: 'active',
-                    activationStatus: 'ACTIVE',
-                    paymentVerified: true,
-                    paymentStatus: 'RECONCILED',
-                    signedByBinGroups: true,
-                    propertyIds,
-                    primaryPropertyId: propertyIds[0] || null,
-                    approvedAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-            }
-
-            if (paymentId) {
-                batch.update(doc(db, 'payment_transactions', paymentId), {
-                    status: 'RECONCILED',
-                    verificationState: 'ADMIN_VERIFIED',
-                    unlocksDashboard: true,
-                    reconciledBy: adminId,
-                    reconciledAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-            }
-
-            batch.set(doc(collection(db, 'audit_logs')), {
-                action: 'INTAKE_APPROVED_ATOMIC_ACTIVATION',
-                adminId,
-                ownerId: ownerId || null,
-                intakeId: intake.id,
-                contractId: contractId || null,
-                paymentId: paymentId || null,
-                propertyIds,
-                createdAt: serverTimestamp(),
-                auditVersion: 1
-            });
-
-            await batch.commit();
+            const paymentId = intake.payment?.paymentId || (intake as any).paymentId || intake.id;
+            if (!paymentId) throw new Error('A server-created payment transaction is required before activation.');
+            const method = String(intake.payment?.method || (intake as any).paymentMethod || '').toUpperCase();
+            const paymentReferenceId = method === 'STRIPE'
+                ? undefined
+                : window.prompt('Enter the verified provider, bank, cheque, or cash receipt reference. Activation fails closed without it.');
+            if (method !== 'STRIPE' && !paymentReferenceId?.trim()) return;
+            const approvePayment = httpsCallable(functions, 'adminApprovePayment');
+            await approvePayment({ paymentId, paymentReferenceId: paymentReferenceId?.trim() || undefined });
             setSelectedIntake(null);
-            alert("Sovereign Node Activated: Intake converted to live Owner portfolio.");
+            alert("Payment evidence verified and the bound owner contract was activated.");
         } catch (err) {
             console.error("Conversion Protocol Fault:", err);
-            alert("Relational Provisioning Failure. Check Admin permissions.");
+            alert("Activation failed closed. Verify the signed contract, owner binding, quote hash, and payment evidence.");
         }
     };
 
