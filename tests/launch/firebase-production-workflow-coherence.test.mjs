@@ -329,13 +329,18 @@ test('deploy implementation is invoked exactly once after predeploy gates', () =
   assert.ok(deploy < upload);
 });
 
-test('no deployment artifact is downloaded before it is produced in the deploy job', () => {
+test('only predeploy clearance evidence is downloaded before deployment metadata is produced', () => {
   const deployJobMatch = workflow.match(
     /deploy-firebase-production-stack:[\s\S]*?(?=\n  public-release-clearance:)/,
   );
   assert.ok(deployJobMatch, 'deploy job block missing');
   const deployJob = deployJobMatch[0];
-  assert.doesNotMatch(deployJob, /download-artifact/);
+  const uploadIndex = deployJob.indexOf('Upload production deployment metadata after verification');
+  assert.ok(uploadIndex >= 0, 'deployment metadata upload step missing');
+  const beforeUpload = deployJob.slice(0, uploadIndex);
+  assert.match(beforeUpload, /Download predeploy exact-SHA hard-clearance evidence/);
+  assert.doesNotMatch(beforeUpload, /Download production deployment metadata/);
+  assert.doesNotMatch(beforeUpload, /name:\s*production-deployment-\$\{\{\s*github\.sha\s*\}\}/);
   assert.match(deployJob, /Upload production deployment metadata after verification/);
   assert.match(deployJob, /Deploy and verify Firebase production stack/);
 });

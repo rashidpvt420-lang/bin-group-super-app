@@ -481,7 +481,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
       createdAt: ts()
     });
-    transaction.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
+    transaction.set(db.collection("audit_logs").doc(), { actorId: request.auth!.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
   });
   return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: signingWasIdempotent };
 });

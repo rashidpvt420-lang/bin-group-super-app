@@ -99,7 +99,6 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
 
   const payment = snap.data() || {};
   const paymentReferenceId = String(request.data?.paymentReferenceId || request.data?.referenceId || payment.paymentReference || payment.paymentReferenceId || "").trim();
-  const amountReceived = Number(request.data?.amountReceived || payment.activationDeposit || payment.amount || payment.amountPaid || payment.rentPaid || 0);
   const notes = String(request.data?.notes || request.data?.internalNotes || "Approved by admin.").trim();
   const method = String(request.data?.method || payment.paymentMethod || "").trim();
   const receivedAt = String(request.data?.receivedAt || "").trim();

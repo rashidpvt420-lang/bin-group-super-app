@@ -55,9 +55,9 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
       action: 'OWNER_EVIDENCE_PACK_EXPORTED',
       targetType: 'MAINTENANCE_TICKET',
       targetId: complaint.ticketId,
-      module: 'owner_complaint_command_center',
-      status: 'EXPORTED',
       metadata: {
+        module: 'owner_complaint_command_center',
+        status: 'EXPORTED',
         propertyName: complaint.propertyName || '',
         beforePhotoCount: complaint.photosBefore?.length || 0,
         afterPhotoCount: complaint.proofPhotosAfter?.length || 0,

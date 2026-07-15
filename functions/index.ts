@@ -170,24 +170,6 @@ function assertPlainObject(value: any, label: string) {
     return value;
 }
 
-function cleanPlainValue(value: any): any {
-    if (value === undefined) return null;
-    if (value === null) return null;
-    if (value instanceof admin.firestore.GeoPoint) return value;
-    if (value instanceof FieldValue) return value;
-    if (value instanceof admin.firestore.Timestamp) return value;
-    if (value instanceof Date) return value;
-    if (Array.isArray(value)) return value.map(cleanPlainValue);
-    if (typeof value === "object") {
-        const output: any = {};
-        Object.entries(value).forEach(([key, entry]) => {
-            if (typeof entry !== "function") output[key] = cleanPlainValue(entry);
-        });
-        return output;
-    }
-    return value;
-}
-
 function safeString(value: any, fallback = "") {
     const text = String(value ?? "").trim();
     return text || fallback;

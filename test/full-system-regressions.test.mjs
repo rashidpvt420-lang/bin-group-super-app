@@ -117,7 +117,9 @@ test('Stripe, OTP, IoT, notifications and AI retain fail-closed controls', () =>
   assert.match(ownerOperations, /\.\.\.\(authUser\.customClaims \|\| \{\}\),\s*suspended:\s*false/s);
   assert.match(iot, /x-iot-gateway-token/);
   assert.match(iot, /iot_devices/);
-  assert.match(iot, /duplicate:\s*true/);
+  assert.match(iot, /if \(eventSnap\.exists\)[\s\S]{0,100}duplicate = true/);
+  assert.match(iot, /transaction\.create\(eventRef/);
+  assert.match(iot, /eventId,\s*duplicate,/);
   assert.match(notifications, /enforceAppCheck:\s*true/);
   assert.match(notifications, /notification_dispatch_claims/);
   assert.match(aiQuota, /DAILY_CAPABILITY_LIMITS/);
