@@ -20,19 +20,27 @@ const forbiddenFragments = [
     text: "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
   },
   {
-    label: 'open mission claim without technician/dispatch authority',
-    text: "function safeOpenMissionClaim() {\n      return openMissionPoolRead(resource.data) &&",
+    label: 'direct client-side technician mission claim helper',
+    text: 'function safeOpenMissionClaim() {',
   },
   {
-    label: 'open mission claim double-evaluates dispatch helper',
-    text: 'return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&',
+    label: 'direct client-side mission assignment field helper',
+    text: 'function missionClaimFieldsLookValid() {',
+  },
+  {
+    label: 'tickets update rule still permits direct technician claiming',
+    text: '|| safeOpenMissionClaim()',
+  },
+  {
+    label: 'open mission pool grants dispatcher/admin semantics to technician pool reads',
+    text: 'function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
   },
 ];
 
 const requiredFragments = [
   {
     label: 'hardened property read rule',
-    text: "ownerCanRead(resource.data) || tenantOwns(resource.data)",
+    text: 'ownerCanRead(resource.data) || tenantOwns(resource.data)',
   },
   {
     label: 'hardened notification create rule',
@@ -47,16 +55,16 @@ const requiredFragments = [
     text: 'function hasTechnicianDispatchAuthority() {',
   },
   {
+    label: 'approved technician helper',
+    text: 'function isApprovedTechnician() {',
+  },
+  {
     label: 'open mission availability helper',
     text: 'function openMissionAvailable(data) {',
   },
   {
-    label: 'open mission pool scoped to dispatch authority',
-    text: 'function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
-  },
-  {
-    label: 'open mission claim requires dispatch authority without duplicate pool check',
-    text: 'return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&',
+    label: 'open mission visibility restricted to approved technicians',
+    text: 'function openMissionPoolRead(data) { return isApprovedTechnician() && openMissionAvailable(data); }',
   },
   {
     label: 'tenant ticket unit/property binding helper',
@@ -65,6 +73,18 @@ const requiredFragments = [
   {
     label: 'tenant ticket create uses binding helper',
     text: 'ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);',
+  },
+  {
+    label: 'technician evidence update helper',
+    text: 'function safeTechnicianTicketUpdate() {',
+  },
+  {
+    label: 'ticket assignment and status transitions are dispatcher/server authoritative',
+    text: 'allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+  },
+  {
+    label: 'technician cannot replace assigned technician identity',
+    text: "request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)",
   },
 ];
 
