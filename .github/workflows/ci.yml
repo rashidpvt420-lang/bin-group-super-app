@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Materialize deterministic PR 265 rules repair
+        run: node scripts/repair-pr265-rules.mjs
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -121,6 +124,19 @@ jobs:
           status=$?
           cat security-rules-output.txt
           exit $status
+
+      - name: Upload repaired rules source candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr265-rules-source-${{ github.sha }}
+          path: |
+            firestore.rules
+            storage.rules
+            test/security-rules.test.js
+            test/storage-rules.test.js
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Firestore rules diagnostics
         if: failure() && steps.security_rules.outcome == 'failure'
