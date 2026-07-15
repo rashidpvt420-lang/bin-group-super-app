@@ -23,9 +23,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Materialize null-safe Storage document fields
-        run: node scripts/repair-pr265-storage-fields.mjs
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -125,15 +122,6 @@ jobs:
           cat security-rules-output.txt
           exit $status
 
-      - name: Upload repaired Storage rules candidate
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr265-storage-rules-${{ github.sha }}
-          path: storage.rules
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Upload Firestore rules diagnostics
         if: failure() && steps.security_rules.outcome == 'failure'
         uses: actions/upload-artifact@v4
@@ -145,44 +133,3 @@ jobs:
 
       - name: Verify mobile store source readiness
         run: npm run test:mobile-store-readiness
-
-  materialize-storage-repair:
-    name: Commit validated Storage repair to PR branch
-    needs: build-and-test
-    if: always() && github.event_name == 'pull_request' && github.head_ref == 'repair/current-main-ci-blockers-2bbb986'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: write
-    steps:
-      - name: Download exact-run Storage rules
-        uses: actions/download-artifact@v4
-        with:
-          name: pr265-storage-rules-${{ github.sha }}
-          path: /tmp/pr265-storage-rules
-
-      - name: Checkout repair branch
-        uses: actions/checkout@v4
-        with:
-          ref: repair/current-main-ci-blockers-2bbb986
-          fetch-depth: 0
-
-      - name: Materialize validated Storage rules and restore canonical CI
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp /tmp/pr265-storage-rules/storage.rules storage.rules
-          git checkout origin/main -- .github/workflows/ci.yml
-          rm -f scripts/repair-pr265-storage-fields.mjs
-          git diff --check
-
-      - name: Commit Storage repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add storage.rules .github/workflows/ci.yml scripts/repair-pr265-storage-fields.mjs
-          git diff --cached --check
-          git commit -m 'fix(storage): make optional document fields null-safe'
-          git push origin HEAD:repair/current-main-ci-blockers-2bbb986
