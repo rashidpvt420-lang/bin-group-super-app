@@ -32,11 +32,11 @@ const checks = [
     path: 'src/tenant/pages/TenantScheduledServicePage.tsx',
     required: [
       "httpsCallable(functions, 'getScheduledServiceAvailability')",
+      "httpsCallable(functions, 'createTenantServiceTicket')",
       "httpsCallable(functions, 'saveScheduledServiceAccessCode')",
       'recurrenceFrequency',
       'recurrenceOccurrences',
-      'cancellationPolicyAccepted',
-      'PENDING_OPERATIONS_QUOTE',
+      'policyAccepted',
       'availabilitySlotId',
       'accessCodeExpiresAt',
       'sensitiveOccupants',
@@ -98,6 +98,20 @@ const checks = [
       "runTicketAction('approve_reschedule'",
       "runTicketAction('cancellation_decision'",
       "runTicketAction('mark_payment'",
+    ],
+  },
+  {
+    path: 'functions/tenantTicketOperations.ts',
+    required: [
+      'export const createTenantServiceTicket',
+      'if (kind === "SCHEDULED_SERVICE")',
+      'details.policyAccepted !== true',
+      'quoteStatus: "PENDING_OPERATIONS_QUOTE"',
+      'cancellationPolicyAccepted: true',
+      'availabilitySlotId: text(details.availabilitySlotId',
+      'requestedAccessCodeExpiry: timestampOrNull(details.accessCodeExpiresAt)',
+      'sensitiveOccupants: text(details.sensitiveOccupants',
+      'transaction.create(ticketRef, common)',
     ],
   },
   {
@@ -244,4 +258,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, protected full-stack deployment, and retired parallel deploy path verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, server-authoritative intake, secure key lifecycle, exports, protected full-stack deployment, and retired parallel deploy path verified)`);
