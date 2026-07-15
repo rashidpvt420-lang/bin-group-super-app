@@ -5,7 +5,6 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, setDoc } from 'firebase/firestore';
 import { getBytes, ref, uploadString } from 'firebase/storage';
 
 let testEnv;
@@ -39,30 +38,35 @@ describe('Storage Security Rules', () => {
       email: 'admin@example.com',
       email_verified: true,
     });
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      const db = context.firestore();
-      await setDoc(doc(db, 'contracts/contract_email'), {
-        ownerId: 'different_owner',
-        ownerEmail: 'owner@example.com',
-      });
-      await setDoc(doc(db, 'invoices/invoice_email'), {
-        ownerId: 'different_owner',
-        recipientEmail: 'owner@example.com',
-      });
-    });
 
     const adminStorage = adminContext.storage();
     await assertSucceeds(uploadString(
       ref(adminStorage, 'contracts/contract_email/contract.pdf'),
       'contract',
       'raw',
-      { contentType: 'application/pdf' },
+      {
+        contentType: 'application/pdf',
+        customMetadata: {
+          contractId: 'contract_email',
+          ownerId: 'different_owner',
+          ownerEmail: 'owner@example.com',
+          documentType: 'owner_contract',
+        },
+      },
     ));
     await assertSucceeds(uploadString(
       ref(adminStorage, 'invoices/invoice_email/invoice.pdf'),
       'invoice',
       'raw',
-      { contentType: 'application/pdf' },
+      {
+        contentType: 'application/pdf',
+        customMetadata: {
+          invoiceId: 'invoice_email',
+          ownerId: 'different_owner',
+          recipientEmail: 'owner@example.com',
+          documentType: 'owner_invoice',
+        },
+      },
     ));
 
     const unverifiedStorage = testEnv.authenticatedContext('unverified_owner', {
@@ -113,6 +117,23 @@ describe('Storage Security Rules', () => {
         },
       },
     ));
+    await assertFails(uploadString(
+      ref(tenantStorage, receiptPath),
+      'proof',
+      'raw',
+      {
+        contentType: 'text/plain',
+        customMetadata: validMetadata.customMetadata,
+      },
+    ));
     await assertSucceeds(uploadString(ref(tenantStorage, receiptPath), 'proof', 'raw', validMetadata));
+    await assertSucceeds(getBytes(ref(tenantStorage, receiptPath)));
+
+    await assertFails(uploadString(
+      ref(tenantStorage, receiptPath),
+      'replacement',
+      'raw',
+      validMetadata,
+    ));
   });
 });
