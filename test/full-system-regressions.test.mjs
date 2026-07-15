@@ -172,13 +172,8 @@ test('runtimeAll does not re-export functions already exported by runtime', () =
 });
 
 test('Firestore and Storage rules suites cannot clear shared emulator fixtures concurrently', () => {
-  const packageJson = read('package.json');
-  assert.match(
-    packageJson,
-    /"test:rules":\s*"[^"]*node --test --test-concurrency=1 test\/security-rules\.test\.js test\/storage-rules\.test\.js/,
-  );
-  assert.match(
-    packageJson,
-    /"test:rules:node":\s*"[^"]*node --test --test-concurrency=1 test\/security-rules\.test\.js test\/storage-rules\.test\.js/,
-  );
+  const scripts = JSON.parse(read('package.json')).scripts;
+  const serializedRuleFiles = /node --test --test-concurrency=1 test\/security-rules\.test\.js test\/storage-rules\.test\.js/;
+  assert.match(scripts['test:rules'], serializedRuleFiles);
+  assert.match(scripts['test:rules:node'], serializedRuleFiles);
 });
