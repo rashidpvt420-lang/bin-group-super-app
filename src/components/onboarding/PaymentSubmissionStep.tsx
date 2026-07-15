@@ -29,6 +29,13 @@ interface PaymentSubmissionStepProps {
 }
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport';
+type CanonicalQuote = {
+    annualContractValue: number;
+    activationDeposit: number;
+    currency: string;
+    expiresAtMs: number;
+    version: string;
+};
 
 const documentTypes: Array<{ key: ProofKey; en: string; ar: string }> = [
     { key: 'propertyProof', en: 'Property Proof', ar: 'إثبات ملكية العقار' },
@@ -81,6 +88,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         portfolioSummary,
         isContractSigned,
         signatureName,
+        contractOtpVerificationId,
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
     const ar = isRTL;
@@ -94,20 +102,25 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     const [confirmDialog, setConfirmDialog] = useState(false);
     const [reauthRequired, setReauthRequired] = useState(false);
     const [reauthPassword, setReauthPassword] = useState('');
+    const [paymentReference, setPaymentReference] = useState('');
+    const [paymentReceipt, setPaymentReceipt] = useState<File | null>(null);
+    const [canonicalQuote, setCanonicalQuote] = useState<CanonicalQuote | null>(null);
 
     const ownerEmail = ownerAccount?.email || companyProfile.email || '';
     const annualContractValue = useMemo(() => resolveMoney(
+        canonicalQuote?.annualContractValue,
         portfolioSummary?.estimatedACV,
         paymentManifest?.annualContractValue,
         selectedPlan?.annualPrice,
         selectedPlan?.price,
         selectedPlan?.total,
-    ), [paymentManifest, portfolioSummary?.estimatedACV, selectedPlan]);
+    ), [canonicalQuote?.annualContractValue, paymentManifest, portfolioSummary?.estimatedACV, selectedPlan]);
     const amountDue = useMemo(() => resolveMoney(
+        canonicalQuote?.activationDeposit,
         paymentManifest?.activationDeposit,
         paymentManifest?.amount,
         annualContractValue > 0 ? annualContractValue * 0.15 : 0,
-    ), [annualContractValue, paymentManifest]);
+    ), [annualContractValue, canonicalQuote?.activationDeposit, paymentManifest]);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -200,6 +213,20 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         if (!ownerAccount?.uid) throw new Error(copy('Owner account is missing. Return to the account step.', 'حساب المالك غير موجود. ارجع إلى خطوة إنشاء الحساب.'));
         if (!paymentMethod) throw new Error(copy('Select a payment method first.', 'اختر طريقة الدفع أولاً.'));
         if (!isContractSigned || signatureName.trim().length < 3) throw new Error(copy('A valid signed agreement is required.', 'يلزم توقيع صحيح على الاتفاقية.'));
+        if (!contractOtpVerificationId) throw new Error(copy('Verify the contract email OTP before payment.', 'تحقق من رمز توقيع العقد عبر البريد الإلكتروني قبل الدفع.'));
+        if (paymentMethod !== 'STRIPE' && (paymentReference.trim().length < 4 || !paymentReceipt)) {
+            throw new Error(copy(
+                'Manual payments require a bank/cheque reference and an uploaded receipt.',
+                'تتطلب المدفوعات اليدوية مرجع التحويل أو الشيك وإيصالاً مرفوعاً.',
+            ));
+        }
+        const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);
+        if (!proofDocuments.propertyProof || (!hasIndividualIdentity && !proofDocuments.tradeLicense)) {
+            throw new Error(copy(
+                'Property proof and either Emirates ID plus passport or a trade license are required.',
+                'يلزم إثبات ملكية العقار وإما الهوية الإماراتية مع جواز السفر أو الرخصة التجارية.',
+            ));
+        }
         if (amountDue <= 0) throw new Error(copy('The payable amount is missing. Recalculate the quotation.', 'مبلغ الدفع غير موجود. أعد احتساب عرض السعر.'));
     };
 
@@ -207,10 +234,55 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         validateSubmission();
         await user.getIdToken(true);
 
+        const previewQuote = httpsCallable(functions, 'previewOwnerOnboardingQuote');
+        const previewResult = await previewQuote({
+            properties,
+            selectedAddOns: selectedAddOns || [],
+        });
+        const serverQuote = previewResult.data as CanonicalQuote;
+        if (
+            !serverQuote ||
+            serverQuote.currency !== 'AED' ||
+            serverQuote.annualContractValue <= 0 ||
+            serverQuote.activationDeposit <= 0
+        ) {
+            throw new Error(copy(
+                'The server did not return a valid AED onboarding quote.',
+                'لم يُرجع الخادم عرض تسجيل صالحًا بالدرهم الإماراتي.',
+            ));
+        }
+        const quoteChanged =
+            Math.abs(serverQuote.annualContractValue - annualContractValue) > 0.01 ||
+            Math.abs(serverQuote.activationDeposit - amountDue) > 0.01;
+        setCanonicalQuote(serverQuote);
+        if (quoteChanged) {
+            throw new Error(copy(
+                'The server-authoritative quote was refreshed. Review the updated annual value and 15% deposit, then submit again.',
+                'تم تحديث عرض السعر المعتمد من الخادم. راجع القيمة السنوية ودفعة 15٪ المحدّثة ثم أرسل مرة أخرى.',
+            ));
+        }
+
         const effectiveIntakeId = intakeId || onboardingSessionId || user.uid;
         setIntakeId(effectiveIntakeId);
         const urls = await uploadProofDocuments(user, effectiveIntakeId);
         setUploadedUrls(urls);
+        let manualPaymentEvidence: Record<string, string> | null = null;
+        if (paymentMethod !== 'STRIPE' && paymentReceipt) {
+            const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+            if (!allowedTypes.has(paymentReceipt.type)) {
+                throw new Error(copy('Payment receipt must be PDF, JPEG, PNG, WEBP, or HEIC.', 'يجب أن يكون إيصال الدفع بصيغة PDF أو JPEG أو PNG أو WEBP أو HEIC.'));
+            }
+            const safeName = paymentReceipt.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'payment-receipt';
+            const paymentProofPath = `payment-references/owners/${user.uid}/${effectiveIntakeId}/${Date.now()}_${safeName}`;
+            const paymentProofRef = ref(storage, paymentProofPath);
+            await uploadBytes(paymentProofRef, paymentReceipt, { contentType: paymentReceipt.type });
+            manualPaymentEvidence = {
+                reference: paymentReference.trim(),
+                receiptUrl: await getDownloadURL(paymentProofRef),
+                receiptPath: paymentProofPath,
+                receiptName: paymentReceipt.name,
+            };
+        }
 
         const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
         await submitPackage({
@@ -222,7 +294,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             amount: amountDue,
             activationDeposit: amountDue,
             annualContractValue,
-            paymentManifest: paymentManifest || null,
+            paymentManifest: manualPaymentEvidence || paymentManifest || null,
             companyProfile: {
                 name: companyProfile.name,
                 licenseNumber: companyProfile.licenseNumber,
@@ -238,6 +310,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             },
             properties,
             signatureName: signatureName.trim(),
+            otpVerificationId: contractOtpVerificationId,
             documentUrls: urls,
         });
 
@@ -248,7 +321,6 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 ownerEmail: user.email || ownerEmail,
                 intakeId: effectiveIntakeId,
                 onboardingSessionId: onboardingSessionId || effectiveIntakeId,
-                amount: amountDue,
             });
             const checkout = result.data as { url?: string };
             if (!checkout.url) throw new Error(copy('Stripe did not return a secure checkout URL.', 'لم يتم إنشاء رابط دفع آمن من Stripe.'));
@@ -365,6 +437,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, mb: 2 }}>
                         {copy('Payment Summary', 'ملخص الدفع')}
                     </Typography>
+                    {canonicalQuote && (
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            {copy(
+                                `Server quote ${canonicalQuote.version} verified. Expires ${new Date(canonicalQuote.expiresAtMs).toLocaleString('en-AE')}.`,
+                                `تم التحقق من عرض الخادم ${canonicalQuote.version}. تنتهي صلاحيته في ${new Date(canonicalQuote.expiresAtMs).toLocaleString('ar-AE')}.`,
+                            )}
+                        </Alert>
+                    )}
                     <Grid container spacing={2}>
                         <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Amount Due', 'المبلغ المستحق')}</Typography><Typography color="#fff" fontWeight={800}>AED {formatMoney(amountDue)}</Typography></Grid>
                         <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Payment Method', 'طريقة الدفع')}</Typography><Typography color="#fff" fontWeight={800}>{paymentMethod || copy('Not selected', 'غير محددة')}</Typography></Grid>
@@ -372,6 +452,32 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Properties / Units', 'العقارات / الوحدات')}</Typography><Typography color="#fff" fontWeight={800}>{properties.length} / {portfolioSummary.totalUnits}</Typography></Grid>
                     </Grid>
                 </Paper>
+
+                {paymentMethod && paymentMethod !== 'STRIPE' && (
+                    <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <Stack spacing={2}>
+                            <Typography variant="h6" fontWeight={950} color="#fff">
+                                {copy('Manual Payment Evidence', 'إثبات الدفع اليدوي')}
+                            </Typography>
+                            <TextField
+                                fullWidth
+                                required
+                                label={copy('Bank transfer / cheque reference', 'مرجع التحويل البنكي / الشيك')}
+                                value={paymentReference}
+                                onChange={(event) => setPaymentReference(event.target.value)}
+                            />
+                            <Button variant="outlined" component="label" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>
+                                {paymentReceipt ? paymentReceipt.name : copy('Attach receipt (PDF or image)', 'إرفاق الإيصال (PDF أو صورة)')}
+                                <input
+                                    hidden
+                                    type="file"
+                                    accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                                    onChange={(event) => setPaymentReceipt(event.target.files?.[0] || null)}
+                                />
+                            </Button>
+                        </Stack>
+                    </Paper>
+                )}
 
                 <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <Typography variant="h6" fontWeight={950} color="#fff" sx={{ mb: 2 }}>
@@ -412,7 +518,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     </Button>
                     <Button
                         onClick={() => setConfirmDialog(true)}
-                        disabled={loading || !ownerAccount?.uid || !paymentMethod || !isContractSigned || amountDue <= 0}
+                        disabled={
+                            loading ||
+                            !ownerAccount?.uid ||
+                            !paymentMethod ||
+                            !isContractSigned ||
+                            amountDue <= 0 ||
+                            (paymentMethod !== 'STRIPE' && (paymentReference.trim().length < 4 || !paymentReceipt))
+                        }
                         fullWidth
                         variant="contained"
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}

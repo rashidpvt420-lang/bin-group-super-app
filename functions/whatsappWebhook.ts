@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
 import * as admin from "firebase-admin";
 import { verifyWhatsAppSignature } from "./whatsappSignature";
 
@@ -159,6 +159,12 @@ export const whatsappWebhook = onRequest(
   {
     region: "us-central1",
     cors: false,
+    secrets: [
+      whatsappToken,
+      whatsappPhoneNumberId,
+      whatsappVerifyToken,
+      whatsappAppSecret,
+    ],
   },
   async (req, res) => {
     if (req.method === "GET") {

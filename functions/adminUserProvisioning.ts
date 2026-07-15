@@ -222,7 +222,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
     role,
     createdAuthUser,
     message: createdAuthUser
-      ? `Staff account created. Ask the user to reset password before first login. Initial Password: ${passwordToUse}`
+      ? "Staff account created. Send the user a Firebase password-reset link before first login."
       : "Existing staff account updated.",
   };
 });

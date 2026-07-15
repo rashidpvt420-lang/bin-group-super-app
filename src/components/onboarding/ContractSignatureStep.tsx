@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Typography, Button, Paper, Grid, TextField, Checkbox, FormControlLabel, Stack, alpha, Divider
+    Alert, Box, Typography, Button, Paper, Grid, TextField, Checkbox, FormControlLabel, Stack, Divider, CircularProgress
 } from '@mui/material';
 import { FileSignature, ShieldCheck, ScrollText } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { functions, httpsCallable } from '../../lib/firebase';
 
 interface ContractSignatureStepProps {
     onNext: () => void;
@@ -19,8 +20,8 @@ const readable = (value: string | undefined, fallback: string) => {
 };
 
 const modeLabel = (strategy?: string) => {
-    if (strategy === 'pm') return 'Property Management Only / إدارة العقار فقط';
-    if (strategy === 'hybrid') return 'Maintenance + Property Management / الصيانة وإدارة العقار معاً';
+    if (strategy === 'pm' || strategy === 'pm_only' || strategy === 'rent') return 'Property Management Only / إدارة العقار فقط';
+    if (strategy === 'hybrid' || strategy === 'both') return 'Maintenance + Property Management / الصيانة وإدارة العقار معاً';
     return 'Maintenance Only / الصيانة فقط';
 };
 
@@ -48,13 +49,22 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         portfolioSummary,
         isContractSigned,
         signatureName,
+        contractOtpVerificationId,
         setContractSignature,
+        setContractOtpVerificationId,
+        intakeId,
+        onboardingSessionId,
         calculateSummary
     } = useOnboardingStore();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, lang } = useLanguage();
 
     const [typedName, setTypedName] = useState(signatureName || '');
     const [accepted, setAccepted] = useState(isContractSigned);
+    const [otpRequestId, setOtpRequestId] = useState('');
+    const [otp, setOtp] = useState('');
+    const [otpBusy, setOtpBusy] = useState(false);
+    const [otpError, setOtpError] = useState('');
+    const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
     const primaryProperty = properties[0];
     const quote = portfolioSummary.quoteResults?.[primaryProperty?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
@@ -69,16 +79,64 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         setContractSignature(accepted, typedName);
     }, [typedName, accepted, setContractSignature]);
 
-    const isValid = typedName.trim().length >= 3 && accepted;
+    const contractReference = intakeId || onboardingSessionId;
+    const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference);
+    const isValid = canRequestOtp && Boolean(contractOtpVerificationId);
+
+    const requestOtp = async () => {
+        if (!canRequestOtp) return;
+        setOtpBusy(true);
+        setOtpError('');
+        try {
+            const callable = httpsCallable(functions, 'requestContractSignatureOtp');
+            const result = await callable({
+                email: ownerAccount?.email,
+                contractId: contractReference,
+                propertyName: primaryProperty?.address || primaryProperty?.emirate || 'BIN GROUP contract',
+            });
+            const data = result.data as { requestId?: string };
+            if (!data.requestId) throw new Error('OTP request reference was not returned.');
+            setOtpRequestId(data.requestId);
+            setContractOtpVerificationId(null);
+        } catch (error: any) {
+            setOtpError(error?.message || copy('OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
+        } finally {
+            setOtpBusy(false);
+        }
+    };
+
+    const verifyOtp = async () => {
+        if (!otpRequestId || otp.trim().length !== 6) return;
+        setOtpBusy(true);
+        setOtpError('');
+        try {
+            const callable = httpsCallable(functions, 'verifyContractSignatureOtp');
+            const result = await callable({
+                requestId: otpRequestId,
+                otp: otp.trim(),
+                signature: typedName.trim(),
+            });
+            const data = result.data as { verificationId?: string; contractId?: string };
+            if (!data.verificationId || data.contractId !== contractReference) {
+                throw new Error('OTP verification did not match this contract.');
+            }
+            setContractOtpVerificationId(data.verificationId);
+        } catch (error: any) {
+            setContractOtpVerificationId(null);
+            setOtpError(error?.message || copy('OTP verification failed.', 'فشل التحقق من الرمز.'));
+        } finally {
+            setOtpBusy(false);
+        }
+    };
 
     return (
-        <Box sx={{ maxWidth: 980, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 }, dir: isRTL ? 'rtl' : 'ltr' }}>
+        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 980, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 } }}>
             <Box sx={{ textAlign: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom>
-                    {readable(t('onboarding.contract_title'), 'Full Bilingual Owner Service Agreement')}
+                    {lang === 'ar' ? 'اتفاقية خدمات المالك ثنائية اللغة' : readable(t('onboarding.contract_title'), 'Full Bilingual Owner Service Agreement')}
                 </Typography>
                 <Typography variant="body1" color="rgba(255,255,255,0.5)">
-                    {readable(t('onboarding.contract_desc'), 'Review the full English/Arabic contract and provide your digital signature to proceed.')}
+                    {lang === 'ar' ? 'راجع العقد الكامل باللغتين الإنجليزية والعربية ثم أكد توقيعك الرقمي.' : readable(t('onboarding.contract_desc'), 'Review the full English/Arabic contract and provide your digital signature to proceed.')}
                 </Typography>
             </Box>
 
@@ -139,12 +197,12 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
                 <Box sx={{ p: 3, bgcolor: 'rgba(198, 167, 94, 0.05)', borderRadius: 2, border: `1px solid rgba(198, 167, 94, 0.2)` }}>
                     <Stack direction="row" spacing={1} alignItems="center" mb={2}>
                         <FileSignature size={20} color={binThemeTokens.gold} />
-                        <Typography variant="h6" fontWeight="950" color="#FFF">Digital Signature</Typography>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">{copy('Digital Signature', 'التوقيع الرقمي')}</Typography>
                     </Stack>
                     
                     <TextField 
                         fullWidth
-                        label="Type your full legal name to sign"
+                        label={copy('Type your full legal name to sign', 'اكتب اسمك القانوني الكامل للتوقيع')}
                         variant="outlined"
                         value={typedName}
                         onChange={(e) => setTypedName(e.target.value)}
@@ -156,20 +214,50 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
                         control={<Checkbox checked={accepted} onChange={(e) => setAccepted(e.target.checked)} sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />}
                         label={
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                                I, <strong>{typedName || '___'}</strong>, accept the full bilingual Owner Service Agreement, commercial terms, exclusions, limitation of liability, indemnity, digital evidence vault, and UAE governing law clauses, and authorize BIN GROUP to generate the locked signed PDF.
+                                {copy(
+                                    `I, ${typedName || '___'}, accept the full bilingual Owner Service Agreement, commercial terms, exclusions, limitation of liability, indemnity, digital evidence vault, and UAE governing law clauses, and authorize BIN GROUP to generate the locked signed PDF.`,
+                                    `أنا ${typedName || '___'} أوافق على اتفاقية خدمات المالك ثنائية اللغة وشروطها التجارية والاستثناءات وحدود المسؤولية والتعويض وخزنة الأدلة الرقمية وأحكام القانون الإماراتي، وأفوض بن جروب بإنشاء نسخة PDF موقعة ومقفلة.`
+                                )}
                             </Typography>
                         }
                     />
+                    <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
+                    {otpError && <Alert severity="error" sx={{ mb: 2 }}>{otpError}</Alert>}
+                    {contractOtpVerificationId ? (
+                        <Alert severity="success">
+                            {copy('Email OTP verified for this contract.', 'تم التحقق من رمز البريد الإلكتروني لهذا العقد.')}
+                        </Alert>
+                    ) : (
+                        <Stack spacing={2}>
+                            <Button variant="outlined" disabled={!canRequestOtp || otpBusy} onClick={requestOtp}>
+                                {otpBusy ? <CircularProgress size={20} /> : copy('SEND CONTRACT OTP', 'إرسال رمز توقيع العقد')}
+                            </Button>
+                            {otpRequestId && (
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                    <TextField
+                                        fullWidth
+                                        label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')}
+                                        value={otp}
+                                        onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        inputProps={{ inputMode: 'numeric', maxLength: 6 }}
+                                    />
+                                    <Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={verifyOtp}>
+                                        {copy('VERIFY OTP', 'تحقق من الرمز')}
+                                    </Button>
+                                </Stack>
+                            )}
+                        </Stack>
+                    )}
                 </Box>
             </Paper>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Button variant="outlined" onClick={onBack} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, px: 4, borderRadius: 100, fontWeight: 950 }}>
-                    {readable(t('onboarding.back'), 'Back')}
+                    {copy('Back', 'رجوع')}
                 </Button>
                 <Button variant="contained" onClick={onNext} disabled={!isValid} fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, px: 4, borderRadius: 100, '&:hover': { bgcolor: '#FFF' }, '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)' } }}>
                     <ScrollText size={18} style={{ marginRight: 8 }} />
-                    {readable(t('onboarding.sign_proceed'), 'Sign Full Agreement & Proceed to Payment')}
+                    {copy('Sign Full Agreement & Proceed to Payment', 'توقيع الاتفاقية والمتابعة إلى الدفع')}
                 </Button>
             </Stack>
         </Box>

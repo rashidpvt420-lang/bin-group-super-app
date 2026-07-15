@@ -18,6 +18,7 @@ import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, query, 
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -272,6 +273,7 @@ export default function OwnerContractsResolvedPage() {
   const [contracts, setContracts] = useState<any[]>([]);
   const [signatureName, setSignatureName] = useState('');
   const [signingId, setSigningId] = useState<string | null>(null);
+  const [otpVerificationId, setOtpVerificationId] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeState | null>(null);
 
   const contractIdFromUrl = useMemo(() => new URLSearchParams(window.location.search).get('contractId'), []);
@@ -364,13 +366,17 @@ export default function OwnerContractsResolvedPage() {
       setNotice({ type: 'error', text: 'No contract ID found for signing.' });
       return;
     }
+    if (!otpVerificationId) {
+      setNotice({ type: 'error', text: 'Verify the contract signature OTP before signing.' });
+      return;
+    }
     if (!window.confirm('Sign this contract electronically?')) return;
 
     setSigningId(contract.id);
     setNotice(null);
     try {
       const signContract = httpsCallable(functions, 'ownerSignContractAndQueuePdf');
-      const result = await signContract({ contractId: contract.id, signatureName: name, acceptedTerms: true });
+      const result = await signContract({ contractId: contract.id, signatureName: name, otpVerificationId, acceptedTerms: true });
       const data = result.data as { status?: string; idempotent?: boolean; termSummary?: any };
       setNotice({ type: 'success', text: data?.idempotent ? 'Contract is already signed and ready for activation/payment verification.' : `Contract signed successfully. Status: ${data?.status || 'READY_FOR_ACTIVATION'}.` });
       await refreshRole?.();
@@ -409,7 +415,14 @@ export default function OwnerContractsResolvedPage() {
             <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> Contract Signature Required</Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)' }}>Type your full legal name and sign. Dashboard unlock still requires payment verification.</Typography>
             <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
-            <Button variant="contained" disabled={signingId === primaryContract.id} onClick={() => handleSignContract(primaryContract)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3, alignSelf: 'flex-start' }}>
+            <ContractSignatureOtpControl
+              contractId={primaryContract.id}
+              email={user?.email || ''}
+              propertyName={primaryContract.propertyName}
+              signatureName={signatureName}
+              onVerified={setOtpVerificationId}
+            />
+            <Button variant="contained" disabled={signingId === primaryContract.id || !otpVerificationId} onClick={() => handleSignContract(primaryContract)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3, alignSelf: 'flex-start' }}>
               {signingId === primaryContract.id ? 'Signing...' : 'Review & Sign Contract'}
             </Button>
           </Stack>

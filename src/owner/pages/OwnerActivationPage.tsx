@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CreditCard, FileSignature, LockKeyhole, PenLine, ShieldCheck, WalletCards } from 'lucide-react';
-import { collection, db, functions, getDocs, httpsCallable, query, where } from '../../lib/firebase';
+import { collection, db, functions, getDocs, getDownloadURL, httpsCallable, query, ref, storage, uploadBytes, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 
 const fmtAED = (value: number) => `AED ${Math.round(value || 0).toLocaleString()}`;
 
@@ -149,6 +150,9 @@ export default function OwnerActivationPage() {
   const [activating, setActivating] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signatureName, setSignatureName] = useState('');
+  const [otpVerificationId, setOtpVerificationId] = useState<string | null>(null);
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -267,6 +271,10 @@ export default function OwnerActivationPage() {
       setError('Enter your legal name before signing the contract.');
       return;
     }
+    if (!otpVerificationId) {
+      setError('Verify the contract signature OTP before signing.');
+      return;
+    }
 
     setSigning(true);
     setError(null);
@@ -276,6 +284,7 @@ export default function OwnerActivationPage() {
       const result = await signContract({
         contractId: primaryContract.id,
         signatureName: signatureName.trim(),
+        otpVerificationId,
         acceptedTerms: true,
       });
       const data = result.data as { status?: string; idempotent?: boolean };
@@ -293,12 +302,20 @@ export default function OwnerActivationPage() {
       setError('No owner profile or contract found. Create/select a contract first.');
       return;
     }
+    if (!user?.uid || !paymentReference.trim() || !paymentProof) {
+      setError('Enter the bank reference and attach the payment receipt before requesting verification.');
+      return;
+    }
 
     setActivating(true);
     setError(null);
     setSuccess(null);
     try {
-      const ownerPaymentReference = `OWNER_PORTAL_${Date.now()}`;
+      const safeName = paymentProof.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'payment-receipt';
+      const proofPath = `payment-references/owners/${user.uid}/${primaryContract.id}/${Date.now()}_${safeName}`;
+      const proofRef = ref(storage, proofPath);
+      await uploadBytes(proofRef, paymentProof, { contentType: paymentProof.type });
+      const proofUrl = await getDownloadURL(proofRef);
       const createPayment = httpsCallable(functions, 'createOwnerPaymentTransaction');
       const result = await createPayment({
         contractId: primaryContract.id,
@@ -307,11 +324,14 @@ export default function OwnerActivationPage() {
         amount: mobilization,
         amountSource: mobilization <= 0 ? 'OWNER_CONFIRMATION_FALLBACK' : 'CONTRACT_VALUE',
         currency: 'AED',
-        reference: ownerPaymentReference,
+        reference: paymentReference.trim(),
+        paymentProofUrl: proofUrl,
+        paymentProofPath: proofPath,
+        paymentProofName: paymentProof.name,
         annualContractValue: annualValue,
         mobilizationAmount: mobilization,
         paymentPlan: paymentPlanText,
-        paymentReferenceId: ownerPaymentReference,
+        paymentReferenceId: paymentReference.trim(),
         commercialScheduleLocked: hasCommercialSchedule(primaryContract),
       });
       const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean; idempotent?: boolean };
@@ -319,6 +339,7 @@ export default function OwnerActivationPage() {
       setSuccess(data?.amountPendingAdminConfirmation
         ? `${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must confirm the mobilization amount and verify payment before dashboard unlock.`
         : `${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
+      setPaymentProof(null);
       await refreshAfterAction();
     } catch (err: any) {
       setError(err?.message || 'Activation request failed.');
@@ -337,7 +358,7 @@ export default function OwnerActivationPage() {
 
   const PaymentRequestButton = ({ fullWidth = false }: { fullWidth?: boolean }) => (
     <Button
-      disabled={activating || !canSubmitPaymentRequest}
+      disabled={activating || !canSubmitPaymentRequest || !paymentReference.trim() || !paymentProof}
       onClick={handleManualVerificationBridge}
       variant="contained"
       startIcon={<CreditCard size={18} />}
@@ -422,14 +443,46 @@ export default function OwnerActivationPage() {
                       onChange={(event) => setSignatureName(event.target.value)}
                       fullWidth
                     />
+                    <ContractSignatureOtpControl
+                      contractId={primaryContract.id}
+                      email={user?.email || ''}
+                      propertyName={primaryContract?.propertyName}
+                      signatureName={signatureName}
+                      onVerified={setOtpVerificationId}
+                    />
                     <Button
-                      disabled={signing || !primaryContract?.id}
+                      disabled={signing || !primaryContract?.id || !otpVerificationId}
                       onClick={handleOwnerSignContract}
                       variant="contained"
                       startIcon={<PenLine size={18} />}
                       sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950, borderRadius: 3, py: 1.5 }}
                     >
                       {signing ? 'Signing...' : 'Sign Contract'}
+                    </Button>
+                  </Stack>
+                )}
+
+                {canSubmitPaymentRequest && (
+                  <Stack spacing={1.5}>
+                    <TextField
+                      label="Bank transfer / cheque reference"
+                      value={paymentReference}
+                      onChange={(event) => setPaymentReference(event.target.value)}
+                      required
+                      fullWidth
+                    />
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}
+                    >
+                      {paymentProof ? paymentProof.name : 'Attach payment receipt (PDF or image)'}
+                      <input
+                        hidden
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                        onChange={(event) => setPaymentProof(event.target.files?.[0] || null)}
+                      />
                     </Button>
                   </Stack>
                 )}

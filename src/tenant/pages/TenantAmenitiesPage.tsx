@@ -43,10 +43,23 @@ export default function TenantAmenitiesPage() {
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.uid || !selectedAmenity || !bookingDate) return;
+    if (!user?.uid || !user.propertyId || !selectedAmenity || !bookingDate) {
+      alert('A verified property and unit link is required before booking an amenity.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'amenityBookings'), { tenantUid: user.uid, tenantName: user.displayName || 'Resident', amenityName: selectedAmenity.name, bookingDate, timeSlot, status: 'booked', createdAt: serverTimestamp() });
+      await addDoc(collection(db, 'amenityBookings'), {
+        tenantUid: user.uid,
+        tenantName: user.displayName || 'Resident',
+        propertyId: user.propertyId,
+        unitId: user.unitId || null,
+        amenityName: selectedAmenity.name,
+        bookingDate,
+        timeSlot,
+        status: 'booked',
+        createdAt: serverTimestamp(),
+      });
       setOpenAdd(false); setSelectedAmenity(null); setBookingDate(''); setTimeSlot('09:00 AM - 11:00 AM');
     } catch (err) { console.error('Failed to book slot', err); alert('Failed to book slot: ' + (err instanceof Error ? err.message : String(err))); }
     finally { setSubmitting(false); }

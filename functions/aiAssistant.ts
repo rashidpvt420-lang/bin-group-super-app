@@ -1,5 +1,5 @@
-import { onCall } from "firebase-functions/v2/https";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
+import { defineSecret } from "firebase-functions/params";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -144,10 +144,14 @@ async function askOpenAI(apiKey: string, prompt: string) {
 
 export const runSovereignAI = onCall({
   cors: true,
-  timeoutSeconds: 60
+  timeoutSeconds: 60,
+  secrets: [openAiKey, geminiApiKey],
 }, async (request) => {
-  const signedIn = Boolean(request.auth?.uid);
-  const uid = request.auth?.uid || "public-session";
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Sign in before using Sovereign AI.");
+  }
+  const signedIn = true;
+  const uid = request.auth.uid;
   const prompt = buildPrompt(request.data || {}, uid, signedIn);
   const providerPref = asText(request.data?.provider || "gemini", 20).toLowerCase();
   const errors: string[] = [];

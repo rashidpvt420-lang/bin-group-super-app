@@ -100,20 +100,39 @@ const MONTHLY_BILLING_SURCHARGE = 0.06;
 
 const ASSET_CLASS_ALIASES: Record<string, string> = {
   standard_apartment: 'apt-std',
+  apartment: 'apt-std',
+  residential: 'apt-std',
   luxury_apartment: 'apt-lux',
+  villa: 'villa-std',
   standard_villa: 'villa-std',
   luxury_estate_villa: 'villa-lux',
+  luxury_villa: 'villa-lux',
+  building: 'com-twr',
+  commercial: 'off-sml',
+  commercial_building: 'com-twr',
   commercial_tower: 'com-twr',
+  office_building: 'off-sml',
   small_office: 'off-sml',
+  retail_center: 'rtl-mall',
+  retail_centre: 'rtl-mall',
   retail_mall: 'rtl-mall',
   mall: 'rtl-mall',
+  warehouse: 'lab-camp',
+  logistics_warehouse: 'lab-camp',
   labor_camp: 'lab-camp',
   labour_camp: 'lab-camp',
   hospital: 'hosp',
   clinic: 'hosp',
   large_hospital: 'hosp',
   primary_clinic: 'hosp',
+  school: 'school',
+  education: 'school',
+  campus: 'school',
+  government_property: 'government_majlis',
+  government_building: 'government_majlis',
+  government_facility: 'government_majlis',
   data_center: 'data-ctr',
+  data_centre: 'data-ctr',
   mixed_use: 'mix-dev',
   mixed_use_development: 'mix-dev',
   mixed_use_tower: 'mix-dev',
@@ -126,8 +145,12 @@ const ASSET_CLASS_ALIASES: Record<string, string> = {
   masjid: 'mosque_fm',
   mosque_fm: 'mosque_fm',
   religious_facility: 'mosque_fm',
-  'mosque / masjid': 'mosque_fm',
+  mosque_masjid: 'mosque_fm',
 };
+
+function aliasKey(value?: string): string {
+  return String(value || '').trim().toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
 
 function finiteNumber(value: unknown, fallback = 0): number {
   if (typeof value === 'string') {
@@ -145,7 +168,8 @@ function positiveNumber(value: unknown, fallback = 0): number {
 function normalizeAssetClassId(assetClassId?: string): string {
   const raw = String(assetClassId || '').trim();
   if (!raw) return 'apt-std';
-  return ASSET_CLASS_ALIASES[raw] || ASSET_CLASS_ALIASES[raw.toLowerCase()] || raw;
+  const keyed = aliasKey(raw);
+  return ASSET_CLASS_ALIASES[raw] || ASSET_CLASS_ALIASES[raw.toLowerCase()] || ASSET_CLASS_ALIASES[keyed] || raw;
 }
 
 function safeZone(value: unknown): 'A' | 'B' | 'C' {
@@ -275,14 +299,15 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
 
   const sqft = Math.max(safeInput.sqft || 0, 1000);
   const age = safeInput.propertyAge || 0;
-  const worshipperProxy = Math.max(safeInput.units || 1, 1);
+  const worshipperCapacity = Math.max(safeInput.units || 1, 1);
   const mepRate = safeInput.contractType === 'FM_ONLY' ? 20 : safeInput.contractType === 'BOTH' ? 38 : 30;
   const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.18 : age <= 15 ? 1.35 : 1.55;
-  const capacityMultiplier = worshipperProxy <= 300 ? 1 : worshipperProxy <= 1000 ? 1.15 : worshipperProxy <= 3000 ? 1.35 : 1.6;
+  const capacityMultiplier = worshipperCapacity <= 300 ? 1 : worshipperCapacity <= 1000 ? 1.15 : worshipperCapacity <= 3000 ? 1.35 : 1.6;
 
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 8 * capacityMultiplier;
-  const wuduCleaning = worshipperProxy * 5 * 35 * 365;
+  const wuduAreaProxySqft = Math.min(Math.max(Math.ceil(worshipperCapacity * 0.12), 35), 650);
+  const wuduCleaning = wuduAreaProxySqft * 35 * 26;
   const ramadanSurge = 15500 + (safeInput.hasCentralHVAC ? 2500 : 0);
   const compliancePremium = Math.max(baseQuote * 0.04, 2500);
   const complexityPremium = (baseQuote + softServices) * 0.1;
@@ -292,6 +317,7 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
 
   pricingExplanation.push(`${mepRate} AED/sqft mosque MEP rate applied to ${sqft} sqft.`);
   pricingExplanation.push(`${ageCoefficient}x mosque age/risk coefficient applied.`);
+  pricingExplanation.push(`Wudu cleaning priced from ${wuduAreaProxySqft} sqft wudu-area proxy, not worshipper capacity.`);
   pricingExplanation.push('Prayer-time-safe mosque operating model included.');
   addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
 
@@ -364,9 +390,19 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const zoneAdjustedQuote = baseQuote * zoneMultiplier;
   if (zoneMultiplier !== 1) pricingExplanation.push(`Strategic location premium applied for Zone ${safeInput.zone}.`);
 
-  const normalizedEmirate = safeInput.emirate.toLowerCase();
-  const emirateEntry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find((entry) => entry.label.toLowerCase().includes(normalizedEmirate));
-  const emirateMultiplier = emirateEntry ? finiteNumber(emirateEntry.value, 1) : 1;
+  const normalizedEmirate = safeInput.emirate.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const emirateMultiplier =
+    normalizedEmirate.includes('dubai') ? 1.15 :
+    normalizedEmirate.includes('abudhabi') ? 1.1 :
+    normalizedEmirate.includes('sharjah') ? 0.9 :
+    (
+      normalizedEmirate === 'rak' ||
+      normalizedEmirate.includes('rasalkhaimah') ||
+      normalizedEmirate.includes('ajman') ||
+      normalizedEmirate.includes('fujairah') ||
+      normalizedEmirate === 'uaq' ||
+      normalizedEmirate.includes('ummalquwain')
+    ) ? 0.8 : 1;
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional operational cost adjustment for ${safeInput.emirate} (${emirateMultiplier}x) applied.`);
 

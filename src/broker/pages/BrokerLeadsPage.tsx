@@ -38,7 +38,6 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const clean = (value: unknown) => String(value || '').trim();
-const BROKER_COMMISSION_RATE = 0.10;
 
 const numericAmount = (value: unknown) => {
     const raw = String(value || '').replace(/[^0-9.]/g, '');
@@ -159,9 +158,6 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                 },
                 status: 'new',
                 lifecycleStatus: 'LEAD_CAPTURED',
-                commissionEligible: false,
-                commissionStatus: 'NOT_CONVERTED',
-                commissionRate: BROKER_COMMISSION_RATE,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
@@ -213,15 +209,6 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                     : `LEAD_${String(newStatus).toUpperCase()}`,
                 updatedAt: serverTimestamp(),
             };
-
-            if (newStatus === 'converted') {
-                statusPayload.convertedAt = serverTimestamp();
-                statusPayload.commissionEligible = true;
-                statusPayload.commissionStatus = 'PENDING_REVIEW';
-                statusPayload.commissionCreationStatus = 'PENDING_ADMIN_CONTRACT_MATCH';
-                statusPayload.requiresAdminAttribution = true;
-                statusPayload.adminAttributionRequiredAt = serverTimestamp();
-            }
 
             await updateDoc(doc(db, 'brokerLeads', leadId), statusPayload);
             await logAuditAction({

@@ -192,6 +192,7 @@ export interface OnboardingState {
     };
     isContractSigned: boolean;
     signatureName: string;
+    contractOtpVerificationId: string | null;
     kycUrls: {
         emiratesId?: string;
         passport?: string;
@@ -227,6 +228,7 @@ export interface OnboardingState {
     updateSignupData: (data: Partial<OnboardingState['signupData']>) => void;
     updateKycUrls: (data: Partial<OnboardingState['kycUrls']>) => void;
     setContractSignature: (isSigned: boolean, name: string) => void;
+    setContractOtpVerificationId: (verificationId: string | null) => void;
     setSelectedPlan: (plan: any) => void;
     toggleAddOn: (id: string) => void;
     setContractId: (id: string) => void;
@@ -390,6 +392,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             signupData: { name: '', email: '', phone: '' },
             isContractSigned: false,
             signatureName: '',
+            contractOtpVerificationId: null,
             kycUrls: {},
             ownerAccount: null,
             proofDocuments: {
@@ -453,7 +456,12 @@ export const useOnboardingStore = create<OnboardingState>()(
                 kycUrls: { ...state.kycUrls, ...data }
             })),
 
-            setContractSignature: (isSigned, name) => set({ isContractSigned: isSigned, signatureName: name }),
+            setContractSignature: (isSigned, name) => set((state) => ({
+                isContractSigned: isSigned,
+                signatureName: name,
+                contractOtpVerificationId: state.signatureName === name ? state.contractOtpVerificationId : null,
+            })),
+            setContractOtpVerificationId: (contractOtpVerificationId) => set({ contractOtpVerificationId }),
 
             setSelectedPlan: (selectedPlan) => set({ selectedPlan }),
             toggleAddOn: (id) => {
@@ -527,7 +535,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                 intakeId: null, onboardingSessionId: createOnboardingSessionId(),
                 paymentVerified: false, paymentRequested: false, accountCreated: false,
                 valuationResult: null, paymentManifest: null, paymentMethod: null,
-                isContractSigned: false, signatureName: '',
+                isContractSigned: false, signatureName: '', contractOtpVerificationId: null,
                 companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
                 signupData: { name: '', email: '', phone: '' }, kycUrls: {},
                 ownerAccount: null,

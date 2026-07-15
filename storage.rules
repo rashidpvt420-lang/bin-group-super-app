@@ -159,6 +159,13 @@ service firebase.storage {
       allow write: if isAuth() && ticketExists(ticketId) && (
         ticket(ticketId).tenantId == request.auth.uid ||
         ticket(ticketId).tenantUid == request.auth.uid ||
+        isAdmin()
+      ) && isImageUpload(10);
+    }
+
+    match /maintenanceTickets/{ticketId}/owner/{fileName} {
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if isAuth() && ticketExists(ticketId) && (
         ticket(ticketId).ownerId == request.auth.uid ||
         ticket(ticketId).ownerUid == request.auth.uid ||
         isAdmin()
@@ -181,13 +188,13 @@ service firebase.storage {
     }
 
     match /design_requests/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(50);
       allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
     match /ai_design_renders/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isOwnerRole() || isAuditor());
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
       allow create, update, delete: if isAdmin();
     }
 

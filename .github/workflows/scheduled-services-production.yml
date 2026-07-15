@@ -1,161 +1,20 @@
-name: Scheduled Services Production
+name: Scheduled Services Production (Retired)
 
+# Scheduled-service code remains covered by normal CI. Production deployment
+# is centralized in firebase-production-deploy.yml so no partial stack can
+# bypass exact-SHA, founder, incident, artifact, role-proof, or postdeploy gates.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/scheduled-services-production.yml'
-      - 'scripts/verify-scheduled-services-completeness.mjs'
-      - 'scripts/harden-system-secrets-rules.mjs'
-      - 'package.json'
-      - 'firestore.rules'
-      - 'src/components/AuthenticatedShell.tsx'
-      - 'src/tenant/pages/TenantScheduledServicePage.tsx'
-      - 'src/tenant/pages/TenantTicketDetailPage.tsx'
-      - 'src/tenant/pages/TenantTicketsPage.tsx'
-      - 'src/tenant/pages/TenantSimpleDashboardPage.tsx'
-      - 'src/tenant/pages/TenantDashboardLightPage.tsx'
-      - 'src/tenant/TenantApp.tsx'
-      - 'apps/admin-panel/src/pages/ops/ScheduledServicesOperationsPage.tsx'
-      - 'apps/admin-panel/src/App.tsx'
-      - 'apps/admin-panel/src/components/Navigation.tsx'
-      - 'functions/scheduledServices.ts'
-      - 'functions/scheduledServiceAvailability.ts'
-      - 'functions/runtime.ts'
-      - 'functions/runtimeAll.ts'
-      - 'functions/tsconfig.json'
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
-
-concurrency:
-  group: scheduled-services-production
-  cancel-in-progress: true
-
-env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
-  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-  VITE_ENABLE_FIREBASE_APPCHECK: 'true'
-  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-  VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-  VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
-  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-  REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-  REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-  REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
-  REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
-  REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
-  CI: true
 
 jobs:
-  validate-and-deploy:
-    name: Validate and deploy scheduled services
+  retired:
+    name: Refuse parallel production deployment
     runs-on: ubuntu-latest
-    environment: production
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Use Java 21 for Firestore rules tests
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-
-      - name: Deployment configuration preflight
+      - name: Use the protected production workflow
         run: |
-          set -euo pipefail
-          test -n "${VITE_FIREBASE_API_KEY}"
-          test -n "${VITE_FIREBASE_APP_ID}"
-          test -n "${VITE_FIREBASE_MESSAGING_SENDER_ID}"
-          test -n "${VITE_APP_CHECK_SITE_KEY}"
-
-      - name: Install dependencies
-        run: bash scripts/npm-install-retry.sh
-
-      - name: Verify scheduled-services completeness
-        run: node scripts/verify-scheduled-services-completeness.mjs
-
-      - name: Verify Functions compiler configuration
-        run: node --test test/functions-tsconfig.test.mjs
-
-      - name: Harden and test Firestore rules
-        run: npm run test:rules
-
-      - name: Create production environment files
-        run: node scripts/write-production-env.mjs
-
-      - name: TypeScript check public app
-        run: npx tsc -p tsconfig.app.json --noEmit
-
-      - name: Build shared package
-        run: npm run build --workspace=@bin/shared
-
-      - name: Build public app
-        run: npm run build
-
-      - name: Build admin panel
-        run: npm run build:admin
-        env:
-          CI: false
-
-      - name: Verify admin Firebase embedding
-        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
-
-      - name: Build scheduled-service functions
-        run: npm run build --workspace=functions
-
-      - name: Stamp deployment commit
-        run: |
-          printf '%s\n' "$GITHUB_SHA" > dist/deployment-sha.txt
-          printf '%s\n' "$GITHUB_SHA" > apps/admin-panel/build/deployment-sha.txt
-
-      - name: Deploy scheduled-services stack
-        id: deploy_stack
-        shell: bash
-        run: |
-          set +e
-          TARGETS="firestore:rules,hosting:app,hosting:admin,functions:tenantManageScheduledService,functions:saveScheduledServiceAccessCode,functions:adminRevealScheduledServiceAccessCode,functions:scheduledServiceReminderCron,functions:onScheduledServiceUpdated,functions:createNextRecurringScheduledService,functions:getScheduledServiceAvailability,functions:adminManageScheduledServiceAvailability,functions:adminUpdateScheduledService"
-          npx firebase deploy --project "$GCP_PROJECT_ID" --non-interactive --force --only "$TARGETS" > scheduled-services-deploy-output.txt 2>&1
-          status=$?
-          cat scheduled-services-deploy-output.txt
-          exit $status
-
-      - name: Upload scheduled-services deploy diagnostics
-        if: failure() && steps.deploy_stack.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: scheduled-services-deploy-diagnostics-${{ github.sha }}
-          path: scheduled-services-deploy-output.txt
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Verify public and admin commit markers
-        run: |
-          set -euo pipefail
-          PUBLIC_SHA="$(curl -fsSL --retry 8 --retry-delay 5 "https://bin-group-57c60.web.app/deployment-sha.txt?run=${GITHUB_RUN_ID}")"
-          ADMIN_SHA="$(curl -fsSL --retry 8 --retry-delay 5 "https://bin-group-admin-panel.web.app/deployment-sha.txt?run=${GITHUB_RUN_ID}")"
-          test "$PUBLIC_SHA" = "$GITHUB_SHA"
-          test "$ADMIN_SHA" = "$GITHUB_SHA"
-          echo "Verified public and admin deployment commit: $GITHUB_SHA"
+          echo "::error::This deploy path is retired. Dispatch Firebase Production Deploy with its protected production environment and exact current main SHA."
+          exit 1

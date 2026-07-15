@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Building2, ClipboardCheck, CreditCard, Shield, Wallet, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, db, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, functions } from '../../lib/firebase';
+import { collection, db, doc, getDoc, getDocs, onSnapshot, query, where, functions } from '../../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
@@ -611,8 +611,6 @@ export default function OwnerDashboardResolvedPage() {
     const reporterId = `reporter_${ownerId}_${Date.now()}`;
     const permissionScope = String(reporterData.permissionScope || 'COMPLAINTS_ONLY').toUpperCase();
     const accessType = String(reporterData.accessType || 'MAJLIS_RESIDENT').toUpperCase();
-    const canActOnOwnerBehalf = permissionScope === 'OWNER_DELEGATE' || accessType === 'OWNER_DELEGATE';
-    const canViewPropertyComplaints = canActOnOwnerBehalf || permissionScope === 'VIEW_AND_COMPLAIN';
     const payload = {
       reporterId,
       ownerId,
@@ -630,35 +628,26 @@ export default function OwnerDashboardResolvedPage() {
       unitId: String(reporterData.unitId || '').trim(),
       notes: String(reporterData.notes || '').trim(),
       inviteCode: makeInviteCode(),
-      portalRoute: canActOnOwnerBehalf ? '/owner/dashboard' : '/tenant/request',
+      portalRoute: '/tenant/request',
       loginHint: 'Reporter must use a separate verified login for portal access.',
       accessStatus: 'INVITED',
       canCreateComplaints: true,
       canViewOwnComplaints: true,
-      canViewPropertyComplaints,
-      canActOnOwnerBehalf,
-      canViewOwnerFinancials: false,
-      canApproveWork: canActOnOwnerBehalf,
-      invitedByOwnerUid: ownerId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
-    await setDoc(doc(db, 'propertyReporters', reporterId), payload);
-    setReporters((current) => [resolvePropertyReporter({ id: reporterId, ...payload, createdAt: new Date(), updatedAt: new Date() }), ...current]);
-  };
-
-  const handleRemoveReporter = async (reporterId: string) => {
-    await updateDoc(doc(db, 'propertyReporters', reporterId), {
-      accessStatus: 'SUSPENDED',
-      canCreateComplaints: false,
-      canViewOwnComplaints: false,
       canViewPropertyComplaints: false,
       canActOnOwnerBehalf: false,
       canViewOwnerFinancials: false,
       canApproveWork: false,
-      updatedAt: serverTimestamp(),
-    });
+      invitedByOwnerUid: ownerId,
+    };
+
+    const createReporter = httpsCallable(functions, 'ownerCreatePropertyReporter');
+    await createReporter({ reporterId, ...payload });
+    setReporters((current) => [resolvePropertyReporter({ id: reporterId, ...payload, createdAt: new Date(), updatedAt: new Date() }), ...current]);
+  };
+
+  const handleRemoveReporter = async (reporterId: string) => {
+    const suspendReporter = httpsCallable(functions, 'ownerSuspendPropertyReporter');
+    await suspendReporter({ reporterId });
     setReporters((current) => current.map((reporter) => reporter.id === reporterId ? { ...reporter, accessStatus: 'SUSPENDED', canCreateComplaints: false } : reporter));
   };
 
@@ -709,26 +698,10 @@ export default function OwnerDashboardResolvedPage() {
       notes: String(rentData.notes || ''),
       lastPaymentDate: new Date().toISOString(),
       createdByOwnerUid: ownerId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     };
 
-    await setDoc(doc(db, 'tenant_ledger', recordId), payload);
-    const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
-    await logUserAuditAction({
-      action: 'OWNER_RENT_PAYMENT_RECORDED',
-      targetType: 'TENANT_LEDGER',
-      targetId: recordId,
-      module: 'owner_money_snapshot',
-      status: 'RECORDED',
-      metadata: {
-        propertyId: payload.propertyId,
-        propertyName: payload.propertyName,
-        tenantName: payload.tenantName,
-        amountPaid: rentPaid,
-        balance,
-      },
-    });
+    const ownerRecordRentPayment = httpsCallable(functions, 'ownerRecordRentPayment');
+    await ownerRecordRentPayment(payload);
 
     setLedgerSummary((current: any) => {
       const row = {

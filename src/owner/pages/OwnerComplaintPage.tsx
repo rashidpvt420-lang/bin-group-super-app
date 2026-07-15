@@ -14,13 +14,13 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Camera, X, ChevronLeft, MapPin, AlertCircle } from 'lucide-react';
 import {
-    db, storage, collection, addDoc, serverTimestamp,
-    query, where, getDocs, doc, getDoc,
+    db, storage, collection, functions, httpsCallable,
+    query, where, getDocs,
     ref, uploadBytes, getDownloadURL
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { notifyTicketCreated, notifyAdmins } from '../../services/notificationService';
+import { notifyAdmins } from '../../services/notificationService';
 
 const CATEGORIES = [
     'AC / Cooling', 'Electrical / Power', 'Plumbing / Water',
@@ -93,15 +93,22 @@ export default function OwnerComplaintPage() {
         setPreviews(prev => prev.filter((_, idx) => idx !== i));
     };
 
-    const uploadPhotos = async (): Promise<string[]> => {
-        if (!photos.length) return [];
+    const uploadPhotos = async (ticketId: string): Promise<{ urls: string[]; paths: string[] }> => {
+        if (!photos.length) return { urls: [], paths: [] };
         const urls: string[] = [];
+        const paths: string[] = [];
         for (const file of photos) {
-            const fileRef = ref(storage, `maintenanceTickets/${user?.uid}/${Date.now()}_${file.name}`);
-            await uploadBytes(fileRef, file);
+            if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic'].includes(file.type)) {
+                throw new Error('Complaint evidence must be JPEG, PNG, WEBP, or HEIC.');
+            }
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'owner-evidence';
+            const path = `maintenanceTickets/${ticketId}/owner/${Date.now()}_${safeName}`;
+            const fileRef = ref(storage, path);
+            await uploadBytes(fileRef, file, { contentType: file.type });
             urls.push(await getDownloadURL(fileRef));
+            paths.push(path);
         }
-        return urls;
+        return { urls, paths };
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -131,52 +138,35 @@ export default function OwnerComplaintPage() {
 
         setSubmitting(true);
         try {
-            setUploadingPhotos(true);
-            const photoUrls = await uploadPhotos();
-            setUploadingPhotos(false);
-
-            const selectedUnit = units.find(u => u.id === selectedUnitId);
-
-            const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
-                requesterRole: 'owner',
-                ownerId: user!.uid,
-                ownerUid: user!.uid,
-                ownerName: user!.displayName || 'Owner',
-                ownerPhone: user!.phoneNumber || '',
-                ownerEmail: user!.email || '',
+            const createTicket = httpsCallable(functions, 'ownerCreateMaintenanceTicket');
+            const created = await createTicket({
                 propertyId: selectedPropertyId,
-                propertyName: selectedProperty?.name || selectedProperty?.propertyName || '',
                 unitId: selectedUnitId || null,
-                unitNumber: selectedUnit?.unitNumber || null,
-                floor: selectedUnit?.floorNumber || null,
-                tenantId: selectedUnit?.tenantId || null,
-                tenantName: selectedUnit?.tenantName || null,
-                tenantEmail: selectedUnit?.tenantEmail || null,
                 category,
                 priority,
                 description,
                 specificLocation,
-                photos: photoUrls,
-                jobLocation,
-                source: 'OWNER_PORTAL',
-                status: 'OPEN',
-                dispatchStatus: 'PENDING_ASSIGNMENT',
-                trackingStatus: 'WAITING_FOR_TECHNICIAN',
-                assignedTechnicianId: null,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                slaMinutes: priority === 'emergency' ? 60 : priority === 'urgent' ? 240 : 1440,
             });
+            const ticketId = String((created.data as { ticketId?: string }).ticketId || '');
+            if (!ticketId) throw new Error('Ticket reference was not returned.');
+
+            if (photos.length) {
+                setUploadingPhotos(true);
+                const evidence = await uploadPhotos(ticketId);
+                const attachEvidence = httpsCallable(functions, 'ownerAttachMaintenanceEvidence');
+                await attachEvidence({ ticketId, urls: evidence.urls, paths: evidence.paths });
+                setUploadingPhotos(false);
+            }
 
             await notifyAdmins({
                 type: 'OWNER_COMPLAINT',
                 title: `Owner Complaint: ${category}`,
                 body: `${user!.displayName || 'Owner'} filed a ${priority} complaint at ${selectedProperty?.name || 'a property'}. Requires assignment.`,
-                ticketId: docRef.id,
+                ticketId,
                 metadata: { category, priority, propertyId: selectedPropertyId },
             });
 
-            navigate(`/owner/ticket/${docRef.id}`);
+            navigate(`/owner/ticket/${ticketId}`);
         } catch (err) {
             console.error('Owner complaint submit failed:', err);
             alert('Failed to submit: ' + (err instanceof Error ? err.message : String(err)));

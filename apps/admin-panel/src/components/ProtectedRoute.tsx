@@ -13,8 +13,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean;
         'operations_admin',
         'finance_admin',
         'hr_admin',
-        'hr_manager',
-        'hr_staff',
         'support_admin',
         ...extraRoles,
     ]);

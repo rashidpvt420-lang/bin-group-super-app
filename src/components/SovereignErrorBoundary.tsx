@@ -1,5 +1,5 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
-import { db, collection, addDoc, serverTimestamp, auth } from "../lib/firebase";
+import { functions, httpsCallable } from "../lib/firebase";
 import "./ErrorBoundary.css";
 
 // Simple Typography shim if not fully loaded
@@ -116,16 +116,17 @@ class SovereignErrorBoundary extends Component<Props, State> {
     }
     
     try {
-        await addDoc(collection(db, "telemetry_logs"), {
-            severity: "CRITICAL",
-            type: "FRONTEND_CRASH",
-            message: error.message,
-            stack: error.stack,
-            componentStack: errorInfo.componentStack,
-            userId: auth.currentUser?.uid || "UNAUTHENTICATED",
-            userAgent: navigator.userAgent,
-            url: window.location.href,
-            timestamp: serverTimestamp()
+        const recordTelemetry = httpsCallable(functions, 'recordClientTelemetry');
+        await recordTelemetry({
+            kind: 'CRASH',
+            eventType: 'FRONTEND_CRASH',
+            metadata: {
+              errorName: error.name,
+              message: error.message,
+              componentStack: errorInfo.componentStack,
+              userAgent: navigator.userAgent,
+              path: window.location.pathname,
+            },
         });
         console.log("Telemetry push complete. Incident sequestered.");
     } catch (telemetryErr) {

@@ -66,8 +66,8 @@ export default function TechnicianProfilePage() {
                 setTechData(data);
                 setDisplayName(data.displayName || user.displayName || '');
                 setPhone(data.phoneNumber || data.phone || user.phoneNumber || '');
-                setTrade(data.trade || data.specialty || data.primaryTrade || label('General Maintenance', 'صيانة عامة'));
-                setServiceZone(data.serviceZone || data.zone || data.city || '');
+                setTrade(data.requestedTrade || data.trade || data.specialty || data.primaryTrade || label('General Maintenance', 'صيانة عامة'));
+                setServiceZone(data.serviceZonePreference || data.serviceZone || data.zone || data.city || '');
                 setEmergencyName(data.emergencyContact?.name || '');
                 setEmergencyPhone(data.emergencyContact?.phone || '');
                 setIsAvailable(data.isAvailable !== false);
@@ -93,18 +93,12 @@ export default function TechnicianProfilePage() {
             if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: displayName.trim() });
             const normalizedTrade = trade.trim() || label('General Maintenance', 'صيانة عامة');
             const payload = {
-                uid: user.uid,
-                email: user.email || techData?.email || '',
-                role: techData?.role || 'technician',
                 displayName: displayName.trim(),
                 phoneNumber: phone.trim(),
                 phone: phone.trim(),
-                trade: normalizedTrade,
-                specialty: normalizedTrade,
-                serviceZone: serviceZone.trim(),
+                requestedTrade: normalizedTrade,
+                serviceZonePreference: serviceZone.trim(),
                 emergencyContact: { name: emergencyName.trim(), phone: emergencyPhone.trim() },
-                isAvailable,
-                status: techData?.status || 'active',
                 language: lang,
                 updatedAt: serverTimestamp(),
             };
@@ -193,7 +187,7 @@ export default function TechnicianProfilePage() {
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Service Zone', 'منطقة الخدمة')} value={serviceZone} onChange={e => setServiceZone(e.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Name', 'اسم جهة الاتصال للطوارئ')} value={emergencyName} onChange={e => setEmergencyName(e.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Phone', 'هاتف جهة الاتصال للطوارئ')} value={emergencyPhone} onChange={e => setEmergencyPhone(e.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}><FormControlLabel control={<Switch checked={isAvailable} onChange={e => setIsAvailable(e.target.checked)} color="primary" />} label={<Typography color="#FFF" fontWeight="900">{label('Available for Dispatch', 'متاح لاستقبال المهام')}</Typography>} sx={{ mr: isRTL ? 0 : undefined, ml: isRTL ? 0 : undefined }} /></Grid>
+                    <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}><FormControlLabel disabled control={<Switch checked={isAvailable} color="primary" />} label={<Typography color="#FFF" fontWeight="900">{label('Availability is controlled by duty status', 'يتم التحكم في التوفر من خلال حالة الدوام')}</Typography>} sx={{ mr: isRTL ? 0 : undefined, ml: isRTL ? 0 : undefined }} /></Grid>
                 </Grid>
                 
                 <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>

@@ -6,14 +6,13 @@ import { ShieldCheck, MapPin, Building, Wrench, ArrowRight, ArrowLeft, CheckCirc
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { formatAED } from '../../utils/formatters';
 import ContractDigitalSignature from '../ContractDigitalSignature';
 
 const GovernanceReviewStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { 
-        properties, selectedPlan, portfolioSummary, setIntakeId, 
-        companyProfile 
+        properties, selectedPlan, portfolioSummary, setIntakeId,
+        onboardingSessionId
     } = useOnboardingStore();
     const { tx } = useLanguage();
     const [loading, setLoading] = useState(false);
@@ -34,28 +33,10 @@ const GovernanceReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
         setLoading(true);
         setError(null);
-        try {
-            const docRef = await addDoc(collection(db, 'intake_submissions'), {
-                properties,
-                selectedPlan,
-                portfolioSummary,
-                mobilizationDue: mobilizationPayment,
-                companyProfile,
-                signedData,
-                status: 'AWAITING_VERIFICATION',
-                paymentStatus: 'PENDING',
-                createdAt: serverTimestamp(),
-                source: 'Sovereign_Wizard_v2.1_Optimized'
-            });
-            setIntakeId(docRef.id);
-            setSubmitted(true);
-            setLoading(false);
-            setTimeout(onNext, 2000);
-        } catch (err: any) {
-            console.error("Submission Fault:", err);
-            setError("Systemic fault during submission. Operational node retry required.");
-            setLoading(false);
-        }
+        setIntakeId(onboardingSessionId);
+        setSubmitted(true);
+        setLoading(false);
+        setTimeout(onNext, 2000);
     };
 
     if (submitted) {

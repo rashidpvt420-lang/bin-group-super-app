@@ -1,80 +1,20 @@
-name: Tenant UI Hotfix Deploy
+name: Tenant UI Hotfix Deploy (Retired)
 
-# Scoped hosting-only release for tenant portal UX corrections.
+# Production deploys are intentionally centralized in
+# firebase-production-deploy.yml so exact-SHA, founder authorization,
+# incident, artifact, live-role, and postdeployment gates cannot be bypassed.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/tenant-ui-hotfix-deploy.yml'
-      - 'src/tenant/**'
-      - 'src/components/AuthenticatedShell.tsx'
-      - 'src/components/navigation/NavigationControl.tsx'
-      - 'src/components/RoleQuickActionsPanel.tsx'
-      - 'src/components/RoleJourneyStrip.tsx'
-      - 'src/theme/**'
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
-
-concurrency:
-  group: tenant-ui-hotfix-production
-  cancel-in-progress: true
-
-env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
-  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-  VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-  VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
 
 jobs:
-  deploy-tenant-ui:
-    name: Build and deploy tenant UI
+  retired:
+    name: Refuse parallel production deployment
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-
-      - name: Install dependencies
-        run: bash scripts/npm-install-retry.sh
-
-      - name: Create production environment
-        run: node scripts/write-production-env.mjs
-
-      - name: Build shared package
-        run: npm run build --workspace=@bin/shared
-
-      - name: Build public app
-        run: npm run build
-
-      - name: Stamp deployed commit
-        run: printf '%s\n' "$GITHUB_SHA" > dist/deployment-sha.txt
-
-      - name: Deploy public hosting only
-        run: npx firebase deploy --only hosting:app --project "$GCP_PROJECT_ID" --non-interactive --force
-
-      - name: Verify live commit marker
+      - name: Use the protected production workflow
         run: |
-          set -euo pipefail
-          LIVE_SHA="$(curl -fsSL --retry 8 --retry-delay 5 "https://bin-group-57c60.web.app/deployment-sha.txt?run=${GITHUB_RUN_ID}")"
-          test "$LIVE_SHA" = "$GITHUB_SHA"
-          echo "Verified Firebase Hosting commit: $LIVE_SHA"
+          echo "::error::This deploy path is retired. Dispatch Firebase Production Deploy with its protected production environment and exact current main SHA."
+          exit 1

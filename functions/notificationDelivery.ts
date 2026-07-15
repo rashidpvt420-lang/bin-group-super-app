@@ -101,15 +101,11 @@ function roleFromToken(token: Record<string, unknown>) {
 }
 
 async function isAdminCaller(uid: string, token: Record<string, unknown>) {
+    void uid;
     const tokenRole = roleFromToken(token);
     if (token.admin === true || token.isAdmin === true || token.ceo === true) return true;
     if (["admin", "super_admin", "superadmin", "ceo", "manager", "operations_admin", "dispatcher"].includes(tokenRole)) return true;
-
-    const userSnap = await db.collection("users").doc(uid).get();
-    const data = userSnap.data() || {};
-    const role = cleanRole(data.role || data.userRole || data.primaryRole);
-    return data.admin === true || data.isAdmin === true || data.ceo === true ||
-        ["admin", "super_admin", "superadmin", "ceo", "manager", "operations_admin", "dispatcher"].includes(role);
+    return false;
 }
 
 function participantIds(ticket: FirebaseFirestore.DocumentData) {

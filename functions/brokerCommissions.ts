@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -7,9 +8,9 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const ts = () => FieldValue.serverTimestamp();
 
-// Default brokerage commission rate, matching the 10% figure already used in the
-// broker portal's inline estimate (src/pages/BrokerPortalPage.tsx).
-const COMMISSION_RATE = 0.1;
+const MIN_COMMISSION_RATE = 0.05;
+const MAX_COMMISSION_RATE = 0.08;
+const DEFAULT_COMMISSION_RATE = MIN_COMMISSION_RATE;
 
 const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
 const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "manager", "operations_admin", "finance_admin"]);
@@ -18,11 +19,6 @@ async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const claims = auth.token || {};
   if (claims.admin === true || claims.isAdmin === true || ADMIN_ROLES.has(roleOf(claims.role))) return;
-
-  const profile = await db.collection("users").doc(auth.uid).get();
-  const data = profile.data() || {};
-  if (data.isAdmin === true || data.admin === true || ADMIN_ROLES.has(roleOf(data.role))) return;
-
   throw new HttpsError("permission-denied", "Admin permission required.");
 }
 
@@ -42,7 +38,7 @@ export function isValidReraFormat(license: string): boolean {
  * commission is created in a PENDING state when the broker is RERA-verified,
  * or a HOLD state otherwise (released later by setBrokerReraVerification).
  *
- * Idempotency is the caller's responsibility (guard on contract.commissionGenerated).
+ * A deterministic commission ID and Firestore transaction enforce idempotency.
  * Returns null when the deal has no associated broker.
  */
 export async function createBrokerCommissionForContract(
@@ -72,49 +68,99 @@ export async function createBrokerCommissionForContract(
 
   const base = Number(
     opts.annualContractValue ||
-    opts.amountReceived ||
+    contract.quoteSnapshot?.annualContractValue ||
     contract.annualContractValue ||
-    contract.amountReceived ||
-    contract.mobilizationAmount ||
     0,
   );
-  const amount = Math.round(base * COMMISSION_RATE * 100) / 100;
+  if (!Number.isFinite(base) || base <= 0) {
+    throw new Error("Broker commission requires a positive locked annual contract value.");
+  }
+  const requestedCommissionRate = Number(
+    contract.brokerCommissionRate ||
+    contract.commissionRate ||
+    broker.brokerCommissionRate ||
+    broker.commissionRate ||
+    DEFAULT_COMMISSION_RATE,
+  );
+  const commissionRateApproved =
+    Number.isFinite(requestedCommissionRate) &&
+    requestedCommissionRate >= MIN_COMMISSION_RATE &&
+    requestedCommissionRate <= MAX_COMMISSION_RATE;
+  const commissionRate = commissionRateApproved ? requestedCommissionRate : DEFAULT_COMMISSION_RATE;
+  const amount = commissionRateApproved ? Math.round(base * commissionRate * 100) / 100 : 0;
+  const complianceHold = !reraVerified || !commissionRateApproved;
+  const holdReason = !commissionRateApproved
+    ? "COMMISSION_RATE_REQUIRES_ADMIN_REVIEW"
+    : reraVerified
+      ? null
+      : "BROKER_RERA_UNVERIFIED";
   const now = ts();
 
-  const commissionRef = db.collection("broker_commissions").doc();
-  await commissionRef.set({
-    brokerId,
-    brokerUid: brokerId,
-    brokerName,
-    brokerCode,
-    contractId,
-    propertyName: contract.propertyName || contract.propertyTitle || "",
-    linkedProperty: contract.propertyName || contract.propertyTitle || "",
-    amount,
-    percentage: COMMISSION_RATE * 100,
-    commissionBase: base,
-    currency: String(contract.currency || "AED").trim().toUpperCase(),
-    status: reraVerified ? "PENDING" : "HOLD",
-    complianceHold: !reraVerified,
-    holdReason: reraVerified ? null : "BROKER_RERA_UNVERIFIED",
-    reraVerifiedAtCreation: reraVerified,
-    source: "CONTRACT_ACTIVATION",
-    createdAt: now,
-    updatedAt: now,
+  const commissionRef = db.collection("broker_commissions").doc(`commission_${contractId}`);
+  return db.runTransaction(async (transaction) => {
+    const existingCommission = await transaction.get(commissionRef);
+    if (existingCommission.exists) {
+      const existing = existingCommission.data() || {};
+      return {
+        commissionId: commissionRef.id,
+        brokerId: String(existing.brokerId || brokerId),
+        amount: Number(existing.amount || 0),
+        status: String(existing.status || "PENDING"),
+      };
+    }
+    transaction.create(commissionRef, {
+      brokerId,
+      brokerUid: brokerId,
+      brokerName,
+      brokerCode,
+      contractId,
+      propertyName: contract.propertyName || contract.propertyTitle || "",
+      linkedProperty: contract.propertyName || contract.propertyTitle || "",
+      amount,
+      percentage: commissionRate * 100,
+      commissionBase: base,
+      currency: String(contract.currency || "AED").trim().toUpperCase(),
+      status: complianceHold ? "HOLD" : "PENDING",
+      complianceHold,
+      holdReason,
+      requestedPercentage: Number.isFinite(requestedCommissionRate) ? requestedCommissionRate * 100 : null,
+      reraVerifiedAtCreation: reraVerified,
+      source: "CONTRACT_ACTIVATION",
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(db.collection("contracts").doc(contractId), {
+      commissionGenerated: true,
+      commissionId: commissionRef.id,
+      updatedAt: now,
+    }, { merge: true });
+    transaction.create(db.collection("auditLogs").doc(`broker_commission_${contractId}`), {
+      action: "BROKER_COMMISSION_CREATED",
+      commissionId: commissionRef.id,
+      brokerId,
+      contractId,
+      amount,
+      heldForRera: !reraVerified,
+      heldForCommissionRate: !commissionRateApproved,
+      createdAt: now,
+    });
+    return { commissionId: commissionRef.id, brokerId, amount, status: complianceHold ? "HOLD" : "PENDING" };
   });
-
-  await db.collection("auditLogs").add({
-    action: "BROKER_COMMISSION_CREATED",
-    commissionId: commissionRef.id,
-    brokerId,
-    contractId,
-    amount,
-    heldForRera: !reraVerified,
-    createdAt: now,
-  });
-
-  return { commissionId: commissionRef.id, brokerId, amount, status: reraVerified ? "PENDING" : "HOLD" };
 }
+
+export const reconcileBrokerCommissionOnContractActivation = onDocumentUpdated(
+  { document: "contracts/{contractId}", region: "europe-west3" },
+  async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    const becameActive = roleOf(after.status) === "active" && roleOf(before.status) !== "active";
+    const needsRepair = roleOf(after.status) === "active" && after.commissionGenerated !== true;
+    if (!becameActive && !needsRepair) return;
+    await createBrokerCommissionForContract(String(event.params.contractId), after, {
+      annualContractValue: Number(after.quoteSnapshot?.annualContractValue || after.annualContractValue || 0),
+    });
+  },
+);
 
 /**
  * Admin-only: set (or clear) a broker's RERA verification flag. Verifying a
@@ -158,6 +204,7 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
     if (!holds.empty) {
       const batch = db.batch();
       holds.forEach((d) => {
+        if (String(d.data().holdReason || "") !== "BROKER_RERA_UNVERIFIED") return;
         batch.set(d.ref, {
           status: "PENDING",
           complianceHold: false,

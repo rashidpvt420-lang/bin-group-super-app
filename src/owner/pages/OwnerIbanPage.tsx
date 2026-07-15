@@ -4,6 +4,7 @@ import { CreditCard, Shield, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { db, collection, addDoc, query, where, getDocs, serverTimestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { logAuditAction } from '../../utils/auditLogger';
 
 export default function OwnerIbanPage() {
     const { user } = useRole();
@@ -50,7 +51,12 @@ export default function OwnerIbanPage() {
                 status: 'PENDING_VERIFICATION',
                 createdAt: serverTimestamp(),
             });
-            await addDoc(collection(db, 'auditLogs'), { action: 'IBAN_ADDED', actorId: user?.uid, actorRole: 'owner', timestamp: serverTimestamp() });
+            await logAuditAction({
+                action: 'IBAN_ADDED',
+                targetType: 'OWNER_BANK_ACCOUNT',
+                targetId: user?.uid || 'unknown',
+                metadata: { bankName, last4: iban.replace(/\s/g, '').slice(-4) },
+            });
             setSuccess('Bank account submitted for verification. BIN GROUP will verify within 1-2 business days.');
             setIban(''); setBankName(''); setAccountHolder(''); setShowForm(false);
             const snap = await getDocs(query(collection(db, 'ownerBankAccounts'), where('ownerId', '==', user?.uid)));

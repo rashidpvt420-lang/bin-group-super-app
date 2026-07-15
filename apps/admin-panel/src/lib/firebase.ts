@@ -44,6 +44,12 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 if (typeof window !== 'undefined') {
     const enableAppCheck = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
     const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+    const siteKey = clean(process.env.REACT_APP_APP_CHECK_SITE_KEY);
+    const appCheckRequired = process.env.NODE_ENV === 'production' && !isLocal;
+
+    if (appCheckRequired && (!enableAppCheck || !siteKey)) {
+        throw new Error('[Firebase] Admin App Check configuration is required in production.');
+    }
 
     if (enableAppCheck) {
         const existingDebug = (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN;
@@ -64,7 +70,6 @@ if (typeof window !== 'undefined') {
             console.info(`[Firebase] Admin App Check debug token fingerprint=${fingerprint}`);
         }
 
-        const siteKey = clean(process.env.REACT_APP_APP_CHECK_SITE_KEY);
         if (siteKey) {
             try {
                 initializeAppCheck(app, {
@@ -73,7 +78,10 @@ if (typeof window !== 'undefined') {
                 });
                 console.log('App Check active.');
             } catch (err) {
-                console.warn('App Check initialization failed:', err);
+                if (appCheckRequired) {
+                    throw new Error('[Firebase] Admin App Check initialization failed in production.');
+                }
+                console.warn('App Check initialization failed in development:', err);
             }
         } else {
             console.warn('App Check site key missing or placeholder. App Check not initialized.');

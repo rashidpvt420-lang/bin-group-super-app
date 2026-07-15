@@ -1,7 +1,10 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 import { generateContractPDF } from "./pdfEngine";
+import { assertVerifiedContractSignatureOtp } from "./contractSignatureOtp";
+import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -108,7 +111,7 @@ function assertAuthenticatedOwner(request: any, ownerUid: string, ownerEmail: st
   }
 }
 
-async function resolveOrCreateOwnerAuth(email: string, password: string, fullName: string) {
+async function resolveOrCreateOwnerAuth(email: string, password: string, fullName: string, auth: any) {
   if (!password) {
     return { uid: "", accountCreated: false, accountCreationStatus: "PENDING_ADMIN_PROVISIONING" };
   }
@@ -119,6 +122,9 @@ async function resolveOrCreateOwnerAuth(email: string, password: string, fullNam
     const existingRole = String(existingProfile.data()?.role || "").toLowerCase();
     if (existingRole && !["owner", "owner_pending"].includes(existingRole)) {
       throw new HttpsError("failed-precondition", "This email is already registered with another role. Use another email.");
+    }
+    if (!auth?.uid || auth.uid !== existing.uid) {
+      throw new HttpsError("already-exists", "This email is already registered. Sign in before continuing.");
     }
     return { uid: existing.uid, accountCreated: false, accountCreationStatus: "EXISTING_AUTH_LINKED" };
   } catch (error: any) {
@@ -137,6 +143,7 @@ async function resolveOrCreateOwnerAuth(email: string, password: string, fullNam
       disabled: false,
       emailVerified: false
     });
+    await admin.auth().setCustomUserClaims(created.uid, { role: "owner" });
     return { uid: created.uid, accountCreated: true, accountCreationStatus: "AUTH_CREATED" };
   } catch (error: any) {
     console.error("Owner auth creation failed:", error);
@@ -150,6 +157,38 @@ async function resolveOrCreateOwnerAuth(email: string, password: string, fullNam
   }
 }
 
+export const previewOwnerOnboardingQuote = onCall({ cors: true }, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Owner authentication is required to calculate a locked quote.");
+  }
+  const role = String(
+    request.auth.token?.role ||
+    request.auth.token?.userRole ||
+    request.auth.token?.primaryRole ||
+    "",
+  ).trim().toLowerCase();
+  if (role !== "owner") {
+    throw new HttpsError("permission-denied", "Only an owner account may request an onboarding quote.");
+  }
+  try {
+    const quote = calculateOwnerOnboardingQuote(
+      request.data?.properties,
+      request.data?.selectedAddOns,
+    );
+    return {
+      ...quote,
+      quoteHash: crypto.createHash("sha256")
+        .update(JSON.stringify(cleanPlainValue(quote)))
+        .digest("hex"),
+    };
+  } catch (error: any) {
+    throw new HttpsError(
+      "invalid-argument",
+      error?.message || "The server could not calculate this property quote.",
+    );
+  }
+});
+
 export const submitPendingOwnerRegistration = onCall({ cors: true }, async (request) => {
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
   const email = cleanEmail(request.data?.email);
@@ -157,7 +196,7 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
   const password = cleanPassword(request.data?.password);
   const intakeId = cleanReference(request.data?.intakeId || request.data?.onboardingSubmissionId);
   const requestedOwnerUid = cleanReference(request.data?.ownerUid || request.data?.uid);
-  const authProvision = await resolveOrCreateOwnerAuth(email, password, fullName);
+  const authProvision = await resolveOrCreateOwnerAuth(email, password, fullName, request.auth);
   const registrationId = authProvision.uid || requestedOwnerUid || cleanReference(request.data?.ownerRegistrationId || request.data?.pendingOwnerId) || intakeId || db.collection("owner_registration_requests").doc().id;
   const timestamp = serverTimestamp();
   const pendingPaymentPackage = extractPendingPaymentPackage(request.data);
@@ -276,19 +315,105 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const intakeId = cleanText(data.intakeId, "intakeId", 120);
   const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
   const paymentMethod = cleanText(data.paymentMethod, "paymentMethod", 60);
-  const amount = cleanMoney(data.amount, "Payment amount", true);
-  const activationDeposit = cleanMoney(data.activationDeposit || data.amount, "Activation deposit", true);
-  const annualContractValue = cleanMoney(data.annualContractValue || amount, "Annual contract value");
+  if (!["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"].includes(paymentMethod)) {
+    throw new HttpsError("invalid-argument", "Unsupported payment method.");
+  }
+  const submittedAmount = cleanMoney(data.amount, "Payment amount", true);
+  const submittedActivationDeposit = cleanMoney(data.activationDeposit || data.amount, "Activation deposit", true);
+  const annualContractValue = cleanMoney(data.annualContractValue, "Annual contract value", true);
   const companyProfile = cleanPlainValue(data.companyProfile || {});
   const serviceDetails = cleanPlainValue(data.serviceDetails || {});
   const documentUrls = cleanPlainValue(data.documentUrls || {});
   const paymentManifest = cleanPlainValue(data.paymentManifest || {});
   const properties = cleanPlainValue(data.properties || []);
   const signatureName = cleanText(data.signatureName, "signatureName", 120);
+  const otpVerificationId = cleanText(data.otpVerificationId, "otpVerificationId", 180);
 
+  if (!Array.isArray(properties) || properties.length === 0 || properties.length > 100) {
+    throw new HttpsError("invalid-argument", "One to 100 properties are required for an onboarding quote.");
+  }
+  const requiredDocument = (key: string) => {
+    const value = String(documentUrls?.[key] || "").trim();
+    return value.startsWith("https://") || value.startsWith("gs://");
+  };
+  const hasIndividualIdentity = requiredDocument("emiratesId") && requiredDocument("passport");
+  if (!requiredDocument("propertyProof") || (!hasIndividualIdentity && !requiredDocument("tradeLicense"))) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Property proof and either Emirates ID plus passport or a trade license are required.",
+    );
+  }
+  if (!signatureName) {
+    throw new HttpsError("failed-precondition", "A verified contract signature name is required.");
+  }
+  const manualPaymentReference = String(paymentManifest?.reference || "").trim();
+  const manualReceiptUrl = String(paymentManifest?.receiptUrl || "").trim();
+  const manualReceiptPath = String(paymentManifest?.receiptPath || "").trim();
+  if (
+    paymentMethod !== "STRIPE" &&
+    (
+      manualPaymentReference.length < 4 ||
+      !manualReceiptUrl.startsWith("https://") ||
+      !manualReceiptPath.startsWith(`payment-references/owners/${ownerUid}/${intakeId}/`)
+    )
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Manual payment submissions require an owner-scoped uploaded receipt and payment reference.",
+    );
+  }
+
+  const paymentRef = db.collection("payment_transactions").doc(intakeId);
+  const existingPayment = await paymentRef.get();
+  const existing = existingPayment.data() || {};
+  if (existingPayment.exists && existing.ownerUid !== ownerUid) {
+    throw new HttpsError("already-exists", "This onboarding reference is locked to another owner.");
+  }
+  const quoteStartedAt = Number(existing.quoteSnapshot?.quotedAtMs || Date.now());
+  let serverQuote: ReturnType<typeof calculateOwnerOnboardingQuote>;
+  try {
+    serverQuote = calculateOwnerOnboardingQuote(properties, serviceDetails.selectedAddOns, quoteStartedAt);
+  } catch (error: any) {
+    throw new HttpsError("invalid-argument", error?.message || "The server could not calculate this property quote.");
+  }
+  if (Date.now() > serverQuote.expiresAtMs) {
+    throw new HttpsError("deadline-exceeded", "The locked quote has expired. Generate and accept a new quote version.");
+  }
+  const activationDeposit = serverQuote.activationDeposit;
+  const amount = activationDeposit;
+  if (
+    amount <= 0 ||
+    annualContractValue !== serverQuote.annualContractValue ||
+    submittedAmount !== amount ||
+    submittedActivationDeposit !== amount
+  ) {
+    throw new HttpsError("failed-precondition", "The accepted quote changed. Refresh and accept the server-calculated AED quote before payment.");
+  }
   if (amount <= 0 || activationDeposit <= 0) {
     throw new HttpsError("invalid-argument", "A positive payment amount is required.");
   }
+  const quoteSnapshot = cleanPlainValue({
+    ...serverQuote,
+    serviceDetails,
+    properties,
+  });
+  const quoteHash = crypto.createHash("sha256")
+    .update(JSON.stringify(quoteSnapshot))
+    .digest("hex");
+  if (existingPayment.exists) {
+    if (existing.ownerUid !== ownerUid || (existing.quoteHash && existing.quoteHash !== quoteHash)) {
+      throw new HttpsError("already-exists", "This onboarding reference is locked to a different owner or quote version.");
+    }
+    if (["PAID", "APPROVED"].includes(String(existing.paymentStatus || existing.status || "").toUpperCase())) {
+      return { success: true, idempotent: true, paymentId: intakeId, contractId: intakeId };
+    }
+  }
+  await assertVerifiedContractSignatureOtp({
+    verificationId: otpVerificationId,
+    uid: ownerUid,
+    contractId: intakeId,
+    signature: signatureName,
+  });
 
   // Generate the locked Contract PDF
   let contractUrl = "";
@@ -303,19 +428,20 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
       propertyType: serviceDetails.selectedPlan,
       units: serviceDetails.totalUnits,
       planName: serviceDetails.selectedPlan,
-      annualValue: annualContractValue || amount,
+      annualValue: annualContractValue,
       mobilizationAmount: activationDeposit
     });
   } catch (pdfError) {
     console.error("Failed to generate PDF contract:", pdfError);
-    // Don't completely fail the onboarding if PDF generation fails, just leave it blank for manual regeneration
+    throw new HttpsError("internal", "The locked contract PDF could not be generated. No payment package was created.");
   }
 
   const timestamp = serverTimestamp();
   const batch = db.batch();
 
-  const paymentRef = db.collection("payment_transactions").doc(intakeId);
   batch.set(paymentRef, {
+    paymentId: intakeId,
+    contractId: intakeId,
     ownerUid,
     ownerId: ownerUid,
     ownerEmail,
@@ -324,7 +450,11 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentMethod,
     amount,
     activationDeposit,
-    annualContractValue: annualContractValue || amount,
+    annualContractValue,
+    quoteSnapshot,
+    quoteHash,
+    quoteVersion: quoteSnapshot.version,
+    quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
     currency: "AED",
     status: "PENDING",
     verificationState: "ADMIN_VERIFICATION_REQUIRED",
@@ -332,8 +462,14 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     serviceDetails,
     documentUrls,
     paymentManifest,
+    paymentReferenceId: manualPaymentReference || null,
+    paymentProofUrl: manualReceiptUrl || null,
+    paymentProofPath: manualReceiptPath || null,
     contractUrl,
     signatureName,
+    otpVerificationId,
+    ownerSigned: true,
+    signatureStatus: "OWNER_SIGNED",
     submittedAt: timestamp,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -346,10 +482,22 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     ownerId: ownerUid,
     ownerEmail,
     signatureName,
+    otpVerificationId,
     contractUrl,
-    annualContractValue: annualContractValue || amount,
+    annualContractValue,
     activationDeposit,
-    status: "PENDING_PAYMENT_ACTIVATION",
+    quoteSnapshot,
+    quoteHash,
+    quoteVersion: quoteSnapshot.version,
+    quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
+    ownerSigned: true,
+    signatureStatus: "OWNER_SIGNED",
+    signatureState: {
+      ownerSigned: true,
+      ownerSignedName: signatureName,
+      paymentVerificationPending: true
+    },
+    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
     createdAt: timestamp,
     updatedAt: timestamp
   }, { merge: true });
@@ -361,7 +509,11 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentMethod,
     paymentAmount: amount,
     activationDeposit,
-    annualContractValue: annualContractValue || amount,
+    annualContractValue,
+    quoteSnapshot,
+    quoteHash,
+    quoteVersion: quoteSnapshot.version,
+    quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
     status: "payment_pending_approval",
     ownerUid,
     ownerId: ownerUid,
@@ -371,6 +523,48 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     contractUrl,
     properties,
     updatedAt: timestamp
+  }, { merge: true });
+
+  properties.forEach((property: any, index: number) => {
+    const sourceId = String(property?.id || `property_${index + 1}`)
+      .replace(/[^A-Za-z0-9_-]/g, "_")
+      .slice(0, 100);
+    const propertyId = `${intakeId}_${sourceId}`;
+    batch.set(db.collection("properties").doc(propertyId), {
+      ...cleanPlainValue(property),
+      propertyId,
+      intakeId,
+      ownerUid,
+      ownerId: ownerUid,
+      ownerEmail,
+      status: "PENDING_ADMIN_APPROVAL",
+      activationStatus: "LOCKED_PENDING_PAYMENT_AND_ADMIN_APPROVAL",
+      quoteHash,
+      updatedAt: timestamp,
+      ...(existingPayment.exists ? {} : { createdAt: timestamp }),
+    }, { merge: true });
+    batch.set(db.collection("propertyPassports").doc(propertyId), {
+      propertyId,
+      intakeId,
+      ownerUid,
+      ownerId: ownerUid,
+      status: "PENDING_VERIFICATION",
+      titleDeedVerified: false,
+      activated: false,
+      updatedAt: timestamp,
+      ...(existingPayment.exists ? {} : { createdAt: timestamp }),
+    }, { merge: true });
+  });
+
+  batch.set(db.collection("users").doc(ownerUid), {
+    status: "payment_pending_admin_verification",
+    adminApproved: false,
+    paymentVerified: false,
+    dashboardLocked: true,
+    dashboardUnlocked: false,
+    latestActivationContractId: intakeId,
+    latestIntakeId: intakeId,
+    updatedAt: timestamp,
   }, { merge: true });
 
   const auditRef = db.collection("audit_logs").doc();
@@ -386,7 +580,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentMethod,
     paymentAmount: amount,
     activationDeposit,
-    annualContractValue: annualContractValue || amount,
+    annualContractValue,
     timestamp,
     createdAt: timestamp,
     documentCount: Object.keys(documentUrls).length
@@ -394,5 +588,5 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
 
   await batch.commit();
 
-  return { success: true };
+  return { success: true, idempotent: false, paymentId: intakeId, contractId: intakeId, quoteHash };
 });

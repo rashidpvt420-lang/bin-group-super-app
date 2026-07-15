@@ -231,22 +231,47 @@ export const stripeWebhook = onRequest({
 
   const eventId = safeId(event.id);
   const eventRef = db.collection("stripe_webhook_events").doc(eventId);
-  const existingEvent = await eventRef.get();
-  if (existingEvent.exists) {
+  const claim = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(eventRef);
+    const data = snap.data() || {};
+    if (data.processed === true || data.ignored === true) return "DUPLICATE";
+    const processingStartedAt = data.processingStartedAt?.toMillis?.() || 0;
+    if (data.processing === true && Date.now() - processingStartedAt < 10 * 60 * 1000) {
+      return "IN_PROGRESS";
+    }
+    transaction.set(eventRef, {
+      eventId: event.id,
+      eventType: event.type,
+      processing: true,
+      processingStartedAt: FieldValue.serverTimestamp(),
+      attempts: Number(data.attempts || 0) + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+    return "CLAIMED";
+  });
+  if (claim === "DUPLICATE") {
     response.status(200).json({ received: true, duplicate: true });
     return;
   }
+  if (claim === "IN_PROGRESS") {
+    // A 2xx response tells Stripe to stop retrying. Until durable processing
+    // completes, fail closed so a crashed worker cannot lose a paid event.
+    response.status(503).json({ received: false, processing: true, retry: true });
+    return;
+  }
 
+  try {
   if (event.type !== "checkout.session.completed") {
-    await eventRef.set({ eventId: event.id, eventType: event.type, processed: false, ignored: true, createdAt: FieldValue.serverTimestamp() });
+    await eventRef.set({ eventId: event.id, eventType: event.type, processed: false, ignored: true, processing: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     response.status(200).json({ received: true, ignored: true });
     return;
   }
 
   const session = event.data.object as import("stripe").Stripe.Checkout.Session;
   if (session.payment_status !== "paid") {
-    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, reason: "PAYMENT_NOT_PAID", createdAt: FieldValue.serverTimestamp() });
-    response.status(202).json({ received: true, processed: false, reason: "PAYMENT_NOT_PAID" });
+    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, ignored: true, processing: false, reason: "PAYMENT_NOT_PAID", updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    response.status(200).json({ received: true, processed: false, ignored: true, reason: "PAYMENT_NOT_PAID" });
     return;
   }
 
@@ -262,12 +287,12 @@ export const stripeWebhook = onRequest({
   const timestamp = FieldValue.serverTimestamp();
 
   if (!ownerUid || [intakeId, ticketId, designRequestId].filter(Boolean).length !== 1 || currency !== "AED" || amount <= 0) {
-    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, reason: "INVALID_SIGNED_SESSION_METADATA", ownerUid, intakeId, ticketId, designRequestId, currency, amount, createdAt: timestamp });
+    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, ignored: true, processing: false, reason: "INVALID_SIGNED_SESSION_METADATA", ownerUid, intakeId, ticketId, designRequestId, currency, amount, updatedAt: timestamp }, { merge: true });
     response.status(200).json({ received: true, processed: false, reason: "INVALID_SIGNED_SESSION_METADATA" });
     return;
   }
   if (Number.isFinite(expectedMetadataAmount) && expectedMetadataAmount > 0 && !sameMoney(expectedMetadataAmount, amount)) {
-    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, reason: "STRIPE_METADATA_AMOUNT_MISMATCH", expectedAmount: expectedMetadataAmount, receivedAmount: amount, createdAt: timestamp });
+    await eventRef.set({ eventId: event.id, eventType: event.type, sessionId: session.id, processed: false, ignored: true, processing: false, reason: "STRIPE_METADATA_AMOUNT_MISMATCH", expectedAmount: expectedMetadataAmount, receivedAmount: amount, updatedAt: timestamp }, { merge: true });
     response.status(200).json({ received: true, processed: false, reason: "STRIPE_METADATA_AMOUNT_MISMATCH" });
     return;
   }
@@ -285,6 +310,8 @@ export const stripeWebhook = onRequest({
     amount,
     currency,
     processed: true,
+    processing: false,
+    processedAt: timestamp,
     createdAt: timestamp,
   };
 
@@ -329,7 +356,7 @@ export const stripeWebhook = onRequest({
         stripeSessionId: session.id,
         createdAt: timestamp,
       });
-      batch.set(eventRef, { ...eventRecord, processed: false, reason: "AMOUNT_OR_OWNERSHIP_MISMATCH", expectedAmount });
+      batch.set(eventRef, { ...eventRecord, processed: false, ignored: true, manualReviewRequired: true, reason: "AMOUNT_OR_OWNERSHIP_MISMATCH", expectedAmount });
       await batch.commit();
       response.status(200).json({ received: true, processed: false, reason: "AMOUNT_OR_OWNERSHIP_MISMATCH" });
       return;
@@ -446,7 +473,7 @@ export const stripeWebhook = onRequest({
         amountReceived: amount,
         createdAt: timestamp,
       });
-      batch.set(eventRef, { ...eventRecord, processed: false, reason: "DESIGN_AMOUNT_OR_OWNERSHIP_MISMATCH", expectedAmount });
+      batch.set(eventRef, { ...eventRecord, processed: false, ignored: true, manualReviewRequired: true, reason: "DESIGN_AMOUNT_OR_OWNERSHIP_MISMATCH", expectedAmount });
       await batch.commit();
       response.status(200).json({ received: true, processed: false, reason: "DESIGN_AMOUNT_OR_OWNERSHIP_MISMATCH" });
       return;
@@ -504,7 +531,7 @@ export const stripeWebhook = onRequest({
         amountReceived: amount,
         createdAt: timestamp,
       });
-      batch.set(eventRef, { ...eventRecord, processed: false, reason: "TICKET_AMOUNT_OR_OWNERSHIP_MISMATCH", expectedAmount });
+      batch.set(eventRef, { ...eventRecord, processed: false, ignored: true, manualReviewRequired: true, reason: "TICKET_AMOUNT_OR_OWNERSHIP_MISMATCH", expectedAmount });
       await batch.commit();
       response.status(200).json({ received: true, processed: false, reason: "TICKET_AMOUNT_OR_OWNERSHIP_MISMATCH" });
       return;
@@ -548,4 +575,19 @@ export const stripeWebhook = onRequest({
   batch.set(eventRef, eventRecord);
   await batch.commit();
   response.status(200).json({ received: true, processed: true });
+  } catch {
+    console.error("Stripe webhook processing failed after claim", { eventId });
+    try {
+      await eventRef.set({
+        processed: false,
+        processing: false,
+        processingFailed: true,
+        failureCode: "UNHANDLED_PROCESSING_FAILURE",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch {
+      console.error("Stripe webhook claim release failed", { eventId });
+    }
+    response.status(500).json({ received: false, retry: true });
+  }
 });

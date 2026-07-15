@@ -6,7 +6,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
-import { auth, db, doc, setDoc, serverTimestamp } from '../lib/firebase';
+import { auth, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { 
     User, Users, Wrench, Briefcase, ShieldCheck, 
@@ -90,19 +90,11 @@ const RoleGatewayPage: React.FC = () => {
             const activeUser = auth.currentUser || user;
             if (!activeUser) throw new Error('No authenticated user found.');
 
-            await setDoc(doc(db, 'users', activeUser.uid), {
-                uid: activeUser.uid,
-                email: activeUser.email || '',
-                displayName: activeUser.displayName || activeUser.email || 'BIN GROUP User',
-                role: roleId,
-                status: 'active',
-                onboardingComplete: roleId !== 'owner',
-                updatedAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
-            }, { merge: true });
-
+            const assignRole = httpsCallable(functions, 'assignPublicPortalRole');
+            await assignRole({ role: roleId });
+            await activeUser.getIdToken(true);
             await refreshRole();
-            navigate(roleHome[roleId] || '/');
+            navigate(roleId === 'owner' ? '/onboarding' : (roleHome[roleId] || '/'));
         } catch (error: any) {
             console.error('[ROLE-GATEWAY] Failed to assign role:', error);
             setNotice(error?.message || 'Unable to assign role. Please try again.');

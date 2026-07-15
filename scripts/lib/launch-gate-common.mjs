@@ -82,39 +82,56 @@ export function requireArtifactDigest(value, label, failures) {
   return digest;
 }
 
-/** Deterministic digest over built hosting artifacts (main dist + admin build). */
+function regularFilesRecursively(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...regularFilesRecursively(full));
+    else if (entry.isFile()) files.push(full);
+  }
+  return files;
+}
+
+/** Deterministic digest over every deployable hosting, Functions, rules, and index byte. */
 export function computeValidatedArtifactDigest(root = process.cwd()) {
-  const targets = [
-    path.join(root, 'dist', 'index.html'),
-    path.join(root, 'apps', 'admin-panel', 'build', 'index.html'),
+  const requiredDirectories = [
+    path.join(root, 'dist'),
+    path.join(root, 'apps', 'admin-panel', 'build'),
+    path.join(root, 'functions', 'lib'),
   ];
+  const requiredFiles = [
+    path.join(root, 'firebase.json'),
+    path.join(root, 'firestore.rules'),
+    path.join(root, 'firestore.indexes.json'),
+    path.join(root, 'storage.rules'),
+    path.join(root, 'package-lock.json'),
+    path.join(root, 'functions', 'package.json'),
+  ];
+  for (const dir of requiredDirectories) {
+    if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+      throw new Error(`Cannot compute artifact digest; missing ${path.relative(root, dir)}`);
+    }
+  }
+  for (const file of requiredFiles) {
+    if (!existsSync(file) || !statSync(file).isFile()) {
+      throw new Error(`Cannot compute artifact digest; missing ${path.relative(root, file)}`);
+    }
+  }
+
+  const targets = [
+    ...requiredDirectories.flatMap(regularFilesRecursively),
+    ...requiredFiles,
+  ].sort((left, right) => path.relative(root, left).localeCompare(path.relative(root, right)));
+  if (targets.length === requiredFiles.length) {
+    throw new Error('Cannot compute artifact digest; deployable build directories are empty.');
+  }
+
   const hash = createHash('sha256');
   for (const target of targets) {
-    if (!existsSync(target)) {
-      throw new Error(`Cannot compute artifact digest; missing ${path.relative(root, target)}`);
-    }
-    hash.update(path.relative(root, target));
+    hash.update(path.relative(root, target).replaceAll(path.sep, '/'));
     hash.update('\0');
     hash.update(readFileSync(target));
     hash.update('\0');
-  }
-  for (const dir of [
-    path.join(root, 'dist', 'assets'),
-    path.join(root, 'apps', 'admin-panel', 'build', 'static', 'js'),
-  ]) {
-    if (!existsSync(dir)) continue;
-    const files = readdirSync(dir)
-      .filter((name) => /\.(js|mjs|css)$/.test(name))
-      .sort()
-      .slice(0, 40);
-    for (const name of files) {
-      const full = path.join(dir, name);
-      if (!statSync(full).isFile()) continue;
-      hash.update(path.relative(root, full));
-      hash.update('\0');
-      hash.update(readFileSync(full));
-      hash.update('\0');
-    }
   }
   return `sha256:${hash.digest('hex')}`;
 }

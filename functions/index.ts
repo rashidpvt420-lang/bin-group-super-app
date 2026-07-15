@@ -3,7 +3,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
-const defineSecret = (name: string) => ({ value: () => process.env[name] || "" });
+import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import {
@@ -26,11 +26,7 @@ const db = admin.firestore();
 // Secrets
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
-const smtpUserSecret = defineSecret("SMTP_USER");
-const smtpPassSecret = defineSecret("SMTP_PASS");
-// Same Secret Manager names used by functions/whatsappBot.ts and functions/whatsappWebhook.ts.
-const waToken = defineSecret("WHATSAPP_TOKEN");
-const waPhoneId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
+const iotGatewayToken = defineSecret("IOT_GATEWAY_TOKEN");
 
 // ─── AUDIT HELPER ──────────────────────────────────────────────────────────
 
@@ -119,6 +115,38 @@ async function hasCallableRoleAccess(authContext: any, allowedRoles: Set<string>
     return token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole);
 }
 
+async function assertApprovedTechnicianAccount(authContext: any) {
+    const isAdminActor = await hasCallableRoleAccess(
+        authContext,
+        new Set(["admin", "super_admin", "operations_admin"]),
+    );
+    if (isAdminActor) return;
+
+    const hasTechnicianClaim = await hasCallableRoleAccess(authContext, new Set(["technician"]));
+    if (!hasTechnicianClaim || !authContext?.uid) {
+        throw new HttpsError("permission-denied", "Technician access required.");
+    }
+    const [userSnap, technicianSnap] = await Promise.all([
+        db.collection("users").doc(authContext.uid).get(),
+        db.collection("technicians").doc(authContext.uid).get(),
+    ]);
+    const user = userSnap.data() || {};
+    const technician = technicianSnap.data() || {};
+    const status = normalizeRole(technician.status || user.status);
+    const approvalStatus = normalizeRole(technician.approvalStatus || user.approvalStatus);
+    const suspended =
+        status === "suspended" ||
+        technician.suspended === true ||
+        user.suspended === true ||
+        authContext.token?.suspended === true;
+    if (suspended || (status !== "active" && approvalStatus !== "approved")) {
+        throw new HttpsError(
+            "permission-denied",
+            "Only approved, active technicians may perform operational actions.",
+        );
+    }
+}
+
 function assignedTechnicianId(ticketData: FirebaseFirestore.DocumentData) {
     return safeString(ticketData.assignedTechnicianId || ticketData.technicianId || ticketData.assignedTechId || ticketData.techId);
 }
@@ -130,6 +158,7 @@ async function assertTechnicianTicketMutationAccess(authContext: any, ticketData
     const isAdminActor = await hasCallableRoleAccess(authContext, new Set(["admin", "super_admin", "operations_admin"]));
     if (isAdminActor) return;
 
+    await assertApprovedTechnicianAccount(authContext);
     const assignedId = assignedTechnicianId(ticketData);
     if (!assignedId) throw new HttpsError("failed-precondition", "Ticket is not assigned to this technician.");
     if (assignedId !== authContext.uid) throw new HttpsError("permission-denied", "You are not assigned to this mission.");
@@ -321,11 +350,15 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Only an owner or admin can submit owner onboarding.");
+    throw new HttpsError(
+        "failed-precondition",
+        "Legacy owner onboarding is disabled because it accepted client-calculated contract values. Use submitOwnerOnboardingPaymentPackage with a locked server quote and verified signature OTP.",
+    );
 
-    const uid = request.auth.uid;
+    const uid = request.auth!.uid;
     const payload = assertPlainObject(request.data || {}, "Onboarding payload");
     const ownerAccount = assertPlainObject(payload.ownerAccount || {}, "Owner account");
-    if (ownerAccount.uid && ownerAccount.uid !== uid && request.auth.token?.admin !== true) {
+    if (ownerAccount.uid && ownerAccount.uid !== uid && request.auth!.token?.admin !== true) {
         throw new HttpsError("permission-denied", "Owner onboarding can only be submitted for the signed-in owner.");
     }
 
@@ -354,7 +387,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     console.info("submitOwnerOnboarding.received", {
         uid,
-        tokenRole: request.auth.token?.role || null,
+        tokenRole: request.auth!.token?.role || null,
         payloadKeys: Object.keys(payload),
         propertyCount: properties.length,
         proofKeys: Object.keys(proofDocuments)
@@ -392,7 +425,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         ownerId: uid,
         userId: uid,
         createdBy: uid,
-        createdByRole: request.auth.token?.admin === true ? "admin" : "owner",
+        createdByRole: request.auth!.token?.admin === true ? "admin" : "owner",
         visibility: "admin_owner",
         auditVersion: 1
     };
@@ -423,7 +456,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         ownerAccount: {
             uid,
             fullName: ownerAccount.fullName || ownerAccount.name || "",
-            email: ownerAccount.email || request.auth.token?.email || "",
+            email: ownerAccount.email || request.auth!.token?.email || "",
             mobile: ownerAccount.mobile || ownerAccount.phone || "",
             createdBeforePayment: true
         },
@@ -578,13 +611,13 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         uid,
         name: ownerAccount.fullName || ownerAccount.name || "",
         displayName: ownerAccount.fullName || ownerAccount.name || "",
-        email: ownerAccount.email || request.auth.token?.email || "",
+        email: ownerAccount.email || request.auth!.token?.email || "",
         phone: ownerAccount.mobile || ownerAccount.phone || "",
         status: "PAYMENT_PENDING",
         dashboardUnlocked: false,
         activeContractId: contractId,
         latestIntakeId: intakeId,
-        testAccount: existingOwner.data()?.testAccount === true || request.auth.token?.testAccount === true,
+        testAccount: existingOwner.data()?.testAccount === true || request.auth!.token?.testAccount === true,
         ...(existingOwner.exists ? {} : { createdAt: timestamp }),
         updatedAt: timestamp
     }), { merge: true });
@@ -600,7 +633,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     batch.set(auditRef, cleanPlainValue({
         actorId: uid,
-        actorRole: request.auth.token?.admin === true ? "admin" : "owner",
+        actorRole: request.auth!.token?.admin === true ? "admin" : "owner",
         action: "OWNER_ONBOARDING_SUBMIT",
         targetType: "intake_submissions",
         targetId: intakeId,
@@ -648,6 +681,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
 export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    await assertApprovedTechnicianAccount(request.auth);
     const uid = request.auth.uid;
     const userRef = db.collection("users").doc(uid);
     const userDoc = await userRef.get();
@@ -674,6 +708,7 @@ export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
 
 export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    await assertApprovedTechnicianAccount(request.auth);
     const uid = request.auth.uid;
     const userRef = db.collection("users").doc(uid);
     const userDoc = await userRef.get();
@@ -723,11 +758,40 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
         const ticketData = ticketDoc.data()!;
         const existingTechId = assignedTechnicianId(ticketData);
 
+        if (!isAdminActor) {
+            const [userDoc, technicianDoc] = await Promise.all([
+                transaction.get(db.collection("users").doc(request.auth!.uid)),
+                transaction.get(db.collection("technicians").doc(request.auth!.uid)),
+            ]);
+            const userData = userDoc.data() || {};
+            const technicianData = technicianDoc.data() || {};
+            const status = normalizeRole(technicianData.status || userData.status);
+            const suspended = technicianData.suspended === true || userData.suspended === true || status === "suspended";
+            const approved = status === "active" ||
+                normalizeRole(technicianData.approvalStatus || userData.approvalStatus) === "approved";
+            if (suspended || !approved) {
+                throw new HttpsError("permission-denied", "Only approved, active technicians can accept tickets.");
+            }
+            if (!existingTechId) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "This mission must be assigned by dispatch before it can be accepted.",
+                );
+            }
+            if (
+                normalizeRole(ticketData.status) === "emergency_submitted" &&
+                technicianData.emergencyEligible !== true &&
+                userData.emergencyEligible !== true
+            ) {
+                throw new HttpsError("permission-denied", "Emergency eligibility is required to accept an SOS ticket.");
+            }
+        }
+
         if (existingTechId && existingTechId !== request.auth!.uid && !isAdminActor) {
             throw new HttpsError("failed-precondition", "Ticket is already assigned to another technician.");
         }
 
-        if (!['OPEN', 'open', 'AUTO_ASSIGNED', 'auto_assigned', 'ASSIGNED', 'assigned', 'pending_assignment', 'PENDING_ASSIGNMENT'].includes(ticketData.status)) {
+        if (!['OPEN', 'open', 'AUTO_ASSIGNED', 'auto_assigned', 'ASSIGNED', 'assigned', 'pending_assignment', 'PENDING_ASSIGNMENT', 'emergency_submitted', 'EMERGENCY_SUBMITTED'].includes(ticketData.status)) {
             throw new HttpsError("failed-precondition", "Ticket is not available for acceptance.");
         }
 
@@ -760,10 +824,22 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
     const ticketData = ticketDoc.data()!;
     await assertTechnicianTicketMutationAccess(request.auth, ticketData);
+    const currentStatus = String(ticketData.status || "").trim().toUpperCase();
+    const requestedStatus = String(status || "").trim().toUpperCase();
+    const allowedTransitions: Record<string, string[]> = {
+        ACCEPTED: ["EN_ROUTE"],
+        ASSIGNED: ["EN_ROUTE"],
+        EN_ROUTE: ["ARRIVED"],
+        ARRIVED: ["IN_PROGRESS"],
+        IN_PROGRESS: ["COMPLETED", "COMPLETED_PENDING_APPROVAL"],
+    };
+    if (!(allowedTransitions[currentStatus] || []).includes(requestedStatus)) {
+        throw new HttpsError("failed-precondition", `Invalid ticket transition: ${currentStatus || "UNKNOWN"} -> ${requestedStatus}.`);
+    }
 
     const now = FieldValue.serverTimestamp();
     const updateData: any = {
-        status,
+        status: requestedStatus === "COMPLETED_PENDING_APPROVAL" ? "COMPLETED" : requestedStatus,
         updatedAt: now
     };
 
@@ -825,6 +901,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
         updateData.notes = nextNotes;
         updateData.technicianNotes = nextNotes;
         updateData.tenantApprovalRequired = true;
+        updateData.tenantApprovalStatus = "PENDING_TENANT_REVIEW";
     }
 
     if (proofType && proofUrl) {
@@ -1291,48 +1368,6 @@ async function sendTwilioSMS(to: string, message: string) {
     }
 }
 
-async function sendWhatsAppTemplate(to: string, templateName: string, languageCode = "en", bodyText = "") {
-    const phoneId = waPhoneId.value();
-    const token = waToken.value();
-    if (!phoneId || !token) {
-        console.info(`[WhatsApp MOCK] To: ${to}, Template: ${templateName}, BodyText: ${bodyText}`);
-        return;
-    }
-    try {
-        const formattedPhone = to.replace(/[^0-9]/g, "");
-        const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                messaging_product: "whatsapp",
-                to: formattedPhone,
-                type: "template",
-                template: {
-                    name: templateName,
-                    language: { code: languageCode },
-                    components: bodyText ? [
-                        {
-                            type: "body",
-                            parameters: [{ type: "text", text: bodyText }]
-                        }
-                    ] : []
-                }
-            })
-        });
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error("[WhatsApp Error]:", errText);
-        } else {
-            console.log(`[WhatsApp Success] Template ${templateName} sent to ${to}`);
-        }
-    } catch (error) {
-        console.error("[WhatsApp Exception]:", error);
-    }
-}
-
 async function dispatchOmniNotification(userId: string, title: string, body: string, options: any = {}) {
     try {
         const userDoc = await db.collection("users").doc(userId).get();
@@ -1366,10 +1401,6 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
         if (userData?.phone || userData?.mobile) {
             const phone = userData.phone || userData.mobile;
             await sendTwilioSMS(phone, `[${title}] ${body}`);
-
-            // 4. WhatsApp Notification fallback
-            const templateName = options.whatsappTemplate || "bin_group_alert";
-            await sendWhatsAppTemplate(phone, templateName, "en", body);
         }
     } catch (err) {
         console.error("Notification Error:", err);
@@ -1840,7 +1871,7 @@ type GeminiGenerateResponse = {
     }>;
 };
 
-export const getMissionGuidance = onCall({ cors: true }, async (request) => {
+export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     try {
         const { context, input: rawInput } = request.data;
@@ -1879,18 +1910,20 @@ export const getMissionGuidance = onCall({ cors: true }, async (request) => {
  * [V11] SECURE ARCHITECTURAL CONCEPT GENERATOR
  * Calls Gemini from backend-only using Secret Manager.
  */
-export const generateDesignConcept = onCall({ cors: true }, async (request) => {
+export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
 
     const uid = request.auth.uid;
-    const userDoc = await db.collection("users").doc(uid).get();
-    const userData = userDoc.data();
-
-    // Enterprise Admin Check
+    const tokenRole = normalizeRole(
+        request.auth.token.role ||
+        request.auth.token.userRole ||
+        request.auth.token.primaryRole,
+    );
     const isAdmin = request.auth.token.admin === true ||
-        request.auth.token.role === "admin" ||
-        userData?.role === "admin" ||
-        userData?.isAdmin === true;
+        request.auth.token.isAdmin === true ||
+        request.auth.token.superAdmin === true ||
+        request.auth.token.super_admin === true ||
+        ["admin", "super_admin", "ceo", "manager", "operations_admin"].includes(tokenRole);
 
     if (!isAdmin) throw new HttpsError('permission-denied', 'Unauthorized execution node.');
 
@@ -2026,46 +2059,6 @@ export const syncAdminSummary = onDocumentCreated("maintenanceTickets/{id}", asy
         openTickets: FieldValue.increment(1),
         lastUpdated: FieldValue.serverTimestamp()
     }).catch(() => summaryRef.set({ openTickets: 1, lastUpdated: FieldValue.serverTimestamp() }));
-});
-
-export const processMailQueue = onDocumentCreated({ document: "mail/{docId}" }, async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    try {
-        const user = smtpUserSecret.value();
-        const pass = smtpPassSecret.value();
-        if (!user || !pass) {
-            await snap.ref.update({ delivery: { state: 'ERROR', error: 'SMTP credentials are not configured. Mail cannot be processed.' } });
-            return;
-        }
-        const nodemailer = await import("nodemailer");
-        const mailTransport = nodemailer.createTransport({
-            host: 'smtp.gmail.com', port: 465, secure: true,
-            auth: { user, pass }
-        });
-        const mailData = snap.data();
-        await mailTransport.sendMail({
-            from: `"BIN GROUP" <${user}>`,
-            to: mailData.to,
-            subject: mailData.message?.subject || 'Update',
-            html: mailData.message?.html || ''
-        });
-        await snap.ref.update({ delivery: { state: 'SUCCESS', deliveredAt: FieldValue.serverTimestamp() } });
-    } catch (err: any) {
-        await snap.ref.update({ delivery: { state: 'ERROR', error: err.message } });
-    }
-});
-
-export const onIntakeCreated = onDocumentCreated("intake_submissions/{id}", async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const data = snap.data();
-    try {
-        await db.collection("properties").add({ propertyName: data.propertyName || 'New Asset', ownerEmail: data.ownerEmail, status: 'PENDING_APPROVAL', createdAt: FieldValue.serverTimestamp() });
-        await snap.ref.update({ status: 'PROCESSED' });
-    } catch (err) {
-        await snap.ref.update({ status: 'ERROR', error: String(err) });
-    }
 });
 
 // ─── TENANT INVITATION SYSTEM ───────────────────────────────────────────────
@@ -2336,65 +2329,83 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
         }
     }
 
-    const batch = db.batch();
+    await db.runTransaction(async (transaction) => {
+        const currentInviteSnap = await transaction.get(inviteDoc.ref);
+        if (!currentInviteSnap.exists) throw new HttpsError("not-found", "Invitation no longer exists.");
+        const currentInvite = currentInviteSnap.data() || {};
+        if (currentInvite.status === "accepted") throw new HttpsError("already-exists", "Invitation already used.");
+        if (currentInvite.status === "cancelled" || currentInvite.status === "expired") {
+            throw new HttpsError("failed-precondition", "Invitation is no longer active.");
+        }
+        if (!currentInvite.expiresAt?.toMillis || currentInvite.expiresAt.toMillis() <= Date.now()) {
+            throw new HttpsError("failed-precondition", "Invitation expired.");
+        }
 
-    // Update User
-    batch.update(db.collection("users").doc(authUid), {
-        role: "tenant",
-        status: "active",
-        displayName: invite.tenantName,
-        propertyId: invite.propertyId,
-        ownerId: ownerId,
-        unitId: invite.unitId,
-        tenantInvitationId: inviteDoc.id,
-        acceptedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-    });
+        let unitRef: FirebaseFirestore.DocumentReference | null = null;
+        if (currentInvite.unitId) {
+            unitRef = db.collection("units").doc(currentInvite.unitId);
+            const unitSnap = await transaction.get(unitRef);
+            if (!unitSnap.exists) throw new HttpsError("not-found", "Invited unit no longer exists.");
+            const currentTenantId = String(unitSnap.data()?.tenantId || "").trim();
+            if (currentTenantId && currentTenantId !== authUid && currentTenantId !== currentInvite.tenantId) {
+                throw new HttpsError("failed-precondition", "Unit is already linked to another tenant.");
+            }
+        }
 
-    // Update Unit
-    if (invite.unitId) {
-        batch.update(db.collection("units").doc(invite.unitId), {
-            tenantId: authUid,
-            tenantName: invite.tenantName,
-            tenantEmail: invite.tenantEmail,
-            occupancyStatus: "occupied",
+        const userRef = db.collection("users").doc(authUid);
+        transaction.set(userRef, {
+            uid: authUid,
+            email: authEmail,
+            role: "tenant",
+            status: "active",
+            displayName: currentInvite.tenantName,
+            propertyId: currentInvite.propertyId,
+            ownerId,
+            unitId: currentInvite.unitId,
+            tenantInvitationId: inviteDoc.id,
+            acceptedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
-        });
-    }
+        }, { merge: true });
 
-    // Update Invitation
-    batch.update(inviteDoc.ref, {
-        status: 'accepted',
-        acceptedAt: FieldValue.serverTimestamp(),
-        acceptedBy: authUid
+        if (unitRef) {
+            transaction.update(unitRef, {
+                tenantId: authUid,
+                tenantUid: authUid,
+                tenantName: currentInvite.tenantName,
+                tenantEmail: currentInvite.tenantEmail,
+                occupancyStatus: "occupied",
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        }
+
+        transaction.update(inviteDoc.ref, {
+            status: "accepted",
+            acceptedAt: FieldValue.serverTimestamp(),
+            acceptedBy: authUid
+        });
+        transaction.set(db.collection("tenant_invitation_events").doc(), {
+            invitationId: inviteDoc.id,
+            type: "ACCEPTED",
+            timestamp: FieldValue.serverTimestamp(),
+            actorId: authUid
+        });
     });
 
-    // Update Leases & Ledgers (if they were created with the stub ID)
     const stubId = invite.tenantId;
     if (stubId && stubId !== authUid) {
-        const leases = await db.collection("leases").where("tenantId", "==", stubId).get();
-        for (const d of leases.docs) {
-            batch.update(d.ref, { tenantId: authUid });
-        }
-
-        const ledgers = await db.collection("tenant_ledger").where("tenantId", "==", stubId).get();
-        for (const d of ledgers.docs) {
-            batch.update(d.ref, { tenantId: authUid });
-        }
-
-        // Delete stub if it exists
-        batch.delete(db.collection("users").doc(stubId));
+        const [leases, ledgers] = await Promise.all([
+            db.collection("leases").where("tenantId", "==", stubId).limit(200).get(),
+            db.collection("tenant_ledger").where("tenantId", "==", stubId).limit(200).get(),
+        ]);
+        const writer = db.bulkWriter();
+        for (const d of leases.docs) writer.update(d.ref, { tenantId: authUid, tenantUid: authUid });
+        for (const d of ledgers.docs) writer.update(d.ref, { tenantId: authUid, tenantUid: authUid });
+        await writer.close();
     }
 
-    batch.set(db.collection("tenant_invitation_events").doc(), {
-        invitationId: inviteDoc.id,
-        type: 'ACCEPTED',
-        timestamp: FieldValue.serverTimestamp(),
-        actorId: authUid
-    });
-
-    await batch.commit();
-    return { status: "success", redirect: "/tenant" };
+    const existingClaims = (await admin.auth().getUser(authUid)).customClaims || {};
+    await admin.auth().setCustomUserClaims(authUid, { ...existingClaims, role: "tenant" });
+    return { status: "success", redirect: "/tenant", tokenRefreshRequired: true };
 });
 
 export const trackTenantInvitationOpen = onRequest(async (req, res) => {
@@ -2845,11 +2856,23 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
 
     const techId = request.auth.uid;
     const techRef = db.collection("users").doc(techId);
     const techDoc = await techRef.get();
     const techData = techDoc.data() || {};
+    const technicianProfile = await db.collection("technicians").doc(techId).get();
+    const technicianData = technicianProfile.data() || {};
+    const technicianStatus = normalizeRole(technicianData.status || techData.status);
+    const technicianApproved = technicianStatus === "active" ||
+        normalizeRole(technicianData.approvalStatus || techData.approvalStatus) === "approved";
+    const technicianSuspended = technicianStatus === "suspended" ||
+        technicianData.suspended === true ||
+        techData.suspended === true;
+    if (technicianSuspended || !technicianApproved) {
+        throw new HttpsError("permission-denied", "Only approved, active technicians can start duty.");
+    }
     const now = FieldValue.serverTimestamp();
     const nowDate = new Date();
     const gstDate = new Date(nowDate.getTime() + (4 * 60 * 60 * 1000));
@@ -2922,6 +2945,7 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
 
     const techId = request.auth.uid;
     const techDoc = await db.collection("users").doc(techId).get();
@@ -2978,6 +3002,7 @@ export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
 
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
@@ -3012,6 +3037,12 @@ export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
             throw new HttpsError("failed-precondition", "Ticket is already closed or unavailable.");
         }
 
+        if (!assignedTechnicianId && request.auth?.token?.admin !== true) {
+            throw new HttpsError(
+                "failed-precondition",
+                "This mission must be assigned by dispatch before it can be accepted.",
+            );
+        }
         if (assignedTechnicianId && assignedTechnicianId !== techId && request.auth?.token?.admin !== true) {
             throw new HttpsError("permission-denied", "This ticket is assigned to another technician.");
         }
@@ -3248,7 +3279,10 @@ export const registerFCMToken = onCall({ cors: true }, async (request) => {
  * [V14] IOT GATEWAY TRIGGER
  * Standardized endpoint for Smart Building Sensors to pulse telemetry or trigger alarms.
  */
-export const triggerIoTEvent = onRequest(async (req, res) => {
+export const triggerIoTEvent = onRequest({
+    cors: false,
+    secrets: [iotGatewayToken],
+}, async (req, res) => {
     if (req.method !== "POST") {
         res.status(405).send("Method Not Allowed");
         return;
@@ -3256,7 +3290,14 @@ export const triggerIoTEvent = onRequest(async (req, res) => {
     try {
         const payload = req.body;
         const { device_id, property_id, event_type, urgency, telemetry, auth_token } = payload;
-        if (!auth_token || auth_token !== "BIN_IOT_CORE_SECURE_2026") {
+        const configuredToken = iotGatewayToken.value();
+        if (!configuredToken) {
+            res.status(503).send("IoT gateway is not configured");
+            return;
+        }
+        const provided = Buffer.from(String(auth_token || ""));
+        const expected = Buffer.from(configuredToken);
+        if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
             res.status(401).send("Unauthorized Device Node");
             return;
         }
@@ -3326,75 +3367,10 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
  */
 export const processPayment = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Identity verification failed.");
-
-    const { invoiceId, paymentMethod, amount } = request.data;
-    if (!invoiceId || typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
-        throw new HttpsError("invalid-argument", "Transaction payload incomplete or invalid.");
-    }
-
-    const uid = request.auth.uid;
-    const invoiceRef = db.collection("invoices").doc(invoiceId);
-
-    return await db.runTransaction(async (transaction) => {
-        const invoiceSnap = await transaction.get(invoiceRef);
-        if (!invoiceSnap.exists) throw new HttpsError("not-found", "Invoice node not found.");
-
-        const invoiceData = invoiceSnap.data()!;
-        if (invoiceData.status === "PAID") throw new HttpsError("failed-precondition", "Transaction already settled.");
-
-        const invoiceAmount = Number(invoiceData.amount);
-        if (!Number.isFinite(invoiceAmount) || Math.abs(amount - invoiceAmount) > 0.01) {
-            throw new HttpsError("invalid-argument", "Payment amount does not match the invoice balance.");
-        }
-
-        const txId = `TXN-${Date.now()}-${uid.substring(0, 5)}`;
-        const receiptId = `RCPT-${Date.now()}`;
-
-        // 1. Log Atomic Transaction
-        transaction.set(db.collection("transactions").doc(txId), {
-            txId, uid, invoiceId, amount,
-            currency: "AED",
-            status: "SUCCESS",
-            method: paymentMethod || "SOVEREIGN_WALLET",
-            timestamp: FieldValue.serverTimestamp(),
-            metadata: {
-                ip: request.rawRequest.ip || "unknown",
-                userAgent: request.rawRequest.headers["user-agent"] || "unknown"
-            }
-        });
-
-        // 2. Update Invoice Status
-        transaction.update(invoiceRef, {
-            status: "PAID",
-            paidAt: FieldValue.serverTimestamp(),
-            transactionId: txId,
-            receiptId
-        });
-
-        // 3. Generate Digital Receipt (Audit collections)
-        transaction.set(db.collection("receipts").doc(receiptId), {
-            receiptId, txId, invoiceId, uid, amount,
-            taxAmount: amount * 0.05, // 5% VAT UAE
-            netAmount: amount * 0.95,
-            issuedAt: FieldValue.serverTimestamp(),
-            complianceCode: "UAE-VAT-COMPLIANT-2026"
-        });
-
-        // 4. Update Sovereign Ledger
-        const ledgerRef = db.collection("ledgers").doc(uid);
-        transaction.set(ledgerRef, {
-            totalPaid: FieldValue.increment(amount),
-            lastPaymentAt: FieldValue.serverTimestamp(),
-            status: "CURRENT"
-        }, { merge: true });
-
-        return {
-            status: "SUCCESS",
-            transactionId: txId,
-            receiptId,
-            message: "Sovereign settlement complete."
-        };
-    });
+    throw new HttpsError(
+        "failed-precondition",
+        "Legacy client-authoritative settlement is disabled. Use a verified Stripe checkout or an audited finance-admin payment approval.",
+    );
 });
 
 

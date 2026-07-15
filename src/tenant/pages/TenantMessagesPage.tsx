@@ -118,8 +118,10 @@ export default function TenantMessagesPage() {
 
             const docRef = await addDoc(collection(db, 'conversations'), {
                 propertyId,
-                participantUids: [user.uid, assignedQueue],
-                participantRoles: ['tenant', assignedRole],
+                participantUids: [user.uid],
+                participantRoles: ['tenant'],
+                assignedQueue,
+                assignedRole,
                 type: convType,
                 status: 'open',
                 lastMessageAt: serverTimestamp(),

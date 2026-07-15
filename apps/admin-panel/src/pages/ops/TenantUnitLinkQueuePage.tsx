@@ -6,15 +6,13 @@ import {
 import {
     CheckCircle2, XCircle, Search, Filter, Link, Home
 } from 'lucide-react';
-import { db, collection, query, where, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, getDocs, writeBatch } from '../../lib/firebase';
+import { db, functions, httpsCallable, collection, query, orderBy, onSnapshot } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
-import { useAuth } from '../../context/AuthContext';
 
 export default function TenantUnitLinkQueuePage() {
     const { isRTL } = useLanguage();
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<any[]>([]);
     const [notice, setNotice] = useState('');
@@ -34,81 +32,15 @@ export default function TenantUnitLinkQueuePage() {
     const handleAction = async (req: any, action: 'approved' | 'rejected') => {
         try {
             setNotice('');
-            const requestRef = doc(db, 'tenant_unit_link_requests', req.id);
-            const now = serverTimestamp();
-            const actorId = user?.uid || 'admin';
-
-            if (action === 'approved') {
-                let targetUnitId = String(req.candidateUnitId || '').trim();
-                if (!targetUnitId && req.propertyId && req.unitNumber) {
-                    const snap = await getDocs(query(
-                        collection(db, 'units'),
-                        where('propertyId', '==', req.propertyId),
-                        where('unitNumber', '==', req.unitNumber)
-                    ));
-                    if (!snap.empty) targetUnitId = snap.docs[0].id;
-                }
-
-                if (!targetUnitId || !req.propertyId) {
-                    setNotice('Cannot approve safely: no existing unit match was found. Create/repair the unit first, then approve the request.');
-                    return;
-                }
-
-                const tenantId = req.tenantUid || req.tenantId;
-                const unitPayload = {
-                    tenantId,
-                    tenantUid: tenantId,
-                    tenantEmail: req.tenantEmail || '',
-                    tenantName: req.tenantName || '',
-                    occupancyStatus: 'occupied',
-                    tenantStatus: 'linked',
-                    status: 'OCCUPIED',
-                    linkedBy: actorId,
-                    linkedAt: now,
-                    updatedAt: now,
-                };
-
-                const batch = writeBatch(db);
-                batch.update(requestRef, {
-                    status: 'APPROVED',
-                    verificationState: 'ADMIN_VERIFIED',
-                    linkedUnitId: targetUnitId,
-                    linkedAt: now,
-                    updatedAt: now,
-                    resolvedAt: now,
-                    resolvedBy: actorId
-                });
-                batch.set(doc(db, 'units', targetUnitId), unitPayload, { merge: true });
-                if (tenantId) {
-                    batch.set(doc(db, 'users', tenantId), {
-                        unitId: targetUnitId,
-                        propertyId: req.propertyId,
-                        tenantUnitLinkVerified: true,
-                        tenantUnitLinkedAt: now,
-                        updatedAt: now,
-                    }, { merge: true });
-                }
-                batch.set(doc(collection(db, 'audit_logs')), {
-                    action: 'ADMIN_APPROVED_TENANT_UNIT_LINK',
-                    actorId,
-                    actorRole: 'admin',
-                    targetType: 'tenant_unit_link_requests',
-                    targetId: req.id,
-                    metadata: { ...unitPayload, propertyId: req.propertyId, unitId: targetUnitId },
-                    createdAt: now
-                });
-                await batch.commit();
-                setNotice('Tenant unit link approved and attached to the existing unit.');
-            } else {
-                await updateDoc(requestRef, {
-                    status: 'REJECTED',
-                    verificationState: 'ADMIN_REJECTED',
-                    updatedAt: now,
-                    resolvedAt: now,
-                    resolvedBy: actorId
-                });
-                setNotice('Tenant unit link request rejected.');
-            }
+            const resolveUnitLink = httpsCallable(functions, 'adminResolveTenantUnitLink');
+            await resolveUnitLink({
+                requestId: req.id,
+                decision: action === 'approved' ? 'APPROVE' : 'REJECT',
+                unitId: req.candidateUnitId || null,
+            });
+            setNotice(action === 'approved'
+                ? 'Tenant unit link approved and attached to the existing unit.'
+                : 'Tenant unit link request rejected.');
         } catch (err) {
             console.error('Failed to update request:', err);
             setNotice('Failed to update tenant unit link request.');

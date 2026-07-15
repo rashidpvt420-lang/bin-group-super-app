@@ -23,7 +23,7 @@ import {
   Divider,
 } from '@mui/material';
 import { apiClient } from '../../services/api';
-import { db, collection, getDocs, doc, updateDoc, onSnapshot, query, addDoc, serverTimestamp } from '../../lib/firebase';
+import { db, functions, httpsCallable, collection, getDocs, doc, updateDoc, onSnapshot, query, addDoc, serverTimestamp } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { useAuth } from '../../context/AuthContext';
 
@@ -91,7 +91,7 @@ export default function OwnerManagementPage() {
           totalUnits: data.totalUnits || 0,
           monthlyRentCollected: data.monthlyRentCollected || 0,
           unpaidInvoiceCount: data.unpaidInvoiceCount || 0,
-          suspensionStatus: data.suspensionStatus || 'ACTIVE',
+          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
           joinedDate: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ''),
         };
       }) as Owner[];
@@ -108,19 +108,8 @@ export default function OwnerManagementPage() {
     if (!selectedOwner) return;
 
     try {
-      const ownerRef = doc(db, 'owners', selectedOwner.ownerId);
-      await updateDoc(ownerRef, {
-        suspensionStatus: 'SUSPENDED',
-        suspensionReason,
-        status: 'SUSPENDED'
-      });
-      // also update user document in users collection if exists
-      const userRef = doc(db, 'users', selectedOwner.ownerId);
-      await updateDoc(userRef, {
-        suspensionStatus: 'SUSPENDED',
-        suspensionReason,
-        status: 'SUSPENDED'
-      }).catch(e => console.warn('User document update failed:', e));
+      const suspendOwner = httpsCallable(functions, 'adminSuspendOwner');
+      await suspendOwner({ ownerId: selectedOwner.ownerId, reason: suspensionReason });
 
       alert(t('admin.owner_suspended', { name: selectedOwner.name }));
       setSuspendDialogOpen(false);
@@ -133,16 +122,8 @@ export default function OwnerManagementPage() {
 
   const handleResume = async (ownerId: string) => {
     try {
-      const ownerRef = doc(db, 'owners', ownerId);
-      await updateDoc(ownerRef, {
-        suspensionStatus: 'ACTIVE',
-        status: 'ACTIVE'
-      });
-      const userRef = doc(db, 'users', ownerId);
-      await updateDoc(userRef, {
-        suspensionStatus: 'ACTIVE',
-        status: 'ACTIVE'
-      }).catch(e => console.warn('User document update failed:', e));
+      const resumeOwner = httpsCallable(functions, 'adminResumeOwner');
+      await resumeOwner({ ownerId });
 
       alert(t('admin.owner_resumed'));
       fetchOwners();

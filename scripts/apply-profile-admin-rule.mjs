@@ -3,55 +3,32 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const path = 'firestore.rules';
 let rules = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 
-const adminRoleList = "['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']";
-const oldBlock = `    function isAdmin() {
-      return signedIn() && (
-        ('admin' in request.auth.token && request.auth.token.admin == true) ||
-        ('isAdmin' in request.auth.token && request.auth.token.isAdmin == true) ||
-        ('ceo' in request.auth.token && request.auth.token.ceo == true) ||
-        ('manager' in request.auth.token && request.auth.token.manager == true) ||
-        ('role' in request.auth.token && request.auth.token.role in ['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin']) ||
-        ('userRole' in request.auth.token && request.auth.token.userRole == 'admin') ||
-        ('primaryRole' in request.auth.token && request.auth.token.primaryRole == 'admin')
-      );
-    }`;
-
-const newBlock = `    function adminProfileGrantsAccess() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ceo == true ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ${adminRoleList} ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userRole in ${adminRoleList} ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.primaryRole in ${adminRoleList}
-      );
-    }
-
-    function isAdmin() {
-      return signedIn() && (
-        ('admin' in request.auth.token && request.auth.token.admin == true) ||
-        ('isAdmin' in request.auth.token && request.auth.token.isAdmin == true) ||
-        ('superAdmin' in request.auth.token && request.auth.token.superAdmin == true) ||
-        ('super_admin' in request.auth.token && request.auth.token.super_admin == true) ||
-        ('ceo' in request.auth.token && request.auth.token.ceo == true) ||
-        ('manager' in request.auth.token && request.auth.token.manager == true) ||
-        ('role' in request.auth.token && request.auth.token.role in ${adminRoleList}) ||
-        ('userRole' in request.auth.token && request.auth.token.userRole in ${adminRoleList}) ||
-        ('primaryRole' in request.auth.token && request.auth.token.primaryRole in ${adminRoleList}) ||
-        adminProfileGrantsAccess()
-      );
-    }`;
-
-if (rules.includes('function adminProfileGrantsAccess()')) {
-  console.log('Profile-backed admin rule already installed.');
-  process.exit(0);
+if (!rules.includes('function hasAdminClaim()')) {
+  console.error('Claims-backed hasAdminClaim helper is missing.');
+  process.exit(1);
 }
 
-if (!rules.includes(oldBlock)) {
-  console.warn('Profile-backed admin rule patch skipped: original isAdmin block not found.');
-  process.exit(0);
+const profileHelper = /\n    function adminProfileGrantsAccess\(\) \{[\s\S]*?\n    \}\n/;
+rules = rules.replace(profileHelper, '\n');
+
+const isAdminBlock = /    function isAdmin\(\) \{[\s\S]*?\n    \}/;
+const claimsOnlyBlock = `    function isAdmin() {
+      // Firestore profile fields are display/cache data, never an authorization
+      // source. Privileged access must be backed by signed Auth custom claims.
+      return hasAdminClaim();
+    }`;
+
+if (!isAdminBlock.test(rules)) {
+  console.error('isAdmin helper is missing.');
+  process.exit(1);
 }
 
-rules = rules.replace(oldBlock, newBlock);
+rules = rules.replace(isAdminBlock, claimsOnlyBlock);
+
+if (rules.includes('adminProfileGrantsAccess') || !rules.includes('return hasAdminClaim();')) {
+  console.error('Admin authorization is not claims-only.');
+  process.exit(1);
+}
+
 writeFileSync(path, rules);
-console.log('Profile-backed admin rule installed.');
+console.log('Claims-only admin rule installed.');

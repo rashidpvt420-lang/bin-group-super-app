@@ -48,17 +48,6 @@ const claimsGrantAdmin = (claims: Record<string, unknown>) => {
     );
 };
 
-const profileGrantsAdmin = (profile: Record<string, unknown> | null) => {
-    const role = roleFrom(profile);
-    return Boolean(
-        profile?.admin === true ||
-        profile?.isAdmin === true ||
-        profile?.ceo === true ||
-        profile?.manager === true ||
-        ADMIN_ROLES.has(role)
-    );
-};
-
 const timeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise<T> => Promise.race([
     promise,
     new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error(code)), ms)),
@@ -110,14 +99,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.warn('[ADMIN-AUTH] Profile lookup failed; claims remain authoritative:', profileError);
             }
 
-            const profileRole = roleFrom(profile);
-            const profileAdmin = profileGrantsAdmin(profile);
-            const isAdmin = claimsAdmin || profileAdmin;
-            const isStaff = STAFF_ROLES.has(claimRole) || STAFF_ROLES.has(profileRole);
-            const role = claimRole || profileRole;
+            const isAdmin = claimsAdmin;
+            const isStaff = STAFF_ROLES.has(claimRole);
+            const role = claimRole;
 
             if (!isAdmin && !isStaff) {
-                if (profileReadError && !claimsAdmin) throw new Error('ADMIN_PROFILE_LOOKUP_FAILED');
+                if (profileReadError && !claimRole) throw new Error('ADMIN_PROFILE_LOOKUP_FAILED');
                 throw new Error('ADMIN_ACCESS_DENIED');
             }
 
