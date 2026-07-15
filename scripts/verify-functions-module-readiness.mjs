@@ -3,6 +3,8 @@ import path from 'node:path';
 
 const root = process.cwd();
 const runtimeAll = fs.readFileSync(path.join(root, 'functions/runtimeAll.ts'), 'utf8');
+const runtime = fs.readFileSync(path.join(root, 'functions/runtime.ts'), 'utf8');
+const index = fs.readFileSync(path.join(root, 'functions/index.ts'), 'utf8');
 const packageJson = fs.readFileSync(path.join(root, 'functions/package.json'), 'utf8');
 const nextLifecycle = fs.readFileSync(path.join(root, 'functions/ticketLifecycleV2.ts'), 'utf8');
 const sla = fs.readFileSync(path.join(root, 'functions/slaPolicy.ts'), 'utf8');
@@ -26,8 +28,17 @@ for (const token of ['assertCompletionReady', 'partsDisposition', 'residentRevie
   if (!guards.includes(token)) missing.push(`completionGuards.ts missing ${token}`);
 }
 
-if (!runtimeAll.includes('updateTicketLifecycleV2')) {
-  missing.push('functions/runtimeAll.ts has not exposed the next lifecycle callable yet');
+if (!runtimeAll.includes("export * from './runtime'")) {
+  missing.push('functions/runtimeAll.ts does not export the canonical runtime');
+}
+if (!runtime.includes('export * from "./index"')) {
+  missing.push('functions/runtime.ts does not export functions/index.ts');
+}
+if (!index.includes('export const updateTicketLifecycle = onCall')) {
+  missing.push('functions/index.ts does not expose the canonical ticket lifecycle callable');
+}
+if (runtimeAll.includes('updateTicketLifecycleV2') || runtimeAll.includes('ticketLifecycleV2')) {
+  missing.push('functions/runtimeAll.ts must not expose the superseded V2 lifecycle callable');
 }
 
 if (missing.length) {

@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import { AlertTriangle, Shield, Flame, Droplets, Zap, ShieldAlert, Radio, Compass } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, where, onSnapshot, updateDoc, doc, addDoc, serverTimestamp } from '../../lib/firebase';
+import { db, functions, httpsCallable, collection, query, where, onSnapshot, addDoc, serverTimestamp } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function EmergencyCommandCenterPage() {
@@ -90,24 +90,14 @@ export default function EmergencyCommandCenterPage() {
         if (!window.confirm(`Confirm priority dispatch for ${techName}?`)) return;
 
         try {
-            await updateDoc(doc(db, 'maintenanceTickets', selectedEmergency.id), {
-                assignedTechnicianId: techId,
-                assignedTechnicianName: techName,
-                status: 'ACCEPTED',
-                dispatchStatus: 'EN_ROUTE',
-                trackingStatus: 'LIVE_TRACKING',
-                requiresImmediateDispatch: true,
-                updatedAt: serverTimestamp()
+            const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
+            await assignTechnician({
+                ticketId: selectedEmergency.id,
+                technicianId: techId,
+                reassignmentReason: 'Priority emergency dispatch',
             });
 
-            // Update technician active job in users collection
-            await updateDoc(doc(db, 'users', techId), {
-                activeTicketId: selectedEmergency.id,
-                dutyStatus: 'ON_JOB',
-                updatedAt: serverTimestamp()
-            });
-
-            alert(`Technician ${techName} dispatched successfully!`);
+            alert(`Technician ${techName} assigned. The technician must accept before live tracking starts.`);
         } catch (err) {
             console.error('Failed to dispatch:', err);
             alert('Dispatch failed.');

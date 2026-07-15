@@ -110,28 +110,43 @@ export default function TechnicianJobDetailPage() {
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [ppeChecked, setPpeChecked] = useState(false);
     const [safetyChecked, setSafetyChecked] = useState(false);
     const [online, setOnline] = useState(navigator.onLine);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
-        const unsub = onSnapshot(doc(db, 'maintenanceTickets', id), (snap) => {
-            if (!snap.exists()) {
+        const unsub = onSnapshot(
+            doc(db, 'maintenanceTickets', id),
+            (snap) => {
+                if (!snap.exists()) {
+                    setTicket(null);
+                    setLoading(false);
+                    return;
+                }
+                const data: TechnicianTicketRecord = { id: snap.id, ...(snap.data() as Record<string, any>) };
+                const assigned = data.assignedTechnicianId || data.technicianId;
+                if (assigned !== user.uid) {
+                    setLoadError('This mission is not assigned to your technician account.');
+                    setTicket(null);
+                    setLoading(false);
+                    return;
+                }
+                setLoadError(null);
+                setTicket(data);
+                setLoading(false);
+            },
+            (error) => {
                 setTicket(null);
                 setLoading(false);
-                return;
-            }
-            const data: TechnicianTicketRecord = { id: snap.id, ...(snap.data() as Record<string, any>) };
-            const assigned = data.assignedTechnicianId || data.technicianId;
-            if (assigned && assigned !== user.uid) {
-                alert('This mission is assigned to another technician.');
-                navigate('/technician/jobs');
-                return;
-            }
-            setTicket(data);
-            setLoading(false);
-        });
+                setLoadError(
+                    error?.code === 'permission-denied'
+                        ? 'Mission access denied. Only the assigned technician can view this job.'
+                        : 'Mission data could not be loaded. Check connectivity and try again.',
+                );
+            },
+        );
         return () => unsub();
     }, [id, user?.uid, navigate]);
 
@@ -258,14 +273,6 @@ export default function TechnicianJobDetailPage() {
         try {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
 
-            if (nextStatus === 'EN_ROUTE') {
-                startLiveTracking(id, user.uid, () => undefined, (err) => {
-                    setGpsError(err);
-                    setIsTracking(false);
-                });
-                setIsTracking(true);
-            }
-
             if (nextStatus === 'ARRIVED') {
                 const position = await getVerifiedArrivalPosition();
                 const arrivalLocation = {
@@ -323,6 +330,18 @@ export default function TechnicianJobDetailPage() {
 
             const updateTicketLifecycle = httpsCallable(functions, 'updateTicketLifecycle');
             await updateTicketLifecycle(lifecyclePayload);
+            if (nextStatus === 'EN_ROUTE') {
+                try {
+                    await startLiveTracking(id, user.uid, () => undefined, (err) => {
+                        setGpsError(err);
+                        setIsTracking(false);
+                    });
+                    setIsTracking(true);
+                } catch (trackingError: any) {
+                    setGpsError(trackingError?.message || 'Mission is en route, but live GPS tracking could not start.');
+                    setIsTracking(false);
+                }
+            }
             setMessage(nextStatus === 'COMPLETED' ? 'Completed. Tenant approval requested.' : `Status updated: ${nextStatus.replace(/_/g, ' ')}`);
             if (nextStatus === 'COMPLETED') navigate('/technician/jobs');
         } catch (err: any) {
@@ -341,7 +360,18 @@ export default function TechnicianJobDetailPage() {
         return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     }
 
-    if (!ticket) return <Alert severity="warning">{tx('tech.job.mission_not_found', 'Mission not found.')}</Alert>;
+    if (!ticket) {
+        return (
+            <Stack spacing={2}>
+                <Alert severity={loadError ? 'error' : 'warning'}>
+                    {loadError || tx('tech.job.mission_not_found', 'Mission not found.')}
+                </Alert>
+                <Button variant="outlined" onClick={() => navigate('/technician/jobs')}>
+                    {tx('tech.job.return_to_jobs', 'Return to my jobs')}
+                </Button>
+            </Stack>
+        );
+    }
 
     const contactPhone = ticket.tenantPhone || ticket.ownerPhone || ticket.requesterPhone;
     const requesterName = ticket.tenantName || ticket.ownerName || 'Resident';
@@ -410,7 +440,7 @@ export default function TechnicianJobDetailPage() {
                     <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.lifecycle', 'Mission Lifecycle')}</Typography>
                         <Stack direction="row" flexWrap="wrap" gap={2} sx={{ mt: 2 }}>
-                            {!ticket.assignedTechnicianId ? (
+                            {['ASSIGNED', 'AUTO_ASSIGNED'].includes(status) ? (
                                 <Button variant="contained" disabled={actionLoading} onClick={acceptJob} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('tech.job.accept_mission', 'Accept Mission')}</Button>
                             ) : (
                                 <Stack spacing={2} sx={{ width: '100%' }}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { Bug, CalendarDays, CheckCircle2, Clock3, KeyRound, Plane, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { addDoc, collection, db, doc, functions, getDoc, getDocs, httpsCallable, limit, query, serverTimestamp, where } from '../../lib/firebase';
+import { collection, db, doc, functions, getDoc, getDocs, httpsCallable, limit, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -84,6 +84,7 @@ export default function TenantScheduledServicePage() {
   const { tx, isRTL } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const requestIdRef = useRef(`scheduled_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
   const [serviceCode, setServiceCode] = useState<ServiceCode>(() => normalizeService(searchParams.get('service')));
   const [preferredDate, setPreferredDate] = useState('');
@@ -259,93 +260,56 @@ export default function TenantScheduledServicePage() {
 
     setSubmitting(true);
     try {
-      const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
-        requesterRole: 'tenant',
-        tenantId: user.uid,
-        tenantUid: user.uid,
-        tenantName: user.displayName || 'Resident',
-        tenantPhone: user.phoneNumber || '',
-        tenantEmail: user.email || '',
-        requesterId: user.uid,
-        requesterEmail: user.email || '',
-        reporterEmail: user.email || '',
-        createdBy: user.uid,
-        createdByUid: user.uid,
+      const createTicket = httpsCallable(functions, 'createTenantServiceTicket');
+      const result = await createTicket({
+        kind: 'SCHEDULED_SERVICE',
         propertyId: unitData.propertyId,
-        propertyName: propertyData?.name || propertyData?.propertyName || '',
         unitId: unitData.id,
-        unitNumber: unitData.unitNumber || '',
-        floor: unitData.floorNumber || '',
-        ...(unitData.ownerId ? { ownerId: unitData.ownerId } : {}),
-        ...(unitData.ownerUid ? { ownerUid: unitData.ownerUid } : {}),
-        requestType: 'SCHEDULED_SERVICE',
-        serviceCode,
-        serviceLabel: service.label,
-        category: service.category,
-        description: operationsSummary,
-        operationsSummary,
-        specificLocation: serviceScope.trim(),
-        serviceLocationDetail: serviceScope.trim(),
-        preferredServiceDate: preferredDate,
-        requestedServiceDate: preferredDate,
-        preferredTimeWindow: selectedSlot?.timeWindow || timeWindow,
-        availabilitySlotId: selectedSlot?.id || null,
-        availabilitySelectionStatus: selectedSlot ? 'REQUESTED_PUBLISHED_SLOT' : 'PREFERENCE_ONLY',
-        availabilityVendorId: selectedSlot?.vendorId || null,
-        availabilityVendorName: selectedSlot?.vendorName || null,
-        availabilityPriceFrom: selectedSlot?.priceFrom || null,
-        occupancyStatus,
-        tenantAway,
-        vacationService: occupancyStatus === 'vacation' || serviceCode === 'vacation-care',
-        accessMethod,
-        accessAuthorized: tenantAway ? accessAuthorized : true,
-        accessCodeStatus: accessMethod === 'smart-lock' ? 'PENDING_SECURE_UPLOAD' : 'NOT_REQUIRED',
-        securityAccessStatus: accessMethod === 'smart-lock' ? 'PENDING_CONFIRMATION' : 'NOT_REQUIRED',
-        contactDuringService: contactDuringService.trim(),
-        pestTarget: serviceCode === 'pest-control' ? pestTarget.trim() : '',
-        sensitiveOccupants: serviceCode === 'pest-control' ? sensitiveOccupants : 'not_applicable',
-        specialInstructions: specialInstructions.trim(),
-        recurrenceFrequency: serviceCode === 'deep-clean' ? recurrenceFrequency : 'one-time',
-        recurrenceOccurrences: serviceCode === 'deep-clean' ? (recurrenceFrequency === 'one-time' ? 1 : recurrenceOccurrences) : 1,
-        recurrenceSequence: 1,
-        recurringPlanApproved: false,
-        pricingRequired: true,
-        quotedPrice: null,
-        currency: 'AED',
-        quoteStatus: 'PENDING_OPERATIONS_QUOTE',
-        cancellationPolicyVersion: POLICY_VERSION,
-        cancellationPolicyAccepted: true,
-        cancellationPolicyAcceptedAt: serverTimestamp(),
-        policyAcknowledgement: POLICY_COPY,
-        priority: 'normal',
-        slaPriority: 'SCHEDULED',
-        slaStartsAt: 'CONFIRMED_APPOINTMENT',
-        photoEvidenceRequired: false,
-        evidenceStatus: 'NOT_REQUIRED_AT_INTAKE',
-        source: 'TENANT_PORTAL_SCHEDULED_SERVICE',
-        status: 'PENDING_SCHEDULING',
-        appointmentStatus: 'PENDING_CONFIRMATION',
-        dispatchStatus: 'PENDING_SCHEDULING',
-        trackingStatus: 'WAITING_FOR_APPOINTMENT_AND_QUOTE',
-        technicianId: null,
-        assignedTechnicianId: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        clientRequestId: requestIdRef.current,
+        details: {
+          serviceCode,
+          serviceLabel: service.label,
+          category: service.category,
+          operationsSummary,
+          serviceScope: serviceScope.trim(),
+          preferredDate,
+          preferredTimeWindow: selectedSlot?.timeWindow || timeWindow,
+          availabilitySlotId: selectedSlot?.id || '',
+          availabilityVendorId: selectedSlot?.vendorId || '',
+          availabilityVendorName: selectedSlot?.vendorName || '',
+          availabilityPriceFrom: selectedSlot?.priceFrom || null,
+          occupancyStatus,
+          tenantAway,
+          vacationService: occupancyStatus === 'vacation' || serviceCode === 'vacation-care',
+          accessMethod,
+          accessAuthorized: tenantAway ? accessAuthorized : true,
+          accessCodeExpiresAt: accessCodeExpiresAt || '',
+          contactDuringService: contactDuringService.trim(),
+          pestTarget: serviceCode === 'pest-control' ? pestTarget.trim() : '',
+          sensitiveOccupants: serviceCode === 'pest-control' ? sensitiveOccupants : 'not_applicable',
+          specialInstructions: specialInstructions.trim(),
+          recurrenceFrequency: serviceCode === 'deep-clean' ? recurrenceFrequency : 'one-time',
+          recurrenceOccurrences: serviceCode === 'deep-clean' ? (recurrenceFrequency === 'one-time' ? 1 : recurrenceOccurrences) : 1,
+          cancellationPolicyVersion: POLICY_VERSION,
+          policyAccepted: policyAccepted,
+        },
       });
+      const { ticketId } = result.data as { ticketId?: string };
+      if (!ticketId) throw new Error('Scheduled service did not return a ticket ID.');
 
       if (accessMethod === 'smart-lock') {
         try {
           const saveAccessCode = httpsCallable(functions, 'saveScheduledServiceAccessCode');
-          await saveAccessCode({ ticketId: docRef.id, code: temporaryAccessCode.trim(), expiresAt: new Date(accessCodeExpiresAt).toISOString() });
+          await saveAccessCode({ ticketId, code: temporaryAccessCode.trim(), expiresAt: new Date(accessCodeExpiresAt).toISOString() });
         } catch (accessError) {
           console.error('[TenantScheduledService] secure access code save failed:', accessError);
           setNotice(tx('tenant.scheduled.codeSaveFailed', 'The service request was created, but the temporary access code could not be secured. Open the request and add a new code before the appointment.'));
-          navigate(`/tenant/ticket/${docRef.id}`);
+          navigate(`/tenant/ticket/${ticketId}`);
           return;
         }
       }
 
-      navigate(`/tenant/ticket/${docRef.id}`);
+      navigate(`/tenant/ticket/${ticketId}`);
     } catch (error) {
       console.error('[TenantScheduledService] submit failed:', error);
       setNotice(tx('tenant.scheduled.submitError', 'The scheduled service could not be submitted. Please try again.'));

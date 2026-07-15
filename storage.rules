@@ -4,7 +4,8 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     function isAuth() {
-      return request.auth != null;
+      return request.auth != null &&
+        request.auth.token.suspended != true;
     }
 
     function hasAnyRole(roles) {
@@ -15,13 +16,24 @@ service firebase.storage {
       );
     }
 
+    function claimedRole() {
+      return isAuth()
+        ? request.auth.token.role != null
+          ? request.auth.token.role
+          : request.auth.token.userRole != null
+            ? request.auth.token.userRole
+            : request.auth.token.primaryRole
+        : null;
+    }
+
     function isAdmin() {
       return isAuth() && (
-        request.auth.token.admin == true ||
-        request.auth.token.isAdmin == true ||
+        (
+          claimedRole() == null &&
+          (request.auth.token.admin == true || request.auth.token.isAdmin == true)
+        ) ||
         request.auth.token.ceo == true ||
-        request.auth.token.manager == true ||
-        hasAnyRole(['admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'hr_manager', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'MANAGER'])
+        hasAnyRole(['admin', 'super_admin', 'ceo', 'ADMIN', 'SUPER_ADMIN', 'CEO'])
       );
     }
 
@@ -35,6 +47,12 @@ service firebase.storage {
 
     function isOwnerRole() {
       return hasAnyRole(['owner', 'OWNER']);
+    }
+
+    function hasVerifiedEmail() {
+      return isAuth() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email != null;
     }
 
     function ticketExists(ticketId) {
@@ -86,9 +104,11 @@ service firebase.storage {
         contract(contractId).ownerUid == request.auth.uid ||
         contract(contractId).createdBy == request.auth.uid ||
         contract(contractId).userId == request.auth.uid ||
-        contract(contractId).recipientEmail == request.auth.token.email ||
-        contract(contractId).ownerEmail == request.auth.token.email ||
-        contract(contractId).email == request.auth.token.email
+        (hasVerifiedEmail() && (
+          contract(contractId).recipientEmail == request.auth.token.email ||
+          contract(contractId).ownerEmail == request.auth.token.email ||
+          contract(contractId).email == request.auth.token.email
+        ))
       );
     }
 
@@ -108,9 +128,11 @@ service firebase.storage {
         invoice(invoiceId).ownerUid == request.auth.uid ||
         invoice(invoiceId).payerId == request.auth.uid ||
         invoice(invoiceId).userId == request.auth.uid ||
-        invoice(invoiceId).recipientEmail == request.auth.token.email ||
-        invoice(invoiceId).ownerEmail == request.auth.token.email ||
-        invoice(invoiceId).email == request.auth.token.email
+        (hasVerifiedEmail() && (
+          invoice(invoiceId).recipientEmail == request.auth.token.email ||
+          invoice(invoiceId).ownerEmail == request.auth.token.email ||
+          invoice(invoiceId).email == request.auth.token.email
+        ))
       );
     }
 
@@ -130,6 +152,13 @@ service firebase.storage {
       return request.resource != null &&
              request.resource.size < maxSizeMb * 1024 * 1024 &&
              request.resource.contentType.matches('application/pdf|image/.*');
+    }
+
+    function hasTenantReceiptMetadata(tenantId) {
+      return request.resource != null &&
+        request.resource.metadata.tenantId == tenantId &&
+        request.resource.metadata.evidenceType == 'tenant_payment_receipt' &&
+        request.resource.metadata.receiptHash.matches('^[A-Fa-f0-9]{64}$');
     }
 
     match /maintenanceTickets/{tenantId}/{fileName} {
@@ -205,7 +234,15 @@ service firebase.storage {
 
     match /payment-references/owners/{ownerId}/{paymentId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin() || isAuditor());
-      allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) && isDocumentUpload(15);
+      allow write: if request.resource != null &&
+        resource == null &&
+        isAuth() &&
+        (request.auth.uid == ownerId || isAdmin()) &&
+        isDocumentUpload(15) &&
+        request.resource.metadata.ownerUid == ownerId &&
+        request.resource.metadata.paymentId == paymentId &&
+        request.resource.metadata.evidenceType == 'owner_payment_receipt' &&
+        request.resource.metadata.receiptHash.matches('^[a-f0-9]{64}$');
     }
 
     match /owners/{ownerId}/{allPaths=**} {
@@ -220,7 +257,20 @@ service firebase.storage {
 
     match /brokerDocuments/{brokerId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == brokerId || isAdmin() || isAuditor());
-      allow write: if isAuth() && (request.auth.uid == brokerId || isAdmin()) && isDocumentUpload(15);
+      allow write: if request.resource != null &&
+        resource == null &&
+        isAuth() &&
+        (request.auth.uid == brokerId || isAdmin()) &&
+        isDocumentUpload(15) &&
+        request.resource.metadata.brokerId == brokerId &&
+        request.resource.metadata.documentType in [
+          'emirates_id',
+          'passport',
+          'trade_license',
+          'rera_license',
+          'bank_details',
+          'broker_agreement'
+        ];
       allow delete: if isAuth() && (request.auth.uid == brokerId || isAdmin());
     }
 
@@ -263,7 +313,10 @@ service firebase.storage {
 
     match /receipts/{tenantId}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
-      allow write: if isAuth() && request.auth.uid == tenantId && isDocumentUpload(10);
+      allow write: if isAuth() &&
+        request.auth.uid == tenantId &&
+        isDocumentUpload(10) &&
+        hasTenantReceiptMetadata(tenantId);
     }
 
     match /temp_kyc/{userId}/{fileName} {

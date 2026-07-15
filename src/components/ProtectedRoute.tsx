@@ -6,6 +6,11 @@ import { Box, Typography, Button, Stack, CircularProgress } from '@mui/material'
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { Lock, LogOut } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import {
+    isOwnerPreActivationPath,
+    isOwnerProfileActivated,
+    OWNER_LOCKED_STATUSES,
+} from '../owner/activationPolicy';
 interface ProtectedRouteProps {
     children: React.ReactNode;
     allowedRoles?: string[];
@@ -61,6 +66,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     const currentStatus = (status || '').toLowerCase();
     const normalizedRole = (role || '').toLowerCase();
     const isAdminRoute = location.pathname.startsWith('/admin');
+    const isOwnerRecoveryPath =
+        normalizedRole === 'owner' &&
+        isOwnerPreActivationPath(location.pathname);
     // Staff-tier roles (hr_staff, dispatcher, etc.) are not granted isAdmin —
     // they get read-only access to /admin/* via the explicit allowedRoles list
     // instead, so they don't get redirect-looped back into the route they need.
@@ -78,7 +86,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
     }
 
-    if (currentStatus === 'profile_unavailable' || currentStatus === 'profile_missing') {
+    if (
+        currentStatus === 'profile_unavailable' ||
+        currentStatus === 'profile_missing' ||
+        (
+            currentStatus === 'profile_incomplete' &&
+            !isOwnerRecoveryPath &&
+            !isAdmin &&
+            !isAllowedStaffRole
+        )
+    ) {
         return (
             <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', bgcolor: binThemeTokens.canvas, p: 4 }}>
                 <Stack spacing={3} alignItems="center" sx={{ maxWidth: 560, textAlign: 'center' }}>
@@ -190,31 +207,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         );
     }
 
-    const ownerLockedStatuses = [
-        'pending',
-        'pending_approval',
-        'pending_admin_approval',
-        'payment_pending',
-        'payment_pending_approval',
-        'payment_pending_admin_verification',
-        'awaiting_verification',
-        'awaiting_approval',
-        'rejected',
-        'onboarding',
-        'suspended',
-    ];
-
-    const ownerStatusAllowedPaths = new Set([
-        '/owner/activation',
-        '/owner/onboarding-status',
-        '/owner/contracts',
-        '/owner/documents',
-    ]);
-    const ownerStatusPathAllowed = currentStatus !== 'suspended' && ownerStatusAllowedPaths.has(location.pathname);
+    const ownerStatusPathAllowed = currentStatus !== 'suspended' && isOwnerRecoveryPath;
+    const ownerAccessLocked = OWNER_LOCKED_STATUSES.has(currentStatus) || !isOwnerProfileActivated(user);
 
     if (
         normalizedRole === 'owner' &&
-        ownerLockedStatuses.includes(currentStatus) &&
+        ownerAccessLocked &&
         !isAdmin &&
         location.pathname.startsWith('/owner') &&
         !ownerStatusPathAllowed
@@ -252,7 +250,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                         {isPendingApproval ? t('lock.desc_offline') : t('lock.desc')}
                     </Typography>
 
-                    <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'center', width: { xs: '100%', sm: 'auto' } }}>
                         <Button
                             variant="outlined"
                             startIcon={<LogOut size={18} />}
@@ -261,14 +259,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                         >
                             {t('lock.signout')}
                         </Button>
-                        {!isPendingApproval && (
+                        {currentStatus !== 'suspended' && (
+                            <>
                             <Button
                                 variant="contained"
-                                href="/onboarding"
+                                href="/owner/activation"
                                 sx={{ bgcolor: binThemeTokens.gold, color: binThemeTokens.textPrimary, fontWeight: 900, px: 4, '&:hover': { bgcolor: binThemeTokens.goldHover } }}
                             >
-                                {t('lock.resume')}
+                                {isRTL ? 'عرض حالة التفعيل' : 'VIEW ACTIVATION STATUS'}
                             </Button>
+                            <Button
+                                variant="outlined"
+                                href="/owner/contracts"
+                                sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 900, px: 4 }}
+                            >
+                                {isRTL ? 'العقود والدفع' : 'CONTRACTS & PAYMENT'}
+                            </Button>
+                            </>
                         )}
                     </Stack>
                 </Box>

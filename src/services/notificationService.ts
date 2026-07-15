@@ -47,7 +47,6 @@ const technicianJobLink = (ticketId: string) => `/technician/job/${ticketId}`;
 const tenantTicketLink = (ticketId: string) => ticketId ? `/tenant/ticket/${ticketId}` : '/tenant/tickets';
 const ownerTicketLink = (ticketId: string) => ticketId ? `/owner/ticket/${ticketId}` : '/owner/tickets';
 const adminTicketLink = (ticketId: string) => ticketId ? `/admin/tickets?ticketId=${encodeURIComponent(ticketId)}` : '/admin/tickets';
-const adminPaymentLink = (paymentId: string) => paymentId ? `/admin/payments?paymentId=${encodeURIComponent(paymentId)}` : '/admin/payments';
 
 // ─── Send a notification through the server-side gatekeeper ──────────────────
 export async function sendNotification(payload: NotificationCreatePayload) {
@@ -192,32 +191,6 @@ export const NotificationEvents = {
                 body: `Your referral for ${leadName} has been accepted into the pipeline.`,
                 link: '/broker/referrals',
                 metadata: { leadName }
-            }),
-    },
-    ADMIN: {
-        NEW_ONBOARDING: (propertyName: string) =>
-            notifyAdmins({
-                type: 'NEW_ONBOARDING',
-                title: 'NEW ASSET INTAKE',
-                body: `A new asset (${propertyName}) requires verification.`,
-                link: '/admin/vault',
-                metadata: { propertyName }
-            }),
-        OWNER_RENT_PAYMENT_SUBMITTED: (ownerId: string, propertyName: string, amount: number, paymentId: string) =>
-            notifyAdmins({
-                type: 'OWNER_RENT_PAYMENT_SUBMITTED',
-                title: 'OWNER RENT PAYMENT NEEDS VERIFICATION',
-                body: `Owner ${ownerId} submitted AED ${Number(amount || 0).toLocaleString('en-AE')} rent payment proof for ${propertyName || 'a property'}.`,
-                link: adminPaymentLink(paymentId),
-                metadata: { ownerId, propertyName, amount, paymentId }
-            }),
-        EMERGENCY_TICKET: (propertyName: string, category: string) =>
-            notifyAdmins({
-                type: 'EMERGENCY_SOS',
-                title: 'CRITICAL SOS DETECTED',
-                body: `Emergency ${category} issue at ${propertyName}. Ensure immediate dispatch.`,
-                link: '/admin/tickets',
-                metadata: { propertyName, category }
             }),
     }
 };

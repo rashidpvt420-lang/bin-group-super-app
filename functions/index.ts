@@ -11,10 +11,7 @@ import {
     assertOcrCallerRole,
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
-import { buildOnboardingRecoverySnapshot, normalizeOnboardingState } from "./onboardingStateMachine";
-export { deliverNotificationPush } from "./notificationDelivery";
-export { mintAdminBridgeToken } from "./adminBridgeAuth";
-export { logUserAuditAction } from "./userAuditOperations";
+import { enforceAiUsageQuota } from "./aiUsageQuota";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -112,6 +109,7 @@ const normalizeRole = (value: unknown) => String(value || "").trim().toLowerCase
 
 async function hasCallableRoleAccess(authContext: any, allowedRoles: Set<string>) {
     const token = authContext?.token || {};
+    if (!authContext?.uid || token.suspended === true) return false;
     const tokenRole = normalizeRole(token.role || token.userRole || token.primaryRole);
     return token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole);
 }
@@ -195,157 +193,6 @@ function safeString(value: any, fallback = "") {
     return text || fallback;
 }
 
-function assertOwnerSubmissionGeo(property: any) {
-    const geoSource = property?.geo || property?.location || property?.coordinates || {};
-    const lat = Number(geoSource.lat ?? geoSource.latitude);
-    const lng = Number(geoSource.lng ?? geoSource.longitude);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        throw new HttpsError("invalid-argument", "A valid property geo-anchor is required before submission.");
-    }
-    if (lat === 0 && lng === 0) {
-        throw new HttpsError("invalid-argument", "Default coordinates cannot be used for property onboarding.");
-    }
-
-    const source = safeString(geoSource.source || property?.geoSource || "google_maps");
-    const isManual = source === "admin_manual";
-    const address = safeString(geoSource.address || property?.addressLine || property?.address);
-    const emirate = safeString(geoSource.emirate || property?.emirate);
-    let city = safeString(geoSource.city || property?.city || property?.area);
-    let area = safeString(geoSource.area || property?.area || city);
-
-    if (!address && !geoSource.placeId && !property?.googlePlaceId) {
-        throw new HttpsError("invalid-argument", "Address or Google Place ID is required for property onboarding.");
-    }
-    if (!emirate || (!city && !area)) {
-        throw new HttpsError("invalid-argument", "Emirate and city/area are required for property onboarding.");
-    }
-
-    let normalizedEmirate = emirate;
-    if (normalizedEmirate.toLowerCase() === "al ain" || city.toLowerCase() === "al ain" || area.toLowerCase().includes("falaj hazza")) {
-        normalizedEmirate = "Abu Dhabi";
-        city = "Al Ain";
-        area = area.toLowerCase().includes("falaj hazza") ? "Falaj Hazza" : area || "Al Ain";
-    }
-
-    return {
-        point: new admin.firestore.GeoPoint(lat, lng),
-        lat,
-        lng,
-        geohash: safeString(geoSource.geohash, geohashForLocation(lat, lng)),
-        address,
-        emirate: normalizedEmirate,
-        city: city || area,
-        area: area || city,
-        placeId: safeString(geoSource.placeId || property?.googlePlaceId || (isManual ? "MANUAL" : "")),
-        source: isManual ? "admin_manual" : "google_maps",
-        verified: false,
-        verifiedBy: null,
-        verifiedAt: null,
-        requiresGeoReview: true,
-        dispatchReady: false,
-        updatedAt: FieldValue.serverTimestamp()
-    };
-}
-
-function getPlanCoverageForSubmission(selectedPlan: any) {
-    return {
-        included: Array.isArray(selectedPlan?.features) ? selectedPlan.features : [],
-        excluded: Array.isArray(selectedPlan?.exclusions) ? selectedPlan.exclusions : [],
-        pricingBasis: selectedPlan?.id || selectedPlan?.name || "hybrid",
-        slaLevel: selectedPlan?.id === "hybrid" ? "Priority" : "Standard"
-    };
-}
-
-function buildPropertyPassportRecord(args: {
-    property: any;
-    ownerId: string;
-    ownerAccount: any;
-    intakeId: string;
-    contractId: string;
-    paymentTransactionId: string;
-    selectedPlan: any;
-    selectedAddOns: any[];
-    estimatedAnnualValue: number;
-    paymentMethod: string;
-    projectId: string;
-    companyId: string;
-    timestamp: any;
-}) {
-    const p = args.property || {};
-    const geo = p.geo || {};
-    const units = Number(p.units || 0);
-    const occupiedUnits = Number(p.occupiedUnits || 0);
-    return cleanPlainValue({
-        passportId: p.propertyId,
-        propertyId: p.propertyId,
-        ownerId: args.ownerId,
-        ownerName: args.ownerAccount.fullName || args.ownerAccount.name || '',
-        ownerEmail: args.ownerAccount.email || '',
-        companyId: args.companyId,
-        projectId: args.projectId,
-        intakeId: args.intakeId,
-        emirate: p.emirate || geo.emirate || '',
-        city: p.city || geo.city || '',
-        zone: p.area || geo.area || '',
-        gps: geo.lat && geo.lng ? { lat: geo.lat, lng: geo.lng, geohash: geo.geohash || null } : null,
-        location: p.location || null,
-        address: p.addressLine || p.address || geo.address || '',
-        propertyType: p.propertyType || '',
-        assetClass: p.assetGrade || p.subType || 'Standard',
-        floors: Number(p.floors || 0),
-        units,
-        occupiedUnits,
-        vacantUnits: Math.max(units - occupiedUnits, 0),
-        offices: Number(p.offices || 0),
-        shops: Number(p.shops || 0),
-        lifts: Number(p.lifts || 0),
-        parkingSpaces: Number(p.parkingCapacity || p.parking || 0),
-        pools: Number(p.poolsCount || (p.pool ? 1 : 0)),
-        gardens: Boolean(p.majlisGarden || p.irrigationSystem),
-        buildingAge: Number(p.age || 0),
-        conditionRating: p.condition || 'Good',
-        currentContractType: args.selectedPlan?.id || args.selectedPlan?.name || 'hybrid',
-        contractId: args.contractId,
-        contractStartDate: null,
-        contractEndDate: null,
-        annualContractValue: args.estimatedAnnualValue,
-        paymentPlan: args.paymentMethod,
-        selectedAddOns: args.selectedAddOns,
-        activeTenants: 0,
-        tenantHistory: [],
-        openTickets: 0,
-        closedTickets: 0,
-        slaBreaches: 0,
-        technicianHistory: [],
-        preventiveMaintenanceSchedule: [],
-        complianceDocuments: [],
-        titleDeedStatus: p.titleDeedStatus || 'manual_review_required',
-        corporateOwnerStatus: p.ownerType === 'Government' ? 'government' : 'private',
-        insuranceStatus: 'not_recorded',
-        fireSafetyStatus: p.fireAlarm || p.firePump ? 'requires_certificate_review' : 'not_recorded',
-        elevatorServiceStatus: Number(p.lifts || 0) > 0 ? 'requires_amc_review' : 'not_applicable',
-        hvacStatus: p.hvac ? 'requires_pm_schedule' : 'not_recorded',
-        plumbingStatus: 'not_recorded',
-        electricalStatus: 'not_recorded',
-        cleaningStatus: 'not_recorded',
-        securityStatus: p.securityLevel || 'Standard',
-        serviceHistory: [],
-        quoteHistory: [{ intakeId: args.intakeId, annualContractValue: args.estimatedAnnualValue, createdAt: new Date() }],
-        contractHistory: [{ contractId: args.contractId, status: 'PENDING_APPROVAL', createdAt: new Date() }],
-        paymentHistory: [{ paymentId: args.paymentTransactionId, status: 'PENDING', createdAt: new Date() }],
-        photosDocuments: [],
-        adminNotes: [],
-        riskPriorityLevel: p.condition === 'Poor' || Number(p.age || 0) > 20 ? 'HIGH' : 'NORMAL',
-        buildingPerformanceIndex: null,
-        lastInspectionDate: null,
-        nextInspectionDate: null,
-        status: 'PENDING_ADMIN_REVIEW',
-        createdAt: args.timestamp,
-        updatedAt: args.timestamp
-    });
-}
-
 export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in before submitting onboarding.");
 
@@ -355,335 +202,6 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         "failed-precondition",
         "Legacy owner onboarding is disabled because it accepted client-calculated contract values. Use submitOwnerOnboardingPaymentPackage with a locked server quote and verified signature OTP.",
     );
-
-    const uid = request.auth!.uid;
-    const payload = assertPlainObject(request.data || {}, "Onboarding payload");
-    const ownerAccount = assertPlainObject(payload.ownerAccount || {}, "Owner account");
-    if (ownerAccount.uid && ownerAccount.uid !== uid && request.auth!.token?.admin !== true) {
-        throw new HttpsError("permission-denied", "Owner onboarding can only be submitted for the signed-in owner.");
-    }
-
-    const properties = Array.isArray(payload.properties) ? payload.properties : [];
-    if (!properties.length) throw new HttpsError("invalid-argument", "At least one property is required.");
-
-    const selectedPlan = assertPlainObject(payload.selectedPlan || payload.servicePlan || {}, "Service plan");
-    const payment = assertPlainObject(payload.payment || {}, "Payment");
-    const paymentMethod = safeString(payment.method || payload.paymentMethod);
-    if (!paymentMethod) throw new HttpsError("invalid-argument", "Payment method is required.");
-
-    const onboardingSessionId = safeString(payload.onboardingSessionId, `session_${Date.now()}`);
-    const submissionId = safeString(payload.idempotencyKey, `${uid}_${onboardingSessionId}`);
-    const intakeId = submissionId;
-    const propertyId = safeString(properties[0]?.propertyId || properties[0]?.id, `${submissionId}_property`);
-    const contractId = `${submissionId}_contract`;
-    const paymentTransactionId = `${submissionId}_mobilization`;
-    const auditLogId = `${submissionId}_submit`;
-    const companyId = "BIN_GROUP";
-    const projectId = admin.app().options.projectId || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "UNKNOWN_PROJECT";
-    const timestamp = FieldValue.serverTimestamp();
-    const planCoverage = getPlanCoverageForSubmission(selectedPlan);
-    const estimatedAnnualValue = Number(payload.pricing?.annualContractValue || payload.portfolioSummary?.estimatedACV || 2500);
-    const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
-    const proofDocuments = cleanPlainValue(payload.proofDocuments || {});
-
-    console.info("submitOwnerOnboarding.received", {
-        uid,
-        tokenRole: request.auth!.token?.role || null,
-        payloadKeys: Object.keys(payload),
-        propertyCount: properties.length,
-        proofKeys: Object.keys(proofDocuments)
-    });
-
-    const normalizedProperties = properties.map((property: any, index: number) => {
-        const geo = assertOwnerSubmissionGeo(property);
-        return cleanPlainValue({
-            ...property,
-            companyId,
-            projectId,
-            ownerId: uid,
-            propertyId: index === 0 ? propertyId : safeString(property.propertyId || property.id, `${submissionId}_property_${index}`),
-            propertyName: property.propertyName || property.name || property.address || `${property.propertyType || "Property"} ${index + 1}`,
-            addressLine: property.addressLine || property.address || geo.address,
-            googlePlaceId: property.googlePlaceId || geo.placeId || null,
-            emirate: geo.emirate,
-            city: geo.city,
-            area: geo.area,
-            geo,
-            location: { lat: geo.lat, lng: geo.lng },
-            coordinates: { lat: geo.lat, lng: geo.lng },
-            status: "PENDING_ADMIN_REVIEW",
-            activationState: "LOCKED_PENDING_ADMIN_APPROVAL",
-            dispatchReady: false,
-            verified: false,
-            approved: false,
-            updatedAt: timestamp
-        });
-    });
-
-    const baseLifecycle = {
-        companyId,
-        projectId,
-        ownerId: uid,
-        userId: uid,
-        createdBy: uid,
-        createdByRole: request.auth!.token?.admin === true ? "admin" : "owner",
-        visibility: "admin_owner",
-        auditVersion: 1
-    };
-
-    const intakeRef = db.collection("intake_submissions").doc(intakeId);
-    const propertyRef = db.collection("properties_pending").doc(propertyId);
-    const contractRef = db.collection("contracts").doc(contractId);
-    const paymentRef = db.collection("payment_transactions").doc(paymentTransactionId);
-    const auditRef = db.collection("audit_logs").doc(auditLogId);
-    const ownerRef = db.collection("owners").doc(uid);
-    const userRef = db.collection("users").doc(uid);
-
-    const [existingIntake, , existingContract, existingPayment, existingOwner] = await Promise.all([
-        intakeRef.get(),
-        propertyRef.get(),
-        contractRef.get(),
-        paymentRef.get(),
-        ownerRef.get()
-    ]);
-
-    const batch = db.batch();
-
-    batch.set(intakeRef, cleanPlainValue({
-        ...baseLifecycle,
-        intakeId,
-        idempotencyKey: submissionId,
-        onboardingSessionId,
-        ownerAccount: {
-            uid,
-            fullName: ownerAccount.fullName || ownerAccount.name || "",
-            email: ownerAccount.email || request.auth!.token?.email || "",
-            mobile: ownerAccount.mobile || ownerAccount.phone || "",
-            createdBeforePayment: true
-        },
-        contactInfo: cleanPlainValue(payload.contactInfo || {}),
-        companyProfile: cleanPlainValue(payload.companyProfile || {}),
-        properties: normalizedProperties,
-        propertyDetails: normalizedProperties,
-        selectedPlan: cleanPlainValue(selectedPlan),
-        servicePlan: {
-            id: selectedPlan?.id || "hybrid",
-            name: selectedPlan?.name || selectedPlan?.packageName || "Institutional Package",
-            coverage: planCoverage.included,
-            exclusions: planCoverage.excluded,
-            slaLevel: planCoverage.slaLevel
-        },
-        contractType: selectedPlan?.id || selectedPlan?.name || "hybrid",
-        selectedAddOns: cleanPlainValue(Array.isArray(payload.selectedAddOns) ? payload.selectedAddOns : []),
-        addOns: cleanPlainValue(Array.isArray(payload.addOns) ? payload.addOns : payload.selectedAddOns || []),
-        proofDocuments,
-        ownerIdentityDocuments: {
-            emiratesId: proofDocuments.emiratesId || null,
-            passport: proofDocuments.passport || null,
-            tradeLicense: proofDocuments.tradeLicense || null
-        },
-        titleDeed: {
-            status: proofDocuments.propertyProof ? "uploaded" : "missing",
-            verificationStatus: proofDocuments.propertyProof ? "manual_review_required" : "missing",
-            source: "OWNER_UPLOADED_DOCUMENT",
-            verifiedFieldsLocked: false,
-            locationGeoAnchorRequired: true
-        },
-        portfolioSummary: cleanPlainValue(payload.portfolioSummary || {}),
-        pricing: {
-            annualContractValue: estimatedAnnualValue,
-            mobilizationPercent: 15,
-            mobilizationAmount,
-            currency: "AED"
-        },
-        payment: {
-            paymentId: paymentTransactionId,
-            contractId,
-            method: paymentMethod,
-            state: "PAYMENT_PENDING",
-            amount: mobilizationAmount,
-            currency: "AED",
-            mobilizationPercent: 15
-        },
-        paymentState: "PAYMENT_PENDING",
-        paymentStatus: "PENDING",
-        paymentGate: {
-            required: true,
-            mobilizationPercent: 15,
-            dashboardUnlockRequiresAdminApproval: true
-        },
-        adminReviewState: "admin_review",
-        activationState: "LOCKED_PENDING_ADMIN_APPROVAL",
-        status: "admin_review",
-        onboardingStatus: "admin_review",
-        source: "OWNER_PUBLIC_ONBOARDING_CALLABLE_V1",
-        ...(existingIntake.exists ? {} : { createdAt: timestamp }),
-        updatedAt: timestamp
-    }), { merge: true });
-
-    // Persist ALL properties and create/update a canonical Property Passport per property.
-    normalizedProperties.forEach((p: any) => {
-        const pRef = db.collection("properties_pending").doc(p.propertyId);
-        const passportRef = db.collection("propertyPassports").doc(p.propertyId);
-        batch.set(pRef, cleanPlainValue({
-            ...p,
-            intakeId,
-            contractId,
-            paymentTransactionId,
-            source: "OWNER_PUBLIC_ONBOARDING_CALLABLE_V1",
-            createdAt: timestamp,
-            updatedAt: timestamp
-        }), { merge: true });
-        batch.set(passportRef, buildPropertyPassportRecord({
-            property: p,
-            ownerId: uid,
-            ownerAccount,
-            intakeId,
-            contractId,
-            paymentTransactionId,
-            selectedPlan,
-            selectedAddOns: Array.isArray(payload.selectedAddOns) ? payload.selectedAddOns : [],
-            estimatedAnnualValue,
-            paymentMethod,
-            projectId,
-            companyId,
-            timestamp
-        }), { merge: true });
-    });
-
-    batch.set(contractRef, cleanPlainValue({
-        ...baseLifecycle,
-        contractId,
-        intakeId,
-        propertyId,
-        propertyIds: normalizedProperties.map((p: any) => p.propertyId),
-        idempotencyKey: `${submissionId}_contract`,
-        status: "PENDING_APPROVAL",
-        contractStatus: "draft",
-        activationStatus: "LOCKED_PENDING_ADMIN_APPROVAL",
-        paymentVerified: false,
-        paymentStatus: "PENDING",
-        approved: false,
-        packageName: selectedPlan?.name || selectedPlan?.packageName || "Institutional Package",
-        planType: selectedPlan?.id || "hybrid",
-        selectedAddOns: cleanPlainValue(Array.isArray(payload.selectedAddOns) ? payload.selectedAddOns : []),
-        coverage: planCoverage.included,
-        exclusions: planCoverage.excluded,
-        signatureState: {
-            ownerSigned: false,
-            binGroupsSigned: false,
-            pdfGenerated: false,
-            emailed: false
-        },
-        paymentSchedule: {
-            mobilizationPercent: 15,
-            mobilizationAmount,
-            remainingBalance: Math.max(estimatedAnnualValue - mobilizationAmount, 0),
-            currency: "AED"
-        },
-        portfolioSummary: cleanPlainValue(payload.portfolioSummary || {}),
-        annualContractValue: estimatedAnnualValue,
-        depositAmount: mobilizationAmount,
-        ...(existingContract.exists ? {} : { createdAt: timestamp }),
-        updatedAt: timestamp
-    }), { merge: true });
-
-    batch.set(paymentRef, cleanPlainValue({
-        ...baseLifecycle,
-        paymentId: paymentTransactionId,
-        intakeId,
-        propertyId,
-        contractId,
-        idempotencyKey: `${submissionId}_mobilization`,
-        amount: mobilizationAmount,
-        currency: "AED",
-        method: paymentMethod,
-        gateway: paymentMethod === "BANK_TRANSFER" ? "MANUAL_BANK" : "MANUAL",
-        status: "PENDING",
-        verificationState: "ADMIN_VERIFICATION_REQUIRED",
-        verified: false,
-        unlocksDashboard: false,
-        history: [{ status: "PENDING", timestamp: new Date(), note: "15% mobilization submitted for admin verification." }],
-        ...(existingPayment.exists ? {} : { createdAt: timestamp }),
-        updatedAt: timestamp
-    }), { merge: true });
-
-    batch.set(ownerRef, cleanPlainValue({
-        ownerId: uid,
-        uid,
-        name: ownerAccount.fullName || ownerAccount.name || "",
-        displayName: ownerAccount.fullName || ownerAccount.name || "",
-        email: ownerAccount.email || request.auth!.token?.email || "",
-        phone: ownerAccount.mobile || ownerAccount.phone || "",
-        status: "deposit_pending",
-        onboardingStatus: "admin_review",
-        dashboardUnlocked: false,
-        activeContractId: contractId,
-        latestIntakeId: intakeId,
-        testAccount: existingOwner.data()?.testAccount === true || request.auth!.token?.testAccount === true,
-        ...(existingOwner.exists ? {} : { createdAt: timestamp }),
-        updatedAt: timestamp
-    }), { merge: true });
-
-    batch.set(userRef, cleanPlainValue({
-        role: "owner",
-        status: "deposit_pending",
-        onboardingStatus: "admin_review",
-        dashboardUnlocked: false,
-        activeContractId: contractId,
-        latestIntakeId: intakeId,
-        updatedAt: timestamp
-    }), { merge: true });
-
-    batch.set(auditRef, cleanPlainValue({
-        actorId: uid,
-        actorRole: request.auth!.token?.admin === true ? "admin" : "owner",
-        action: "OWNER_ONBOARDING_SUBMIT",
-        targetType: "intake_submissions",
-        targetId: intakeId,
-        after: {
-            intakeId,
-            propertyId,
-            contractId,
-            paymentTransactionId,
-            status: "admin_review"
-        },
-        metadata: {
-            callable: "submitOwnerOnboarding",
-            idempotencyKey: submissionId,
-            payloadKeys: Object.keys(payload)
-        },
-        createdAt: timestamp
-    }), { merge: true });
-
-    await batch.commit();
-
-    console.info("submitOwnerOnboarding.committed", {
-        uid,
-        intakeId,
-        propertyId,
-        propertyIds: normalizedProperties.map((p: any) => p.propertyId),
-        contractId,
-        paymentTransactionId,
-        auditLogId,
-        status: "admin_review"
-    });
-
-    return {
-        intakeId,
-        propertyId,
-        propertyIds: normalizedProperties.map((p: any) => p.propertyId),
-        contractId,
-        paymentTransactionId,
-        auditLogId,
-        status: "admin_review",
-        onboarding: buildOnboardingRecoverySnapshot({
-            status: normalizeOnboardingState("admin_review"),
-            supportReferenceId: intakeId,
-            lastCompletedStep: "onboarding_package_submitted",
-            updatedAt: new Date().toISOString(),
-        }),
-    };
 });
 
 
@@ -828,13 +346,18 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     const { ticketId, status, notes, proofType, proofUrl, arrivalLocation } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
     if (!allowedStatuses.includes(status)) throw new HttpsError("invalid-argument", "Invalid status transition.");
+    const hasAccess = await hasCallableRoleAccess(
+        request.auth,
+        new Set(["technician", "admin", "super_admin", "operations_admin"]),
+    );
+    if (!hasAccess) throw new HttpsError("permission-denied", "Technician access required.");
+    const isAdminActor = await hasCallableRoleAccess(
+        request.auth,
+        new Set(["admin", "super_admin", "operations_admin"]),
+    );
+    if (!isAdminActor) await assertApprovedTechnicianAccount(request.auth);
 
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const ticketDoc = await ticketRef.get();
-    if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
-    const ticketData = ticketDoc.data()!;
-    await assertTechnicianTicketMutationAccess(request.auth, ticketData);
-    const currentStatus = String(ticketData.status || "").trim().toUpperCase();
     const requestedStatus = String(status || "").trim().toUpperCase();
     const allowedTransitions: Record<string, string[]> = {
         ACCEPTED: ["EN_ROUTE"],
@@ -843,34 +366,67 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
         ARRIVED: ["IN_PROGRESS"],
         IN_PROGRESS: ["COMPLETED", "COMPLETED_PENDING_APPROVAL"],
     };
-    if (!(allowedTransitions[currentStatus] || []).includes(requestedStatus)) {
-        throw new HttpsError("failed-precondition", `Invalid ticket transition: ${currentStatus || "UNKNOWN"} -> ${requestedStatus}.`);
-    }
-
     const now = FieldValue.serverTimestamp();
-    const updateData: any = {
-        status: requestedStatus === "COMPLETED_PENDING_APPROVAL" ? "COMPLETED" : requestedStatus,
-        updatedAt: now
-    };
+    let completedOwnerId = "";
+    let completedPropertyName = "";
+    await db.runTransaction(async (transaction) => {
+        const ticketDoc = await transaction.get(ticketRef);
+        if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
+        const ticketData = ticketDoc.data()!;
+        const assignedId = assignedTechnicianId(ticketData);
+        if (!isAdminActor && assignedId !== request.auth!.uid) {
+            throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+        }
+        const currentStatus = String(ticketData.status || "").trim().toUpperCase();
+        if (!(allowedTransitions[currentStatus] || []).includes(requestedStatus)) {
+            throw new HttpsError("failed-precondition", `Invalid ticket transition: ${currentStatus || "UNKNOWN"} -> ${requestedStatus}.`);
+        }
 
-    if (status === 'EN_ROUTE') updateData.onTheWayAt = now;
-    if (status === 'ARRIVED') {
-        updateData.arrivedAt = now;
-        if (arrivalLocation) {
+        const updateData: any = {
+            status: requestedStatus === "COMPLETED" ? "COMPLETED_PENDING_APPROVAL" : requestedStatus,
+            updatedAt: now
+        };
+        if (requestedStatus === 'EN_ROUTE') {
+            updateData.onTheWayAt = now;
+            updateData.trackingStatus = 'LIVE_TRACKING';
+            updateData.dispatchStatus = 'EN_ROUTE';
+        }
+        if (requestedStatus === 'ARRIVED') {
+            if (!arrivalLocation) {
+                throw new HttpsError("failed-precondition", "Arrival GPS evidence is required.");
+            }
             const lat = Number(arrivalLocation.lat ?? arrivalLocation.latitude);
             const lng = Number(arrivalLocation.lng ?? arrivalLocation.longitude);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                throw new HttpsError("invalid-argument", "Valid arrival GPS coordinates are required.");
+            const accuracy = Number(arrivalLocation.accuracy);
+            if (
+                !Number.isFinite(lat) || !Number.isFinite(lng) ||
+                lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
+                !Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100
+            ) {
+                throw new HttpsError("invalid-argument", "Arrival GPS must include coordinates with accuracy of 100 metres or better.");
+            }
+            let propertyGeo = normalizeGeo(ticketData.jobLocation || ticketData.propertyLocation || ticketData.geo);
+            if (!propertyGeo && ticketData.propertyId) {
+                const propertySnap = await transaction.get(
+                    db.collection("properties").doc(String(ticketData.propertyId)),
+                );
+                propertyGeo = normalizeGeo(propertySnap.data() || {});
+            }
+            if (!propertyGeo || distanceKm({ lat, lng }, propertyGeo) > 0.25) {
+                throw new HttpsError("failed-precondition", "Arrival location is outside the 250 metre property geofence.");
             }
             const cleanArrivalLocation = {
                 lat,
                 lng,
                 latitude: lat,
                 longitude: lng,
-                accuracy: Number(arrivalLocation.accuracy || 0),
+                accuracy,
                 heading: arrivalLocation.heading ?? null,
                 speed: arrivalLocation.speed ?? null,
             };
+            updateData.arrivedAt = now;
+            updateData.trackingStatus = 'ARRIVED';
+            updateData.dispatchStatus = 'ARRIVED';
             updateData.arrivedLocation = cleanArrivalLocation;
             updateData.technicianLocation = cleanArrivalLocation;
             updateData.technicianLocationUpdatedAt = now;
@@ -878,59 +434,84 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
             updateData.gpsVerifiedAt = now;
             updateData.onSiteVerification = 'GPS_VERIFIED';
         }
-    }
-    if (status === 'IN_PROGRESS') updateData.startedAt = now;
-    if (status === 'COMPLETED' || status === 'COMPLETED_PENDING_APPROVAL') {
-        const nextBeforePhotoUrl = proofType === 'BEFORE' && proofUrl ? proofUrl : ticketData.beforePhotoUrl;
-        const nextAfterPhotoUrl = proofType === 'AFTER' && proofUrl ? proofUrl : ticketData.afterPhotoUrl;
-        const nextNotes = String(notes || ticketData.notes || ticketData.technicianNotes || '').trim();
-
-        const beforePhotos = Array.isArray(ticketData.beforePhotos) ? ticketData.beforePhotos : [];
-        const afterPhotos = Array.isArray(ticketData.afterPhotos) ? ticketData.afterPhotos : [];
-        const evidencePhotos = Array.isArray(ticketData.evidencePhotos) ? ticketData.evidencePhotos : [];
-        const proofPhotos = Array.isArray(ticketData.proofPhotos) ? ticketData.proofPhotos : [];
-        const completionPhotos = Array.isArray(ticketData.completionPhotos) ? ticketData.completionPhotos : [];
-
-        const hasBeforeProof = Boolean(nextBeforePhotoUrl) || beforePhotos.length > 0;
-        const hasAfterProof = Boolean(nextAfterPhotoUrl) || afterPhotos.length > 0 || completionPhotos.length > 0 || proofPhotos.length > 0 || evidencePhotos.length > 0;
-        const hasNotes = nextNotes.length >= 10;
-
-        if (!hasBeforeProof) {
-            throw new HttpsError('failed-precondition', 'Before photo proof is required before completing this ticket.');
+        if (requestedStatus === 'IN_PROGRESS') {
+            updateData.startedAt = now;
+            updateData.trackingStatus = 'WORK_STARTED';
+            updateData.dispatchStatus = 'IN_PROGRESS';
         }
-
-        if (!hasAfterProof) {
-            throw new HttpsError('failed-precondition', 'After photo proof is required before completing this ticket.');
+        if (requestedStatus === 'COMPLETED' || requestedStatus === 'COMPLETED_PENDING_APPROVAL') {
+            const nextBeforePhotoUrl = proofType === 'BEFORE' && proofUrl ? proofUrl : ticketData.beforePhotoUrl;
+            const nextAfterPhotoUrl = proofType === 'AFTER' && proofUrl ? proofUrl : ticketData.afterPhotoUrl;
+            const nextNotes = String(notes || ticketData.notes || ticketData.technicianNotes || '').trim();
+            const beforeCollections = [
+                ticketData.beforePhotos,
+                ticketData.photos,
+                ticketData.tenantPhotos,
+                ticketData.initialPhotoUrls,
+            ];
+            const afterCollections = [
+                ticketData.afterPhotos,
+                ticketData.completionPhotos,
+                ticketData.proofPhotos,
+                ticketData.evidencePhotos,
+            ];
+            const hasBeforeProof = Boolean(nextBeforePhotoUrl) ||
+                beforeCollections.some((items) => Array.isArray(items) && items.length > 0);
+            const hasAfterProof = Boolean(nextAfterPhotoUrl) ||
+                afterCollections.some((items) => Array.isArray(items) && items.length > 0);
+            if (!hasBeforeProof) {
+                throw new HttpsError('failed-precondition', 'Before photo proof is required before completing this ticket.');
+            }
+            if (!hasAfterProof) {
+                throw new HttpsError('failed-precondition', 'After photo proof is required before completing this ticket.');
+            }
+            if (nextNotes.length < 10) {
+                throw new HttpsError('failed-precondition', 'Technician completion notes are required before completing this ticket.');
+            }
+            updateData.completedAt = now;
+            updateData.trackingStatus = 'COMPLETED';
+            updateData.dispatchStatus = 'COMPLETED_PENDING_REVIEW';
+            updateData.notes = nextNotes;
+            updateData.technicianNotes = nextNotes;
+            updateData.tenantApprovalRequired = true;
+            updateData.tenantApprovalStatus = "PENDING_TENANT_REVIEW";
+            updateData.capacityReleasedAt = now;
+            if (assignedId) {
+                const technicianRef = db.collection("users").doc(assignedId);
+                const technicianSnap = await transaction.get(technicianRef);
+                if (technicianSnap.exists) {
+                    transaction.update(technicianRef, {
+                        currentJobCount: Math.max(0, Number(technicianSnap.data()?.currentJobCount || 0) - 1),
+                        updatedAt: now,
+                    });
+                }
+            }
+            completedOwnerId = safeString(ticketData.ownerId || ticketData.ownerUid);
+            completedPropertyName = safeString(ticketData.propertyName, "the property");
         }
-
-        if (!hasNotes) {
-            throw new HttpsError('failed-precondition', 'Technician completion notes are required before completing this ticket.');
+        if (proofType && proofUrl) {
+            if (proofType === 'BEFORE') updateData.beforePhotoUrl = proofUrl;
+            if (proofType === 'AFTER') updateData.afterPhotoUrl = proofUrl;
+            if (proofType === 'SIGNATURE') updateData.signatureUrl = proofUrl;
         }
-
-        updateData.completedAt = now;
-        updateData.notes = nextNotes;
-        updateData.technicianNotes = nextNotes;
-        updateData.tenantApprovalRequired = true;
-        updateData.tenantApprovalStatus = "PENDING_TENANT_REVIEW";
-    }
-
-    if (proofType && proofUrl) {
-        if (proofType === 'BEFORE') updateData.beforePhotoUrl = proofUrl;
-        if (proofType === 'AFTER') updateData.afterPhotoUrl = proofUrl;
-        if (proofType === 'SIGNATURE') updateData.signatureUrl = proofUrl;
-    }
-
-    await ticketRef.update(updateData);
-
-    await logAudit({
-        actorId: request.auth.uid, actorRole: "technician",
-        action: `LIFECYCLE_${status}`, targetType: "maintenanceTickets", targetId: ticketId,
-        metadata: { notes, proofType }
+        transaction.update(ticketRef, updateData);
+        transaction.set(db.collection("audit_logs").doc(), {
+            actorId: request.auth!.uid,
+            actorRole: isAdminActor ? "admin" : "technician",
+            action: `LIFECYCLE_${requestedStatus}`,
+            targetType: "maintenanceTickets",
+            targetId: ticketId,
+            metadata: { notes: safeString(notes, "").slice(0, 500), proofType: safeString(proofType) },
+            createdAt: now,
+        });
     });
 
     // Notify Owner on completion
-    if (status === 'COMPLETED' && ticketData.ownerId) {
-        await dispatchOmniNotification(ticketData.ownerId, "Mission Completed", `The technician has finished the work at ${ticketData.propertyName}. View details in your dashboard.`);
+    if (
+        (requestedStatus === 'COMPLETED' || requestedStatus === 'COMPLETED_PENDING_APPROVAL') &&
+        completedOwnerId
+    ) {
+        await dispatchOmniNotification(completedOwnerId, "Mission Completed", `The technician has finished the work at ${completedPropertyName}. View details in your dashboard.`);
     }
 
     return { status: "SUCCESS" };
@@ -961,10 +542,35 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
     const ticketOwnerEmail = normalizeRole(ticketData.ownerEmail);
     const tokenRole = normalizeRole(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole);
     const isAdmin = request.auth.token?.admin === true || request.auth.token?.super_admin === true || request.auth.token?.superAdmin === true || ["admin", "super_admin", "operations_admin"].includes(tokenRole);
-    const isTicketOwner = ticketData.ownerId === uid || ticketData.ownerUid === uid || (!!email && ticketOwnerEmail === email);
+    if (!isAdmin) {
+        const ownerUser = await admin.auth().getUser(uid);
+        if (
+            tokenRole !== "owner" ||
+            request.auth.token?.email_verified !== true ||
+            request.auth.token?.suspended === true ||
+            ownerUser.disabled ||
+            !ownerUser.emailVerified
+        ) {
+            throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+        }
+    }
+    const isTicketOwner = ticketData.ownerId === uid ||
+        ticketData.ownerUid === uid ||
+        (request.auth.token?.email_verified === true && !!email && ticketOwnerEmail === email);
 
     if (!isAdmin && !isTicketOwner) {
         throw new HttpsError("permission-denied", "This ticket is not linked to your owner account.");
+    }
+    const reviewableStatuses = new Set([
+        "completed",
+        "completed_pending_approval",
+        "resolved",
+        "resolved_pending_approval",
+        "awaiting_owner_approval",
+        "awaiting_review",
+    ]);
+    if (!reviewableStatuses.has(normalizeRole(ticketData.status))) {
+        throw new HttpsError("failed-precondition", "Ticket is not ready for owner completion review.");
     }
 
     const now = FieldValue.serverTimestamp();
@@ -1023,7 +629,22 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
         });
     }
 
-    await ticketRef.update(baseUpdate);
+    await db.runTransaction(async (transaction) => {
+        const freshSnap = await transaction.get(ticketRef);
+        if (!freshSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
+        const fresh = freshSnap.data() || {};
+        const freshOwnerEmail = normalizeRole(fresh.ownerEmail);
+        const stillOwned = fresh.ownerId === uid ||
+            fresh.ownerUid === uid ||
+            (request.auth!.token?.email_verified === true && !!email && freshOwnerEmail === email);
+        if (!isAdmin && !stillOwned) {
+            throw new HttpsError("permission-denied", "This ticket is no longer linked to your owner account.");
+        }
+        if (!reviewableStatuses.has(normalizeRole(fresh.status))) {
+            throw new HttpsError("failed-precondition", "Ticket is no longer ready for owner completion review.");
+        }
+        transaction.update(ticketRef, baseUpdate);
+    });
 
     await logAudit({
         actorId: uid,
@@ -1076,9 +697,66 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
 export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
-    if (!after || before?.status === after.status) return;
+    if (!after) return;
+    const evidenceBecameReady =
+        before?.evidenceStatus !== "TENANT_EVIDENCE_UPLOADED" &&
+        after.evidenceStatus === "TENANT_EVIDENCE_UPLOADED";
+    if (
+        evidenceBecameReady &&
+        !safeString(after.assignedTechnicianId || after.technicianId)
+    ) {
+        const readyUpdate = {
+            dispatchStatus: "PENDING_ASSIGNMENT",
+            trackingStatus: "WAITING_FOR_TECHNICIAN",
+            evidenceReadyAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+        await event.data!.after.ref.set(readyUpdate, { merge: true });
+        await attemptAutoAssignment(event.data!.after.ref, { ...after, ...readyUpdate });
+    }
+    if (before?.status === after.status) return;
 
     const ticketId = event.params.id;
+    const terminalStatuses = new Set([
+        "completed",
+        "completed_pending_approval",
+        "completed_pending_tenant_approval",
+        "closed",
+        "cancelled",
+        "rejected",
+    ]);
+    const beforeStatus = normalizeRole(before?.status);
+    const afterStatus = normalizeRole(after.status);
+    if (
+        terminalStatuses.has(afterStatus) &&
+        !terminalStatuses.has(beforeStatus) &&
+        !after.capacityReleasedAt
+    ) {
+        const ticketRef = event.data!.after.ref;
+        await db.runTransaction(async (transaction) => {
+            const freshTicketSnap = await transaction.get(ticketRef);
+            const freshTicket = freshTicketSnap.data() || {};
+            if (
+                !freshTicketSnap.exists ||
+                freshTicket.capacityReleasedAt ||
+                !terminalStatuses.has(normalizeRole(freshTicket.status))
+            ) return;
+            const technicianId = assignedTechnicianId(freshTicket);
+            if (!technicianId) {
+                transaction.set(ticketRef, { capacityReleasedAt: FieldValue.serverTimestamp() }, { merge: true });
+                return;
+            }
+            const technicianRef = db.collection("users").doc(technicianId);
+            const technicianSnap = await transaction.get(technicianRef);
+            transaction.set(ticketRef, { capacityReleasedAt: FieldValue.serverTimestamp() }, { merge: true });
+            if (technicianSnap.exists) {
+                transaction.set(technicianRef, {
+                    currentJobCount: Math.max(0, Number(technicianSnap.data()?.currentJobCount || 0) - 1),
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+        });
+    }
 
     await logAudit({
         actorId: after.updatedBy || "SYSTEM",
@@ -1148,6 +826,30 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
 async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReference, ticketData: any) {
     const ticketId = ticketRef.id;
     try {
+        const status = normalizeRole(ticketData.status);
+        if (!["open", "pending_assignment", "emergency_submitted"].includes(status)) return;
+        if (
+            ticketData.photoEvidenceRequired === true &&
+            ticketData.evidenceStatus !== "TENANT_EVIDENCE_UPLOADED"
+        ) return;
+        const requesterRole = normalizeRole(ticketData.requesterRole);
+        const source = safeString(ticketData.source).toUpperCase();
+        if (requesterRole === "tenant" || source === "TENANT_PORTAL") {
+            const tenantId = safeString(ticketData.tenantId || ticketData.tenantUid);
+            const unitId = safeString(ticketData.unitId);
+            const propertyId = safeString(ticketData.propertyId);
+            if (!tenantId || !unitId || !propertyId) return;
+            const unitSnap = await db.collection("units").doc(unitId).get();
+            const unit = unitSnap.data() || {};
+            const unitTenantId = safeString(
+                unit.tenantId || unit.tenantUid || unit.userId || unit.authUid,
+            );
+            if (
+                !unitSnap.exists ||
+                unitTenantId !== tenantId ||
+                safeString(unit.propertyId) !== propertyId
+            ) return;
+        }
         // Works for both tenant-filed AND owner-filed tickets
         const requesterId: string = ticketData.tenantId || ticketData.tenantUid || ticketData.ownerId || "";
         const requesterDoc = requesterId ? await db.collection("users").doc(requesterId).get() : null;
@@ -1188,19 +890,25 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
             return;
         }
 
-        const techQuery = await db.collection("users").where("role", "in", ["technician", "specialist"]).get();
+        const techQuery = await db.collection("users")
+            .where("role", "in", ["technician", "specialist"])
+            .where("onDuty", "==", true)
+            .limit(100)
+            .get();
         const requiredSkill = String(ticketData.complaintCategory || ticketData.category || ticketData.trade || "").toLowerCase();
 
         const candidates = techQuery.docs
             .map((d) => ({ id: d.id, data: d.data() }))
             .filter((tech) => {
                 const data = tech.data;
-                const onDuty = data.onDuty === true || data.available === true;
+                const onDuty = data.onDuty === true;
+                const approved = ["active", "approved"].includes(String(data.status || "").toLowerCase()) &&
+                    data.suspended !== true;
                 const hasCapacity = Number(data.currentJobCount || 0) < Number(data.maxConcurrentJobs || 3);
                 const sameEmirate = String(data.emirate || "").toLowerCase() === String(contextUpdate.emirate).toLowerCase();
                 const skills = Array.isArray(data.tradeSkills) ? data.tradeSkills.map((s: any) => String(s).toLowerCase()) : [String(data.trade || "").toLowerCase()];
                 const skillMatch = !requiredSkill || skills.some((s: string) => requiredSkill.includes(s) || s.includes(requiredSkill));
-                return onDuty && hasCapacity && sameEmirate && skillMatch;
+                return onDuty && approved && hasCapacity && sameEmirate && skillMatch;
             })
             .map((tech) => ({
                 ...tech,
@@ -1211,19 +919,45 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
 
         if (candidates.length > 0) {
             const bestTech = candidates[0];
-            await ticketRef.update({
-                assignedTechnicianId: bestTech.id,
-                technicianId: bestTech.id,
-                assignedTechnicianName: bestTech.data.displayName || bestTech.data.name || "Specialist",
-                assignedTechnicianPhone: bestTech.data.phone || bestTech.data.phoneNumber || "",
-                assignedTechnicianAvatar: bestTech.data.photoURL || "",
-                technicianSpecialty: bestTech.data.specialty || bestTech.data.trade || "",
-                status: "AUTO_ASSIGNED",
-                dispatchStatus: "AUTO_ASSIGNED",
-                trackingStatus: "TECHNICIAN_ASSIGNED",
-                autoAssignedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp()
+            const technicianRef = db.collection("users").doc(bestTech.id);
+            const assigned = await db.runTransaction(async (transaction) => {
+                const [freshTicketSnap, freshTechnicianSnap] = await Promise.all([
+                    transaction.get(ticketRef),
+                    transaction.get(technicianRef),
+                ]);
+                const freshTicket = freshTicketSnap.data() || {};
+                const freshTechnician = freshTechnicianSnap.data() || {};
+                if (
+                    !freshTicketSnap.exists ||
+                    safeString(freshTicket.assignedTechnicianId || freshTicket.technicianId) ||
+                    !freshTechnicianSnap.exists ||
+                    freshTechnician.onDuty !== true ||
+                    freshTechnician.suspended === true ||
+                    !["active", "approved"].includes(normalizeRole(freshTechnician.status)) ||
+                    Number(freshTechnician.currentJobCount || 0) >= Number(freshTechnician.maxConcurrentJobs || 3)
+                ) {
+                    return false;
+                }
+                transaction.update(ticketRef, {
+                    assignedTechnicianId: bestTech.id,
+                    technicianId: bestTech.id,
+                    assignedTechnicianName: freshTechnician.displayName || freshTechnician.name || "Specialist",
+                    assignedTechnicianPhone: freshTechnician.phone || freshTechnician.phoneNumber || "",
+                    assignedTechnicianAvatar: freshTechnician.photoURL || "",
+                    technicianSpecialty: freshTechnician.specialty || freshTechnician.trade || "",
+                    status: "AUTO_ASSIGNED",
+                    dispatchStatus: "AUTO_ASSIGNED",
+                    trackingStatus: "TECHNICIAN_ASSIGNED",
+                    autoAssignedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+                transaction.update(technicianRef, {
+                    currentJobCount: FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                return true;
             });
+            if (!assigned) return;
 
             await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.category || ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
                 url: `/technician/job/${ticketId}`,
@@ -1247,6 +981,10 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
 export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
+    if (
+        snap.data().photoEvidenceRequired === true &&
+        snap.data().evidenceStatus !== "TENANT_EVIDENCE_UPLOADED"
+    ) return;
     await attemptAutoAssignment(snap.ref, snap.data());
 });
 
@@ -1477,7 +1215,7 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
     const contractData = assertPlainObject(request.data?.contractData, "Contract payload");
     const propertyId = safeString(contractData.propertyId || contractData.propertyPassportId || contractData.passportId);
     const contractId = safeString(contractData.contractId || contractData.id);
-    const requesterEmail = safeString(request.auth.token?.email).toLowerCase();
+    let requesterEmail = safeString(request.auth.token?.email).toLowerCase();
     const hasPrivilegedAccess = await hasCallableRoleAccess(
         request.auth,
         new Set(["admin", "super_admin", "ceo", "operations_admin", "finance_admin", "account_manager"])
@@ -1487,6 +1225,15 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
     }
 
     if (!hasPrivilegedAccess) {
+        const ownerAccess = await hasCallableRoleAccess(request.auth, new Set(["owner"]));
+        if (!ownerAccess || request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
+            throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+        }
+        const requesterUser = await admin.auth().getUser(request.auth.uid);
+        if (requesterUser.disabled || !requesterUser.emailVerified) {
+            throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+        }
+        requesterEmail = safeString(requesterUser.email || requesterEmail).toLowerCase();
         let authorized = false;
 
         if (propertyId) {
@@ -1497,7 +1244,7 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
                     safeString(property.ownerId) === request.auth.uid ||
                     safeString(property.ownerUid) === request.auth.uid ||
                     safeString(property.userId) === request.auth.uid ||
-                    safeString(property.ownerEmail).toLowerCase() === requesterEmail;
+                    (Boolean(requesterEmail) && safeString(property.ownerEmail).toLowerCase() === requesterEmail);
             }
         }
 
@@ -1509,7 +1256,7 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
                     safeString(contract.ownerId) === request.auth.uid ||
                     safeString(contract.ownerUid) === request.auth.uid ||
                     safeString(contract.userId) === request.auth.uid ||
-                    safeString(contract.ownerEmail).toLowerCase() === requesterEmail;
+                    (Boolean(requesterEmail) && safeString(contract.ownerEmail).toLowerCase() === requesterEmail);
             }
         }
 
@@ -1537,22 +1284,16 @@ export const generateInstitutionalContract = onCall({ cors: true }, async (reque
 });
 
 export const generateAndEmailPayslip = onCall({
-    cors: true
+    cors: true,
+    enforceAppCheck: true
 }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin access required.");
     const hasPayrollAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "ceo", "hr_manager", "finance_admin"]));
     if (!hasPayrollAccess) throw new HttpsError("permission-denied", "Unauthorized.");
-
-    const { staffId, payPeriod, staffName, basicSalary, allowances, overtime, deductions } = request.data || {};
-    const netSalary = Number(basicSalary) + Number(allowances) + Number(overtime) - Number(deductions);
-
-    try {
-        const { generatePayslipPDF } = await import("./pdfEngine");
-        const pdfUrl = await generatePayslipPDF({ staffId, staffName, payPeriod, paymentDate: new Date().toLocaleDateString(), basicSalary, allowances, overtime, deductions, netSalary });
-        return { success: true, pdfUrl };
-    } catch (err: any) {
-        throw new HttpsError("internal", "Payroll failed.");
-    }
+    throw new HttpsError(
+        "failed-precondition",
+        "Legacy client-supplied payroll generation is disabled. Generate a server-authoritative payroll batch and settle its payrollId.",
+    );
 });
 
 export const generateIntegrityAudit = onCall({ cors: true }, async (request) => {
@@ -1883,6 +1624,11 @@ type GeminiGenerateResponse = {
 
 export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
+    await enforceAiUsageQuota(
+        request.auth,
+        "mission",
+        new Set(["owner", "admin", "super_admin", "ceo"]),
+    );
     try {
         const { context, input: rawInput } = request.data;
         const prompt = rawInput || (context
@@ -2320,13 +2066,22 @@ export const acceptTenantInvitation = onCall({ cors: true }, async (request) => 
 
     if (invite.status === 'accepted') throw new HttpsError("failed-precondition", "Invitation already used.");
     if (invite.status === 'cancelled') throw new HttpsError("failed-precondition", "Invitation cancelled.");
-    if (invite.expiresAt.toDate() < new Date()) {
+    const expiresAtMillis = typeof invite.expiresAt?.toMillis === "function"
+        ? invite.expiresAt.toMillis()
+        : Number.NaN;
+    if (!Number.isFinite(expiresAtMillis)) {
+        throw new HttpsError("failed-precondition", "Invitation has no valid expiry and cannot be accepted.");
+    }
+    if (expiresAtMillis < Date.now()) {
         await inviteDoc.ref.update({ status: 'expired' });
         throw new HttpsError("failed-precondition", "Invitation expired.");
     }
 
     const authUid = request.auth.uid;
     const authEmail = request.auth.token.email?.toLowerCase();
+    if (request.auth.token.email_verified !== true) {
+        throw new HttpsError("failed-precondition", "Verify the invited email address before accepting the invitation.");
+    }
     if (authEmail !== invite.tenantEmail.toLowerCase()) {
         throw new HttpsError("permission-denied", "This invitation was sent to a different email address.");
     }
@@ -2581,8 +2336,7 @@ async function aggregatePassportData(propertyId: string) {
         else openTickets++;
     });
 
-    const passportId = `passport_${propertyId}`;
-    const passportRef = db.collection("property_passports").doc(passportId);
+    const passportRef = db.collection("propertyPassports").doc(propertyId);
 
     await passportRef.set({
         propertyId,
@@ -2681,6 +2435,8 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
 
     const data = request.data || {};
     const dryRun = data.dryRun !== false; // Default to true if not explicitly false
+    const maxDocs = Math.max(1, Math.min(200, Math.floor(Number(data.maxDocs) || 100)));
+    const afterId = safeString(data.afterId);
 
     const log: string[] = [];
     const orphanTicketIds: string[] = [];
@@ -2699,7 +2455,13 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
     log.push(`[CONFIG] DryRun: ${dryRun} | Target: maintenanceTickets`);
 
     try {
-        const ticketsSnap = await db.collection("maintenanceTickets").get();
+        let ticketsQuery: admin.firestore.Query = db.collection("maintenanceTickets")
+            .orderBy(admin.firestore.FieldPath.documentId())
+            .limit(maxDocs);
+        if (afterId) {
+            ticketsQuery = ticketsQuery.startAfter(afterId);
+        }
+        const ticketsSnap = await ticketsQuery.get();
         docsMatched = ticketsSnap.size;
 
         const batch = db.batch();
@@ -2747,10 +2509,6 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
                     batchCount++;
                     docsUpdated++;
 
-                    if (batchCount >= 450) { // Safety margin for 500 limit
-                        await batch.commit();
-                        batchCount = 0;
-                    }
                 } else {
                     docsSkipped++;
                 }
@@ -2792,6 +2550,10 @@ export const institutionalRepairTrigger = onCall({ cors: true }, async (request)
             docsSkipped,
             orphanTicketIds,
             invalidStatusTicketIds,
+            nextAfterId: ticketsSnap.size === maxDocs
+                ? ticketsSnap.docs[ticketsSnap.docs.length - 1]?.id || null
+                : null,
+            pageLimit: maxDocs,
             log,
             success: true
         };
@@ -3298,43 +3060,116 @@ export const triggerIoTEvent = onRequest({
         return;
     }
     try {
-        const payload = req.body;
-        const { device_id, property_id, event_type, urgency, telemetry, auth_token } = payload;
+        const payload = assertPlainObject(req.body || {}, "IoT event");
+        const deviceId = safeString(payload.device_id);
+        const propertyId = safeString(payload.property_id);
+        const eventType = safeString(payload.event_type);
+        const sourceEventId = safeString(payload.event_id);
+        const urgency = safeString(payload.urgency || "nominal").toLowerCase();
+        const occurredAtMs = Date.parse(safeString(payload.timestamp || payload.occurred_at));
+        const telemetry = assertPlainObject(payload.telemetry || {}, "IoT telemetry");
+        if (
+            !deviceId ||
+            !propertyId ||
+            !sourceEventId ||
+            !/^[A-Za-z0-9_.:-]{3,180}$/.test(sourceEventId) ||
+            !/^[a-z0-9_:-]{2,80}$/i.test(eventType) ||
+            !Number.isFinite(occurredAtMs) ||
+            Math.abs(Date.now() - occurredAtMs) > 5 * 60 * 1000 ||
+            JSON.stringify(telemetry).length > 16_000
+        ) {
+            res.status(400).send("Invalid or stale IoT event");
+            return;
+        }
         const configuredToken = iotGatewayToken.value();
         if (!configuredToken) {
             res.status(503).send("IoT gateway is not configured");
             return;
         }
-        const provided = Buffer.from(String(auth_token || ""));
+        const provided = Buffer.from(String(req.get("x-iot-gateway-token") || ""));
         const expected = Buffer.from(configuredToken);
         if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
             res.status(401).send("Unauthorized Device Node");
             return;
         }
-        const timestamp = FieldValue.serverTimestamp();
-        const eventId = `iot_${Date.now()}_${device_id}`;
-        await db.collection("telemetry_logs").doc(eventId).set({
-            deviceId: device_id, propertyId: property_id, type: event_type,
-            urgency: urgency || "nominal", telemetry: telemetry || {},
-            timestamp, processed: false
+        const eventHash = crypto.createHash("sha256")
+            .update(`${deviceId}|${propertyId}|${eventType}|${sourceEventId}`)
+            .digest("hex");
+        const eventId = `iot_${eventHash}`;
+        const ticketId = `iot_ticket_${eventHash}`;
+        const eventRef = db.collection("telemetry_logs").doc(eventId);
+        const deviceRef = db.collection("iot_devices").doc(deviceId);
+        const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+        const isCritical = urgency === "critical" || eventType === "leak_detected" || eventType === "fire_alarm";
+        let duplicate = false;
+        await db.runTransaction(async (transaction) => {
+            const [eventSnap, deviceSnap] = await Promise.all([
+                transaction.get(eventRef),
+                transaction.get(deviceRef),
+            ]);
+            if (eventSnap.exists) {
+                duplicate = true;
+                return;
+            }
+            const device = deviceSnap.data() || {};
+            if (
+                !deviceSnap.exists ||
+                device.active !== true ||
+                safeString(device.propertyId) !== propertyId
+            ) {
+                throw new HttpsError("permission-denied", "IoT device is not registered for this property.");
+            }
+            const timestamp = FieldValue.serverTimestamp();
+            transaction.create(eventRef, {
+                eventId: sourceEventId,
+                eventHash,
+                deviceId,
+                propertyId,
+                type: eventType,
+                urgency,
+                telemetry,
+                occurredAt: admin.firestore.Timestamp.fromMillis(occurredAtMs),
+                receivedAt: timestamp,
+                processed: isCritical,
+                duplicate: false,
+            });
+            if (isCritical) {
+                transaction.create(ticketRef, {
+                    propertyId,
+                    title: `IOT ALERT: ${eventType.replace(/_/g, " ").toUpperCase()}`,
+                    description: `Automated alert triggered by registered device ${deviceId}.`,
+                    status: "OPEN",
+                    priority: "EMERGENCY",
+                    category: eventType === "fire_alarm" ? "FIRE_SAFETY" : "IOT_ALERT",
+                    source: "IOT_SENSOR",
+                    sourceEventId,
+                    sourceEventHash: eventHash,
+                    deviceId,
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                });
+                transaction.create(db.collection("audit_logs").doc(`iot_${eventHash}`), {
+                    actorId: deviceId,
+                    actorRole: "iot_device",
+                    action: "IOT_CRITICAL_TRIGGER",
+                    targetType: "maintenanceTickets",
+                    targetId: ticketId,
+                    metadata: { eventType, urgency, eventHash },
+                    createdAt: timestamp,
+                });
+            }
         });
-        if (urgency === "critical" || event_type === "leak_detected" || event_type === "fire_alarm") {
-            const ticketId = `auto_${Date.now()}_${property_id}`;
-            await db.collection("maintenanceTickets").doc(ticketId).set({
-                propertyId: property_id, title: `IOT ALERT: ${event_type.replace("_", " ").toUpperCase()}`,
-                description: `Automated alert triggered by device ${device_id}. Telemetry: ${JSON.stringify(telemetry)}`,
-                status: "OPEN", priority: "EMERGENCY", category: "PLUMBING", source: "IOT_SENSOR",
-                deviceId: device_id, createdAt: timestamp, updatedAt: timestamp
-            });
-            await logAudit({
-                actorId: device_id, actorRole: "iot_device", action: "IOT_CRITICAL_TRIGGER",
-                targetType: "maintenanceTickets", targetId: ticketId, metadata: { event_type, urgency }
-            });
-        }
-        res.status(200).json({ success: true, eventId, message: urgency === "critical" ? "Triage initiated" : "Telemetry logged" });
+        res.status(200).json({
+            success: true,
+            eventId,
+            duplicate,
+            ticketId: isCritical ? ticketId : null,
+            message: duplicate ? "Duplicate event acknowledged" : isCritical ? "Triage initiated" : "Telemetry logged",
+        });
     } catch (error: any) {
-        console.error("IoT Gateway Failure:", error);
-        res.status(500).json({ error: error.message });
+        const status = error instanceof HttpsError && error.code === "permission-denied" ? 403 : 500;
+        console.error("IoT Gateway Failure:", { code: error?.code || "internal" });
+        res.status(status).json({ error: status === 403 ? "Device registration rejected" : "IoT event processing failed" });
     }
 });
 
@@ -3714,11 +3549,4 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
 
 // ─── NEW FEATURES ─────────────────────────────────────────────────────────
 export { assessDamage } from "./damageAssessment";
-export { runSovereignAI } from "./aiAssistant";
-export { whatsappBotWebhook } from "./whatsappBot";
-
-
-export * from "./adminOwnerOperations";
 export * from "./adminReports";
-
-export * from "./technicianOfflineSync";

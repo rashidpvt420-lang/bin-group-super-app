@@ -31,6 +31,12 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
@@ -126,6 +132,9 @@ jobs:
           path: functions-build-output.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Run Firestore and Storage security rules tests
+        run: npm run test:rules
 
       - name: Verify mobile store source readiness
         run: npm run test:mobile-store-readiness

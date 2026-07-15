@@ -6,6 +6,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type Props = {
   contractId: string;
+  contractHash: string;
   email: string;
   propertyName?: string;
   signatureName: string;
@@ -14,6 +15,7 @@ type Props = {
 
 export default function ContractSignatureOtpControl({
   contractId,
+  contractHash,
   email,
   propertyName,
   signatureName,
@@ -33,10 +35,10 @@ export default function ContractSignatureOtpControl({
     setVerified(false);
     setError('');
     onVerified(null);
-  }, [contractId, signatureName, onVerified]);
+  }, [contractId, contractHash, signatureName, onVerified]);
 
   const requestOtp = async () => {
-    if (!contractId || !email || !signatureName.trim()) {
+    if (!contractId || !contractHash || !email || !signatureName.trim()) {
       setError(copy('Enter your legal signature name before requesting the OTP.', 'أدخل اسم التوقيع القانوني قبل طلب رمز التحقق.'));
       return;
     }
@@ -44,7 +46,12 @@ export default function ContractSignatureOtpControl({
     setError('');
     try {
       const callable = httpsCallable(functions, 'requestContractSignatureOtp');
-      const result = await callable({ contractId, email, propertyName: propertyName || 'BIN GROUP contract' });
+      const result = await callable({
+        contractId,
+        contractHash,
+        email,
+        propertyName: propertyName || 'BIN GROUP contract',
+      });
       const data = result.data as { requestId?: string };
       if (!data.requestId) throw new Error('OTP request reference was not returned.');
       setRequestId(data.requestId);
@@ -92,7 +99,7 @@ export default function ContractSignatureOtpControl({
       <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
         <Button
           variant="outlined"
-          disabled={busy || !contractId || !signatureName.trim()}
+          disabled={busy || !contractId || !contractHash || !signatureName.trim()}
           onClick={requestOtp}
           sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}
         >

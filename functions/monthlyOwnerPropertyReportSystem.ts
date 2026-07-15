@@ -429,17 +429,25 @@ async function processOwnerReport(ownerId: string, contracts: any[], periodStart
 }
 
 async function collectEligibleOwnerContracts() {
-  const snap = await db.collection("contracts").limit(2500).get();
   const grouped = new Map<string, any[]>();
-  snap.forEach((doc) => {
-    const data: any = { id: doc.id, contractId: doc.id, ...doc.data() };
-    if (!includesMaintenanceAndPropertyManagement(data)) return;
-    const ownerId = safeString(data.ownerId || data.ownerUid || data.userId || data.createdBy);
-    if (!ownerId) return;
-    const list = grouped.get(ownerId) || [];
-    list.push(data);
-    grouped.set(ownerId, list);
-  });
+  let cursor: admin.firestore.QueryDocumentSnapshot | null = null;
+  do {
+    let query: admin.firestore.Query = db.collection("contracts")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(500);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    snap.forEach((doc) => {
+      const data: any = { id: doc.id, contractId: doc.id, ...doc.data() };
+      if (!includesMaintenanceAndPropertyManagement(data)) return;
+      const ownerId = safeString(data.ownerId || data.ownerUid || data.userId || data.createdBy);
+      if (!ownerId) return;
+      const list = grouped.get(ownerId) || [];
+      list.push(data);
+      grouped.set(ownerId, list);
+    });
+    cursor = snap.size === 500 ? snap.docs[snap.docs.length - 1] : null;
+  } while (cursor);
   return grouped;
 }
 

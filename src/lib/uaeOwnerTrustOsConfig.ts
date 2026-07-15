@@ -93,7 +93,7 @@ export const UAE_OWNER_TRUST_OS_CAPABILITIES: OwnerTrustOsCapability[] = [
     title: 'QR verified property maintenance passport',
     priority: 'must-have',
     surfaces: ['owner', 'tenant', 'broker', 'public'],
-    appCollection: 'property_passports',
+    appCollection: 'propertyPassports',
     businessReason: 'Turns service history, warranties, recurring faults, and verified evidence into a trust signal for owners, tenants, buyers, and brokers.',
     implementationRule: 'Public pages must expose only safe, approved maintenance history and never leak tenant private data, staff data, or unpaid invoice details.',
     proofRequired: ['publicSlug', 'visibilityPolicy', 'verifiedJobsCount', 'warrantyRefs', 'lastVerifiedAt'],

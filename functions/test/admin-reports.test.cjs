@@ -27,7 +27,7 @@ async function seedAdmin(uid = 'admin_user') {
     status: 'active',
     isAdmin: true,
   });
-  return { uid, token: {} };
+  return { uid, token: { admin: true, role: 'admin' } };
 }
 
 describe('getAdminReports callable core', () => {
@@ -126,5 +126,46 @@ describe('getAdminReports callable core', () => {
     assert.equal(operational.data[0].date, '2026-07-02');
     assert.equal(typeof operational.data[0].tickets, 'number');
     assert.equal(typeof operational.data[0].completedJobs, 'number');
+  });
+
+  it('counts only verified canonical payments and excludes legacy, pending and credit rows', async () => {
+    const auth = await seedAdmin();
+    const reportDay = admin.firestore.Timestamp.fromDate(new Date('2026-07-02T12:00:00.000Z'));
+    await Promise.all([
+      db.collection('payments').doc('legacy_paid').set({
+        amount: 9000,
+        status: 'PAID',
+        createdAt: reportDay,
+      }),
+      db.collection('invoices').doc('invoice_paid').set({
+        amount: 8000,
+        status: 'PAID',
+        createdAt: reportDay,
+      }),
+      db.collection('payment_transactions').doc('pending').set({
+        amount: 7000,
+        status: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+        createdAt: reportDay,
+      }),
+      db.collection('payment_transactions').doc('credit').set({
+        amount: 500,
+        status: 'APPROVED',
+        recordType: 'SLA_CREDIT',
+        paymentVerified: true,
+        createdAt: reportDay,
+      }),
+      db.collection('payment_transactions').doc('verified').set({
+        amount: 1250,
+        status: 'PENDING_ADMIN_APPROVAL',
+        paymentVerified: true,
+        createdAt: reportDay,
+      }),
+    ]);
+
+    const report = await runGetAdminReports(
+      { reportType: 'financial', startDate: '2026-07-01', endDate: '2026-07-03' },
+      auth,
+    );
+    assert.equal(report.summary.totalRevenue, 1250);
   });
 });

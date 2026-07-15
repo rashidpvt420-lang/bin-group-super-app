@@ -69,9 +69,25 @@ on:
         description: 'Comma-separated evidence references for the incident attestation (required, non-empty)'
         required: true
         type: string
+      hard_clearance_run_id:
+        description: 'Successful Live Role Smoke Tests hard-clearance run ID for this exact SHA (required for public mode)'
+        required: false
+        type: string
+        default: ''
+      stripe_live_checkout_session_id:
+        description: 'Recent successful cs_live_ session to verify through Stripe API (required for public mode)'
+        required: false
+        type: string
+        default: ''
+      stripe_live_webhook_event_id:
+        description: 'Matching checkout.session.completed evt_ ID (required for public mode)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -113,6 +129,9 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
+          HARD_CLEARANCE_RUN_ID_INPUT: ${{ inputs.hard_clearance_run_id }}
+          STRIPE_LIVE_SESSION_ID_INPUT: ${{ inputs.stripe_live_checkout_session_id }}
+          STRIPE_LIVE_EVENT_ID_INPUT: ${{ inputs.stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
           [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
@@ -122,6 +141,11 @@ jobs:
           [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
           if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]]
+            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]]
+            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]]
+            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]]
+          else
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]]
           fi
 
       - name: Checkout repository
@@ -205,8 +229,6 @@ jobs:
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
       PRODUCTION_APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
-      PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
-      POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
       VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
       FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
       E2E_BASE_URL: https://bin-group-57c60.web.app
@@ -240,6 +262,9 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
+          HARD_CLEARANCE_RUN_ID_INPUT: ${{ inputs.hard_clearance_run_id }}
+          STRIPE_LIVE_SESSION_ID_INPUT: ${{ inputs.stripe_live_checkout_session_id }}
+          STRIPE_LIVE_EVENT_ID_INPUT: ${{ inputs.stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
           [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
@@ -249,6 +274,11 @@ jobs:
           [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
           if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]]
+            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]]
+            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]]
+            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]]
+          else
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]]
           fi
 
       - name: Checkout repository
@@ -287,6 +317,45 @@ jobs:
 
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
+
+      - name: Verify predeploy hard-clearance run provenance
+        if: ${{ inputs.launch_mode == 'public' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$EXPECTED_REPOSITORY/actions/runs/$HARD_CLEARANCE_RUN_ID")"
+          jq -e --arg sha "$EXPECTED_SHA" '
+            .name == "Live Role Smoke Tests" and
+            .event == "workflow_dispatch" and
+            .head_branch == "main" and
+            .head_sha == $sha and
+            .status == "completed" and
+            .conclusion == "success"' \
+            <<<"$run_json" >/dev/null
+
+      - name: Download predeploy exact-SHA hard-clearance evidence
+        if: ${{ inputs.launch_mode == 'public' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: hard-public-launch-clearance-${{ github.sha }}
+          path: predeploy_hard_clearance
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.hard_clearance_run_id }}
+
+      - name: Verify predeploy hard-clearance artifact
+        if: ${{ inputs.launch_mode == 'public' }}
+        env:
+          HARD_CLEARANCE_DIRECTORY: predeploy_hard_clearance
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+        run: node scripts/verify-hard-clearance-artifact.mjs
 
       - name: Create production incidents artifact from protected workflow attestation
         env:
@@ -429,11 +498,11 @@ jobs:
           PREDEPLOY_FUNCTIONS_BUILD_OK: ${{ steps.build_functions.outputs.ok }}
           PREDEPLOY_RULES_OK: ${{ steps.rules_test.outputs.ok }}
           PREDEPLOY_FUNCTIONS_LOAD_OK: ${{ steps.functions_load.outputs.ok }}
-          PREDEPLOY_STRIPE_PROOF_OK: ${{ secrets.PREDEPLOY_STRIPE_PROOF_OK }}
         run: node scripts/predeploy-approval-gate.mjs
 
       - name: Deploy and verify Firebase production stack
         env:
+          DEPLOYMENT_ENVIRONMENT: production
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
           VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
         run: node scripts/deploy-firebase-production.mjs
@@ -477,13 +546,13 @@ jobs:
         run: npm run launch:status
 
       - name: Create signed hard-launch decision
+        if: ${{ inputs.launch_mode == 'bank-pilot' }}
         env:
           HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
           AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           POSTDEPLOY_RELEASE_CLEARED: 'false'
-          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
           VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
         run: npm run hard-launch:decision
 
@@ -515,7 +584,6 @@ jobs:
       HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
-      POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
       VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
       FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
       E2E_BASE_URL: https://bin-group-57c60.web.app
@@ -611,7 +679,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: production-deployment-${{ github.sha }}
-          path: launch_package
+          # Upload paths already include launch_package/. Downloading into that
+          # directory would nest launch_package/launch_package and make the
+          # same-run verifier read missing files.
+          path: .
           # Same-workflow-run only: never accept a cross-run orphan artifact.
 
       - name: Verify downloaded deployment artifact is bound to this run and SHA
@@ -622,6 +693,49 @@ jobs:
           AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
         run: node scripts/verify-same-run-deployment-artifact.mjs
+
+      - name: Verify hard-clearance run provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$EXPECTED_REPOSITORY/actions/runs/$HARD_CLEARANCE_RUN_ID")"
+          jq -e \
+            --arg sha "$EXPECTED_SHA" \
+            '.path == ".github/workflows/live-role-smoke.yml" and
+             .event == "workflow_dispatch" and
+             .head_branch == "main" and
+             .head_sha == $sha and
+             .status == "completed" and
+             .conclusion == "success"' \
+            <<<"$run_json" >/dev/null
+
+      - name: Download exact-SHA hard-clearance evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: hard-public-launch-clearance-${{ github.sha }}
+          path: hard_clearance
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.hard_clearance_run_id }}
+
+      - name: Restore pilot incident evidence
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package
+          if [[ -f hard_clearance/pilot-incident-report.json ]]; then
+            cp hard_clearance/pilot-incident-report.json launch_package/pilot-incident-report.json
+          elif [[ -f hard_clearance/launch_package/pilot-incident-report.json ]]; then
+            cp hard_clearance/launch_package/pilot-incident-report.json launch_package/pilot-incident-report.json
+          else
+            echo "::error::Downloaded hard-clearance artifact has no pilot-incident-report.json"
+            exit 1
+          fi
       - name: Seed E2E auth and gate fixtures
         run: |
           set -euo pipefail
@@ -682,6 +796,15 @@ jobs:
           npm run test:e2e:launch-audit:live
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
+      - name: Verify recent live Stripe payment and processed webhook
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ inputs.stripe_live_checkout_session_id }}
+          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ inputs.stripe_live_webhook_event_id }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+        run: node scripts/verify-stripe-live-proof.mjs
+
       - name: Postdeploy release gate
         id: postdeploy_gate
         env:
@@ -695,7 +818,6 @@ jobs:
           POSTDEPLOY_SMOKE_OK: ${{ steps.postdeploy_smoke.outputs.ok }}
           POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
           POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
-          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
         run: |
           set -euo pipefail
           node scripts/postdeploy-release-gate.mjs
@@ -708,7 +830,6 @@ jobs:
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
-          POSTDEPLOY_STRIPE_LIVE_OK: ${{ secrets.POSTDEPLOY_STRIPE_LIVE_OK }}
         run: npm run hard-launch:decision
 
       - name: Upload public release clearance artifact
@@ -718,6 +839,8 @@ jobs:
           name: public-release-clearance-${{ github.sha }}
           path: |
             launch_package/public-release-status.json
+            launch_package/stripe-live-proof.json
+            launch_package/pilot-incident-report.json
             launch_package/launch-evidence-batch.json
             launch_package/hard-launch-decision.json
             launch_package/production-incidents.json

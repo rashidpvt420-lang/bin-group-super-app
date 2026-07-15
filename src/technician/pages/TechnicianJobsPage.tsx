@@ -1,8 +1,7 @@
 /**
  * BIN GROUP — TechnicianJobsPage
- * Lists assigned active jobs and open pool jobs a technician can accept.
- * Acceptance is routed through the backend callable so unassigned jobs are not
- * blocked by Firestore ownership rules.
+ * Lists assigned active jobs. Unassigned ticket details stay private until an
+ * authorized dispatcher binds the mission to an approved technician.
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,17 +10,15 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
-    Clock, MapPin, Navigation, ArrowRight, CheckCircle, User
+    Clock, MapPin, Navigation, ArrowRight
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, doc, functions, httpsCallable } from '../../lib/firebase';
+import { db, collection } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
-
-const OPEN_POOL_STATUSES = ['OPEN', 'open', 'PENDING_ASSIGNMENT', 'pending_assignment', 'EMERGENCY_SUBMITTED', 'emergency_submitted'];
 
 const STATUS_COLOR: Record<string, string> = {
     accepted: '#3b82f6',
@@ -45,10 +42,8 @@ export default function TechnicianJobsPage() {
     const { tx, isRTL } = useLanguage();
 
     const [assignedJobs, setAssignedJobs] = useState<SnapshotDoc[]>([]);
-    const [poolJobs, setPoolJobs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [accepting, setAccepting] = useState<string | null>(null);
-    const [acceptError, setAcceptError] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -59,45 +54,16 @@ export default function TechnicianJobsPage() {
             ALL_TECHNICIAN_ACTIVE_STATUSES,
             (jobs: SnapshotDoc[]) => {
                 setAssignedJobs(jobs);
+                setLoadError('');
                 setLoading(false);
-            }
+            },
+            () => {
+                setLoadError(tx('tech.jobs.load_error', 'Assigned jobs could not be loaded. Check your connection or contact dispatch.'));
+                setLoading(false);
+            },
         );
         return () => unsub();
     }, [user?.uid]);
-
-    useEffect(() => {
-        if (!user?.uid) return;
-        const q = query(
-            collection(db, 'maintenanceTickets'),
-            where('status', 'in', OPEN_POOL_STATUSES)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setPoolJobs(
-                snap.docs
-                    .map(d => ({ id: d.id, ...d.data() }))
-                    .filter((j: any) => !j.assignedTechnicianId && !j.technicianId)
-            );
-        }, (err) => {
-            console.warn('[JobPool] listener error:', err);
-        });
-        return () => unsub();
-    }, [user?.uid]);
-
-    const handleAccept = async (jobId: string) => {
-        if (!user?.uid) return;
-        setAccepting(jobId);
-        setAcceptError(null);
-        try {
-            const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
-            await acceptTechnicianTicket({ ticketId: jobId });
-            navigate(`/technician/job/${jobId}`);
-        } catch (err: any) {
-            console.error('[Accept] Failed:', err);
-            setAcceptError(err?.message || 'Failed to accept job. Please try again.');
-        } finally {
-            setAccepting(null);
-        }
-    };
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -185,14 +151,13 @@ export default function TechnicianJobsPage() {
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
                 {tx('tech.jobs.title', 'My Jobs')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 5 }}>
-                {tx('tech.jobs.subtitle', 'Active assignments and open pool jobs.')}
+                {tx('tech.jobs.subtitle', 'Active assignments securely issued by dispatch.')}
             </Typography>
-
-            {acceptError && <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>{acceptError}</Alert>}
 
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
                 {tx('tech.jobs.active_assignments', 'ACTIVE ASSIGNMENTS')} ({assignedJobs.length})
@@ -208,76 +173,12 @@ export default function TechnicianJobsPage() {
                 </Stack>
             )}
 
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
-                {tx('tech.jobs.job_pool', 'OPEN JOB POOL')} ({poolJobs.length})
-            </Typography>
-
-            {poolJobs.length === 0 ? (
-                <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.08)' }}>
-                    <Typography color="textSecondary" fontWeight="900">{tx('tech.jobs.no_pool', 'NO OPEN JOBS IN POOL')}</Typography>
-                </Paper>
-            ) : (
-                <Stack spacing={2}>
-                    {poolJobs.map(job => (
-                        <Paper key={job.id} sx={{
-                            p: 3, bgcolor: 'rgba(15, 23, 42, 0.5)', borderRadius: 5,
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            transition: 'all 0.2s', '&:hover': { borderColor: 'rgba(255,255,255,0.12)', transform: 'translateY(-1px)' }
-                        }}>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
-                                <Box sx={{ flex: 1 }}>
-                                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 0.5 }}>
-                                        <Chip
-                                            size="small"
-                                            label={String(job.priority || 'normal').toUpperCase()}
-                                            sx={{
-                                                bgcolor: String(job.priority).toLowerCase() === 'emergency' ? alpha('#ef4444', 0.15) : alpha(binThemeTokens.gold, 0.08),
-                                                color: String(job.priority).toLowerCase() === 'emergency' ? '#ef4444' : binThemeTokens.gold,
-                                                fontWeight: 950, fontSize: '0.6rem', height: 20
-                                            }}
-                                        />
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>
-                                            #{String(job.id).substring(0, 8)}
-                                        </Typography>
-                                    </Stack>
-                                    <Typography variant="body1" fontWeight="900" color="#FFF" sx={{ mb: 0.5 }}>
-                                        {String(job.category || job.complaintCategory || 'Maintenance')}
-                                    </Typography>
-                                    <Stack direction="row" spacing={2} alignItems="center">
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'rgba(255,255,255,0.4)' }}>
-                                            <MapPin size={13} />
-                                            <Typography variant="caption" fontWeight="800">
-                                                {String(job.propertyName || 'Property')}
-                                            </Typography>
-                                        </Box>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'rgba(255,255,255,0.4)' }}>
-                                            <User size={13} />
-                                            <Typography variant="caption" fontWeight="800">
-                                                {String(job.tenantName || job.ownerName || 'Requester')}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
-                                </Box>
-
-                                <Button
-                                    variant="contained"
-                                    disabled={accepting === job.id}
-                                    onClick={() => handleAccept(job.id)}
-                                    startIcon={accepting === job.id ? <CircularProgress size={14} color="inherit" /> : <CheckCircle size={16} />}
-                                    sx={{
-                                        bgcolor: '#10b981', color: '#FFF', fontWeight: 950,
-                                        borderRadius: 3, px: 3, py: 1.2,
-                                        '&:hover': { bgcolor: '#059669' },
-                                        flexShrink: 0
-                                    }}
-                                >
-                                    {accepting === job.id ? tx('tech.jobs.accepting', 'ACCEPTING…') : tx('tech.jobs.accept', 'ACCEPT JOB')}
-                                </Button>
-                            </Stack>
-                        </Paper>
-                    ))}
-                </Stack>
-            )}
+            <Alert severity="info" sx={{ borderRadius: 3 }}>
+                {tx(
+                    'tech.jobs.dispatch_only',
+                    'For resident privacy and duplicate-claim protection, full mission details appear only after dispatch assigns the ticket to you.'
+                )}
+            </Alert>
         </Box>
     );
 }

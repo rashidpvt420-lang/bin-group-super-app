@@ -13,12 +13,13 @@ import {
     onSnapshot,
     updateDoc,
     serverTimestamp,
-    addDoc,
     collection,
     query,
     where,
     getDocs,
     writeBatch,
+    functions,
+    httpsCallable,
 } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
@@ -28,7 +29,7 @@ import { formatAED } from '../utils/formatters';
 import { NotificationEvents } from '@bin/shared';
 import { logAuditAction } from '../utils/auditLogger';
 
-const terminalStatuses = ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED'];
+const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED'];
 
 function text(value: unknown, fallback = '—') {
     const resolved = String(value ?? '').trim();
@@ -70,18 +71,26 @@ export default function DesignRequestDetailPage() {
     const [request, setRequest] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    const [actionError, setActionError] = useState('');
 
     const currentPath = window.location.pathname;
     const basePrefix = currentPath.includes('/design-studio') ? currentPath.split('/design-studio')[0] : '';
 
     useEffect(() => {
         if (!id) return;
-        const unsub = onSnapshot(doc(db, 'design_requests', id), (snap) => {
-            if (snap.exists()) {
-                setRequest({ id: snap.id, ...snap.data() });
-            }
-            setLoading(false);
-        });
+        const unsub = onSnapshot(
+            doc(db, 'design_requests', id),
+            (snap) => {
+                if (snap.exists()) {
+                    setRequest({ id: snap.id, ...snap.data() });
+                }
+                setLoading(false);
+            },
+            (error) => {
+                setActionError(error.message || 'Design request could not be loaded.');
+                setLoading(false);
+            },
+        );
         return () => unsub();
     }, [id]);
 
@@ -124,6 +133,7 @@ export default function DesignRequestDetailPage() {
     const handleOwnerAction = async (action: 'APPROVE' | 'REJECT' | 'TAKEOVER') => {
         if (!id || !request || !user?.uid) return;
         setProcessing(true);
+        setActionError('');
         try {
             const status = action === 'REJECT' ? 'OWNER_REJECTED' : action === 'TAKEOVER' ? 'OWNER_APPROVED_OWNER_TO_PAY' : 'OWNER_APPROVED_TENANT_TO_PAY';
             const approvalStatus = action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_APPROVED';
@@ -164,8 +174,9 @@ export default function DesignRequestDetailPage() {
                     request.scope?.zoneType || 'requested area'
                 );
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Design owner action failed:', err);
+            setActionError(err?.message || 'The owner decision could not be saved.');
         } finally {
             setProcessing(false);
         }
@@ -174,62 +185,24 @@ export default function DesignRequestDetailPage() {
     const handleCreatePaymentRequest = async () => {
         if (!id || !request || !user?.uid) return;
         setProcessing(true);
+        setActionError('');
         try {
-            const payerRole = request.payerRole || (request.role === 'tenant' ? 'tenant' : 'owner');
-            const payerId = request.payerId || user.uid;
-            const executionScope = buildExecutionScope(request);
-            const amount = Math.round(Number(request.quote?.finalTotal || 0) * 0.15);
-
-            const paymentRef = await addDoc(collection(db, 'payment_transactions'), {
-                type: 'DESIGN_STUDIO_EXECUTION',
-                source: 'AI_DESIGN_STUDIO',
+            const createPaymentRequest = httpsCallable(functions, 'createDesignPaymentRequest');
+            await createPaymentRequest({ designRequestId: id });
+            const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
+            const checkout: any = await createCheckout({
                 designRequestId: id,
-                propertyId: request.propertyId || null,
-                propertyName: request.propertyName || null,
-                ownerId: request.ownerId || null,
-                tenantId: request.role === 'tenant' ? request.userId : null,
-                payerId,
-                payerRole,
-                ownerEmail: request.ownerEmail || null,
-                ownerName: request.ownerName || null,
-                userId: payerId,
-                amount,
-                amountReceived: 0,
-                currency: 'AED',
-                status: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
-                paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
-                verificationState: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
-                paymentMethod: 'Manual / Admin Verification',
-                internalNotes: 'AI Design Studio execution quote payment pending admin verification.',
-                executionScope,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                activationRequestedAt: serverTimestamp(),
+                ownerUid: user.uid,
+                ownerEmail: user.email,
             });
-
-            await updateDoc(doc(db, 'design_requests', id), {
-                status: 'PAYMENT_PENDING',
-                workflowStage: 'PAYMENT_PENDING',
-                paymentId: paymentRef.id,
-                paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
-                executionStatus: 'AWAITING_PAYMENT_VERIFICATION',
-                adminHandoffStatus: 'PAYMENT_QUEUE',
-                engineerHandoffStatus: 'WAITING_PAYMENT',
-                executionScope,
-                updatedAt: serverTimestamp(),
-                paymentRequestedAt: serverTimestamp(),
-            });
-
-            await logAuditAction({
-                actorId: user.uid,
-                actorRole: role || payerRole,
-                action: 'DESIGN_PAYMENT_REQUEST_CREATED',
-                targetType: 'design_requests',
-                targetId: id,
-                metadata: { paymentId: paymentRef.id, amount, payerRole },
-            });
-        } catch (err) {
+            const checkoutUrl = String(checkout?.data?.url || '');
+            if (!checkoutUrl.startsWith('https://')) {
+                throw new Error('The payment provider did not return a secure checkout URL.');
+            }
+            window.location.assign(checkoutUrl);
+        } catch (err: any) {
             console.error('Design payment request failed:', err);
+            setActionError(err?.message || 'Design payment checkout could not be started.');
         } finally {
             setProcessing(false);
         }
@@ -238,6 +211,7 @@ export default function DesignRequestDetailPage() {
     const handleAdminEngineerHandoff = async () => {
         if (!id || !request || !user?.uid) return;
         setProcessing(true);
+        setActionError('');
         try {
             const executionScope = request.executionScope || buildExecutionScope(request);
             await updateDoc(doc(db, 'design_requests', id), {
@@ -257,8 +231,9 @@ export default function DesignRequestDetailPage() {
                 targetId: id,
                 metadata: executionScope,
             });
-        } catch (err) {
+        } catch (err: any) {
             console.error('Engineer handoff failed:', err);
+            setActionError(err?.message || 'The engineer handoff could not be saved.');
         } finally {
             setProcessing(false);
         }
@@ -273,7 +248,7 @@ export default function DesignRequestDetailPage() {
     const isTenantRequest = request.role === 'tenant';
     const isPayer = request.payerId ? request.payerId === user?.uid : request.userId === user?.uid || request.ownerId === user?.uid;
     const canApprove = isOwner && ['PENDING_OWNER_NOC', 'AWAITING_OWNER_APPROVAL'].includes(String(request.status || ''));
-    const canCreatePayment = isPayer && !terminalStatuses.includes(String(request.status || '')) && ['OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'DEPOSIT_PENDING', 'AI_CONCEPT_READY'].includes(String(request.status || ''));
+    const canCreatePayment = isPayer && !terminalStatuses.includes(String(request.status || '')) && ['OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'DEPOSIT_PENDING', 'AI_CONCEPT_READY', 'PAYMENT_PENDING'].includes(String(request.status || ''));
     const canAdminHandoff = isAdmin && ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID', 'APPROVED_FOR_EXECUTION', 'READY_FOR_EXECUTION'].includes(String(request.status || ''));
     const referenceImages: string[] = Array.isArray(scope.referenceImages) ? scope.referenceImages : [];
     const executionScope = request.executionScope || buildExecutionScope(request);
@@ -283,6 +258,7 @@ export default function DesignRequestDetailPage() {
             <Button startIcon={<ArrowLeft />} onClick={() => navigate(`${basePrefix}/design-studio`)} sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, fontWeight: 900 }}>
                 BACK TO STUDIO
             </Button>
+            {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
 
             <Grid container spacing={6}>
                 <Grid item xs={12} lg={7}>
@@ -401,7 +377,7 @@ export default function DesignRequestDetailPage() {
                                 </Stack>
                             )}
 
-                            {canCreatePayment && (
+                            {canCreatePayment && request.status !== 'PAYMENT_PENDING' && (
                                 <Button variant="contained" fullWidth size="large" onClick={handleCreatePaymentRequest} disabled={processing} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
                                     PAY 15% DEPOSIT ({formatAED(Math.round(Number(quote.finalTotal || 0) * 0.15))})
                                 </Button>
@@ -410,9 +386,14 @@ export default function DesignRequestDetailPage() {
                             {request.status === 'PAYMENT_PENDING' && (
                                 <Box sx={{ textAlign: 'center', py: 2 }}>
                                     <CreditCard size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
-                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>AWAITING PAYMENT VERIFICATION</Typography>
+                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>PAYMENT CHECKOUT PENDING</Typography>
                                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>Payment ID: {text(request.paymentId)}</Typography>
-                                    <Alert severity="warning" sx={{ bgcolor: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}>Admin or payment webhook must verify payment before execution handoff.</Alert>
+                                    <Alert severity="warning" sx={{ mb: 2, bgcolor: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}>Only the Stripe webhook can verify payment. If checkout was interrupted, resume it below.</Alert>
+                                    {canCreatePayment && (
+                                        <Button variant="outlined" fullWidth onClick={handleCreatePaymentRequest} disabled={processing} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
+                                            RESUME SECURE CHECKOUT
+                                        </Button>
+                                    )}
                                 </Box>
                             )}
                         </Paper>

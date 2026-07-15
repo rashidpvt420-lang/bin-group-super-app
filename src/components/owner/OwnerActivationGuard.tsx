@@ -5,18 +5,7 @@ import { LockKeyhole, CreditCard, FileText } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-
-const ALWAYS_ALLOWED_OWNER_PATHS = new Set([
-  '/owner/contracts',
-  '/owner/activation',
-  '/owner/onboarding-status',
-  '/owner/documents',
-]);
-
-function isAllowedPath(pathname: string) {
-  if (ALWAYS_ALLOWED_OWNER_PATHS.has(pathname)) return true;
-  return pathname.startsWith('/owner/property-passport/');
-}
+import { isOwnerPreActivationPath, isOwnerProfileActivated } from '../../owner/activationPolicy';
 
 function ownerContractId(profile: any) {
   return String(
@@ -42,20 +31,12 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
   const profile = user as any;
 
   const isOwner = String(profile?.role || '').toLowerCase() === 'owner';
-  const adminApproved = profile?.adminApproved === true;
-  const paymentVerified = profile?.paymentVerified === true;
-  const hasActiveContract = Boolean(String(profile?.activeContractId || '').trim());
   const suspended = String(profile?.status || '').toLowerCase() === 'suspended' ||
     String(profile?.onboardingStatus || '').toLowerCase() === 'suspended';
-  const activated = !isOwner || (
-    adminApproved &&
-    paymentVerified &&
-    hasActiveContract &&
-    !suspended
-  );
+  const activated = !isOwner || isOwnerProfileActivated(profile);
   const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
-  if (!suspended && (activated || isAllowedPath(location.pathname))) return <>{children}</>;
+  if (!suspended && (activated || isOwnerPreActivationPath(location.pathname))) return <>{children}</>;
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', py: 4 }}>
@@ -108,8 +89,8 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
             {suspended
               ? copy('Server status: suspended. Portal actions remain blocked until an authorized administrator restores access.', 'حالة الخادم: موقوف. تبقى إجراءات البوابة محظورة حتى يعيد مسؤول مخوّل الوصول.')
               : copy(
-                'Required server evidence: admin approval, verified payment, and an active contract bound to this owner.',
-                'الأدلة المطلوبة من الخادم: موافقة الإدارة، ودفع موثق، وعقد نشط مرتبط بهذا المالك.'
+                'Required server evidence: admin approval, verified payment, an explicit dashboard unlock, active status, and an active contract bound to this owner.',
+                'الأدلة المطلوبة من الخادم: موافقة الإدارة، ودفع موثق، وفتح صريح للوحة التحكم، وحالة نشطة، وعقد نشط مرتبط بهذا المالك.'
               )}
           </Alert>
         </Stack>

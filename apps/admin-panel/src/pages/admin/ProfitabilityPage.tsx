@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Container, Typography, Box, Grid, Card, CardContent,
     Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    LinearProgress, Skeleton, Button, Divider, Paper
+    LinearProgress, Skeleton, Button, Divider, Paper, Alert
 } from '@mui/material';
 import {
     AccountBalance,
@@ -17,20 +17,20 @@ import {
     ReceiptLong,
     Security
 } from '@mui/icons-material';
-import { collection, onSnapshot, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { collection, onSnapshot, QuerySnapshot, DocumentData, query, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { motion } from 'framer-motion';
 
 interface CFOStats {
-    mrr: number;
-    arr: number;
+    mrr: number | null;
+    arr: number | null;
     totalRevenue: number;
-    totalCosts: number;
-    grossProfit: number;
-    profitMargin: number;
+    totalCosts: number | null;
+    grossProfit: number | null;
+    profitMargin: number | null;
     outstandingInvoices: number;
     overdueInvoices: number;
-    churnRate: number;
+    churnRate: number | null;
     portfolioCount: number;
     activeContracts: number;
 }
@@ -39,34 +39,50 @@ export default function CFODashboard() {
     const [stats, setStats] = useState<CFOStats | null>(null);
     const [snapshotData, setSnapshotData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
-        // 💰 1. Revenue Intelligence (From Payments)
-        const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot: QuerySnapshot<DocumentData>) => {
-            const successful = snapshot.docs.filter((d: any) => d.data().status === 'SUCCEEDED' || d.data().status === 'PAID');
-            const revenue = successful.reduce((acc: number, d: any) => acc + (d.data().amount || 0), 0);
-            const overdue = snapshot.docs.filter((d: any) => d.data().status === 'OVERDUE').reduce((acc: number, d: any) => acc + (d.data().amount || 0), 0);
-            const pending = snapshot.docs.filter((d: any) => d.data().status === 'PENDING').reduce((acc: number, d: any) => acc + (d.data().amount || 0), 0);
+        // Canonical financial truth is the server-authored payment_transactions ledger.
+        const paymentQuery = query(collection(db, 'payment_transactions'), limit(1000));
+        const unsubPayments = onSnapshot(paymentQuery, (snapshot: QuerySnapshot<DocumentData>) => {
+            const rows = snapshot.docs.map((row) => row.data());
+            const statusOf = (row: any) => String(row.status || row.paymentStatus || '').toUpperCase();
+            const isCredit = (row: any) => ['SLA_CREDIT', 'REFUND', 'CREDIT'].includes(String(row.recordType || row.transactionType || '').toUpperCase());
+            const successful = rows.filter((row: any) =>
+                !isCredit(row) && (
+                    row.paymentVerified === true ||
+                    row.verified === true ||
+                    ['SUCCEEDED', 'PAID', 'APPROVED', 'VERIFIED'].includes(statusOf(row))
+                )
+            );
+            const revenue = successful.reduce((acc: number, row: any) => acc + Number(row.amount || row.paidAmount || 0), 0);
+            const overdue = rows.filter((row: any) => statusOf(row) === 'OVERDUE').reduce((acc: number, row: any) => acc + Number(row.amount || 0), 0);
+            const pending = rows
+                .filter((row: any) => statusOf(row).startsWith('PENDING') || ['PAYMENT_REQUESTED', 'REVIEW_REQUIRED'].includes(statusOf(row)))
+                .reduce((acc: number, row: any) => acc + Number(row.amount || 0), 0);
 
             setStats(prev => ({
                 ...(prev || {} as CFOStats),
                 totalRevenue: revenue,
-                arr: revenue * 1.05, // Institutional projection
-                mrr: revenue / 12,
+                arr: null,
+                mrr: null,
                 outstandingInvoices: pending,
                 overdueInvoices: overdue,
-                totalCosts: revenue * 0.45, // OpEx model
-                grossProfit: revenue * 0.55,
-                profitMargin: 55,
-                churnRate: 1.2,
+                totalCosts: null,
+                grossProfit: null,
+                profitMargin: null,
+                churnRate: null,
                 portfolioCount: prev?.portfolioCount || 0,
                 activeContracts: prev?.activeContracts || 0
             }));
             setLoading(false);
+        }, (error) => {
+            setLoadError(error.message || 'Canonical payment ledger could not be loaded.');
+            setLoading(false);
         });
 
         // 🏢 2. Portfolio Intelligence (From Properties & Contracts)
-        const unsubProps = onSnapshot(collection(db, 'properties'), (snapshot: QuerySnapshot<DocumentData>) => {
+        const unsubProps = onSnapshot(query(collection(db, 'properties'), limit(1000)), (snapshot: QuerySnapshot<DocumentData>) => {
             const props = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setSnapshotData(props);
             setStats(prev => ({
@@ -75,7 +91,7 @@ export default function CFODashboard() {
             }));
         });
 
-        const unsubContracts = onSnapshot(collection(db, 'contracts'), (snapshot: QuerySnapshot<DocumentData>) => {
+        const unsubContracts = onSnapshot(query(collection(db, 'contracts'), limit(1000)), (snapshot: QuerySnapshot<DocumentData>) => {
             setStats((prev: any) => ({
                 ...(prev || {} as CFOStats),
                 activeContracts: snapshot.docs.filter((d: any) => d.data().status === 'ACTIVE').length
@@ -93,6 +109,10 @@ export default function CFODashboard() {
 
     return (
         <Container maxWidth={false} sx={{ py: 6, bgcolor: '#f8fafc', minHeight: '100vh' }}>
+            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
+            <Alert severity="info" sx={{ mb: 3 }}>
+                Revenue includes verified server-authored payment transactions only. ARR, MRR, cost, margin and churn remain unavailable until authoritative accounting inputs are connected.
+            </Alert>
             {/* ── 1. DASHBOARD HEADER ── */}
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
@@ -107,10 +127,10 @@ export default function CFODashboard() {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button variant="outlined" startIcon={<ReceiptLong />} sx={{ borderRadius: 3, fontWeight: 900, px: 3 }}>
+                    <Button disabled title="An audited export backend is not connected." variant="outlined" startIcon={<ReceiptLong />} sx={{ borderRadius: 3, fontWeight: 900, px: 3 }}>
                         Export Audit
                     </Button>
-                    <Button variant="contained" startIcon={<NorthEast />} sx={{ borderRadius: 3, fontWeight: 900, px: 3, boxShadow: '0 10px 30px rgba(25,118,210,0.3)' }}>
+                    <Button disabled title="Forecasting is disabled until authoritative cost history exists." variant="contained" startIcon={<NorthEast />} sx={{ borderRadius: 3, fontWeight: 900, px: 3, boxShadow: '0 10px 30px rgba(25,118,210,0.3)' }}>
                         Revenue Forecast
                     </Button>
                 </Box>
@@ -123,8 +143,7 @@ export default function CFODashboard() {
                         <Grid item xs={12} md={4}>
                             <MetricCard 
                                 label="Annual Recurring Revenue" 
-                                value={`AED ${(stats?.arr || 0).toLocaleString()}`} 
-                                delta="+12.4%" 
+                                value={stats?.arr === null ? 'Not available' : `AED ${(stats?.arr || 0).toLocaleString()}`}
                                 icon={<AccountBalance />} 
                                 color="#1e293b" 
                             />
@@ -132,8 +151,7 @@ export default function CFODashboard() {
                         <Grid item xs={12} md={4}>
                             <MetricCard 
                                 label="Net Profit Margin" 
-                                value={`${stats?.profitMargin}%`} 
-                                delta="+2.1%" 
+                                value={stats?.profitMargin === null ? 'Not available' : `${stats?.profitMargin || 0}%`}
                                 icon={<PieChart />} 
                                 color="#16a34a" 
                             />
@@ -141,7 +159,7 @@ export default function CFODashboard() {
                         <Grid item xs={12} md={4}>
                             <MetricCard 
                                 label="Mrr (Active Coverage)" 
-                                value={`AED ${(stats?.mrr || 0).toLocaleString()}`} 
+                                value={stats?.mrr === null ? 'Not available' : `AED ${(stats?.mrr || 0).toLocaleString()}`}
                                 icon={<Payments />} 
                                 color="#1976d2" 
                             />
@@ -193,16 +211,16 @@ export default function CFODashboard() {
                                 <Security sx={{ color: '#fbbf24' }} /> Alpha Insights
                             </Typography>
                             <Box sx={{ mt: 4, spaceY: 4 }}>
-                                <InsightRow label="Client Churn Rate" value="1.25%" status="OPTIMAL" />
-                                <InsightRow label="Portfolio ARR Density" value="94.2%" status="HIGH" />
-                                <InsightRow label="Service Margin" value="55.8%" status="GROWING" />
-                                <InsightRow label="Asset Health Correlation" value="0.88" status="STRONG" />
+                                <InsightRow label="Client Churn Rate" value="Not available" status="NO SOURCE" />
+                                <InsightRow label="Portfolio ARR Density" value="Not available" status="NO SOURCE" />
+                                <InsightRow label="Service Margin" value="Not available" status="NO SOURCE" />
+                                <InsightRow label="Asset Health Correlation" value="Not available" status="NO SOURCE" />
                             </Box>
                             
                             <Box sx={{ mt: 8, p: 3, bgcolor: '#1e293b', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
                                 <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase' }}>Forecast Alpha</Typography>
                                 <Typography variant="body2" sx={{ mt: 1, color: '#e2e8f0', lineHeight: 1.6 }}>
-                                    Predictive models suggest an <strong>8.4% increase</strong> in gross margins next quarter due to advanced preventive HVAC loops.
+                                    Forecasting is disabled until verified revenue, cost, renewal and churn histories are available from authoritative ledgers.
                                 </Typography>
                             </Box>
                         </CardContent>
@@ -231,20 +249,17 @@ export default function CFODashboard() {
                                 {stats?.portfolioCount ? snapshotData.map((row: any) => (
                                     <TableRow key={row.id} hover>
                                         <TableCell sx={{ fontWeight: 800 }}>{row.propertyName || row.address || 'Unnamed Asset'}</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>AED {(row.annualAMC || 0).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>AED {(row.annualAMC * 0.4).toLocaleString()}</TableCell>
-                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>AED {(row.annualAMC * 0.6).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>AED {Number(row.annualContractValue || row.annualAMC || 0).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ color: '#ef4444', fontWeight: 700 }}>{Number.isFinite(Number(row.actualOperatingCost)) ? `AED ${Number(row.actualOperatingCost).toLocaleString()}` : 'Not available'}</TableCell>
+                                        <TableCell sx={{ color: '#16a34a', fontWeight: 900 }}>{Number.isFinite(Number(row.actualOperatingCost)) ? `AED ${(Number(row.annualContractValue || row.annualAMC || 0) - Number(row.actualOperatingCost)).toLocaleString()}` : 'Not available'}</TableCell>
                                         <TableCell>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="body2" fontWeight={800}>60%</Typography>
-                                                <Box sx={{ flexGrow: 1, height: 4, bgcolor: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
-                                                    <Box sx={{ width: `60%`, height: '100%', bgcolor: '#16a34a' }} />
-                                                </Box>
+                                                <Typography variant="body2" fontWeight={800}>{Number.isFinite(Number(row.actualOperatingCost)) && Number(row.annualContractValue || row.annualAMC) > 0 ? `${Math.round(((Number(row.annualContractValue || row.annualAMC) - Number(row.actualOperatingCost)) / Number(row.annualContractValue || row.annualAMC)) * 100)}%` : 'Not available'}</Typography>
                                             </Box>
                                         </TableCell>
                                         <TableCell>
                                             <Chip 
-                                                label="ACTIVE" 
+                                                label={String(row.status || 'UNKNOWN').toUpperCase()}
                                                 size="small" 
                                                 sx={{ 
                                                     fontWeight: 900, 

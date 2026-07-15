@@ -65,10 +65,11 @@ npm run build
 npm run dev
 ```
 
-### Deploy
-```bash
-firebase deploy --project bin-group-57c60
-```
+### Production deployment
+
+Production deployment is intentionally unavailable from local commands. Use the
+protected `Firebase Production Deploy` workflow with an exact current `main`
+SHA, required environment approval, and post-deployment evidence.
 
 ---
 

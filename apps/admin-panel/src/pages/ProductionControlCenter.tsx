@@ -50,7 +50,7 @@ export default function ProductionControlCenter() {
         const fetchMetrics = async () => {
             try {
                 // Property Passport Aggregation for total financials
-                const passportSnap = await getDocs(collection(db, 'property_passports'));
+                const passportSnap = await getDocs(collection(db, 'propertyPassports'));
                 let rent = 0, collected = 0, outstanding = 0, units = 0, properties = 0;
                 passportSnap.forEach(doc => {
                     const data = doc.data();

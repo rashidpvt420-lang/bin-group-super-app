@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -75,7 +76,7 @@ async function tokensForUser(userId: string) {
 async function adminRecipients() {
     const roles = ["admin", "super_admin", "ceo", "manager", "operations_admin", "dispatcher"];
     const snapshots = await Promise.all(
-        roles.map((role) => db.collection("users").where("role", "==", role).get())
+        roles.map((role) => db.collection("users").where("role", "==", role).limit(100).get())
     );
     return unique(snapshots.flatMap((snap) => snap.docs.map((docSnap) => docSnap.id)));
 }
@@ -84,6 +85,7 @@ async function onDutyTechnicianRecipients() {
     const snapshot = await db.collection("users")
         .where("role", "==", "technician")
         .where("onDuty", "==", true)
+        .limit(200)
         .get();
     return unique(snapshot.docs.map((docSnap) => docSnap.id));
 }
@@ -136,26 +138,38 @@ async function loadTicket(ticketId: string) {
 async function canCreateNotification(uid: string, token: Record<string, unknown>, payload: ReturnType<typeof assertSafeNotificationPayload>) {
     if (await isAdminCaller(uid, token)) return true;
     if (payload.recipientId === uid) return true;
+    if (payload.recipientId === "ADMIN_GROUP" || payload.recipientId === "ON_DUTY_TECHNICIANS") {
+        const allowedTypes = payload.recipientId === "ADMIN_GROUP"
+            ? new Set(["TICKET_CREATED", "OWNER_COMPLAINT", "EMERGENCY_SOS", "TENANT_APPROVED", "TENANT_REJECTED"])
+            : new Set(["EMERGENCY_SOS"]);
+        if (!allowedTypes.has(payload.type) || !payload.ticketId) return false;
+        const ticket = await loadTicket(payload.ticketId);
+        if (!ticket || !participantIds(ticket).includes(uid)) return false;
+        if (payload.type === "EMERGENCY_SOS") {
+            const priority = cleanString(ticket.priority || ticket.severity || ticket.urgency, 40).toUpperCase();
+            const status = cleanString(ticket.status, 80).toUpperCase();
+            if (!["EMERGENCY", "CRITICAL", "SOS"].includes(priority) && !status.includes("EMERGENCY")) {
+                return false;
+            }
+        }
+        return payload.recipientId === "ADMIN_GROUP"
+            ? payload.recipientRole === "admin"
+            : payload.recipientRole === "technician";
+    }
 
     const ticket = await loadTicket(payload.ticketId);
     if (ticket) {
         const participants = participantIds(ticket);
         if (!participants.includes(uid)) return false;
-        if (payload.recipientId === "ADMIN_GROUP" || payload.recipientId === "ON_DUTY_TECHNICIANS") return true;
         return participants.includes(payload.recipientId);
     }
 
-    return payload.recipientId === "ADMIN_GROUP" && [
-        "NEW_ONBOARDING",
-        "TICKET_CREATED",
-        "EMERGENCY_SOS",
-        "DESIGN_NOC",
-        "TENANT_APPROVED",
-        "TENANT_REJECTED",
-    ].includes(payload.type);
+    return false;
 }
 
-export const createNotification = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const createNotification = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
 
     const payload = assertSafeNotificationPayload(request.data || {});
@@ -167,14 +181,24 @@ export const createNotification = onCall({ cors: true, region: "europe-west3" },
     const recipientIds = await recipientIdsForNotification({ recipientId: payload.recipientId });
     if (!recipientIds.length) return { notificationIds: [], recipientCount: 0 };
 
-    const batch = db.batch();
     const notificationIds: string[] = [];
     const now = FieldValue.serverTimestamp();
+    const groupDispatch = payload.recipientId === "ADMIN_GROUP" || payload.recipientId === "ON_DUTY_TECHNICIANS";
+    const dispatchKey = groupDispatch
+        ? crypto.createHash("sha256")
+            .update(`${payload.ticketId}|${payload.type}|${payload.recipientId}`)
+            .digest("hex")
+        : "";
+    const claimRef = dispatchKey
+        ? db.collection("notification_dispatch_claims").doc(dispatchKey)
+        : null;
 
-    recipientIds.forEach((recipientId) => {
-        const ref = db.collection("notifications").doc();
+    const notificationWrites = recipientIds.slice(0, 300).map((recipientId) => {
+        const ref = groupDispatch
+            ? db.collection("notifications").doc(`${dispatchKey.slice(0, 24)}_${recipientId}`)
+            : db.collection("notifications").doc();
         notificationIds.push(ref.id);
-        batch.set(ref, {
+        return { ref, recipientId, data: {
             recipientId,
             recipientRole: payload.recipientRole,
             type: payload.type,
@@ -188,12 +212,36 @@ export const createNotification = onCall({ cors: true, region: "europe-west3" },
             createdByUid: uid,
             createdByEmail: cleanString(token.email, 160) || null,
             deliverySource: "callable:createNotification",
-        });
+        } };
     });
 
+    if (claimRef) {
+        const created = await db.runTransaction(async (transaction) => {
+            const claimSnap = await transaction.get(claimRef);
+            if (claimSnap.exists) return false;
+            transaction.create(claimRef, {
+                ticketId: payload.ticketId,
+                type: payload.type,
+                recipientGroup: payload.recipientId,
+                createdByUid: uid,
+                createdAt: now,
+            });
+            notificationWrites.forEach(({ ref, data }) => transaction.create(ref, data));
+            return true;
+        });
+        return {
+            notificationIds: created ? notificationIds : [],
+            recipientCount: created ? notificationIds.length : 0,
+            idempotent: !created,
+        };
+    }
+
+    const batch = db.batch();
+    notificationWrites.forEach(({ ref, data }) => batch.set(ref, data));
     await batch.commit();
-    return { notificationIds, recipientCount: notificationIds.length };
-});
+    return { notificationIds, recipientCount: notificationIds.length, idempotent: false };
+  },
+);
 
 export const deliverNotificationPush = onDocumentCreated("notifications/{notificationId}", async (event) => {
     const snap = event.data;

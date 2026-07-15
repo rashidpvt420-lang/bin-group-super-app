@@ -1,47 +1,55 @@
 # Operations-Only Checklist
 
-Code changes on `cursor/full-system-audit-fix` do **not** complete these items. Do not mark them passed from a laptop audit.
+These controls cannot be passed by source review or local tests. Missing evidence is a release blocker.
 
-## A. Identity & App Check
+## Identity and App Check
 
-1. Confirm Firebase project `bin-group-57c60`.
-2. Register App Check debug UUID under **BIN GROUP Web** for E2E only; production remains fail-closed.
-3. Confirm admin panel App Check site key secrets in GitHub Environments.
-4. Confirm custom claims for founder/admin allowlist (no email-only elevation).
+- Confirm Firebase project `bin-group-57c60` and production web-app registrations.
+- Confirm production App Check enforcement and valid site keys for main and admin builds.
+- Register only the controlled E2E debug UUID when running protected tests; remove stale tokens.
+- Verify founder/admin/staff custom claims and suspension behavior using real accounts.
 
-## B. SMTP
+## SMTP
 
-1. Confirm `SMTP_USER` / `SMTP_PASS` exist in Secret Manager and are bound to mail + OTP Functions.
-2. Run `npm run test:gate12:smtp` against production with real secrets (not simulated).
-3. Confirm provider message IDs land in audit/delivery logs without secret leakage.
+- Confirm enabled `SMTP_USER` and `SMTP_PASS` Secret Manager versions and Function bindings.
+- Run `npm run test:gate12:smtp` in the protected production environment.
+- Retain provider message ID, recipient, timestamp and delivery-state evidence without secret values.
 
-## C. Stripe
+## Stripe
 
-1. Confirm live-mode keys and webhook secret ENABLED versions.
-2. Execute one real AED mobilization Checkout for a test owner.
-3. Confirm webhook HTTP 200 and Firestore event `processed: true` for that event id.
-4. Confirm owner dashboard remains locked until admin activation.
-5. Associate evidence with the exact deployed commit SHA.
+- Confirm live API and webhook secret versions.
+- Execute a real AED Checkout for an exact-SHA test owner.
+- Confirm the selected `checkout.session.completed` event matches the session and the app's Firestore webhook record is `processed=true`, `ignored!=true`.
+- Confirm a mismatch creates reconciliation evidence and never unlocks an owner.
+- Confirm admin approval, invoice proof and dashboard unlock on the valid payment.
 
-## D. Five-role live evidence
+## Five-profile production evidence
 
-1. Seed auth + live fixtures for current SHA.
-2. Run profile gates / launch walkthrough / critical evidence suites with `E2E_STRICT_LIVE=true`.
-3. Store Playwright JSON via `PLAYWRIGHT_JSON_OUTPUT_FILE` only (no stdout pollution).
+- Seed controlled owner, tenant, two-technician, broker and admin accounts for the current SHA.
+- Run strict profile gates, five-profile walkthrough and business suites with App Check enabled.
+- Exercise owner onboarding/activation, tenant evidence and SOS, technician assignment/proof, broker attribution/payout and admin review/audit.
+- Retain Playwright JSON and hashes; do not substitute screenshots or hand-written claims.
 
-## E. Protected production deploy
+## Controlled pilot
 
-1. Exact current `origin/main` SHA verification.
-2. Founder confirmation phrases + HMAC authorization.
-3. Incident attestation (active=false unless true incident).
-4. Workload Identity → build → deploy → same-run artifact verify.
-5. Postdeploy SMTP + App Check + Gate 11 smoke.
-6. Signed hard-launch decision artifact only may set `pilotEligible` / `hardLaunchClaim`.
+- Run at least 24 hours.
+- Record exact pilot start/end, monitoring reference, rollback reference and incident reference.
+- Require zero open P0/P1 incidents.
+- Generate `pilot-incident-report.json` only in the protected hard-clearance workflow.
 
-## F. Explicit non-actions for agents
+## Protected deployment
 
-- Do not set `pilotEligible` or `hardLaunchClaim` manually.
-- Do not deploy production from audit branches.
-- Do not merge to main without human review.
-- Do not print or commit secrets.
-- Do not fabricate Stripe/SMTP/App Check/five-role evidence.
+- Dispatch from `refs/heads/main` with the exact current SHA.
+- Use authorized founder identity, exact confirmation phrases and protected environment approval.
+- For public mode, select a successful exact-SHA hard-clearance run before deployment.
+- Verify Workload Identity, deterministic builds, rules emulators, complete artifact digest and full-stack deploy.
+- Verify same-run production metadata, hosted App Check, SMTP, routes and live business evidence.
+- Accept a public claim only from the signed final decision artifact with empty failures.
+
+## Prohibited shortcuts
+
+- No local or hosting-only production deploys.
+- No manual `pilotEligible` or `hardLaunchClaim`.
+- No fabricated Stripe, SMTP, App Check, pilot or five-profile evidence.
+- No secret values in logs, commits or artifacts.
+- No deployment of superseded SHAs.

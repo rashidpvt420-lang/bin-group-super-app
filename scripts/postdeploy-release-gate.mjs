@@ -28,6 +28,10 @@ import {
   validateDeploymentDocument,
   validateEvidenceRecord,
 } from './lib/launch-honesty.mjs';
+import {
+  pilotIncidentReportPath,
+  validatePilotIncidentReport,
+} from './lib/hard-launch-gate.mjs';
 
 const REQUIRED_POSTDEPLOY_EVIDENCE = Object.freeze([
   ...REQUIRED_PILOT_EVIDENCE,
@@ -232,18 +236,47 @@ export function runPostdeployReleaseGate({
 
   const launchMode = String(env.LAUNCH_MODE || '').trim();
   if (launchMode === 'public') {
-    if (String(env.POSTDEPLOY_STRIPE_LIVE_OK || '') !== 'true') {
-      failures.push(
-        'Public launch requires POSTDEPLOY_STRIPE_LIVE_OK=true (live payment + webhook proof).',
-      );
+    const stripeProofPath = path.join(root, 'launch_package', 'stripe-live-proof.json');
+    if (!existsSync(stripeProofPath)) {
+      failures.push('Public launch requires execution-generated stripe-live-proof.json.');
+    } else {
+      try {
+        const proof = JSON.parse(readFileSync(stripeProofPath, 'utf8'));
+        const proofAgeMs = now - Date.parse(proof.observedAt || '');
+        if (
+          proof.status !== 'passed' ||
+          proof.source !== 'stripe-api-live-verifier' ||
+          proof.liveMode !== true ||
+          proof.webhookProcessed !== true ||
+          proof.currency !== 'AED' ||
+          Number(proof.amountMinor || 0) <= 0 ||
+          proof.commitSha !== githubSha ||
+          String(proof.workflowRunId || '') !== String(env.GITHUB_RUN_ID || '') ||
+          proof.releaseId !== releaseId ||
+          proof.validatedArtifactDigest !== validatedDigest ||
+          !Number.isFinite(proofAgeMs) ||
+          proofAgeMs < 0 ||
+          proofAgeMs > 72 * 60 * 60 * 1000 ||
+          proof.hardLaunchClaim === true
+        ) {
+          failures.push('stripe-live-proof.json is stale, non-live, unprocessed, or not bound to this release.');
+        }
+      } catch (error) {
+        failures.push(`stripe-live-proof.json is malformed: ${error.message}`);
+      }
     }
   }
 
-  const pilotNoP0 = (evidenceBatch.records || []).find(
-    (r) => r.testName === 'pilot_no_p0_p1' && r.commitSha === githubSha,
-  );
-  if (!pilotNoP0 || pilotNoP0.exitCode !== 0) {
-    failures.push('Completed pilot_no_p0_p1 evidence is required before public release clearance.');
+  const pilotPath = pilotIncidentReportPath(root);
+  if (!existsSync(pilotPath)) {
+    failures.push('Workflow-bound pilot-incident-report.json is required before public release clearance.');
+  } else {
+    try {
+      const pilotReport = JSON.parse(readFileSync(pilotPath, 'utf8'));
+      failures.push(...validatePilotIncidentReport(pilotReport, githubSha));
+    } catch (error) {
+      failures.push(`pilot-incident-report.json is malformed: ${error.message}`);
+    }
   }
 
   const uniqueFailures = [...new Set(failures)];

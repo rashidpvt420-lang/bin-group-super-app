@@ -417,6 +417,7 @@ export default function OwnerContractsResolvedPage() {
             <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
             <ContractSignatureOtpControl
               contractId={primaryContract.id}
+              contractHash={String(primaryContract.quoteHash || primaryContract.contractHash || '')}
               email={user?.email || ''}
               propertyName={primaryContract.propertyName}
               signatureName={signatureName}

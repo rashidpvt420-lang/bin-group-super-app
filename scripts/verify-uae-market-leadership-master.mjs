@@ -26,7 +26,7 @@ const checks = [
       'communication_intake',
       'maintenance_ledger',
       'quote_benchmarks',
-      'property_passports',
+      'propertyPassports',
       'attendance_events',
       'data_governance_events',
       'UAE_RELEASE_GATES',

@@ -1,7 +1,7 @@
 // src/tenant/pages/TenantPaymentsPage.tsx
 // Tenant can view payment history, upcoming payments, receipts, upload proof
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Box, Paper, Typography, Stack, Chip, Grid, Button,
     CircularProgress, Alert, Table, TableBody, TableCell, TableContainer,
@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { CreditCard, DollarSign, CheckCircle2, Clock, Upload, FileText, Download, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { db, collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, storage, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, orderBy, storage, ref, uploadBytes, getDownloadURL, functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
@@ -68,6 +68,9 @@ export default function TenantPaymentsPage() {
         period: '',
         notes: '',
     });
+    const submissionIdRef = useRef(
+        window.crypto?.randomUUID?.() || `proof_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    );
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -144,7 +147,7 @@ export default function TenantPaymentsPage() {
         try {
             let receiptUrl = '';
             const receiptHash = await hashReceiptFile(receiptFile);
-            const receiptPath = `receipts/${user.uid}/${Date.now()}_${sanitizeReceiptName(receiptFile.name)}`;
+            const receiptPath = `receipts/${user.uid}/${submissionIdRef.current}_${sanitizeReceiptName(receiptFile.name)}`;
             const storageRef = ref(storage, receiptPath);
             await uploadBytes(storageRef, receiptFile, {
                 contentType: receiptFile.type || 'application/octet-stream',
@@ -156,12 +159,9 @@ export default function TenantPaymentsPage() {
             });
             receiptUrl = await getDownloadURL(storageRef);
 
-            await addDoc(collection(db, 'payment_transactions'), {
-                tenantId: user.uid,
-                payerId: user.uid,
-                userId: user.uid,
-                tenantEmail: user.email || '',
-                tenantName: user.displayName || '',
+            const submitTenantPaymentProof = httpsCallable(functions, 'submitTenantPaymentProof');
+            await submitTenantPaymentProof({
+                submissionId: submissionIdRef.current,
                 amount: parseFloat(proofForm.amount),
                 reference: proofForm.reference.trim(),
                 bankName: proofForm.bankName.trim(),
@@ -170,25 +170,12 @@ export default function TenantPaymentsPage() {
                 receiptUrl,
                 receiptPath,
                 receiptHash,
-                evidence: {
-                    receiptUrl,
-                    receiptPath,
-                    receiptHash,
-                    fileName: receiptFile.name,
-                    contentType: receiptFile.type || 'application/octet-stream',
-                    size: receiptFile.size,
-                },
-                status: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
-                paymentVerified: false,
-                submittedByTenant: true,
-                transferDestination: 'OWNER_DIRECT_IBAN',
-                binGroupFundsCustody: false,
-                createdAt: serverTimestamp(),
             });
             setSnackbar({ open: true, message: 'Payment proof submitted. Admin will verify within 24 hours.', error: false });
             setUploadDialogOpen(false);
             setProofForm({ amount: '', reference: '', bankName: '', period: '', notes: '' });
             setReceiptFile(null);
+            submissionIdRef.current = window.crypto?.randomUUID?.() || `proof_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
         } catch (error: any) {
             setSnackbar({ open: true, message: error?.message || 'Failed to submit payment proof.', error: true });
         } finally {

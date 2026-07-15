@@ -82,11 +82,15 @@ export function requireArtifactDigest(value, label, failures) {
   return digest;
 }
 
-function regularFilesRecursively(dir) {
+function regularFilesRecursively(dir, { excludedDirectories = new Set(), excludedFiles = new Set() } = {}) {
   const files = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory() && excludedDirectories.has(entry.name)) continue;
+    if (entry.isFile() && excludedFiles.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) files.push(...regularFilesRecursively(full));
+    if (entry.isDirectory()) {
+      files.push(...regularFilesRecursively(full, { excludedDirectories, excludedFiles }));
+    }
     else if (entry.isFile()) files.push(full);
   }
   return files;
@@ -97,7 +101,7 @@ export function computeValidatedArtifactDigest(root = process.cwd()) {
   const requiredDirectories = [
     path.join(root, 'dist'),
     path.join(root, 'apps', 'admin-panel', 'build'),
-    path.join(root, 'functions', 'lib'),
+    path.join(root, 'functions'),
   ];
   const requiredFiles = [
     path.join(root, 'firebase.json'),
@@ -105,7 +109,8 @@ export function computeValidatedArtifactDigest(root = process.cwd()) {
     path.join(root, 'firestore.indexes.json'),
     path.join(root, 'storage.rules'),
     path.join(root, 'package-lock.json'),
-    path.join(root, 'functions', 'package.json'),
+    path.join(root, 'functions', 'package-lock.json'),
+    path.join(root, 'functions', 'lib', 'runtimeAll.js'),
   ];
   for (const dir of requiredDirectories) {
     if (!existsSync(dir) || !statSync(dir).isDirectory()) {
@@ -118,10 +123,16 @@ export function computeValidatedArtifactDigest(root = process.cwd()) {
     }
   }
 
-  const targets = [
-    ...requiredDirectories.flatMap(regularFilesRecursively),
+  const functionsDirectory = path.join(root, 'functions');
+  const targets = [...new Set([
+    ...regularFilesRecursively(path.join(root, 'dist')),
+    ...regularFilesRecursively(path.join(root, 'apps', 'admin-panel', 'build')),
+    ...regularFilesRecursively(functionsDirectory, {
+      excludedDirectories: new Set(['node_modules', '.git']),
+      excludedFiles: new Set(['firebase-debug.log']),
+    }).filter((file) => !file.endsWith('.local') && !path.basename(file).startsWith('firebase-debug.')),
     ...requiredFiles,
-  ].sort((left, right) => path.relative(root, left).localeCompare(path.relative(root, right)));
+  ])].sort((left, right) => path.relative(root, left).localeCompare(path.relative(root, right)));
   if (targets.length === requiredFiles.length) {
     throw new Error('Cannot compute artifact digest; deployable build directories are empty.');
   }

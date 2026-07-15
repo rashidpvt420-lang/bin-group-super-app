@@ -33,6 +33,7 @@ import {
 } from 'firebase/auth';
 import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import { OWNER_LOCKED_STATUSES } from '../owner/activationPolicy';
 
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string; diagnostic?: string };
 
@@ -53,7 +54,7 @@ const LoginPage: React.FC = () => {
     const { t, tx, isRTL, lang, setLang } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
-    const { role, isAdmin, loading: roleLoading, refreshRole } = useRole();
+    const { role, status, isAdmin, loading: roleLoading, refreshRole } = useRole();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -87,8 +88,37 @@ const LoginPage: React.FC = () => {
     };
 
     useEffect(() => {
-        if (!roleLoading && role) navigate(resolvePostLoginTarget(), { replace: Boolean(safeReturnTo) });
-    }, [role, isAdmin, roleLoading, navigate, safeReturnTo, intendedRoleKey]);
+        if (roleLoading) return;
+        if (role) {
+            const currentStatus = String(status || '').toLowerCase();
+            if (['profile_unavailable', 'profile_missing'].includes(currentStatus)) {
+                setNotice({
+                    type: 'warning',
+                    text: tx(
+                        'login.profile_unverified',
+                        'Signed in, but the server profile could not be verified. Retry after restoring connectivity or contact support.',
+                    ),
+                });
+                return;
+            }
+            if (role === 'owner' && OWNER_LOCKED_STATUSES.has(currentStatus)) {
+                navigate('/owner/activation', { replace: true });
+                return;
+            }
+            if (currentStatus === 'profile_incomplete' && !isAdmin) {
+                setNotice({
+                    type: 'warning',
+                    text: tx('login.profile_incomplete', 'Your account profile is incomplete. Contact support to restore portal access.'),
+                });
+                return;
+            }
+            navigate(resolvePostLoginTarget(), { replace: Boolean(safeReturnTo) });
+            return;
+        }
+        if (status === 'role_required') {
+            navigate('/gateway', { replace: true, state: { reason: 'role_required' } });
+        }
+    }, [role, status, isAdmin, roleLoading, navigate, safeReturnTo, intendedRoleKey]);
 
     const buildAuthDiagnostic = (err: any) => {
         const runtime = getFirebaseRuntimeDiagnostics();

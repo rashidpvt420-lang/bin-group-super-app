@@ -78,9 +78,11 @@ type BrokerDocument = {
     brokerId?: string;
     title?: string;
     documentType?: string;
+    docType?: string;
     fileName?: string;
     url?: string;
     downloadUrl?: string;
+    fileUrl?: string;
     status?: string;
 };
 
@@ -425,11 +427,11 @@ export default function BrokerManagementPage() {
                                 <Typography variant="h6" sx={{ fontWeight: 950, mb: 1 }}>Uploaded Broker Documents</Typography>
                                 <Stack spacing={1}>
                                     {selectedDocuments.map((docItem) => {
-                                        const href = docItem.url || docItem.downloadUrl || '';
+                                        const href = docItem.fileUrl || docItem.url || docItem.downloadUrl || '';
                                         return (
                                             <Stack key={docItem.id} direction="row" justifyContent="space-between" spacing={2} sx={{ p: 1.5, border: '1px solid #e5e7eb', borderRadius: 2 }}>
                                                 <Box>
-                                                    <Typography sx={{ fontWeight: 900 }}>{docItem.title || docItem.documentType || docItem.fileName || 'Broker document'}</Typography>
+                                                    <Typography sx={{ fontWeight: 900 }}>{docItem.title || docItem.docType || docItem.documentType || docItem.fileName || 'Broker document'}</Typography>
                                                     <Typography variant="caption" color="text.secondary">{statusText(docItem.status)}</Typography>
                                                 </Box>
                                                 {href && <Button href={href} target="_blank" rel="noreferrer" startIcon={<VisibilityIcon />}>Open</Button>}

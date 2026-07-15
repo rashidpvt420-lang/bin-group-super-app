@@ -1,10 +1,72 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
+
+const expectedProjectId = 'bin-group-57c60';
+const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
+const githubSha = String(process.env.GITHUB_SHA || '').trim();
+const artifactDigest = String(process.env.VALIDATED_ARTIFACT_DIGEST || '').trim();
+const approvalPath = 'launch_package/predeploy-approval.json';
+const digestFailures = [];
+const validatedArtifactDigest = requireArtifactDigest(
+  artifactDigest,
+  'VALIDATED_ARTIFACT_DIGEST',
+  digestFailures,
+);
+
+if (
+  process.env.GITHUB_ACTIONS !== 'true' ||
+  process.env.GITHUB_REF !== 'refs/heads/main' ||
+  deploymentEnvironment !== 'production' ||
+  !/^[0-9a-f]{40}$/.test(githubSha) ||
+  !validatedArtifactDigest
+) {
+  console.error('[production-deploy] Refusing deployment outside the protected exact-SHA production workflow');
+  for (const failure of digestFailures) console.error(`[production-deploy] ${failure}`);
+  process.exit(1);
+}
+
+if (!existsSync(approvalPath)) {
+  console.error(`[production-deploy] Missing protected predeploy approval: ${approvalPath}`);
+  process.exit(1);
+}
+
+let approval;
+try {
+  approval = JSON.parse(readFileSync(approvalPath, 'utf8'));
+} catch {
+  console.error('[production-deploy] Protected predeploy approval is malformed');
+  process.exit(1);
+}
+
+if (
+  approval.commitSha !== githubSha ||
+  approval.artifactDigest !== artifactDigest ||
+  approval.githubEnvironment !== 'production' ||
+  approval.approvedVia !== 'github-environment-protection'
+) {
+  console.error('[production-deploy] Protected predeploy approval does not match this SHA and artifact');
+  process.exit(1);
+}
 
 const projectId = String(process.env.GCP_PROJECT_ID || '').trim();
-if (!projectId) {
-  console.error('[production-deploy] GCP_PROJECT_ID is required');
+if (projectId !== expectedProjectId) {
+  console.error(`[production-deploy] GCP_PROJECT_ID must equal ${expectedProjectId}`);
+  process.exit(1);
+}
+
+const remoteMain = spawnSync(
+  'git',
+  ['ls-remote', '--exit-code', 'origin', 'refs/heads/main'],
+  { cwd: process.cwd(), encoding: 'utf8', shell: false },
+);
+const remoteMainSha = String(remoteMain.stdout || '').trim().split(/\s+/)[0] || '';
+if ((remoteMain.status ?? 1) !== 0 || remoteMainSha !== githubSha) {
+  console.error(
+    `[production-deploy] Refusing stale deployment: current origin/main ${remoteMainSha || '(unavailable)'} does not match GITHUB_SHA`,
+  );
   process.exit(1);
 }
 
@@ -42,8 +104,10 @@ function retryFirebase(target, label) {
   process.exit(1);
 }
 
-retryFirebase('hosting,firestore:rules,firestore:indexes,storage', 'critical Firebase resources');
-retryFirebase('functions', 'Firebase Functions');
+retryFirebase(
+  'functions,hosting,firestore:rules,firestore:indexes,storage',
+  'complete Firebase production stack',
+);
 
 const metadataStatus = run(process.execPath, [
   'scripts/write-production-deployment-metadata.mjs',

@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { 
     Container, Typography, Box, Paper, Grid, Stack, Button, 
-    Chip, Divider, alpha, CircularProgress, Table, TableBody, 
+    Chip, alpha, CircularProgress, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, LinearProgress
 } from '@mui/material';
 import { 
-    ShieldCheck, Building, ClipboardCheck, FileText, 
-    Calendar, Wrench, ArrowLeft, Download, Shield,
-    FileCheck, Activity, BarChart3, Landmark
+    ShieldCheck, ClipboardCheck, Download,
+    FileCheck, Landmark
 } from 'lucide-react';
-import { db, doc, getDoc, collection, query, where, getDocs, orderBy, limit } from '../lib/firebase';
+import { db, doc, getDoc } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
-import { useRole } from '../context/RoleContext';
 import CoverageTracker from '../components/CoverageTracker';
 import type { CoverageItem } from '../components/CoverageTracker';
 
@@ -29,38 +27,70 @@ interface AssetRegistryItem {
 
 const GovernmentPropertyPage: React.FC = () => {
     const { id } = useParams();
-    const navigate = useNavigate();
-    const { t, tx, isRTL } = useLanguage();
-    const { role } = useRole();
+    const { tx, isRTL } = useLanguage();
     const [property, setProperty] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    
-    // Mock Data for Government Protocol
-    const [assets, setAssets] = useState<AssetRegistryItem[]>([
-        { id: '1', category: 'HVAC', name: 'Chiller Unit A1', serialNumber: 'UAE-CH-9928', lastService: new Date(Date.now() - 86400000 * 30), nextService: new Date(Date.now() + 86400000 * 60), status: 'OPTIMAL' },
-        { id: '2', category: 'LIFT', name: 'Passenger Lift 01', serialNumber: 'OTIS-DX-112', lastService: new Date(Date.now() - 86400000 * 15), nextService: new Date(Date.now() + 86400000 * 15), status: 'SERVICE_REQUIRED' },
-        { id: '3', category: 'FIRE', name: 'Main Control Panel', serialNumber: 'UAE-FR-001', lastService: new Date(Date.now() - 86400000 * 180), nextService: new Date(Date.now() + 86400000 * 5), status: 'OPTIMAL' },
-    ]);
+    const [error, setError] = useState('');
+    const [assets, setAssets] = useState<AssetRegistryItem[]>([]);
+    const [coverage, setCoverage] = useState<CoverageItem[]>([]);
+    const [inspections, setInspections] = useState<any[]>([]);
+    const [documents, setDocuments] = useState<any[]>([]);
 
-    const [coverage, setCoverage] = useState<CoverageItem[]>([
-        { id: 'c1', system: 'HVAC Plant', provider: 'Daikin Middle East', expiryDate: new Date(Date.now() + 86400000 * 400), type: 'WARRANTY', policyNumber: 'WAR-992-DK', status: 'ACTIVE' },
-        { id: 'c2', system: 'Structural Shell', provider: 'Oman Insurance', expiryDate: new Date(Date.now() + 86400000 * 45), type: 'INSURANCE', policyNumber: 'POL-DXB-001', status: 'EXPIRING' },
-        { id: 'c3', system: 'Main Pool Filtration', provider: 'Fluidra', expiryDate: new Date(Date.now() - 86400000 * 10), type: 'WARRANTY', policyNumber: 'WAR-FL-55', status: 'EXPIRED' },
-    ]);
+    const toDate = (value: any) => value?.toDate?.() || (value ? new Date(value) : null);
+    const displayDate = (value: any) => {
+        const date = toDate(value);
+        return date && Number.isFinite(date.getTime()) ? date.toLocaleDateString(isRTL ? 'ar-AE' : 'en-AE') : tx('common.notRecorded', 'Not recorded');
+    };
 
     useEffect(() => {
         if (!id) return;
         const fetchProp = async () => {
             try {
                 const snap = await getDoc(doc(db, 'properties', id));
-                if (snap.exists()) setProperty(snap.data());
-            } catch (err) { console.error(err); }
+                if (!snap.exists()) {
+                    setError(tx('government.propertyNotFound', 'Property record was not found or is not available to this account.'));
+                    setLoading(false);
+                    return;
+                }
+                const data = snap.data();
+                setProperty(data);
+                const assetRows = Array.isArray(data.assetRegistry) ? data.assetRegistry : Array.isArray(data.assets) ? data.assets : [];
+                setAssets(assetRows.map((asset: any, index: number) => ({
+                    id: String(asset.id || asset.assetId || index),
+                    category: String(asset.category || asset.type || 'ASSET'),
+                    name: String(asset.name || asset.assetName || 'Unnamed asset'),
+                    serialNumber: String(asset.serialNumber || asset.serial || ''),
+                    lastService: asset.lastService || asset.lastServiceAt || null,
+                    nextService: asset.nextService || asset.nextServiceAt || null,
+                    status: ['OPTIMAL', 'SERVICE_REQUIRED', 'CRITICAL'].includes(String(asset.status || '').toUpperCase())
+                        ? String(asset.status).toUpperCase()
+                        : 'SERVICE_REQUIRED',
+                })) as AssetRegistryItem[]);
+                const coverageRows = Array.isArray(data.coverage) ? data.coverage : Array.isArray(data.warranties) ? data.warranties : [];
+                setCoverage(coverageRows.map((item: any, index: number) => ({
+                    id: String(item.id || item.policyNumber || index),
+                    system: String(item.system || item.name || 'Coverage'),
+                    provider: String(item.provider || ''),
+                    expiryDate: toDate(item.expiryDate || item.expiresAt) || new Date(0),
+                    type: String(item.type || 'WARRANTY').toUpperCase(),
+                    policyNumber: String(item.policyNumber || item.reference || ''),
+                    status: String(item.status || 'UNKNOWN').toUpperCase(),
+                })) as CoverageItem[]);
+                setInspections(Array.isArray(data.inspectionHistory) ? data.inspectionHistory : []);
+                setDocuments(Array.isArray(data.complianceDocuments) ? data.complianceDocuments : []);
+            } catch (err) {
+                console.error('[GovernmentProperty] load failed:', err);
+                setError(tx('government.propertyLoadFailed', 'Property evidence could not be loaded.'));
+            }
             setLoading(false);
         };
         fetchProp();
     }, [id]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (error || !property) {
+        return <Box sx={{ p: 6, color: '#fff', textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}><Typography>{error || tx('government.propertyNotFound', 'Property record was not found.')}</Typography></Box>;
+    }
 
     return (
         <Box sx={{ bgcolor: '#000', minHeight: '100vh', py: 6 }}>
@@ -70,7 +100,7 @@ const GovernmentPropertyPage: React.FC = () => {
                     <Box sx={{ position: 'absolute', top: 0, right: 0, p: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ShieldCheck size={16} /> SOVEREIGN PROTOCOL ACTIVE
                     </Box>
-                    <Stack direction="row" spacing={3} alignItems="center">
+                    <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }}>
                         <Box sx={{ p: 2, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 2 }}>
                             <Landmark size={48} />
                         </Box>
@@ -80,8 +110,8 @@ const GovernmentPropertyPage: React.FC = () => {
                             <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)' }}>{property?.address}</Typography>
                         </Box>
                         <Stack spacing={2}>
-                            <Button variant="contained" startIcon={<Download />} sx={{ bgcolor: '#FFF', color: '#000', fontWeight: 950 }}>WEEKLY REPORT</Button>
-                            <Button variant="outlined" startIcon={<Download />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', fontWeight: 950 }}>MONTHLY AUDIT</Button>
+                            <Button disabled variant="contained" startIcon={<Download />} title={tx('government.reportUnavailable', 'No verified report artifact is available.')} sx={{ bgcolor: '#FFF', color: '#000', fontWeight: 950 }}>{tx('government.weeklyReport', 'WEEKLY REPORT — NOT AVAILABLE')}</Button>
+                            <Button disabled variant="outlined" startIcon={<Download />} title={tx('government.reportUnavailable', 'No verified report artifact is available.')} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', fontWeight: 950 }}>{tx('government.monthlyAudit', 'MONTHLY AUDIT — NOT AVAILABLE')}</Button>
                         </Stack>
                     </Stack>
                 </Box>
@@ -103,14 +133,16 @@ const GovernmentPropertyPage: React.FC = () => {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {assets.map((asset) => (
+                                        {assets.length === 0 ? (
+                                            <TableRow><TableCell colSpan={4} sx={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', py: 5 }}>{tx('government.noAssets', 'No verified asset registry entries are recorded for this property.')}</TableCell></TableRow>
+                                        ) : assets.map((asset) => (
                                             <TableRow key={asset.id} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
                                                 <TableCell>
                                                     <Typography variant="body1" fontWeight="900" color="#FFF">{asset.name}</Typography>
                                                     <Typography variant="caption" color="textSecondary">{asset.category}</Typography>
                                                 </TableCell>
                                                 <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>{asset.serialNumber}</TableCell>
-                                                <TableCell sx={{ color: '#FFF' }}>{asset.lastService.toLocaleDateString()}</TableCell>
+                                                <TableCell sx={{ color: '#FFF' }}>{displayDate(asset.lastService)}</TableCell>
                                                 <TableCell>
                                                     <Chip 
                                                         label={asset.status} 
@@ -137,17 +169,15 @@ const GovernmentPropertyPage: React.FC = () => {
                             <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                                 <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 3 }}>INSPECTION PROTOCOL</Typography>
                                 <Stack spacing={3}>
-                                    {[
-                                        { title: 'STRUCTURAL AUDIT', date: '4 DAYS AGO', score: 100 },
-                                        { title: 'CIVIL DEFENSE SYNC', date: '12 DAYS AGO', score: 98 },
-                                        { title: 'WATER SANITIZATION', date: '2 DAYS AGO', score: 100 }
-                                    ].map((log, i) => (
+                                    {inspections.length === 0 ? (
+                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)' }}>{tx('government.noInspections', 'No verified inspection history is recorded.')}</Typography>
+                                    ) : inspections.map((log, i) => (
                                         <Box key={i}>
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                                <Typography variant="caption" fontWeight="900" color="#FFF">{log.title}</Typography>
-                                                <Typography variant="caption" color="textSecondary">{log.date}</Typography>
+                                                <Typography variant="caption" fontWeight="900" color="#FFF">{String(log.title || log.type || 'INSPECTION')}</Typography>
+                                                <Typography variant="caption" color="textSecondary">{displayDate(log.completedAt || log.date || log.createdAt)}</Typography>
                                             </Box>
-                                            <LinearProgress variant="determinate" value={log.score} sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                                            <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, Number(log.score || 0)))} sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                                         </Box>
                                     ))}
                                 </Stack>
@@ -159,8 +189,23 @@ const GovernmentPropertyPage: React.FC = () => {
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 3 }}>Institutional certifications and authority approvals.</Typography>
                                 <Stack spacing={1}>
-                                    <Button fullWidth variant="outlined" size="small" sx={{ justifyContent: 'flex-start', color: '#FFF', borderColor: 'rgba(255,255,255,0.1)' }}>TRADE_LICENSE_2026.PDF</Button>
-                                    <Button fullWidth variant="outlined" size="small" sx={{ justifyContent: 'flex-start', color: '#FFF', borderColor: 'rgba(255,255,255,0.1)' }}>SIRA_COMPLIANCE_CERT.PDF</Button>
+                                    {documents.length === 0 ? (
+                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)' }}>{tx('government.noDocuments', 'No verified compliance documents are recorded.')}</Typography>
+                                    ) : documents.map((document: any, index: number) => (
+                                        <Button
+                                            key={String(document.id || document.storagePath || index)}
+                                            fullWidth
+                                            variant="outlined"
+                                            size="small"
+                                            disabled={!document.downloadUrl}
+                                            href={document.downloadUrl || undefined}
+                                            target={document.downloadUrl ? '_blank' : undefined}
+                                            rel={document.downloadUrl ? 'noreferrer' : undefined}
+                                            sx={{ justifyContent: 'flex-start', color: '#FFF', borderColor: 'rgba(255,255,255,0.1)' }}
+                                        >
+                                            {String(document.name || document.fileName || document.type || 'Compliance document')}
+                                        </Button>
+                                    ))}
                                 </Stack>
                             </Paper>
                         </Stack>

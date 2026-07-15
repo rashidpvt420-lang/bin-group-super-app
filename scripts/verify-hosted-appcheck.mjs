@@ -43,6 +43,6 @@ ok = (await checkBundle(mainBase, 'main')) && ok;
 ok = (await checkBundle(adminBase, 'admin')) && ok;
 
 if (!ok) {
-  console.error('[hosted-appcheck] Rebuild with: npm run build:live && firebase deploy --only hosting --project bin-group-57c60');
+  console.error('[hosted-appcheck] Rebuild and deploy the exact current main SHA through the protected production workflow.');
   process.exit(1);
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { db, functions } from '../../lib/firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { 
   Brain, 
   Activity, 
@@ -96,15 +97,19 @@ export default function LiveMapPage() {
     setDispatchDialogOpen(true);
   };
 
-  const handleDispatch = (tech: any) => {
-    // 1. Update the actual ticket in Firestore to DISPATCHED
+  const handleDispatch = async (tech: any) => {
     if (selectedTicket) {
-      const ticketRef = doc(db, "maintenanceTickets", selectedTicket.id);
-      updateDoc(ticketRef, {
-        status: 'DISPATCHED',
-        assignedTechnicianId: tech.id,
-        assignedTechnicianName: tech.name
-      });
+      try {
+        const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
+        await assignTechnician({
+          ticketId: selectedTicket.id,
+          technicianId: tech.id,
+        });
+      } catch (error: any) {
+        console.error('Dispatch failed:', error);
+        window.alert(error?.message || 'Dispatch could not assign this mission.');
+        return;
+      }
 
       // --- 3. Mock Automated SMS/Push Triggers ---
       // Fire a browser notification to alert the Technician
@@ -120,6 +125,7 @@ export default function LiveMapPage() {
     }
 
     setDispatchDialogOpen(false);
+    setSelectedTicket(null);
 
     if (generatePass && selectedTicket) {
       generateGatePass(selectedTicket, tech);

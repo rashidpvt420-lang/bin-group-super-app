@@ -33,6 +33,8 @@ type CanonicalQuote = {
     annualContractValue: number;
     activationDeposit: number;
     currency: string;
+    quoteHash: string;
+    quotedAtMs: number;
     expiresAtMs: number;
     version: string;
 };
@@ -71,6 +73,11 @@ const fileToBase64Payload = (file: File): Promise<string> => new Promise((resolv
     reader.onerror = () => reject(reader.error || new Error('Unable to read the document.'));
     reader.readAsDataURL(file);
 });
+
+const sha256File = async (file: File) => {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
 
 export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepProps) {
     const {
@@ -275,12 +282,23 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             const safeName = paymentReceipt.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'payment-receipt';
             const paymentProofPath = `payment-references/owners/${user.uid}/${effectiveIntakeId}/${Date.now()}_${safeName}`;
             const paymentProofRef = ref(storage, paymentProofPath);
-            await uploadBytes(paymentProofRef, paymentReceipt, { contentType: paymentReceipt.type });
+            const receiptHash = await sha256File(paymentReceipt);
+            const uploadResult = await uploadBytes(paymentProofRef, paymentReceipt, {
+                contentType: paymentReceipt.type,
+                customMetadata: {
+                    ownerUid: user.uid,
+                    paymentId: effectiveIntakeId,
+                    evidenceType: 'owner_payment_receipt',
+                    receiptHash,
+                },
+            });
             manualPaymentEvidence = {
                 reference: paymentReference.trim(),
                 receiptUrl: await getDownloadURL(paymentProofRef),
                 receiptPath: paymentProofPath,
                 receiptName: paymentReceipt.name,
+                receiptHash,
+                receiptGeneration: uploadResult.metadata.generation,
             };
         }
 
@@ -294,6 +312,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             amount: amountDue,
             activationDeposit: amountDue,
             annualContractValue,
+            quoteHash: serverQuote.quoteHash,
+            quoteQuotedAtMs: serverQuote.quotedAtMs,
             paymentManifest: manualPaymentEvidence || paymentManifest || null,
             companyProfile: {
                 name: companyProfile.name,

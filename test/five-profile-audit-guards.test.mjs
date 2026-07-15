@@ -20,15 +20,20 @@ test('safeOpenMissionClaim cannot authorize technician self-claims', () => {
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
   assert.match(
     rules,
-    /match \/tickets\/\{ticketId\}[\s\S]{0,400}allow update: if canDispatchJobs\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
+    /match \/tickets\/\{ticketId\}[\s\S]{0,400}allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
   );
 });
 
-test('owner activation requires paymentVerified + adminApproved + activeContractId', () => {
+test('owner activation delegates to the complete server-confirmed policy', () => {
   const guard = readFileSync(join(root, 'src/components/owner/OwnerActivationGuard.tsx'), 'utf8');
-  assert.match(guard, /adminApproved &&/);
-  assert.match(guard, /paymentVerified &&/);
-  assert.match(guard, /hasActiveContract/);
+  const policy = readFileSync(join(root, 'src/owner/activationPolicy.ts'), 'utf8');
+  assert.match(guard, /isOwnerProfileActivated\(profile\)/);
+  assert.match(policy, /normalized\(profile\.status\) === 'active'/);
+  assert.match(policy, /profile\.adminApproved === true/);
+  assert.match(policy, /profile\.paymentVerified === true/);
+  assert.match(policy, /profile\.dashboardUnlocked === true/);
+  assert.match(policy, /profile\.dashboardLocked !== true/);
+  assert.match(policy, /profile\.activeContractId/);
   const page = readFileSync(join(root, 'src/owner/pages/OwnerActivationPage.tsx'), 'utf8');
   assert.match(page, /profile\?\.adminApproved === true/);
   assert.doesNotMatch(page, /mobilization > 0/);

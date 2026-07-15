@@ -24,52 +24,67 @@ export default function PublicLaunchOpsPanel() {
     });
 
     const [alerts, setAlerts] = useState<any[]>([]);
+    const [streamError, setStreamError] = useState('');
 
     useEffect(() => {
         // 1. Live Snapshot of Security Registry
-        const qSecurity = query(collection(db, 'security_audit_logs'), orderBy('timestamp', 'desc'), limit(5));
+        const qSecurity = query(collection(db, 'security_audit_logs'), orderBy('createdAt', 'desc'), limit(5));
         const unsubSecurity = onSnapshot(qSecurity, (snapshot) => {
             const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAlerts(logs);
             
             // Calculate abuse attempts from logs
-            const abuse = logs.filter((l: any) => l.type === 'ABUSE_DETECTED').length;
+            const abuse = logs.filter((l: any) => ['BOT_DETECTION', 'OTP_THROTTLE', 'QUOTE_LIMIT'].includes(String(l.type || ''))).length;
             setMetrics(prev => ({ ...prev, abuseAttempts: abuse }));
-        });
+        }, (error) => setStreamError(error.message || 'Security telemetry stream unavailable.'));
 
         // 2. Quote Velocity (Last 1 hour)
         const hourAgo = new Date(Date.now() - 3600000);
-        const qQuotes = query(collection(db, 'quotes'), where('createdAt', '>=', hourAgo));
+        const qQuotes = query(collection(db, 'quotes'), where('createdAt', '>=', hourAgo), limit(500));
         const unsubQuotes = onSnapshot(qQuotes, (snapshot) => {
             setMetrics(prev => ({ ...prev, quotesPerHour: snapshot.size }));
-        });
+        }, (error) => setStreamError(error.message || 'Quote telemetry stream unavailable.'));
 
         // 3. Payment Integrity (Failures)
-        const qPayments = query(collection(db, 'payments'), where('status', '==', 'FAILED'));
+        const qPayments = query(collection(db, 'payment_transactions'), where('status', 'in', ['FAILED', 'REJECTED', 'REVIEW_REQUIRED']), limit(500));
         const unsubPayments = onSnapshot(qPayments, (snapshot) => {
             setMetrics(prev => ({ ...prev, paymentFailures: snapshot.size }));
-        });
+        }, (error) => setStreamError(error.message || 'Payment integrity stream unavailable.'));
 
-        // 4. Overall Conversion Logic (Derived from total quotes vs total payments)
-        const unsubAllQuotes = onSnapshot(collection(db, 'quotes'), (qSnap) => {
-            onSnapshot(collection(db, 'payments'), (pSnap) => {
-                const totalQ = qSnap.size || 1;
-                const totalP = pSnap.size;
-                const cv = (totalP / totalQ) * 100;
-                setMetrics(prev => ({ ...prev, conversionRate: parseFloat(cv.toFixed(2)) }));
-            });
-        });
+        // 4. Overall Conversion Logic (bounded operational sample).
+        let sampledQuoteCount = 0;
+        let sampledVerifiedPayments = 0;
+        const updateConversion = () => {
+            const totalQ = sampledQuoteCount || 1;
+            const cv = (sampledVerifiedPayments / totalQ) * 100;
+            setMetrics(prev => ({ ...prev, conversionRate: parseFloat(cv.toFixed(2)) }));
+        };
+        const unsubAllQuotes = onSnapshot(query(collection(db, 'quotes'), limit(1000)), (qSnap) => {
+            sampledQuoteCount = qSnap.size;
+            updateConversion();
+        }, (error) => setStreamError(error.message || 'Quote conversion stream unavailable.'));
+        const unsubAllPayments = onSnapshot(query(collection(db, 'payment_transactions'), limit(1000)), (pSnap) => {
+            sampledVerifiedPayments = pSnap.docs.filter((row) => {
+                const data = row.data();
+                const status = String(data.status || data.paymentStatus || '').toUpperCase();
+                const isCredit = ['SLA_CREDIT', 'REFUND', 'CREDIT'].includes(String(data.recordType || data.transactionType || '').toUpperCase());
+                return !isCredit && (data.paymentVerified === true || data.verified === true || ['PAID', 'APPROVED', 'VERIFIED', 'SUCCEEDED'].includes(status));
+            }).length;
+            updateConversion();
+        }, (error) => setStreamError(error.message || 'Payment conversion stream unavailable.'));
 
         return () => {
             unsubSecurity();
             unsubQuotes();
             unsubPayments();
             unsubAllQuotes();
+            unsubAllPayments();
         };
     }, []);
 
     return (
         <Box sx={{ p: 4, bgcolor: '#f1f5f9', minHeight: '100vh' }}>
+            {streamError && <Alert severity="error" sx={{ mb: 3 }}>{streamError}</Alert>}
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
                     <Typography variant="h4" fontWeight="black" sx={{ color: '#0f172a', letterSpacing: -1 }}>
@@ -92,7 +107,7 @@ export default function PublicLaunchOpsPanel() {
                     <Stack spacing={2}>
                         {alerts.map(alert => (
                             <Alert key={alert.id} severity={alert.severity || 'info'} variant="filled" action={
-                                <IconButton size="small" color="inherit">Reconcile</IconButton>
+                                <IconButton disabled title="Reconciliation actions run from the audited payment approval queue." size="small" color="inherit">Reconcile</IconButton>
                             }>
                                 <AlertTitle fontWeight="bold">{alert.title || 'Security Signal'}</AlertTitle>
                                 {alert.message || alert.details || 'Operational status update received.'}

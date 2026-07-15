@@ -5,8 +5,9 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { OwnerComplaint } from '../utils/ownerComplaintResolver';
 import { exportComplaintsToCsv } from './OwnerComplaintReportExport';
-import { db, functions, httpsCallable, addDoc, collection, serverTimestamp } from '../../lib/firebase';
+import { functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { logAuditAction } from '../../utils/auditLogger';
 
 interface OwnerComplaintCommandCenterProps {
   complaints: OwnerComplaint[];
@@ -48,7 +49,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
 
   const handleEvidenceExport = async () => {
     exportComplaintsToCsv([complaint], `bin_group_evidence_pack_${complaint.ticketId}_${new Date().toISOString().slice(0, 10)}.csv`);
-    await addDoc(collection(db, 'audit_logs'), {
+    await logAuditAction({
       actorId: user?.uid || 'owner',
       actorRole: 'owner',
       action: 'OWNER_EVIDENCE_PACK_EXPORTED',
@@ -61,7 +62,6 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
         beforePhotoCount: complaint.photosBefore?.length || 0,
         afterPhotoCount: complaint.proofPhotosAfter?.length || 0,
       },
-      createdAt: serverTimestamp(),
     });
   };
 

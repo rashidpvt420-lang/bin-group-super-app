@@ -47,8 +47,13 @@ const LEGACY_STATUS_ALIASES: Record<string, OnboardingState> = {
   pending: 'draft',
   pending_admin_review: 'admin_review',
   pending_admin_approval: 'admin_review',
+  payment_verified_pending_admin_approval: 'admin_review',
   payment_pending: 'deposit_pending',
+  payment_pending_approval: 'deposit_processing',
+  pending_admin_payment_verification: 'deposit_processing',
+  pending_payment_verification: 'deposit_processing',
   awaiting_payment: 'deposit_pending',
+  awaiting_verification: 'admin_review',
   payment_submitted: 'deposit_processing',
   payment_processing: 'deposit_processing',
   paid: 'deposit_paid',
@@ -183,16 +188,22 @@ export function onboardingCurrentBlocker(raw: unknown): string {
 }
 
 export function isOwnerDashboardUnlockEligible(flags: {
+  status?: unknown;
   paymentVerified?: boolean;
   adminApproved?: boolean;
+  dashboardUnlocked?: boolean;
+  dashboardLocked?: boolean;
   activeContractId?: string | null;
   onboardingStatus?: unknown;
 }): boolean {
   const state = normalizeOnboardingState(flags.onboardingStatus);
   if (state === 'suspended' || state === 'rejected' || state === 'expired') return false;
   return (
+    String(flags.status || '').trim().toLowerCase() === 'active' &&
     flags.paymentVerified === true &&
     flags.adminApproved === true &&
+    flags.dashboardUnlocked === true &&
+    flags.dashboardLocked !== true &&
     Boolean(String(flags.activeContractId || '').trim())
   );
 }

@@ -190,4 +190,4 @@ for (const required of [
 
 fs.writeFileSync(rulesPath, output);
 console.log('✅ Patched firestore.rules to allow first-time public role selection while blocking admin self-assignment.');
-console.log('Next: firebase deploy --only firestore:rules --project bin-group-57c60');
+console.log('Next: validate the rules locally, then use the protected exact-SHA production workflow.');

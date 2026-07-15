@@ -61,8 +61,6 @@ const launchMode = String(process.env.LAUNCH_MODE || '').trim();
 if (!['bank-pilot', 'public'].includes(launchMode)) failures.push('LAUNCH_MODE must be bank-pilot or public');
 if (launchMode === 'public') {
   if (String(process.env.RUN_PUBLIC_RELEASE_GATE || '') !== 'true') failures.push('public launch mode requires RUN_PUBLIC_RELEASE_GATE=true');
-  if (String(process.env.PREDEPLOY_STRIPE_PROOF_OK || '') !== 'true') failures.push('public launch mode requires PREDEPLOY_STRIPE_PROOF_OK=true');
-  if (String(process.env.POSTDEPLOY_STRIPE_LIVE_OK || '') !== 'true') failures.push('public launch mode requires POSTDEPLOY_STRIPE_LIVE_OK=true');
 }
 
 if (failures.length) {

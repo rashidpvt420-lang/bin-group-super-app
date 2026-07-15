@@ -77,11 +77,19 @@ jobs:
       - name: TypeScript check
         run: npx tsc -p tsconfig.app.json --noEmit
 
+      - name: Lint root app
+        run: npm run lint
+
       - name: Build shared package
         run: npm run build --workspace=@bin/shared
 
       - name: Build unified Vite app
         run: npm run build
+        env:
+          CI: false
+
+      - name: Build dedicated admin panel
+        run: npm run build:admin
         env:
           CI: false
 
@@ -122,3 +130,6 @@ jobs:
           path: security-rules-output.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Verify mobile store source readiness
+        run: npm run test:mobile-store-readiness

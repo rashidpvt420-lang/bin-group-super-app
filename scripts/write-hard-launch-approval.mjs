@@ -68,8 +68,8 @@ if (!pilot.pilotEligible || incidentErrors.length || operationalErrors.length) {
 const approval = {
   schemaVersion: 1,
   status: 'approved',
-  releaseDecision: 'HARD_PUBLIC_LAUNCH_AUTHORIZED',
-  hardLaunchClaim: true,
+  releaseDecision: 'HARD_PUBLIC_LAUNCH_PREREQUISITES_APPROVED',
+  hardLaunchClaim: false,
   commitSha,
   deployedCommitSha: deploymentDoc.deployedCommitSha,
   projectId: PRODUCTION.projectId,

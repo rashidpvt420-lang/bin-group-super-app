@@ -41,7 +41,28 @@ function serialize(value: any): any {
 }
 
 function ownerMatches(doc: any, uid: string, email: string) {
-  return doc.ownerId === uid || doc.ownerUid === uid || doc.userId === uid || normalizeEmail(doc.ownerEmail) === email;
+  return doc.ownerId === uid ||
+    doc.ownerUid === uid ||
+    doc.userId === uid ||
+    (Boolean(email) && normalizeEmail(doc.ownerEmail) === email);
+}
+
+async function assertVerifiedOwner(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Auth required.");
+  const role = String(
+    auth.token?.role ||
+    auth.token?.userRole ||
+    auth.token?.primaryRole ||
+    "",
+  ).trim().toLowerCase();
+  if (role !== "owner" || auth.token?.email_verified !== true || auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
+  const userRecord = await admin.auth().getUser(auth.uid);
+  if (userRecord.disabled || !userRecord.emailVerified) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
+  return normalizeEmail(userRecord.email || auth.token?.email);
 }
 
 async function loadOwnerInspection(id: string, uid: string, email: string) {
@@ -56,9 +77,8 @@ async function loadOwnerInspection(id: string, uid: string, email: string) {
 }
 
 export const listOwnerHandoverInspections = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
-  const uid = request.auth.uid;
-  const email = normalizeEmail(request.auth.token?.email);
+  const email = await assertVerifiedOwner(request.auth);
+  const uid = request.auth!.uid;
   const byId = new Map<string, any>();
 
   const queries = [
@@ -80,9 +100,8 @@ export const listOwnerHandoverInspections = onCall({ cors: true }, async (reques
 });
 
 export const updateOwnerHandoverInspection = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
-  const uid = request.auth.uid;
-  const email = normalizeEmail(request.auth.token?.email);
+  const email = await assertVerifiedOwner(request.auth);
+  const uid = request.auth!.uid;
   const payload = asObject(request.data || {}, "Action payload");
   const inspectionId = String(payload.inspectionId || "").trim();
   const action = String(payload.action || "").trim().toUpperCase();

@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Button, CircularProgress,
     Chip, Divider, alpha, Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, MenuItem, Select
+    TextField, MenuItem, Select, Alert
 } from '@mui/material';
 import {
     AlertTriangle, Shield, CheckCircle2, UserCheck, XCircle, RotateCcw
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
@@ -20,6 +20,7 @@ export default function DisputeQueuePage() {
     const [selectedDispute, setSelectedDispute] = useState<any>(null);
     const [resolutionNote, setResolutionNote] = useState('');
     const [resolutionAction, setResolutionAction] = useState('request_revisit');
+    const [resolveError, setResolveError] = useState('');
 
     useEffect(() => {
         const q = query(
@@ -48,57 +49,19 @@ export default function DisputeQueuePage() {
 
     const handleResolve = async () => {
         if (!selectedDispute) return;
+        setResolveError('');
         try {
-            const updates: any = {
-                adminReviewStatus: 'RESOLVED',
-                requiresAdminReview: false,
-                disputeResolutionAction: resolutionAction,
-                disputeResolutionNote: resolutionNote,
-                disputeResolvedAt: serverTimestamp(),
-                disputeResolvedBy: 'admin',
-                updatedAt: serverTimestamp()
-            };
-
-            if (resolutionAction === 'request_revisit') {
-                updates.status = 'disputed_revisit_required';
-                await addDoc(collection(db, 'maintenanceTickets'), {
-                    parentId: selectedDispute.id,
-                    tenantId: selectedDispute.tenantId || null,
-                    tenantUid: selectedDispute.tenantUid || null,
-                    ownerId: selectedDispute.ownerId || null,
-                    propertyId: selectedDispute.propertyId || null,
-                    unitId: selectedDispute.unitId || null,
-                    title: `REVISIT: ${selectedDispute.title || 'Disputed Job'}`,
-                    description: `Admin Revisit Dispatch. Reason: ${resolutionNote || 'No notes'}`,
-                    status: 'OPEN',
-                    priority: 'high',
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp()
-                });
-            } else if (resolutionAction === 'approve_credit') {
-                updates.status = 'closed_with_credit';
-                if (selectedDispute.ownerId) {
-                    await addDoc(collection(db, 'payment_transactions'), {
-                        ownerId: selectedDispute.ownerId,
-                        type: 'SLA_CREDIT',
-                        amount: 50, // Standard SLA credit or variable
-                        currency: 'AED',
-                        description: `SLA Credit for Disputed Ticket: ${selectedDispute.id}`,
-                        status: 'PENDING_APPROVAL',
-                        approved: false,
-                        paymentVerified: false,
-                        createdAt: serverTimestamp()
-                    });
-                }
-            } else if (resolutionAction === 'dismiss') {
-                updates.status = 'closed';
-            }
-
-            await updateDoc(doc(db, 'maintenanceTickets', selectedDispute.id), updates);
+            const resolveDispute = httpsCallable(functions, 'adminResolveTicketDispute');
+            await resolveDispute({
+                ticketId: selectedDispute.id,
+                action: resolutionAction,
+                note: resolutionNote.trim(),
+            });
             setOpenResolve(false);
             setSelectedDispute(null);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to resolve dispute:', err);
+            setResolveError(err?.message || 'Dispute resolution failed.');
         }
     };
 
@@ -110,6 +73,7 @@ export default function DisputeQueuePage() {
                 <Typography variant="h5" color="#FFF" fontWeight="950">Dispute & Escalation Queue</Typography>
                 <Chip label={`${disputes.length} Pending`} color={disputes.length > 0 ? "error" : "success"} />
             </Box>
+            {resolveError && <Alert severity="error" sx={{ mb: 3 }}>{resolveError}</Alert>}
 
             <Grid container spacing={3}>
                 {disputes.map(dispute => (

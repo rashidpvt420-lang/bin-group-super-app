@@ -143,6 +143,10 @@ const checks = [
     required: [
       'export * from "./scheduledServices";',
       'export * from "./scheduledServiceAvailability";',
+      'export * from "./paymentEvidence";',
+      'export * from "./ticketDispatchOperations";',
+      'export * from "./aiUsageQuota";',
+      'export * from "./hrAutomation";',
     ],
   },
   {
@@ -207,8 +211,8 @@ const checks = [
   {
     path: 'scripts/deploy-firebase-production.mjs',
     required: [
-      "retryFirebase('hosting,firestore:rules,firestore:indexes,storage', 'critical Firebase resources');",
-      "retryFirebase('functions', 'Firebase Functions');",
+      "'functions,hosting,firestore:rules,firestore:indexes,storage'",
+      "'complete Firebase production stack'",
       "'hosting,firestoreRules,firestoreIndexes,storageRules,functions'",
       "'scripts/verify-production-deployment.mjs'",
     ],

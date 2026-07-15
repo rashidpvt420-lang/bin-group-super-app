@@ -26,17 +26,29 @@ function ref(value: unknown, fallback = "") {
   return output.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 160);
 }
 
-function assertOwner(request: any, ownerUid: string, ownerEmail: string) {
+async function assertOwner(request: any, ownerUid: string, ownerEmail: string) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
   if (request.auth.uid !== ownerUid) throw new HttpsError("permission-denied", "Owner UID does not match authenticated account.");
+  const role = String(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole || "").trim().toLowerCase();
   const tokenEmail = String(request.auth.token?.email || "").trim().toLowerCase();
-  if (tokenEmail && tokenEmail !== ownerEmail) throw new HttpsError("permission-denied", "Owner email does not match authenticated account.");
+  const userRecord = await admin.auth().getUser(ownerUid);
+  if (
+    role !== "owner" ||
+    request.auth.token?.email_verified !== true ||
+    request.auth.token?.suspended === true ||
+    userRecord.disabled ||
+    !userRecord.emailVerified ||
+    !tokenEmail ||
+    tokenEmail !== ownerEmail
+  ) {
+    throw new HttpsError("permission-denied", "A verified, active owner account matching this email is required.");
+  }
 }
 
 export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, memory: "512MiB" }, async (request) => {
   const ownerUid = text(request.data?.ownerUid, "ownerUid", 120);
   const ownerEmail = email(request.data?.ownerEmail);
-  assertOwner(request, ownerUid, ownerEmail);
+  await assertOwner(request, ownerUid, ownerEmail);
 
   const intakeId = ref(request.data?.intakeId, ownerUid);
   const onboardingSessionId = ref(request.data?.onboardingSessionId, intakeId || ownerUid);

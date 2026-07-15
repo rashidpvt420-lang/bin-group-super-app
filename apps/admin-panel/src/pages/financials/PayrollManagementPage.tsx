@@ -24,7 +24,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Wallet, Clock, FileText, Send } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -53,19 +53,24 @@ export default function PayrollManagementPage() {
   const [payroll, setPayroll] = useState<PayrollRecord[]>([]);
   const [openProcess, setOpenAdd] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   useEffect(() => {
     const qTechs = query(collection(db, 'users'), where('role', '==', 'technician'));
-    const unsubscribeTechs = onSnapshot(qTechs, (snap) => {
-      setTechs(snap.docs.map(d => ({ uid: d.id, ...d.data() } as Technician)));
-    });
+    const unsubscribeTechs = onSnapshot(
+      qTechs,
+      (snap) => setTechs(snap.docs.map(d => ({ uid: d.id, ...d.data() } as Technician))),
+      (error) => setActionError(error.message || 'Technician payroll profiles could not be loaded.'),
+    );
 
     const qPayroll = query(collection(db, 'payroll'));
-    const unsubscribePayroll = onSnapshot(qPayroll, (snap) => {
-      setPayroll(snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollRecord)));
-    });
+    const unsubscribePayroll = onSnapshot(
+      qPayroll,
+      (snap) => setPayroll(snap.docs.map(d => ({ id: d.id, ...d.data() } as PayrollRecord))),
+      (error) => setActionError(error.message || 'Payroll records could not be loaded.'),
+    );
 
     return () => {
       unsubscribeTechs();
@@ -75,65 +80,47 @@ export default function PayrollManagementPage() {
 
   const handleProcessPayroll = async () => {
     setProcessing(true);
+    setActionError('');
     try {
-      const batch = writeBatch(db);
+      const generatePayroll = httpsCallable<
+        { month: string; afterId?: string },
+        { status: string; processed: number; skipped: string[]; nextAfterId: string | null }
+      >(functions, 'adminGeneratePayrollBatch');
+      let afterId = '';
       const skippedNames: string[] = [];
       let processedCount = 0;
+      do {
+        const result = await generatePayroll({ month: currentMonth, ...(afterId ? { afterId } : {}) });
+        processedCount += Number(result.data.processed || 0);
+        skippedNames.push(...(Array.isArray(result.data.skipped) ? result.data.skipped : []));
+        afterId = String(result.data.nextAfterId || '');
+      } while (afterId);
 
-      for (const tech of techs) {
-        const existing = payroll.find(p => p.techId === tech.uid && p.month === currentMonth);
-        if (existing) continue;
-
-        // No fabricated default: a technician with no real base salary on file
-        // is skipped rather than silently entered into a real payroll/transactions ledger.
-        if (!tech.baseSalary || tech.baseSalary <= 0) {
-          skippedNames.push(tech.displayName || tech.email);
-          continue;
-        }
-        const amount = tech.baseSalary;
-
-        const payrollRef = doc(collection(db, 'payroll'));
-        batch.set(payrollRef, {
-          techId: tech.uid,
-          techName: tech.displayName || tech.email,
-          amount,
-          month: currentMonth,
-          status: 'pending',
-          createdAt: serverTimestamp(),
-        });
-
-        const txRef = doc(collection(db, 'transactions'));
-        batch.set(txRef, {
-          techId: tech.uid,
-          amount,
-          type: 'debit',
-          category: 'payroll',
-          description: `Salary for ${tech.displayName} - ${currentMonth}`,
-          status: 'PENDING',
-          createdAt: serverTimestamp(),
-        });
-        processedCount++;
-      }
-
-      await batch.commit();
       const successMsg = t('fin.payroll_gen_success', { month: currentMonth });
       const skippedMsg = skippedNames.length > 0
         ? t('fin.gen_payroll_skipped', { count: skippedNames.length, names: skippedNames.join(', ') })
         : '';
       alert(processedCount === 0 && skippedMsg ? skippedMsg : (skippedMsg ? `${successMsg}\n\n${skippedMsg}` : successMsg));
       setOpenAdd(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Payroll failure:', err);
+      setActionError(err?.message || 'Payroll generation failed before the server ledger was committed.');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleSettlePayment = async (record: PayrollRecord) => {
+    const paymentReference = window.prompt('Enter the bank or payment reference for this payroll settlement:')?.trim() || '';
+    if (paymentReference.length < 4) {
+      setActionError('A payment reference of at least four characters is required.');
+      return;
+    }
     setProcessing(true);
+    setActionError('');
     try {
-      const payslipNode = httpsCallable(functions, 'generateAndEmailPayslip');
-      const result: any = await payslipNode({ payrollId: record.id });
+      const settlePayroll = httpsCallable(functions, 'adminSettlePayrollRecord');
+      const result: any = await settlePayroll({ payrollId: record.id, paymentReference });
       const payload = result?.data || {};
       if (payload.status === 'SUCCESS' || payload.success !== false) {
         alert(`Sovereign Pay Advice Secured: ${payload.pdfUrl || payload.url || 'generated'}`);
@@ -142,7 +129,7 @@ export default function PayrollManagementPage() {
       }
     } catch (err: any) {
       console.error('Payslip Node Fault:', err);
-      alert(err?.message || 'Institutional Payroll node failed. Check ledger permissions.');
+      setActionError(err?.message || 'Payroll settlement failed. The record remains unpaid.');
     } finally {
       setProcessing(false);
     }
@@ -163,6 +150,7 @@ export default function PayrollManagementPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+      {actionError && <Alert severity="error" onClose={() => setActionError('')} sx={{ mb: 3 }}>{actionError}</Alert>}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
         <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           {t('nav.technicians')} <Box component="span" sx={{ color: '#6366f1' }}>{t('fin.payroll')}</Box>

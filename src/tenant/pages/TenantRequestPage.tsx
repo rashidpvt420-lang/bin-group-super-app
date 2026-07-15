@@ -270,7 +270,7 @@ export default function TenantRequestPage() {
                 serviceLocationRequired: true,
                 serviceLocationVerified: true,
                 photos: [],
-                primaryPhotoUrl: null,
+                primaryPhotoUrl: '',
                 jobLocation,
                 photoEvidenceRequired: true,
                 evidenceStatus: 'PENDING_TENANT_UPLOAD',

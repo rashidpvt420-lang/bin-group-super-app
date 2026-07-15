@@ -32,8 +32,9 @@ import {
   Divider,
   Alert
 } from '@mui/material';
-import { db } from '../../lib/firebase';
+import { db, functions } from '../../lib/firebase';
 import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { useLanguage } from '@bin/shared';
 import { UserCheck, Wrench } from 'lucide-react';
 
@@ -180,13 +181,10 @@ export default function TicketsManagementPage() {
       }
 
       try {
-          const ticketRef = doc(db, 'maintenanceTickets', assigningTicket.ticketId);
-          await updateDoc(ticketRef, {
-              assignedTechnicianId: tech.id,
-              assignedTechnicianName: tech.displayName,
-              status: 'ASSIGNED',
-              updatedAt: serverTimestamp(),
-              assignedAt: serverTimestamp()
+          const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
+          await assignTechnician({
+              ticketId: assigningTicket.ticketId,
+              technicianId: tech.id,
           });
           setAssigningTicket(null);
       } catch (err) {

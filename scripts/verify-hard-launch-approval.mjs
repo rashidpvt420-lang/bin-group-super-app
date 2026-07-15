@@ -34,5 +34,5 @@ if (!result.hardLaunchEligible) {
   process.exit(1);
 }
 
-console.log('[hard-launch-status] GO — same-commit production, live evidence, pilot, incident, rollback, and founder approval verified');
-console.log('hardLaunchClaim=true');
+console.log('[hard-launch-status] ELIGIBLE — prerequisites verified; signed final decision is still required');
+console.log('hardLaunchClaim=false');

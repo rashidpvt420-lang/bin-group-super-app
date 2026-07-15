@@ -1,5 +1,6 @@
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { enforceAiUsageQuota } from "./aiUsageQuota";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -152,6 +153,11 @@ export const runSovereignAI = onCall({
   }
   const signedIn = true;
   const uid = request.auth.uid;
+  await enforceAiUsageQuota(
+    request.auth,
+    "chat",
+    new Set(["owner", "tenant", "technician", "broker", "admin", "super_admin", "ceo"]),
+  );
   const prompt = buildPrompt(request.data || {}, uid, signedIn);
   const providerPref = asText(request.data?.provider || "gemini", 20).toLowerCase();
   const errors: string[] = [];

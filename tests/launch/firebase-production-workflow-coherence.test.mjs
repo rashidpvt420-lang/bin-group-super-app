@@ -450,12 +450,25 @@ test('deployment failure prevents evidence and release jobs by job dependency an
 test('bank-pilot does not claim public launch; public mode requires Stripe live proof', () => {
   const decision = readFileSync(path.join(root, 'scripts/hard-launch-decision-gate.mjs'), 'utf8');
   assert.match(decision, /bank-pilot-no-public-claim/);
-  assert.match(decision, /POSTDEPLOY_STRIPE_LIVE_OK/);
+  assert.match(decision, /stripe-live-proof\.json/);
+  assert.match(decision, /stripeLiveOk/);
+  assert.doesNotMatch(decision, /POSTDEPLOY_STRIPE_LIVE_OK/);
   assert.match(decision, /public-awaiting-postdeploy-clearance|postdeploy release clearance/);
   assert.match(workflow, /LAUNCH_MODE:\s*\$\{\{\s*inputs\.launch_mode\s*\}\}/);
   assert.match(
     decision,
     /launchMode === 'public' && postdeployCleared && stripeLiveOk/,
+  );
+});
+
+test('same-run deployment artifact downloads without nesting launch_package twice', () => {
+  assert.match(
+    workflow,
+    /name: Download production deployment metadata[\s\S]{0,300}name: production-deployment-\$\{\{ github\.sha \}\}[\s\S]{0,120}path: \./,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /name: Download production deployment metadata[\s\S]{0,300}path: launch_package/,
   );
 });
 

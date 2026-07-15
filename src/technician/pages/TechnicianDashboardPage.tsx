@@ -10,7 +10,6 @@ import {
     Grid,
     LinearProgress,
     Paper,
-    Snackbar,
     Stack,
     Typography,
     alpha,
@@ -32,7 +31,6 @@ import {
     Hammer,
     Mail,
     MapPin,
-    Navigation,
     Phone,
     Power,
     Target,
@@ -48,7 +46,6 @@ import {
     getDocs,
     limit,
     onSnapshot,
-    orderBy,
     query,
     where,
     functions,
@@ -214,10 +211,8 @@ export default function TechnicianDashboardPage() {
     const [recentCompleted, setRecentCompleted] = useState<any[]>([]);
     const [profileReadWarnings, setProfileReadWarnings] = useState<string[]>([]);
     const [stats, setStats] = useState({ assigned: 0, emergency: 0, inProgress: 0, completedToday: 0, completedMonth: 0, slaRisk: 0, quality: 0 });
-    const [missionPool, setMissionPool] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<SnapshotDoc[]>([]);
     const [earnings, setEarnings] = useState(0);
-    const [acceptError, setAcceptError] = useState('');
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -243,8 +238,6 @@ export default function TechnicianDashboardPage() {
             setLoading(false);
         });
 
-        const qPool = query(collection(db, 'maintenanceTickets'), where('assignedTechnicianId', '==', null), where('status', 'in', ['OPEN', 'emergency_submitted']), orderBy('createdAt', 'desc'), limit(5));
-        const unsubPool = onSnapshot(qPool, (snap) => setMissionPool(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (error) => console.warn('[TechnicianDashboard] mission pool unavailable:', error));
         const qCompleted = query(collection(db, 'maintenanceTickets'), where('assignedTechnicianId', '==', user.uid), where('status', 'in', ['completed', 'CLOSED', 'COMPLETED']), where('completedAt', '>=', today));
         const unsubCompleted = onSnapshot(qCompleted, (snap) => setStats((prev) => ({ ...prev, completedToday: snap.size })), (error) => console.warn('[TechnicianDashboard] completed today unavailable:', error));
         const qMonthCompleted = query(collection(db, 'maintenanceTickets'), where('assignedTechnicianId', '==', user.uid), where('status', 'in', ['completed', 'CLOSED', 'COMPLETED']), where('completedAt', '>=', monthStart), limit(25));
@@ -262,7 +255,7 @@ export default function TechnicianDashboardPage() {
             setEarnings(sum);
         }, (error) => console.warn('[TechnicianDashboard] payroll unavailable:', error));
 
-        return () => { unsubAssigned(); unsubPool(); unsubCompleted(); unsubMonthCompleted(); unsubPayroll(); };
+        return () => { unsubAssigned(); unsubCompleted(); unsubMonthCompleted(); unsubPayroll(); };
     }, [user]);
 
     useEffect(() => {
@@ -353,19 +346,6 @@ export default function TechnicianDashboardPage() {
         }
     };
 
-    const handleAcceptJob = async (jobId: string) => {
-        if (!user?.uid) return;
-        setAcceptError('');
-        try {
-            const acceptFn = httpsCallable(functions, 'acceptTechnicianTicket');
-            await acceptFn({ ticketId: jobId });
-            navigate(`/technician/job/${jobId}`);
-        } catch (err: any) {
-            console.error('Failed to accept job', err);
-            setAcceptError(err.message || 'Mission pool assignment failed. Another technician may have claimed it.');
-        }
-    };
-
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2, color: ui.ink }}>
             <CircularProgress sx={{ color: ui.gold }} />
@@ -402,17 +382,6 @@ export default function TechnicianDashboardPage() {
                 </Stack>
             </SectionCard>
 
-            <Snackbar
-                open={!!acceptError}
-                autoHideDuration={6000}
-                onClose={() => setAcceptError('')}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert onClose={() => setAcceptError('')} severity="error" sx={{ width: '100%', fontWeight: 700 }}>
-                    {acceptError}
-                </Alert>
-            </Snackbar>
-
             <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
                 <Grid item xs={6} md={2.4}><MetricCard icon={<Activity size={20} />} label="Active Jobs" value={stats.assigned} tone={ui.blue} helper="Assigned live tickets" /></Grid>
                 <Grid item xs={6} md={2.4}><MetricCard icon={<Zap size={20} />} label="Emergency" value={stats.emergency} tone={ui.red} helper="Priority response" /></Grid>
@@ -448,7 +417,6 @@ export default function TechnicianDashboardPage() {
 
             {(coreWarnings.length > 0 || complianceWarnings.length > 0) && <SectionCard sx={{ mb: 3.5, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.24)}` }}><Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}><AlertTriangle size={20} color="#D97706" /><Typography variant="subtitle1" fontWeight="950" sx={{ color: ui.ink }}>Staff Data Review</Typography></Stack>{coreWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• Core sync: {warning}</Typography>)}{complianceWarnings.map((warning) => <Typography key={warning} variant="body2" sx={{ color: '#92400E', overflowWrap: 'anywhere', fontWeight: 750 }}>• Compliance action: {warning}</Typography>)}</SectionCard>}
 
-            {missionPool.length > 0 && isOnDuty && <Box><Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 2 }}><Navigation size={20} color={ui.gold} /><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink }}>Available Mission Pool</Typography></Stack><Grid container spacing={3}>{missionPool.map((job) => <Grid item xs={12} md={6} key={job.id}><SectionCard sx={{ bgcolor: job.priority === 'emergency' ? alpha(ui.red, 0.055) : ui.canvas, border: `1px solid ${job.priority === 'emergency' ? alpha(ui.red, 0.25) : ui.line}` }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}><Box sx={{ minWidth: 0 }}><Typography variant="overline" sx={{ color: job.priority === 'emergency' ? ui.red : ui.gold, fontWeight: 950 }}>{String(job.priority || 'standard').toUpperCase()}</Typography><Typography variant="h6" fontWeight="950" sx={{ color: ui.ink, overflowWrap: 'anywhere' }}>{String(job.category || 'Issue')}</Typography></Box>{job.priority === 'emergency' && <Zap color={ui.red} />}</Stack><Typography variant="body2" sx={{ color: ui.muted, mb: 2, fontWeight: 700 }}>{String(job.description || 'No description')}</Typography><Button fullWidth variant="contained" onClick={() => handleAcceptJob(String(job.id))} sx={{ bgcolor: ui.gold, color: ui.ink, fontWeight: 950 }}>CLAIM MISSION</Button></SectionCard></Grid>)}</Grid></Box>}
         </Box>
     );
 }

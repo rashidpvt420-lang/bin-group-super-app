@@ -3,7 +3,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPDF } from "./pdfEngine";
 import { termFieldsFromStart } from "./ownerContractTerm";
-import { assertVerifiedContractSignatureOtp } from "./contractSignatureOtp";
+import {
+  consumeVerifiedContractSignatureOtp,
+  validateVerifiedContractSignatureOtp,
+} from "./contractSignatureOtp";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -383,8 +386,11 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, asyn
 
 const ALREADY_SIGNED_STATUSES = new Set(["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"]);
 
-export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (request) => {
+export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
+  if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
   const contractId = s(request.data?.contractId);
   const signatureName = s(request.data?.signatureName || request.auth.token?.name || request.auth.token?.email, "Owner");
   if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
@@ -392,6 +398,10 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Contract not found.");
   const contract = snap.data() || {};
+  const contractHash = s(contract.quoteHash || contract.contractHash).toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(contractHash)) {
+    throw new HttpsError("failed-precondition", "Contract must have a locked server quote hash before signing.");
+  }
   const ownerId = s(contract.ownerId || contract.ownerUid);
   const ownerEmail = s(contract.ownerEmail || request.auth.token?.email).toLowerCase();
   const requesterEmail = s(request.auth.token?.email).toLowerCase();
@@ -403,66 +413,97 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true }, async (reques
   if (alreadySigned) {
     return { status: s(contract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: contract.signedPdfUrl || contract.pdfUrl || "", idempotent: true };
   }
-  await assertVerifiedContractSignatureOtp({
-    verificationId: s(request.data?.otpVerificationId),
+  const otpVerificationId = s(request.data?.otpVerificationId);
+  const otpEvidence = {
+    verificationId: otpVerificationId,
     uid: request.auth.uid,
     contractId,
     signature: signatureName,
-  });
+    contractHash,
+  };
+  await validateVerifiedContractSignatureOtp(otpEvidence);
 
   const signedAtDate = new Date();
   const termFields = termFieldsFromStart(signedAtDate);
   const pdfUrl = await generateContractPDF({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
-  const batch = db.batch();
   // NOTE: signing only marks the contract ready for activation. Payment verification
   // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
   // dashboard - signing must never set paymentVerified/dashboardUnlocked on its own.
-  batch.set(ref, { status: "READY_FOR_ACTIVATION", contractStatus: "signed_awaiting_payment_verification", activationStatus: "PENDING_PAYMENT_VERIFICATION", ownerSigned: true, signatureStatus: "OWNER_SIGNED", otpVerificationId: s(request.data?.otpVerificationId), signatureState: { ...(contract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
-  if (ownerId) {
-    const ownerPatch = {
-      email: ownerEmail || null,
-      latestActivationContractId: contractId,
-      activeContractId: contractId,
-      contractSignatureStatus: 'SIGNED_AWAITING_PAYMENT_VERIFICATION',
-      activationStatus: 'PENDING_PAYMENT_VERIFICATION',
-      activeContractTermMonths: termFields.contractTermMonths,
-      activeContractValidFrom: termFields.effectiveFrom,
-      activeContractValidTo: termFields.validTo,
-      ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
-      dashboardLocked: true,
-      dashboardUnlocked: false,
-      signedPdfUrl: pdfUrl,
-      updatedAt: ts()
-    };
-    batch.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
-    batch.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
-  }
   const dashboardUrl = `${appBaseUrl()}/owner/dashboard`;
-  batch.set(db.collection("mail").doc(), {
-    to: ownerEmail,
-    message: {
-      from: "BIN GROUP <ceo@bin-groups.com>",
-      replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
-      subject: "BIN GROUP Contract Signed - Payment Verification Pending",
-      html: `<p>Dear ${signatureName},</p>
+  let signingWasIdempotent = false;
+  await db.runTransaction(async (transaction) => {
+    const freshContractSnap = await transaction.get(ref);
+    const freshContract = freshContractSnap.data() || {};
+    if (
+      ALREADY_SIGNED_STATUSES.has(s(freshContract.status).toUpperCase()) ||
+      freshContract.ownerSigned === true ||
+      freshContract.signatureState?.ownerSigned === true
+    ) {
+      signingWasIdempotent = true;
+      return;
+    }
+    await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
+    transaction.set(ref, { status: "READY_FOR_ACTIVATION", contractStatus: "signed_awaiting_payment_verification", activationStatus: "PENDING_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+    transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
+    if (ownerId) {
+      const ownerPatch = {
+        email: ownerEmail || null,
+        pendingContractId: contractId,
+        latestActivationContractId: contractId,
+        contractSignatureStatus: 'SIGNED_AWAITING_PAYMENT_VERIFICATION',
+        activationStatus: 'PENDING_PAYMENT_VERIFICATION',
+        activeContractTermMonths: termFields.contractTermMonths,
+        activeContractValidFrom: termFields.effectiveFrom,
+        activeContractValidTo: termFields.validTo,
+        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
+        dashboardLocked: true,
+        dashboardUnlocked: false,
+        signedPdfUrl: pdfUrl,
+        updatedAt: ts()
+      };
+      transaction.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
+      transaction.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
+    }
+    transaction.set(db.collection("mail").doc(`owner_contract_signed_${contractId}`), {
+      to: ownerEmail,
+      message: {
+        from: "BIN GROUP <ceo@bin-groups.com>",
+        replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+        subject: "BIN GROUP Contract Signed - Payment Verification Pending",
+        html: `<p>Dear ${signatureName},</p>
 <p><b>Your BIN GROUP contract has been signed. Your signed PDF is attached below.</b></p>
 <p><a href="${pdfUrl}">Download signed contract PDF</a></p>
 <p>Submit your mobilization payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment (typically within 24 hours).</p>
 <p><a href="${dashboardUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Portal</a></p>
 <p>Support: support@bin-groups.com</p>
 <p>BIN GROUP - Made in UAE 🇦🇪</p>`
-    },
-    metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
-    createdAt: ts()
+      },
+      metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
+      createdAt: ts()
+    });
+    transaction.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
   });
-  batch.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
-  await batch.commit();
-  return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: false };
+  return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: signingWasIdempotent };
 });
 
 export const ownerInviteTenantToProperty = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
+  const requesterRole = s(
+    request.auth.token?.role ||
+    request.auth.token?.userRole ||
+    request.auth.token?.primaryRole,
+  ).toLowerCase();
+  if (
+    requesterRole !== "owner" ||
+    request.auth.token?.email_verified !== true ||
+    request.auth.token?.suspended === true
+  ) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
+  const requesterUser = await admin.auth().getUser(request.auth.uid);
+  if (requesterUser.disabled || !requesterUser.emailVerified) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
   const propertyId = s(request.data?.propertyId);
   const tenantEmail = s(request.data?.tenantEmail).toLowerCase();
   const tenantName = s(request.data?.tenantName, "Tenant");
@@ -472,8 +513,13 @@ export const ownerInviteTenantToProperty = onCall({ cors: true }, async (request
   if (!propSnap.exists) throw new HttpsError("not-found", "Property not found.");
   const prop = propSnap.data() || {};
   const ownerId = s(prop.ownerId);
-  const requesterEmail = s(request.auth.token?.email).toLowerCase();
-  if (ownerId !== request.auth.uid && s(prop.ownerEmail).toLowerCase() !== requesterEmail) throw new HttpsError("permission-denied", "Only the property owner can invite tenants.");
+  const requesterEmail = s(requesterUser.email || request.auth.token?.email).toLowerCase();
+  if (
+    ownerId !== request.auth.uid &&
+    (!requesterEmail || s(prop.ownerEmail).toLowerCase() !== requesterEmail)
+  ) {
+    throw new HttpsError("permission-denied", "Only the property owner can invite tenants.");
+  }
   const tenantId = id(`${propertyId}_${tenantEmail}_${unitNumber}`, `${propertyId}_tenant`);
   const g = gpsOf(prop);
   const tenantLocation = g ? { lat: g.lat, lng: g.lng, address: addressOf(prop), emirate: emirateOf(prop), inheritedFromPropertyId: propertyId } : null;
@@ -515,6 +561,13 @@ export const adminSuspendOwner = onCall({ cors: true }, async (request) => {
   batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
   batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_SUSPEND_OWNER", targetType: "users", targetId: ownerId, metadata: { reason }, createdAt: ts() });
   await batch.commit();
+  const authUser = await admin.auth().getUser(ownerId);
+  await admin.auth().updateUser(ownerId, { disabled: true });
+  await admin.auth().setCustomUserClaims(ownerId, {
+    ...(authUser.customClaims || {}),
+    suspended: true,
+  });
+  await admin.auth().revokeRefreshTokens(ownerId);
   return { status: "SUSPENDED", ownerId };
 });
 
@@ -549,6 +602,13 @@ export const adminResumeOwner = onCall({ cors: true }, async (request) => {
   batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
   batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_RESUME_OWNER", targetType: "users", targetId: ownerId, createdAt: ts() });
   await batch.commit();
+  const authUser = await admin.auth().getUser(ownerId);
+  await admin.auth().updateUser(ownerId, { disabled: false });
+  await admin.auth().setCustomUserClaims(ownerId, {
+    ...(authUser.customClaims || {}),
+    suspended: false,
+  });
+  await admin.auth().revokeRefreshTokens(ownerId);
   return { status: restoredStatus.toUpperCase(), ownerId };
 });
 

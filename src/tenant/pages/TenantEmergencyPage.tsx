@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, Stack, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import React, { useState, useEffect, useRef } from 'react';
+import { Alert, Box, Typography, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, MapPin } from 'lucide-react';
-import { db, collection, addDoc, serverTimestamp, query, where, getDocs } from '../../lib/firebase';
+import { AlertTriangle } from 'lucide-react';
+import { db, collection, query, where, getDocs, functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useToast } from '../../context/ToastContext';
@@ -13,22 +13,24 @@ export default function TenantEmergencyPage() {
     const navigate = useNavigate();
     const [submitting, setSubmitting] = useState(false);
     const [unitData, setUnitData] = useState<any>(null);
-    const [propertyData, setPropertyData] = useState<any>(null);
     const { showToast } = useToast();
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const requestIdRef = useRef(`sos_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
     useEffect(() => {
         const fetchResidence = async () => {
             if (!user?.uid) return;
             try {
-                const unitSnap = await getDocs(query(collection(db, "units"), where("tenantId", "==", user.uid)));
+                let unitSnap = await getDocs(query(collection(db, "units"), where("tenantId", "==", user.uid)));
+                if (unitSnap.empty) {
+                    unitSnap = await getDocs(query(collection(db, "units"), where("tenantUid", "==", user.uid)));
+                }
+                if (unitSnap.empty && user.email) {
+                    unitSnap = await getDocs(query(collection(db, "units"), where("tenantEmail", "==", user.email.toLowerCase())));
+                }
                 if (!unitSnap.empty) {
                     const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
                     setUnitData(uData);
-                    if (uData.propertyId) {
-                        const propSnap = await getDocs(query(collection(db, "properties"), where("__name__", "==", uData.propertyId)));
-                        if (!propSnap.empty) setPropertyData({ id: propSnap.docs[0].id, ...propSnap.docs[0].data() });
-                    }
                 }
             } catch (err) {
                 console.error("Fetch failed:", err);
@@ -47,29 +49,19 @@ export default function TenantEmergencyPage() {
 
         setSubmitting(true);
         try {
-            const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
-                tenantId: user.uid,
-                tenantUid: user.uid,
-                tenantName: user.displayName || 'Resident',
-                tenantPhone: user.phoneNumber || '',
-                propertyId: unitData.propertyId || '',
-                propertyName: propertyData?.name || propertyData?.propertyName || '',
+            const createTicket = httpsCallable(functions, 'createTenantServiceTicket');
+            const result = await createTicket({
+                kind: 'EMERGENCY',
                 unitId: unitData.id,
-                unitNumber: unitData.unitNumber || '',
-                category: 'emergency',
-                priority: 'emergency',
-                description: 'TENANT TRIGGERED SOS EMERGENCY',
-                status: 'emergency_submitted',
-                assignedTechnicianId: null,
-                requiresImmediateDispatch: true,
-                slaMinutes: 60,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
+                propertyId: unitData.propertyId,
+                clientRequestId: requestIdRef.current,
             });
-            navigate(`/tenant/ticket/${docRef.id}`);
+            const { ticketId } = result.data as { ticketId?: string };
+            if (!ticketId) throw new Error('Emergency service did not return a ticket ID.');
+            navigate(`/tenant/ticket/${ticketId}`);
         } catch (err) {
             console.error(err);
-            showToast("Failed to trigger SOS. Please try again or call emergency support.", "error");
+            showToast(isRTL ? 'تعذر إرسال نداء الطوارئ. حاول مرة أخرى أو اتصل بدعم الطوارئ.' : 'Failed to trigger SOS. Please try again or call emergency support.', "error");
         } finally {
             setSubmitting(false);
         }
@@ -82,6 +74,13 @@ export default function TenantEmergencyPage() {
             <Typography variant="h6" color="textSecondary" sx={{ mb: 6, maxWidth: 500, mx: 'auto' }}>
                 {t('dash.tenant.emergencyDesc') || 'Trigger this only for immediate life-safety or severe property damage incidents (e.g., major flood, complete blackout, fire).'}
             </Typography>
+            {!unitData && (
+                <Alert severity="warning" sx={{ maxWidth: 560, mx: 'auto', mb: 3, textAlign: isRTL ? 'right' : 'left' }}>
+                    {isRTL
+                        ? 'لا توجد وحدة سكنية مرتبطة بحسابك. اتصل بإدارة العقار أو بخدمات الطوارئ مباشرة.'
+                        : 'No residence is linked to your account. Contact property management or emergency services directly.'}
+                </Alert>
+            )}
 
             <Button 
                 variant="contained" 
@@ -101,13 +100,13 @@ export default function TenantEmergencyPage() {
             </Button>
 
             <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-                <DialogTitle>Confirm Emergency SOS</DialogTitle>
+                <DialogTitle>{isRTL ? 'تأكيد نداء الطوارئ' : 'Confirm Emergency SOS'}</DialogTitle>
                 <DialogContent>
-                    <Typography>Are you sure you want to trigger a Priority 1 Emergency SOS?</Typography>
+                    <Typography>{isRTL ? 'هل أنت متأكد من إرسال نداء طوارئ من الأولوية الأولى؟' : 'Are you sure you want to trigger a Priority 1 Emergency SOS?'}</Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-                    <Button onClick={handleEmergencyTrigger} color="error" variant="contained" data-testid="tenant-sos-confirm">Trigger SOS</Button>
+                    <Button onClick={() => setConfirmOpen(false)}>{isRTL ? 'إلغاء' : 'Cancel'}</Button>
+                    <Button onClick={handleEmergencyTrigger} color="error" variant="contained" data-testid="tenant-sos-confirm">{isRTL ? 'إرسال الطوارئ' : 'Trigger SOS'}</Button>
                 </DialogActions>
             </Dialog>
         </Box>

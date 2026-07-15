@@ -23,6 +23,10 @@ const paymentStep = read('src/components/onboarding/PaymentSubmissionStep.tsx');
 const ownerRegistration = read('functions/ownerRegistrationRequest.ts');
 const stripePayment = read('functions/stripePayment.ts');
 const ownerDashboard = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
+const ownerActivationPolicy = read('src/owner/activationPolicy.ts');
+const paymentEvidence = read('functions/paymentEvidence.ts');
+const runtime = read('functions/runtime.ts');
+const payrollPage = read('apps/admin-panel/src/pages/financials/PayrollManagementPage.tsx');
 const firestoreRules = read('firestore.rules');
 const storageRules = read('storage.rules');
 
@@ -98,7 +102,7 @@ assert(!paymentStep.includes("params.get('payment_success') === 'true'"), 'Clien
 
 assert(!stripePayment.includes('mock_session_id'), 'Stripe checkout must not return mock sessions.');
 assert(stripePayment.includes('failed-precondition'), 'Stripe checkout must fail closed when unconfigured or package persistence is missing.');
-assert(stripePayment.includes('assertAuthenticatedOwner(request, ownerUid)'), 'Stripe checkout must bind the caller to the authenticated owner.');
+assert(stripePayment.includes('assertAuthenticatedPayer(request, ownerUid)'), 'Stripe checkout must bind the caller to the authenticated payer.');
 assert(stripePayment.includes('return intakeId;'), 'Stripe onboarding must use the canonical intake ID as the payment ID.');
 assert(stripePayment.includes('adminApprovalRequired: true'), 'Stripe verification must explicitly require final admin approval.');
 assert(stripePayment.includes('unlocksDashboard: false'), 'Stripe verification must not directly unlock the owner dashboard.');
@@ -108,13 +112,37 @@ assert(!existsSync('src/pages/public/PaymentResultPage.tsx'), 'Legacy PaymentRes
 
 assert(!ownerDashboard.includes("'READY_FOR_ACTIVATION'"), 'Owner dashboard active states must not include READY_FOR_ACTIVATION.');
 assert(!ownerDashboard.includes("'OWNER_SIGNED'"), 'Owner dashboard active states must not include OWNER_SIGNED.');
-assert(ownerDashboard.includes('profile.paymentVerified === true'), 'Owner dashboard profile active check must require paymentVerified.');
-assert(ownerDashboard.includes('contract.paymentVerified === true'), 'Owner dashboard contract active check must require paymentVerified.');
+assert(ownerDashboard.includes('isOwnerProfileActivated'), 'Owner dashboard must use the canonical profile activation policy.');
+assert(ownerDashboard.includes('isOwnerContractActivated'), 'Owner dashboard must use the canonical contract activation policy.');
+for (const requiredFlag of [
+  "normalized(profile.status) === 'active'",
+  'profile.adminApproved === true',
+  'profile.paymentVerified === true',
+  'profile.dashboardUnlocked === true',
+  'profile.dashboardLocked !== true',
+  "profile.activeContractId || ''",
+]) {
+  assert(ownerActivationPolicy.includes(requiredFlag), `Owner activation policy missing ${requiredFlag}.`);
+}
 
-assert(firestoreRules.includes('paymentDraftCreate'), 'Firestore rules must guard payment draft creation.');
+assert(!firestoreRules.includes('function paymentDraftCreate'), 'Legacy client-authored payment drafts must remain removed.');
+assert(
+  firestoreRules.includes("match /payment_transactions/{paymentId}") &&
+    firestoreRules.includes('// Financial evidence is always created by a validated Cloud Function.') &&
+    firestoreRules.includes('allow create: if false;'),
+  'Firestore rules must keep payment transactions server-authored.',
+);
 assert(firestoreRules.includes('safeTenantEvidenceUpdate'), 'Firestore rules must allow narrow tenant-owned evidence metadata updates.');
 assert(ownerActivationIsAdminControlled, 'Firestore rules must keep activation admin controlled.');
 assert(storageRules.includes('onboarding-proof'), 'Storage rules must cover onboarding proof uploads.');
+assert(storageRules.includes('function hasVerifiedEmail()'), 'Storage email ACLs must require a verified email claim.');
+assert(storageRules.includes('hasTenantReceiptMetadata(tenantId)'), 'Tenant receipt uploads must bind immutable hash metadata.');
+assert(paymentEvidence.includes('assertStoredTenantReceipt'), 'Tenant payment proof must verify stored receipt metadata server-side.');
+assert(runtime.includes('export * from "./paymentEvidence";'), 'Runtime must export tenant and design payment callables.');
+assert(runtime.includes('export * from "./ticketDispatchOperations";'), 'Runtime must export dispatch and dispute callables.');
+assert(payrollPage.includes("'adminGeneratePayrollBatch'"), 'Admin payroll UI must use the server-side generation callable.');
+assert(payrollPage.includes("'adminSettlePayrollRecord'"), 'Admin payroll UI must use the server-side settlement callable.');
+assert(!payrollPage.includes("collection(db, 'transactions')"), 'Admin payroll UI must not write financial ledger rows directly.');
 
 if (failures.length) {
   console.error('\nProduction stability guard failed:\n');

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Paper, Typography, TextField, Button, CircularProgress, Chip, Stack } from '@mui/material';
 import { Shield, CheckCircle2, AlertCircle } from 'lucide-react';
-import { db, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, limit } from '../lib/firebase';
+import { db, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, limit, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
@@ -56,14 +56,13 @@ export const IbanManager: React.FC = () => {
 
             const docRef = await addDoc(collection(db, 'ownerBankAccounts'), newRecord);
             
-            await addDoc(collection(db, 'auditLogs'), {
+            const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
+            await logUserAuditAction({
                 action: 'UPDATE_IBAN',
-                actorId: user?.uid,
-                actorRole: 'owner',
-                ownerId: user?.uid,
-                status: 'PENDING',
-                timestamp: serverTimestamp()
-            });
+                targetType: 'ownerBankAccounts',
+                targetId: docRef.id,
+                metadata: { status: 'PENDING', last4 },
+            }).catch((auditError) => console.warn('[IBAN] audit bridge failed:', auditError));
 
             setIbanRecord({ id: docRef.id, ...newRecord, verificationStatus: 'PENDING' });
             setNewIban('');

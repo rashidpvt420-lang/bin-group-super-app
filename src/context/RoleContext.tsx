@@ -215,13 +215,19 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
                 const resolvedOnboardingComplete = data.onboardingComplete;
                 const resolvedRole = finalRole;
-                const resolvedStatus = normalizeRole(data.status || 'active');
+                // A claim identifies the portal, but it does not prove that the
+                // corresponding profile was approved. Missing status must stay
+                // locked until the server writes an explicit lifecycle state.
+                const resolvedStatus = data.status
+                    ? normalizeRole(data.status)
+                    : 'profile_incomplete';
                 const resolvedIsAdmin = finalIsAdmin;
 
                 setUser({
                     ...currentUser,
                     ...data,
                     role: resolvedRole,
+                    status: resolvedStatus,
                     isAdmin: resolvedIsAdmin,
                     onboardingComplete: resolvedOnboardingComplete,
                 } as SovereignUser);
