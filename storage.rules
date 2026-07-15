@@ -5,24 +5,23 @@ service firebase.storage {
 
     function isAuth() {
       return request.auth != null &&
-        request.auth.token.suspended != true;
+        request.auth.token.get('suspended', false) != true;
     }
 
     function hasAnyRole(roles) {
       return isAuth() && (
-        request.auth.token.role in roles ||
-        request.auth.token.userRole in roles ||
-        request.auth.token.primaryRole in roles
+        request.auth.token.get('role', '') in roles ||
+        request.auth.token.get('userRole', '') in roles ||
+        request.auth.token.get('primaryRole', '') in roles
       );
     }
 
     function claimedRole() {
       return isAuth()
-        ? request.auth.token.role != null
-          ? request.auth.token.role
-          : request.auth.token.userRole != null
-            ? request.auth.token.userRole
-            : request.auth.token.primaryRole
+        ? request.auth.token.get(
+            'role',
+            request.auth.token.get('userRole', request.auth.token.get('primaryRole', null))
+          )
         : null;
     }
 
@@ -30,9 +29,12 @@ service firebase.storage {
       return isAuth() && (
         (
           claimedRole() == null &&
-          (request.auth.token.admin == true || request.auth.token.isAdmin == true)
+          (
+            request.auth.token.get('admin', false) == true ||
+            request.auth.token.get('isAdmin', false) == true
+          )
         ) ||
-        request.auth.token.ceo == true ||
+        request.auth.token.get('ceo', false) == true ||
         hasAnyRole(['admin', 'super_admin', 'ceo', 'ADMIN', 'SUPER_ADMIN', 'CEO'])
       );
     }
@@ -51,8 +53,8 @@ service firebase.storage {
 
     function hasVerifiedEmail() {
       return isAuth() &&
-        request.auth.token.email_verified == true &&
-        request.auth.token.email != null;
+        request.auth.token.get('email_verified', false) == true &&
+        request.auth.token.get('email', null) != null;
     }
 
     function ticketExists(ticketId) {

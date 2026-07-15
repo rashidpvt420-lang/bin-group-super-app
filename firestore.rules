@@ -85,6 +85,22 @@ service cloud.firestore {
     function canManageProperties() { return isAdmin() || hasPermission('canManageProperties'); }
     function canManageContracts() { return isAdmin() || hasPermission('canManageContracts'); }
     function canManageCompanyProfile() { return isAdmin() || hasPermission('canManageCompanyProfile'); }
+    function canReadUserDirectory() {
+      return hasAdminClaim() || (
+        signedIn() &&
+        claimedRole() in [
+          'hr_admin',
+          'hr_manager',
+          'hr_staff',
+          'finance_admin',
+          'finance_staff',
+          'account_manager',
+          'operations_admin',
+          'operations_manager',
+          'dispatcher'
+        ]
+      );
+    }
     function canDispatchJobs() {
       return hasAdminClaim() ||
         hasPermission('canDispatchJobs') ||
@@ -810,11 +826,14 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if signedIn() && request.auth.uid == userId;
-      allow get: if isAdmin() || isHr() || isFinance() || isOps() || emailOwns(resource.data) ||
-                  (signedIn() && request.auth.uid != userId && resource.data.get('role', '') == 'tenant' &&
-                   ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
-                    emailMatches(resource.data.get('ownerEmail', null))));
-      allow list: if isAdmin() || isHr() || isFinance() || isOps();
+      allow get: if (signedIn() &&
+                     request.auth.uid != userId &&
+                     resource.data.get('role', '') == 'tenant' &&
+                     ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
+                      emailMatches(resource.data.get('ownerEmail', null)))) ||
+                    emailOwns(resource.data) ||
+                    canReadUserDirectory();
+      allow list: if canReadUserDirectory();
       allow list: if signedIn() &&
         resource.data.get('role', '') == 'tenant' &&
         resource.data.get('ownerId', null) == request.auth.uid;
@@ -822,7 +841,7 @@ service cloud.firestore {
       allow update: if isAdmin() || safeUserSelfUpdate(userId);
       allow delete: if isAdmin();
       match /{document=**} {
-        allow read: if isAdmin() || isHr() || (signedIn() && request.auth.uid == userId);
+        allow read: if (signedIn() && request.auth.uid == userId) || canReadUserDirectory();
         allow create: if isAdmin();
         allow update: if isAdmin();
         allow delete: if isAdmin();
