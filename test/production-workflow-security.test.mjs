@@ -17,7 +17,12 @@ const workflow = readFileSync(workflowPath, 'utf8');
 const productionPreflight = readFileSync('scripts/verify-production-workflow-env.mjs', 'utf8');
 const legacyProductionWorkflowPath = '.github/workflows/production.yml';
 const legacyProductionWorkflow = readFileSync(legacyProductionWorkflowPath, 'utf8');
+const retiredParallelWorkflows = [
+  '.github/workflows/tenant-ui-hotfix-deploy.yml',
+  '.github/workflows/scheduled-services-production.yml',
+];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+const functionsPackageJson = JSON.parse(readFileSync('functions/package.json', 'utf8'));
 
 function runBlocks(source) {
   const lines = source.split(/\r?\n/);
@@ -126,6 +131,22 @@ test('legacy production workflow is retired and cannot deploy', () => {
   assert.doesNotMatch(legacyProductionWorkflow, /GCP_SERVICE_ACCOUNT/);
   assert.doesNotMatch(legacyProductionWorkflow, /\bnpx\s+firebase\s+deploy\b/);
   assert.doesNotMatch(legacyProductionWorkflow, /\bfirebase\s+deploy\b/);
+});
+
+test('parallel production workflows and local package scripts cannot deploy', () => {
+  for (const file of retiredParallelWorkflows) {
+    const source = readFileSync(file, 'utf8');
+    assert.match(source, /Retired/);
+    assert.match(source, /\bexit 1\b/);
+    assert.doesNotMatch(source, /\bfirebase\s+deploy\b/);
+    assert.doesNotMatch(source, /google-github-actions\/auth/);
+    assert.doesNotMatch(source, /^\s*id-token:\s*write\s*$/m);
+  }
+  for (const scriptName of ['deploy', 'deploy:raw', 'launch:deploy:hosting']) {
+    assert.equal(packageJson.scripts[scriptName], 'node scripts/refuse-ungated-production-deploy.mjs');
+  }
+  assert.equal(functionsPackageJson.scripts.deploy, 'node ../scripts/refuse-ungated-production-deploy.mjs');
+  assert.doesNotMatch(readFileSync('scripts/launch-deploy-hosting.mjs', 'utf8'), /\bfirebase\s+deploy\b/);
 });
 
 test('five-profile optional second technician credentials are documented when referenced', () => {

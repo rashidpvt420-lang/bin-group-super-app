@@ -355,10 +355,10 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         "Legacy owner onboarding is disabled because it accepted client-calculated contract values. Use submitOwnerOnboardingPaymentPackage with a locked server quote and verified signature OTP.",
     );
 
-    const uid = request.auth.uid;
+    const uid = request.auth!.uid;
     const payload = assertPlainObject(request.data || {}, "Onboarding payload");
     const ownerAccount = assertPlainObject(payload.ownerAccount || {}, "Owner account");
-    if (ownerAccount.uid && ownerAccount.uid !== uid && request.auth.token?.admin !== true) {
+    if (ownerAccount.uid && ownerAccount.uid !== uid && request.auth!.token?.admin !== true) {
         throw new HttpsError("permission-denied", "Owner onboarding can only be submitted for the signed-in owner.");
     }
 
@@ -387,7 +387,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     console.info("submitOwnerOnboarding.received", {
         uid,
-        tokenRole: request.auth.token?.role || null,
+        tokenRole: request.auth!.token?.role || null,
         payloadKeys: Object.keys(payload),
         propertyCount: properties.length,
         proofKeys: Object.keys(proofDocuments)
@@ -425,7 +425,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         ownerId: uid,
         userId: uid,
         createdBy: uid,
-        createdByRole: request.auth.token?.admin === true ? "admin" : "owner",
+        createdByRole: request.auth!.token?.admin === true ? "admin" : "owner",
         visibility: "admin_owner",
         auditVersion: 1
     };
@@ -456,7 +456,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         ownerAccount: {
             uid,
             fullName: ownerAccount.fullName || ownerAccount.name || "",
-            email: ownerAccount.email || request.auth.token?.email || "",
+            email: ownerAccount.email || request.auth!.token?.email || "",
             mobile: ownerAccount.mobile || ownerAccount.phone || "",
             createdBeforePayment: true
         },
@@ -611,13 +611,13 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         uid,
         name: ownerAccount.fullName || ownerAccount.name || "",
         displayName: ownerAccount.fullName || ownerAccount.name || "",
-        email: ownerAccount.email || request.auth.token?.email || "",
+        email: ownerAccount.email || request.auth!.token?.email || "",
         phone: ownerAccount.mobile || ownerAccount.phone || "",
         status: "PAYMENT_PENDING",
         dashboardUnlocked: false,
         activeContractId: contractId,
         latestIntakeId: intakeId,
-        testAccount: existingOwner.data()?.testAccount === true || request.auth.token?.testAccount === true,
+        testAccount: existingOwner.data()?.testAccount === true || request.auth!.token?.testAccount === true,
         ...(existingOwner.exists ? {} : { createdAt: timestamp }),
         updatedAt: timestamp
     }), { merge: true });
@@ -633,7 +633,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     batch.set(auditRef, cleanPlainValue({
         actorId: uid,
-        actorRole: request.auth.token?.admin === true ? "admin" : "owner",
+        actorRole: request.auth!.token?.admin === true ? "admin" : "owner",
         action: "OWNER_ONBOARDING_SUBMIT",
         targetType: "intake_submissions",
         targetId: intakeId,

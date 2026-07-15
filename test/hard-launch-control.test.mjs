@@ -161,6 +161,7 @@ test('committed proof file is not a mutable founder approval switch', () => {
 
 test('launch status builds current Functions before measuring discovery', () => {
   const source = readFileSync('scripts/launch-status.mjs', 'utf8');
+  assert.match(source, /const\s+npmCommand\s*=\s*process\.platform/);
   const build = source.indexOf("['run', 'build:functions']");
   const discovery = source.indexOf('scripts/measure-functions-load.mjs');
   assert.ok(build >= 0, 'launch-status must build Functions on a fresh checkout');

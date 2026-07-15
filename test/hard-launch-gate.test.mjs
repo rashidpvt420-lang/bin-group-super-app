@@ -271,9 +271,9 @@ test('operational intake verifies source run, artifact, schema, and recomputed h
   }
 });
 
-test('launch status derives hard launch claim instead of hardcoding true', () => {
+test('launch status never emits the signed final hard-launch claim', () => {
   const statusScript = readFileSync('scripts/launch-status.mjs', 'utf8');
-  assert.match(statusScript, /hardLaunchClaim\s*=\s*hardLaunchEligible/);
+  assert.match(statusScript, /const\s+hardLaunchClaim\s*=\s*false/);
   assert.match(statusScript, /--hard/);
   assert.doesNotMatch(statusScript, /const\s+hardLaunchClaim\s*=\s*true/);
 });
