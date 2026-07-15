@@ -1,6 +1,6 @@
 # Property Onboarding Audit
 
-**BASE_SHA:** `b4bda2b2d07b951101bc0578581e5040ab8698ed`
+**BASE_SHA:** `2bbb9869804064e56046f0f795fcc59ff7cea7f6`
 **Branch:** `cursor/full-system-audit-fix-v4-30e9`
 **Decision:** Code paths are fail-closed; public launch remains **NO-GO** without protected live evidence.
 
