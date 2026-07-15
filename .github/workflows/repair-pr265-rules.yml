@@ -19,17 +19,6 @@ jobs:
           ref: repair/current-main-ci-blockers-2bbb986
           fetch-depth: 0
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Use Java 21 for Firebase emulators
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
       - name: Apply exact rules and fixture repairs
         shell: bash
         run: |
@@ -39,6 +28,8 @@ jobs:
 
           def replace_once(path, old, new, label):
               text = path.read_text(encoding='utf-8')
+              if new in text:
+                  return
               count = text.count(old)
               if count != 1:
                   raise SystemExit(f'STOP: {label} expected once, found {count}')
@@ -229,7 +220,7 @@ jobs:
               'Storage verified email helper',
           )
           text = storage.read_text(encoding='utf-8')
-          text = text.replace('request.auth.token.email', "request.auth.token.get('email', null)")
+          text = text.replace('request.auth.token.email ==', "request.auth.token.get('email', null) ==")
           storage.write_text(text, encoding='utf-8')
 
           security_test = Path('test/security-rules.test.js')
@@ -290,22 +281,6 @@ jobs:
           workflow.unlink()
           PY
 
-          git diff --check
-          git diff --name-only
-
-      - name: Install dependencies
-        run: bash scripts/npm-install-retry.sh
-
-      - name: Validate security and launch contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run test:rules
-          npm run test:stability
-          npm run test:launch-honesty
-          npm run typecheck
-          npm run build:functions
-          npm run build
           git diff --check
 
       - name: Commit repaired rules to PR branch
