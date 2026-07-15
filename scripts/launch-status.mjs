@@ -26,6 +26,7 @@ const outDir = path.join(root, 'launch_package');
 const statusPath = path.join(outDir, 'launch-status.json');
 const pilotLockPath = path.join(outDir, 'pilot-start.lock.json');
 const hardMode = process.argv.includes('--hard') || process.env.LAUNCH_SCOPE === 'hard';
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function run(cmd, args) {
   const result = spawnSync(cmd, args, { encoding: 'utf8', cwd: root });
@@ -103,7 +104,9 @@ const automationOk =
   invalidEvidence.length === 0;
 const pilotEligible = automationOk && eligibility.pilotEligible === true;
 const hardLaunchEligible = pilotEligible && hardEligibility.hardLaunchEligible === true;
-const hardLaunchClaim = hardLaunchEligible;
+// This aggregator is an eligibility report, never the signed final public
+// decision. Only hard-launch-decision-gate.mjs may emit a true claim.
+const hardLaunchClaim = false;
 
 if (!pilotEligible && existsSync(pilotLockPath)) {
   const lock = readJsonSafe(pilotLockPath, {});

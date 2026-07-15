@@ -55,6 +55,10 @@ function validateAppCheckToken() {
   const token = String(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || '').trim();
   const skip = process.env.E2E_SKIP_APPCHECK_TOKEN === 'true';
   if (skip) {
+    if (process.env.E2E_STRICT_LIVE === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+      console.error('[E2E_ENV_GUARD] E2E_SKIP_APPCHECK_TOKEN is forbidden in strict live or GitHub Actions runs.');
+      return ['VITE_FIREBASE_APPCHECK_DEBUG_TOKEN(skip-forbidden)'];
+    }
     console.warn('[E2E_ENV_GUARD] App Check token check skipped via E2E_SKIP_APPCHECK_TOKEN=true (not allowed for launch clearance).');
     return [];
   }

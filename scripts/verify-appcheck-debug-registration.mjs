@@ -26,6 +26,10 @@ function mask(value) {
 }
 
 if (process.env.APPCHECK_SKIP_REGISTRATION_VERIFY === 'true') {
+  if (process.env.E2E_STRICT_LIVE === 'true' || process.env.GITHUB_ACTIONS === 'true') {
+    console.error('[appcheck-registration] FAIL skip flag is forbidden in strict live or GitHub Actions runs');
+    process.exit(1);
+  }
   console.log('[appcheck-registration] skipped (APPCHECK_SKIP_REGISTRATION_VERIFY=true)');
   process.exit(0);
 }
