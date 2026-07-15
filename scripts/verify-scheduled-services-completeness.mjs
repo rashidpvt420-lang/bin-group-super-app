@@ -156,9 +156,9 @@ const checks = [
   {
     path: 'scripts/harden-system-secrets-rules.mjs',
     required: [
-      "match /system_secrets/{secretId}",
+      'match /system_secrets/{secretId}',
       'allow read, write: if false;',
-      "match /{collection}/{document=**}",
+      'match /{collection}/{document=**}',
       "collection != 'system_secrets' && hasAdminClaim()",
       'source.includes(legacyCatchAll)',
     ],
@@ -173,24 +173,44 @@ const checks = [
   {
     path: '.github/workflows/scheduled-services-production.yml',
     required: [
-      "VITE_ENABLE_FIREBASE_APPCHECK: 'true'",
-      'npm run test:rules',
-      'firestore:rules,hosting:app,hosting:admin',
-      'functions:tenantManageScheduledService',
-      'functions:saveScheduledServiceAccessCode',
-      'functions:adminRevealScheduledServiceAccessCode',
-      'functions:scheduledServiceReminderCron',
-      'functions:onScheduledServiceUpdated',
-      'functions:createNextRecurringScheduledService',
-      'functions:getScheduledServiceAvailability',
-      'functions:adminManageScheduledServiceAvailability',
-      'functions:adminUpdateScheduledService',
-      'npm run build --workspace=functions',
+      'name: Scheduled Services Production (Retired)',
+      'workflow_dispatch:',
+      'name: Refuse parallel production deployment',
+      'name: Use the protected production workflow',
+      'Dispatch Firebase Production Deploy',
+      'exit 1',
     ],
     forbidden: [
-      'SCHEDULED_SERVICE_ACCESS_KEY',
-      'HARD_LAUNCH_APPROVAL_HMAC_KEY',
+      'id-token: write',
+      'environment: production',
+      'firebase deploy',
+      'functions:tenantManageScheduledService',
       'continue-on-error: true',
+      'push:',
+    ],
+  },
+  {
+    path: '.github/workflows/firebase-production-deploy.yml',
+    required: [
+      'name: Firebase Production Deploy',
+      'environment: production',
+      'npm run build:functions',
+      'npm run test:rules',
+      'node scripts/deploy-firebase-production.mjs',
+      '[[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]',
+      'Verify production deployment metadata and same-run bindings after deploy',
+    ],
+    forbidden: [
+      'continue-on-error: true',
+    ],
+  },
+  {
+    path: 'scripts/deploy-firebase-production.mjs',
+    required: [
+      "retryFirebase('hosting,firestore:rules,firestore:indexes,storage', 'critical Firebase resources');",
+      "retryFirebase('functions', 'Firebase Functions');",
+      "'hosting,firestoreRules,firestoreIndexes,storageRules,functions'",
+      "'scripts/verify-production-deployment.mjs'",
     ],
   },
   {
@@ -220,4 +240,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, catch-all exclusion, exports, builds and deploy targets verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, protected full-stack deployment, and retired parallel deploy path verified)`);
