@@ -72,6 +72,21 @@ if (!text.includes(canonicalTicketUpdate)) {
   throw new Error('[ticket-rule-binding] Tickets update rule is not server-authoritative after cleanup.');
 }
 
+const legacyAmenitySlotCreate = `      allow create: if signedIn() &&
+        request.resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('propertyId', null) == getTenantPropertyId();`;
+const hardenedAmenitySlotCreate = `      allow create: if signedIn() &&
+        request.resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('propertyId', null) is string &&
+        request.resource.data.get('propertyId', null) == getTenantPropertyId();`;
+
+if (text.includes(legacyAmenitySlotCreate)) {
+  text = text.replace(legacyAmenitySlotCreate, hardenedAmenitySlotCreate);
+  changed = true;
+} else if (!text.includes(hardenedAmenitySlotCreate)) {
+  throw new Error('[ticket-rule-binding] Amenity slot create rule is missing or not property scoped.');
+}
+
 for (const forbidden of ['function safeOpenMissionClaim(', 'function missionClaimFieldsLookValid(', 'safeOpenMissionClaim()']) {
   if (text.includes(forbidden)) {
     throw new Error(`[ticket-rule-binding] Forbidden direct technician claim fragment remains: ${forbidden}`);
@@ -82,10 +97,14 @@ if (!text.includes(canonicalPool)) {
   throw new Error('[ticket-rule-binding] Open mission visibility is not restricted to approved technicians.');
 }
 
+if (!text.includes(hardenedAmenitySlotCreate)) {
+  throw new Error('[ticket-rule-binding] Amenity slot locks must require a non-null propertyId.');
+}
+
 if (changed) writeFileSync(file, text);
 
 console.log(
   changed
-    ? `Applied server-authoritative ticket dispatch cleanup (claim helpers removed: ${removedClaimFields + removedDirectClaims}).`
-    : 'Ticket and dispatch rules already server-authoritative.',
+    ? `Applied server-authoritative ticket dispatch and amenity scope cleanup (claim helpers removed: ${removedClaimFields + removedDirectClaims}).`
+    : 'Ticket dispatch and amenity slot rules already server-authoritative.',
 );
