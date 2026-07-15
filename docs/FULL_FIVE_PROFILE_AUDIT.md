@@ -1,7 +1,7 @@
 # Full Five-Profile Audit
 
 **Audit date:** 15 July 2026
-**BASE_SHA (`origin/main`):** `b4bda2b2d07b951101bc0578581e5040ab8698ed`
+**BASE_SHA (`origin/main`):** `2bbb9869804064e56046f0f795fcc59ff7cea7f6`
 **Branch:** `cursor/full-system-audit-fix-v4-30e9`
 **Decision:** **HARD PUBLIC LAUNCH = NO-GO** until the operations evidence in `OPERATIONS_ONLY_CHECKLIST.md` is produced by protected workflows.
 

@@ -43,7 +43,7 @@ const legacyOwner = read(legacyOwnerPath);
 const launchRegisterRaw = read(launchRegisterPath);
 
 assertContains(mainAppPath, mainApp, '<Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />', 'main app admin entry must remain the protected launch/evidence handoff');
-assertContains(mainAppPath, mainApp, '<Route path="/owner/*" element={protectedRoute([\'owner\', \'ceo\'], <OwnerApp />)} />', 'owner portal must resolve through src/owner/OwnerApp.tsx');
+assertContains(mainAppPath, mainApp, '<Route path="/owner/*" element={protectedRoute([\'owner\'], <OwnerApp />)} />', 'owner portal must resolve through src/owner/OwnerApp.tsx');
 assertContains(mainAppPath, mainApp, '<Route path="/tenant/*" element={protectedRoute([\'tenant\'], <TenantApp />)} />', 'tenant portal must resolve through src/tenant/TenantApp.tsx');
 assertContains(mainAppPath, mainApp, '<Route path="/technician/*" element={protectedRoute([\'technician\'], <TechnicianApp />)} />', 'technician portal must resolve through src/technician/TechnicianApp.tsx');
 assertContains(mainAppPath, mainApp, '<Route path="/broker/*" element={protectedRoute([\'broker\'], <BrokerApp />)} />', 'broker portal must resolve through src/broker/BrokerApp.tsx');
@@ -73,7 +73,7 @@ assertContains(adminTerminalPath, adminTerminal, 'Canonical Admin Coverage', 'ma
 assertContains(adminTerminalPath, adminTerminal, 'Route consolidation guard', 'admin runbook must include the route consolidation test');
 assertContains(adminTerminalPath, adminTerminal, 'CANONICAL_SLA_POLICY', 'admin launch dashboard must use the same SLA source as tenant workflow');
 assertContains(adminTerminalPath, adminTerminal, 'system_health/admin_summaries', 'hard launch gates must remain tied to evidence, not static green UI');
-assertContains(adminTerminalPath, adminTerminal, 'LEGACY_ADMIN_PANEL_URL', 'main app admin handoff must retain a link to the dedicated operational admin application');
+assertContains(adminTerminalPath, adminTerminal, 'ADMIN_OPERATIONS_CONSOLE_URL', 'main app admin handoff must retain a link to the dedicated operational admin application');
 
 assertContains(operationalAdminPath, operationalAdmin, 'DashboardPage', 'dedicated admin application must own the operational dashboard');
 assertContains(operationalAdminPath, operationalAdmin, 'OwnerManagementPage', 'dedicated admin application must own owner operations');

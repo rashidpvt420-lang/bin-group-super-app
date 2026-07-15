@@ -5,24 +5,23 @@ service firebase.storage {
 
     function isAuth() {
       return request.auth != null &&
-        request.auth.token.suspended != true;
+        request.auth.token.get('suspended', false) != true;
     }
 
     function hasAnyRole(roles) {
       return isAuth() && (
-        request.auth.token.role in roles ||
-        request.auth.token.userRole in roles ||
-        request.auth.token.primaryRole in roles
+        request.auth.token.get('role', '') in roles ||
+        request.auth.token.get('userRole', '') in roles ||
+        request.auth.token.get('primaryRole', '') in roles
       );
     }
 
     function claimedRole() {
       return isAuth()
-        ? request.auth.token.role != null
-          ? request.auth.token.role
-          : request.auth.token.userRole != null
-            ? request.auth.token.userRole
-            : request.auth.token.primaryRole
+        ? request.auth.token.get(
+            'role',
+            request.auth.token.get('userRole', request.auth.token.get('primaryRole', null))
+          )
         : null;
     }
 
@@ -30,9 +29,12 @@ service firebase.storage {
       return isAuth() && (
         (
           claimedRole() == null &&
-          (request.auth.token.admin == true || request.auth.token.isAdmin == true)
+          (
+            request.auth.token.get('admin', false) == true ||
+            request.auth.token.get('isAdmin', false) == true
+          )
         ) ||
-        request.auth.token.ceo == true ||
+        request.auth.token.get('ceo', false) == true ||
         hasAnyRole(['admin', 'super_admin', 'ceo', 'ADMIN', 'SUPER_ADMIN', 'CEO'])
       );
     }
@@ -51,8 +53,8 @@ service firebase.storage {
 
     function hasVerifiedEmail() {
       return isAuth() &&
-        request.auth.token.email_verified == true &&
-        request.auth.token.email != null;
+        request.auth.token.get('email_verified', false) == true &&
+        request.auth.token.get('email', null) != null;
     }
 
     function ticketExists(ticketId) {
@@ -67,24 +69,24 @@ service firebase.storage {
       return isAuth() && ticketExists(ticketId) && (
         isAdmin() ||
         isAuditor() ||
-        ticket(ticketId).ownerId == request.auth.uid ||
-        ticket(ticketId).ownerUid == request.auth.uid ||
-        ticket(ticketId).tenantId == request.auth.uid ||
-        ticket(ticketId).tenantUid == request.auth.uid ||
-        ticket(ticketId).assignedTechnicianId == request.auth.uid ||
-        ticket(ticketId).technicianId == request.auth.uid ||
-        ticket(ticketId).assignedTechId == request.auth.uid ||
-        ticket(ticketId).technicianUid == request.auth.uid
+        ticket(ticketId).get('ownerId', null) == request.auth.uid ||
+        ticket(ticketId).get('ownerUid', null) == request.auth.uid ||
+        ticket(ticketId).get('tenantId', null) == request.auth.uid ||
+        ticket(ticketId).get('tenantUid', null) == request.auth.uid ||
+        ticket(ticketId).get('assignedTechnicianId', null) == request.auth.uid ||
+        ticket(ticketId).get('technicianId', null) == request.auth.uid ||
+        ticket(ticketId).get('assignedTechId', null) == request.auth.uid ||
+        ticket(ticketId).get('technicianUid', null) == request.auth.uid
       );
     }
 
     function canWriteTicketEvidence(ticketId) {
       return isAuth() && ticketExists(ticketId) && (
         isAdmin() ||
-        ticket(ticketId).assignedTechnicianId == request.auth.uid ||
-        ticket(ticketId).technicianId == request.auth.uid ||
-        ticket(ticketId).assignedTechId == request.auth.uid ||
-        ticket(ticketId).technicianUid == request.auth.uid
+        ticket(ticketId).get('assignedTechnicianId', null) == request.auth.uid ||
+        ticket(ticketId).get('technicianId', null) == request.auth.uid ||
+        ticket(ticketId).get('assignedTechId', null) == request.auth.uid ||
+        ticket(ticketId).get('technicianUid', null) == request.auth.uid
       );
     }
 
@@ -100,14 +102,14 @@ service firebase.storage {
       return isAuth() && contractExists(contractId) && (
         isAdmin() ||
         isAuditor() ||
-        contract(contractId).ownerId == request.auth.uid ||
-        contract(contractId).ownerUid == request.auth.uid ||
-        contract(contractId).createdBy == request.auth.uid ||
-        contract(contractId).userId == request.auth.uid ||
+        contract(contractId).get('ownerId', null) == request.auth.uid ||
+        contract(contractId).get('ownerUid', null) == request.auth.uid ||
+        contract(contractId).get('createdBy', null) == request.auth.uid ||
+        contract(contractId).get('userId', null) == request.auth.uid ||
         (hasVerifiedEmail() && (
-          contract(contractId).recipientEmail == request.auth.token.email ||
-          contract(contractId).ownerEmail == request.auth.token.email ||
-          contract(contractId).email == request.auth.token.email
+          contract(contractId).get('recipientEmail', null) == request.auth.token.email ||
+          contract(contractId).get('ownerEmail', null) == request.auth.token.email ||
+          contract(contractId).get('email', null) == request.auth.token.email
         ))
       );
     }
@@ -124,14 +126,14 @@ service firebase.storage {
       return isAuth() && invoiceExists(invoiceId) && (
         isAdmin() ||
         isAuditor() ||
-        invoice(invoiceId).ownerId == request.auth.uid ||
-        invoice(invoiceId).ownerUid == request.auth.uid ||
-        invoice(invoiceId).payerId == request.auth.uid ||
-        invoice(invoiceId).userId == request.auth.uid ||
+        invoice(invoiceId).get('ownerId', null) == request.auth.uid ||
+        invoice(invoiceId).get('ownerUid', null) == request.auth.uid ||
+        invoice(invoiceId).get('payerId', null) == request.auth.uid ||
+        invoice(invoiceId).get('userId', null) == request.auth.uid ||
         (hasVerifiedEmail() && (
-          invoice(invoiceId).recipientEmail == request.auth.token.email ||
-          invoice(invoiceId).ownerEmail == request.auth.token.email ||
-          invoice(invoiceId).email == request.auth.token.email
+          invoice(invoiceId).get('recipientEmail', null) == request.auth.token.email ||
+          invoice(invoiceId).get('ownerEmail', null) == request.auth.token.email ||
+          invoice(invoiceId).get('email', null) == request.auth.token.email
         ))
       );
     }
@@ -186,8 +188,8 @@ service firebase.storage {
     match /maintenanceTickets/{ticketId}/tenant/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if isAuth() && ticketExists(ticketId) && (
-        ticket(ticketId).tenantId == request.auth.uid ||
-        ticket(ticketId).tenantUid == request.auth.uid ||
+        ticket(ticketId).get('tenantId', null) == request.auth.uid ||
+        ticket(ticketId).get('tenantUid', null) == request.auth.uid ||
         isAdmin()
       ) && isImageUpload(10);
     }
@@ -195,8 +197,8 @@ service firebase.storage {
     match /maintenanceTickets/{ticketId}/owner/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if isAuth() && ticketExists(ticketId) && (
-        ticket(ticketId).ownerId == request.auth.uid ||
-        ticket(ticketId).ownerUid == request.auth.uid ||
+        ticket(ticketId).get('ownerId', null) == request.auth.uid ||
+        ticket(ticketId).get('ownerUid', null) == request.auth.uid ||
         isAdmin()
       ) && isImageUpload(10);
     }

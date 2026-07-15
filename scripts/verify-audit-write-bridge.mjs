@@ -34,14 +34,16 @@ for (const path of requiredBridges) {
 }
 
 const auditFunction = read('functions/userAuditOperations.ts');
-const functionIndex = read('functions/index.ts');
+const functionRuntime = read('functions/runtime.ts');
+const functionRuntimeAll = read('functions/runtimeAll.ts');
 const firestoreRules = read('firestore.rules');
 
 assert(auditFunction.includes('export const logUserAuditAction'), 'The authenticated audit callable must exist.');
 assert(auditFunction.includes('region: "europe-west3"'), 'The audit callable must deploy in the client-configured europe-west3 region.');
 assert(auditFunction.includes('request.auth?.uid'), 'The audit callable must require an authenticated user.');
 assert(auditFunction.includes('db.collection("audit_logs").add'), 'The audit callable must perform the server-side audit write.');
-assert(functionIndex.includes('export { logUserAuditAction } from "./userAuditOperations";'), 'functions/index.ts must export logUserAuditAction.');
+assert(functionRuntime.includes('export * from "./userAuditOperations";'), 'functions/runtime.ts must export userAuditOperations.');
+assert(functionRuntimeAll.includes("export * from './runtime';"), 'functions/runtimeAll.ts must deploy the canonical runtime exports.');
 assert(firestoreRules.includes('match /audit_logs/'), 'Firestore Rules must explicitly cover audit_logs.');
 assert(firestoreRules.includes('match /auditLogs/'), 'Firestore Rules must explicitly cover auditLogs.');
 assert(firestoreRules.includes('match /system_health/{healthDoc}') && firestoreRules.includes('allow read: if isAdmin();'), 'Firestore Rules must let admins read system_health evidence.');

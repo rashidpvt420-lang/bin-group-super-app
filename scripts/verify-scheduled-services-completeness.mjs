@@ -32,14 +32,24 @@ const checks = [
     path: 'src/tenant/pages/TenantScheduledServicePage.tsx',
     required: [
       "httpsCallable(functions, 'getScheduledServiceAvailability')",
+      "httpsCallable(functions, 'createTenantServiceTicket')",
       "httpsCallable(functions, 'saveScheduledServiceAccessCode')",
       'recurrenceFrequency',
       'recurrenceOccurrences',
-      'cancellationPolicyAccepted',
-      'PENDING_OPERATIONS_QUOTE',
+      'policyAccepted: policyAccepted',
       'availabilitySlotId',
       'accessCodeExpiresAt',
       'sensitiveOccupants',
+    ],
+  },
+  {
+    path: 'functions/tenantTicketOperations.ts',
+    required: [
+      'details.policyAccepted !== true',
+      'cancellationPolicyAccepted: true',
+      'quoteStatus: "PENDING_OPERATIONS_QUOTE"',
+      'availabilitySlotId: text(details.availabilitySlotId',
+      'recurrenceOccurrences:',
     ],
   },
   {

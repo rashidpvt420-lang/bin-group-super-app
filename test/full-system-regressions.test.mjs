@@ -170,3 +170,21 @@ test('runtimeAll does not re-export functions already exported by runtime', () =
   assert.doesNotMatch(runtimeAll, /listOwnerHandoverInspections|updateOwnerHandoverInspection/);
   assert.doesNotMatch(runtimeAll, /submitTenantMoveInspection/);
 });
+
+test('Firestore and Storage rules suites cannot clear shared emulator fixtures concurrently', () => {
+  const scripts = JSON.parse(read('package.json')).scripts;
+  const serializedRuleFiles = /node --test --test-concurrency=1 test\/security-rules\.test\.js test\/storage-rules\.test\.js/;
+  assert.match(scripts['test:rules'], serializedRuleFiles);
+  assert.match(scripts['test:rules:node'], serializedRuleFiles);
+});
+
+test('public smoke stays credential-free while authenticated smoke enforces App Check', () => {
+  const smoke = read('tests/e2e/live-role-smoke.spec.ts');
+  const authenticatedStart = smoke.indexOf("test.describe('BIN GROUP production authenticated role smoke'");
+  assert.ok(authenticatedStart > 0);
+  const publicBlock = smoke.slice(0, authenticatedStart);
+  const authenticatedBlock = smoke.slice(authenticatedStart);
+  assert.doesNotMatch(publicBlock, /attachAuthenticatedAppCheckMonitor\(page\)/);
+  assert.match(authenticatedBlock, /attachAuthenticatedAppCheckMonitor\(page\)/);
+  assert.match(authenticatedBlock, /assertAuthenticatedFirebaseRead/);
+});

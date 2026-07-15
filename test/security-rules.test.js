@@ -82,6 +82,17 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(adminDb, 'properties/prop_b')));
   });
 
+  it('suspended Auth claims deny access even to an owned record', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'properties/suspended_owner_property'), { ownerId: 'owner_suspended' });
+
+    const suspendedOwnerDb = testEnv.authenticatedContext('owner_suspended', {
+      role: 'owner',
+      suspended: true,
+    }).firestore();
+    await assertFails(getDoc(doc(suspendedOwnerDb, 'properties/suspended_owner_property')));
+  });
+
   it('tenant ticket access: Tenant can read their own tickets', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
@@ -441,16 +452,16 @@ describe('Firestore Security Rules', () => {
   });
 
   it('broker payout requests: broker cannot bypass callable review by writing request records directly', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
-    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'broker_payout_requests/request_seed'), {
-      brokerId: 'broker_a',
-      brokerUid: 'broker_a',
-      amount: 2500,
-      status: 'PENDING_ADMIN_REVIEW',
-      approvalStatus: 'PENDING',
-      paymentStatus: 'REQUESTED',
-      commissionIds: ['commission_1'],
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'broker_payout_requests/request_seed'), {
+        brokerId: 'broker_a',
+        brokerUid: 'broker_a',
+        amount: 2500,
+        status: 'PENDING_ADMIN_REVIEW',
+        approvalStatus: 'PENDING',
+        paymentStatus: 'REQUESTED',
+        commissionIds: ['commission_1'],
+      });
     });
 
     const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker', email: 'broker-a@example.com' }).firestore();

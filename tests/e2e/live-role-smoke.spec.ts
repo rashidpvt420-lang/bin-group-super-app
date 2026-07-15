@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
 
@@ -117,18 +117,6 @@ async function expectDashboardControls(page: Page, role: RoleName) {
 }
 
 test.describe('BIN GROUP production public smoke', () => {
-  test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
-  });
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
-  });
-
   for (const route of publicRoutes) {
     test(`public route loads: ${route}`, async ({ page }) => {
       await expectHealthyPublicRoute(page, route);
@@ -149,6 +137,8 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
         return;
       }
 
+      const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+      await appCheckMonitor.assertTokenFingerprint();
       const consoleErrors: string[] = [];
       page.on('console', (msg) => {
         console.log(`[BROWSER CONSOLE ${msg.type()}]: ${msg.text()}`);
@@ -161,27 +151,32 @@ test.describe('BIN GROUP production authenticated role smoke', () => {
         console.log(`[BROWSER REQUESTFAILED]: ${request.url()} - ${request.failure()?.errorText}`);
       });
 
-      const targetBase = role === 'admin' ? 'https://bin-group-admin-panel.web.app' : (process.env.E2E_BASE_URL || 'https://bin-group-57c60.web.app');
-      
-      await login(page, email!, password!, targetBase);
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_500);
+      try {
+        const targetBase = role === 'admin' ? 'https://bin-group-admin-panel.web.app' : (process.env.E2E_BASE_URL || 'https://bin-group-57c60.web.app');
 
-      const targetPath = `${targetBase}${roleRoutes[role]}`;
-      await page.goto(targetPath, { waitUntil: 'domcontentloaded' });
-      await expectNoCriticalRuntimeCrash(page, targetPath);
-      await expectDashboardControls(page, role);
+        await login(page, email!, password!, targetBase);
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(2_500);
 
-      const currentPath = new URL(page.url()).pathname;
-      expect(currentPath, `${role} should be able to reach ${roleRoutes[role]}`).toBe(roleRoutes[role]);
+        const targetPath = `${targetBase}${roleRoutes[role]}`;
+        await page.goto(targetPath, { waitUntil: 'domcontentloaded' });
+        await expectNoCriticalRuntimeCrash(page, targetPath);
+        await expectDashboardControls(page, role);
 
-      const bodyText = await page.locator('body').innerText({ timeout: 20_000 });
-      expect(bodyText).not.toMatch(visibleAccessFailureText);
+        const currentPath = new URL(page.url()).pathname;
+        expect(currentPath, `${role} should be able to reach ${roleRoutes[role]}`).toBe(roleRoutes[role]);
 
-      const criticalConsoleErrors = consoleErrors.filter((entry) =>
-        /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i.test(entry)
-      );
-      expect(criticalConsoleErrors.join('\n')).toBe('');
+        const bodyText = await page.locator('body').innerText({ timeout: 20_000 });
+        expect(bodyText).not.toMatch(visibleAccessFailureText);
+
+        const criticalConsoleErrors = consoleErrors.filter((entry) =>
+          /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i.test(entry)
+        );
+        expect(criticalConsoleErrors.join('\n')).toBe('');
+      } finally {
+        appCheckMonitor.assertClean(test.info().title);
+        appCheckMonitor.assertAuthenticatedFirebaseRead(test.info().title);
+      }
     });
   }
 });
