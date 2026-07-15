@@ -39,14 +39,16 @@ describe('Storage Security Rules', () => {
       email: 'admin@example.com',
       email_verified: true,
     });
-    const adminDb = adminContext.firestore();
-    await setDoc(doc(adminDb, 'contracts/contract_email'), {
-      ownerId: 'different_owner',
-      ownerEmail: 'owner@example.com',
-    });
-    await setDoc(doc(adminDb, 'invoices/invoice_email'), {
-      ownerId: 'different_owner',
-      recipientEmail: 'owner@example.com',
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'contracts/contract_email'), {
+        ownerId: 'different_owner',
+        ownerEmail: 'owner@example.com',
+      });
+      await setDoc(doc(db, 'invoices/invoice_email'), {
+        ownerId: 'different_owner',
+        recipientEmail: 'owner@example.com',
+      });
     });
 
     const adminStorage = adminContext.storage();

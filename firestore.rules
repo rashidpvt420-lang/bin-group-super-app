@@ -2,15 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
+      // Suspension is enforced through Auth disablement, token revocation and
+      // the signed custom claim. Re-reading users/{uid} in every helper made
+      // valid requests exceed Firestore's 1,000-expression evaluation limit.
       return request.auth != null &&
-        request.auth.token.get('suspended', false) != true &&
-        (
-          !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-          !(
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') in
-              ['suspended', 'SUSPENDED', 'disabled', 'DISABLED', 'rejected', 'REJECTED']
-          )
-        );
+        request.auth.token.get('suspended', false) != true;
     }
 
     function claimedRole() {
@@ -202,16 +198,13 @@ service cloud.firestore {
     }
 
     function isApprovedTechnician() {
-      return hasTechnicianClaim() && (
-        (
-          exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) &&
-          approvedTechnicianProfile(get(/databases/$(database)/documents/technicians/$(request.auth.uid)).data)
-        ) ||
-        (
-          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          approvedTechnicianProfile(get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
-        )
-      );
+      // Technician approval has one canonical profile source. Avoid evaluating
+      // a second user-document fallback on every ticket read and update.
+      return hasTechnicianClaim() &&
+        exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) &&
+        approvedTechnicianProfile(
+          get(/databases/$(database)/documents/technicians/$(request.auth.uid)).data
+        );
     }
 
     function isTechnicianActor() {
@@ -222,7 +215,16 @@ service cloud.firestore {
       return canDispatchJobs();
     }
 
-    function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
+    function participantCanRead(data) {
+      // Resolve cheap identifier ownership before email/profile lookups so
+      // legitimate participant requests remain below the rules expression cap.
+      return isAdmin() ||
+        owns(data) ||
+        tenantOwns(data) ||
+        brokerOwns(data) ||
+        (hasTechnicianClaim() && techOwns(data) && isApprovedTechnician()) ||
+        emailOwns(data);
+    }
 
     function staffRequestCreate(data) {
       return staffCanCreate(data) &&
@@ -813,10 +815,14 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if signedIn() && request.auth.uid == userId;
-      allow get: if isAdmin() || isHr() || isFinance() || isOps() || emailOwns(resource.data) ||
-                  (signedIn() && request.auth.uid != userId && resource.data.get('role', '') == 'tenant' &&
-                   ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
-                    emailMatches(resource.data.get('ownerEmail', null))));
+      allow get: if signedIn() &&
+        request.auth.uid != userId &&
+        resource.data.get('role', '') == 'tenant' &&
+        (
+          resource.data.get('ownerId', null) == request.auth.uid ||
+          emailMatches(resource.data.get('ownerEmail', null))
+        );
+      allow get: if isAdmin() || isHr() || isFinance() || isOps();
       allow list: if isAdmin() || isHr() || isFinance() || isOps();
       allow list: if signedIn() &&
         resource.data.get('role', '') == 'tenant' &&
@@ -1359,7 +1365,10 @@ service cloud.firestore {
     }
 
     match /propertyPassports/{passportId} {
-      allow read: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || emailMatches(resource.data.get('ownerEmail', null))));
+      allow read: if (signedIn() && (
+        resource.data.get('ownerId', null) == request.auth.uid ||
+        emailMatches(resource.data.get('ownerEmail', null))
+      )) || isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
