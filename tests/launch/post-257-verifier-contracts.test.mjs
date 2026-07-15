@@ -18,7 +18,7 @@ function runNode(script, cwd = root) {
   });
 }
 
-test('checked-in rules become server-authoritative under the final prepare:rules transform', () => {
+test('checked-in rules become server-authoritative and property-scoped under the final prepare:rules transform', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-ticket-rules-'));
   try {
     const sourceRules = readFileSync(path.join(root, 'firestore.rules'), 'utf8');
@@ -39,6 +39,10 @@ test('checked-in rules become server-authoritative under the final prepare:rules
       preparedRules,
       /allow update: if canDispatchJobs\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
     );
+    assert.match(
+      preparedRules,
+      /request\.resource\.data\.get\('propertyId', null\) is string &&\n\s*request\.resource\.data\.get\('propertyId', null\) == getTenantPropertyId\(\);/,
+    );
 
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);
@@ -47,7 +51,7 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     const second = runNode(ticketBindingScript, directory);
     assert.equal(second.status, 0, second.stderr || second.stdout);
     const afterSecondRun = readFileSync(path.join(directory, 'firestore.rules'));
-    assert.deepEqual(afterSecondRun, beforeSecondRun, 'ticket rule transform must be idempotent');
+    assert.deepEqual(afterSecondRun, beforeSecondRun, 'ticket and amenity rule transform must be idempotent');
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -80,4 +84,5 @@ test('launch-hardening verifier explicitly rejects direct technician assignment 
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /ticket assignment and status transitions are dispatcher\/server authoritative/);
+  assert.match(verifierSource, /amenity slot locks require a non-null property scope/);
 });
