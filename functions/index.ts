@@ -11,6 +11,7 @@ import {
     assertOcrCallerRole,
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
+import { buildOnboardingRecoverySnapshot, normalizeOnboardingState } from "./onboardingStateMachine";
 export { deliverNotificationPush } from "./notificationDelivery";
 export { mintAdminBridgeToken } from "./adminBridgeAuth";
 export { logUserAuditAction } from "./userAuditOperations";
@@ -511,9 +512,10 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
             mobilizationPercent: 15,
             dashboardUnlockRequiresAdminApproval: true
         },
-        adminReviewState: "AWAITING_VERIFICATION",
+        adminReviewState: "admin_review",
         activationState: "LOCKED_PENDING_ADMIN_APPROVAL",
-        status: "AWAITING_VERIFICATION",
+        status: "admin_review",
+        onboardingStatus: "admin_review",
         source: "OWNER_PUBLIC_ONBOARDING_CALLABLE_V1",
         ...(existingIntake.exists ? {} : { createdAt: timestamp }),
         updatedAt: timestamp
@@ -613,7 +615,8 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         displayName: ownerAccount.fullName || ownerAccount.name || "",
         email: ownerAccount.email || request.auth!.token?.email || "",
         phone: ownerAccount.mobile || ownerAccount.phone || "",
-        status: "PAYMENT_PENDING",
+        status: "deposit_pending",
+        onboardingStatus: "admin_review",
         dashboardUnlocked: false,
         activeContractId: contractId,
         latestIntakeId: intakeId,
@@ -624,7 +627,8 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     batch.set(userRef, cleanPlainValue({
         role: "owner",
-        status: "PAYMENT_PENDING",
+        status: "deposit_pending",
+        onboardingStatus: "admin_review",
         dashboardUnlocked: false,
         activeContractId: contractId,
         latestIntakeId: intakeId,
@@ -642,7 +646,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
             propertyId,
             contractId,
             paymentTransactionId,
-            status: "pending_admin_review"
+            status: "admin_review"
         },
         metadata: {
             callable: "submitOwnerOnboarding",
@@ -662,7 +666,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         contractId,
         paymentTransactionId,
         auditLogId,
-        status: "pending_admin_review"
+        status: "admin_review"
     });
 
     return {
@@ -672,7 +676,13 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
         contractId,
         paymentTransactionId,
         auditLogId,
-        status: "pending_admin_review"
+        status: "admin_review",
+        onboarding: buildOnboardingRecoverySnapshot({
+            status: normalizeOnboardingState("admin_review"),
+            supportReferenceId: intakeId,
+            lastCompletedStep: "onboarding_package_submitted",
+            updatedAt: new Date().toISOString(),
+        }),
     };
 });
 

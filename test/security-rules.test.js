@@ -102,8 +102,12 @@ describe('Firestore Security Rules', () => {
       priority: 'URGENT',
       updatedAt: new Date().toISOString(),
     }));
-    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
+    await assertFails(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
+      updatedAt: new Date().toISOString(),
+    }));
+    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
+      technicianNotes: 'Verified evidence note from assigned technician.',
       updatedAt: new Date().toISOString(),
     }));
   });
@@ -157,6 +161,28 @@ describe('Firestore Security Rules', () => {
     const techDb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
     await assertFails(updateDoc(doc(techDb, 'tickets/open_ticket'), claim));
     await assertFails(updateDoc(doc(techDb, 'maintenanceTickets/open_maintenance_ticket'), claim));
+
+    // Approved technician profile still cannot self-claim via client write (server transaction required).
+    await setDoc(doc(adminDb, 'technicians/tech_approved'), {
+      status: 'active',
+      approvalStatus: 'approved',
+      suspended: false,
+    });
+    await setDoc(doc(adminDb, 'users/tech_approved'), {
+      role: 'technician',
+      status: 'active',
+      approvalStatus: 'approved',
+      suspended: false,
+    });
+    await setDoc(doc(adminDb, 'tickets/open_ticket_approved_tech'), openTicket);
+    const approvedTechDb = testEnv.authenticatedContext('tech_approved', { role: 'technician' }).firestore();
+    await assertFails(updateDoc(doc(approvedTechDb, 'tickets/open_ticket_approved_tech'), {
+      assignedTechnicianId: 'tech_approved',
+      technicianId: 'tech_approved',
+      status: 'ASSIGNED',
+      updatedAt: new Date().toISOString(),
+      assignedAt: new Date().toISOString(),
+    }));
 
     const dispatcherDb = testEnv.authenticatedContext('dispatcher_a', { role: 'dispatcher' }).firestore();
     await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));

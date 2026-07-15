@@ -75,7 +75,7 @@
     "measure:functions-load": "node scripts/measure-functions-load.mjs",
     "e2e:ensure-appcheck": "node scripts/ensure-e2e-appcheck-debug.mjs",
     "verify:admin-firebase": "node scripts/verify-admin-firebase-build.mjs",
-    "test:launch-honesty": "node --test test/launch-honesty.test.mjs test/production-workflow-security.test.mjs test/hard-launch-gate.test.mjs test/hard-launch-control.test.mjs tests/launch/*.test.mjs",
+    "test:launch-honesty": "node --test test/launch-honesty.test.mjs test/production-workflow-security.test.mjs test/hard-launch-gate.test.mjs test/hard-launch-control.test.mjs test/five-profile-audit-guards.test.mjs tests/launch/*.test.mjs && node --experimental-strip-types --test test/onboarding-state-machine.test.mjs",
     "test:hr-smoke": "node scripts/hr-smoke-test.mjs",
     "test:uae-platform-config": "node scripts/verify-uae-platform-config.mjs",
     "test:uae-market-leadership-master": "node scripts/verify-uae-market-leadership-master.mjs",

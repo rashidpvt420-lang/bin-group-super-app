@@ -43,10 +43,16 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
 
   const isOwner = String(profile?.role || '').toLowerCase() === 'owner';
   const adminApproved = profile?.adminApproved === true;
-  const paymentVerified = !!profile?.paymentVerified;
-  const hasActiveContract = !!profile?.activeContractId;
-  const suspended = String(profile?.status || '').toLowerCase() === 'suspended';
-  const activated = !isOwner || (adminApproved && paymentVerified && hasActiveContract);
+  const paymentVerified = profile?.paymentVerified === true;
+  const hasActiveContract = Boolean(String(profile?.activeContractId || '').trim());
+  const suspended = String(profile?.status || '').toLowerCase() === 'suspended' ||
+    String(profile?.onboardingStatus || '').toLowerCase() === 'suspended';
+  const activated = !isOwner || (
+    adminApproved &&
+    paymentVerified &&
+    hasActiveContract &&
+    !suspended
+  );
   const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
   if (!suspended && (activated || isAllowedPath(location.pathname))) return <>{children}</>;

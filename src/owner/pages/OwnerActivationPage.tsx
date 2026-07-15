@@ -101,7 +101,7 @@ const gate = (label: string, done: boolean, review: boolean, doneDetail: string,
   return { label, status: 'Missing', detail: missingDetail, tone: '#ef4444' };
 };
 
-function buildActivationGates(contract: any, profile: any, activated: boolean, mobilization: number): ActivationGate[] {
+function buildActivationGates(contract: any, profile: any, activated: boolean): ActivationGate[] {
   const paymentStatus = normalizeGateStatus(contract?.paymentStatus || profile?.paymentStatus || contract?.status);
   const signatureStatus = normalizeGateStatus(contract?.signatureStatus || contract?.ownerSignatureStatus || profile?.signatureStatus);
   const approvalStatus = normalizeGateStatus(contract?.adminApprovalStatus || contract?.binApprovalStatus || contract?.approvalStatus || profile?.approvalStatus);
@@ -111,7 +111,7 @@ function buildActivationGates(contract: any, profile: any, activated: boolean, m
   const ibanVerified = isTruthyVerified(profile?.ibanVerified, profile?.payoutVerified, profile?.bankDetails?.verified, profile?.ibanStatus, contract?.ibanVerified, contract?.payoutVerified);
   const ownerSigned = contract?.ownerSigned === true || contract?.ownerSignature?.signed === true || signatureStatus === 'OWNER_SIGNED' || signatureStatus === 'SIGNED';
   const paymentVerified = contract?.paymentVerified === true || profile?.paymentVerified === true || VERIFIED_PAYMENT_STATUSES.includes(paymentStatus);
-  const paymentInReview = PENDING_PAYMENT_STATUSES.includes(paymentStatus) || paymentStatus.includes('PENDING') || paymentStatus.includes('REVIEW') || mobilization > 0;
+  const paymentInReview = !paymentVerified && (PENDING_PAYMENT_STATUSES.includes(paymentStatus) || paymentStatus.includes('PENDING') || paymentStatus.includes('REVIEW') || paymentStatus.includes('PROCESSING'));
   const adminApproved = approvalStatus.includes('APPROVED') || normalizeGateStatus(contract?.activationStatus) === 'ACTIVE' || activated;
 
   return [
@@ -120,7 +120,7 @@ function buildActivationGates(contract: any, profile: any, activated: boolean, m
     gate('15% payment proof', paymentVerified, paymentInReview, 'Mobilization/payment proof is verified.', 'Payment proof is waiting for admin verification.', 'Payment proof has not been submitted.'),
     gate('Contract signed by owner', ownerSigned, Boolean(contract?.id), 'Owner signature is recorded.', 'Contract is ready for owner signature.', 'No signable contract found.'),
     gate('BIN GROUP approved', adminApproved, approvalStatus.includes('PENDING') || approvalStatus.includes('REVIEW') || Boolean(contract?.id), 'BIN GROUP/admin approval is complete.', 'BIN GROUP/admin approval is pending.', 'Admin approval has not started.'),
-    gate('Dashboard unlocked', activated, paymentVerified || adminApproved, 'Owner dashboard access is active.', 'Dashboard unlock is waiting for final admin/payment closure.', 'Dashboard remains locked.'),
+    gate('Dashboard unlocked', activated, paymentVerified && adminApproved, 'Owner dashboard access is active.', 'Dashboard unlock is waiting for final admin/payment closure.', 'Dashboard remains locked.'),
     gate('Properties copied to live records', hasPropertyDetails(contract), Boolean(contract?.id), 'Property records are visible from the contract.', 'Property copy/linkage is in review.', 'Property records are not live yet.'),
     gate('Units generated/imported', units > 0, hasPropertyDetails(contract), `${units} unit(s) resolved.`, 'Property is present; units still need generation or import.', 'Units are not configured.'),
     gate('Tenant invitations', tenantInviteCount > 0, units > 0, `${tenantInviteCount} tenant invitation(s) tracked.`, 'Units exist; tenant invitations can be sent next.', 'Tenant invitations are not ready until units exist.'),
@@ -235,12 +235,14 @@ export default function OwnerActivationPage() {
     'Annual / Quarterly / Monthly'
   );
   const profile = user as any;
-  const activated = !!profile?.paymentVerified && (!!profile?.activeContractId || !!profile?.dashboardUnlocked);
+  const activated = profile?.paymentVerified === true &&
+    profile?.adminApproved === true &&
+    Boolean(String(profile?.activeContractId || '').trim());
   const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && primaryContract?.ownerSigned !== true && primaryContract?.signatureStatus !== 'OWNER_SIGNED';
   const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
   const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0 && !hasCommercialSchedule(primaryContract);
   const canSubmitPaymentRequest = !!primaryContract?.id && !activated && !canSign && signedWaitingActivation;
-  const activationGates = buildActivationGates(primaryContract, profile, activated, mobilization);
+  const activationGates = buildActivationGates(primaryContract, profile, activated);
 
   const refreshAfterAction = async () => {
     await refreshRole?.();

@@ -483,18 +483,8 @@ service cloud.firestore {
         ]);
     }
 
-    function missionClaimFieldsLookValid() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedTechnicianId', 'technicianId', 'techId', 'status', 'updatedAt', 'assignedAt']) &&
-        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == request.auth.uid) &&
-        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == request.auth.uid) &&
-        (!('techId' in request.resource.data) || request.resource.data.techId == request.auth.uid) &&
-        (!('status' in request.resource.data) || request.resource.data.status in ['ASSIGNED', 'assigned', 'IN_PROGRESS', 'in_progress']);
-    }
-
-    function safeOpenMissionClaim() {
-      return isApprovedTechnician() && openMissionAvailable(resource.data) && missionClaimFieldsLookValid();
-    }
-
+    // Direct client open-mission claims are denied. Assignment requires
+    // canDispatchJobs() / Admin SDK or the acceptTechnicianTicket transaction.
     function safeParticipantDocumentCreate(data) {
       return signedIn() &&
         (owns(data) || tenantOwns(data)) &&
@@ -829,7 +819,7 @@ service cloud.firestore {
     match /tickets/{ticketId} {
       allow read: if participantCanRead(resource.data) || canDispatchJobs();
       allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
+      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
     }
 

@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const workflowPath = path.join(root, '.github/workflows/firebase-production-deploy.yml');
-const workflow = readFileSync(workflowPath, 'utf8');
+const workflow = readFileSync(workflowPath, 'utf8').replace(/\r\n/g, '\n');
 const producerScript = path.join(root, 'scripts/create-production-incidents-attestation.mjs');
 const verifierScript = path.join(root, 'scripts/verify-same-run-deployment-artifact.mjs');
 const gitignore = readFileSync(path.join(root, '.gitignore'), 'utf8');

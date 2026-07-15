@@ -738,6 +738,9 @@ describe('launch honesty — App Check failure pattern', () => {
 
 describe('launch honesty — write-production-deployment-metadata refuse partial', () => {
   it('refuses to write passed metadata without all components', () => {
+    const target = path.join(ROOT, 'launch_package/production-deployment.json');
+    const existedBefore = existsSync(target);
+    const before = existedBefore ? readFileSync(target, 'utf8') : null;
     const result = spawnSync(
       process.execPath,
       ['scripts/write-production-deployment-metadata.mjs', '--components', 'hosting,functions'],
@@ -749,6 +752,10 @@ describe('launch honesty — write-production-deployment-metadata refuse partial
     );
     assert.notEqual(result.status, 0);
     assert.match(`${result.stderr}${result.stdout}`, /REFUSED|missing/i);
-    assert.equal(existsSync(path.join(ROOT, 'launch_package/production-deployment.json')), false);
+    if (existedBefore) {
+      assert.equal(readFileSync(target, 'utf8'), before);
+    } else {
+      assert.equal(existsSync(target), false);
+    }
   });
 });
