@@ -82,6 +82,17 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(adminDb, 'properties/prop_b')));
   });
 
+  it('suspended Auth claims deny access even to an owned record', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'properties/suspended_owner_property'), { ownerId: 'owner_suspended' });
+
+    const suspendedOwnerDb = testEnv.authenticatedContext('owner_suspended', {
+      role: 'owner',
+      suspended: true,
+    }).firestore();
+    await assertFails(getDoc(doc(suspendedOwnerDb, 'properties/suspended_owner_property')));
+  });
+
   it('tenant ticket access: Tenant can read their own tickets', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });

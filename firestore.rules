@@ -2,15 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
+      // Suspension is an Auth control: admin suspension callables disable the
+      // user, set this claim, and revoke refresh tokens. Reading users/{uid}
+      // inside this foundational helper multiplies across nested predicates
+      // and can exceed Firestore's 1,000-expression evaluation limit.
       return request.auth != null &&
-        request.auth.token.get('suspended', false) != true &&
-        (
-          !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-          !(
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') in
-              ['suspended', 'SUSPENDED', 'disabled', 'DISABLED', 'rejected', 'REJECTED']
-          )
-        );
+        request.auth.token.get('suspended', false) != true;
     }
 
     function claimedRole() {
