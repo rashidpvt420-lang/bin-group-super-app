@@ -134,34 +134,38 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
-  it('open mission claim: only technician or dispatcher-authorized users can claim open jobs', async () => {
+  it('open mission assignment: direct client claims fail and dispatcher authority assigns', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'maintenanceTickets/open_ticket'), {
+
+    const openTicket = {
       tenantId: 'tenant_a',
       propertyId: 'prop_a',
       unitId: 'unit_a',
       assignedTechnicianId: null,
       status: 'OPEN',
-    });
+    };
+    await setDoc(doc(adminDb, 'tickets/open_ticket'), openTicket);
+    await setDoc(doc(adminDb, 'maintenanceTickets/open_maintenance_ticket'), openTicket);
 
-    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
-    await assertFails(updateDoc(doc(ownerDb, 'maintenanceTickets/open_ticket'), {
-      assignedTechnicianId: 'owner_a',
-      technicianId: 'owner_a',
-      status: 'ASSIGNED',
-      updatedAt: new Date().toISOString(),
-      assignedAt: new Date().toISOString(),
-    }));
-
-    const techDb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
-    await assertSucceeds(updateDoc(doc(techDb, 'maintenanceTickets/open_ticket'), {
+    const claim = {
       assignedTechnicianId: 'tech_a',
       technicianId: 'tech_a',
       status: 'ASSIGNED',
       updatedAt: new Date().toISOString(),
       assignedAt: new Date().toISOString(),
-    }));
+    };
+
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'tickets/open_ticket'), claim));
+
+    const techDb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
+    await assertFails(updateDoc(doc(techDb, 'tickets/open_ticket'), claim));
+    await assertFails(updateDoc(doc(techDb, 'maintenanceTickets/open_maintenance_ticket'), claim));
+
+    const dispatcherDb = testEnv.authenticatedContext('dispatcher_a', { role: 'dispatcher' }).firestore();
+    await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));
+    await assertSucceeds(updateDoc(doc(dispatcherDb, 'maintenanceTickets/open_maintenance_ticket'), claim));
   });
 
   it('tenant ticket creation: tenant must use their own assigned unit and matching property', async () => {
