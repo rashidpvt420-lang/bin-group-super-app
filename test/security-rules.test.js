@@ -925,4 +925,67 @@ describe('Firestore Security Rules', () => {
       timeSlot: '10AM',
     }));
   });
+
+  it('stale-token suspended user is denied access', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    // User profile in firestore is suspended: true
+    await setDoc(doc(adminDb, 'users/suspended_user'), { suspended: true });
+    await setDoc(doc(adminDb, 'properties/suspended_owner_prop'), { ownerId: 'suspended_user' });
+
+    // The user's token does NOT have suspended claim (stale token representation)
+    const staleTokenDb = testEnv.authenticatedContext('suspended_user', {
+      role: 'owner'
+    }).firestore();
+
+    await assertFails(getDoc(doc(staleTokenDb, 'properties/suspended_owner_prop')));
+    await assertFails(getDoc(doc(staleTokenDb, 'users/suspended_user')));
+  });
+
+  it('user subcollection restrictions: Operations and Finance can read top-level user directories but NOT subcollections', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'users/some_user'), { displayName: 'John Doe', role: 'tenant' });
+    await setDoc(doc(adminDb, 'users/some_user/fcmTokens/token_123'), { token: 'token_123' });
+
+    // Operations user
+    const opsDb = testEnv.authenticatedContext('ops_user', {
+      role: 'operations_manager'
+    }).firestore();
+
+    // Finance user
+    const financeDb = testEnv.authenticatedContext('finance_user', {
+      role: 'finance_admin'
+    }).firestore();
+
+    // Operations and Finance can read top-level user doc
+    await assertSucceeds(getDoc(doc(opsDb, 'users/some_user')));
+    await assertSucceeds(getDoc(doc(financeDb, 'users/some_user')));
+
+    // Operations and Finance CANNOT read fcmTokens subcollection
+    await assertFails(getDoc(doc(opsDb, 'users/some_user/fcmTokens/token_123')));
+    await assertFails(getDoc(doc(financeDb, 'users/some_user/fcmTokens/token_123')));
+  });
+
+  it('user subcollection restrictions: User, Admin, and HR can read user subcollections', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'users/some_user'), { displayName: 'John Doe', role: 'tenant' });
+    await setDoc(doc(adminDb, 'users/some_user/fcmTokens/token_123'), { token: 'token_123' });
+
+    // HR user
+    const hrDb = testEnv.authenticatedContext('hr_user', {
+      role: 'hr_admin'
+    }).firestore();
+
+    // Self user
+    const selfDb = testEnv.authenticatedContext('some_user', {
+      role: 'tenant'
+    }).firestore();
+
+    // Admin, HR, and Self can read fcmTokens subcollection
+    await assertSucceeds(getDoc(doc(adminDb, 'users/some_user/fcmTokens/token_123')));
+    await assertSucceeds(getDoc(doc(hrDb, 'users/some_user/fcmTokens/token_123')));
+    await assertSucceeds(getDoc(doc(selfDb, 'users/some_user/fcmTokens/token_123')));
+  });
 });
