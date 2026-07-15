@@ -165,13 +165,15 @@ service cloud.firestore {
       );
     }
     function canDispatchJobs() {
-      return hasAdminClaim() ||
+      return isNotSuspended() && (
+        hasAdminClaim() ||
         hasPermission('canDispatchJobs') ||
         (signedIn() && (
           request.auth.token.get('role', '') in ['operations_manager', 'dispatcher'] ||
           request.auth.token.get('userRole', '') in ['operations_manager', 'dispatcher'] ||
           request.auth.token.get('primaryRole', '') in ['operations_manager', 'dispatcher']
-        ));
+        ))
+      );
     }
 
     function authEmail() { return signedIn() ? request.auth.token.get('email', null) : null; }
@@ -298,7 +300,7 @@ service cloud.firestore {
       return canDispatchJobs();
     }
 
-    function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
+    function participantCanRead(data) { return isNotSuspended() && (isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data)); }
 
     function staffRequestCreate(data) {
       return staffCanCreate(data) &&
@@ -1001,14 +1003,14 @@ service cloud.firestore {
     }
 
     match /tickets/{ticketId} {
-      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
+      allow read: if participantCanRead(resource.data) || canDispatchJobs();
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
       allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
-      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
+      allow read: if participantCanRead(resource.data) || canDispatchJobs();
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
       allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
