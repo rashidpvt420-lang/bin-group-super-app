@@ -1,8 +1,12 @@
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+import { enforceAiUsageQuota } from "./aiUsageQuota";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
+if (!admin.apps.length) admin.initializeApp();
+const db = admin.firestore();
 
 const DAMAGE_SYSTEM_PROMPT = `You are an expert UAE property maintenance assessor for BIN GROUP, licensed in Abu Dhabi.
 Analyze the image provided and return ONLY a valid JSON object — no markdown fences, no explanation — with exactly these fields:
@@ -48,6 +52,21 @@ export const assessDamage = onCall({
     throw new HttpsError("unauthenticated", "Sign in before requesting damage assessment.");
   }
   const { imageBase64, mimeType = "image/jpeg", propertyId, notes } = request.data || {};
+  const quota = await enforceAiUsageQuota(
+    request.auth,
+    "damage",
+    new Set(["owner", "admin", "super_admin", "ceo"]),
+  );
+  if (propertyId && !["admin", "super_admin", "ceo"].includes(quota.role)) {
+    const propertySnap = await db.collection("properties").doc(String(propertyId)).get();
+    const property = propertySnap.data() || {};
+    if (
+      !propertySnap.exists ||
+      ![property.ownerId, property.ownerUid].some((value) => String(value || "") === request.auth!.uid)
+    ) {
+      throw new HttpsError("permission-denied", "Damage assessment property belongs to another owner.");
+    }
+  }
 
   if (!imageBase64) return { success: false, error: "No image provided", assessment: FALLBACK_RESPONSE };
 

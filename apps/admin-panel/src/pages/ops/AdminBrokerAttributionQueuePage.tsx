@@ -7,22 +7,13 @@ import {
 import {
     Briefcase, Search, Filter, CheckCircle2, UserPlus, FileText
 } from 'lucide-react';
-import { db, collection, query, where, orderBy, onSnapshot, doc, getDoc, writeBatch, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, functions, httpsCallable, limit } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
-import { useAuth } from '../../context/AuthContext';
-
-const BROKER_COMMISSION_RATE = 0.10;
-const clean = (value: unknown) => String(value || '').trim();
-const numericAmount = (value: unknown) => {
-    const amount = Number(String(value || '').replace(/[^0-9.]/g, ''));
-    return Number.isFinite(amount) ? amount : 0;
-};
 
 export default function AdminBrokerAttributionQueuePage() {
     const { isRTL } = useLanguage();
-    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [leads, setLeads] = useState<any[]>([]);
     const [notice, setNotice] = useState('');
@@ -39,16 +30,19 @@ export default function AdminBrokerAttributionQueuePage() {
     useEffect(() => {
         const q = query(
             collection(db, 'brokerLeads'),
-            where('status', '==', 'converted'),
-            where('commissionStatus', '==', 'PENDING_REVIEW'),
-            orderBy('updatedAt', 'desc')
+            where('status', '==', 'negotiation'),
+            limit(200)
         );
 
         const unsubscribe = onSnapshot(q, (snap) => {
-            setLeads(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const rows = snap.docs
+                .map(d => ({ id: d.id, ...d.data() } as any))
+                .sort((a, b) => Number(b.updatedAt?.toMillis?.() || 0) - Number(a.updatedAt?.toMillis?.() || 0));
+            setLeads(rows);
             setLoading(false);
         }, (err) => {
             console.error('Failed to load converted leads:', err);
+            setNotice('Broker attribution queue could not be loaded.');
             setLoading(false);
         });
 
@@ -66,114 +60,22 @@ export default function AdminBrokerAttributionQueuePage() {
         if (!selectedLead || (!linkForm.intakeId && !linkForm.ownerId && !linkForm.propertyId && !linkForm.contractId)) return;
 
         try {
-            const actorId = user?.uid || 'admin';
-            const brokerId = clean(selectedLead.brokerId || selectedLead.brokerUid);
-            const brokerName = clean(selectedLead.brokerName || selectedLead.brokerDisplayName || selectedLead.brokerEmail || 'Broker');
-            const brokerEmail = clean(selectedLead.brokerEmail);
-            const attributionId = clean(selectedLead.attributionId || `broker_lead_${brokerId}_${selectedLead.id}`);
-            const batch = writeBatch(db);
-            const leadRef = doc(db, 'brokerLeads', selectedLead.id);
-            const now = serverTimestamp();
-            const targetPatch = {
-                brokerId,
-                brokerUid: brokerId,
-                brokerName,
-                brokerEmail,
-                brokerLeadId: selectedLead.id,
-                brokerAttributionId: attributionId,
-                attributionSource: 'ADMIN_BROKER_ATTRIBUTION_QUEUE',
-                updatedAt: now,
-            };
-
-            batch.update(leadRef, {
-                commissionStatus: 'MATCHED_TO_CONTRACT',
-                commissionCreationStatus: linkForm.contractId ? 'COMMISSION_PENDING_ADMIN_APPROVAL' : 'MATCHED_PENDING_CONTRACT_ACTIVATION',
-                matchedOwnerId: linkForm.ownerId,
-                matchedPropertyId: linkForm.propertyId,
-                matchedContractId: linkForm.contractId,
-                matchedIntakeId: linkForm.intakeId,
-                matchedAt: now,
-                matchedBy: actorId,
-                updatedAt: now,
+            if (!linkForm.contractId.trim()) {
+                setNotice('An active contract ID is required before commission attribution.');
+                return;
+            }
+            const matchAttribution = httpsCallable(functions, 'adminMatchBrokerAttribution');
+            await matchAttribution({
+                leadId: selectedLead.id,
+                contractId: linkForm.contractId.trim(),
+                intakeId: linkForm.intakeId.trim(),
+                ownerId: linkForm.ownerId.trim(),
+                propertyId: linkForm.propertyId.trim(),
             });
-
-            if (linkForm.intakeId) {
-                batch.set(doc(db, 'intake_submissions', linkForm.intakeId), {
-                    ...targetPatch,
-                    brokerMatchedAt: now,
-                    brokerMatchedBy: actorId,
-                }, { merge: true });
-            }
-
-            let commissionBase = numericAmount(selectedLead.budgetAmount || selectedLead.budget);
-            let propertyName = clean(selectedLead.propertyInterest || selectedLead.location);
-            if (linkForm.contractId) {
-                const contractRef = doc(db, 'contracts', linkForm.contractId);
-                const contractSnap = await getDoc(contractRef);
-                const contract = contractSnap.exists() ? contractSnap.data() : {};
-                commissionBase = numericAmount(contract.annualContractValue || contract.amountReceived || contract.mobilizationAmount || commissionBase);
-                propertyName = clean(contract.propertyName || contract.propertyTitle || propertyName);
-                batch.set(contractRef, {
-                    ...targetPatch,
-                    brokerMatchedAt: now,
-                    brokerMatchedBy: actorId,
-                }, { merge: true });
-
-                const commissionRef = doc(db, 'broker_commissions', `lead_${selectedLead.id}`);
-                const commissionAmount = Math.round(commissionBase * BROKER_COMMISSION_RATE * 100) / 100;
-                batch.set(commissionRef, {
-                    leadId: selectedLead.id,
-                    brokerId,
-                    brokerUid: brokerId,
-                    brokerName,
-                    brokerEmail,
-                    attributionId,
-                    contractId: linkForm.contractId,
-                    intakeId: linkForm.intakeId || null,
-                    ownerId: linkForm.ownerId || null,
-                    propertyId: linkForm.propertyId || null,
-                    propertyName,
-                    amount: commissionAmount,
-                    percentage: BROKER_COMMISSION_RATE * 100,
-                    rate: BROKER_COMMISSION_RATE,
-                    commissionBase,
-                    currency: 'AED',
-                    status: 'PENDING',
-                    payoutStatus: 'NOT_REQUESTED',
-                    source: 'ADMIN_ATTRIBUTION_MATCH',
-                    createdAt: now,
-                    updatedAt: now,
-                }, { merge: true });
-            }
-
-            if (linkForm.propertyId) {
-                batch.set(doc(db, 'properties', linkForm.propertyId), {
-                    brokerLeadId: selectedLead.id,
-                    brokerAttributionId: attributionId,
-                    updatedAt: now,
-                }, { merge: true });
-            }
-
-            batch.set(doc(collection(db, 'auditLogs')), {
-                action: 'ADMIN_MATCH_BROKER_ATTRIBUTION',
-                actorId,
-                actorRole: 'admin',
-                brokerId,
-                targetType: 'BROKER_LEAD',
-                targetId: selectedLead.id,
-                attributionId,
-                intakeId: linkForm.intakeId || null,
-                ownerId: linkForm.ownerId || null,
-                propertyId: linkForm.propertyId || null,
-                contractId: linkForm.contractId || null,
-                createdAt: now,
-            });
-
-            await batch.commit();
 
             setOpenLink(false);
             setSelectedLead(null);
-            setNotice('Broker attribution matched. Commission is now pending admin approval when a contract was supplied.');
+            setNotice('Broker attribution matched to the active contract. The server-calculated commission is pending review.');
         } catch (err) {
             console.error('Failed to match lead:', err);
             setNotice('Failed to match broker attribution. Check target IDs and admin permissions.');

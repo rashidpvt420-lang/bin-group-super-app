@@ -6,16 +6,25 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const text = (value: unknown, max = 1000) => String(value ?? "").trim().slice(0, max);
 
-function assertOwnerRole(auth: any) {
+async function assertOwnerRole(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
   const role = text(auth.token?.role || auth.token?.userRole || auth.token?.primaryRole, 40).toLowerCase();
-  if (role !== "owner") throw new HttpsError("permission-denied", "Only an owner may create an owner maintenance complaint.");
+  const userRecord = await admin.auth().getUser(auth.uid);
+  if (
+    role !== "owner" ||
+    auth.token?.email_verified !== true ||
+    auth.token?.suspended === true ||
+    userRecord.disabled ||
+    !userRecord.emailVerified
+  ) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
 }
 
 export const ownerCreateMaintenanceTicket = onCall(
   { cors: true, region: "europe-west3" },
   async (request) => {
-    assertOwnerRole(request.auth);
+    await assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;
     const propertyId = text(request.data?.propertyId, 160);
     const unitId = text(request.data?.unitId, 160);
@@ -90,7 +99,7 @@ export const ownerCreateMaintenanceTicket = onCall(
     };
     const batch = db.batch();
     batch.create(ticketRef, ticket);
-    batch.create(db.collection("auditLogs").doc(`owner_ticket_${ticketRef.id}`), {
+    batch.create(db.collection("audit_logs").doc(`owner_ticket_${ticketRef.id}`), {
       action: "OWNER_MAINTENANCE_TICKET_CREATED",
       actorId: ownerUid,
       actorRole: "owner",

@@ -82,6 +82,46 @@ function writeIncidents(root) {
   );
 }
 
+function writePilotIncident(root, overrides = {}) {
+  mkdirSync(path.join(root, 'launch_package'), { recursive: true });
+  const completedAt = new Date(Date.now() - 60 * 60 * 1000);
+  const startedAt = new Date(completedAt.getTime() - 25 * 60 * 60 * 1000);
+  writeFileSync(
+    path.join(root, 'launch_package/pilot-incident-report.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        status: 'passed',
+        commitSha: SHA,
+        projectId: PRODUCTION.projectId,
+        pilotStartedAt: startedAt.toISOString(),
+        pilotCompletedAt: completedAt.toISOString(),
+        openP0: 0,
+        openP1: 0,
+        rollbackPlanVerified: true,
+        monitoringVerified: true,
+        incidentConfirmationVerified: true,
+        rollbackConfirmationVerified: true,
+        incidentReference: 'ops://incident/TEST-1',
+        rollbackReference: 'ops://rollback/TEST-1',
+        monitoringReference: 'ops://monitoring/TEST-1',
+        approvedBy: 'rashidpvt420-lang',
+        generatedAt: new Date().toISOString(),
+        generatedByWorkflow: true,
+        source: 'hard-public-launch-clearance-workflow',
+        githubRepository: 'rashidpvt420-lang/bin-group-super-app',
+        githubRef: 'refs/heads/main',
+        githubRunId: '456',
+        githubRunAttempt: '1',
+        hardLaunchClaim: false,
+        ...overrides,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 function writeDeployment(root, overrides = {}) {
   const now = new Date().toISOString();
   const doc = {
@@ -296,6 +336,7 @@ describe('postdeploy release gate', () => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
+    writePilotIncident(root);
     const batch = JSON.parse(
       readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
     );
@@ -423,6 +464,7 @@ describe('postdeploy release gate', () => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
+    writePilotIncident(root);
     try {
       const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: true });
       assert.equal(result.ok, true, JSON.stringify(result.failures, null, 2));

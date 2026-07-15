@@ -1,55 +1,49 @@
 # Release Blockers
 
-**BASE_SHA:** `3f9da3a0cb9df940c9780ead237167b8992ffa66`  
-**Branch:** `cursor/full-system-audit-fix`  
-**PRODUCTION_DEPLOYED:** `false`  
-**pilotEligible:** `false`  
-**hardLaunchClaim:** `false`  
-**HARD_PUBLIC_LAUNCH:** `NO-GO`
+**BASE_SHA:** `b4bda2b2d07b951101bc0578581e5040ab8698ed`
+**Branch:** `cursor/full-system-audit-fix-v4-30e9`
+**PRODUCTION_DEPLOYED:** `false`
+**pilotEligible:** `false`
+**hardLaunchClaim:** `false`
+**HARD PUBLIC LAUNCH:** `NO-GO`
 
----
+## Code-side disposition
 
-## Origin/main movement
+The audited P0/P1 source defects are repaired on this branch, subject to the validation matrix in `TESTING.md` and CI:
 
-| Item | SHA |
-|------|-----|
-| Frozen candidate | `55f4a8972f584dbd0eb142b1f41df1cbcabd1f07` |
-| Current origin/main | `3f9da3a0cb9df940c9780ead237167b8992ffa66` |
-| Delta | Frozen is ancestor; main is **5 commits ahead** |
+- privileged and financial direct-write paths closed;
+- owner activation/OTP/payment evidence bound server-side;
+- tenant service and physical-access flows moved to validated callables;
+- technician dispatch/lifecycle authority made transactional;
+- suspension enforced across Auth, rules and callables;
+- Stripe mismatch reconciliation and idempotency hardened;
+- protected deployment/artifact/public-decision chain made fail-closed;
+- stale rule, workflow and launch-test contracts aligned.
 
-Do not deploy superseded SHAs (`a31c764…`, `f524c119…`, `ed66f49b…`, stale package artifacts).
+No production readiness claim follows from this code disposition.
 
-Local `launch_package/production-deployment.json` references older SHA `eb67e2e0…` / ref `e2e-redesign` with `hardLaunchClaim: false` — **not** launch proof for current main.
+## Blocking live evidence
 
----
+| ID | Severity | Required evidence |
+|---|---|---|
+| OPS-STRIPE | P0 | Live AED session, matching Stripe event and processed Firestore webhook bound to deployed SHA |
+| OPS-SMTP | P0 | Secret-bound production delivery with provider message ID |
+| OPS-APPCHECK | P0 | Main/admin hosted App Check verification and strict credentialed E2E |
+| OPS-E2E5 | P0 | Exact-SHA owner, tenant, technician, broker and admin walkthrough artifacts |
+| OPS-PILOT | P0 | 24-hour pilot report with zero open P0/P1 and rollback/monitoring references |
+| OPS-PROD-RUN | P0 | Protected full-stack deployment plus same-run signed final decision |
 
-## Code-side P0/P1 (this branch)
+## Decision rule
 
-| Sev | ID | Status |
-|-----|----|--------|
-| P0 | Technician direct open-mission claim in committed rules | **Closed** |
-| P1 | Canonical onboarding state machine + submit status writes | **Closed** (submit path) |
-| P1 | Owner activation gate alignment | **Closed** |
-| P2 | Dead localhost ownerToken API clients | **Closed** |
+Public mode requires all of the following to bind to the same repository, `main` commit, workflow run and validated artifact digest:
 
-No unresolved **code-side P0** remaining from this audit pass. Residual P1 items are **operations/live-evidence** only (below).
+1. founder authorization;
+2. clear production incident attestation;
+3. exact-SHA hard-clearance provenance;
+4. complete Firebase deployment metadata;
+5. postdeploy public release status;
+6. live Stripe proof;
+7. pilot incident report;
+8. signed final hard-launch decision.
 
----
-
-## Operational blockers (fail-closed — not code-passed)
-
-| ID | Sev | Blocker | Why not code |
-|----|-----|---------|--------------|
-| OPS-STRIPE | P0 | Live AED Checkout + signed webhook 200 + Firestore processed event for deploy SHA | Requires live Stripe + production Functions |
-| OPS-SMTP | P0 | SMTP_USER/SMTP_PASS Secret Manager delivery proof | Console/runtime secret verification |
-| OPS-APPCHECK | P0 | Production App Check token registration evidence for web app | Firebase Console |
-| OPS-E2E5 | P0 | Live five-role walkthrough on current hosting SHA | Seeded credentials + hosted build |
-| OPS-PROD-RUN | P0 | Protected `firebase-production-deploy` signed final artifact | Must not be run from this audit |
-
-Until the protected workflow emits a signed decision with empty `failures` and both flags true, launch claims stay false.
-
----
-
-## CI note
-
-origin/main CI for `3f9da3a0…` concluded **success** at audit start. Branch CI status is reported after PR checks run.
+Any missing, malformed, stale, cross-run or mismatched artifact keeps `hardLaunchClaim=false`.

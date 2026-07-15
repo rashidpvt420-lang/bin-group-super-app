@@ -17,6 +17,9 @@ import {
   REQUIRED_PILOT_EVIDENCE,
   evaluatePilotEligibility,
 } from './lib/launch-honesty.mjs';
+import {
+  validatePilotIncidentReport,
+} from './lib/hard-launch-gate.mjs';
 
 const failures = [];
 
@@ -43,6 +46,9 @@ const paths = {
   deployment: path.resolve('launch_package/production-deployment.json'),
   evidence: path.resolve('launch_package/launch-evidence-batch.json'),
   launchStatus: path.resolve('launch_package/launch-status.json'),
+  publicReleaseStatus: path.resolve('launch_package/public-release-status.json'),
+  stripeLiveProof: path.resolve('launch_package/stripe-live-proof.json'),
+  pilotIncidentReport: path.resolve('launch_package/pilot-incident-report.json'),
   decision: path.resolve('launch_package/hard-launch-decision.json'),
 };
 
@@ -110,8 +116,61 @@ if (launchMode !== 'bank-pilot' && launchMode !== 'public') {
   failures.push('LAUNCH_MODE must be bank-pilot or public');
 }
 
-const postdeployCleared = String(process.env.POSTDEPLOY_RELEASE_CLEARED || '').trim() === 'true';
-const stripeLiveOk = String(process.env.POSTDEPLOY_STRIPE_LIVE_OK || '').trim() === 'true';
+let publicReleaseStatus = null;
+let stripeLiveProof = null;
+if (launchMode === 'public') {
+  try {
+    publicReleaseStatus = readJsonStrict(paths.publicReleaseStatus, 'public-release-status.json');
+    if (
+      publicReleaseStatus.status !== 'passed' ||
+      publicReleaseStatus.publicReleaseCleared !== true ||
+      publicReleaseStatus.hardLaunchClaim === true ||
+      publicReleaseStatus.commitSha !== context.commitSha ||
+      String(publicReleaseStatus.releaseId || '') !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
+      publicReleaseStatus.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
+      !Array.isArray(publicReleaseStatus.failures) ||
+      publicReleaseStatus.failures.length !== 0
+    ) {
+      failures.push('public-release-status.json is not a clear, same-run, exact-artifact postdeploy result');
+    }
+  } catch (error) {
+    failures.push(error.message);
+  }
+  try {
+    stripeLiveProof = readJsonStrict(paths.stripeLiveProof, 'stripe-live-proof.json');
+    const proofAgeMs = Date.now() - Date.parse(stripeLiveProof.observedAt || '');
+    if (
+      stripeLiveProof.status !== 'passed' ||
+      stripeLiveProof.source !== 'stripe-api-live-verifier' ||
+      stripeLiveProof.liveMode !== true ||
+      stripeLiveProof.webhookProcessed !== true ||
+      stripeLiveProof.currency !== 'AED' ||
+      Number(stripeLiveProof.amountMinor || 0) <= 0 ||
+      stripeLiveProof.commitSha !== context.commitSha ||
+      stripeLiveProof.repository !== context.repository ||
+      String(stripeLiveProof.workflowRunId || '') !== context.runId ||
+      stripeLiveProof.releaseId !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
+      stripeLiveProof.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
+      !Number.isFinite(proofAgeMs) ||
+      proofAgeMs < 0 ||
+      proofAgeMs > 72 * 60 * 60 * 1000 ||
+      stripeLiveProof.hardLaunchClaim === true
+    ) {
+      failures.push('stripe-live-proof.json is stale, non-live, unprocessed, or not bound to this run and artifact');
+    }
+  } catch (error) {
+    failures.push(error.message);
+  }
+  try {
+    const pilotIncidentReport = readJsonStrict(paths.pilotIncidentReport, 'pilot-incident-report.json');
+    failures.push(...validatePilotIncidentReport(pilotIncidentReport, context.commitSha));
+  } catch (error) {
+    failures.push(error.message);
+  }
+}
+
+const postdeployCleared = publicReleaseStatus?.publicReleaseCleared === true;
+const stripeLiveOk = stripeLiveProof?.status === 'passed';
 
 if (failures.length) {
   console.error('\n[hard-launch-decision] FAIL — hard public launch is not approved');
@@ -124,6 +183,11 @@ const evidenceHashes = {
   incidents: sha256File(paths.incidents),
   deployment: sha256File(paths.deployment),
   liveEvidence: sha256File(paths.evidence),
+  ...(launchMode === 'public' ? {
+    publicReleaseStatus: sha256File(paths.publicReleaseStatus),
+    stripeLiveProof: sha256File(paths.stripeLiveProof),
+    pilotIncidentReport: sha256File(paths.pilotIncidentReport),
+  } : {}),
 };
 
 let status = 'recorded';

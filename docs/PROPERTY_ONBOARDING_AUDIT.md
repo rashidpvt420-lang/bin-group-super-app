@@ -1,83 +1,53 @@
 # Property Onboarding Audit
 
-**BASE_SHA:** `3f9da3a0cb9df940c9780ead237167b8992ffa66`  
-**Branch:** `cursor/full-system-audit-fix`  
-**Decision:** Code-side onboarding is recoverable and server-gated; **public launch remains NO-GO** until payment/SMTP/App Check ops evidence exists.
+**BASE_SHA:** `b4bda2b2d07b951101bc0578581e5040ab8698ed`
+**Branch:** `cursor/full-system-audit-fix-v4-30e9`
+**Decision:** Code paths are fail-closed; public launch remains **NO-GO** without protected live evidence.
 
----
+## Canonical journey
 
-## Canonical state machine
+1. Public property and ownership intake.
+2. Owner Auth account creation and verified email.
+3. Proof upload to owner-scoped Storage.
+4. Server-authoritative quote preview and locked `quoteHash`.
+5. Contract selection and OTP signature bound to the contract hash.
+6. Payment package creation before Stripe checkout, or immutable manual receipt upload.
+7. Stripe webhook/manual evidence validation.
+8. Admin approval through `adminApprovePayment`.
+9. Atomic contract, owner, user, intake, property and invoice activation.
+10. Dashboard unlock only when the complete activation policy passes.
 
-Defined in `src/lib/onboardingStateMachine.ts` (mirrored in `functions/onboardingStateMachine.ts`):
+The disabled `submitOwnerOnboarding` callable is a minimal fail-closed compatibility stub. The live path is `submitOwnerOnboardingPaymentPackage`; it does not accept client-calculated activation authority.
 
-`draft` → `property_details_complete` → `documents_pending` → `quote_ready` → `contract_selected` → `deposit_pending` → `deposit_processing` → `deposit_paid` → `identity_pending` → `signature_pending` → `admin_review` → `changes_requested` | `approved` → `active`
+## Canonical lifecycle vocabulary
 
-Terminal / control: `rejected`, `expired`, `suspended`.
+`draft` → `property_details_complete` → `documents_pending` → `quote_ready` → `contract_selected` → `deposit_pending` → `deposit_processing` → `deposit_paid` → `identity_pending` → `signature_pending` → `admin_review` → `approved` → `active`
 
-Legacy aliases (examples): `pending_admin_review` → `admin_review`; `PAYMENT_PENDING` → `deposit_pending`; `APPROVED_PENDING_OWNER_SIGNATURE` → `signature_pending`.
+Control states: `changes_requested`, `rejected`, `expired`, `suspended`.
 
-Recovery snapshot fields: `progressPercent`, `currentBlocker`, `nextRequiredStep`, `lastCompletedStep`, `actionRequired`, `supportReferenceId`, `adminReviewReason`, `unlocksDashboard` (true only for `active`).
+Legacy live values including `payment_pending_approval`, `pending_admin_payment_verification` and `payment_verified_pending_admin_approval` normalize to the canonical machine. State normalization is display/recovery logic; authorization always checks explicit server fields.
 
----
+## Integrity invariants
 
-## Stage map (A–V)
+- Quote and contract hashes are 64-character SHA-256 values generated/locked server-side.
+- OTP evidence must match owner UID, contract ID, signature and contract hash and may be consumed only once.
+- Canonical activation uses the same intake, contract, payment and receipt-path ID. Divergent legacy records require migration.
+- Receipt metadata binds owner UID, payment ID, evidence type, hash, content type, size and immutable Storage generation.
+- Stripe completion must match the persisted session, amount, currency and payer. A paid mismatch creates durable manual-reconciliation evidence and never unlocks.
+- Owner activation requires `status=active`, `adminApproved=true`, `paymentVerified=true`, `dashboardUnlocked=true`, `dashboardLocked!=true` and a non-empty `activeContractId`.
+- Owners cannot client-write activation-adjacent fields in `users`, `owners`, `properties`, contracts or payment ledgers.
 
-| Stage | UI | Server write / callable | Unlock effect |
-|-------|----|-------------------------|---------------|
-| A Public landing | `/`, `/owner-landing` | none | none |
-| B–E Property intake | `/onboarding/*` steps | local zustand draft (`bin-group-onboarding-v3`) | none |
-| F Proof upload | ProofUploadStep | storage under owner paths; package submit | none |
-| G–H Quote | QuoteModelingStep | client quote engine; hash required on accept | new quote version if changed |
-| I Contract selection | ContractSelectionStep | stored on submit | none |
-| J–K Deposit + plan | PaymentSubmissionStep | `submitOwnerOnboarding` then Stripe checkout | dashboard stays locked |
-| L–N Auth + profile + contract | AccountCreation / callables | owners/users/contracts | locked |
-| O OTP signature | ContractSignatureOtp + `ownerSignContractAndQueuePdf` | OTP hashed server-side | locked |
-| P Payment proof | Stripe webhook / admin payment approval | payment docs; `processed` registry | locked until admin |
-| Q–R Admin approve + activate | admin callables | `paymentVerified`, `adminApproved`, `activeContractId` | **then** unlock |
-| S–U Units / invites / IBAN | owner portal after unlock | scoped creates + verification | operational |
-| V Dashboard | `/owner/dashboard` | `OwnerActivationGuard` | requires three server flags |
+## Recovery and idempotency
 
-**Rule:** Client Stripe success or query params never unlock. Activation requires server-confirmed payment + valid contract binding + admin approval.
+- Payment package and Stripe session creation use stable IDs and validate existing bindings.
+- Expired/closed Stripe sessions rotate checkout attempts.
+- Webhook event records and deterministic invoice/commission IDs prevent duplicate side effects.
+- Rejected manual evidence can be resubmitted only with newly validated immutable Storage evidence.
+- Suspended owners are disabled in Auth, receive a suspension claim and have refresh tokens revoked; resume reverses all three controls.
 
----
+## Operations still required
 
-## Findings
-
-### P1 — Status vocabulary fragmentation (partially closed)
-
-| Field | Detail |
-|-------|--------|
-| Actual | Intake/owner docs used `AWAITING_VERIFICATION`, `PAYMENT_PENDING`, `pending_admin_review` |
-| Expected | Canonical states above |
-| Fix | Submit callable now writes `admin_review` / `deposit_pending` and returns recovery snapshot |
-| Status | **Fixed for submit path**; other admin/Stripe writers still alias-compatible |
-
-### P1 — Dashboard unlock UX vs guard
-
-| Field | Detail |
-|-------|--------|
-| Actual | Activation page could show progress using `dashboardUnlocked` without `adminApproved` |
-| Fix | Page + guard aligned to `paymentVerified && adminApproved && activeContractId` |
-| Status | **Fixed** |
-
-### Ops (not code-pass)
-
-| ID | Blocker |
-|----|---------|
-| O-1 | Live Stripe AED checkout + webhook HTTP 200 + Firestore `processed: true` for current main SHA |
-| O-2 | SMTP Secret Manager values cannot be verified from this workstation |
-| O-3 | Protected production deploy + signed decision artifact not run (by design) |
-
----
-
-## Idempotency / abandoned flows
-
-- `submitOwnerOnboarding` uses `idempotencyKey` / session id document ids.
-- Stripe webhook uses processed-event registry (`processed: true` / ignore duplicates).
-- Abandoned drafts remain in localStorage until cleared; resume does not imply payment.
-
----
-
-## Quote integrity
-
-Quote engine: UAE zone/age/type/units/floors/lifts/facilities/package/VAT/deposit. Accepted quotes must not be silently mutated — generate a new version/hash (engine already versions; server package store must retain `quoteHash` / `quoteVersion` — client cannot alter protected property fields per `safeOwnerPropertyUpdate`).
+- Real AED live Checkout and matching processed webhook evidence.
+- SMTP secret and provider-delivery evidence.
+- Exact-SHA App Check and five-profile hosted walkthrough.
+- Protected production deployment and signed same-run final decision.

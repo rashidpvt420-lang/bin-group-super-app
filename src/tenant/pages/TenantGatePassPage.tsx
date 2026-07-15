@@ -9,7 +9,7 @@ import { ShieldCheck, Plus, Clock, Trash2, Phone, Calendar } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, serverTimestamp, functions, httpsCallable, getDocs, limit } from '../../lib/firebase';
+import { db, collection, onSnapshot, query, where, functions, httpsCallable, getDocs, limit } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TenantGatePassPage() {
@@ -34,6 +34,9 @@ export default function TenantGatePassPage() {
             if (!user?.uid) return;
             try {
                 let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
+                if (unitSnap.empty) {
+                    unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid), limit(1)));
+                }
                 if (unitSnap.empty && user.email) {
                     unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', normalizeEmail(user.email)), limit(1)));
                 }
@@ -85,25 +88,12 @@ export default function TenantGatePassPage() {
                 unitId,
                 type: visitorType,
                 name: visitorName.trim(),
+                visitorPhone: visitorPhone.trim(),
                 validFrom: Date.now(),
                 validUntil
             });
-            const { token, passId } = result.data as any;
-
-            await addDoc(collection(db, 'gatePasses'), {
-                passId,
-                qrToken: token,
-                propertyId: propertyId || null,
-                unitId: unitId || null,
-                tenantUid: user.uid,
-                tenantName: user.displayName || 'Resident',
-                visitorName: visitorName.trim(),
-                visitorPhone: visitorPhone.trim(),
-                visitorType,
-                duration: parseInt(duration, 10),
-                status: 'active',
-                createdAt: serverTimestamp(),
-            });
+            const { passId } = result.data as any;
+            if (!passId) throw new Error('Pass service did not return a pass ID.');
             setOpenAdd(false);
             setVisitorName('');
             setVisitorPhone('');
@@ -120,7 +110,8 @@ export default function TenantGatePassPage() {
     const handleRevokePass = async (passId: string) => {
         if (!window.confirm("Are you sure you want to revoke this gate pass?")) return;
         try {
-            await deleteDoc(doc(db, 'gatePasses', passId));
+            const cancelSignedQrPass = httpsCallable(functions, 'cancelSignedQrPass');
+            await cancelSignedQrPass({ passId, collectionName: 'gatePasses' });
         } catch (err) {
             console.error("Failed to revoke pass", err);
             alert("Failed to revoke pass.");

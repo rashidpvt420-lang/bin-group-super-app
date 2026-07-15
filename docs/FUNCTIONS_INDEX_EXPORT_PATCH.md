@@ -1,21 +1,12 @@
 # Functions Runtime Export Status
 
-The new runtime modules are ready and now exposed through the active Functions runtime aggregator:
+`functions/package.json` points Firebase Functions to `lib/runtimeAll.js`.
+`runtimeAll.ts` exports `runtime.ts`, and `runtime.ts` exports the canonical
+`updateTicketLifecycle` callable from `index.ts`.
 
-- `functions/slaPolicy.ts`
-- `functions/completionGuards.ts`
-- `functions/ticketLifecycleV2.ts`
-- `functions/runtimeAll.ts`
-
-`functions/package.json` points Firebase Functions to `lib/runtimeAll.js`, so the deployable TypeScript export must live in `functions/runtimeAll.ts`.
-
-## Applied export
-
-The following export has been added to `functions/runtimeAll.ts`:
-
-```ts
-export { updateTicketLifecycleV2 } from './ticketLifecycleV2';
-```
+`ticketLifecycleV2.ts` remains a non-deployed reference module. It is not
+exported because two independently callable lifecycle writers would split
+transition authority and evidence requirements.
 
 ## Validation before public launch
 
@@ -28,4 +19,5 @@ node scripts/verify-functions-sla-policy.mjs
 node scripts/verify-tech-close-gates.mjs
 ```
 
-Do not mark the Functions runtime complete until the Functions build passes and the callable is verified in Firebase after deploy.
+Do not mark the Functions runtime complete until the Functions build passes and
+the canonical callable is verified through the protected deployment workflow.

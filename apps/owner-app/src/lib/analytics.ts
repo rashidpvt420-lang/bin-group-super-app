@@ -1,6 +1,5 @@
 // apps/owner-app/src/lib/analytics.ts
-import { db } from './firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { functions, httpsCallable } from './firebase';
 
 /**
  * Telemetry Implementation (V1.12)
@@ -8,11 +7,11 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
  */
 export const trackEvent = async (metric: string, purpose: string, metadata: any = {}) => {
     try {
-        // Using "analytics_events" as specified in CTO requirements
-        await addDoc(collection(db, 'analytics_events'), {
-            metric,
+        const recordClientTelemetry = httpsCallable(functions, 'recordClientTelemetry');
+        await recordClientTelemetry({
+            kind: 'ANALYTICS',
+            eventType: metric,
             purpose,
-            timestamp: serverTimestamp(),
             metadata: {
                 ...metadata,
                 userAgent: navigator.userAgent,

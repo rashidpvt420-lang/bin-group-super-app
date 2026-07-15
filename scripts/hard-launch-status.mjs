@@ -18,6 +18,9 @@ const files = {
   incidents: path.join(launchPackage, 'production-incidents.json'),
   deployment: path.join(launchPackage, 'production-deployment.json'),
   liveEvidence: path.join(launchPackage, 'launch-evidence-batch.json'),
+  publicReleaseStatus: path.join(launchPackage, 'public-release-status.json'),
+  stripeLiveProof: path.join(launchPackage, 'stripe-live-proof.json'),
+  pilotIncidentReport: path.join(launchPackage, 'pilot-incident-report.json'),
   pilotStatus: path.join(launchPackage, 'launch-status.json'),
   hardStatus: path.join(launchPackage, 'hard-launch-status.json'),
 };
@@ -44,7 +47,15 @@ try {
 }
 
 const expectedHashes = {};
-for (const key of ['authorization', 'incidents', 'deployment', 'liveEvidence']) {
+for (const key of [
+  'authorization',
+  'incidents',
+  'deployment',
+  'liveEvidence',
+  'publicReleaseStatus',
+  'stripeLiveProof',
+  'pilotIncidentReport',
+]) {
   const filePath = files[key];
   if (!existsSync(filePath)) failures.push(`hard-launch dependency is missing: ${key}`);
   else expectedHashes[key] = sha256File(filePath);

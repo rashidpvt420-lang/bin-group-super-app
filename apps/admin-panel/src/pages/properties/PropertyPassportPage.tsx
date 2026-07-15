@@ -25,7 +25,7 @@ export default function PropertyPassportPage() {
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        const q = query(collection(db, 'property_passports'), orderBy('updatedAt', 'desc'));
+        const q = query(collection(db, 'propertyPassports'), orderBy('updatedAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snap) => {
             const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setPassports(docs);

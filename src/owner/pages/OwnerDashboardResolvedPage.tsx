@@ -24,9 +24,8 @@ import { resolvePropertyReporter } from '../utils/ownerReporterResolver';
 import { detectContractMode, canSeeMaintenance } from '../utils/ownerServiceMode';
 import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
+import { isOwnerContractActivated, isOwnerProfileActivated } from '../activationPolicy';
 
-const ACTIVE_CONTRACT_STATUSES = new Set(['ACTIVE', 'SIGNED']);
-const ACTIVE_SIGNATURE_STATUSES = new Set(['ACTIVE', 'SIGNED']);
 const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
 
 const PENDING_PAYMENT_STATES = new Set([
@@ -125,39 +124,6 @@ const getSeconds = (value: any) => Number(value?.seconds || value?._seconds || 0
 const isPermissionDenied = (err: any) => String(err?.code || err?.message || '').toLowerCase().includes('permission');
 const makeInviteCode = () => `BIN-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Date.now().toString().slice(-5)}`;
 
-const isActiveProfile = (profile: any) => {
-  if (!profile) return false;
-  const status = String(profile.status || '').trim().toUpperCase();
-  const activationStatus = String(profile.activationStatus || '').trim().toUpperCase();
-  const signatureStatus = String(profile.contractSignatureStatus || profile.signatureStatus || '').trim().toUpperCase();
-  const verified = profile.paymentVerified === true;
-  const linkedContract = !!(profile.activeContractId || profile.latestActivationContractId);
-
-  return verified && (
-    profile.dashboardUnlocked === true ||
-    (profile.dashboardLocked === false && linkedContract) ||
-    (linkedContract && (status === 'ACTIVE' || activationStatus === 'ACTIVE' || ACTIVE_SIGNATURE_STATUSES.has(signatureStatus)))
-  );
-};
-
-const isActiveContract = (contract: any) => {
-  if (!contract) return false;
-  const status = String(contract.status || '').trim().toUpperCase();
-  const contractStatus = String(contract.contractStatus || '').trim().toUpperCase();
-  const activationStatus = String(contract.activationStatus || '').trim().toUpperCase();
-  const signatureStatus = String(contract.signatureStatus || contract.signatureState?.status || '').trim().toUpperCase();
-  const verified = contract.paymentVerified === true;
-
-  return verified && (
-    contract.dashboardUnlocked === true ||
-    contract.ownerSigned === true ||
-    ACTIVE_CONTRACT_STATUSES.has(status) ||
-    ACTIVE_CONTRACT_STATUSES.has(contractStatus) ||
-    ACTIVE_CONTRACT_STATUSES.has(activationStatus) ||
-    ACTIVE_SIGNATURE_STATUSES.has(signatureStatus)
-  );
-};
-
 const sortByRecent = (a: any, b: any) => getSeconds(b.updatedAt || b.createdAt) - getSeconds(a.updatedAt || a.createdAt);
 
 // Tracks collections skipped due to permission-denied errors during a single load() pass,
@@ -230,7 +196,7 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
     if (ownerProfile) profiles.push(ownerProfile);
   }
 
-  const profile = profiles.sort((a, b) => Number(isActiveProfile(b)) - Number(isActiveProfile(a)) || sortByRecent(a, b))[0] || null;
+  const profile = profiles.sort((a, b) => Number(isOwnerProfileActivated(b)) - Number(isOwnerProfileActivated(a)) || sortByRecent(a, b))[0] || null;
   const trustedEmails = compact([authEmail, normalizeEmail(profile?.email), normalizeEmail(profile?.ownerEmail), ...(Array.isArray(profile?.linkedEmails) ? profile.linkedEmails.map(normalizeEmail) : [])]);
   const ownerIds = compact([authUid, profile?.uid, profile?.ownerId, profile?.activeOwnerId, ...(Array.isArray(profile?.linkedOwnerIds) ? profile.linkedOwnerIds : [])]);
   const contractIds = compact([profile?.activeContractId, profile?.latestActivationContractId, profile?.pendingContractId, profile?.contractId, profile?.latestContractId]);
@@ -251,12 +217,14 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
     for (const c of await getCollectionDocs('contracts', 'emailDelivery.recipient', email)) contracts.set(c.id, c);
   }
 
-  const contractList = Array.from(contracts.values()).sort((a, b) => Number(isActiveContract(b)) - Number(isActiveContract(a)) || sortByRecent(a, b));
+  const contractList = Array.from(contracts.values()).sort((a, b) => Number(isOwnerContractActivated(b)) - Number(isOwnerContractActivated(a)) || sortByRecent(a, b));
   const contract = contractList[0] || null;
   const finalOwnerIds = compact([...ownerIds, contract?.ownerId, contract?.ownerUid]);
   const finalEmails = compact([...trustedEmails, normalizeEmail(contract?.ownerEmail), normalizeEmail(contract?.emailDelivery?.recipient)]).flatMap(emailVariants);
 
-  if (isActiveProfile(profile) || isActiveContract(contract)) return { state: 'active', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails };
+  if (isOwnerProfileActivated(profile) && isOwnerContractActivated(contract)) {
+    return { state: 'active', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails };
+  }
   if (profile || contract) return { state: 'pending', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'Identity found, but verified activation flags are not complete yet.' };
   return { state: 'locked', profile, contract, ownerIds: finalOwnerIds, emails: finalEmails, reason: 'No owner profile or contract found for this login.' };
 }
@@ -694,6 +662,7 @@ export default function OwnerDashboardResolvedPage() {
       referenceFileUrl: String(rentData.referenceFileUrl || ''),
       referenceFilePath: String(rentData.referenceFilePath || ''),
       referenceFileName: String(rentData.referenceFileName || ''),
+      referenceFileHash: String(rentData.referenceFileHash || ''),
       referenceUploadError: String(rentData.referenceUploadError || ''),
       notes: String(rentData.notes || ''),
       lastPaymentDate: new Date().toISOString(),

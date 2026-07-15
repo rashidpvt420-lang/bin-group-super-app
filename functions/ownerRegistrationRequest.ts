@@ -3,7 +3,11 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { generateContractPDF } from "./pdfEngine";
-import { assertVerifiedContractSignatureOtp } from "./contractSignatureOtp";
+import {
+  consumeVerifiedContractSignatureOtp,
+  validateVerifiedContractSignatureOtp,
+} from "./contractSignatureOtp";
+import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -101,6 +105,12 @@ function assertAuthenticatedOwner(request: any, ownerUid: string, ownerEmail: st
 
   const callerUid = String(request.auth.uid || "").trim();
   const tokenEmail = String(request.auth.token?.email || "").trim().toLowerCase();
+  if (request.auth.token?.email_verified !== true) {
+    throw new HttpsError("failed-precondition", "Verify the owner email before submitting contract or payment evidence.");
+  }
+  if (request.auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "Suspended owner accounts cannot continue onboarding.");
+  }
 
   if (!callerUid || callerUid !== ownerUid) {
     throw new HttpsError("permission-denied", "Owner UID does not match the authenticated account.");
@@ -113,7 +123,7 @@ function assertAuthenticatedOwner(request: any, ownerUid: string, ownerEmail: st
 
 async function resolveOrCreateOwnerAuth(email: string, password: string, fullName: string, auth: any) {
   if (!password) {
-    return { uid: "", accountCreated: false, accountCreationStatus: "PENDING_ADMIN_PROVISIONING" };
+    throw new HttpsError("invalid-argument", "A password is required to create the owner Auth account.");
   }
 
   try {
@@ -157,7 +167,7 @@ async function resolveOrCreateOwnerAuth(email: string, password: string, fullNam
   }
 }
 
-export const previewOwnerOnboardingQuote = onCall({ cors: true }, async (request) => {
+export const previewOwnerOnboardingQuote = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Owner authentication is required to calculate a locked quote.");
   }
@@ -189,15 +199,17 @@ export const previewOwnerOnboardingQuote = onCall({ cors: true }, async (request
   }
 });
 
-export const submitPendingOwnerRegistration = onCall({ cors: true }, async (request) => {
+export const submitPendingOwnerRegistration = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
   const email = cleanEmail(request.data?.email);
   const mobile = cleanMobile(request.data?.mobile);
   const password = cleanPassword(request.data?.password);
   const intakeId = cleanReference(request.data?.intakeId || request.data?.onboardingSubmissionId);
-  const requestedOwnerUid = cleanReference(request.data?.ownerUid || request.data?.uid);
   const authProvision = await resolveOrCreateOwnerAuth(email, password, fullName, request.auth);
-  const registrationId = authProvision.uid || requestedOwnerUid || cleanReference(request.data?.ownerRegistrationId || request.data?.pendingOwnerId) || intakeId || db.collection("owner_registration_requests").doc().id;
+  if (!authProvision.uid) {
+    throw new HttpsError("internal", "Owner Auth provisioning did not return a UID.");
+  }
+  const registrationId = authProvision.uid;
   const timestamp = serverTimestamp();
   const pendingPaymentPackage = extractPendingPaymentPackage(request.data);
 
@@ -222,10 +234,34 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
     updatedAt: timestamp
   };
 
-  const batch = db.batch();
+  const userRef = db.collection("users").doc(authProvision.uid);
+  const registrationRef = db.collection("owner_registration_requests").doc(registrationId);
+  const pendingOwnerRef = db.collection("pending_owners").doc(registrationId);
+  const intakeRef = (intakeId || pendingPaymentPackage)
+    ? db.collection("intake_submissions").doc(intakeId || registrationId)
+    : null;
+  const auditRef = db.collection("audit_logs").doc();
 
-  if (authProvision.uid) {
-    batch.set(db.collection("users").doc(authProvision.uid), {
+  await db.runTransaction(async (transaction) => {
+    if (intakeRef) {
+      const intakeSnap = await transaction.get(intakeRef);
+      const existingIntake = intakeSnap.data() || {};
+      const boundUid = String(
+        existingIntake.ownerUid ||
+        existingIntake.ownerId ||
+        existingIntake.ownerRegistrationId ||
+        "",
+      ).trim();
+      const boundEmail = String(existingIntake.ownerEmail || "").trim().toLowerCase();
+      if ((boundUid && boundUid !== authProvision.uid) || (boundEmail && boundEmail !== email)) {
+        throw new HttpsError(
+          "permission-denied",
+          "This onboarding reference is already bound to another owner account.",
+        );
+      }
+    }
+
+    transaction.set(userRef, {
       uid: authProvision.uid,
       email,
       displayName: fullName,
@@ -244,52 +280,49 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
       updatedAt: timestamp,
       createdAt: timestamp
     }, { merge: true });
-  }
 
-  batch.set(db.collection("owner_registration_requests").doc(registrationId), {
-    ...registration,
-    ...(pendingPaymentPackage ? { latestPaymentSubmission: pendingPaymentPackage } : {}),
-    createdAt: timestamp
-  }, { merge: true });
-  batch.set(db.collection("pending_owners").doc(registrationId), {
-    ...registration,
-    pendingOwnerId: registrationId,
-    ownerUid: authProvision.uid || registrationId,
-    ...(pendingPaymentPackage ? { latestPaymentSubmission: pendingPaymentPackage } : {}),
-    createdAt: timestamp
-  }, { merge: true });
-
-  if (intakeId || pendingPaymentPackage) {
-    const intakeRef = db.collection("intake_submissions").doc(intakeId || registrationId);
-    batch.set(intakeRef, {
-      intakeId: intakeId || registrationId,
-      ownerRegistrationId: registrationId,
-      pendingOwnerId: registrationId,
-      ownerUid: authProvision.uid || registrationId,
-      ownerName: fullName,
-      ownerEmail: email,
-      ownerMobile: mobile,
-      accountCreated: Boolean(authProvision.uid),
-      accountCreationStatus: authProvision.accountCreationStatus,
-      status: pendingPaymentPackage ? "AWAITING_VERIFICATION" : "PENDING_OWNER_APPROVAL",
-      paymentStatus: pendingPaymentPackage ? "PENDING" : "NOT_SUBMITTED",
-      adminReviewState: pendingPaymentPackage ? "AWAITING_VERIFICATION" : "PENDING_OWNER_DETAILS",
-      ...(pendingPaymentPackage ? { pendingPaymentSubmission: pendingPaymentPackage } : {}),
-      updatedAt: timestamp
+    transaction.set(registrationRef, {
+      ...registration,
+      ...(pendingPaymentPackage ? { latestPaymentSubmission: pendingPaymentPackage } : {}),
+      createdAt: timestamp
     }, { merge: true });
-  }
+    transaction.set(pendingOwnerRef, {
+      ...registration,
+      pendingOwnerId: registrationId,
+      ownerUid: authProvision.uid,
+      ...(pendingPaymentPackage ? { latestPaymentSubmission: pendingPaymentPackage } : {}),
+      createdAt: timestamp
+    }, { merge: true });
 
-  batch.set(db.collection("audit_logs").doc(), {
-    actorId: authProvision.uid || registrationId,
-    actorRole: authProvision.uid ? "owner" : "owner_pending",
-    action: pendingPaymentPackage ? "SUBMIT_PENDING_OWNER_PAYMENT_PACKAGE" : "SUBMIT_PENDING_OWNER_REGISTRATION",
-    targetType: "owner_registration_requests",
-    targetId: registrationId,
-    metadata: { intakeId: intakeId || null, email, authUid: authProvision.uid || null, paymentPackageSubmitted: Boolean(pendingPaymentPackage) },
-    createdAt: timestamp
+    if (intakeRef) {
+      transaction.set(intakeRef, {
+        intakeId: intakeId || registrationId,
+        ownerRegistrationId: registrationId,
+        pendingOwnerId: registrationId,
+        ownerUid: authProvision.uid,
+        ownerName: fullName,
+        ownerEmail: email,
+        ownerMobile: mobile,
+        accountCreated: true,
+        accountCreationStatus: authProvision.accountCreationStatus,
+        status: pendingPaymentPackage ? "AWAITING_VERIFICATION" : "PENDING_OWNER_APPROVAL",
+        paymentStatus: pendingPaymentPackage ? "PENDING" : "NOT_SUBMITTED",
+        adminReviewState: pendingPaymentPackage ? "AWAITING_VERIFICATION" : "PENDING_OWNER_DETAILS",
+        ...(pendingPaymentPackage ? { pendingPaymentSubmission: pendingPaymentPackage } : {}),
+        updatedAt: timestamp
+      }, { merge: true });
+    }
+
+    transaction.set(auditRef, {
+      actorId: authProvision.uid,
+      actorRole: "owner",
+      action: pendingPaymentPackage ? "SUBMIT_PENDING_OWNER_PAYMENT_PACKAGE" : "SUBMIT_PENDING_OWNER_REGISTRATION",
+      targetType: "owner_registration_requests",
+      targetId: registrationId,
+      metadata: { intakeId: intakeId || null, email, authUid: authProvision.uid, paymentPackageSubmitted: Boolean(pendingPaymentPackage) },
+      createdAt: timestamp
+    });
   });
-
-  await batch.commit();
 
   return {
     status: pendingPaymentPackage ? "PENDING_PAYMENT_VERIFICATION" : "SUCCESS",
@@ -306,7 +339,7 @@ export const submitPendingOwnerRegistration = onCall({ cors: true }, async (requ
   };
 });
 
-export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async (request) => {
+export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
   const ownerEmail = cleanEmail(data.ownerEmail);
@@ -349,12 +382,13 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   const manualPaymentReference = String(paymentManifest?.reference || "").trim();
   const manualReceiptUrl = String(paymentManifest?.receiptUrl || "").trim();
   const manualReceiptPath = String(paymentManifest?.receiptPath || "").trim();
+  const manualReceiptHash = String(paymentManifest?.receiptHash || "").trim().toLowerCase();
   if (
     paymentMethod !== "STRIPE" &&
     (
       manualPaymentReference.length < 4 ||
-      !manualReceiptUrl.startsWith("https://") ||
-      !manualReceiptPath.startsWith(`payment-references/owners/${ownerUid}/${intakeId}/`)
+      !manualReceiptPath.startsWith(`payment-references/owners/${ownerUid}/${intakeId}/`) ||
+      !/^[a-f0-9]{64}$/.test(manualReceiptHash)
     )
   ) {
     throw new HttpsError(
@@ -362,6 +396,14 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
       "Manual payment submissions require an owner-scoped uploaded receipt and payment reference.",
     );
   }
+  const receiptEvidence = paymentMethod === "STRIPE"
+    ? null
+    : await assertStoredOwnerPaymentReceipt({
+      ownerUid,
+      paymentId: intakeId,
+      storagePath: manualReceiptPath,
+      expectedHash: manualReceiptHash,
+    });
 
   const paymentRef = db.collection("payment_transactions").doc(intakeId);
   const existingPayment = await paymentRef.get();
@@ -369,7 +411,28 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   if (existingPayment.exists && existing.ownerUid !== ownerUid) {
     throw new HttpsError("already-exists", "This onboarding reference is locked to another owner.");
   }
-  const quoteStartedAt = Number(existing.quoteSnapshot?.quotedAtMs || Date.now());
+  const existingState = String(existing.paymentStatus || existing.status || "").trim().toUpperCase();
+  const existingQuoteStartedAt = Number(existing.quoteSnapshot?.quotedAtMs || 0);
+  const existingQuoteExpiresAt = Number(
+    existing.quoteSnapshot?.expiresAtMs ||
+    existing.quoteExpiresAt?.toMillis?.() ||
+    0,
+  );
+  const submittedQuoteStartedAt = Number(data.quoteQuotedAtMs || 0);
+  const submittedQuoteHash = String(data.quoteHash || "").trim().toLowerCase();
+  const existingQuoteExpired = existingQuoteExpiresAt > 0 && Date.now() > existingQuoteExpiresAt;
+  const canRotateQuote = existingPayment.exists &&
+    (existingQuoteExpired || ["REJECTED", "PAYMENT_REJECTED", "EXPIRED"].includes(existingState));
+  const quoteStartedAt = canRotateQuote
+    ? submittedQuoteStartedAt
+    : (existingQuoteStartedAt || submittedQuoteStartedAt);
+  if (
+    !Number.isFinite(quoteStartedAt) ||
+    quoteStartedAt <= 0 ||
+    quoteStartedAt > Date.now() + 60_000
+  ) {
+    throw new HttpsError("failed-precondition", "Generate and accept a current server quote before submitting payment.");
+  }
   let serverQuote: ReturnType<typeof calculateOwnerOnboardingQuote>;
   try {
     serverQuote = calculateOwnerOnboardingQuote(properties, serviceDetails.selectedAddOns, quoteStartedAt);
@@ -398,21 +461,36 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     properties,
   });
   const quoteHash = crypto.createHash("sha256")
-    .update(JSON.stringify(quoteSnapshot))
+    .update(JSON.stringify(cleanPlainValue(serverQuote)))
     .digest("hex");
+  if (!submittedQuoteHash || submittedQuoteHash !== quoteHash) {
+    throw new HttpsError("failed-precondition", "The accepted quote hash is missing or stale. Refresh and accept the current quote.");
+  }
   if (existingPayment.exists) {
-    if (existing.ownerUid !== ownerUid || (existing.quoteHash && existing.quoteHash !== quoteHash)) {
+    if (
+      existing.ownerUid !== ownerUid ||
+      (existing.quoteHash && existing.quoteHash !== quoteHash && !canRotateQuote)
+    ) {
       throw new HttpsError("already-exists", "This onboarding reference is locked to a different owner or quote version.");
     }
     if (["PAID", "APPROVED"].includes(String(existing.paymentStatus || existing.status || "").toUpperCase())) {
       return { success: true, idempotent: true, paymentId: intakeId, contractId: intakeId };
     }
+    if (
+      !canRotateQuote &&
+      existing.quoteHash === quoteHash &&
+      existing.otpEvidenceVerified === true &&
+      existing.ownerSigned === true
+    ) {
+      return { success: true, idempotent: true, paymentId: intakeId, contractId: intakeId };
+    }
   }
-  await assertVerifiedContractSignatureOtp({
+  await validateVerifiedContractSignatureOtp({
     verificationId: otpVerificationId,
     uid: ownerUid,
     contractId: intakeId,
     signature: signatureName,
+    contractHash: quoteHash,
   });
 
   // Generate the locked Contract PDF
@@ -437,9 +515,35 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   }
 
   const timestamp = serverTimestamp();
-  const batch = db.batch();
+  const contractRef = db.collection("contracts").doc(intakeId);
+  const intakeRef = db.collection("intake_submissions").doc(intakeId);
+  const packageWasIdempotent = await db.runTransaction(async (transaction) => {
+    const freshPaymentSnap = await transaction.get(paymentRef);
+    const freshPayment = freshPaymentSnap.data() || {};
+    if (freshPaymentSnap.exists) {
+      if (String(freshPayment.ownerUid || "") !== ownerUid) {
+        throw new HttpsError("already-exists", "This onboarding reference is locked to another owner.");
+      }
+      const freshState = String(freshPayment.paymentStatus || freshPayment.status || "").toUpperCase();
+      if (["PAID", "APPROVED"].includes(freshState)) {
+        if (String(freshPayment.quoteHash || "") !== quoteHash) {
+          throw new HttpsError("already-exists", "Paid onboarding evidence is locked to another quote version.");
+        }
+        return true;
+      }
+      if (freshPayment.quoteHash && freshPayment.quoteHash !== quoteHash && !canRotateQuote) {
+        throw new HttpsError("already-exists", "This onboarding reference is locked to another quote version.");
+      }
+    }
+    await consumeVerifiedContractSignatureOtp(transaction, {
+      verificationId: otpVerificationId,
+      uid: ownerUid,
+      contractId: intakeId,
+      signature: signatureName,
+      contractHash: quoteHash,
+    });
 
-  batch.set(paymentRef, {
+  transaction.set(paymentRef, {
     paymentId: intakeId,
     contractId: intakeId,
     ownerUid,
@@ -455,6 +559,12 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     quoteHash,
     quoteVersion: quoteSnapshot.version,
     quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
+    ...(canRotateQuote && existing.quoteHash && existing.quoteHash !== quoteHash
+      ? {
+        previousQuoteHashes: FieldValue.arrayUnion(existing.quoteHash),
+        quoteReplacedAt: timestamp,
+      }
+      : {}),
     currency: "AED",
     status: "PENDING",
     verificationState: "ADMIN_VERIFICATION_REQUIRED",
@@ -465,9 +575,14 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     paymentReferenceId: manualPaymentReference || null,
     paymentProofUrl: manualReceiptUrl || null,
     paymentProofPath: manualReceiptPath || null,
+    paymentProofEvidence: receiptEvidence,
+    paymentProofHash: receiptEvidence?.receiptHash || null,
+    paymentProofGeneration: receiptEvidence?.generation || null,
     contractUrl,
     signatureName,
     otpVerificationId,
+    otpEvidenceVerified: true,
+    otpEvidenceBoundAt: timestamp,
     ownerSigned: true,
     signatureStatus: "OWNER_SIGNED",
     submittedAt: timestamp,
@@ -475,14 +590,17 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     updatedAt: timestamp
   }, { merge: true });
 
-  const contractRef = db.collection("contracts").doc(intakeId);
-  batch.set(contractRef, {
+  transaction.set(contractRef, {
     contractId: intakeId,
+    paymentId: intakeId,
+    intakeId,
     ownerUid,
     ownerId: ownerUid,
     ownerEmail,
     signatureName,
     otpVerificationId,
+    otpEvidenceVerified: true,
+    otpEvidenceBoundAt: timestamp,
     contractUrl,
     annualContractValue,
     activationDeposit,
@@ -490,6 +608,12 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     quoteHash,
     quoteVersion: quoteSnapshot.version,
     quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
+    ...(canRotateQuote && existing.quoteHash && existing.quoteHash !== quoteHash
+      ? {
+        previousQuoteHashes: FieldValue.arrayUnion(existing.quoteHash),
+        quoteReplacedAt: timestamp,
+      }
+      : {}),
     ownerSigned: true,
     signatureStatus: "OWNER_SIGNED",
     signatureState: {
@@ -502,8 +626,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     updatedAt: timestamp
   }, { merge: true });
 
-  const intakeRef = db.collection("intake_submissions").doc(intakeId);
-  batch.set(intakeRef, {
+  transaction.set(intakeRef, {
     paymentSubmitted: true,
     paymentSubmittedAt: timestamp,
     paymentMethod,
@@ -514,6 +637,12 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     quoteHash,
     quoteVersion: quoteSnapshot.version,
     quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
+    ...(canRotateQuote && existing.quoteHash && existing.quoteHash !== quoteHash
+      ? {
+        previousQuoteHashes: FieldValue.arrayUnion(existing.quoteHash),
+        quoteReplacedAt: timestamp,
+      }
+      : {}),
     status: "payment_pending_approval",
     ownerUid,
     ownerId: ownerUid,
@@ -530,7 +659,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
       .replace(/[^A-Za-z0-9_-]/g, "_")
       .slice(0, 100);
     const propertyId = `${intakeId}_${sourceId}`;
-    batch.set(db.collection("properties").doc(propertyId), {
+    transaction.set(db.collection("properties").doc(propertyId), {
       ...cleanPlainValue(property),
       propertyId,
       intakeId,
@@ -543,7 +672,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
       updatedAt: timestamp,
       ...(existingPayment.exists ? {} : { createdAt: timestamp }),
     }, { merge: true });
-    batch.set(db.collection("propertyPassports").doc(propertyId), {
+    transaction.set(db.collection("propertyPassports").doc(propertyId), {
       propertyId,
       intakeId,
       ownerUid,
@@ -556,7 +685,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     }, { merge: true });
   });
 
-  batch.set(db.collection("users").doc(ownerUid), {
+  transaction.set(db.collection("users").doc(ownerUid), {
     status: "payment_pending_admin_verification",
     adminApproved: false,
     paymentVerified: false,
@@ -568,7 +697,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   }, { merge: true });
 
   const auditRef = db.collection("audit_logs").doc();
-  batch.set(auditRef, {
+  transaction.set(auditRef, {
     action: "ONBOARDING_PAYMENT_SUBMITTED",
     actorId: ownerUid,
     actorRole: "owner",
@@ -586,7 +715,12 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     documentCount: Object.keys(documentUrls).length
   });
 
-  await batch.commit();
+    return false;
+  });
+
+  if (packageWasIdempotent) {
+    return { success: true, idempotent: true, paymentId: intakeId, contractId: intakeId, quoteHash };
+  }
 
   return { success: true, idempotent: false, paymentId: intakeId, contractId: intakeId, quoteHash };
 });

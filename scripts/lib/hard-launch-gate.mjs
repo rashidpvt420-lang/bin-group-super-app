@@ -168,8 +168,12 @@ export function validateHardLaunchApprovalDocument(doc, commitSha, { root = proc
   if (!doc || typeof doc !== 'object') return ['hard-launch-approval.json missing or malformed'];
   if (doc.schemaVersion !== 1) errors.push('hard launch approval schemaVersion must be 1');
   if (doc.status !== 'approved') errors.push('hard launch approval status must be approved');
-  if (doc.releaseDecision !== 'HARD_PUBLIC_LAUNCH_AUTHORIZED') errors.push('releaseDecision must be HARD_PUBLIC_LAUNCH_AUTHORIZED');
-  if (doc.hardLaunchClaim !== true) errors.push('hardLaunchClaim must be true in final approval');
+  if (doc.releaseDecision !== 'HARD_PUBLIC_LAUNCH_PREREQUISITES_APPROVED') {
+    errors.push('releaseDecision must be HARD_PUBLIC_LAUNCH_PREREQUISITES_APPROVED');
+  }
+  if (doc.hardLaunchClaim !== false) {
+    errors.push('hardLaunchClaim must remain false before the signed final decision');
+  }
   if (doc.commitSha !== commitSha) errors.push('hard launch approval commitSha must equal current commit SHA');
   if (doc.deployedCommitSha !== commitSha) errors.push('deployedCommitSha must equal current commit SHA');
   if (doc.projectId !== PRODUCTION.projectId) errors.push(`projectId must be ${PRODUCTION.projectId}`);
@@ -238,7 +242,9 @@ export function evaluateHardLaunchEligibility({
   const hardLaunchEligible = pilot.pilotEligible && errors.length === 0;
   return {
     hardLaunchEligible,
-    hardLaunchClaim: hardLaunchEligible,
+    // Eligibility does not authorize a public claim. The signed
+    // hard-launch-decision artifact is the sole claim authority.
+    hardLaunchClaim: false,
     pilotEligible: pilot.pilotEligible,
     pilot,
     errors: [...new Set(errors)],

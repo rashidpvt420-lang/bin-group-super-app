@@ -125,9 +125,8 @@ export function runPredeployApprovalGate({
 
   const launchMode = String(env.LAUNCH_MODE || '').trim();
   if (launchMode === 'public') {
-    if (String(env.PREDEPLOY_STRIPE_PROOF_OK || '') !== 'true') {
-      failures.push('Public launch mode requires PREDEPLOY_STRIPE_PROOF_OK=true (live Stripe proof).');
-    }
+    // Public mode's Stripe proof is generated after deployment by querying
+    // Stripe and the processed webhook registry; a static boolean is rejected.
   } else if (launchMode === 'bank-pilot') {
     if (String(env.LAUNCH_BANK_ONLY || '') !== '1' && String(env.LAUNCH_BANK_ONLY || '') !== 'true') {
       failures.push('bank-pilot mode requires LAUNCH_BANK_ONLY=1.');

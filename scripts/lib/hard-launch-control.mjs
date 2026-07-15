@@ -7,7 +7,10 @@ import path from 'node:path';
 export const HARD_LAUNCH_CONTROL_SCHEMA = 1;
 export const AUTHORIZATION_KIND = 'bin-group-hard-launch-authorization';
 export const DECISION_KIND = 'bin-group-hard-launch-decision';
-export const AUTHORIZATION_MAX_AGE_MS = 60 * 60 * 1000;
+// The authorization is bound to the exact main SHA, repository, actor and
+// workflow run. It must remain valid through build, deploy, live E2E and the
+// final postdeploy decision, which can legitimately exceed one hour.
+export const AUTHORIZATION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 export const DECISION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const DEPLOYMENT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 export const FUTURE_SKEW_MS = 5 * 60 * 1000;
@@ -245,6 +248,20 @@ export function validateHardLaunchDecisionDocument(document, context = {}) {
   if (document.kind !== DECISION_KIND) failures.push('decision kind mismatch');
   if (document.status !== 'approved') failures.push('decision status must equal approved');
   if (document.hardLaunchClaim !== true) failures.push('decision hardLaunchClaim must equal true');
+  if (document.launchMode !== 'public') failures.push('decision launchMode must equal public');
+  for (const key of [
+    'authorization',
+    'incidents',
+    'deployment',
+    'liveEvidence',
+    'publicReleaseStatus',
+    'stripeLiveProof',
+    'pilotIncidentReport',
+  ]) {
+    if (!/^[a-f0-9]{64}$/.test(String(document.evidenceHashes?.[key] || ''))) {
+      failures.push(`decision evidence hash is missing or invalid: ${key}`);
+    }
+  }
   if (context.commitSha && document.commitSha !== context.commitSha) failures.push('decision commitSha mismatch');
   if (context.repository && document.repository !== context.repository) failures.push('decision repository mismatch');
   failures.push(...validateIsoTimestamp(document.approvedAt, 'decision approvedAt', { now, maxAgeMs: DECISION_MAX_AGE_MS }));

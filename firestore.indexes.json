@@ -14,6 +14,8 @@
     { "collectionGroup": "brokerLeads", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "brokerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "referrals", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "brokerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "broker_commissions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "brokerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "payment_transactions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "payment_transactions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "adminApprovalRequired", "order": "ASCENDING" }] },
     { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "recipientId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "recipientId", "order": "ASCENDING" }, { "fieldPath": "read", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "role", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },

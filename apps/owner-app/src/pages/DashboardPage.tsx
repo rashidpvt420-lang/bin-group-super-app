@@ -99,7 +99,7 @@ export default function DashboardPage() {
 
                 // Fetch Property Passports
                 const passportQuery = query(
-                    collection(db, 'property_passports'),
+                    collection(db, 'propertyPassports'),
                     where('ownerId', '==', user.uid)
                 );
                 const passportSnap = await getDocs(passportQuery);

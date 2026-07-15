@@ -22,6 +22,7 @@ const pilotLockPath = 'launch_package/pilot-start.lock.json';
 const failures = [];
 const warnings = [];
 const isPilotMode = process.argv.includes('--pilot') || process.env.LAUNCH_SCOPE === 'pilot';
+const root = process.cwd();
 
 function fail(message) {
   failures.push(message);
@@ -31,13 +32,14 @@ function warn(message) {
   warnings.push(message);
 }
 
-const sha = gitSha();
-const evidence = readJsonSafe(evidencePath(), { records: [] });
-const deploymentDoc = readJsonSafe(deploymentEvidencePath(), null);
+const sha = gitSha(root);
+const evidence = readJsonSafe(evidencePath(root), { records: [] });
+const deploymentDoc = readJsonSafe(deploymentEvidencePath(root), null);
 const eligibility = evaluatePilotEligibility({
   evidenceBatch: evidence,
   commitSha: sha,
   deploymentDoc,
+  root,
 });
 const deploymentValid =
   validateDeploymentDocument(deploymentDoc, sha, { requireWorkflowProvenance: true }).length === 0;
@@ -67,6 +69,7 @@ function validateGate(groupName, name, gate) {
   const status = String(gate.status || '').toLowerCase();
   const label = `${groupName}.${name}`;
   const waivedBlocked = assertGateNotWaivedForSecurity(groupName, name, gate);
+  const superseded = executionSupersedesLedger(groupName, name);
   if (waivedBlocked && !superseded) {
     fail(waivedBlocked);
     return;
@@ -118,12 +121,6 @@ if (existsSync(statusPath)) {
   }
 }
 
-const root = process.cwd();
-const sha = gitSha(root);
-const evidence = readJsonSafe(evidencePath(root), { records: [] });
-const deploymentDoc = readJsonSafe(deploymentEvidencePath(root), null);
-const eligibility = evaluatePilotEligibility({ evidenceBatch: evidence, commitSha: sha, deploymentDoc, root });
-
 for (const key of eligibility.missing) {
   fail(`${isPilotMode ? 'Controlled pilot' : 'Public launch'} blocked: missing current-commit evidence for ${key}`);
 }
@@ -160,7 +157,9 @@ if (!isPilotMode) {
     commitSha: sha,
     root,
   });
-  hardLaunchClaim = hard.hardLaunchClaim;
+  // Clearance is an eligibility check, not the signed final launch decision.
+  // Only hard-launch-decision-gate.mjs may emit hardLaunchClaim=true.
+  hardLaunchClaim = false;
   for (const error of hard.errors) fail(`Hard public launch blocked: ${error}`);
 }
 

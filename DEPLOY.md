@@ -8,7 +8,7 @@
 
 ---
 
-## 🛠️ Local Development & Deployment
+## 🛠️ Local Development and Protected Deployment
 
 ### 1. Build Pipeline
 To generate the production bundle:
@@ -17,17 +17,13 @@ npm install
 npm run build
 ```
 
-### 2. Hosting Deployment
-To push the latest frontend changes to production:
-```powershell
-firebase deploy --only hosting
-```
+### 2. Production deployment
 
-### 3. Full Ecosystem Update
-To deploy Cloud Functions, Firestore Rules, and Indexes along with Hosting:
-```powershell
-./deploy-production.ps1
-```
+Local production deployment is disabled. Hosting, Functions, Firestore rules,
+indexes, and Storage rules must be deployed together through
+`.github/workflows/firebase-production-deploy.yml` from the exact current
+`main` SHA after protected-environment approval. The retired PowerShell files
+fail closed and must not be used as operational instructions.
 
 ---
 

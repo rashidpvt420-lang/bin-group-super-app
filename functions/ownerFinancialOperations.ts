@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -17,7 +18,16 @@ export const ownerRecordRentPayment = onCall(
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
     const role = text(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole, 40).toLowerCase();
-    if (role !== "owner") throw new HttpsError("permission-denied", "Only an owner account may record rent evidence.");
+    const ownerUser = await admin.auth().getUser(request.auth.uid);
+    if (
+      role !== "owner" ||
+      request.auth.token?.email_verified !== true ||
+      request.auth.token?.suspended === true ||
+      ownerUser.disabled ||
+      !ownerUser.emailVerified
+    ) {
+      throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+    }
 
     const ownerUid = request.auth.uid;
     const propertyId = text(request.data?.propertyId, 160);
@@ -30,6 +40,7 @@ export const ownerRecordRentPayment = onCall(
     const referenceFileUrl = text(request.data?.referenceFileUrl, 2000);
     const referenceFilePath = text(request.data?.referenceFilePath, 500);
     const referenceFileName = text(request.data?.referenceFileName, 180);
+    const referenceFileHash = text(request.data?.referenceFileHash, 80).toLowerCase();
     const notes = text(request.data?.notes, 1000);
     const requestedRecordId = text(request.data?.paymentTransactionId || request.data?.tenantLedgerId, 180);
 
@@ -42,8 +53,8 @@ export const ownerRecordRentPayment = onCall(
     if (!["BANK_TRANSFER", "CARD", "CHEQUE", "CASH_MANUAL", "OTHER"].includes(paymentMethod)) {
       throw new HttpsError("invalid-argument", "Unsupported rent payment method.");
     }
-    if (paymentReference.length < 4 && !referenceFileUrl) {
-      throw new HttpsError("failed-precondition", "A payment reference or uploaded receipt is required.");
+    if (!referenceFilePath || !/^[a-f0-9]{64}$/.test(referenceFileHash)) {
+      throw new HttpsError("failed-precondition", "An immutable uploaded rent receipt is required.");
     }
     if (
       referenceFilePath &&
@@ -54,9 +65,15 @@ export const ownerRecordRentPayment = onCall(
 
     const propertyRef = db.collection("properties").doc(propertyId);
     const recordId = requestedRecordId;
+    const receiptEvidence = await assertStoredOwnerPaymentReceipt({
+      ownerUid,
+      paymentId: recordId,
+      storagePath: referenceFilePath,
+      expectedHash: referenceFileHash,
+    });
     const paymentRef = db.collection("payment_transactions").doc(recordId);
     const ledgerRef = db.collection("tenant_ledger").doc(recordId);
-    const auditRef = db.collection("auditLogs").doc(`owner_rent_${recordId}`);
+    const auditRef = db.collection("audit_logs").doc(`owner_rent_${recordId}`);
     const now = FieldValue.serverTimestamp();
     const balance = Math.max(0, Math.round((rentDue - rentPaid) * 100) / 100);
     const status = balance > 0 ? "PARTIAL" : "PAID";
@@ -78,7 +95,8 @@ export const ownerRecordRentPayment = onCall(
           text(existing.ownerUid || existing.ownerId, 160) !== ownerUid ||
           text(existing.propertyId, 160) !== propertyId ||
           money(existing.rentPaid ?? existing.amountPaid ?? existing.amount, "Existing rent paid") !== rentPaid ||
-          text(existing.paymentReference, 180) !== paymentReference
+          text(existing.paymentReference, 180) !== paymentReference ||
+          text(existing.referenceFileHash, 80).toLowerCase() !== referenceFileHash
         ) {
           throw new HttpsError("already-exists", "Rent record ID is bound to different owner evidence.");
         }
@@ -116,6 +134,8 @@ export const ownerRecordRentPayment = onCall(
         referenceFileUrl,
         referenceFilePath,
         referenceFileName,
+        referenceFileHash,
+        receiptEvidence,
         notes,
         createdByOwnerUid: ownerUid,
         createdAt: now,

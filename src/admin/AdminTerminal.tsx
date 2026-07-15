@@ -42,7 +42,7 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
 
-const LEGACY_ADMIN_PANEL_URL = 'https://bin-group-admin-panel.web.app';
+const ADMIN_OPERATIONS_CONSOLE_URL = 'https://bin-group-admin-panel.web.app';
 
 type Metric = {
   key: string;
@@ -262,7 +262,7 @@ export default function AdminTerminal() {
       </Stack>
 
       <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)', '& .MuiAlert-icon': { color: '#60A5FA' } }}>
-        The canonical admin route is <strong>/admin/dashboard</strong>. The old admin-panel domain is handoff-only; do not split dashboard fixes across duplicate admin folders.
+        This in-app route is the read-only status terminal. Owner approvals, payment verification, dispatch, disputes, and staff operations are performed in the protected Admin Operations Console.
       </Alert>
 
       {!loading && (
@@ -470,8 +470,8 @@ export default function AdminTerminal() {
         <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>
           Trust & Security
         </Button>
-        <Button href={LEGACY_ADMIN_PANEL_URL} target="_blank" rel="noreferrer" startIcon={renderSafeIcon(ExternalLink, { size: 17 })} sx={{ color: 'rgba(255,255,255,0.64)', border: '1px solid rgba(255,255,255,0.18)', fontWeight: 900 }}>
-          Legacy handoff
+        <Button href={ADMIN_OPERATIONS_CONSOLE_URL} target="_blank" rel="noreferrer" startIcon={renderSafeIcon(ExternalLink, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#E5C86B' } }}>
+          Open Operations Console
         </Button>
         <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>
           Reset session

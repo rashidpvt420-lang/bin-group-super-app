@@ -167,7 +167,7 @@ async function runStage4Pilot() {
     console.log(chalk.yellow("\n🧐 Verifying Passport Aggregation (Waiting 10s)..."));
     await new Promise(r => setTimeout(r, 10000));
 
-    const passportSnap = await db.collection('property_passports').doc(`passport_${propertyId}`).get();
+    const passportSnap = await db.collection('propertyPassports').doc(propertyId).get();
     if (!passportSnap.exists) {
         console.log(chalk.red("❌ Property Passport NOT found. Aggregation failed."));
     } else {

@@ -337,7 +337,7 @@ export const UAE_MARKET_LEADERSHIP_DATA_MODEL: MarketLeadershipCollection[] = [
   { collection: 'maintenance_ledger', owner: 'admin', purpose: 'Immutable repair timeline from intake to owner report.', hardenedRuleRequired: true, publicSafe: false },
   { collection: 'quote_benchmarks', owner: 'finance', purpose: 'Trade, area, scope, estimate band, quote variance, and invoice matching.', hardenedRuleRequired: true, publicSafe: false },
   { collection: 'vendor_rfqs', owner: 'operations', purpose: 'Three-quote procurement, comparison matrix, exception reason, and award decision.', hardenedRuleRequired: true, publicSafe: false },
-  { collection: 'property_passports', owner: 'owner', purpose: 'Owner-approved safe maintenance passport summaries and warranty status.', hardenedRuleRequired: true, publicSafe: true },
+  { collection: 'propertyPassports', owner: 'owner', purpose: 'Owner-approved safe maintenance passport summaries and warranty status.', hardenedRuleRequired: true, publicSafe: true },
   { collection: 'owner_reports', owner: 'finance', purpose: 'Owner P&L, yield, service charge, management fee, invoice, VAT, and export-ready reporting.', hardenedRuleRequired: true, publicSafe: false },
   { collection: 'move_evidence_chains', owner: 'operations', purpose: 'Move-in/out condition packs, meter readings, keys, deductions, signatures, and dispute window.', hardenedRuleRequired: true, publicSafe: false },
   { collection: 'employees', owner: 'hr', purpose: 'Employee master, visa, Emirates ID, medical, insurance, certificate, accommodation, and dispatch readiness.', hardenedRuleRequired: true, publicSafe: false },

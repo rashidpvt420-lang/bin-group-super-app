@@ -14,7 +14,6 @@ import { LanguageProvider, useLanguage, SovereignAIChat, AIProvider, SovereignAl
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import BulkImporter from './components/BulkImporter';
-import AdminPaymentApproval from './components/AdminPaymentApproval';
 import InstitutionalReportsPanel from './components/reports/InstitutionalReportsPanel';
 import PilotCommandCenter from './components/pilot/PilotCommandCenter';
 import PublicLaunchOpsPanel from './components/ops/PublicLaunchOpsPanel';
@@ -122,7 +121,7 @@ function AppContent() {
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
                     <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
-                    <Route path="/manual-approvals" element={<ProtectedRoute adminOnly><AdminPaymentApproval /></ProtectedRoute>} />
+                    <Route path="/manual-approvals" element={<Navigate to="/payments" replace />} />
                     <Route path="/admin/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
                     <Route path="/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
                     <Route path="/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />

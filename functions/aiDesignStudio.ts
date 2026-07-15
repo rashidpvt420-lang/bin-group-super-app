@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import { enforceAiUsageQuota } from "./aiUsageQuota";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const imageGenerationKey = defineSecret("IMAGE_GENERATION_API_KEY");
@@ -294,6 +295,12 @@ export const generateAIDesignConceptImages = onCall({
 }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in before generating AI design renders.");
+  await enforceAiUsageQuota(
+    request.auth,
+    "design",
+    new Set(["owner", "tenant", "admin", "super_admin", "ceo"]),
+    3,
+  );
 
   const data = (request.data || {}) as GeneratePayload;
   const requestId = cleanText(data.requestId, `preview_${Date.now()}`);

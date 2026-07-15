@@ -4,7 +4,7 @@ import {
     Container, Typography, Box, Paper, Grid, Stack, Button,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
-    IconButton, Alert
+    IconButton
 } from '@mui/material';
 import { 
     DollarSign, 
@@ -13,8 +13,6 @@ import {
 import { db, collection, query, onSnapshot, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '../../lib/firebase';
 import RegisterStaffDialog from '../../components/RegisterStaffDialog';
 
 export default function HRManagementPage() {
@@ -25,8 +23,6 @@ export default function HRManagementPage() {
     const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [generatingId, setGeneratingId] = useState<string | null>(null);
-    const [payrollError, setPayrollError] = useState<string | null>(null);
     const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
 
     const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
@@ -76,25 +72,6 @@ export default function HRManagementPage() {
         }
     };
 
-    const getPayrollErrorMessage = (err: any) => {
-        const code = err?.code || 'functions/internal';
-        const message = err?.message || 'No additional detail was returned.';
-
-        if (code === 'functions/unauthenticated') {
-            return 'Your admin session expired. Sign in again and retry payslip generation.';
-        }
-        if (code === 'functions/permission-denied') {
-            return 'Your account does not have HR or finance permission to generate payslips.';
-        }
-        if (code === 'functions/failed-precondition') {
-            return 'Payroll email is not configured in Firebase Secrets. Configure SMTP_USER and SMTP_PASS before retrying.';
-        }
-        if (code === 'functions/invalid-argument') {
-            return `Payslip data is incomplete. ${message}`;
-        }
-        return `Payslip could not be generated (${code}). ${message}`;
-    };
-
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
@@ -134,16 +111,6 @@ export default function HRManagementPage() {
                     <Tab label="PAYROLL HUB" disabled={!isHRManager} />
                     <Tab label="HR DOCUMENTS" disabled={!isHRStaff} />
                 </Tabs>
-
-                {payrollError && (
-                    <Alert
-                        severity="error"
-                        onClose={() => setPayrollError(null)}
-                        sx={{ mb: 3, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#fecaca' }}
-                    >
-                        {payrollError}
-                    </Alert>
-                )}
 
                 {tab === 0 && (
                     <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
@@ -214,46 +181,9 @@ export default function HRManagementPage() {
                                                         <Button 
                                                             size="small" 
                                                             variant="outlined" 
-                                                            startIcon={generatingId === s.id ? <CircularProgress size={14} /> : <FileText size={14} />}
-                                                            disabled={generatingId !== null}
-                                                            onClick={async () => {
-                                                                setGeneratingId(s.id);
-                                                                setPayrollError(null);
-                                                                try {
-                                                                    if (!auth.currentUser) {
-                                                                        setPayrollError('Your admin session is not active. Sign in again before generating payslips.');
-                                                                        return;
-                                                                    }
-                                                                    if (!s.salary || s.salary <= 0) {
-                                                                        setPayrollError(`${s.displayName || 'This staff member'} has no salary on file. Set a salary before generating a payslip.`);
-                                                                        return;
-                                                                    }
-                                                                    await auth.currentUser.getIdToken(true);
-
-                                                                    // The function in index.ts is generateAndEmailPayslip
-                                                                    const genFn = httpsCallable(functions, 'generateAndEmailPayslip');
-                                                                    const payPeriod = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                                                                    const result: any = await genFn({
-                                                                        staffId: s.id,
-                                                                        staffName: s.displayName,
-                                                                        staffEmail: s.email,
-                                                                        payPeriod,
-                                                                        basicSalary: s.salary,
-                                                                        allowances: s.allowances || 0,
-                                                                        overtime: s.overtime || 0,
-                                                                        deductions: s.deductions || 0
-                                                                    });
-
-                                                                    if (result.data.success) {
-                                                                        alert("Sovereign Pay Advice secured and dispatched via email.");
-                                                                    }
-                                                                } catch (err: any) {
-                                                                    console.error("Payroll fault:", err);
-                                                                    setPayrollError(getPayrollErrorMessage(err));
-                                                                } finally {
-                                                                    setGeneratingId(null);
-                                                                }
-                                                            }}
+                                                            startIcon={<FileText size={14} />}
+                                                            onClick={() => navigate('/financials/payroll')}
+                                                            title="Generate a server-authoritative payroll batch before settling and emailing a payslip."
                                                             sx={{ 
                                                                 borderColor: alpha(binThemeTokens.gold, 0.3), 
                                                                 color: binThemeTokens.gold, 

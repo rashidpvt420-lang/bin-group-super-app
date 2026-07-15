@@ -56,12 +56,19 @@ export default function BrokerDocumentsPage() {
         try {
             const safeName = file.name.replace(/[^\w.-]+/g, '_');
             const fileRef = ref(storage, `brokerDocuments/${user.uid}/${docType}/${Date.now()}_${safeName}`);
-            await uploadBytes(fileRef, file);
+            await uploadBytes(fileRef, file, {
+                contentType: file.type || 'application/octet-stream',
+                customMetadata: {
+                    brokerId: user.uid,
+                    documentType: docType,
+                },
+            });
             const fileUrl = await getDownloadURL(fileRef);
             await addDoc(collection(db, 'brokerDocuments'), {
                 brokerId: user.uid,
                 fileName: file.name,
                 fileUrl,
+                storagePath: fileRef.fullPath,
                 fileSize: file.size,
                 contentType: file.type || 'application/octet-stream',
                 docType,

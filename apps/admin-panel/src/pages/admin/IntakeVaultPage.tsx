@@ -128,16 +128,18 @@ export const IntakeVaultPage: React.FC = () => {
         }
     };
 
-    const handleReject = async (id: string) => {
+    const handleReject = async (intake: IntakeSubmission) => {
         if (!window.confirm("Initialize Rejection Protocol? This will archive the submission.")) return;
+        const reason = window.prompt('Enter the audited rejection reason.');
+        if (!reason?.trim()) return;
         try {
-            await updateDoc(doc(db, 'intake_submissions', id), {
-                status: 'REJECTED',
-                rejectedAt: serverTimestamp()
-            });
+            const paymentId = intake.payment?.paymentId || (intake as any).paymentId || intake.id;
+            const rejectPayment = httpsCallable(functions, 'adminRejectPayment');
+            await rejectPayment({ paymentId, reason: reason.trim() });
             setSelectedIntake(null);
         } catch (err) {
-            console.error(err);
+            console.error('Canonical payment rejection failed:', err);
+            alert('Rejection failed closed. Confirm that a bound payment transaction exists and is not already active.');
         }
     };
 
@@ -441,7 +443,7 @@ export const IntakeVaultPage: React.FC = () => {
                                         variant="outlined" 
                                         color="error"
                                         startIcon={<XCircle />}
-                                        onClick={() => handleReject(selectedIntake.id)}
+                                        onClick={() => handleReject(selectedIntake)}
                                         sx={{ 
                                             fontWeight: 900, 
                                             borderColor: binThemeTokens.danger,

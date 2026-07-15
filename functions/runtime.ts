@@ -31,6 +31,10 @@ export * from "./qrSecurity";
 export * from "./technicianOfflineSync";
 export * from "./scheduledServices";
 export * from "./scheduledServiceAvailability";
+export * from "./ticketDispatchOperations";
+export * from "./paymentEvidence";
+export * from "./tenantTicketOperations";
+export * from "./aiUsageQuota";
 
 if (!admin.apps.length) {
   admin.initializeApp();

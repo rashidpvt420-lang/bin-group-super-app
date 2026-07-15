@@ -76,6 +76,15 @@ test('founder authorization is bound to the exact workflow commit', () => {
   assert.match(errors, /commitSha does not match workflow SHA/);
 });
 
+test('same-run authorization remains valid through a ninety-minute deployment pipeline', () => {
+  const authorization = signDocument({
+    ...authorizationPayload(),
+    issuedAt: new Date(now - 90 * 60_000).toISOString(),
+    expiresAt: new Date(now + 10 * 60 * 60_000).toISOString(),
+  }, signingKey);
+  assert.deepEqual(validateAuthorizationDocument(authorization, context), []);
+});
+
 test('missing incident telemetry fails closed', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'hard-launch-incidents-'));
   try {

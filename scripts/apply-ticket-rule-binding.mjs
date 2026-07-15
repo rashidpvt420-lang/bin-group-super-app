@@ -4,12 +4,16 @@ const file = 'firestore.rules';
 let text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 let changed = false;
 
-const oldCreate = "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);";
-const newCreate = "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);";
-
-if (text.includes(oldCreate)) {
-  text = text.split(oldCreate).join(newCreate);
-  changed = true;
+const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
+for (const legacyCreate of [
+  "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
+  "      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);",
+  "      allow create: if canDispatchJobs() || canCreateTenantBoundTicket(request.resource.data);",
+]) {
+  if (text.includes(legacyCreate)) {
+    text = text.split(legacyCreate).join(canonicalCreate);
+    changed = true;
+  }
 }
 
 function removeRuleFunction(functionName) {
@@ -51,15 +55,10 @@ function removeRuleFunction(functionName) {
   return removed;
 }
 
-const canonicalPool = '    function openMissionPoolRead(data) { return isApprovedTechnician() && openMissionAvailable(data); }';
-const poolPattern = /^    function openMissionPoolRead\(data\) \{ return .*openMissionAvailable\(data\); \}$/gm;
-if (poolPattern.test(text)) {
-  text = text.replace(poolPattern, canonicalPool);
-  changed = true;
-}
-
 const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
 const removedDirectClaims = removeRuleFunction('safeOpenMissionClaim');
+const removedOpenPool = removeRuleFunction('openMissionPoolRead');
+const removedOpenAvailability = removeRuleFunction('openMissionAvailable');
 
 const directClaimReference = /\s*\|\|\s*safeOpenMissionClaim\(\)/g;
 if (directClaimReference.test(text)) {
@@ -67,25 +66,32 @@ if (directClaimReference.test(text)) {
   changed = true;
 }
 
-const canonicalTicketUpdate = '      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
+const canonicalTicketUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
 if (!text.includes(canonicalTicketUpdate)) {
   throw new Error('[ticket-rule-binding] Tickets update rule is not server-authoritative after cleanup.');
 }
 
-for (const forbidden of ['function safeOpenMissionClaim(', 'function missionClaimFieldsLookValid(', 'safeOpenMissionClaim()']) {
+for (const forbidden of [
+  'function safeOpenMissionClaim(',
+  'function missionClaimFieldsLookValid(',
+  'safeOpenMissionClaim()',
+  'function openMissionPoolRead(',
+  'function openMissionAvailable(',
+  'openMissionPoolRead(resource.data)',
+]) {
   if (text.includes(forbidden)) {
     throw new Error(`[ticket-rule-binding] Forbidden direct technician claim fragment remains: ${forbidden}`);
   }
 }
 
-if (!text.includes(canonicalPool)) {
-  throw new Error('[ticket-rule-binding] Open mission visibility is not restricted to approved technicians.');
+if (!text.includes(canonicalCreate)) {
+  throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
 }
 
 if (changed) writeFileSync(file, text);
 
 console.log(
   changed
-    ? `Applied server-authoritative ticket dispatch cleanup (claim helpers removed: ${removedClaimFields + removedDirectClaims}).`
+    ? `Applied server-authoritative ticket dispatch cleanup (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`
     : 'Ticket and dispatch rules already server-authoritative.',
 );

@@ -94,10 +94,14 @@ export const requestContractSignatureOtp = onCall(
   {
     cors: true,
     region: "europe-west3",
+    enforceAppCheck: true,
     secrets: [smtpUser, smtpPass],
   },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before requesting a contract signature OTP.");
+    if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
+      throw new HttpsError("permission-denied", "A verified, active owner email is required for contract OTP.");
+    }
 
     const user = smtpUser.value() || process.env.SMTP_USER || "";
     const pass = smtpPass.value() || process.env.SMTP_PASS || "";
@@ -118,6 +122,10 @@ export const requestContractSignatureOtp = onCall(
     await enforceOtpRequestRate(uid);
 
     const contractId = asText(request.data?.contractId || request.data?.propertyId || "contract-pending", "contract-pending").slice(0, 120);
+    const contractHash = asText(request.data?.contractHash).toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(contractHash)) {
+      throw new HttpsError("failed-precondition", "A server-authoritative contract quote hash is required.");
+    }
     const propertyName = asText(request.data?.propertyName || request.data?.address || "BIN GROUP contract", "BIN GROUP contract").slice(0, 180);
     const otp = makeOtp();
     const salt = crypto.randomBytes(18).toString("hex");
@@ -144,6 +152,7 @@ export const requestContractSignatureOtp = onCall(
     await requestRef.set({
       uid,
       contractId,
+      contractHash,
       propertyName,
       email,
       channel: "email",
@@ -184,7 +193,7 @@ export const requestContractSignatureOtp = onCall(
 );
 
 export const verifyContractSignatureOtp = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before verifying a contract signature OTP.");
 
@@ -281,45 +290,78 @@ export const verifyContractSignatureOtp = onCall(
   }
 );
 
-export async function assertVerifiedContractSignatureOtp(args: {
+type VerifiedOtpArgs = {
   verificationId: string;
   uid: string;
   contractId: string;
   signature: string;
-}) {
+  contractHash: string;
+};
+
+function assertVerifiedEvidence(data: FirebaseFirestore.DocumentData, args: VerifiedOtpArgs) {
+  const contractId = asText(args.contractId);
+  const signature = asText(args.signature);
+  const contractHash = asText(args.contractHash).toLowerCase();
+  const evidenceExpiresAt = data.evidenceExpiresAt?.toMillis ? data.evidenceExpiresAt.toMillis() : 0;
+  if (
+    data.status !== "VERIFIED" ||
+    data.uid !== args.uid ||
+    asText(data.contractId) !== contractId ||
+    asText(data.contractHash).toLowerCase() !== contractHash ||
+    asText(data.signature) !== signature ||
+    !evidenceExpiresAt ||
+    Date.now() > evidenceExpiresAt
+  ) {
+    throw new HttpsError("failed-precondition", "Contract OTP evidence is invalid, expired, or belongs to another contract.");
+  }
+  const consumedFor = asText(data.consumedFor);
+  if (consumedFor) {
+    throw new HttpsError("failed-precondition", "Contract OTP evidence has already been consumed.");
+  }
+}
+
+export async function validateVerifiedContractSignatureOtp(args: VerifiedOtpArgs) {
   const verificationId = asText(args.verificationId);
   const contractId = asText(args.contractId);
   const signature = asText(args.signature);
-  if (!verificationId || !contractId || !signature) {
+  const contractHash = asText(args.contractHash).toLowerCase();
+  if (!verificationId || !contractId || !signature || !/^[a-f0-9]{64}$/.test(contractHash)) {
+    throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required.");
+  }
+  const snap = await db.collection("contract_signature_otps").doc(verificationId).get();
+  if (!snap.exists) throw new HttpsError("failed-precondition", "Contract OTP verification was not found.");
+  assertVerifiedEvidence(snap.data() || {}, args);
+  return { verificationId, contractId };
+}
+
+export async function consumeVerifiedContractSignatureOtp(
+  transaction: FirebaseFirestore.Transaction,
+  args: VerifiedOtpArgs,
+) {
+  const verificationId = asText(args.verificationId);
+  const contractId = asText(args.contractId);
+  const signature = asText(args.signature);
+  const contractHash = asText(args.contractHash).toLowerCase();
+  if (!verificationId || !contractId || !signature || !/^[a-f0-9]{64}$/.test(contractHash)) {
     throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required.");
   }
 
   const ref = db.collection("contract_signature_otps").doc(verificationId);
-  await db.runTransaction(async (transaction) => {
-    const snap = await transaction.get(ref);
-    if (!snap.exists) throw new HttpsError("failed-precondition", "Contract OTP verification was not found.");
-    const data = snap.data() || {};
-    const evidenceExpiresAt = data.evidenceExpiresAt?.toMillis ? data.evidenceExpiresAt.toMillis() : 0;
-    if (
-      data.status !== "VERIFIED" ||
-      data.uid !== args.uid ||
-      asText(data.contractId) !== contractId ||
-      asText(data.signature) !== signature ||
-      !evidenceExpiresAt ||
-      Date.now() > evidenceExpiresAt
-    ) {
-      throw new HttpsError("failed-precondition", "Contract OTP evidence is invalid, expired, or belongs to another contract.");
-    }
-    const consumedFor = asText(data.consumedFor);
-    if (consumedFor && consumedFor !== contractId) {
-      throw new HttpsError("failed-precondition", "Contract OTP evidence has already been consumed.");
-    }
-    transaction.set(ref, {
-      consumedFor: contractId,
-      consumedAt: data.consumedAt || FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-  });
+  const snap = await transaction.get(ref);
+  if (!snap.exists) throw new HttpsError("failed-precondition", "Contract OTP verification was not found.");
+  const data = snap.data() || {};
+  assertVerifiedEvidence(data, args);
+  transaction.set(ref, {
+    consumedFor: contractId,
+    consumedAt: data.consumedAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
 
   return { verificationId, contractId };
+}
+
+export async function assertVerifiedContractSignatureOtp(args: VerifiedOtpArgs) {
+  return db.runTransaction(async (transaction) =>
+    consumeVerifiedContractSignatureOtp(transaction, args)
+  );
 }

@@ -77,7 +77,11 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
             setSnackbar({ open: true, message: `${t('onboarding.payment.manifest_prefix')} ${method}`, severity: 'success' });
         } catch (error: any) {
             console.error("Manifest Error:", error);
-            setSnackbar({ open: true, message: t('onboarding.payment.initiation_error'), severity: 'error' });
+            setSnackbar({
+                open: true,
+                message: error?.message || t('onboarding.payment.initiation_error'),
+                severity: 'error'
+            });
         } finally {
             setIsGenerating(false);
         }

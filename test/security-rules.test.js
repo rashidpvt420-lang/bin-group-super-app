@@ -57,6 +57,25 @@ describe('Firestore Security Rules', () => {
     await assertFails(setDoc(doc(ownerADb, 'payment_transactions/pay_1'), { ownerId: 'owner_a', paymentVerified: true }));
   });
 
+  it('owner profile activation fields remain server-authoritative', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'owners/owner_a'), {
+      ownerId: 'owner_a',
+      status: 'pending_admin_approval',
+      adminApproved: false,
+      paymentVerified: false,
+      dashboardUnlocked: false,
+      dashboardLocked: true,
+      activeContractId: null,
+    });
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'owners/owner_a'), {
+      adminApproved: true,
+      dashboardLocked: false,
+      activeContractId: 'forged_contract',
+    }));
+  });
+
   it('admin override: Admin can read all', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
@@ -175,7 +194,10 @@ describe('Firestore Security Rules', () => {
       suspended: false,
     });
     await setDoc(doc(adminDb, 'tickets/open_ticket_approved_tech'), openTicket);
+    await setDoc(doc(adminDb, 'maintenanceTickets/open_maintenance_ticket_approved_tech'), openTicket);
     const approvedTechDb = testEnv.authenticatedContext('tech_approved', { role: 'technician' }).firestore();
+    await assertFails(getDoc(doc(approvedTechDb, 'tickets/open_ticket_approved_tech')));
+    await assertFails(getDoc(doc(approvedTechDb, 'maintenanceTickets/open_maintenance_ticket_approved_tech')));
     await assertFails(updateDoc(doc(approvedTechDb, 'tickets/open_ticket_approved_tech'), {
       assignedTechnicianId: 'tech_approved',
       technicianId: 'tech_approved',
@@ -187,6 +209,52 @@ describe('Firestore Security Rules', () => {
     const dispatcherDb = testEnv.authenticatedContext('dispatcher_a', { role: 'dispatcher' }).firestore();
     await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));
     await assertSucceeds(updateDoc(doc(dispatcherDb, 'maintenanceTickets/open_maintenance_ticket'), claim));
+    await assertFails(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), {
+      paymentVerified: true,
+      status: 'CLOSED',
+      updatedAt: new Date().toISOString(),
+    }));
+    await assertFails(updateDoc(doc(dispatcherDb, 'maintenanceTickets/open_maintenance_ticket'), {
+      paymentVerified: true,
+      status: 'CLOSED',
+      updatedAt: new Date().toISOString(),
+    }));
+  });
+
+  it('physical access passes: tenants cannot mint or approve pass records directly', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a', unitId: 'unit_a' });
+    await setDoc(doc(adminDb, 'units/unit_a'), { tenantId: 'tenant_a', propertyId: 'prop_a', ownerId: 'owner_a' });
+
+    const tenantDb = testEnv.authenticatedContext('tenant_a', { role: 'tenant' }).firestore();
+    await assertFails(setDoc(doc(tenantDb, 'gatePasses/forged'), {
+      passId: 'forged',
+      tenantUid: 'tenant_a',
+      propertyId: 'prop_a',
+      unitId: 'unit_a',
+      status: 'active',
+      qrToken: 'forged',
+    }));
+    await assertFails(setDoc(doc(tenantDb, 'visitorParkingRequests/forged'), {
+      passId: 'forged',
+      tenantUid: 'tenant_a',
+      propertyId: 'prop_a',
+      unitId: 'unit_a',
+      status: 'approved',
+      qrToken: 'forged',
+    }));
+    await setDoc(doc(adminDb, 'visitorParkingRequests/server_created'), {
+      passId: 'server_created',
+      tenantUid: 'tenant_a',
+      propertyId: 'prop_a',
+      unitId: 'unit_a',
+      status: 'pending',
+      qrToken: 'signed-on-server',
+    });
+    await assertFails(updateDoc(doc(tenantDb, 'visitorParkingRequests/server_created'), {
+      status: 'approved',
+    }));
   });
 
   it('tenant ticket creation: tenant must use their own assigned unit and matching property', async () => {
@@ -204,6 +272,9 @@ describe('Firestore Security Rules', () => {
       propertyId: 'prop_a',
       status: 'OPEN',
       source: 'TENANT_PORTAL',
+      evidenceStatus: 'PENDING_TENANT_UPLOAD',
+      assignedTechnicianId: null,
+      technicianId: null,
     }));
 
     await assertFails(setDoc(doc(tenantADb, 'maintenanceTickets/wrong_property_ticket'), {
@@ -213,6 +284,9 @@ describe('Firestore Security Rules', () => {
       propertyId: 'prop_b',
       status: 'OPEN',
       source: 'TENANT_PORTAL',
+      evidenceStatus: 'PENDING_TENANT_UPLOAD',
+      assignedTechnicianId: null,
+      technicianId: null,
     }));
 
     await assertFails(setDoc(doc(tenantADb, 'maintenanceTickets/wrong_unit_ticket'), {
@@ -222,10 +296,13 @@ describe('Firestore Security Rules', () => {
       propertyId: 'prop_b',
       status: 'OPEN',
       source: 'TENANT_PORTAL',
+      evidenceStatus: 'PENDING_TENANT_UPLOAD',
+      assignedTechnicianId: null,
+      technicianId: null,
     }));
   });
 
-  it('gatePasses isolation: Tenant can manage own gatePasses, others blocked', async () => {
+  it('gatePasses isolation: Tenant can read own server pass but cannot mint one', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'gatePasses/pass_1'), { tenantUid: 'tenant_a', visitorName: 'Visitor 1' });
@@ -234,7 +311,7 @@ describe('Firestore Security Rules', () => {
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
 
     await assertSucceeds(getDoc(doc(tenantADb, 'gatePasses/pass_1')));
-    await assertSucceeds(setDoc(doc(tenantADb, 'gatePasses/pass_new'), { tenantUid: 'tenant_a', visitorName: 'Visitor New' }));
+    await assertFails(setDoc(doc(tenantADb, 'gatePasses/pass_new'), { tenantUid: 'tenant_a', visitorName: 'Visitor New' }));
     await assertFails(getDoc(doc(tenantBDb, 'gatePasses/pass_1')));
   });
 
@@ -586,7 +663,7 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantADb, 'amenityBookings/booking_b')));
   });
 
-  it('tenant cannot create visitor parking for another unit', async () => {
+  it('tenant cannot create visitor parking records directly', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
@@ -595,7 +672,7 @@ describe('Firestore Security Rules', () => {
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
 
-    await assertSucceeds(setDoc(doc(tenantADb, 'visitorParkingRequests/req_a'), {
+    await assertFails(setDoc(doc(tenantADb, 'visitorParkingRequests/req_a'), {
       tenantUid: 'tenant_a',
       propertyId: 'prop_a',
       unitId: 'unit_a',
@@ -750,6 +827,91 @@ describe('Firestore Security Rules', () => {
       tenantId: 'tenant_b',
       description: 'Water leak',
       status: 'OPEN',
+    }));
+  });
+
+  it('financial ledgers are server-authored even for admin browser clients', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const seedDb = context.firestore();
+      await setDoc(doc(seedDb, 'payment_transactions/seed_payment'), {
+        ownerId: 'owner_a',
+        amount: 100,
+        status: 'PENDING',
+      });
+    });
+
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
+    for (const clientDb of [ownerDb, adminDb]) {
+      await assertFails(setDoc(doc(clientDb, 'payment_transactions/client_payment'), {
+        ownerId: 'owner_a',
+        amount: 100,
+        status: 'PAID',
+        paymentVerified: true,
+      }));
+      await assertFails(updateDoc(doc(clientDb, 'payment_transactions/seed_payment'), {
+        status: 'PAID',
+        paymentVerified: true,
+      }));
+      await assertFails(deleteDoc(doc(clientDb, 'payment_transactions/seed_payment')));
+      await assertFails(setDoc(doc(clientDb, 'payments/client_payment'), { amount: 100, status: 'PAID' }));
+      await assertFails(setDoc(doc(clientDb, 'transactions/client_transaction'), { amount: 100, status: 'PAID' }));
+      await assertFails(setDoc(doc(clientDb, 'invoices/client_invoice'), { amount: 100, status: 'PAID' }));
+    }
+  });
+
+  it('server coordination and security evidence collections reject all client writes', async () => {
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
+    for (const clientDb of [ownerDb, adminDb]) {
+      await assertFails(setDoc(doc(clientDb, 'public_rate_limits/property_test'), { count: 1 }));
+      await assertFails(setDoc(doc(clientDb, 'notification_dispatch_claims/claim_test'), { createdByUid: 'owner_a' }));
+      await assertFails(setDoc(doc(clientDb, 'stripe_webhook_events/evt_test'), { processed: true }));
+      await assertFails(setDoc(doc(clientDb, 'contract_signature_otps/otp_test'), { status: 'VERIFIED' }));
+      await assertFails(setDoc(doc(clientDb, 'ai_usage/owner_a_20260715'), { total: 1 }));
+    }
+  });
+
+  it('email-based owner access requires a verified authentication email', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'propertyPassports/passport_email'), {
+      ownerId: 'different_owner',
+      ownerEmail: 'owner@example.com',
+      status: 'ACTIVE',
+    });
+    await setDoc(doc(adminDb, 'users/tenant_email'), {
+      role: 'tenant',
+      ownerId: '',
+      ownerEmail: 'owner@example.com',
+    });
+
+    const unverifiedDb = testEnv.authenticatedContext('email_owner_unverified', {
+      role: 'owner',
+      email: 'owner@example.com',
+      email_verified: false,
+    }).firestore();
+    const verifiedDb = testEnv.authenticatedContext('email_owner_verified', {
+      role: 'owner',
+      email: 'owner@example.com',
+      email_verified: true,
+    }).firestore();
+
+    await assertFails(getDoc(doc(unverifiedDb, 'propertyPassports/passport_email')));
+    await assertFails(getDoc(doc(unverifiedDb, 'users/tenant_email')));
+    await assertSucceeds(getDoc(doc(verifiedDb, 'propertyPassports/passport_email')));
+    await assertSucceeds(getDoc(doc(verifiedDb, 'users/tenant_email')));
+  });
+
+  it('amenity slot creation fails closed when tenant property binding is absent', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await setDoc(doc(adminDb, 'users/tenant_without_property'), { role: 'tenant' });
+    const tenantDb = testEnv.authenticatedContext('tenant_without_property', { role: 'tenant' }).firestore();
+    await assertFails(setDoc(doc(tenantDb, 'amenitySlots/unbound_slot'), {
+      tenantUid: 'tenant_without_property',
+      amenityName: 'Community Pool',
+      bookingDate: '2026-07-02',
+      timeSlot: '10AM',
     }));
   });
 });

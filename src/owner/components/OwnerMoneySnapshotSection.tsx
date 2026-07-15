@@ -7,7 +7,7 @@ import { NotificationEvents } from '../../services/notificationService';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
 
-type RentRecordPayload = { tenantName: string; propertyId: string; propertyName: string; unitNumber: string; rentDue: number; rentPaid: number; paymentMethod: string; paymentReference: string; notes: string; paymentTransactionId?: string; tenantLedgerId?: string };
+type RentRecordPayload = { tenantName: string; propertyId: string; propertyName: string; unitNumber: string; rentDue: number; rentPaid: number; paymentMethod: string; paymentReference: string; notes: string; paymentTransactionId?: string; tenantLedgerId?: string; referenceFileUrl?: string; referenceFilePath?: string; referenceFileName?: string; referenceFileType?: string; referenceFileSize?: number; referenceFileHash?: string };
 type Props = { ledgerSummary: TenantLedgerSummary | null; pendingPayments: number; properties: any[]; onRecordRentPayment: (payload: RentRecordPayload) => Promise<void>; isExternalOpen?: boolean; onCloseExternal?: () => void };
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
@@ -18,6 +18,10 @@ function statusTone(status: string, balance: number, overdueDays: number) { if (
 function display(value: any) { return value === undefined || value === null || value === '' ? 'Not recorded' : String(value); }
 function safeFileName(value: string) { return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'reference-file'; }
 function openExternalUrl(url?: string | null) { if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer'); }
+async function sha256File(file: File) {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 
 export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPayments, properties, onRecordRentPayment, isExternalOpen, onCloseExternal }: Props) {
   const { user } = useRole();
@@ -35,7 +39,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
   const overdueTenants = useMemo(() => rows.filter((row) => row.overdueDays > 0).length, [rows]);
   const ledgerPendingPayments = useMemo(() => rows.filter((row) => String(row.status || '').toUpperCase().includes('PENDING')).length, [rows]);
   const effectivePendingPayments = Math.max(pendingPayments, ledgerPendingPayments);
-  const isRentRecordValid = form.tenantName.trim().length > 0 && !!form.propertyId && Number(form.rentPaid || 0) > 0;
+  const isRentRecordValid = form.tenantName.trim().length > 0 && !!form.propertyId && Number(form.rentPaid || 0) > 0 && Boolean(referenceFile);
 
   const updateForm = (key: keyof RentRecordPayload, value: string | number) => setForm((current) => ({ ...current, [key]: value }));
   const selectProperty = (propertyId: string) => { const property = properties.find((item) => propertyIdOf(item) === propertyId); setForm((current) => ({ ...current, propertyId, propertyName: propertyNameOf(property) || current.propertyName || 'Property' })); };
@@ -56,20 +60,34 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
       let referenceFileName = '';
       let referenceFileType = '';
       let referenceFileSize = 0;
+      let referenceFileHash = '';
       if (referenceFile) {
+        const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+        if (!allowedTypes.has(referenceFile.type) || referenceFile.size <= 0 || referenceFile.size > 15 * 1024 * 1024) {
+          throw new Error('Receipt must be a PDF, JPEG, PNG, WEBP, or HEIC file up to 15 MB.');
+        }
         referenceFileName = referenceFile.name;
         referenceFileType = referenceFile.type;
         referenceFileSize = referenceFile.size;
+        referenceFileHash = await sha256File(referenceFile);
         referenceFilePath = `payment-references/owners/${user.uid}/${recordId}/${safeFileName(referenceFile.name)}`;
         try {
           const storageRef = ref(storage, referenceFilePath);
-          await uploadBytes(storageRef, referenceFile, { contentType: referenceFile.type || 'application/octet-stream' });
+          await uploadBytes(storageRef, referenceFile, {
+            contentType: referenceFile.type,
+            customMetadata: {
+              ownerUid: user.uid,
+              paymentId: recordId,
+              evidenceType: 'owner_payment_receipt',
+              receiptHash: referenceFileHash,
+            },
+          });
           referenceFileUrl = await getDownloadURL(storageRef);
         } catch (error: any) {
           throw new Error(error?.message || 'Reference file upload failed.');
         }
       }
-      const linkedPayload = { ...form, paymentTransactionId: recordId, tenantLedgerId: recordId, referenceFileUrl, referenceFilePath, referenceFileName, referenceFileType, referenceFileSize };
+      const linkedPayload = { ...form, paymentTransactionId: recordId, tenantLedgerId: recordId, referenceFileUrl, referenceFilePath, referenceFileName, referenceFileType, referenceFileSize, referenceFileHash };
       await onRecordRentPayment(linkedPayload);
       await NotificationEvents.OWNER.RENT_PAYMENT_SUBMITTED(user.uid, rentPaid, propertyName, recordId);
       setOpen(false);

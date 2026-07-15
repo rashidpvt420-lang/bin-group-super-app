@@ -13,7 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { addDoc, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query } from '../../lib/firebase';
 
 type IntakeRecord = {
   id: string;
@@ -96,70 +96,13 @@ export default function WhatsAppTriageQueuePage() {
     setBusyId(intake.id);
     setNotice('');
     try {
-      const ticketPayload = {
-        source: 'whatsapp_triage',
-        sourceChannel: 'whatsapp',
+      const processIntake = httpsCallable(functions, 'adminProcessWhatsAppIntake');
+      const response: any = await processIntake({
+        action: 'convert',
         intakeId: intake.id,
-        waId: intake.waId || '',
-        contactName: intake.contactName || '',
-        title: form.title,
-        description: form.scope,
-        standardScope: form.scope,
-        category: form.category,
-        trade: form.category,
-        urgency: form.urgency,
-        priority: form.urgency,
-        status: form.technicianId ? 'ASSIGNED' : 'OPEN',
-        propertyId: form.propertyId,
-        unitId: form.unitId,
-        tenantId: form.tenantId,
-        ownerId: form.ownerId,
-        assignedTechnicianId: form.technicianId || null,
-        technicianId: form.technicianId || null,
-        humanApprovedBy: 'admin_triage_queue',
-        approvalState: 'triaged',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      const ticketRef = await addDoc(collection(db, 'maintenanceTickets'), ticketPayload);
-      await addDoc(collection(db, 'maintenance_ledger'), {
-        source: 'admin_whatsapp_triage',
-        ledgerEvent: 'WHATSAPP_INTAKE_CONVERTED_TO_TICKET',
-        intakeId: intake.id,
-        ticketId: ticketRef.id,
-        ownerId: form.ownerId,
-        propertyId: form.propertyId,
-        category: form.category,
-        urgency: form.urgency,
-        status: 'ticket_created',
-        createdAt: serverTimestamp(),
+        form,
       });
-      await addDoc(collection(db, 'data_governance_events'), {
-        source: 'admin_whatsapp_triage',
-        dataCategory: 'whatsapp_chat_and_property_maintenance_evidence',
-        lawfulBasis: 'service_request_and_contract_operations',
-        retentionClass: 'maintenance_evidence_standard',
-        roleAccessPolicy: ['admin', 'owner', 'assigned_technician'],
-        subjectRef: intake.waId || intake.id,
-        ticketId: ticketRef.id,
-        createdAt: serverTimestamp(),
-      });
-      await updateDoc(doc(db, 'communication_intake', intake.id), {
-        status: form.technicianId ? 'ticket_dispatched' : 'ticket_created_pending_dispatch',
-        ticketId: ticketRef.id,
-        ticketDraftId: ticketRef.id,
-        propertyId: form.propertyId,
-        unitId: form.unitId,
-        tenantId: form.tenantId,
-        ownerId: form.ownerId,
-        category: form.category,
-        urgency: form.urgency,
-        standardScope: form.scope,
-        humanApprovedBy: 'admin_triage_queue',
-        updatedAt: serverTimestamp(),
-      });
-      setNotice(`WhatsApp intake converted to ticket ${ticketRef.id}.`);
+      setNotice(`WhatsApp intake converted to ticket ${response.data?.ticketId || 'successfully'}.`);
     } catch (error: any) {
       setNotice(error?.message || 'Failed to convert WhatsApp intake.');
     } finally {
@@ -170,19 +113,14 @@ export default function WhatsAppTriageQueuePage() {
   const markNoAction = async (intake: IntakeRecord) => {
     setBusyId(intake.id);
     try {
-      await updateDoc(doc(db, 'communication_intake', intake.id), {
-        status: 'closed_no_action',
-        humanApprovedBy: 'admin_triage_queue',
-        updatedAt: serverTimestamp(),
-      });
-      await addDoc(collection(db, 'maintenance_ledger'), {
-        source: 'admin_whatsapp_triage',
-        ledgerEvent: 'WHATSAPP_INTAKE_CLOSED_NO_ACTION',
+      const processIntake = httpsCallable(functions, 'adminProcessWhatsAppIntake');
+      await processIntake({
+        action: 'close',
         intakeId: intake.id,
-        waId: intake.waId || '',
-        status: 'closed_no_action',
-        createdAt: serverTimestamp(),
       });
+      setNotice('WhatsApp intake closed with audited no-action status.');
+    } catch (error: any) {
+      setNotice(error?.message || 'Failed to close WhatsApp intake.');
     } finally {
       setBusyId(null);
     }

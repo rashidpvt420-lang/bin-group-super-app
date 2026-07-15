@@ -26,8 +26,9 @@ export default function VisitorParkingPage() {
         try {
             await updateDoc(doc(db, 'visitorParkingRequests', id), {
                 status,
-                approvedBy: 'Admin Operator',
-                approvedAt: serverTimestamp()
+                reviewedBy: 'admin-operator',
+                reviewedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
             });
         } catch (err) {
             console.error('Failed to update request:', err);

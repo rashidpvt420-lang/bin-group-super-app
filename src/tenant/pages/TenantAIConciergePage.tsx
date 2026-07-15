@@ -5,9 +5,9 @@ import {
 } from '@mui/material';
 import { AlertCircle, Bot, Camera, CheckCircle2, ChevronRight, Send, Sparkles, Wrench, X } from 'lucide-react';
 import { 
-  addDoc, collection, db, serverTimestamp, 
-  storage, ref, uploadBytes, getDownloadURL, 
-  query, where, getDocs, getDoc, doc, updateDoc 
+  collection, db, functions, httpsCallable, serverTimestamp,
+  storage, ref, uploadBytes, getDownloadURL,
+  query, where, getDocs, doc, updateDoc
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -102,9 +102,9 @@ export default function TenantAIConciergePage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const requestIdRef = useRef(`ai_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
   // Load residence properties/units on mount
-  const [propertyData, setPropertyData] = useState<any>(null);
   const [unitData, setUnitData] = useState<any>(null);
   const [loadingResidence, setLoadingResidence] = useState(true);
 
@@ -116,6 +116,9 @@ export default function TenantAIConciergePage() {
       }
       try {
         let unitSnap = await getDocs(query(collection(db, "units"), where("tenantId", "==", user.uid)));
+        if (unitSnap.empty) {
+          unitSnap = await getDocs(query(collection(db, "units"), where("tenantUid", "==", user.uid)));
+        }
         if (unitSnap.empty && user.email) {
           unitSnap = await getDocs(query(collection(db, "units"), where("tenantEmail", "==", user.email.toLowerCase())));
         }
@@ -123,14 +126,6 @@ export default function TenantAIConciergePage() {
         if (!unitSnap.empty) {
           const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
           setUnitData(uData);
-
-          if (uData.propertyId) {
-            const propSnap = await getDoc(doc(db, "properties", uData.propertyId));
-            if (propSnap.exists()) {
-              const pData: any = { id: propSnap.id, ...propSnap.data() };
-              setPropertyData(pData);
-            }
-          }
         }
       } catch (err) {
         console.error("Fetch residence failed:", err);
@@ -193,7 +188,7 @@ export default function TenantAIConciergePage() {
       const nextCtx: ConversationContext = { ...ctx, photoUrl: previewUrl, photoFile: file };
       advanceBot('confirm', nextCtx);
     } catch {
-      pushMessage('bot', 'Could not attach photo. Tap **Skip** to continue without it.');
+      pushMessage('bot', 'Could not attach the required photo. Please try another image before submitting.');
     } finally {
       setUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -201,8 +196,7 @@ export default function TenantAIConciergePage() {
   };
 
   const handleSkipPhoto = () => {
-    pushMessage('user', 'Skip photo');
-    advanceBot('confirm', { ...ctx, photoUrl: '', photoFile: null });
+    pushMessage('bot', tx('tenant.ai.photoRequired', 'A photo is required before this maintenance request can be dispatched. Please attach clear evidence of the issue.'));
   };
 
   const handleSubmit = async () => {
@@ -213,56 +207,33 @@ export default function TenantAIConciergePage() {
     setSubmitting(true);
     let createdTicketId = '';
     try {
-      const locationSource = propertyData?.location || propertyData?.propertyLocation || propertyData?.geoPoint || null;
-      const jobLocation = locationSource ? {
-        lat: Number(locationSource.lat ?? locationSource.latitude ?? 0),
-        lng: Number(locationSource.lng ?? locationSource.longitude ?? 0),
-        latitude: Number(locationSource.lat ?? locationSource.latitude ?? 0),
-        longitude: Number(locationSource.lng ?? locationSource.longitude ?? 0),
-        address: propertyData?.address || propertyData?.locationAddress || '',
-        source: 'property',
-      } : null;
-
-      const priorityLower = String(ctx.priority || 'normal').toLowerCase();
-
-      // Create canonical ticket
-      const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
-        requesterRole: 'tenant',
-        tenantId: user.uid,
-        tenantUid: user.uid,
-        tenantName: user.displayName || 'Resident',
-        tenantPhone: user.phoneNumber || '',
+      const priorityLower = ({
+        HIGH: 'urgent',
+        URGENT: 'emergency',
+        NORMAL: 'normal',
+      } as const)[ctx.priority] || 'normal';
+      if (!ctx.photoFile) {
+        throw new Error(tx('tenant.ai.photoRequired', 'A photo is required before this maintenance request can be submitted.'));
+      }
+      const createTicket = httpsCallable(functions, 'createTenantServiceTicket');
+      const result = await createTicket({
+        kind: 'AI_CONCIERGE',
         propertyId: unitData.propertyId || '',
-        propertyName: propertyData?.name || propertyData?.propertyName || '',
-        ownerId: propertyData?.ownerId || '',
-        ownerUid: propertyData?.ownerUid || propertyData?.ownerId || '',
-        ownerEmail: propertyData?.ownerEmail || '',
         unitId: unitData.id,
-        unitNumber: unitData.unitNumber || '',
-        floor: unitData.floorNumber || '',
-        category: ctx.category,
-        priority: priorityLower,
-        description: ctx.description,
-        specificLocation: ctx.location,
-        photos: [],
-        primaryPhotoUrl: null,
-        jobLocation,
-        photoEvidenceRequired: true,
-        evidenceStatus: ctx.photoFile ? 'PENDING_TENANT_UPLOAD' : 'NO_EVIDENCE_ATTACHED',
-        source: 'AI_CONCIERGE',
-        status: 'OPEN',
-        dispatchStatus: 'PENDING_ASSIGNMENT',
-        trackingStatus: 'WAITING_FOR_TECHNICIAN',
-        technicianId: null,
-        assignedTechnicianId: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        slaMinutes: priorityLower === 'emergency' ? 60 : priorityLower === 'urgent' ? 240 : 1440,
+        clientRequestId: requestIdRef.current,
+        details: {
+          category: ctx.category,
+          priority: priorityLower,
+          description: ctx.description,
+          specificLocation: ctx.location,
+          photoEvidenceExpected: true,
+        },
       });
-      createdTicketId = docRef.id;
+      createdTicketId = String((result.data as any)?.ticketId || '');
+      if (!createdTicketId) throw new Error('Ticket service did not return a ticket ID.');
 
       // Handle actual Firebase Storage upload if file exists
-      if (ctx.photoFile) {
+      {
         const file = ctx.photoFile;
         const timestamp = Date.now();
         const sanitizeFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
@@ -307,6 +278,7 @@ export default function TenantAIConciergePage() {
   };
 
   const handleRestart = () => {
+    requestIdRef.current = `ai_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     setMessages([{ id: makeMsgId(), from: 'bot', text: getBotText('idle', ctx), timestamp: new Date() }]);
     setCtx({ description: '', category: '', priority: 'NORMAL', location: '', photoUrl: '', photoFile: null });
     setStep('idle');

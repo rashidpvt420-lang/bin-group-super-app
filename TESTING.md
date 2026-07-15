@@ -19,19 +19,19 @@ This repo is a multi-surface Firebase/React platform. Use the root scripts as th
 ## Install
 
 ```bash
-npm install --legacy-peer-deps
+npm ci --include=optional --legacy-peer-deps
 ```
 
 For the dedicated admin panel:
 
 ```bash
-npm --prefix apps/admin-panel install --legacy-peer-deps
+npm --prefix apps/admin-panel ci --legacy-peer-deps
 ```
 
 For the dedicated owner app:
 
 ```bash
-npm --prefix apps/owner-app install --legacy-peer-deps
+npm --prefix apps/owner-app ci --legacy-peer-deps
 ```
 
 ## Build commands
@@ -84,7 +84,7 @@ npm run build:functions
 npm run typecheck
 ```
 
-## Firestore rules validation
+## Firestore and Storage rules validation
 
 Prepare and harden rules:
 
@@ -98,13 +98,13 @@ Verify rule hardening:
 npm run verify:rules-hardening
 ```
 
-Run rules tests through the emulator:
+Run Firestore and Storage rules tests through their emulators:
 
 ```bash
 npm run test:rules
 ```
 
-Run the node-only rule test path:
+Run the same Node test files without pinning the Firebase project:
 
 ```bash
 npm run test:rules:node
@@ -226,7 +226,7 @@ Run or manually verify these surfaces after every launch-blocker fix:
 
 ### Admin
 
-- Main app `/admin/*` bridge opens the dedicated admin panel.
+- Main app `/admin/*` is a read-only status terminal with an explicit handoff to the dedicated admin panel.
 - Dedicated admin dashboard loads without React hook errors.
 - Admin can access owners, tenants, tickets, technicians, map, SOS, document vault, audit, payments, broker management, property approvals, unit status, HR, pricing, contract termination, orphan war room, public ops, and reports.
 
@@ -294,33 +294,12 @@ Add to `.env.e2e` (public site key from Firebase Console → App Check):
 VITE_APP_CHECK_SITE_KEY=6Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Rebuild and redeploy hosting **from the same commit** you test:
-
-```bash
-npm run build:live
-firebase deploy --only hosting --project bin-group-57c60
-node scripts/verify-hosted-appcheck.mjs
-```
-
-**PowerShell** (quote `--only` targets; install deps first if `vite` is not recognized):
-
-```powershell
-cd "C:\Users\My-PC\Desktop\bin-app-e2e-redesign"
-git fetch origin cursor/hard-launch-gate-redesign-30e9
-git reset --hard origin/cursor/hard-launch-gate-redesign-30e9
-npm run setup:e2e
-
-# .env.e2e must include BOTH:
-# VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=878faabb-b281-4159-a84d-dc1bed73eb2e
-# VITE_APP_CHECK_SITE_KEY=6Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# Register that UUID under App Check debug tokens for BOTH web apps (main + admin).
-
-npm run launch:deploy:hosting
-# or manually:
-# npm run build:live
-# firebase deploy --only "hosting" --project bin-group-57c60
-# node scripts/verify-hosted-appcheck.mjs
-```
+Rebuild and deploy the exact current `main` SHA only through the protected
+`Firebase Production Deploy` workflow. Local and hosting-only deployment
+commands fail closed because they bypass exact-SHA, artifact, approval, and
+same-run metadata controls. After that protected run completes, execute
+`node scripts/verify-hosted-appcheck.mjs` against the deployed main and admin
+surfaces.
 
 `verify-hosted-appcheck` must print `[hosted-appcheck] ok` for **main** and **admin** before running profile-gates.
 

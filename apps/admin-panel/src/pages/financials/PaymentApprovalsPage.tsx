@@ -58,7 +58,10 @@ const PENDING_PAYMENT_STATUSES = ['pending', 'pending_admin_approval', 'submitte
 const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
-const isRentPayment = (row: PaymentRecord) => upper(row.recordType) === 'OWNER_RENT_PAYMENT' || upper(row.transactionType) === 'RENT_COLLECTION' || upper(row.paymentType) === 'RENT_COLLECTION';
+const isRentPayment = (row: PaymentRecord) =>
+    ['OWNER_RENT_PAYMENT', 'TENANT_RENT_PAYMENT_PROOF'].includes(upper(row.recordType)) ||
+    ['RENT_COLLECTION', 'RENT_PAYMENT_PROOF'].includes(upper(row.transactionType)) ||
+    upper(row.paymentType) === 'RENT_COLLECTION';
 const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.referenceFileName || row.receiptUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || 'No reference recorded';
 const referenceUrl = (row: PaymentRecord) => row.referenceFileUrl || row.receiptUrl || row.proofUrl || row.attachmentUrl || '';
 const submittedAmount = (row: PaymentRecord) => row.amountReceived || row.mobilizationAmount || row.amountPaid || row.rentPaid || row.amount || 0;

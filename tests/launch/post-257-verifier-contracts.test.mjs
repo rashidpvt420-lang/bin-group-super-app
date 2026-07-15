@@ -31,13 +31,11 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /function\s+safeOpenMissionClaim\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+missionClaimFieldsLookValid\s*\(/);
     assert.doesNotMatch(preparedRules, /\|\|\s*safeOpenMissionClaim\(\)/);
+    assert.doesNotMatch(preparedRules, /function\s+openMissionPoolRead\s*\(/);
+    assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
     assert.match(
       preparedRules,
-      /function openMissionPoolRead\(data\) \{ return isApprovedTechnician\(\) && openMissionAvailable\(data\); \}/,
-    );
-    assert.match(
-      preparedRules,
-      /allow update: if canDispatchJobs\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
+      /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
     );
 
     const verification = runNode(rulesVerifier, directory);
@@ -72,7 +70,7 @@ test('scheduled-service verifier follows the centralized protected production li
   assert.doesNotMatch(retiredWorkflow, /firebase deploy/);
   assert.match(protectedWorkflow, /environment: production/);
   assert.match(protectedWorkflow, /node scripts\/deploy-firebase-production\.mjs/);
-  assert.match(deployRunner, /retryFirebase\('functions', 'Firebase Functions'\)/);
+  assert.match(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
 });
 
 test('launch-hardening verifier explicitly rejects direct technician assignment authority', () => {

@@ -6,8 +6,13 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
+import { isOwnerProfileActivated } from '../activationPolicy';
 
 const fmtAED = (value: number) => `AED ${Math.round(value || 0).toLocaleString()}`;
+const sha256File = async (file: File) => {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
 
 const SIGNABLE_STATUSES = [
   'PENDING_OWNER_SIGNATURE',
@@ -20,6 +25,7 @@ const SIGNABLE_STATUSES = [
 const READY_STATUSES = ['READY_FOR_ACTIVATION', 'OWNER_SIGNED', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'SIGNED'];
 const VERIFIED_PAYMENT_STATUSES = ['PAID', 'VERIFIED', 'ADMIN_VERIFIED', 'APPROVED', 'SETTLED', 'RECONCILED'];
 const PENDING_PAYMENT_STATUSES = ['PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'ADMIN_REVIEW'];
+const ADMIN_APPROVED_STATUSES = ['APPROVED', 'ADMIN_APPROVED', 'BIN_APPROVED', 'ACTIVE'];
 
 type ActivationGate = {
   label: string;
@@ -112,7 +118,11 @@ function buildActivationGates(contract: any, profile: any, activated: boolean): 
   const ownerSigned = contract?.ownerSigned === true || contract?.ownerSignature?.signed === true || signatureStatus === 'OWNER_SIGNED' || signatureStatus === 'SIGNED';
   const paymentVerified = contract?.paymentVerified === true || profile?.paymentVerified === true || VERIFIED_PAYMENT_STATUSES.includes(paymentStatus);
   const paymentInReview = !paymentVerified && (PENDING_PAYMENT_STATUSES.includes(paymentStatus) || paymentStatus.includes('PENDING') || paymentStatus.includes('REVIEW') || paymentStatus.includes('PROCESSING'));
-  const adminApproved = approvalStatus.includes('APPROVED') || normalizeGateStatus(contract?.activationStatus) === 'ACTIVE' || activated;
+  const adminApproved = contract?.adminApproved === true ||
+    profile?.adminApproved === true ||
+    ADMIN_APPROVED_STATUSES.includes(approvalStatus) ||
+    normalizeGateStatus(contract?.activationStatus) === 'ACTIVE' ||
+    activated;
 
   return [
     gate('Property submitted', hasPropertyDetails(contract), Boolean(contract?.id), 'Property details are attached to the contract.', 'Contract exists; property details are under admin review.', 'Property details are not linked yet.'),
@@ -235,9 +245,7 @@ export default function OwnerActivationPage() {
     'Annual / Quarterly / Monthly'
   );
   const profile = user as any;
-  const activated = profile?.paymentVerified === true &&
-    profile?.adminApproved === true &&
-    Boolean(String(profile?.activeContractId || '').trim());
+  const activated = isOwnerProfileActivated(profile);
   const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && primaryContract?.ownerSigned !== true && primaryContract?.signatureStatus !== 'OWNER_SIGNED';
   const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
   const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0 && !hasCommercialSchedule(primaryContract);
@@ -316,7 +324,16 @@ export default function OwnerActivationPage() {
       const safeName = paymentProof.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'payment-receipt';
       const proofPath = `payment-references/owners/${user.uid}/${primaryContract.id}/${Date.now()}_${safeName}`;
       const proofRef = ref(storage, proofPath);
-      await uploadBytes(proofRef, paymentProof, { contentType: paymentProof.type });
+      const paymentProofHash = await sha256File(paymentProof);
+      await uploadBytes(proofRef, paymentProof, {
+        contentType: paymentProof.type,
+        customMetadata: {
+          ownerUid: user.uid,
+          paymentId: primaryContract.id,
+          evidenceType: 'owner_payment_receipt',
+          receiptHash: paymentProofHash,
+        },
+      });
       const proofUrl = await getDownloadURL(proofRef);
       const createPayment = httpsCallable(functions, 'createOwnerPaymentTransaction');
       const result = await createPayment({
@@ -330,6 +347,7 @@ export default function OwnerActivationPage() {
         paymentProofUrl: proofUrl,
         paymentProofPath: proofPath,
         paymentProofName: paymentProof.name,
+        paymentProofHash,
         annualContractValue: annualValue,
         mobilizationAmount: mobilization,
         paymentPlan: paymentPlanText,
@@ -447,6 +465,7 @@ export default function OwnerActivationPage() {
                     />
                     <ContractSignatureOtpControl
                       contractId={primaryContract.id}
+                      contractHash={String(primaryContract.quoteHash || primaryContract.contractHash || '')}
                       email={user?.email || ''}
                       propertyName={primaryContract?.propertyName}
                       signatureName={signatureName}

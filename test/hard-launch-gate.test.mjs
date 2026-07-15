@@ -197,8 +197,8 @@ test('hard launch approval is bound to deployment, browser evidence, operations,
     const approval = {
       schemaVersion: 1,
       status: 'approved',
-      releaseDecision: 'HARD_PUBLIC_LAUNCH_AUTHORIZED',
-      hardLaunchClaim: true,
+      releaseDecision: 'HARD_PUBLIC_LAUNCH_PREREQUISITES_APPROVED',
+      hardLaunchClaim: false,
       commitSha,
       deployedCommitSha: commitSha,
       projectId: PRODUCTION.projectId,
@@ -276,6 +276,18 @@ test('launch status never emits the signed final hard-launch claim', () => {
   assert.match(statusScript, /const\s+hardLaunchClaim\s*=\s*false/);
   assert.match(statusScript, /--hard/);
   assert.doesNotMatch(statusScript, /const\s+hardLaunchClaim\s*=\s*true/);
+});
+
+test('legacy eligibility and approval artifacts never emit the signed final claim', () => {
+  const gate = readFileSync('scripts/lib/hard-launch-gate.mjs', 'utf8');
+  const writer = readFileSync('scripts/write-hard-launch-approval.mjs', 'utf8');
+  const verifier = readFileSync('scripts/verify-hard-launch-approval.mjs', 'utf8');
+  assert.match(gate, /hardLaunchClaim:\s*false/);
+  assert.doesNotMatch(gate, /hardLaunchClaim:\s*hardLaunchEligible/);
+  assert.match(writer, /hardLaunchClaim:\s*false/);
+  assert.doesNotMatch(writer, /hardLaunchClaim:\s*true/);
+  assert.match(verifier, /hardLaunchClaim=false/);
+  assert.doesNotMatch(verifier, /hardLaunchClaim=true/);
 });
 
 test('launch-critical browser evidence cannot use mocked Firebase network routes', () => {

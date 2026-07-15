@@ -11,12 +11,24 @@ if (!admin.apps.length) {
 // cross-domain admin redirect without granting any new privilege: it only
 // re-asserts the caller's own uid, so the admin-panel's own role/claims gate
 // still decides whether that identity is allowed in.
-export const mintAdminBridgeToken = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const mintAdminBridgeToken = onCall({
+  cors: true,
+  region: "europe-west3",
+  enforceAppCheck: true,
+  consumeAppCheckToken: true,
+}, async (request) => {
   const authContext = request.auth;
   if (!authContext) {
     throw new HttpsError("unauthenticated", "Sign-in required before bridging to the admin panel.");
   }
   const claims = authContext.token || {};
+  if (claims.suspended === true) {
+    throw new HttpsError("permission-denied", "Suspended accounts cannot open the admin panel.");
+  }
+  const userRecord = await admin.auth().getUser(authContext.uid);
+  if (userRecord.disabled) {
+    throw new HttpsError("permission-denied", "Disabled accounts cannot open the admin panel.");
+  }
   const role = String(claims.role || claims.userRole || claims.primaryRole || "").trim().toLowerCase();
   const allowedRoles = new Set([
     "admin",

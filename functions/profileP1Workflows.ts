@@ -70,6 +70,9 @@ async function profileFor(uid: string) {
 async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const token = auth.token || {};
+  if (token.suspended === true) throw new HttpsError("permission-denied", "Suspended admin account.");
+  const userRecord = await admin.auth().getUser(auth.uid);
+  if (userRecord.disabled) throw new HttpsError("permission-denied", "Disabled admin account.");
   if (
     token.admin === true ||
     token.isAdmin === true ||
@@ -84,8 +87,21 @@ async function requireAdmin(auth: any) {
 
 async function requireProfileRole(auth: any, allowed: Set<string>, label: string) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", `${label} login required.`);
+  if (auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", `${label} account is suspended.`);
+  }
   if (hasRole(auth.token || {}, allowed)) {
-    return (await profileFor(auth.uid)).data;
+    const [profile, userRecord] = await Promise.all([
+      profileFor(auth.uid),
+      admin.auth().getUser(auth.uid),
+    ]);
+    if (
+      userRecord.disabled ||
+      ["suspended", "disabled", "rejected"].includes(normalizedRole(profile.data.status))
+    ) {
+      throw new HttpsError("permission-denied", `${label} account is not active.`);
+    }
+    return profile.data;
   }
   throw new HttpsError("permission-denied", `${label} role required.`);
 }
@@ -96,7 +112,11 @@ function ownsProperty(auth: any, property: FirebaseFirestore.DocumentData) {
     property.ownerId === auth.uid ||
     property.ownerUid === auth.uid ||
     property.userId === auth.uid ||
-    normalizedEmail(property.ownerEmail) === email
+    (
+      auth?.token?.email_verified === true &&
+      Boolean(email) &&
+      normalizedEmail(property.ownerEmail) === email
+    )
   );
 }
 
@@ -109,7 +129,7 @@ function hashOptionalCode(value: unknown) {
   };
 }
 
-export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
 
   const brokerId = text(request.data?.brokerId);
@@ -139,6 +159,68 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3" 
     }
   }
 
+  let verifiedDocumentRefs: FirebaseFirestore.DocumentReference[] = [];
+  if (decision === "APPROVE") {
+    const documentsSnap = await db.collection("brokerDocuments")
+      .where("brokerId", "==", brokerId)
+      .limit(20)
+      .get();
+    const documents = documentsSnap.docs.map((docSnap) => ({
+      ref: docSnap.ref,
+      id: docSnap.id,
+      data: docSnap.data(),
+    }));
+    const requiredTypes = ["rera_license", "bank_details", "broker_agreement"];
+    const selected = requiredTypes.map((type) =>
+      documents.find((document) => text(document.data.docType) === type),
+    );
+    const identityDocument = documents.find((document) =>
+      ["emirates_id", "passport", "trade_license"].includes(text(document.data.docType)),
+    );
+    if (selected.some((document) => !document) || !identityDocument) {
+      throw new HttpsError(
+        "failed-precondition",
+        "RERA, identity, bank, and signed broker agreement documents are required for KYC approval.",
+      );
+    }
+    const documentsToVerify = [...selected, identityDocument].filter(Boolean) as Array<{
+      ref: FirebaseFirestore.DocumentReference;
+      id: string;
+      data: FirebaseFirestore.DocumentData;
+    }>;
+    for (const document of documentsToVerify) {
+      const storagePath = text(document.data.storagePath);
+      const documentType = text(document.data.docType);
+      if (
+        !storagePath.startsWith(`brokerDocuments/${brokerId}/${documentType}/`) ||
+        text(document.data.status).toLowerCase() !== "pending_review"
+      ) {
+        throw new HttpsError("failed-precondition", "Broker document ownership or review state is invalid.");
+      }
+      try {
+        const [metadata] = await admin.storage().bucket().file(storagePath).getMetadata();
+        const contentType = text(metadata.contentType).toLowerCase();
+        const size = Number(metadata.size || 0);
+        const customMetadata = metadata.metadata || {};
+        if (
+          customMetadata.brokerId !== brokerId ||
+          customMetadata.documentType !== documentType ||
+          !["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"].includes(contentType) ||
+          size <= 0 ||
+          size > 15 * 1024 * 1024
+        ) {
+          throw new Error("metadata mismatch");
+        }
+      } catch {
+        throw new HttpsError(
+          "failed-precondition",
+          `Stored ${documentType} evidence is missing or its immutable metadata does not match.`,
+        );
+      }
+    }
+    verifiedDocumentRefs = documentsToVerify.map((document) => document.ref);
+  }
+
   const now = ts();
   const actorId = request.auth?.uid || "admin";
   const actorEmail = request.auth?.token?.email || null;
@@ -146,12 +228,28 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3" 
   let releasedCommissions = 0;
 
   await db.runTransaction(async (transaction) => {
+    const freshBrokerSnap = await transaction.get(brokerRef);
+    if (!freshBrokerSnap.exists) throw new HttpsError("not-found", "Broker profile not found.");
+    const freshDocuments = await Promise.all(
+      verifiedDocumentRefs.map((documentRef) => transaction.get(documentRef)),
+    );
+    if (
+      decision === "APPROVE" &&
+      freshDocuments.some((documentSnap) =>
+        !documentSnap.exists ||
+        documentSnap.data()?.brokerId !== brokerId ||
+        text(documentSnap.data()?.status).toLowerCase() !== "pending_review"
+      )
+    ) {
+      throw new HttpsError("failed-precondition", "Broker documents changed during KYC review.");
+    }
     transaction.set(brokerRef, clean({
       status: approved ? "APPROVED" : "REJECTED",
       approvalStatus: approved ? "APPROVED" : "REJECTED",
       kycStatus: approved ? "VERIFIED" : "REJECTED",
       brokerKycStatus: approved ? "VERIFIED" : "REJECTED",
       reraVerified: approved,
+      ibanVerified: approved,
       reraStatus: approved ? "VERIFIED" : "REJECTED",
       brokerKycReviewedBy: actorId,
       brokerKycReviewedByEmail: actorEmail,
@@ -164,8 +262,16 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3" 
       rejectionReason: approved ? null : reason,
       updatedAt: now,
     }), { merge: true });
+    freshDocuments.forEach((documentSnap) => {
+      transaction.set(documentSnap.ref, {
+        status: approved ? "verified" : "rejected",
+        reviewedAt: now,
+        reviewedBy: actorId,
+        updatedAt: now,
+      }, { merge: true });
+    });
 
-    const auditRef = db.collection("auditLogs").doc();
+    const auditRef = db.collection("audit_logs").doc();
     transaction.set(auditRef, clean({
       action: approved ? "ADMIN_APPROVE_BROKER_KYC" : "ADMIN_REJECT_BROKER_KYC",
       actorId,
@@ -206,7 +312,7 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3" 
   return { status: "SUCCESS", brokerId, decision, releasedCommissions };
 });
 
-export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const broker = await requireProfileRole(request.auth, BROKER_ROLES, "Broker");
   const uid = request.auth!.uid;
   const email = normalizedEmail(request.auth?.token?.email || broker.email);
@@ -217,8 +323,12 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
   if (broker.commissionAgreementAccepted !== true) {
     throw new HttpsError("failed-precondition", "Commission agreement must be accepted before payout requests.");
   }
-  if (!text(broker.bankIban || broker.iban) || !text(broker.bankName)) {
-    throw new HttpsError("failed-precondition", "Broker bank name and IBAN are required before payout requests.");
+  if (
+    !text(broker.bankIban || broker.iban) ||
+    !text(broker.bankName) ||
+    broker.ibanVerified !== true
+  ) {
+    throw new HttpsError("failed-precondition", "An admin-verified broker bank name and IBAN are required before payout requests.");
   }
 
   const rawIds = Array.isArray(request.data?.commissionIds) ? request.data.commissionIds : [];
@@ -289,7 +399,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
         updatedAt: now,
       }, { merge: true });
     });
-    transaction.set(db.collection("auditLogs").doc(), clean({
+    transaction.set(db.collection("audit_logs").doc(), clean({
       action: "BROKER_PAYOUT_REQUEST_SUBMITTED",
       actorId: uid,
       actorEmail: email,
@@ -304,7 +414,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
   return { status: "SUCCESS", payoutRequestId: payoutRef.id, amount, commissionCount: commissionIds.length };
 });
 
-export const adminReviewBrokerPayoutRequest = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const adminReviewBrokerPayoutRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
 
   const requestId = text(request.data?.requestId || request.data?.payoutRequestId);
@@ -313,83 +423,120 @@ export const adminReviewBrokerPayoutRequest = onCall({ cors: true, region: "euro
   if (!requestId) throw new HttpsError("invalid-argument", "requestId is required.");
   if (!["APPROVE", "REJECT", "MARK_PAID"].includes(action)) throw new HttpsError("invalid-argument", "action must be APPROVE, REJECT, or MARK_PAID.");
   if (action === "REJECT" && !reason) throw new HttpsError("invalid-argument", "A rejection reason is required.");
-
-  const payoutRef = db.collection("broker_payout_requests").doc(requestId);
-  const payoutSnap = await payoutRef.get();
-  if (!payoutSnap.exists) throw new HttpsError("not-found", "Payout request not found.");
-  const payout = payoutSnap.data() || {};
-  const currentStatus = text(payout.status).toUpperCase();
-  if (currentStatus === "PAID" && action !== "MARK_PAID") {
-    throw new HttpsError("failed-precondition", "Paid payout requests cannot be changed.");
+  const paymentReference = text(request.data?.paymentReference);
+  if (action === "MARK_PAID" && paymentReference.length < 4) {
+    throw new HttpsError("invalid-argument", "A durable payment reference is required before marking a payout paid.");
   }
 
-  const commissionIds = Array.isArray(payout.commissionIds) ? payout.commissionIds.map((value: unknown) => text(value)).filter(Boolean) : [];
+  const payoutRef = db.collection("broker_payout_requests").doc(requestId);
   const now = ts();
   const actorId = request.auth?.uid || "admin";
   const actorEmail = request.auth?.token?.email || null;
-  const batch = db.batch();
-
-  const requestPatch: Record<string, any> = {
-    reviewedBy: actorId,
-    reviewedByEmail: actorEmail,
-    reviewedAt: now,
-    reviewReason: reason || null,
-    updatedAt: now,
-  };
-  if (action === "APPROVE") {
-    requestPatch.status = "APPROVED";
-    requestPatch.approvalStatus = "APPROVED";
-    requestPatch.paymentStatus = "APPROVED_FOR_PAYMENT";
-    requestPatch.approvedAt = now;
-    requestPatch.approvedBy = actorId;
-  } else if (action === "REJECT") {
-    requestPatch.status = "REJECTED";
-    requestPatch.approvalStatus = "REJECTED";
-    requestPatch.paymentStatus = "REJECTED";
-    requestPatch.rejectedAt = now;
-    requestPatch.rejectedBy = actorId;
-    requestPatch.rejectionReason = reason;
-  } else {
-    requestPatch.status = "PAID";
-    requestPatch.paymentStatus = "PAID";
-    requestPatch.paidAt = now;
-    requestPatch.paidBy = actorId;
-    requestPatch.paymentReference = text(request.data?.paymentReference) || null;
-  }
-
-  batch.set(payoutRef, clean(requestPatch), { merge: true });
-  commissionIds.forEach((commissionId) => {
-    const commissionRef = db.collection("broker_commissions").doc(commissionId);
-    const commissionPatch: Record<string, any> = { updatedAt: now };
-    if (action === "APPROVE") {
-      commissionPatch.payoutStatus = "APPROVED";
-      commissionPatch.payoutApprovedAt = now;
-    } else if (action === "REJECT") {
-      commissionPatch.payoutStatus = "REJECTED";
-      commissionPatch.payoutRejectedAt = now;
-      commissionPatch.payoutRejectionReason = reason;
-    } else {
-      commissionPatch.status = "PAID";
-      commissionPatch.payoutStatus = "PAID";
-      commissionPatch.paidAt = now;
-      commissionPatch.paidDate = new Date().toISOString();
+  await db.runTransaction(async (transaction) => {
+    const payoutSnap = await transaction.get(payoutRef);
+    if (!payoutSnap.exists) throw new HttpsError("not-found", "Payout request not found.");
+    const payout = payoutSnap.data() || {};
+    const currentStatus = text(payout.status).toUpperCase();
+    const targetStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "PAID";
+    if (currentStatus === targetStatus) return;
+    if (action === "APPROVE" && currentStatus !== "PENDING_ADMIN_REVIEW") {
+      throw new HttpsError("failed-precondition", "Only pending payout requests can be approved.");
     }
-    batch.set(commissionRef, commissionPatch, { merge: true });
+    if (action === "REJECT" && !["PENDING_ADMIN_REVIEW", "APPROVED"].includes(currentStatus)) {
+      throw new HttpsError("failed-precondition", "This payout request cannot be rejected from its current state.");
+    }
+    if (action === "MARK_PAID" && currentStatus !== "APPROVED") {
+      throw new HttpsError("failed-precondition", "A payout request must be approved before settlement.");
+    }
+    const commissionIds = Array.isArray(payout.commissionIds)
+      ? payout.commissionIds.map((value: unknown) => text(value)).filter(Boolean)
+      : [];
+    if (!commissionIds.length || commissionIds.length > 50) {
+      throw new HttpsError("failed-precondition", "Payout request commission binding is invalid.");
+    }
+    const commissionRefs = commissionIds.map((id) => db.collection("broker_commissions").doc(id));
+    const commissionDocs = await Promise.all(commissionRefs.map((ref) => transaction.get(ref)));
+    for (const commissionSnap of commissionDocs) {
+      const commission = commissionSnap.data() || {};
+      if (
+        !commissionSnap.exists ||
+        commission.brokerId !== payout.brokerId ||
+        text(commission.payoutRequestId) !== requestId
+      ) {
+        throw new HttpsError("failed-precondition", "Payout request contains an invalid commission binding.");
+      }
+      const payoutStatus = text(commission.payoutStatus).toUpperCase();
+      if (action === "APPROVE" && payoutStatus !== "REQUESTED") {
+        throw new HttpsError("failed-precondition", "Every commission must still be awaiting payout approval.");
+      }
+      if (action === "MARK_PAID" && payoutStatus !== "APPROVED") {
+        throw new HttpsError("failed-precondition", "Every commission must be payout-approved before settlement.");
+      }
+    }
+
+    const requestPatch: Record<string, any> = {
+      status: targetStatus,
+      reviewedBy: actorId,
+      reviewedByEmail: actorEmail,
+      reviewedAt: now,
+      reviewReason: reason || null,
+      updatedAt: now,
+    };
+    if (action === "APPROVE") {
+      Object.assign(requestPatch, {
+        approvalStatus: "APPROVED",
+        paymentStatus: "APPROVED_FOR_PAYMENT",
+        approvedAt: now,
+        approvedBy: actorId,
+      });
+    } else if (action === "REJECT") {
+      Object.assign(requestPatch, {
+        approvalStatus: "REJECTED",
+        paymentStatus: "REJECTED",
+        rejectedAt: now,
+        rejectedBy: actorId,
+        rejectionReason: reason,
+      });
+    } else {
+      Object.assign(requestPatch, {
+        paymentStatus: "PAID",
+        paidAt: now,
+        paidBy: actorId,
+        paymentReference,
+      });
+    }
+    transaction.set(payoutRef, clean(requestPatch), { merge: true });
+    commissionDocs.forEach((commissionSnap) => {
+      const commissionPatch: Record<string, any> = { updatedAt: now };
+      if (action === "APPROVE") {
+        commissionPatch.payoutStatus = "APPROVED";
+        commissionPatch.payoutApprovedAt = now;
+      } else if (action === "REJECT") {
+        commissionPatch.payoutStatus = "REJECTED";
+        commissionPatch.payoutRejectedAt = now;
+        commissionPatch.payoutRejectionReason = reason;
+      } else {
+        commissionPatch.status = "PAID";
+        commissionPatch.payoutStatus = "PAID";
+        commissionPatch.paidAt = now;
+        commissionPatch.paidDate = new Date().toISOString();
+        commissionPatch.paymentReference = paymentReference;
+      }
+      transaction.set(commissionSnap.ref, commissionPatch, { merge: true });
+    });
+    transaction.set(db.collection("audit_logs").doc(), clean({
+      action: `ADMIN_${action}_BROKER_PAYOUT`,
+      actorId,
+      actorEmail,
+      brokerId: payout.brokerId || null,
+      payoutRequestId: requestId,
+      commissionIds,
+      amount: payout.amount || 0,
+      reason: reason || null,
+      paymentReference: action === "MARK_PAID" ? paymentReference : null,
+      createdAt: now,
+    }));
   });
-
-  batch.set(db.collection("auditLogs").doc(), clean({
-    action: `ADMIN_${action}_BROKER_PAYOUT`,
-    actorId,
-    actorEmail,
-    brokerId: payout.brokerId || null,
-    payoutRequestId: requestId,
-    commissionIds,
-    amount: payout.amount || 0,
-    reason: reason || null,
-    createdAt: now,
-  }));
-
-  await batch.commit();
   return { status: "SUCCESS", requestId, action };
 });
 
@@ -417,7 +564,7 @@ export const ownerGenerateUnits = onCall({ cors: true, region: "europe-west3" },
     throw new HttpsError("permission-denied", "Owners can generate units only for their own properties.");
   }
 
-  const existingSnap = await db.collection("units").where("propertyId", "==", propertyId).get();
+  const existingSnap = await db.collection("units").where("propertyId", "==", propertyId).limit(2000).get();
   const existingNumbers = new Set(existingSnap.docs.map((docSnap) => text(docSnap.data().unitNumber).toLowerCase()).filter(Boolean));
   const created: string[] = [];
   const skipped: string[] = [];
@@ -467,7 +614,7 @@ export const ownerGenerateUnits = onCall({ cors: true, region: "europe-west3" },
     return { status: "NO_CHANGES", propertyId, createdCount: 0, skipped };
   }
 
-  batch.set(db.collection("auditLogs").doc(), clean({
+  batch.set(db.collection("audit_logs").doc(), clean({
     action: "OWNER_GENERATE_UNITS",
     actorId: request.auth.uid,
     actorEmail: request.auth.token?.email || null,
@@ -528,7 +675,7 @@ export const tenantRequestUnitLink = onCall({ cors: true, region: "europe-west3"
     updatedAt: now,
   }));
 
-  await db.collection("auditLogs").add(clean({
+  await db.collection("audit_logs").add(clean({
     action: "TENANT_UNIT_LINK_REQUESTED",
     actorId: uid,
     actorEmail: email,

@@ -15,8 +15,8 @@ import {
   ListItemAvatar,
   Alert,
 } from '@mui/material';
-import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db, functions, httpsCallable } from '../../lib/firebase';
 
 interface SOSEvent {
   sosId: string;
@@ -107,12 +107,8 @@ export default function SOSFeedPage() {
     try {
       setActionError(null);
       setActionSuccess(null);
-      await updateDoc(doc(db, 'maintenanceTickets', sosId), {
-        status: 'RESPONDED',
-        sosStatus: 'RESPONDED',
-        respondedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const updateEmergency = httpsCallable(functions, 'adminUpdateEmergencyTicket');
+      await updateEmergency({ ticketId: sosId, action: 'respond' });
       setActionSuccess('SOS acknowledged.');
     } catch (error: any) {
       console.error('Failed to respond to SOS:', error);
@@ -124,12 +120,8 @@ export default function SOSFeedPage() {
     try {
       setActionError(null);
       setActionSuccess(null);
-      await updateDoc(doc(db, 'maintenanceTickets', sosId), {
-        status: 'RESOLVED',
-        sosStatus: 'RESOLVED',
-        resolvedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const updateEmergency = httpsCallable(functions, 'adminUpdateEmergencyTicket');
+      await updateEmergency({ ticketId: sosId, action: 'resolve' });
       setActionSuccess('SOS resolved.');
     } catch (error: any) {
       console.error('Failed to resolve SOS:', error);

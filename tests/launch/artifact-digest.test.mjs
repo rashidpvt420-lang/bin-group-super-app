@@ -22,6 +22,7 @@ function fixture() {
     'storage.rules': 'rules_version = "2";',
     'package-lock.json': '{}',
     'functions/package.json': '{}',
+    'functions/package-lock.json': '{}',
   };
   for (const [relative, contents] of Object.entries(files)) {
     writeFileSync(path.join(root, relative), contents);

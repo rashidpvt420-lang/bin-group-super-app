@@ -167,7 +167,12 @@ const matchesFilters = (record: AnyRecord, filters: AnyRecord): boolean => {
 
 const safePaymentStatus = (record: AnyRecord): boolean => {
   const status = lower(record.status || record.paymentStatus || record.state);
-  return !["rejected", "failed", "cancelled", "canceled", "void", "draft"].includes(status);
+  const recordType = lower(record.recordType || record.transactionType || record.type);
+  if (["sla_credit", "refund", "credit"].includes(recordType)) return false;
+  if (["rejected", "failed", "cancelled", "canceled", "void", "draft", "review_required"].includes(status)) return false;
+  return record.paymentVerified === true ||
+    record.verified === true ||
+    ["paid", "approved", "verified", "succeeded", "success"].includes(status);
 };
 
 const revenueFrom = (record: AnyRecord): number => {
@@ -213,17 +218,14 @@ function addRowValue(rows: Map<string, ReturnType<typeof emptyRow>>, date: Date,
 }
 
 async function buildDailyReport(params: NormalizedParams, services: ReportServices) {
-  const [payments, paymentTransactions, invoices, tickets] = await Promise.all([
-    readCollection(services.db, "payments", services.maxDocs),
+  const [paymentTransactions, tickets] = await Promise.all([
     readCollection(services.db, "payment_transactions", services.maxDocs),
-    readCollection(services.db, "invoices", services.maxDocs),
     readCollection(services.db, "maintenanceTickets", services.maxDocs),
   ]);
 
   const rows = new Map<string, ReturnType<typeof emptyRow>>();
-  const financialDocs = [...payments, ...paymentTransactions, ...invoices];
 
-  financialDocs.forEach((record) => {
+  paymentTransactions.forEach((record) => {
     const date = dateFromRecord(record);
     if (!safePaymentStatus(record) || !inRange(date, params.startDate, params.endDate) || !matchesFilters(record, params.filters)) return;
     addRowValue(rows, date as Date, { revenue: revenueFrom(record) });

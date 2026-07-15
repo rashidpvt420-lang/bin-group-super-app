@@ -310,7 +310,7 @@ function AppContent() {
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
         <Route path="/owner/*" element={protectedRoute(['owner'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
-        {/* Admin — canonical in-app command center. No mandatory cross-domain bridge. */}
+        {/* Admin status terminal; privileged workflows are linked to the protected operations console. */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         {/* ── Public verifier routes ── */}
         <Route path="/verify" element={<InvoiceVerificationPage />} />

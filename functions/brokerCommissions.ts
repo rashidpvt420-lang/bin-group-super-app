@@ -229,3 +229,198 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
 
   return { status: "SUCCESS", brokerId, verified, releasedCommissions: released };
 });
+
+export const adminReviewBrokerCommission = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    await requireAdmin(request.auth);
+    const commissionId = String(request.data?.commissionId || "").trim();
+    const action = String(request.data?.action || "").trim().toUpperCase();
+    const reason = String(request.data?.reason || "").trim().slice(0, 1000);
+    const paymentReference = String(request.data?.paymentReference || "").trim().slice(0, 180);
+    if (!commissionId || !["APPROVE", "REJECT", "MARK_PAID"].includes(action)) {
+      throw new HttpsError("invalid-argument", "commissionId and a valid action are required.");
+    }
+    if (action === "REJECT" && reason.length < 8) {
+      throw new HttpsError("invalid-argument", "A clear rejection reason is required.");
+    }
+
+    const commissionRef = db.collection("broker_commissions").doc(commissionId);
+    const auditRef = db.collection("auditLogs").doc(`commission_review_${commissionId}_${action}`);
+    const now = ts();
+    let idempotent = false;
+    await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(commissionRef);
+      if (!snap.exists) throw new HttpsError("not-found", "Commission not found.");
+      const commission = snap.data() || {};
+      if (commission.complianceHold === true || Number(commission.amount || 0) <= 0) {
+        throw new HttpsError("failed-precondition", "Held or zero-value commissions cannot be approved or paid.");
+      }
+      const currentStatus = String(commission.status || "").toUpperCase();
+      const targetStatus = action === "MARK_PAID" ? "PAID" : action === "APPROVE" ? "APPROVED" : "REJECTED";
+      if (currentStatus === targetStatus) {
+        idempotent = true;
+        return;
+      }
+      if (action === "MARK_PAID" && currentStatus !== "APPROVED") {
+        throw new HttpsError("failed-precondition", "Only an approved commission can be marked paid.");
+      }
+      if (action === "MARK_PAID") {
+        const brokerId = String(commission.brokerId || "").trim();
+        const brokerSnap = await transaction.get(db.collection("users").doc(brokerId));
+        const broker = brokerSnap.data() || {};
+        const payoutVerified = broker.ibanVerified === true ||
+          broker.payoutVerified === true ||
+          broker.bankDetails?.verified === true;
+        if (
+          !brokerSnap.exists ||
+          !payoutVerified ||
+          String(commission.payoutStatus || "").toUpperCase() !== "APPROVED" ||
+          paymentReference.length < 4
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Paid status requires an approved payout request, verified broker IBAN, and payment reference.",
+          );
+        }
+      }
+      if (action === "APPROVE" && !["PENDING", "REJECTED"].includes(currentStatus)) {
+        throw new HttpsError("failed-precondition", "Commission is not awaiting approval.");
+      }
+      transaction.set(commissionRef, {
+        status: targetStatus,
+        ...(action === "APPROVE" ? { approvedAt: now, approvedBy: request.auth!.uid } : {}),
+        ...(action === "REJECT" ? { rejectionReason: reason, rejectedAt: now, rejectedBy: request.auth!.uid } : {}),
+        ...(action === "MARK_PAID" ? {
+          paidAt: now,
+          paidBy: request.auth!.uid,
+          payoutStatus: "PAID",
+          paymentReference,
+        } : {}),
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(auditRef, {
+        action: `ADMIN_${action}_BROKER_COMMISSION`,
+        actorId: request.auth!.uid,
+        commissionId,
+        brokerId: commission.brokerId || null,
+        contractId: commission.contractId || null,
+        amount: Number(commission.amount || 0),
+        currency: String(commission.currency || "AED"),
+        reason: reason || null,
+        createdAt: now,
+      });
+    });
+    return { status: "SUCCESS", commissionId, action, idempotent };
+  },
+);
+
+export const adminMatchBrokerAttribution = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    await requireAdmin(request.auth);
+    const leadId = String(request.data?.leadId || "").trim();
+    const contractId = String(request.data?.contractId || "").trim();
+    const intakeId = String(request.data?.intakeId || "").trim();
+    const ownerId = String(request.data?.ownerId || "").trim();
+    const propertyId = String(request.data?.propertyId || "").trim();
+    if (!leadId || !contractId) {
+      throw new HttpsError("invalid-argument", "A broker lead and active contract are required.");
+    }
+    const [leadSnap, contractSnap] = await Promise.all([
+      db.collection("brokerLeads").doc(leadId).get(),
+      db.collection("contracts").doc(contractId).get(),
+    ]);
+    if (!leadSnap.exists || !contractSnap.exists) {
+      throw new HttpsError("not-found", "Broker lead or contract was not found.");
+    }
+    const lead = leadSnap.data() || {};
+    const contract = contractSnap.data() || {};
+    const brokerId = String(lead.brokerId || lead.brokerUid || "").trim();
+    if (!brokerId || String(contract.status || "").toUpperCase() !== "ACTIVE") {
+      throw new HttpsError("failed-precondition", "Commission attribution requires a broker-owned lead and active contract.");
+    }
+    const leadStatus = String(lead.status || "").trim().toLowerCase();
+    if (leadStatus === "converted") {
+      if (String(lead.matchedContractId || "") !== contractId) {
+        throw new HttpsError("already-exists", "Lead is already attributed to another contract.");
+      }
+      return {
+        status: "SUCCESS",
+        leadId,
+        contractId,
+        commissionId: String(lead.commissionId || `commission_${contractId}`),
+        brokerId,
+        amount: Number(lead.commissionAmount || 0),
+        idempotent: true,
+      };
+    }
+    if (leadStatus !== "negotiation") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Lead must be in negotiation before it can be matched to an active contract.",
+      );
+    }
+    const existingContractBroker = String(contract.brokerId || contract.brokerUid || "").trim();
+    if (existingContractBroker && existingContractBroker !== brokerId) {
+      throw new HttpsError("already-exists", "Contract is already attributed to another broker.");
+    }
+    const contractOwnerId = String(contract.ownerUid || contract.ownerId || "").trim();
+    const contractPropertyId = String(contract.propertyId || "").trim();
+    const contractIntakeId = String(contract.intakeId || "").trim();
+    if (
+      (ownerId && ownerId !== contractOwnerId) ||
+      (propertyId && contractPropertyId && propertyId !== contractPropertyId) ||
+      (intakeId && contractIntakeId && intakeId !== contractIntakeId)
+    ) {
+      throw new HttpsError("failed-precondition", "Attribution targets do not match the active contract.");
+    }
+
+    const attributionId = String(lead.attributionId || `broker_lead_${brokerId}_${leadId}`);
+    const commission = await createBrokerCommissionForContract(contractId, {
+      ...contract,
+      brokerId,
+      brokerUid: brokerId,
+      brokerName: lead.brokerName || lead.brokerDisplayName || lead.brokerEmail || "",
+      brokerCode: lead.brokerCode || "",
+      intakeId: contractIntakeId || intakeId,
+    });
+    if (!commission) throw new HttpsError("internal", "Commission could not be created.");
+
+    const now = ts();
+    const batch = db.batch();
+    batch.set(db.collection("brokerLeads").doc(leadId), {
+      status: "converted",
+      commissionStatus: "MATCHED_TO_CONTRACT",
+      commissionCreationStatus: "COMMISSION_CREATED_SERVER_SIDE",
+      commissionId: commission.commissionId,
+      commissionAmount: commission.amount,
+      matchedOwnerId: contractOwnerId || ownerId || null,
+      matchedPropertyId: contractPropertyId || propertyId || null,
+      matchedContractId: contractId,
+      matchedIntakeId: contractIntakeId || intakeId || null,
+      matchedAt: now,
+      matchedBy: request.auth!.uid,
+      updatedAt: now,
+    }, { merge: true });
+    batch.set(db.collection("contracts").doc(contractId), {
+      brokerId,
+      brokerUid: brokerId,
+      brokerLeadId: leadId,
+      brokerAttributionId: attributionId,
+      updatedAt: now,
+    }, { merge: true });
+    batch.set(db.collection("auditLogs").doc(`broker_attribution_${leadId}_${contractId}`), {
+      action: "ADMIN_MATCH_BROKER_ATTRIBUTION",
+      actorId: request.auth!.uid,
+      brokerId,
+      leadId,
+      contractId,
+      commissionId: commission.commissionId,
+      attributionId,
+      createdAt: now,
+    });
+    await batch.commit();
+    return { ...commission, status: "SUCCESS", leadId, contractId, idempotent: false };
+  },
+);

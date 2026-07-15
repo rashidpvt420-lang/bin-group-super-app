@@ -351,8 +351,6 @@ export const startLiveTracking = async (
                     updateDoc(doc(db, 'maintenanceTickets', ticketId), {
                         technicianLocation: payload,
                         technicianLocationUpdatedAt: serverTimestamp(),
-                        trackingStatus: 'LIVE_TRACKING',
-                        dispatchStatus: 'EN_ROUTE',
                         updatedAt: serverTimestamp(),
                     }),
                     updateDoc(doc(db, 'technicians', technicianUid), {
@@ -462,7 +460,6 @@ export const stopLiveTracking = async (
 
     if (activeTicketId && finalStatus !== 'PRESERVE') {
         writes.push(updateDoc(doc(db, 'maintenanceTickets', activeTicketId), {
-            trackingStatus: finalStatus,
             technicianLocationUpdatedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         }));

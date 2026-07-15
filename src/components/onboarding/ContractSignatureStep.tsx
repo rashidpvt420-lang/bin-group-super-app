@@ -46,6 +46,7 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         companyProfile,
         ownerAccount,
         properties,
+        selectedAddOns,
         portfolioSummary,
         isContractSigned,
         signatureName,
@@ -88,10 +89,33 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         setOtpBusy(true);
         setOtpError('');
         try {
+            const previewQuote = httpsCallable(functions, 'previewOwnerOnboardingQuote');
+            const preview = await previewQuote({
+                properties,
+                selectedAddOns: selectedAddOns || [],
+            });
+            const lockedQuote = preview.data as {
+                quoteHash?: string;
+                annualContractValue?: number;
+                activationDeposit?: number;
+            };
+            if (!lockedQuote.quoteHash || !/^[a-f0-9]{64}$/.test(lockedQuote.quoteHash)) {
+                throw new Error('A server-authoritative contract hash was not returned.');
+            }
+            if (
+                Math.abs(Number(lockedQuote.annualContractValue || 0) - Number(quote?.annualTotal || 0)) > 0.01 ||
+                Math.abs(Number(lockedQuote.activationDeposit || 0) - Number(quote?.mobilizationFee || 0)) > 0.01
+            ) {
+                throw new Error(copy(
+                    'The quote changed. Return to pricing and review the current server quote before signing.',
+                    'تغيّر عرض السعر. ارجع إلى التسعير وراجع عرض الخادم الحالي قبل التوقيع.',
+                ));
+            }
             const callable = httpsCallable(functions, 'requestContractSignatureOtp');
             const result = await callable({
                 email: ownerAccount?.email,
                 contractId: contractReference,
+                contractHash: lockedQuote.quoteHash,
                 propertyName: primaryProperty?.address || primaryProperty?.emirate || 'BIN GROUP contract',
             });
             const data = result.data as { requestId?: string };

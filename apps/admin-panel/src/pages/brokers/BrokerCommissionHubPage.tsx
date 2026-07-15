@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, Paper, Grid, Button, alpha, CircularProgress, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
-import { db, collection, query, getDocs, orderBy, limit, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { Container, Typography, Box, Paper, Grid, Button, alpha, CircularProgress, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Alert } from '@mui/material';
+import { db, collection, query, getDocs, orderBy, limit, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 const commissionStatus = (value: unknown) => String(value || '').trim().toUpperCase();
@@ -9,6 +9,7 @@ export default function BrokerCommissionHubPage() {
     const [commissions, setCommissions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState<string | null>(null);
+    const [actionError, setActionError] = useState('');
     const [stats, setStats] = useState({
         pending: 0,
         approved: 0,
@@ -55,19 +56,18 @@ export default function BrokerCommissionHubPage() {
 
     const handleApprove = async (id: string) => {
         setBusyId(id);
+        setActionError('');
         try {
-            await updateDoc(doc(db, 'broker_commissions', id), {
-                status: 'APPROVED',
-                approvedAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
+            const reviewCommission = httpsCallable(functions, 'adminReviewBrokerCommission');
+            await reviewCommission({ commissionId: id, action: 'APPROVE' });
             setCommissions(prev => {
                 const next = prev.map(c => c.id === id ? { ...c, status: 'APPROVED' } : c);
                 recalcStats(next);
                 return next;
             });
-        } catch (e) {
+        } catch (e: any) {
             console.warn('[COMMISSION_HUB] Failed to approve commission.', e);
+            setActionError(e?.message || 'Commission approval failed.');
         } finally {
             setBusyId(null);
         }
@@ -76,21 +76,24 @@ export default function BrokerCommissionHubPage() {
 
     const handleMarkPaid = async (id: string) => {
         setBusyId(id);
+        setActionError('');
         try {
+            const paymentReference = window.prompt('Enter the payout payment reference:')?.trim() || '';
+            if (paymentReference.length < 4) {
+                setActionError('A payout payment reference is required.');
+                return;
+            }
             const paidDate = new Date().toISOString();
-            await updateDoc(doc(db, 'broker_commissions', id), {
-                status: 'PAID',
-                paidDate,
-                paidAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
+            const reviewCommission = httpsCallable(functions, 'adminReviewBrokerCommission');
+            await reviewCommission({ commissionId: id, action: 'MARK_PAID', paymentReference });
             setCommissions(prev => {
                 const next = prev.map(c => c.id === id ? { ...c, status: 'PAID', paidDate } : c);
                 recalcStats(next);
                 return next;
             });
-        } catch (e) {
+        } catch (e: any) {
             console.warn('[COMMISSION_HUB] Failed to mark commission as paid.', e);
+            setActionError(e?.message || 'Commission payout update failed.');
         } finally {
             setBusyId(null);
         }
@@ -105,6 +108,7 @@ export default function BrokerCommissionHubPage() {
                 <Typography variant="h3" fontWeight="950" color="#FFF">Broker <Box component="span" sx={{ color: binThemeTokens.gold }}>Commission Hub</Box></Typography>
                 <Typography variant="body1" color="rgba(255,255,255,0.5)">Lead attribution and payout verification for the BIN GROUP Broker Network.</Typography>
             </Box>
+            {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
 
             <Grid container spacing={4} sx={{ mb: 6 }}>
                 <Grid item xs={12} md={4}>

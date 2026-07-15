@@ -50,6 +50,7 @@ test('workflow does not interpolate dispatch inputs directly inside shell', () =
 
 test('workflow uses least-privilege permissions', () => {
   assert.doesNotMatch(workflow, /^\s*actions:\s*write\s*$/m);
+  assert.match(workflow, /^\s*actions:\s*read\s*$/m);
   assert.match(workflow, /^\s*contents:\s*read\s*$/m);
   assert.match(workflow, /^\s*id-token:\s*write\s*$/m);
 });

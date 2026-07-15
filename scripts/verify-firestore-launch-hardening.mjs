@@ -12,8 +12,8 @@ const forbiddenFragments = [
     text: '      allow create: if signedIn();',
   },
   {
-    label: 'open mission pool readable by any signed-in user',
-    text: "function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null",
+    label: 'open mission pool exposes private tickets before dispatch',
+    text: 'function openMissionPoolRead(data)',
   },
   {
     label: 'tenant ticket create without unit/property validation',
@@ -30,10 +30,6 @@ const forbiddenFragments = [
   {
     label: 'tickets update rule still permits direct technician claiming',
     text: '|| safeOpenMissionClaim()',
-  },
-  {
-    label: 'open mission pool grants dispatcher/admin semantics to technician pool reads',
-    text: 'function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
   },
 ];
 
@@ -52,19 +48,11 @@ const requiredFragments = [
   },
   {
     label: 'technician dispatch authority helper',
-    text: 'function hasTechnicianDispatchAuthority() {',
+    text: 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }',
   },
   {
     label: 'approved technician helper',
     text: 'function isApprovedTechnician() {',
-  },
-  {
-    label: 'open mission availability helper',
-    text: 'function openMissionAvailable(data) {',
-  },
-  {
-    label: 'open mission visibility restricted to approved technicians',
-    text: 'function openMissionPoolRead(data) { return isApprovedTechnician() && openMissionAvailable(data); }',
   },
   {
     label: 'tenant ticket unit/property binding helper',
@@ -72,7 +60,7 @@ const requiredFragments = [
   },
   {
     label: 'tenant ticket create uses binding helper',
-    text: 'ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);',
+    text: 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
   },
   {
     label: 'technician evidence update helper',
@@ -80,11 +68,31 @@ const requiredFragments = [
   },
   {
     label: 'ticket assignment and status transitions are dispatcher/server authoritative',
-    text: 'allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
   },
   {
     label: 'technician cannot replace assigned technician identity',
     text: "request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)",
+  },
+  {
+    label: 'payment transaction writes are server-only',
+    text: "match /payment_transactions/{paymentId} {\n      allow read:",
+  },
+  {
+    label: 'payment transaction create denied',
+    text: "// transaction type and enter a weaker admin approval path.\n      allow create: if false;\n      allow update, delete: if false;",
+  },
+  {
+    label: 'financial transaction create denied',
+    text: 'allow create: if false; // Financial ledger rows are server-authored only.',
+  },
+  {
+    label: 'public rate limits are server-only',
+    text: "match /public_rate_limits/{rateId} {\n      allow read, write: if false;",
+  },
+  {
+    label: 'AI quota records are server-only',
+    text: "match /ai_usage/{usageId} {\n      allow read: if isAdmin();\n      allow write: if false;",
   },
 ];
 

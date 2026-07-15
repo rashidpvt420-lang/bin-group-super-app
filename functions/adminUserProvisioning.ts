@@ -8,9 +8,13 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "hr_manager", "finance_admin"]);
+const PRIVILEGED_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo"]);
 const STAFF_ROLES = new Set([
   "technician",
+  "manager",
+  "operations_admin",
+  "hr_admin",
+  "support_admin",
   "hr_staff",
   "hr_manager",
   "finance_staff",
@@ -30,15 +34,14 @@ function normalizeEmail(value: unknown) {
   return cleanString(value).toLowerCase();
 }
 
-function hasAdminAccess(token: any, dbRole?: string, dbIsAdmin?: boolean) {
+function hasAdminAccess(token: any) {
   const role = cleanString(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
-  return (
-    token?.admin === true ||
+  return token?.suspended !== true && (
+    PRIVILEGED_ADMIN_ROLES.has(role) ||
     token?.super_admin === true ||
     token?.superAdmin === true ||
-    ADMIN_ROLES.has(role) ||
-    dbIsAdmin === true ||
-    (dbRole && ADMIN_ROLES.has(dbRole.toLowerCase()))
+    token?.ceo === true ||
+    (role === "" && (token?.admin === true || token?.isAdmin === true))
   );
 }
 
@@ -49,7 +52,7 @@ function generatedPassword() {
   return `BinPilot#${secureRandom}!`;
 }
 
-export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const authContext = request.auth;
   if (!authContext) {
     throw new HttpsError("unauthenticated", "Admin session required.");
@@ -59,14 +62,12 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
   const actorToken = authContext.token || {};
   const actorRole = cleanString(actorToken.role || actorToken.userRole || actorToken.primaryRole, "admin");
 
-  // Fetch actor's database profile to verify admin access as a fallback
-  const actorProfile = await db.collection("users").doc(actorId).get();
-  const actorProfileData = actorProfile.data() || {};
-  const dbRole = cleanString(actorProfileData.role || actorProfileData.userRole || actorProfileData.primaryRole);
-  const dbIsAdmin = actorProfileData.admin === true || actorProfileData.isAdmin === true;
-
-  if (!hasAdminAccess(actorToken, dbRole, dbIsAdmin)) {
+  if (!hasAdminAccess(actorToken)) {
     throw new HttpsError("permission-denied", "Only authorized admins can provision staff accounts.");
+  }
+  const actorRecord = await admin.auth().getUser(actorId);
+  if (actorRecord.disabled) {
+    throw new HttpsError("permission-denied", "Disabled administrators cannot provision accounts.");
   }
 
   const payload = request.data || {};
@@ -117,7 +118,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
     primaryRole: role,
     staff: true,
     technician: role === "technician",
-    admin: ADMIN_ROLES.has(role),
+    admin: PRIVILEGED_ADMIN_ROLES.has(role),
   });
 
   const commonProfile = {
@@ -135,7 +136,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3" }, as
     trade: specialization,
     status: "active",
     isStaff: true,
-    isAdmin: ADMIN_ROLES.has(role),
+    isAdmin: PRIVILEGED_ADMIN_ROLES.has(role),
     onboardingComplete: true,
     createdAt: now,
     updatedAt: now,
@@ -238,7 +239,7 @@ export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (
   const staffModulesBefore = JSON.stringify(before?.staffModules || []);
   const staffModulesAfter = JSON.stringify(after?.staffModules || []);
   const statusBefore = before?.status;
-  const statusAfter = after?.status;
+  const statusAfter = cleanString(after?.status).toLowerCase();
 
   if (roleBefore === roleAfter && staffModulesBefore === staffModulesAfter && statusBefore === statusAfter) {
     return;
@@ -252,23 +253,25 @@ export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (
     const existingClaims = userRecord.customClaims || {};
     
     // Revoke access if suspended
-    if (statusAfter === "SUSPENDED") {
-      await admin.auth().setCustomUserClaims(uid, {
-        ...existingClaims,
-        suspended: true,
-      });
+    if (["suspended", "disabled", "rejected"].includes(statusAfter)) {
+      await admin.auth().updateUser(uid, { disabled: true });
+      await admin.auth().setCustomUserClaims(uid, { suspended: true });
+      await admin.auth().revokeRefreshTokens(uid);
       return;
     }
 
+    if (userRecord.disabled) {
+      await admin.auth().updateUser(uid, { disabled: false });
+    }
     await admin.auth().setCustomUserClaims(uid, {
-      ...existingClaims,
       role,
       userRole: role,
       primaryRole: role,
-      staff: STAFF_ROLES.has(role) || ADMIN_ROLES.has(role),
+      staff: STAFF_ROLES.has(role) || PRIVILEGED_ADMIN_ROLES.has(role),
       technician: role === "technician",
-      admin: ADMIN_ROLES.has(role),
+      admin: PRIVILEGED_ADMIN_ROLES.has(role),
       modules: after.staffModules || [],
+      permissions: after.permissions || existingClaims.permissions || {},
       suspended: false,
     });
   } catch (error: any) {

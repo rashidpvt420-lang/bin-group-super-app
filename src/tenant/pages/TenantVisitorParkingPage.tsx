@@ -4,7 +4,7 @@ import { ShieldCheck, Plus, Clock, Trash2, Car, Calendar, AlertCircle } from 'lu
 import { QRCodeSVG } from 'qrcode.react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, query, where, getDocs, limit, addDoc, onSnapshot, doc, updateDoc, serverTimestamp, functions, httpsCallable } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, limit, onSnapshot, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 
@@ -33,6 +33,9 @@ export default function TenantVisitorParkingPage() {
       if (!user?.uid) return;
       try {
         let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
+        if (unitSnap.empty) {
+          unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid), limit(1)));
+        }
         if (unitSnap.empty && user.email) {
           unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', normalizeEmail(user.email)), limit(1)));
         }
@@ -75,12 +78,28 @@ export default function TenantVisitorParkingPage() {
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.uid || !visitorName.trim() || !vehiclePlate.trim()) return;
+    const vStart = new Date(visitStartAt).getTime();
+    const vEnd = new Date(visitEndAt).getTime();
+    if (
+      !user?.uid ||
+      !propertyId ||
+      !unitId ||
+      !visitorName.trim() ||
+      !vehiclePlate.trim() ||
+      !Number.isFinite(vStart) ||
+      !Number.isFinite(vEnd) ||
+      vEnd <= Math.max(Date.now(), vStart) ||
+      vEnd - vStart > 7 * 24 * 60 * 60 * 1000
+    ) {
+      setSnackbar({
+        open: true,
+        message: label('tenant.parking.invalidWindow', 'Select a valid visit window of seven days or less.', 'حدد فترة زيارة صالحة لا تتجاوز سبعة أيام.'),
+        severity: 'warning',
+      });
+      return;
+    }
     setSubmitting(true);
     try {
-      const passCode = `VP-${Math.floor(100000 + Math.random() * 900000)}`;
-      const vStart = new Date(visitStartAt).getTime();
-      const vEnd = new Date(visitEndAt).getTime();
       
       const generateSignedQrPass = httpsCallable(functions, 'generateSignedQrPass');
       const result = await generateSignedQrPass({
@@ -88,25 +107,12 @@ export default function TenantVisitorParkingPage() {
           unitId,
           type: 'visitor_parking',
           name: visitorName.trim(),
+          vehiclePlate: vehiclePlate.trim().toUpperCase(),
           validFrom: vStart,
           validUntil: vEnd
       });
-      const { token, passId } = result.data as any;
-
-      await addDoc(collection(db, 'visitorParkingRequests'), {
-        passId,
-        qrToken: token,
-        propertyId,
-        unitId,
-        tenantUid: user.uid,
-        visitorName: visitorName.trim(),
-        vehiclePlate: vehiclePlate.trim().toUpperCase(),
-        visitStartAt,
-        visitEndAt,
-        status: 'pending',
-        passCode,
-        createdAt: serverTimestamp()
-      });
+      const { passId } = result.data as any;
+      if (!passId) throw new Error('Parking service did not return a request ID.');
       setOpenAdd(false);
       setVisitorName('');
       setVehiclePlate('');
@@ -123,9 +129,8 @@ export default function TenantVisitorParkingPage() {
   const handleCancelRequest = async (requestId: string) => {
     if (!window.confirm('Are you sure you want to cancel this parking request?')) return;
     try {
-      await updateDoc(doc(db, 'visitorParkingRequests', requestId), {
-        status: 'cancelled'
-      });
+      const cancelSignedQrPass = httpsCallable(functions, 'cancelSignedQrPass');
+      await cancelSignedQrPass({ passId: requestId, collectionName: 'visitorParkingRequests' });
     } catch (err) {
       console.error('Failed to cancel request:', err);
       setSnackbar({ open: true, message: 'Failed to cancel request.', severity: 'error' });

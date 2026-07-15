@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 
@@ -29,9 +30,30 @@ function normalizeRole(value: unknown) {
     return String(value || "").trim().toLowerCase();
 }
 
+function requirePayrollAdmin(auth: any) {
+    if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
+    const token = auth.token || {};
+    const role = normalizeRole(token.role || token.userRole || token.primaryRole);
+    if (
+        token.admin === true ||
+        token.isAdmin === true ||
+        ["admin", "super_admin", "ceo", "hr_admin", "hr_manager", "finance_admin"].includes(role)
+    ) return;
+    throw new HttpsError("permission-denied", "Payroll permission required.");
+}
+
 function safeText(value: unknown, fallback = "") {
     const text = String(value || "").trim();
     return text || fallback;
+}
+
+function escapeHtml(value: unknown) {
+    return safeText(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 function requestLabel(data: FirebaseFirestore.DocumentData) {
@@ -47,11 +69,218 @@ function chunkRoles(roles: string[]) {
 async function usersByRoles(roles: string[]) {
     const users = new Map<string, FirebaseFirestore.DocumentData>();
     for (const chunk of chunkRoles(roles)) {
-        const snap = await db.collection("users").where("role", "in", chunk).get();
-        snap.docs.forEach((doc) => users.set(doc.id, { id: doc.id, ...doc.data() }));
+        let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+        do {
+            let query: FirebaseFirestore.Query = db.collection("users")
+                .where("role", "in", chunk)
+                .orderBy(admin.firestore.FieldPath.documentId())
+                .limit(500);
+            if (cursor) query = query.startAfter(cursor);
+            const snap = await query.get();
+            snap.docs.forEach((doc) => users.set(doc.id, { id: doc.id, ...doc.data() }));
+            cursor = snap.size === 500 ? snap.docs[snap.docs.length - 1] : null;
+        } while (cursor);
     }
     return Array.from(users.values());
 }
+
+export const adminGeneratePayrollBatch = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        requirePayrollAdmin(request.auth);
+        const month = safeText(request.data?.month);
+        if (!/^\d{4}-\d{2}$/.test(month)) {
+            throw new HttpsError("invalid-argument", "Payroll month must use YYYY-MM.");
+        }
+        const afterId = safeText(request.data?.afterId);
+        let techQuery: FirebaseFirestore.Query = db.collection("users")
+            .where("role", "==", "technician")
+            .orderBy(admin.firestore.FieldPath.documentId())
+            .limit(200);
+        if (afterId) techQuery = techQuery.startAfter(afterId);
+        const techSnap = await techQuery.get();
+        const candidates = techSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const payrollRefs = candidates.map((tech) => db.collection("payroll").doc(`${tech.id}_${month}`));
+        const existing = payrollRefs.length ? await db.getAll(...payrollRefs) : [];
+        const existingIds = new Set(existing.filter((snap) => snap.exists).map((snap) => snap.id));
+        const skipped: string[] = [];
+        let processed = 0;
+        const batch = db.batch();
+        const now = serverTimestamp();
+        candidates.forEach((tech) => {
+            const payrollId = `${tech.id}_${month}`;
+            const amount = Number((tech as any).baseSalary || 0);
+            if (existingIds.has(payrollId)) return;
+            if (!Number.isFinite(amount) || amount <= 0) {
+                skipped.push(safeText((tech as any).displayName || (tech as any).email || tech.id));
+                return;
+            }
+            batch.create(db.collection("payroll").doc(payrollId), {
+                payrollId,
+                techId: tech.id,
+                techName: safeText((tech as any).displayName || (tech as any).email || tech.id),
+                email: safeText((tech as any).email).toLowerCase() || null,
+                amount,
+                currency: "AED",
+                month,
+                status: "pending",
+                createdAt: now,
+                updatedAt: now,
+            });
+            batch.create(db.collection("transactions").doc(`payroll_${payrollId}`), {
+                transactionId: `payroll_${payrollId}`,
+                techId: tech.id,
+                payrollId,
+                amount,
+                currency: "AED",
+                type: "debit",
+                category: "payroll",
+                description: `Salary for ${safeText((tech as any).displayName || tech.id)} - ${month}`,
+                status: "PENDING",
+                createdBy: request.auth!.uid,
+                createdAt: now,
+                updatedAt: now,
+            });
+            processed += 1;
+        });
+        if (processed > 0) await batch.commit();
+        return {
+            status: "SUCCESS",
+            month,
+            processed,
+            skipped,
+            nextAfterId: techSnap.size === 200 ? techSnap.docs[techSnap.docs.length - 1]?.id || null : null,
+        };
+    },
+);
+
+export const adminSettlePayrollRecord = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        requirePayrollAdmin(request.auth);
+        const payrollId = safeText(request.data?.payrollId);
+        const paymentReference = safeText(request.data?.paymentReference).slice(0, 180);
+        if (!payrollId || paymentReference.length < 4) {
+            throw new HttpsError(
+                "invalid-argument",
+                "Payroll ID and a payment reference of at least four characters are required.",
+            );
+        }
+
+        const payrollRef = db.collection("payroll").doc(payrollId);
+        const payrollSnap = await payrollRef.get();
+        if (!payrollSnap.exists) throw new HttpsError("not-found", "Payroll record not found.");
+        const payroll = payrollSnap.data() || {};
+        if (
+            safeText(payroll.status).toLowerCase() === "paid" &&
+            safeText(payroll.paymentReference) === paymentReference
+        ) {
+            return {
+                status: "SUCCESS",
+                payrollId,
+                pdfUrl: safeText(payroll.payslipUrl) || null,
+                idempotent: true,
+            };
+        }
+
+        const techId = safeText(payroll.techId || payroll.staffId);
+        const techName = safeText(payroll.techName || payroll.displayName, techId);
+        const month = safeText(payroll.month || payroll.payPeriod);
+        const amount = Number(payroll.amount || payroll.netSalary || payroll.baseSalary || 0);
+        if (!techId || !/^\d{4}-\d{2}$/.test(month) || !Number.isFinite(amount) || amount <= 0) {
+            throw new HttpsError("failed-precondition", "Payroll record is incomplete or has an invalid amount.");
+        }
+
+        let pdfUrl = "";
+        try {
+            const { generatePayslipPDF } = await import("./pdfEngine");
+            pdfUrl = await generatePayslipPDF({
+                staffId: techId,
+                staffName: techName,
+                payPeriod: month,
+                paymentDate: new Date().toISOString().slice(0, 10),
+                basicSalary: amount,
+                allowances: 0,
+                overtime: 0,
+                deductions: 0,
+                netSalary: amount,
+            });
+        } catch {
+            throw new HttpsError("internal", "Payslip generation failed. Payroll was not marked paid.");
+        }
+
+        const transactionRef = db.collection("transactions").doc(`payroll_${payrollId}`);
+        const auditRef = db.collection("auditLogs").doc(`payroll_settlement_${payrollId}`);
+        const mailRef = db.collection("mail").doc(`payroll_payslip_${payrollId}`);
+        const now = serverTimestamp();
+        let idempotent = false;
+
+        await db.runTransaction(async (transaction) => {
+            const [freshPayrollSnap, ledgerSnap] = await Promise.all([
+                transaction.get(payrollRef),
+                transaction.get(transactionRef),
+            ]);
+            if (!freshPayrollSnap.exists || !ledgerSnap.exists) {
+                throw new HttpsError("failed-precondition", "Payroll ledger linkage is incomplete.");
+            }
+            const freshPayroll = freshPayrollSnap.data() || {};
+            if (safeText(freshPayroll.status).toLowerCase() === "paid") {
+                if (safeText(freshPayroll.paymentReference) !== paymentReference) {
+                    throw new HttpsError("already-exists", "Payroll is already settled under another reference.");
+                }
+                idempotent = true;
+                return;
+            }
+
+            transaction.set(payrollRef, {
+                status: "paid",
+                paymentReference,
+                payslipUrl: pdfUrl,
+                paidAt: now,
+                paidBy: request.auth!.uid,
+                updatedAt: now,
+            }, { merge: true });
+            transaction.set(transactionRef, {
+                status: "PAID",
+                paymentReference,
+                paidAt: now,
+                paidBy: request.auth!.uid,
+                updatedAt: now,
+            }, { merge: true });
+            transaction.set(auditRef, {
+                action: "ADMIN_SETTLE_PAYROLL",
+                actorId: request.auth!.uid,
+                payrollId,
+                transactionId: transactionRef.id,
+                techId,
+                amount,
+                currency: safeText(freshPayroll.currency, "AED"),
+                paymentReference,
+                payslipUrl: pdfUrl,
+                createdAt: now,
+            });
+
+            const email = safeText(freshPayroll.email).toLowerCase();
+            if (email) {
+                transaction.set(mailRef, {
+                    to: email,
+                    message: {
+                        subject: `BIN GROUP payslip - ${month}`,
+                        html: `<p>Dear ${escapeHtml(techName)},</p><p>Your payroll for ${escapeHtml(month)} has been settled.</p><p><a href="${escapeHtml(pdfUrl)}">Open your payslip</a></p>`,
+                    },
+                    metadata: {
+                        type: "payroll_payslip",
+                        payrollId,
+                        techId,
+                    },
+                    createdAt: now,
+                });
+            }
+        });
+
+        return { status: "SUCCESS", payrollId, pdfUrl, idempotent };
+    },
+);
 
 async function queueUserNotification(userId: string, title: string, body: string, data: Record<string, unknown> = {}) {
     if (!userId) return;

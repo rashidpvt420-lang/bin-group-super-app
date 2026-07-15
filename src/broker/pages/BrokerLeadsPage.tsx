@@ -199,20 +199,25 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
     const updateLeadStatus = async (lead: any, newStatus: string) => {
         const leadId = String(lead?.id || '');
         if (!leadId) return;
+        if (!['new', 'contacted', 'viewing', 'negotiation', 'rejected'].includes(newStatus)) {
+            setNotice({
+                severity: 'error',
+                message: 'Lead conversion is completed by BIN GROUP after server-side attribution and contract approval.',
+            });
+            return;
+        }
 
         setNotice(null);
         try {
             const statusPayload: Record<string, any> = {
                 status: newStatus,
-                lifecycleStatus: newStatus === 'converted'
-                    ? 'CONVERTED_TO_BIN_GROUP_OPPORTUNITY'
-                    : `LEAD_${String(newStatus).toUpperCase()}`,
+                lifecycleStatus: `LEAD_${String(newStatus).toUpperCase()}`,
                 updatedAt: serverTimestamp(),
             };
 
             await updateDoc(doc(db, 'brokerLeads', leadId), statusPayload);
             await logAuditAction({
-                action: newStatus === 'converted' ? 'BROKER_LEAD_CONVERTED' : 'BROKER_LEAD_STATUS_UPDATED',
+                action: 'BROKER_LEAD_STATUS_UPDATED',
                 targetType: 'BROKER_LEAD',
                 targetId: leadId,
                 metadata: {
@@ -220,7 +225,6 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                     attributionId: lead.attributionId || `broker_lead_${user?.uid}_${leadId}`,
                     previousStatus: lead.status,
                     newStatus,
-                    commissionCandidate: newStatus === 'converted',
                 },
             });
         } catch (error: any) {
@@ -310,7 +314,6 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                                             <MenuItem value="contacted">CONTACTED</MenuItem>
                                             <MenuItem value="viewing">VIEWING</MenuItem>
                                             <MenuItem value="negotiation">NEGOTIATION</MenuItem>
-                                            <MenuItem value="converted">CONVERTED</MenuItem>
                                             <MenuItem value="rejected">REJECTED</MenuItem>
                                         </TextField>
                                     </Stack>

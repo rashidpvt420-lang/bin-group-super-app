@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -27,8 +28,11 @@ export const adminApproveContractActivation = onCall({ cors: true }, async (requ
 
 const SIGNED_AWAITING_PAYMENT_STATUSES = new Set(["ready_for_activation", "owner_signed", "signed"]);
 
-export const createOwnerPaymentTransaction = onCall({ cors: true }, async (request) => {
+export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
+  if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
 
   const contractId = String(request.data?.contractId || "").trim();
   if (!contractId) throw new HttpsError("invalid-argument", "contractId is required.");
@@ -76,23 +80,37 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
   const paymentReferenceId = String(request.data?.paymentReferenceId || reference).trim();
   const paymentProofUrl = String(request.data?.paymentProofUrl || "").trim();
   const paymentProofPath = String(request.data?.paymentProofPath || "").trim();
+  const paymentProofHash = String(request.data?.paymentProofHash || "").trim().toLowerCase();
   const paymentProofName = String(request.data?.paymentProofName || "").trim().slice(0, 180);
-  const expectedProofPrefix = `payment-references/owners/${request.auth.uid}/${contractId}/`;
+  const intakeId = String(contract.intakeId || "").trim();
+  const paymentId = String(contract.paymentId || intakeId).trim();
+  if (
+    !intakeId ||
+    !paymentId ||
+    !String(contract.quoteHash || "").trim() ||
+    intakeId !== contractId ||
+    paymentId !== contractId
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This contract does not use the canonical intake/payment ID and must be migrated by an administrator before payment submission.",
+    );
+  }
+  const expectedProofPrefix = `payment-references/owners/${request.auth.uid}/${paymentId}/`;
   if (
     paymentReferenceId.length < 4 ||
-    !paymentProofUrl.startsWith("https://") ||
-    !paymentProofPath.startsWith(expectedProofPrefix)
+    !paymentProofUrl ||
+    !paymentProofPath.startsWith(expectedProofPrefix) ||
+    !/^[a-f0-9]{64}$/.test(paymentProofHash)
   ) {
     throw new HttpsError("failed-precondition", "A bank reference and owner-scoped uploaded payment receipt are required.");
   }
-  const intakeId = String(contract.intakeId || "").trim();
-  const paymentId = String(contract.paymentId || intakeId).trim();
-  if (!intakeId || !paymentId || !String(contract.quoteHash || "").trim()) {
-    throw new HttpsError(
-      "failed-precondition",
-      "This contract predates the locked quote workflow and must be migrated by an administrator before payment submission.",
-    );
-  }
+  const paymentProofEvidence = await assertStoredOwnerPaymentReceipt({
+    ownerUid: request.auth.uid,
+    paymentId,
+    storagePath: paymentProofPath,
+    expectedHash: paymentProofHash,
+  });
   const annualContractValue = Number(contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);
   const mobilizationAmount = Number(
     contract.quoteSnapshot?.activationDeposit ||
@@ -155,6 +173,9 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
           paymentProofUrl,
           paymentProofPath,
           paymentProofName,
+          paymentProofHash: paymentProofEvidence.receiptHash,
+          paymentProofGeneration: paymentProofEvidence.generation,
+          paymentProofEvidence,
           status: "PENDING",
           paymentStatus: "PENDING",
           verificationState: "ADMIN_VERIFICATION_REQUIRED",
@@ -178,7 +199,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
           paymentSubmittedAt: now,
           updatedAt: now,
         }, { merge: true });
-        transaction.set(db.collection("auditLogs").doc(`owner_payment_request_${paymentId}`), {
+        transaction.set(db.collection("audit_logs").doc(`owner_payment_request_${paymentId}`), {
           action: "OWNER_RESUBMIT_PAYMENT_TRANSACTION",
           actorId: request.auth?.uid,
           actorRole: "owner",
@@ -212,6 +233,9 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
       paymentProofUrl,
       paymentProofPath,
       paymentProofName,
+      paymentProofHash: paymentProofEvidence.receiptHash,
+      paymentProofGeneration: paymentProofEvidence.generation,
+      paymentProofEvidence,
       annualContractValue,
       quoteSnapshot: contract.quoteSnapshot,
       quoteHash: contract.quoteHash,
@@ -242,7 +266,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true }, async (reque
       paymentSubmittedAt: now,
       updatedAt: now,
     }, { merge: true });
-    transaction.set(db.collection("auditLogs").doc(`owner_payment_request_${paymentId}`), {
+    transaction.set(db.collection("audit_logs").doc(`owner_payment_request_${paymentId}`), {
       action: "OWNER_CREATE_PAYMENT_TRANSACTION",
       actorId: request.auth?.uid,
       actorRole: "owner",

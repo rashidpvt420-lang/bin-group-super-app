@@ -10,6 +10,9 @@ import {
 test('normalizes fragmented onboarding statuses onto the canonical machine', () => {
   assert.equal(normalizeOnboardingState('pending_admin_review'), 'admin_review');
   assert.equal(normalizeOnboardingState('PAYMENT_PENDING'), 'deposit_pending');
+  assert.equal(normalizeOnboardingState('payment_pending_approval'), 'deposit_processing');
+  assert.equal(normalizeOnboardingState('PENDING_ADMIN_PAYMENT_VERIFICATION'), 'deposit_processing');
+  assert.equal(normalizeOnboardingState('PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL'), 'admin_review');
   assert.equal(normalizeOnboardingState('APPROVED_PENDING_OWNER_SIGNATURE'), 'signature_pending');
   assert.equal(normalizeOnboardingState('ACTIVE'), 'active');
 });
@@ -23,20 +26,27 @@ test('rejects illegal onboarding transitions and allows deposit -> admin_review 
 
 test('owner dashboard unlock stays fail-closed without server flags', () => {
   assert.equal(isOwnerDashboardUnlockEligible({
+    status: 'active',
     paymentVerified: true,
     adminApproved: true,
+    dashboardUnlocked: true,
     activeContractId: '',
     onboardingStatus: 'approved',
   }), false);
   assert.equal(isOwnerDashboardUnlockEligible({
+    status: 'active',
     paymentVerified: true,
     adminApproved: true,
+    dashboardUnlocked: true,
+    dashboardLocked: false,
     activeContractId: 'contract_1',
-    onboardingStatus: 'approved',
+    onboardingStatus: 'active',
   }), true);
   assert.equal(isOwnerDashboardUnlockEligible({
+    status: 'active',
     paymentVerified: true,
     adminApproved: true,
+    dashboardUnlocked: true,
     activeContractId: 'contract_1',
     onboardingStatus: 'suspended',
   }), false);

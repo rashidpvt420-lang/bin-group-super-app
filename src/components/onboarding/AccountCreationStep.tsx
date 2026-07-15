@@ -4,7 +4,7 @@ import {
     CircularProgress, InputAdornment, IconButton, Paper, Grid, Container
 } from '@mui/material';
 import { Visibility, VisibilityOff, ArrowBack, ArrowForward, Lock, Mail, Phone, Person, Login, Info } from '@mui/icons-material';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { sendEmailVerification, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -36,6 +36,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
 
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [checkingVerification, setCheckingVerification] = useState(false);
     const [error, setError] = useState<{ message: string; type: 'error' | 'warning' | 'info'; action?: 'signin' } | null>(null);
     const [success, setSuccess] = useState(false);
 
@@ -104,7 +105,10 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             setIntakeId(resolvedIntakeId);
 
             console.log("✅ [ONBOARDING] Account registered successfully. Establishing auth session...");
-            await signInWithEmailAndPassword(auth, email, formData.password);
+            const credential = await signInWithEmailAndPassword(auth, email, formData.password);
+            if (!credential.user.emailVerified) {
+                await sendEmailVerification(credential.user);
+            }
 
             setOwnerAccount({
                 uid,
@@ -115,7 +119,6 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
 
             setSuccess(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            setTimeout(() => onNext(), 1200);
         } catch (err: any) {
             console.error('Account Creation Error:', err);
             let msg = errorText('onboarding.error.generic', 'Account creation failed. Please check the details and try again.');
@@ -131,6 +134,41 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
         }
     };
 
+    const confirmEmailVerification = async () => {
+        setCheckingVerification(true);
+        setError(null);
+        try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) throw new Error('Sign in again to verify the owner email.');
+            await currentUser.reload();
+            if (!currentUser.emailVerified) {
+                setError({
+                    message: lang === 'ar'
+                        ? 'لم يتم التحقق من البريد الإلكتروني بعد. افتح رابط التحقق ثم حاول مرة أخرى.'
+                        : 'Email is not verified yet. Open the verification link, then try again.',
+                    type: 'warning',
+                });
+                return;
+            }
+            await currentUser.getIdToken(true);
+            const upsertProfile = httpsCallable(functions, 'upsertOwnerOnboardingProfile');
+            await upsertProfile({
+                fullName: formData.fullName.trim(),
+                email: formData.email.trim().toLowerCase(),
+                mobile: normalizePhone(formData.mobile),
+                intakeId: intakeId || onboardingSessionId,
+            });
+            onNext();
+        } catch (err: any) {
+            setError({
+                message: err?.message || (lang === 'ar' ? 'تعذر تأكيد البريد الإلكتروني.' : 'Email verification could not be confirmed.'),
+                type: 'error',
+            });
+        } finally {
+            setCheckingVerification(false);
+        }
+    };
+
     if (success) {
         return (
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -142,9 +180,21 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                     </Box>
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>{readable(t('onboarding.success_title'), 'Account Created')}</Typography>
                     <Typography variant="body1" sx={{ color: '#4ADE80', fontWeight: 700 }}>
-                        {readable(t('onboarding.success_locked'), 'Your owner profile was created and is pending admin approval.')}
+                        {lang === 'ar'
+                            ? 'تم إرسال رابط تحقق إلى بريدك الإلكتروني. تحقق منه قبل متابعة العقد والدفع.'
+                            : 'A verification link was sent to your email. Verify it before continuing to contract and payment.'}
                     </Typography>
-                    <CircularProgress sx={{ mt: 4, color: binThemeTokens.gold }} />
+                    {error && <Alert severity={error.type} sx={{ mt: 3 }}>{error.message}</Alert>}
+                    <Button
+                        variant="contained"
+                        onClick={confirmEmailVerification}
+                        disabled={checkingVerification}
+                        sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
+                    >
+                        {checkingVerification
+                            ? <CircularProgress size={22} color="inherit" />
+                            : (lang === 'ar' ? 'تم التحقق — متابعة' : 'I verified my email — Continue')}
+                    </Button>
                 </Paper>
             </Container>
         );
