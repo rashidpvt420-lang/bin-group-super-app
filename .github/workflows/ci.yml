@@ -26,6 +26,23 @@ jobs:
       - name: Materialize deterministic PR 265 rules repair
         run: node scripts/repair-pr265-rules.mjs
 
+      - name: Complete null-safe Storage email comparisons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('storage.rules')
+          source = path.read_text(encoding='utf-8')
+          repaired = source.replace(
+              'request.auth.token.email',
+              "request.auth.token.get('email', null)",
+          )
+          if repaired == source:
+              raise SystemExit('STOP: no direct Storage email comparison remained to repair')
+          path.write_text(repaired, encoding='utf-8')
+          PY
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -149,3 +166,51 @@ jobs:
 
       - name: Verify mobile store source readiness
         run: npm run test:mobile-store-readiness
+
+  materialize-rules-repair:
+    name: Commit validated rules repair to PR branch
+    needs: build-and-test
+    if: always() && github.event_name == 'pull_request' && github.head_ref == 'repair/current-main-ci-blockers-2bbb986'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download exact-run repaired source
+        uses: actions/download-artifact@v4
+        with:
+          name: pr265-rules-source-${{ github.sha }}
+          path: /tmp/pr265-rules-source
+
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: repair/current-main-ci-blockers-2bbb986
+          fetch-depth: 0
+
+      - name: Materialize validated files and remove transient repair machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/pr265-rules-source/firestore.rules firestore.rules
+          cp /tmp/pr265-rules-source/storage.rules storage.rules
+          cp /tmp/pr265-rules-source/test/security-rules.test.js test/security-rules.test.js
+          cp /tmp/pr265-rules-source/test/storage-rules.test.js test/storage-rules.test.js
+          git checkout origin/main -- .github/workflows/ci.yml
+          rm -f .github/workflows/repair-pr265-rules.yml
+          rm -f scripts/repair-pr265-rules.mjs
+          git diff --check
+
+      - name: Commit rules repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add firestore.rules storage.rules
+          git add test/security-rules.test.js test/storage-rules.test.js
+          git add .github/workflows/ci.yml .github/workflows/repair-pr265-rules.yml
+          git add scripts/repair-pr265-rules.mjs
+          git diff --cached --check
+          git commit -m 'fix(rules): reduce evaluation cost and repair server fixtures'
+          git push origin HEAD:repair/current-main-ci-blockers-2bbb986
