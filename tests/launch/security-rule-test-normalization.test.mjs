@@ -22,15 +22,15 @@ test('security rule test normalization enforces callable-only lifecycle and is i
     const normalized = readFileSync(targetPath, 'utf8');
     assert.doesNotMatch(
       normalized,
-      /assertSucceeds\(updateDoc\(doc\(techADb, 'maintenanceTickets\/ticket_3'\), \{\n\s*status: 'IN_PROGRESS'/,
+      /assertSucceeds\(updateDoc\(doc\(techADb, 'maintenanceTickets\/ticket_3'\), \{\r?\n\s*status: 'IN_PROGRESS'/,
     );
     assert.match(
       normalized,
-      /assertFails\(updateDoc\(doc\(techADb, 'maintenanceTickets\/ticket_3'\), \{\n\s*status: 'IN_PROGRESS'/,
+      /assertFails\(updateDoc\(doc\(techADb, 'maintenanceTickets\/ticket_3'\), \{\r?\n\s*status: 'IN_PROGRESS'/,
     );
     assert.match(
       normalized,
-      /assertSucceeds\(updateDoc\(doc\(techADb, 'maintenanceTickets\/ticket_3'\), \{\n\s*technicianNotes: 'Verified evidence note from assigned technician\.'/,
+      /assertSucceeds\(updateDoc\(doc\(techADb, 'maintenanceTickets\/ticket_3'\), \{\r?\n\s*technicianNotes: 'Verified evidence note from assigned technician\.'/,
     );
 
     const beforeSecond = readFileSync(targetPath);

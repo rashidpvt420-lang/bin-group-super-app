@@ -1,37 +1,23 @@
-// owner-app/src/services/api.ts
-import axios from 'axios';
+// Fail-closed: there is no localhost REST API in this monorepo.
+// Portal operations must use Firebase Auth + Firestore / HTTPS callables.
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const REFUSED = () => {
+  throw new Error(
+    'Legacy REST apiClient is disabled. Use Firebase Auth and Cloud Functions callables; localStorage ownerToken is not an authorization source.',
+  );
+};
 
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
+export const apiClient = {
+  get: REFUSED,
+  post: REFUSED,
+  put: REFUSED,
+  patch: REFUSED,
+  delete: REFUSED,
+  request: REFUSED,
+  interceptors: {
+    request: { use: () => undefined },
+    response: { use: () => undefined },
   },
-});
-
-// Request interceptor for JWT
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('ownerToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('ownerToken');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+};
 
 export default apiClient;

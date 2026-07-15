@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'test/security-rules.test.js';
-const source = readFileSync(file, 'utf8');
+const sourceRaw = readFileSync(file, 'utf8');
+const newline = sourceRaw.includes('\r\n') ? '\r\n' : '\n';
+const source = sourceRaw.replace(/\r\n/g, '\n');
 const obsoleteBlock = `    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
       updatedAt: new Date().toISOString(),
@@ -32,5 +34,6 @@ if (obsoleteCount !== 1 || canonicalCount !== 0) {
   );
 }
 
-writeFileSync(file, source.replace(obsoleteBlock, canonicalBlock));
+const next = source.replace(obsoleteBlock, canonicalBlock).replace(/\n/g, newline);
+writeFileSync(file, next);
 console.log('[normalize-rule-tests] direct technician status denied; assigned evidence update allowed');
