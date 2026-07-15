@@ -90,51 +90,47 @@ service firebase.storage {
       );
     }
 
-    function contractExists(contractId) {
-      return firestore.exists(/databases/(default)/documents/contracts/$(contractId));
-    }
-
-    function contract(contractId) {
-      return firestore.get(/databases/(default)/documents/contracts/$(contractId)).data;
-    }
-
     function canReadContractFile(contractId) {
-      return isAuth() && contractExists(contractId) && (
+      let contractData = firestore.get(
+        /databases/(default)/documents/contracts/$(contractId)
+      ).data;
+      let authEmail = request.auth.token.get('email', null);
+      return isAuth() && (
         isAdmin() ||
         isAuditor() ||
-        contract(contractId).get('ownerId', null) == request.auth.uid ||
-        contract(contractId).get('ownerUid', null) == request.auth.uid ||
-        contract(contractId).get('createdBy', null) == request.auth.uid ||
-        contract(contractId).get('userId', null) == request.auth.uid ||
-        (hasVerifiedEmail() && (
-          contract(contractId).get('recipientEmail', null) == request.auth.token.get('email', null) ||
-          contract(contractId).get('ownerEmail', null) == request.auth.token.get('email', null) ||
-          contract(contractId).get('email', null) == request.auth.token.get('email', null)
-        ))
+        (
+          hasVerifiedEmail() && (
+            contractData.get('recipientEmail', null) == authEmail ||
+            contractData.get('ownerEmail', null) == authEmail ||
+            contractData.get('email', null) == authEmail
+          )
+        ) ||
+        contractData.get('ownerId', null) == request.auth.uid ||
+        contractData.get('ownerUid', null) == request.auth.uid ||
+        contractData.get('createdBy', null) == request.auth.uid ||
+        contractData.get('userId', null) == request.auth.uid
       );
     }
 
-    function invoiceExists(invoiceId) {
-      return firestore.exists(/databases/(default)/documents/invoices/$(invoiceId));
-    }
-
-    function invoice(invoiceId) {
-      return firestore.get(/databases/(default)/documents/invoices/$(invoiceId)).data;
-    }
-
     function canReadInvoiceFile(invoiceId) {
-      return isAuth() && invoiceExists(invoiceId) && (
+      let invoiceData = firestore.get(
+        /databases/(default)/documents/invoices/$(invoiceId)
+      ).data;
+      let authEmail = request.auth.token.get('email', null);
+      return isAuth() && (
         isAdmin() ||
         isAuditor() ||
-        invoice(invoiceId).get('ownerId', null) == request.auth.uid ||
-        invoice(invoiceId).get('ownerUid', null) == request.auth.uid ||
-        invoice(invoiceId).get('payerId', null) == request.auth.uid ||
-        invoice(invoiceId).get('userId', null) == request.auth.uid ||
-        (hasVerifiedEmail() && (
-          invoice(invoiceId).get('recipientEmail', null) == request.auth.token.get('email', null) ||
-          invoice(invoiceId).get('ownerEmail', null) == request.auth.token.get('email', null) ||
-          invoice(invoiceId).get('email', null) == request.auth.token.get('email', null)
-        ))
+        (
+          hasVerifiedEmail() && (
+            invoiceData.get('recipientEmail', null) == authEmail ||
+            invoiceData.get('ownerEmail', null) == authEmail ||
+            invoiceData.get('email', null) == authEmail
+          )
+        ) ||
+        invoiceData.get('ownerId', null) == request.auth.uid ||
+        invoiceData.get('ownerUid', null) == request.auth.uid ||
+        invoiceData.get('payerId', null) == request.auth.uid ||
+        invoiceData.get('userId', null) == request.auth.uid
       );
     }
 
@@ -327,7 +323,7 @@ service firebase.storage {
     }
 
     match /{allPaths=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }
