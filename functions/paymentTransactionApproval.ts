@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
+import { assertVerifiedContractSignatureOtp } from "./contractSignatureOtp";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -54,10 +55,6 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   if (!snap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
   const payment = snap.data() || {};
-  if (roleOf(payment.status) === "approved") {
-    return { status: "SUCCESS", paymentId, idempotent: true };
-  }
-
   const paymentReferenceId = String(request.data?.paymentReferenceId || request.data?.referenceId || payment.paymentReference || payment.paymentReferenceId || "").trim();
   const amountReceived = Number(request.data?.amountReceived || payment.activationDeposit || payment.amount || payment.amountPaid || payment.rentPaid || 0);
   const notes = String(request.data?.notes || request.data?.internalNotes || "Approved by admin.").trim();
@@ -68,6 +65,14 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   const actorEmail = request.auth?.token?.email || null;
 
   if (isRentCollectionPayment(payment)) {
+    if (roleOf(payment.status) === "approved" && payment.paymentVerified === true) {
+      return {
+        status: "SUCCESS",
+        paymentId,
+        paymentKind: "RENT_COLLECTION",
+        idempotent: true,
+      };
+    }
     await db.runTransaction(async (transaction) => {
       transaction.set(ref, {
         status: "APPROVED",
@@ -117,6 +122,7 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   const contractSnap = await contractRef.get();
   if (!contractSnap.exists) throw new HttpsError("failed-precondition", "Bound contract does not exist.");
   const contractData = contractSnap.data() || {};
+  const alreadyApproved = roleOf(payment.status) === "approved" && roleOf(contractData.status) === "active";
   const ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
   const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || "").trim();
   if (!ownerUid || contractOwnerUid !== ownerUid) {
@@ -145,29 +151,53 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
   if (Number.isFinite(Number(request.data?.amountReceived)) && Math.abs(Number(request.data.amountReceived) - expectedAmount) > 0.01) {
     throw new HttpsError("failed-precondition", "Received amount does not match the locked mobilization deposit.");
   }
-  const normalizedMethod = upper(payment.paymentMethod || method);
+  const normalizedMethod = upper(payment.paymentMethod || payment.method || method);
   const stripeVerified = normalizedMethod === "STRIPE" &&
     upper(payment.paymentStatus) === "PAID" &&
     payment.verified === true &&
     Boolean(payment.stripeSessionId);
   const manualReference = paymentReferenceId || String(payment.paymentReferenceId || "").trim();
-  const manualVerified = ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(normalizedMethod) && Boolean(manualReference);
-  if (!stripeVerified && !manualVerified) {
+  const manualProofUrl = String(payment.paymentProofUrl || payment.receiptUrl || payment.paymentManifest?.receiptUrl || "").trim();
+  const manualProofPath = String(payment.paymentProofPath || payment.receiptPath || payment.paymentManifest?.receiptPath || "").trim();
+  const manualVerified =
+    ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(normalizedMethod) &&
+    Boolean(manualReference) &&
+    manualProofUrl.startsWith("https://") &&
+    manualProofPath.startsWith(`payment-references/owners/${ownerUid}/`);
+  if (!alreadyApproved && !stripeVerified && !manualVerified) {
     throw new HttpsError("failed-precondition", "Verified Stripe evidence or a manual payment receipt reference is required.");
   }
+  if (!alreadyApproved) {
+    await assertVerifiedContractSignatureOtp({
+      verificationId: String(contractData.otpVerificationId || payment.otpVerificationId || ""),
+      uid: ownerUid,
+      contractId,
+      signature: String(
+        contractData.signatureName ||
+        contractData.signatureState?.ownerSignedName ||
+        payment.signatureName ||
+        "",
+      ),
+    });
+  }
 
-  const propertySnap = await db.collection("properties").where("intakeId", "==", intakeId).limit(100).get();
+  const propertyQuery = db.collection("properties").where("intakeId", "==", intakeId).limit(100);
+  let approvalWasIdempotent = false;
   await db.runTransaction(async (transaction) => {
-    const [freshPaymentSnap, freshContractSnap] = await Promise.all([
+    const [freshPaymentSnap, freshContractSnap, propertySnap] = await Promise.all([
       transaction.get(ref),
       transaction.get(contractRef),
+      transaction.get(propertyQuery),
     ]);
     if (!freshPaymentSnap.exists || !freshContractSnap.exists) {
       throw new HttpsError("failed-precondition", "Payment or contract disappeared during approval.");
     }
     const freshPayment = freshPaymentSnap.data() || {};
     const freshContract = freshContractSnap.data() || {};
-    if (roleOf(freshPayment.status) === "approved" && roleOf(freshContract.status) === "active") return;
+    if (roleOf(freshPayment.status) === "approved" && roleOf(freshContract.status) === "active") {
+      approvalWasIdempotent = true;
+      return;
+    }
     if (freshPayment.quoteHash !== payment.quoteHash || freshContract.quoteHash !== payment.quoteHash) {
       throw new HttpsError("aborted", "Quote evidence changed during approval.");
     }
@@ -227,6 +257,9 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     };
     transaction.set(db.collection("users").doc(ownerUid), ownerPatch, { merge: true });
     transaction.set(db.collection("owners").doc(ownerUid), { ...ownerPatch, status: "ACTIVE" }, { merge: true });
+    if (propertySnap.empty) {
+      throw new HttpsError("failed-precondition", "No property records are bound to the approved onboarding intake.");
+    }
     propertySnap.docs.forEach((propertyDoc) => {
       const property = propertyDoc.data() || {};
       if (String(property.ownerUid || property.ownerId || "") !== ownerUid || property.quoteHash !== payment.quoteHash) {
@@ -295,7 +328,14 @@ export const adminApprovePayment = onCall({ cors: true }, async (request) => {
     }
   }
 
-  return { status: "SUCCESS", paymentId, contractId: contractId || null, intakeId: intakeId || null, ownerUid: ownerUid || null, idempotent: false };
+  return {
+    status: "SUCCESS",
+    paymentId,
+    contractId: contractId || null,
+    intakeId: intakeId || null,
+    ownerUid: ownerUid || null,
+    idempotent: approvalWasIdempotent,
+  };
 });
 
 export const adminRejectPayment = onCall({ cors: true }, async (request) => {

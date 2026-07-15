@@ -24,6 +24,9 @@ const ASSETS: Record<string, AssetPrice> = {
   hosp: { minimum: 75000, unit: "sqft", maintenance: 70, management: 4, combined: 100 },
   "data-ctr": { minimum: 250000, unit: "sqft", maintenance: 50, management: 10, combined: 150 },
   "mix-dev": { minimum: 100000, unit: "sqft", maintenance: 15, management: 4, combined: 25 },
+  government_majlis: { minimum: 25000, unit: "unit", maintenance: 25000, management: 0, combined: 25000 },
+  private_majlis: { minimum: 12000, unit: "unit", maintenance: 12000, management: 0, combined: 12000 },
+  mid_scale_hotel: { minimum: 150000, unit: "unit", maintenance: 100000, management: 10, combined: 200000 },
 };
 
 const ADD_ON_BASE: Record<string, number> = {
@@ -78,16 +81,26 @@ function text(value: unknown) {
   return String(value || "").trim();
 }
 
-function assetId(property: PropertyInput) {
+function assetId(property: PropertyInput): string {
   const type = text(property.propertyType).toLowerCase();
   const subType = text(property.subType).toLowerCase();
   const assetClass = text(property.assetClass).toLowerCase();
   const serviceModel = text(property.serviceModel).toLowerCase();
-  const descriptor = `${type} ${subType} ${assetClass} ${serviceModel}`;
+  const descriptor = `${type} ${subType} ${assetClass} ${serviceModel}`.replace(/[^a-z0-9]+/g, "_");
   if (descriptor.includes("mosque") || descriptor.includes("masjid") || descriptor.includes("religious_facility")) return "mosque_fm";
+  if (descriptor.includes("government_majlis") || property.majlis === true) return "government_majlis";
+  if (descriptor.includes("private_majlis")) return "private_majlis";
+  if (descriptor.includes("hotel")) return "mid_scale_hotel";
+  if (descriptor.includes("hospital") || descriptor.includes("clinic")) return "hosp";
+  if (descriptor.includes("data_center") || descriptor.includes("data_centre")) return "data-ctr";
+  if (descriptor.includes("mixed_use")) return "mix-dev";
+  if (descriptor.includes("retail_mall") || descriptor.includes("mall")) return "rtl-mall";
+  if (descriptor.includes("labor_camp") || descriptor.includes("labour_camp") || descriptor.includes("warehouse")) return "lab-camp";
+  if (descriptor.includes("short_term")) return "apt-sht";
   if (type === "villa") return ["luxury", "ultra-luxury"].includes(text(property.assetGrade).toLowerCase()) ? "villa-lux" : "villa-std";
-  if (type === "building") return "com-twr";
-  if (type === "commercial") return "off-sml";
+  if (descriptor.includes("luxury_apartment")) return "apt-lux";
+  if (type === "building" || descriptor.includes("commercial_tower")) return "com-twr";
+  if (type === "commercial" || descriptor.includes("office")) return "off-sml";
   return "apt-std";
 }
 
@@ -99,12 +112,18 @@ function contractType(property: PropertyInput) {
 }
 
 function emirateMultiplier(property: PropertyInput) {
-  const emirate = text(property.emirate).toLowerCase();
+  const emirate = text(property.emirate).toLowerCase().replace(/[^a-z0-9]+/g, "");
   if (emirate.includes("dubai")) return 1.15;
-  if (emirate.includes("abu dhabi")) return 1.1;
+  if (emirate.includes("abudhabi")) return 1.1;
   if (emirate.includes("sharjah")) return 0.9;
-  // The client engine currently normalizes these names to values that do not
-  // match the combined matrix label, so parity requires the neutral fallback.
+  if (
+    emirate === "rak" ||
+    emirate.includes("rasalkhaimah") ||
+    emirate.includes("ajman") ||
+    emirate.includes("fujairah") ||
+    emirate === "uaq" ||
+    emirate.includes("ummalquwain")
+  ) return 0.8;
   return 1;
 }
 
@@ -154,7 +173,9 @@ function calculateMosque(property: PropertyInput, selectedAddOns: string[]) {
   const capacityMultiplier = capacity <= 300 ? 1 : capacity <= 1000 ? 1.15 : capacity <= 3000 ? 1.35 : 1.6;
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 8 * capacityMultiplier;
-  const wuduCleaning = capacity * 5 * 35 * 365;
+  const wuduAreaProxySqft = Math.min(Math.max(Math.ceil(capacity * 0.12), 35), 650);
+  const wuduCleaning = wuduAreaProxySqft * 35 * 26;
+  // The onboarding UI treats mosque HVAC coverage as mandatory.
   const ramadanSurge = 15500 + 2500;
   const compliancePremium = Math.max(baseQuote * 0.04, 2500);
   const complexityPremium = (baseQuote + softServices) * 0.1;

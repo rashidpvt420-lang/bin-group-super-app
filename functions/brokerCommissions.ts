@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -74,17 +75,25 @@ export async function createBrokerCommissionForContract(
   if (!Number.isFinite(base) || base <= 0) {
     throw new Error("Broker commission requires a positive locked annual contract value.");
   }
-  const commissionRate = Number(
+  const requestedCommissionRate = Number(
     contract.brokerCommissionRate ||
     contract.commissionRate ||
     broker.brokerCommissionRate ||
     broker.commissionRate ||
     DEFAULT_COMMISSION_RATE,
   );
-  if (!Number.isFinite(commissionRate) || commissionRate < MIN_COMMISSION_RATE || commissionRate > MAX_COMMISSION_RATE) {
-    throw new Error("Broker commission rate must be an approved value between 5% and 8%.");
-  }
-  const amount = Math.round(base * commissionRate * 100) / 100;
+  const commissionRateApproved =
+    Number.isFinite(requestedCommissionRate) &&
+    requestedCommissionRate >= MIN_COMMISSION_RATE &&
+    requestedCommissionRate <= MAX_COMMISSION_RATE;
+  const commissionRate = commissionRateApproved ? requestedCommissionRate : DEFAULT_COMMISSION_RATE;
+  const amount = commissionRateApproved ? Math.round(base * commissionRate * 100) / 100 : 0;
+  const complianceHold = !reraVerified || !commissionRateApproved;
+  const holdReason = !commissionRateApproved
+    ? "COMMISSION_RATE_REQUIRES_ADMIN_REVIEW"
+    : reraVerified
+      ? null
+      : "BROKER_RERA_UNVERIFIED";
   const now = ts();
 
   const commissionRef = db.collection("broker_commissions").doc(`commission_${contractId}`);
@@ -111,9 +120,10 @@ export async function createBrokerCommissionForContract(
       percentage: commissionRate * 100,
       commissionBase: base,
       currency: String(contract.currency || "AED").trim().toUpperCase(),
-      status: reraVerified ? "PENDING" : "HOLD",
-      complianceHold: !reraVerified,
-      holdReason: reraVerified ? null : "BROKER_RERA_UNVERIFIED",
+      status: complianceHold ? "HOLD" : "PENDING",
+      complianceHold,
+      holdReason,
+      requestedPercentage: Number.isFinite(requestedCommissionRate) ? requestedCommissionRate * 100 : null,
       reraVerifiedAtCreation: reraVerified,
       source: "CONTRACT_ACTIVATION",
       createdAt: now,
@@ -131,11 +141,26 @@ export async function createBrokerCommissionForContract(
       contractId,
       amount,
       heldForRera: !reraVerified,
+      heldForCommissionRate: !commissionRateApproved,
       createdAt: now,
     });
-    return { commissionId: commissionRef.id, brokerId, amount, status: reraVerified ? "PENDING" : "HOLD" };
+    return { commissionId: commissionRef.id, brokerId, amount, status: complianceHold ? "HOLD" : "PENDING" };
   });
 }
+
+export const reconcileBrokerCommissionOnContractActivation = onDocumentUpdated(
+  { document: "contracts/{contractId}", region: "europe-west3" },
+  async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    const becameActive = roleOf(after.status) === "active" && roleOf(before.status) !== "active";
+    const needsRepair = roleOf(after.status) === "active" && after.commissionGenerated !== true;
+    if (!becameActive && !needsRepair) return;
+    await createBrokerCommissionForContract(String(event.params.contractId), after, {
+      annualContractValue: Number(after.quoteSnapshot?.annualContractValue || after.annualContractValue || 0),
+    });
+  },
+);
 
 /**
  * Admin-only: set (or clear) a broker's RERA verification flag. Verifying a
@@ -179,6 +204,7 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
     if (!holds.empty) {
       const batch = db.batch();
       holds.forEach((d) => {
+        if (String(d.data().holdReason || "") !== "BROKER_RERA_UNVERIFIED") return;
         batch.set(d.ref, {
           status: "PENDING",
           complianceHold: false,

@@ -16,6 +16,7 @@ import { AIProvider } from './context/AIContext';
 import { ToastProvider } from './context/ToastContext';
 import { SovereignAIChat } from './components/SovereignAIChat';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
+import OwnerActivationGuard from './components/owner/OwnerActivationGuard';
 
 function lazyWithRetry(componentImport: () => Promise<any>) {
   return React.lazy(async () => {
@@ -227,6 +228,10 @@ function protectedRoute(allowedRoles: string[], children: React.ReactNode) {
   return withAuth(<ProtectedRoute allowedRoles={allowedRoles}>{children}</ProtectedRoute>);
 }
 
+function protectedOwnerRoute(allowedRoles: string[], children: React.ReactNode) {
+  return protectedRoute(allowedRoles, <OwnerActivationGuard>{children}</OwnerActivationGuard>);
+}
+
 function publicOrPilot(children: React.ReactNode) {
   return PRIVATE_PRODUCTION_DEPLOY ? <PilotLaunchPage /> : children;
 }
@@ -285,25 +290,25 @@ function AppContent() {
         <Route path="/about" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/about-us" element={<Navigate to="/#company-profile" replace />} />
         <Route path="/onboarding/*" element={publicOrPilot(withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false }))} />
-        <Route path="/government/:id" element={protectedRoute(['owner', ...ADMIN_STAFF_ROLES], <GovernmentPropertyPage />)} />
+        <Route path="/government/:id" element={protectedOwnerRoute(['owner', ...ADMIN_STAFF_ROLES], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
         <Route path="/dashboard" element={<Navigate to="/owner/dashboard" replace />} />
-        <Route path="/financials" element={protectedRoute(['owner'], <FinancialDashboardPage />)} />
-        <Route path="/calendar" element={protectedRoute(['owner', 'technician', ...ADMIN_STAFF_ROLES], <MaintenanceCalendarPage />)} />
-        <Route path="/properties/:id/health" element={protectedRoute(['owner'], <HealthScorePage />)} />
-        <Route path="/analytics/reporting" element={protectedRoute(['owner', ...ADMIN_STAFF_ROLES], <ReportingDashboard />)} />
-        <Route path="/analytics/executive" element={protectedRoute(['owner', ...ADMIN_STAFF_ROLES], <ExecutiveReportingPage />)} />
-        <Route path="/analytics/turnover" element={protectedRoute(['owner'], <TurnoverEnginePage />)} />
-        <Route path="/properties/:propertyId/units" element={protectedRoute(['owner'], <PropertyUnitsPage />)} />
+        <Route path="/financials" element={protectedOwnerRoute(['owner'], <FinancialDashboardPage />)} />
+        <Route path="/calendar" element={protectedOwnerRoute(['owner', 'technician', ...ADMIN_STAFF_ROLES], <MaintenanceCalendarPage />)} />
+        <Route path="/properties/:id/health" element={protectedOwnerRoute(['owner'], <HealthScorePage />)} />
+        <Route path="/analytics/reporting" element={protectedOwnerRoute(['owner', ...ADMIN_STAFF_ROLES], <ReportingDashboard />)} />
+        <Route path="/analytics/executive" element={protectedOwnerRoute(['owner', ...ADMIN_STAFF_ROLES], <ExecutiveReportingPage />)} />
+        <Route path="/analytics/turnover" element={protectedOwnerRoute(['owner'], <TurnoverEnginePage />)} />
+        <Route path="/properties/:propertyId/units" element={protectedOwnerRoute(['owner'], <PropertyUnitsPage />)} />
         <Route path="/notifications" element={protectedRoute(NOTIFICATION_ROLES, <NotificationInboxPage />)} />
-        <Route path="/design-studio" element={protectedRoute(['owner', 'tenant'], <DesignStudioPage />)} />
-        <Route path="/design-studio/request/:id" element={protectedRoute(['owner', 'tenant'], <DesignRequestDetailPage />)} />
+        <Route path="/design-studio" element={protectedOwnerRoute(['owner', 'tenant'], <DesignStudioPage />)} />
+        <Route path="/design-studio/request/:id" element={protectedOwnerRoute(['owner', 'tenant'], <DesignRequestDetailPage />)} />
         <Route path="/invoices/:id" element={withAuth(<InvoiceDetailsPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/tenant/*" element={protectedRoute(['tenant'], <TenantApp />)} />
         <Route path="/technician/*" element={protectedRoute(['technician'], <TechnicianApp />)} />
         <Route path="/tech/*" element={<Navigate to="/technician/dashboard" replace />} />
         <Route path="/broker/*" element={protectedRoute(['broker'], <BrokerApp />)} />
-        <Route path="/owner/*" element={protectedRoute(['owner', 'ceo'], <OwnerApp />)} />
+        <Route path="/owner/*" element={protectedRoute(['owner'], <OwnerApp />)} />
         <Route path="/auditor/*" element={protectedRoute(['auditor'], <AuditorPortalPage />)} />
         {/* Admin — canonical in-app command center. No mandatory cross-domain bridge. */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />

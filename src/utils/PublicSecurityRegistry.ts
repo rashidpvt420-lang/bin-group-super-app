@@ -1,4 +1,4 @@
-import { db, collection, addDoc, serverTimestamp, query, where, getDocs, limit } from '../lib/firebase';
+import { db, collection, query, where, getDocs, limit, functions, httpsCallable } from '../lib/firebase';
 
 /**
  * Public Security Registry - Scaling Protection for UAE Launch.
@@ -6,11 +6,11 @@ import { db, collection, addDoc, serverTimestamp, query, where, getDocs, limit }
  */
 export const logSecurityEvent = async (type: 'QUOTE_LIMIT' | 'OTP_THROTTLE' | 'BOT_DETECTION' | 'DUPLICATE_PROPERTY', metadata: any) => {
     try {
-        await addDoc(collection(db, 'security_audit_logs'), {
-            type,
+        const recordTelemetry = httpsCallable(functions, 'recordClientTelemetry');
+        await recordTelemetry({
+            kind: 'SECURITY',
+            eventType: type,
             metadata,
-            timestamp: serverTimestamp(),
-            severity: type === 'BOT_DETECTION' ? 'CRITICAL' : 'WARNING'
         });
     } catch (e) {
         console.error('Security Logging Failed:', e);

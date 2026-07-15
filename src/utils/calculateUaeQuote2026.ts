@@ -385,9 +385,19 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const zoneAdjustedQuote = baseQuote * zoneMultiplier;
   if (zoneMultiplier !== 1) pricingExplanation.push(`Strategic location premium applied for Zone ${safeInput.zone}.`);
 
-  const normalizedEmirate = safeInput.emirate.toLowerCase();
-  const emirateEntry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find((entry) => entry.label.toLowerCase().includes(normalizedEmirate));
-  const emirateMultiplier = emirateEntry ? finiteNumber(emirateEntry.value, 1) : 1;
+  const normalizedEmirate = safeInput.emirate.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const emirateMultiplier =
+    normalizedEmirate.includes('dubai') ? 1.15 :
+    normalizedEmirate.includes('abudhabi') ? 1.1 :
+    normalizedEmirate.includes('sharjah') ? 0.9 :
+    (
+      normalizedEmirate === 'rak' ||
+      normalizedEmirate.includes('rasalkhaimah') ||
+      normalizedEmirate.includes('ajman') ||
+      normalizedEmirate.includes('fujairah') ||
+      normalizedEmirate === 'uaq' ||
+      normalizedEmirate.includes('ummalquwain')
+    ) ? 0.8 : 1;
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional operational cost adjustment for ${safeInput.emirate} (${emirateMultiplier}x) applied.`);
 

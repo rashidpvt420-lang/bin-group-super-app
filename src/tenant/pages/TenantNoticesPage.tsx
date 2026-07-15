@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { Alert, Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, alpha, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { FileText, Bell, Search, AlertCircle, Eye, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, query, where, getDocs, limit, doc, updateDoc, orderBy, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, getDocs, limit, doc, setDoc, serverTimestamp, onSnapshot } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 
@@ -14,33 +14,48 @@ export default function TenantNoticesPage() {
   const { user } = useRole();
   const [loading, setLoading] = useState(true);
   const [notices, setNotices] = useState<any[]>([]);
+  const [readNoticeIds, setReadNoticeIds] = useState<Set<string>>(new Set());
   const [propertyId, setPropertyId] = useState<string>('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [noticesError, setNoticesError] = useState('');
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
   // 1. Resolve tenant propertyId
   useEffect(() => {
     async function resolveProperty() {
-      if (!user?.uid) return;
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+      let resolvedPropertyId = String((user as any).propertyId || '');
       try {
+        if (resolvedPropertyId) {
+          setPropertyId(resolvedPropertyId);
+          return;
+        }
         let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
         if (unitSnap.empty && user.email) {
           unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', normalizeEmail(user.email)), limit(1)));
         }
         if (!unitSnap.empty) {
           const unit = unitSnap.docs[0].data();
-          setPropertyId(unit.propertyId || '');
+          resolvedPropertyId = String(unit.propertyId || '');
+          setPropertyId(resolvedPropertyId);
         } else {
           // Check contracts
           const contractSnap = await getDocs(query(collection(db, 'contracts'), where('tenantId', '==', user.uid), limit(1)));
           if (!contractSnap.empty) {
-            setPropertyId(contractSnap.docs[0].data().propertyId || '');
+            resolvedPropertyId = String(contractSnap.docs[0].data().propertyId || '');
+            setPropertyId(resolvedPropertyId);
           }
         }
       } catch (err) {
         console.error('Failed to resolve tenant propertyId:', err);
+        setNoticesError(label('tenant.notices.link_error', 'Your verified property link could not be loaded.', 'تعذر تحميل ربط العقار الموثق الخاص بك.'));
+      } finally {
+        if (!resolvedPropertyId) setLoading(false);
       }
     }
     resolveProperty();
@@ -49,9 +64,6 @@ export default function TenantNoticesPage() {
   // 2. Fetch notices
   useEffect(() => {
     if (!propertyId || !user?.uid) {
-      if (!propertyId && !loading) {
-        setLoading(false);
-      }
       return;
     }
 
@@ -73,20 +85,41 @@ export default function TenantNoticesPage() {
       setLoading(false);
     }, (err) => {
       console.error('Notices listener failed:', err);
+      setNoticesError(label('tenant.notices.load_error', 'Notices could not be loaded for this property.', 'تعذر تحميل الإشعارات لهذا العقار.'));
       setLoading(false);
     });
 
     return () => unsub();
   }, [propertyId, user?.uid]);
 
+  useEffect(() => {
+    if (!propertyId || !user?.uid) return;
+    const readsQuery = query(
+      collection(db, 'announcementReads'),
+      where('tenantUid', '==', user.uid),
+      where('propertyId', '==', propertyId),
+    );
+    return onSnapshot(readsQuery, (snapshot) => {
+      setReadNoticeIds(new Set(snapshot.docs.map((item) => String(item.data().announcementId || ''))));
+    }, (err) => {
+      console.error('Notice read-state listener failed:', err);
+      setNoticesError(label('tenant.notices.read_state_error', 'Notice read status could not be synchronized.', 'تعذر مزامنة حالة قراءة الإشعار.'));
+    });
+  }, [propertyId, user?.uid]);
+
   const handleMarkAsRead = async (noticeId: string) => {
     if (!user?.uid) return;
     try {
-      await updateDoc(doc(db, 'announcements', noticeId), {
-        [`readBy.${user.uid}`]: true
+      await setDoc(doc(db, 'announcementReads', `${noticeId}_${user.uid}`), {
+        announcementId: noticeId,
+        tenantUid: user.uid,
+        propertyId,
+        readAt: serverTimestamp(),
       });
+      setReadNoticeIds((current) => new Set(current).add(noticeId));
     } catch (err) {
       console.error('Failed to mark notice as read:', err);
+      setNoticesError(label('tenant.notices.mark_error', 'This notice could not be marked as read.', 'تعذر وضع علامة مقروء على هذا الإشعار.'));
     }
   };
 
@@ -122,6 +155,7 @@ export default function TenantNoticesPage() {
           {label('tenant.notices.desc', 'Stay updated with active announcements, maintenance alerts, and emergency updates for your building.', 'ابق على اطلاع بالإعلانات النشطة وتنبيهات الصيانة وتحديثات الطوارئ لمبناك.')}
         </Typography>
       </Box>
+      {noticesError && <Alert severity="error" sx={{ mb: 3 }}>{noticesError}</Alert>}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }}>
         <TextField
@@ -159,7 +193,7 @@ export default function TenantNoticesPage() {
 
       <Grid container spacing={3}>
         {filteredNotices.map((notice) => {
-          const isRead = notice.readBy?.[user?.uid || ''] === true;
+          const isRead = readNoticeIds.has(notice.id);
           const priorityColor = getPriorityColor(notice.priority);
 
           return (

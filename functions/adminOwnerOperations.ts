@@ -498,7 +498,18 @@ export const adminSuspendOwner = onCall({ cors: true }, async (request) => {
   const owner = snap.data() || {};
   if (s(owner.role).toLowerCase() !== "owner") throw new HttpsError("failed-precondition", "Target account is not an owner.");
   const actorId = request.auth?.uid || "admin";
-  const patch = { status: "suspended", suspensionReason: reason, suspendedAt: ts(), suspendedBy: actorId, updatedAt: ts() };
+  const currentStatus = s(owner.status, "pending_admin_approval").toLowerCase();
+  const statusBeforeSuspension = currentStatus === "suspended"
+    ? s(owner.statusBeforeSuspension, "pending_admin_approval").toLowerCase()
+    : currentStatus;
+  const patch = {
+    status: "suspended",
+    statusBeforeSuspension,
+    suspensionReason: reason,
+    suspendedAt: ts(),
+    suspendedBy: actorId,
+    updatedAt: ts(),
+  };
   const batch = db.batch();
   batch.set(ref, patch, { merge: true });
   batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
@@ -517,13 +528,28 @@ export const adminResumeOwner = onCall({ cors: true }, async (request) => {
   const owner = snap.data() || {};
   if (s(owner.role).toLowerCase() !== "owner") throw new HttpsError("failed-precondition", "Target account is not an owner.");
   const actorId = request.auth?.uid || "admin";
-  const patch = { status: "active", suspensionReason: null, resumedAt: ts(), resumedBy: actorId, updatedAt: ts() };
+  const priorStatus = s(owner.statusBeforeSuspension, "pending_admin_approval").toLowerCase();
+  const hasActivationEvidence =
+    owner.adminApproved === true &&
+    owner.paymentVerified === true &&
+    Boolean(s(owner.activeContractId));
+  const restoredStatus = priorStatus === "active" && !hasActivationEvidence
+    ? "pending_admin_approval"
+    : priorStatus;
+  const patch = {
+    status: restoredStatus,
+    statusBeforeSuspension: null,
+    suspensionReason: null,
+    resumedAt: ts(),
+    resumedBy: actorId,
+    updatedAt: ts(),
+  };
   const batch = db.batch();
   batch.set(ref, patch, { merge: true });
   batch.set(db.collection("owners").doc(ownerId), patch, { merge: true });
   batch.set(db.collection("audit_logs").doc(), { actorId, actorRole: "admin", action: "ADMIN_RESUME_OWNER", targetType: "users", targetId: ownerId, createdAt: ts() });
   await batch.commit();
-  return { status: "ACTIVE", ownerId };
+  return { status: restoredStatus.toUpperCase(), ownerId };
 });
 
 export const approveOwnerActivation = onCall({ cors: true }, async (request) => {
@@ -532,7 +558,7 @@ export const approveOwnerActivation = onCall({ cors: true }, async (request) => 
     "failed-precondition",
     "Legacy activation is disabled. Use adminApprovePayment so payment, quote, contract, owner, and property evidence are verified atomically.",
   );
-  const adminId = request.auth.uid;
+  const adminId = request.auth?.uid || "admin";
 
   const { intakeId, ownerId, contractId, paymentId, propertyIds } = request.data;
   if (!intakeId || !ownerId) throw new HttpsError("invalid-argument", "Missing required fields: intakeId, ownerId");

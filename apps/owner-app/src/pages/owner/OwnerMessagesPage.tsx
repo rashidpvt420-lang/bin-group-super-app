@@ -121,8 +121,10 @@ export default function OwnerMessagesPage() {
 
             const docRef = await addDoc(collection(db, 'conversations'), {
                 propertyId: newChatProperty,
-                participantUids: [user.uid, 'admin_system'], // default admin anchor
-                participantRoles: ['owner', 'admin'],
+                participantUids: [user.uid],
+                participantRoles: ['owner'],
+                assignedQueue: 'support_admin_queue',
+                assignedRole: 'admin',
                 type: 'owner_admin',
                 status: 'open',
                 lastMessageAt: serverTimestamp(),

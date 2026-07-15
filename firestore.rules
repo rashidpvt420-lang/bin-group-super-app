@@ -81,7 +81,13 @@ service cloud.firestore {
     }
 
     function authEmail() { return signedIn() ? request.auth.token.get('email', null) : null; }
-    function emailMatches(value) { return signedIn() && authEmail() != null && value != null && value == authEmail(); }
+    function emailMatches(value) {
+      return signedIn() &&
+        request.auth.token.get('email_verified', false) == true &&
+        authEmail() != null &&
+        value != null &&
+        value == authEmail();
+    }
     function isOwnerId(ownerId) { return signedIn() && ownerId != null && ownerId == request.auth.uid; }
     function isOwner(ownerId) { return isOwnerId(ownerId); }
     function isTenantId(tenantId) { return signedIn() && tenantId != null && tenantId == request.auth.uid; }
@@ -226,13 +232,40 @@ service cloud.firestore {
         (!('unlocksDashboard' in data) || data.unlocksDashboard == false);
     }
 
+    function ownerContractDraftCreate(data) {
+      return ownerDraftCreate(data) &&
+        !data.keys().hasAny([
+          'quoteHash',
+          'quoteSnapshot',
+          'quoteVersion',
+          'otpVerificationId',
+          'ownerSigned',
+          'signatureStatus',
+          'signatureState',
+          'paymentReferenceId',
+          'paymentProofUrl',
+          'paymentProofPath'
+        ]);
+    }
+
     function paymentDraftCreate(data) {
       return signedIn() && (owns(data) || tenantOwns(data) || data.get('payerId', null) == request.auth.uid || data.get('userId', null) == request.auth.uid) &&
         (!('status' in data) || data.status in ['draft', 'payment_pending', 'pending', 'PENDING_PAYMENT', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED']) &&
         (!('paymentVerified' in data) || data.paymentVerified == false) &&
         (!('approved' in data) || data.approved == false) &&
         (!('contractActivated' in data) || data.contractActivated == false) &&
-        (!('unlocksDashboard' in data) || data.unlocksDashboard == false);
+        (!('unlocksDashboard' in data) || data.unlocksDashboard == false) &&
+        !data.keys().hasAny([
+          'quoteHash',
+          'quoteSnapshot',
+          'quoteVersion',
+          'otpVerificationId',
+          'ownerSigned',
+          'signatureStatus',
+          'verified',
+          'stripeSessionId',
+          'stripePaymentIntentId'
+        ]);
     }
 
     function paymentConfirmationCreate(data) {
@@ -276,6 +309,31 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
+    }
+
+    function safeOwnerPropertyUpdate() {
+      return signedIn() &&
+        owns(resource.data) &&
+        request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
+        request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status',
+          'activationStatus',
+          'paymentStatus',
+          'paymentVerified',
+          'adminApproved',
+          'approved',
+          'contractActivated',
+          'dashboardUnlocked',
+          'dashboardUnlockApproved',
+          'unlocksDashboard',
+          'activeContractId',
+          'quoteHash',
+          'quoteSnapshot',
+          'quoteVersion',
+          'ownerId',
+          'ownerUid'
+        ]);
     }
 
     function safeTenantEvidenceUpdate() {
@@ -330,12 +388,7 @@ service cloud.firestore {
           'proofReadiness',
           'arrivedLocation',
           'technicianLocation',
-          'technicianLocationUpdatedAt',
-          'trackingStatus',
-          'dispatchStatus',
-          'gpsVerified',
-          'gpsVerifiedAt',
-          'onSiteVerification'
+          'technicianLocationUpdatedAt'
         ]) &&
         request.resource.data.get('beforePhotos', []).size() >= resource.data.get('beforePhotos', []).size() &&
         request.resource.data.get('beforePhotos', []).hasAll(resource.data.get('beforePhotos', [])) &&
@@ -351,9 +404,7 @@ service cloud.firestore {
         (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.get('technicianId', null)) &&
         (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.get('techId', null)) &&
         (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.get('priority', null)) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
-        (!('trackingStatus' in request.resource.data) || request.resource.data.trackingStatus in ['LIVE_TRACKING', 'PRESERVE', 'ARRIVED', 'WORK_STARTED', 'COMPLETED', 'CANCELLED']) &&
-        (!('dispatchStatus' in request.resource.data) || request.resource.data.dispatchStatus in ['EN_ROUTE']);
+        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null));
     }
 
     function safeTechnicianProfileUpdate(techId) {
@@ -404,7 +455,6 @@ service cloud.firestore {
           'contacted',
           'viewing',
           'negotiation',
-          'converted',
           'rejected'
         ]);
     }
@@ -670,13 +720,13 @@ service cloud.firestore {
       allow read: if isAdmin() || isAuditor();
       allow create: if false;  // server-only via Cloud Function
       allow update: if false;
-      allow delete: if isAdmin();
+      allow delete: if false;
     }
     match /auditLogs/{logId} {
       allow read: if isAdmin() || isAuditor();
       allow create: if false;  // server-only via Cloud Function
       allow update: if false;
-      allow delete: if isAdmin();
+      allow delete: if false;
     }
 
     match /system_health/{healthDoc} {
@@ -727,7 +777,7 @@ service cloud.firestore {
       allow get: if signedIn() && getTenantPropertyId() == propertyId;
       allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data));
       allow create: if canManageProperties() || ownerDraftCreate(request.resource.data);
-      allow update: if canManageProperties() || (owns(resource.data) && request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) && (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE'])));
+      allow update: if canManageProperties() || safeOwnerPropertyUpdate();
       allow delete: if isAdmin();
     }
 
@@ -735,7 +785,7 @@ service cloud.firestore {
       allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
       allow list: if signedIn() && resource.data.tenantId == request.auth.uid;
       allow list: if signedIn() && resource.data.tenantUid == request.auth.uid;
-      allow list: if signedIn() && resource.data.tenantEmail == request.auth.token.email;
+      allow list: if emailMatches(resource.data.get('tenantEmail', null));
       allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
       allow create: if canManageProperties();
       allow update: if canManageProperties();
@@ -751,7 +801,7 @@ service cloud.firestore {
 
     match /contracts/{contractId} {
       allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageContracts();
-      allow create: if canManageContracts() || ownerDraftCreate(request.resource.data);
+      allow create: if canManageContracts() || ownerContractDraftCreate(request.resource.data);
       allow update: if canManageContracts() || safeOwnerContractUpdate();
       allow delete: if isAdmin();
     }
@@ -765,9 +815,8 @@ service cloud.firestore {
 
     match /payment_transactions/{paymentId} {
       allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();
-      allow create: if canManageContracts() || paymentDraftCreate(request.resource.data);
-      allow update: if canManageContracts();
-      allow delete: if canManageContracts();
+      allow create: if paymentDraftCreate(request.resource.data);
+      allow update, delete: if false;
     }
 
     match /paymentConfirmations/{confirmationId} {
@@ -785,9 +834,9 @@ service cloud.firestore {
     }
 
     match /maintenanceTickets/{ticketId} {
-      allow read: if participantCanRead(resource.data) || openMissionPoolRead(resource.data) || canDispatchJobs();
+      allow read: if participantCanRead(resource.data) || canDispatchJobs();
       allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate() || safeOpenMissionClaim();
+      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -1049,7 +1098,7 @@ service cloud.firestore {
     match /amenities/{amenityId} {
       allow read: if propertyScopedRead(resource.data);
       allow create: if propertyScopedOwnerWrite(request.resource.data);
-      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
       allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
@@ -1063,16 +1112,37 @@ service cloud.firestore {
     match /announcements/{announcementId} {
       allow read: if propertyScopedRead(resource.data);
       allow create: if propertyScopedOwnerWrite(request.resource.data);
-      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
       allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
-    // Deterministic-id slot locks that enforce one booking per amenity/date/time
-    // across all tenants. Readable by any signed-in user (so a client transaction
-    // can detect a conflict) but immutable once created; owner or admin may free it.
+    match /announcementReads/{readId} {
+      allow read: if isAdmin() || (
+        signedIn() &&
+        resource.data.get('tenantUid', null) == request.auth.uid &&
+        resource.data.get('propertyId', null) == getTenantPropertyId()
+      );
+      allow create: if signedIn() &&
+        request.resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('propertyId', null) == getTenantPropertyId() &&
+        request.resource.data.get('announcementId', null) is string &&
+        request.resource.data.keys().hasOnly(['announcementId', 'tenantUid', 'propertyId', 'readAt']);
+      allow update: if signedIn() &&
+        resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('propertyId', null) == resource.data.get('propertyId', null) &&
+        request.resource.data.get('announcementId', null) == resource.data.get('announcementId', null) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      allow delete: if isAdmin() || (signedIn() && resource.data.get('tenantUid', null) == request.auth.uid);
+    }
+
+    // Deterministic-id slot locks stay property scoped; clients must query by
+    // propertyId and cannot enumerate another building's tenant/time records.
     match /amenitySlots/{slotId} {
-      allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid;
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if signedIn() &&
+        request.resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('propertyId', null) == getTenantPropertyId();
       allow delete: if isAdmin() || tenantUidOwns(resource.data);
     }
 
@@ -1092,7 +1162,7 @@ service cloud.firestore {
     match /documentLibrary/{documentId} {
       allow read: if propertyScopedRead(resource.data);
       allow create: if propertyScopedOwnerWrite(request.resource.data);
-      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
       allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
@@ -1141,7 +1211,7 @@ service cloud.firestore {
     match /staffDirectory/{staffId} {
       allow read: if propertyScopedRead(resource.data);
       allow create: if propertyScopedOwnerWrite(request.resource.data);
-      allow update: if propertyScopedOwnerWrite(resource.data);
+      allow update: if propertyScopedOwnerWrite(resource.data) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
       allow delete: if propertyScopedOwnerWrite(resource.data);
     }
 
@@ -1165,14 +1235,14 @@ service cloud.firestore {
     match /communityPosts/{postId} {
       allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (getTenantPropertyId() == docPropertyId(resource.data) && (resource.data.get('status', null) == 'approved' || resource.data.get('authorUid', null) == request.auth.uid)));
       allow create: if signedIn() && request.resource.data.get('authorUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && request.resource.data.get('status', null) == 'pending';
-      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('status', null) == resource.data.get('status', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt']));
+      allow update: if isAdmin() || ((docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) && docPropertyId(request.resource.data) == docPropertyId(resource.data)) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('status', null) == resource.data.get('status', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt']));
       allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid);
     }
 
     match /communityComments/{commentId} {
       allow read: if propertyScopedRead(resource.data);
       allow create: if signedIn() && request.resource.data.get('authorUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data);
-      allow update: if isAdmin() || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid);
+      allow update: if isAdmin() || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid && docPropertyId(request.resource.data) == docPropertyId(resource.data));
       allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid);
     }
 
@@ -1510,9 +1580,28 @@ service cloud.firestore {
 
     match /{collection}/{document=**} {
       allow read: if collection != 'system_secrets' && hasAdminClaim();
-      allow create: if collection != 'system_secrets' && hasAdminClaim();
-      allow update: if collection != 'system_secrets' && hasAdminClaim();
-      allow delete: if collection != 'system_secrets' && hasAdminClaim();
+      allow create: if !(
+        collection in [
+          'system_secrets',
+          'audit_logs',
+          'auditLogs',
+          'analytics_events',
+          'security_audit_logs',
+          'telemetry_logs',
+          'payment_transactions'
+        ]
+      ) && hasAdminClaim();
+      allow update, delete: if !(
+        collection in [
+          'system_secrets',
+          'audit_logs',
+          'auditLogs',
+          'analytics_events',
+          'security_audit_logs',
+          'telemetry_logs',
+          'payment_transactions'
+        ]
+      ) && hasAdminClaim();
     }
   }
 }

@@ -163,6 +163,15 @@ service firebase.storage {
       ) && isImageUpload(10);
     }
 
+    match /maintenanceTickets/{ticketId}/owner/{fileName} {
+      allow read: if canReadTicketEvidence(ticketId);
+      allow write: if isAuth() && ticketExists(ticketId) && (
+        ticket(ticketId).ownerId == request.auth.uid ||
+        ticket(ticketId).ownerUid == request.auth.uid ||
+        isAdmin()
+      ) && isImageUpload(10);
+    }
+
     match /maintenanceTickets/{ticketId}/proofs/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
       allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);

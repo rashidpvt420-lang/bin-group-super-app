@@ -11,7 +11,6 @@ import {
 import { useOnboardingStore, type PropertyData } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { db, collection, addDoc, serverTimestamp } from '../../lib/firebase';
 import { formatNumber, formatAED } from '../../utils/formatters';
 import Papa from 'papaparse';
 import { useGoogleMaps } from '../../lib/maps';
@@ -31,7 +30,7 @@ const VisuallyHiddenInput = styled('input')({
 const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     const { 
         properties, addProperty, removeProperty, updateProperty, calculateSummary, 
-        portfolioSummary, bulkAddProperties, intakeId, setIntakeId, companyProfile
+        portfolioSummary, bulkAddProperties, intakeId, setIntakeId, onboardingSessionId
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
     const { isLoaded } = useGoogleMaps();
@@ -104,20 +103,10 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
     const safeProperties = Array.isArray(properties) ? properties : [];
 
-    const handleProceed = async () => {
+    const handleProceed = () => {
         if (safeProperties.length === 0) return;
-        try {
-            if (!intakeId) {
-                const docRef = await addDoc(collection(db, 'intake_submissions'), {
-                    properties: safeProperties, portfolioSummary, contactInfo: companyProfile,
-                    status: 'PENDING', createdAt: serverTimestamp(), source: 'frontend_wizard_v1.20'
-                });
-                setIntakeId(docRef.id);
-            }
-            onNext();
-        } catch (error) {
-            onNext();
-        }
+        if (!intakeId) setIntakeId(onboardingSessionId);
+        onNext();
     };
 
     const handleAddProperty = () => {

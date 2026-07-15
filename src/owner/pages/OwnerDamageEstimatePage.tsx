@@ -7,10 +7,10 @@ import {
   AlertTriangle, Camera, CheckCircle2, Clock, DollarSign,
   FileImage, RefreshCw, Upload, Wrench, Zap,
 } from 'lucide-react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { functions, httpsCallable } from '../../lib/firebase';
 
 const gold = binThemeTokens.gold;
 const CARD = 'rgba(15, 23, 42, 0.42)';
@@ -62,7 +62,7 @@ export default function OwnerDamageEstimatePage() {
     setError(null);
     try {
       const base64 = await fileToBase64(file);
-      const fn = httpsCallable(getFunctions(), 'assessDamage');
+      const fn = httpsCallable(functions, 'assessDamage');
       const res: any = await fn({ imageBase64: base64, mimeType: file.type });
       setResult(res.data);
     } catch (e: any) {

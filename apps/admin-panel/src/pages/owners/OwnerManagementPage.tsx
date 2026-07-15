@@ -91,7 +91,7 @@ export default function OwnerManagementPage() {
           totalUnits: data.totalUnits || 0,
           monthlyRentCollected: data.monthlyRentCollected || 0,
           unpaidInvoiceCount: data.unpaidInvoiceCount || 0,
-          suspensionStatus: data.suspensionStatus || 'ACTIVE',
+          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
           joinedDate: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ''),
         };
       }) as Owner[];

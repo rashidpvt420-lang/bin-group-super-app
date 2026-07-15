@@ -102,8 +102,16 @@ export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(
 // VITE_ENABLE_FIREBASE_APPCHECK=true are set. Safe to run without them in dev.
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
 const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+const localAppCheckHost =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const appCheckRequired = import.meta.env.PROD && !localAppCheckHost;
 let appCheckInitialized = false;
 export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
+
+if (appCheckRequired && (!appCheckExplicitlyEnabled || !appCheckSiteKey)) {
+  throw new Error('[Firebase] App Check configuration is required for production builds.');
+}
 
 if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined') {
   try {
@@ -128,7 +136,10 @@ if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined
     });
     appCheckInitialized = true;
   } catch (appCheckError) {
-    console.warn('[Firebase] App Check initialization failed — continuing without enforcement:', appCheckError);
+    if (appCheckRequired) {
+      throw new Error('[Firebase] App Check initialization failed in production.');
+    }
+    console.warn('[Firebase] App Check initialization failed in development:', appCheckError);
   }
 }
 

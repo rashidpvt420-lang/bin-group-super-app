@@ -11,6 +11,7 @@ const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
 
 const OTP_TTL_MINUTES = 10;
+const VERIFIED_EVIDENCE_TTL_HOURS = 2;
 const MAX_ATTEMPTS = 5;
 const MAX_REQUESTS_PER_HOUR = 5;
 
@@ -200,7 +201,11 @@ export const verifyContractSignatureOtp = onCall(
       if (!snap.exists) return { outcome: "NOT_FOUND" as const, data: {} as FirebaseFirestore.DocumentData };
       const data = snap.data() || {};
       if (data.uid !== uid) return { outcome: "FORBIDDEN" as const, data };
-      if (data.status === "VERIFIED") return { outcome: "ALREADY_VERIFIED" as const, data };
+      if (data.status === "VERIFIED") {
+        return asText(data.signature) === signature
+          ? { outcome: "ALREADY_VERIFIED" as const, data }
+          : { outcome: "SIGNATURE_MISMATCH" as const, data };
+      }
 
       const attempts = Number(data.attempts || 0);
       if (attempts >= MAX_ATTEMPTS) return { outcome: "MAX_ATTEMPTS" as const, data };
@@ -230,6 +235,9 @@ export const verifyContractSignatureOtp = onCall(
         status: "VERIFIED",
         signature,
         verifiedAt: FieldValue.serverTimestamp(),
+        evidenceExpiresAt: admin.firestore.Timestamp.fromMillis(
+          Date.now() + VERIFIED_EVIDENCE_TTL_HOURS * 60 * 60 * 1000,
+        ),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       return { outcome: "VERIFIED" as const, data };
@@ -240,6 +248,9 @@ export const verifyContractSignatureOtp = onCall(
     if (result.outcome === "MAX_ATTEMPTS") throw new HttpsError("resource-exhausted", "Maximum OTP attempts exceeded. Request a new code.");
     if (result.outcome === "EXPIRED") throw new HttpsError("deadline-exceeded", "OTP expired. Request a new code.");
     if (result.outcome === "INVALID") throw new HttpsError("permission-denied", "Invalid OTP.");
+    if (result.outcome === "SIGNATURE_MISMATCH") {
+      throw new HttpsError("failed-precondition", "The verified OTP is bound to a different signature name.");
+    }
     if (result.outcome === "ALREADY_VERIFIED") {
       return {
         ok: true,
@@ -288,14 +299,14 @@ export async function assertVerifiedContractSignatureOtp(args: {
     const snap = await transaction.get(ref);
     if (!snap.exists) throw new HttpsError("failed-precondition", "Contract OTP verification was not found.");
     const data = snap.data() || {};
-    const expiresAt = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
+    const evidenceExpiresAt = data.evidenceExpiresAt?.toMillis ? data.evidenceExpiresAt.toMillis() : 0;
     if (
       data.status !== "VERIFIED" ||
       data.uid !== args.uid ||
       asText(data.contractId) !== contractId ||
       asText(data.signature) !== signature ||
-      !expiresAt ||
-      Date.now() > expiresAt
+      !evidenceExpiresAt ||
+      Date.now() > evidenceExpiresAt
     ) {
       throw new HttpsError("failed-precondition", "Contract OTP evidence is invalid, expired, or belongs to another contract.");
     }

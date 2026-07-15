@@ -45,10 +45,11 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
   const adminApproved = profile?.adminApproved === true;
   const paymentVerified = !!profile?.paymentVerified;
   const hasActiveContract = !!profile?.activeContractId;
+  const suspended = String(profile?.status || '').toLowerCase() === 'suspended';
   const activated = !isOwner || (adminApproved && paymentVerified && hasActiveContract);
   const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
-  if (activated || isAllowedPath(location.pathname)) return <>{children}</>;
+  if (!suspended && (activated || isAllowedPath(location.pathname))) return <>{children}</>;
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', py: 4 }}>
@@ -56,22 +57,29 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
         <Stack spacing={3} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
           <Chip
             icon={<LockKeyhole size={14} />}
-            label={copy('ACTIVATION REQUIRED', 'التفعيل مطلوب')}
+            label={suspended ? copy('ACCOUNT SUSPENDED', 'الحساب موقوف') : copy('ACTIVATION REQUIRED', 'التفعيل مطلوب')}
             sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#f59e0b', fontWeight: 950 }}
           />
           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
-              {copy('Owner dashboard is protected until contract payment is verified', 'لوحة المالك محمية حتى يتم التحقق من دفع العقد')}
+              {suspended
+                ? copy('Owner account access is suspended', 'تم إيقاف الوصول إلى حساب المالك')
+                : copy('Owner dashboard is protected until contract payment is verified', 'لوحة المالك محمية حتى يتم التحقق من دفع العقد')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', maxWidth: 760, lineHeight: 1.8 }}>
-              {copy(
-                'BIN GROUP uses a gated activation model: contract scope, mobilization payment, admin verification, then full dashboard access. This keeps every owner profile tied to verified payment evidence and an active service agreement.',
-                'تعتمد بن جروب تفعيلًا محميًا يشمل نطاق العقد ودفعة التجهيز والتحقق الإداري قبل فتح لوحة التحكم. يضمن ذلك ربط كل ملف مالك بإثبات دفع موثق وعقد خدمة نشط.'
-              )}
+              {suspended
+                ? copy(
+                  'Operational and financial actions are unavailable while this account is suspended. Contact BIN GROUP support for the review reason and reinstatement steps.',
+                  'لا تتوفر الإجراءات التشغيلية أو المالية أثناء إيقاف الحساب. تواصل مع دعم بن جروب لمعرفة سبب المراجعة وخطوات إعادة التفعيل.',
+                )
+                : copy(
+                  'BIN GROUP uses a gated activation model: contract scope, mobilization payment, admin verification, then full dashboard access. This keeps every owner profile tied to verified payment evidence and an active service agreement.',
+                  'تعتمد بن جروب تفعيلًا محميًا يشمل نطاق العقد ودفعة التجهيز والتحقق الإداري قبل فتح لوحة التحكم. يضمن ذلك ربط كل ملف مالك بإثبات دفع موثق وعقد خدمة نشط.'
+                )}
             </Typography>
           </Box>
 
-          <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ width: '100%' }}>
+          {!suspended && <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ width: '100%' }}>
             <Button
               variant="contained"
               startIcon={<CreditCard size={18} />}
@@ -88,13 +96,15 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
             >
               {copy('Review Contracts', 'مراجعة العقود')}
             </Button>
-          </Stack>
+          </Stack>}
 
           <Alert severity="warning" sx={{ width: '100%', bgcolor: alpha('#f59e0b', 0.08), color: '#f8fafc', border: `1px solid ${alpha('#f59e0b', 0.25)}` }}>
-            {copy(
-              'Required server evidence: admin approval, verified payment, and an active contract bound to this owner.',
-              'الأدلة المطلوبة من الخادم: موافقة الإدارة، ودفع موثق، وعقد نشط مرتبط بهذا المالك.'
-            )}
+            {suspended
+              ? copy('Server status: suspended. Portal actions remain blocked until an authorized administrator restores access.', 'حالة الخادم: موقوف. تبقى إجراءات البوابة محظورة حتى يعيد مسؤول مخوّل الوصول.')
+              : copy(
+                'Required server evidence: admin approval, verified payment, and an active contract bound to this owner.',
+                'الأدلة المطلوبة من الخادم: موافقة الإدارة، ودفع موثق، وعقد نشط مرتبط بهذا المالك.'
+              )}
           </Alert>
         </Stack>
       </Paper>

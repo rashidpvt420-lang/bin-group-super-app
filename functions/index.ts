@@ -115,6 +115,38 @@ async function hasCallableRoleAccess(authContext: any, allowedRoles: Set<string>
     return token.admin === true || token.super_admin === true || token.superAdmin === true || allowedRoles.has(tokenRole);
 }
 
+async function assertApprovedTechnicianAccount(authContext: any) {
+    const isAdminActor = await hasCallableRoleAccess(
+        authContext,
+        new Set(["admin", "super_admin", "operations_admin"]),
+    );
+    if (isAdminActor) return;
+
+    const hasTechnicianClaim = await hasCallableRoleAccess(authContext, new Set(["technician"]));
+    if (!hasTechnicianClaim || !authContext?.uid) {
+        throw new HttpsError("permission-denied", "Technician access required.");
+    }
+    const [userSnap, technicianSnap] = await Promise.all([
+        db.collection("users").doc(authContext.uid).get(),
+        db.collection("technicians").doc(authContext.uid).get(),
+    ]);
+    const user = userSnap.data() || {};
+    const technician = technicianSnap.data() || {};
+    const status = normalizeRole(technician.status || user.status);
+    const approvalStatus = normalizeRole(technician.approvalStatus || user.approvalStatus);
+    const suspended =
+        status === "suspended" ||
+        technician.suspended === true ||
+        user.suspended === true ||
+        authContext.token?.suspended === true;
+    if (suspended || (status !== "active" && approvalStatus !== "approved")) {
+        throw new HttpsError(
+            "permission-denied",
+            "Only approved, active technicians may perform operational actions.",
+        );
+    }
+}
+
 function assignedTechnicianId(ticketData: FirebaseFirestore.DocumentData) {
     return safeString(ticketData.assignedTechnicianId || ticketData.technicianId || ticketData.assignedTechId || ticketData.techId);
 }
@@ -126,6 +158,7 @@ async function assertTechnicianTicketMutationAccess(authContext: any, ticketData
     const isAdminActor = await hasCallableRoleAccess(authContext, new Set(["admin", "super_admin", "operations_admin"]));
     if (isAdminActor) return;
 
+    await assertApprovedTechnicianAccount(authContext);
     const assignedId = assignedTechnicianId(ticketData);
     if (!assignedId) throw new HttpsError("failed-precondition", "Ticket is not assigned to this technician.");
     if (assignedId !== authContext.uid) throw new HttpsError("permission-denied", "You are not assigned to this mission.");
@@ -317,6 +350,10 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Only an owner or admin can submit owner onboarding.");
+    throw new HttpsError(
+        "failed-precondition",
+        "Legacy owner onboarding is disabled because it accepted client-calculated contract values. Use submitOwnerOnboardingPaymentPackage with a locked server quote and verified signature OTP.",
+    );
 
     const uid = request.auth.uid;
     const payload = assertPlainObject(request.data || {}, "Onboarding payload");
@@ -644,6 +681,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
 export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    await assertApprovedTechnicianAccount(request.auth);
     const uid = request.auth.uid;
     const userRef = db.collection("users").doc(uid);
     const userDoc = await userRef.get();
@@ -670,6 +708,7 @@ export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
 
 export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
+    await assertApprovedTechnicianAccount(request.auth);
     const uid = request.auth.uid;
     const userRef = db.collection("users").doc(uid);
     const userDoc = await userRef.get();
@@ -732,6 +771,12 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
                 normalizeRole(technicianData.approvalStatus || userData.approvalStatus) === "approved";
             if (suspended || !approved) {
                 throw new HttpsError("permission-denied", "Only approved, active technicians can accept tickets.");
+            }
+            if (!existingTechId) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    "This mission must be assigned by dispatch before it can be accepted.",
+                );
             }
             if (
                 normalizeRole(ticketData.status) === "emergency_submitted" &&
@@ -2811,6 +2856,7 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
 
     const techId = request.auth.uid;
     const techRef = db.collection("users").doc(techId);
@@ -2899,6 +2945,7 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
 
     const techId = request.auth.uid;
     const techDoc = await db.collection("users").doc(techId).get();
@@ -2955,6 +3002,7 @@ export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
     if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
+    await assertApprovedTechnicianAccount(request.auth);
 
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
@@ -2989,6 +3037,12 @@ export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
             throw new HttpsError("failed-precondition", "Ticket is already closed or unavailable.");
         }
 
+        if (!assignedTechnicianId && request.auth?.token?.admin !== true) {
+            throw new HttpsError(
+                "failed-precondition",
+                "This mission must be assigned by dispatch before it can be accepted.",
+            );
+        }
         if (assignedTechnicianId && assignedTechnicianId !== techId && request.auth?.token?.admin !== true) {
             throw new HttpsError("permission-denied", "This ticket is assigned to another technician.");
         }

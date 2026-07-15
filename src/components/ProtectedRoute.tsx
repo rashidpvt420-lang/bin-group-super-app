@@ -39,6 +39,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     const { user, role, status, isAdmin, loading, hasPermission, refreshRole } = useRole();
     const { t, lang } = useLanguage();
     const location = useLocation();
+    const isRTL = lang === 'ar';
 
     if (loading) {
         return (
@@ -128,17 +129,22 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                 bgcolor: binThemeTokens.canvas,
                 color: binThemeTokens.textPrimary,
                 p: 4,
+                direction: isRTL ? 'rtl' : 'ltr',
             }}>
                 <Stack spacing={3} sx={{ maxWidth: 560, textAlign: 'center', alignItems: 'center' }}>
                     <Lock size={56} color={binThemeTokens.gold} />
-                    <Typography variant="h4" fontWeight={900}>ACCOUNT REVIEW REQUIRED</Typography>
+                    <Typography variant="h4" fontWeight={900}>
+                        {isRTL ? 'مراجعة الحساب مطلوبة' : 'ACCOUNT REVIEW REQUIRED'}
+                    </Typography>
                     <Typography color={binThemeTokens.textSecondary}>
-                        This portal remains locked while account verification is pending. No operational or financial action is available in this state.
+                        {isRTL
+                            ? 'ستبقى البوابة مقفلة أثناء التحقق من الحساب. لا تتوفر أي إجراءات تشغيلية أو مالية في هذه الحالة.'
+                            : 'This portal remains locked while account verification is pending. No operational or financial action is available in this state.'}
                     </Typography>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                         {pendingProfilePath && (
                             <Button variant="contained" href={pendingProfilePath}>
-                                REVIEW PROFILE
+                                {isRTL ? 'مراجعة الملف' : 'REVIEW PROFILE'}
                             </Button>
                         )}
                         <Button variant="outlined" startIcon={<LogOut size={18} />} onClick={() => auth.signOut()}>
@@ -162,20 +168,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                 color: binThemeTokens.textPrimary,
                 textAlign: 'center',
                 p: 4,
+                direction: isRTL ? 'rtl' : 'ltr',
             }}>
                 <Lock size={64} color={binThemeTokens.danger} />
                 <Typography variant="h4" sx={{ color: binThemeTokens.danger, fontWeight: 900, mt: 3, mb: 1 }}>
-                    ACCESS RESTRICTED
+                    {isRTL ? 'الوصول مقيّد' : 'ACCESS RESTRICTED'}
                 </Typography>
                 <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 4, maxWidth: 400 }}>
-                    Your account does not have the required institutional permission: <strong>{requiredPermission}</strong>. Contact your administrator to request access.
+                    {isRTL
+                        ? <>لا يملك حسابك الصلاحية المؤسسية المطلوبة: <strong>{requiredPermission}</strong>. تواصل مع المسؤول لطلب الوصول.</>
+                        : <>Your account does not have the required institutional permission: <strong>{requiredPermission}</strong>. Contact your administrator to request access.</>}
                 </Typography>
                 <Button
                     variant="outlined"
                     onClick={() => window.history.back()}
                     sx={{ borderColor: binThemeTokens.border, color: binThemeTokens.textPrimary, fontWeight: 800 }}
                 >
-                    RETURN TO SAFETY
+                    {isRTL ? 'العودة بأمان' : 'RETURN TO SAFETY'}
                 </Button>
             </Box>
         );
@@ -192,6 +201,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         'awaiting_approval',
         'rejected',
         'onboarding',
+        'suspended',
     ];
 
     const ownerStatusAllowedPaths = new Set([
@@ -200,7 +210,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         '/owner/contracts',
         '/owner/documents',
     ]);
-    const ownerStatusPathAllowed = ownerStatusAllowedPaths.has(location.pathname);
+    const ownerStatusPathAllowed = currentStatus !== 'suspended' && ownerStatusAllowedPaths.has(location.pathname);
 
     if (
         normalizedRole === 'owner' &&
@@ -222,6 +232,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                     color: binThemeTokens.textPrimary,
                     textAlign: 'center',
                     p: 4,
+                    direction: isRTL ? 'rtl' : 'ltr',
                     backgroundImage: 'radial-gradient(circle at center, rgba(201, 166, 70, 0.08) 0%, transparent 70%)'
                 }}>
                     <Box sx={{

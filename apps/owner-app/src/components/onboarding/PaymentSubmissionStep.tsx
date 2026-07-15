@@ -83,6 +83,12 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
     
     const handleSubmit = async () => {
+        // This legacy surface previously called submitOwnerOnboarding with a
+        // client-provided annual value. Continue only in the canonical main-app
+        // flow, which locks the server quote and verifies the signature OTP.
+        window.location.assign('/onboarding');
+        return;
+
         if (!ownerAccount?.uid) {
             setError(t('onboarding.error.acc_required') || 'Account creation is required before payment submission.');
             return;
@@ -232,6 +238,11 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                     {error}
                                 </Alert>
                             )}
+                            <Alert severity="info">
+                                {isRTL
+                                    ? 'سيتم نقلك إلى مسار التسجيل الآمن لإصدار عرض سعر من الخادم والتحقق من توقيع العقد.'
+                                    : 'Continue in the secure onboarding flow to obtain a server-locked quote and verify the contract signature.'}
+                            </Alert>
                             <Button
                                 variant="contained"
                                 fullWidth
@@ -239,7 +250,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                 onClick={handleSubmit}
                                 sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                             >
-                                {submitting ? t('onboarding.submitting') : t('onboarding.submit_btn')}
+                                {isRTL ? 'متابعة التسجيل الآمن' : 'Continue to Secure Onboarding'}
                             </Button>
                             <Button onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 800 }}>
                                 {t('onboarding.back')}

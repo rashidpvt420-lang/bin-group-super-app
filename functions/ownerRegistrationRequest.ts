@@ -157,6 +157,38 @@ async function resolveOrCreateOwnerAuth(email: string, password: string, fullNam
   }
 }
 
+export const previewOwnerOnboardingQuote = onCall({ cors: true }, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Owner authentication is required to calculate a locked quote.");
+  }
+  const role = String(
+    request.auth.token?.role ||
+    request.auth.token?.userRole ||
+    request.auth.token?.primaryRole ||
+    "",
+  ).trim().toLowerCase();
+  if (role !== "owner") {
+    throw new HttpsError("permission-denied", "Only an owner account may request an onboarding quote.");
+  }
+  try {
+    const quote = calculateOwnerOnboardingQuote(
+      request.data?.properties,
+      request.data?.selectedAddOns,
+    );
+    return {
+      ...quote,
+      quoteHash: crypto.createHash("sha256")
+        .update(JSON.stringify(cleanPlainValue(quote)))
+        .digest("hex"),
+    };
+  } catch (error: any) {
+    throw new HttpsError(
+      "invalid-argument",
+      error?.message || "The server could not calculate this property quote.",
+    );
+  }
+});
+
 export const submitPendingOwnerRegistration = onCall({ cors: true }, async (request) => {
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
   const email = cleanEmail(request.data?.email);
@@ -314,6 +346,22 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   if (!signatureName) {
     throw new HttpsError("failed-precondition", "A verified contract signature name is required.");
   }
+  const manualPaymentReference = String(paymentManifest?.reference || "").trim();
+  const manualReceiptUrl = String(paymentManifest?.receiptUrl || "").trim();
+  const manualReceiptPath = String(paymentManifest?.receiptPath || "").trim();
+  if (
+    paymentMethod !== "STRIPE" &&
+    (
+      manualPaymentReference.length < 4 ||
+      !manualReceiptUrl.startsWith("https://") ||
+      !manualReceiptPath.startsWith(`payment-references/owners/${ownerUid}/${intakeId}/`)
+    )
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Manual payment submissions require an owner-scoped uploaded receipt and payment reference.",
+    );
+  }
 
   const paymentRef = db.collection("payment_transactions").doc(intakeId);
   const existingPayment = await paymentRef.get();
@@ -344,12 +392,6 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
   if (amount <= 0 || activationDeposit <= 0) {
     throw new HttpsError("invalid-argument", "A positive payment amount is required.");
   }
-  await assertVerifiedContractSignatureOtp({
-    verificationId: otpVerificationId,
-    uid: ownerUid,
-    contractId: intakeId,
-    signature: signatureName,
-  });
   const quoteSnapshot = cleanPlainValue({
     ...serverQuote,
     serviceDetails,
@@ -366,6 +408,12 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
       return { success: true, idempotent: true, paymentId: intakeId, contractId: intakeId };
     }
   }
+  await assertVerifiedContractSignatureOtp({
+    verificationId: otpVerificationId,
+    uid: ownerUid,
+    contractId: intakeId,
+    signature: signatureName,
+  });
 
   // Generate the locked Contract PDF
   let contractUrl = "";
@@ -414,6 +462,9 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true }, async 
     serviceDetails,
     documentUrls,
     paymentManifest,
+    paymentReferenceId: manualPaymentReference || null,
+    paymentProofUrl: manualReceiptUrl || null,
+    paymentProofPath: manualReceiptPath || null,
     contractUrl,
     signatureName,
     otpVerificationId,
