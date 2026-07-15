@@ -23,6 +23,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Export exact Firestore rule test source
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-rule-test-source-${{ github.sha }}
+          path: test/security-rules.test.js
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -105,4 +113,20 @@ jobs:
           retention-days: 7
 
       - name: Run security rules tests
-        run: npm run test:rules
+        id: security_rules
+        shell: bash
+        run: |
+          set +e
+          npm run test:rules > security-rules-output.txt 2>&1
+          status=$?
+          cat security-rules-output.txt
+          exit $status
+
+      - name: Upload Firestore rules diagnostics
+        if: failure() && steps.security_rules.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-rules-diagnostics-${{ github.sha }}
+          path: security-rules-output.txt
+          if-no-files-found: error
+          retention-days: 7
