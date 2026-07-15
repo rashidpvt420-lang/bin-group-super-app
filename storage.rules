@@ -90,47 +90,39 @@ service firebase.storage {
       );
     }
 
-    function canReadContractFile(contractId) {
-      let contractData = firestore.get(
-        /databases/(default)/documents/contracts/$(contractId)
-      ).data;
-      let authEmail = request.auth.token.get('email', null);
+    function canReadContractFile() {
       return isAuth() && (
         isAdmin() ||
         isAuditor() ||
+        resource.metadata.get('ownerId', '') == request.auth.uid ||
+        resource.metadata.get('ownerUid', '') == request.auth.uid ||
+        resource.metadata.get('createdBy', '') == request.auth.uid ||
+        resource.metadata.get('userId', '') == request.auth.uid ||
         (
           hasVerifiedEmail() && (
-            contractData.get('recipientEmail', null) == authEmail ||
-            contractData.get('ownerEmail', null) == authEmail ||
-            contractData.get('email', null) == authEmail
+            resource.metadata.get('recipientEmail', '') == request.auth.token.get('email', null) ||
+            resource.metadata.get('ownerEmail', '') == request.auth.token.get('email', null) ||
+            resource.metadata.get('email', '') == request.auth.token.get('email', null)
           )
-        ) ||
-        contractData.get('ownerId', null) == request.auth.uid ||
-        contractData.get('ownerUid', null) == request.auth.uid ||
-        contractData.get('createdBy', null) == request.auth.uid ||
-        contractData.get('userId', null) == request.auth.uid
+        )
       );
     }
 
-    function canReadInvoiceFile(invoiceId) {
-      let invoiceData = firestore.get(
-        /databases/(default)/documents/invoices/$(invoiceId)
-      ).data;
-      let authEmail = request.auth.token.get('email', null);
+    function canReadInvoiceFile() {
       return isAuth() && (
         isAdmin() ||
         isAuditor() ||
+        resource.metadata.get('ownerId', '') == request.auth.uid ||
+        resource.metadata.get('ownerUid', '') == request.auth.uid ||
+        resource.metadata.get('payerId', '') == request.auth.uid ||
+        resource.metadata.get('userId', '') == request.auth.uid ||
         (
           hasVerifiedEmail() && (
-            invoiceData.get('recipientEmail', null) == authEmail ||
-            invoiceData.get('ownerEmail', null) == authEmail ||
-            invoiceData.get('email', null) == authEmail
+            resource.metadata.get('recipientEmail', '') == request.auth.token.get('email', null) ||
+            resource.metadata.get('ownerEmail', '') == request.auth.token.get('email', null) ||
+            resource.metadata.get('email', '') == request.auth.token.get('email', null)
           )
-        ) ||
-        invoiceData.get('ownerId', null) == request.auth.uid ||
-        invoiceData.get('ownerUid', null) == request.auth.uid ||
-        invoiceData.get('payerId', null) == request.auth.uid ||
-        invoiceData.get('userId', null) == request.auth.uid
+        )
       );
     }
 
@@ -285,12 +277,12 @@ service firebase.storage {
     }
 
     match /contracts/{contractId}/{allPaths=**} {
-      allow read: if canReadContractFile(contractId);
+      allow read: if canReadContractFile();
       allow write: if isAdmin() && isDocumentUpload(25);
     }
 
     match /invoices/{invoiceId}/{allPaths=**} {
-      allow read: if canReadInvoiceFile(invoiceId);
+      allow read: if canReadInvoiceFile();
       allow write: if isAdmin() && isDocumentUpload(15);
     }
 
