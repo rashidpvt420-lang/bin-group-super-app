@@ -35,6 +35,11 @@ const forbiddenFragments = [
     label: 'open mission pool grants dispatcher/admin semantics to technician pool reads',
     text: 'function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
   },
+  {
+    label: 'amenity slot creation permits a missing property scope',
+    text: `request.resource.data.get('tenantUid', null) == request.auth.uid &&
+        request.resource.data.get('propertyId', null) == getTenantPropertyId();`,
+  },
 ];
 
 const requiredFragments = [
@@ -85,6 +90,10 @@ const requiredFragments = [
   {
     label: 'technician cannot replace assigned technician identity',
     text: "request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)",
+  },
+  {
+    label: 'amenity slot locks require a non-null property scope',
+    text: "request.resource.data.get('propertyId', null) is string &&",
   },
 ];
 
