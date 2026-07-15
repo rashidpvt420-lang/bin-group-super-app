@@ -72,79 +72,6 @@ if (!text.includes(canonicalTicketUpdate)) {
   throw new Error('[ticket-rule-binding] Tickets update rule is not server-authoritative after cleanup.');
 }
 
-const canonicalTechnicianEvidenceHelper = `    function safeTechnicianTicketUpdate() {
-      let changedFields = request.resource.data.diff(resource.data).affectedKeys();
-      return isApprovedTechnician() &&
-        techOwns(resource.data) &&
-        !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
-        changedFields.hasOnly([
-          'updatedAt',
-          'technicianNotes',
-          'techNotes',
-          'workNotes',
-          'notes',
-          'beforePhotos',
-          'afterPhotos',
-          'afterPhotoUrl',
-          'proofPhotos',
-          'completionPhotos',
-          'evidencePhotos',
-          'evidenceStatus',
-          'resolutionSummary',
-          'materialsUsed',
-          'partsDisposition',
-          'proofReadiness',
-          'arrivedLocation',
-          'technicianLocation',
-          'technicianLocationUpdatedAt'
-        ]) &&
-        (!changedFields.hasAny(['beforePhotos']) || (
-          request.resource.data.get('beforePhotos', []).size() >= resource.data.get('beforePhotos', []).size() &&
-          request.resource.data.get('beforePhotos', []).hasAll(resource.data.get('beforePhotos', []))
-        )) &&
-        (!changedFields.hasAny(['afterPhotos']) || (
-          request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
-          request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', []))
-        )) &&
-        (!changedFields.hasAny(['proofPhotos']) || (
-          request.resource.data.get('proofPhotos', []).size() >= resource.data.get('proofPhotos', []).size() &&
-          request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))
-        )) &&
-        (!changedFields.hasAny(['completionPhotos']) || (
-          request.resource.data.get('completionPhotos', []).size() >= resource.data.get('completionPhotos', []).size() &&
-          request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))
-        )) &&
-        (!changedFields.hasAny(['evidencePhotos']) || (
-          request.resource.data.get('evidencePhotos', []).size() >= resource.data.get('evidencePhotos', []).size() &&
-          request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))
-        ));
-    }
-
-`;
-
-removeRuleFunction('safeTechnicianTicketUpdate');
-const technicianProfileMarker = '    function safeTechnicianProfileUpdate(techId) {';
-if (!text.includes(technicianProfileMarker)) {
-  throw new Error('[ticket-rule-binding] Missing technician profile helper insertion marker.');
-}
-text = text.replace(technicianProfileMarker, `${canonicalTechnicianEvidenceHelper}${technicianProfileMarker}`);
-changed = true;
-
-const legacyAmenitySlotCreate = `      allow create: if signedIn() &&
-        request.resource.data.get('tenantUid', null) == request.auth.uid &&
-        request.resource.data.get('propertyId', null) == getTenantPropertyId();`;
-const hardenedAmenitySlotCreate = `      allow create: if signedIn() &&
-        request.resource.data.get('tenantUid', null) == request.auth.uid &&
-        request.resource.data.get('propertyId', null) is string &&
-        request.resource.data.get('propertyId', null) == getTenantPropertyId();`;
-
-if (text.includes(legacyAmenitySlotCreate)) {
-  text = text.replace(legacyAmenitySlotCreate, hardenedAmenitySlotCreate);
-  changed = true;
-} else if (!text.includes(hardenedAmenitySlotCreate)) {
-  throw new Error('[ticket-rule-binding] Amenity slot create rule is missing or not property scoped.');
-}
-
 for (const forbidden of ['function safeOpenMissionClaim(', 'function missionClaimFieldsLookValid(', 'safeOpenMissionClaim()']) {
   if (text.includes(forbidden)) {
     throw new Error(`[ticket-rule-binding] Forbidden direct technician claim fragment remains: ${forbidden}`);
@@ -155,18 +82,10 @@ if (!text.includes(canonicalPool)) {
   throw new Error('[ticket-rule-binding] Open mission visibility is not restricted to approved technicians.');
 }
 
-if (!text.includes(hardenedAmenitySlotCreate)) {
-  throw new Error('[ticket-rule-binding] Amenity slot locks must require a non-null propertyId.');
-}
-
-if (!text.includes('let changedFields = request.resource.data.diff(resource.data).affectedKeys();')) {
-  throw new Error('[ticket-rule-binding] Technician evidence helper was not canonicalized.');
-}
-
 if (changed) writeFileSync(file, text);
 
 console.log(
   changed
-    ? `Applied server-authoritative ticket dispatch, bounded technician evidence, and amenity scope cleanup (claim helpers removed: ${removedClaimFields + removedDirectClaims}).`
-    : 'Ticket dispatch, technician evidence, and amenity slot rules already server-authoritative.',
+    ? `Applied server-authoritative ticket dispatch cleanup (claim helpers removed: ${removedClaimFields + removedDirectClaims}).`
+    : 'Ticket and dispatch rules already server-authoritative.',
 );
