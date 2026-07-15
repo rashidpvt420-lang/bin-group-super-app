@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-const rules = readFileSync('firestore.rules', 'utf8');
+const rules = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
 
 const forbiddenFragments = [
   {
