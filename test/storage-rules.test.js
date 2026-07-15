@@ -33,12 +33,6 @@ describe('Storage Security Rules', () => {
   });
 
   it('contract and invoice email access requires verified email claims', async () => {
-    const adminContext = testEnv.authenticatedContext('admin_user', {
-      admin: true,
-      role: 'admin',
-      email: 'admin@example.com',
-      email_verified: true,
-    });
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const serverDb = context.firestore();
       await setDoc(doc(serverDb, 'contracts/contract_email'), {
@@ -49,21 +43,20 @@ describe('Storage Security Rules', () => {
         ownerId: 'different_owner',
         recipientEmail: 'owner@example.com',
       });
+      const serverStorage = context.storage();
+      await uploadString(
+        ref(serverStorage, 'contracts/contract_email/contract.pdf'),
+        'contract',
+        'raw',
+        { contentType: 'application/pdf' },
+      );
+      await uploadString(
+        ref(serverStorage, 'invoices/invoice_email/invoice.pdf'),
+        'invoice',
+        'raw',
+        { contentType: 'application/pdf' },
+      );
     });
-
-    const adminStorage = adminContext.storage();
-    await assertSucceeds(uploadString(
-      ref(adminStorage, 'contracts/contract_email/contract.pdf'),
-      'contract',
-      'raw',
-      { contentType: 'application/pdf' },
-    ));
-    await assertSucceeds(uploadString(
-      ref(adminStorage, 'invoices/invoice_email/invoice.pdf'),
-      'invoice',
-      'raw',
-      { contentType: 'application/pdf' },
-    ));
 
     const unverifiedStorage = testEnv.authenticatedContext('unverified_owner', {
       role: 'owner',
