@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
     Alert,
     Box,
     Button,
-    Chip,
-    CircularProgress,
     Container,
     Divider,
     Grid,
@@ -14,70 +12,23 @@ import {
     TextField,
     Typography
 } from '@mui/material';
-import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import {
-    auth,
-    functions,
-    getDownloadURL,
-    httpsCallable,
-    onAuthStateChanged,
-    ref,
-    storage,
-    uploadBytes
-} from '../../lib/firebase';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { buildPersistableGeoAnchor } from '../../utils/geoAnchor';
 
-const waitForCurrentUser = (timeoutMs = 8000): Promise<any | null> => {
-    return new Promise((resolve) => {
-        if (auth.currentUser) {
-            resolve(auth.currentUser);
-            return;
-        }
-
-        let resolved = false;
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (resolved) return;
-            resolved = true;
-            unsubscribe();
-            resolve(user);
-        });
-
-        window.setTimeout(() => {
-            if (resolved) return;
-            resolved = true;
-            unsubscribe();
-            resolve(auth.currentUser);
-        }, timeoutMs);
-    });
-};
+const MAIN_APP_URL = (process.env.REACT_APP_MAIN_APP_URL || 'https://bin-group-57c60.web.app').replace(/\/+$/, '');
 
 const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-    const navigate = useNavigate();
     const {
         properties,
         selectedPlan,
-        selectedAddOns,
         portfolioSummary,
-        companyProfile,
-        ownerAccount,
-        onboardingSessionId,
-        proofDocuments,
         paymentMethod,
         setPaymentMethod,
-        setIntakeId,
-        reset
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
-
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [submissionResult, setSubmissionResult] = useState<any>(null);
-    const [error, setError] = useState<string | null>(null);
 
     const estimatedAnnualValue = portfolioSummary?.estimatedACV || (portfolioSummary?.totalUnits || 1) * 2500;
     const mobilizationAmount = Math.round(estimatedAnnualValue * 0.15);
@@ -86,93 +37,8 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         // This legacy surface previously called submitOwnerOnboarding with a
         // client-provided annual value. Continue only in the canonical main-app
         // flow, which locks the server quote and verifies the signature OTP.
-        window.location.assign('/onboarding');
-        return;
-
-        if (!ownerAccount?.uid) {
-            setError(t('onboarding.error.acc_required') || 'Account creation is required before payment submission.');
-            return;
-        }
-
-        const currentUser = await waitForCurrentUser();
-        if (!currentUser) {
-            setError(t('onboarding.error.session_expired') || 'Your secure session is not active. Use Gateway Login, then return to finish payment submission.');
-            return;
-        }
-
-        if (currentUser.uid !== ownerAccount.uid) {
-            setError(t('onboarding.error.session_mismatch') || 'The active account does not match this owner onboarding session.');
-            return;
-        }
-
-        if (!paymentMethod) {
-            setError(t('onboarding.payment_method_required') || 'Select a payment method before submission.');
-            return;
-        }
-
-        setSubmitting(true);
-        setError(null);
-        try {
-            await currentUser.getIdToken(true);
-            const submissionId = `${currentUser.uid}_${onboardingSessionId}`;
-            const submitOwnerOnboarding = httpsCallable(functions, 'submitOwnerOnboarding');
-            
-            const submissionPayload = JSON.parse(JSON.stringify({
-                idempotencyKey: submissionId,
-                onboardingSessionId,
-                ownerAccount,
-                companyProfile,
-                properties,
-                selectedPlan,
-                selectedAddOns,
-                portfolioSummary,
-                pricing: {
-                    annualContractValue: estimatedAnnualValue,
-                    mobilizationAmount,
-                    currency: 'AED'
-                },
-                payment: {
-                    method: paymentMethod,
-                    amount: mobilizationAmount,
-                    currency: 'AED'
-                }
-            }));
-
-            const result = await submitOwnerOnboarding(submissionPayload);
-            const response = result.data as any;
-            setSubmissionResult(response);
-            setIntakeId(response?.intakeId || submissionId);
-            setSubmitted(true);
-        } catch (err: any) {
-            setError(err?.message || 'Onboarding submission failed.');
-        } finally {
-            setSubmitting(false);
-        }
+        window.location.assign(`${MAIN_APP_URL}/onboarding`);
     };
-
-    if (submitted) {
-        return (
-            <Container maxWidth="md" sx={{ py: 8, textAlign: 'center' }}>
-                <CheckCircle2 size={88} color="#10b981" style={{ marginBottom: 24 }} />
-                <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                    {t('onboarding.submission_secured')}
-                </Typography>
-                <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4 }}>
-                    {t('onboarding.dashboard_locked_info')}
-                </Typography>
-                <Button
-                    variant="contained"
-                    onClick={() => {
-                        reset();
-                        navigate('/owner-dashboard');
-                    }}
-                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 5, py: 1.5 }}
-                >
-                    {t('onboarding.go_dashboard')}
-                </Button>
-            </Container>
-        );
-    }
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -226,18 +92,6 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
                                 {t('onboarding.admin_lock_desc')}
                             </Typography>
-                            {error && (
-                                <Alert
-                                    severity="error"
-                                    action={
-                                        error.includes('session') || error.includes('Gateway') ? (
-                                            <Button color="inherit" size="small" onClick={() => navigate('/login')}>Gateway Login</Button>
-                                        ) : null
-                                    }
-                                >
-                                    {error}
-                                </Alert>
-                            )}
                             <Alert severity="info">
                                 {isRTL
                                     ? 'سيتم نقلك إلى مسار التسجيل الآمن لإصدار عرض سعر من الخادم والتحقق من توقيع العقد.'
@@ -246,7 +100,6 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                             <Button
                                 variant="contained"
                                 fullWidth
-                                disabled={submitting}
                                 onClick={handleSubmit}
                                 sx={{ mt: 2, py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                             >
