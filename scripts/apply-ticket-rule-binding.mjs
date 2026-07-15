@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'firestore.rules';
-let text = readFileSync(file, 'utf8');
+let text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 let changed = false;
 
 const oldCreate = "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);";
@@ -12,30 +12,80 @@ if (text.includes(oldCreate)) {
   changed = true;
 }
 
-const start = text.indexOf('    function isTechnicianActor() {');
-const endMarker = "    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }";
-const end = text.indexOf(endMarker, start);
+function removeRuleFunction(functionName) {
+  const needle = `    function ${functionName}(`;
+  let removed = 0;
 
-if (start >= 0 && end >= 0) {
-  const light = `    function hasTechnicianDispatchAuthority() {
-      return signedIn() && (
-        request.auth.token.role in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
-        request.auth.token.userRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician'] ||
-        request.auth.token.primaryRole in ['admin', 'super_admin', 'operations_admin', 'operations_manager', 'dispatcher', 'technician']
-      );
+  while (true) {
+    const start = text.indexOf(needle);
+    if (start < 0) break;
+
+    const openingBrace = text.indexOf('{', start);
+    if (openingBrace < 0) {
+      throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
     }
 
-    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }
-    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }`;
-  text = text.slice(0, start) + light + text.slice(end + endMarker.length);
+    let depth = 0;
+    let end = -1;
+    for (let index = openingBrace; index < text.length; index += 1) {
+      if (text[index] === '{') depth += 1;
+      if (text[index] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = index + 1;
+          while (text[end] === '\r' || text[end] === '\n') end += 1;
+          break;
+        }
+      }
+    }
+
+    if (end < 0) {
+      throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
+    }
+
+    text = `${text.slice(0, start)}${text.slice(end)}`;
+    removed += 1;
+    changed = true;
+  }
+
+  return removed;
+}
+
+const canonicalPool = '    function openMissionPoolRead(data) { return isApprovedTechnician() && openMissionAvailable(data); }';
+const poolPattern = /^    function openMissionPoolRead\(data\) \{ return .*openMissionAvailable\(data\); \}$/gm;
+if (poolPattern.test(text)) {
+  text = text.replace(poolPattern, canonicalPool);
   changed = true;
 }
 
-const duplicateClaim = 'return hasTechnicianDispatchAuthority() && openMissionPoolRead(resource.data) &&';
-if (text.includes(duplicateClaim)) {
-  text = text.split(duplicateClaim).join('return hasTechnicianDispatchAuthority() && openMissionAvailable(resource.data) &&');
+const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
+const removedDirectClaims = removeRuleFunction('safeOpenMissionClaim');
+
+const directClaimReference = /\s*\|\|\s*safeOpenMissionClaim\(\)/g;
+if (directClaimReference.test(text)) {
+  text = text.replace(directClaimReference, '');
   changed = true;
+}
+
+const canonicalTicketUpdate = '      allow update: if canDispatchJobs() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
+if (!text.includes(canonicalTicketUpdate)) {
+  throw new Error('[ticket-rule-binding] Tickets update rule is not server-authoritative after cleanup.');
+}
+
+for (const forbidden of ['function safeOpenMissionClaim(', 'function missionClaimFieldsLookValid(', 'safeOpenMissionClaim()']) {
+  if (text.includes(forbidden)) {
+    throw new Error(`[ticket-rule-binding] Forbidden direct technician claim fragment remains: ${forbidden}`);
+  }
+}
+
+if (!text.includes(canonicalPool)) {
+  throw new Error('[ticket-rule-binding] Open mission visibility is not restricted to approved technicians.');
 }
 
 if (changed) writeFileSync(file, text);
-console.log(changed ? 'Applied ticket and dispatch rule cleanup.' : 'Ticket and dispatch rules already clean.');
+
+console.log(
+  changed
+    ? `Applied server-authoritative ticket dispatch cleanup (claim helpers removed: ${removedClaimFields + removedDirectClaims}).`
+    : 'Ticket and dispatch rules already server-authoritative.',
+);
