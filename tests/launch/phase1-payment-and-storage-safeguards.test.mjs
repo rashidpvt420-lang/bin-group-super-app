@@ -64,3 +64,39 @@ test('owner activation geo gate fails closed', async () => {
   assert.match(runtime, /export \* from "\.\/securePaymentApproval"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/paymentTransactionApproval"/);
 });
+
+test('owner account creation precedes property upload and OCR', async () => {
+  const page = await read('src/pages/PropertyOnboardingPage.tsx');
+  const clientMachine = await read('src/lib/onboardingStateMachine.ts');
+  const serverMachine = await read('functions/onboardingStateMachine.ts');
+
+  assert.match(page, /case 2: return <AccountCreationStep/);
+  assert.match(page, /case 3: return <AssetProfileStep/);
+  assert.match(page, /Authentication is deliberately completed before title-deed upload\/OCR/);
+  for (const machine of [clientMachine, serverMachine]) {
+    assert.match(machine, /'account_created'/);
+    assert.match(machine, /draft: \['account_created', 'expired', 'suspended'\]/);
+    assert.match(machine, /account_created: \['property_details_complete'/);
+  }
+});
+
+test('Broker KYC is written only through the App Check callable', async () => {
+  const callable = await read('functions/brokerKycProfile.ts');
+  const runtime = await read('functions/runtime.ts');
+  const page = await read('src/broker/pages/BrokerProfilePage.tsx');
+  const ruleHardener = await read('scripts/harden-broker-kyc-rules.mjs');
+  const packageJson = await read('package.json');
+
+  assert.match(callable, /export const submitBrokerKycProfile = onCall/);
+  assert.match(callable, /enforceAppCheck: true/);
+  assert.match(callable, /broker_kyc_profiles/);
+  assert.match(callable, /broker_kyc_submission_limits/);
+  assert.match(callable, /submissionHash/);
+  assert.match(runtime, /export \* from "\.\/brokerKycProfile"/);
+  assert.match(page, /submitBrokerKycProfile/);
+  assert.match(page, /broker_kyc_profiles/);
+  assert.doesNotMatch(page, /setDoc\(doc\(db, ['"]users['"]/);
+  assert.match(ruleHardener, /allow create, update, delete: if false/);
+  assert.match(ruleHardener, /sensitiveBrokerFields/);
+  assert.match(packageJson, /harden:broker-kyc-rules/);
+});
