@@ -31,6 +31,10 @@ const forbiddenFragments = [
     label: 'tickets update rule still permits direct technician claiming',
     text: '|| safeOpenMissionClaim()',
   },
+  {
+    label: 'ticket update still evaluates every actor branch',
+    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+  },
 ];
 
 const requiredFragments = [
@@ -67,8 +71,12 @@ const requiredFragments = [
     text: 'function safeTechnicianTicketUpdate() {',
   },
   {
-    label: 'ticket assignment and status transitions are dispatcher/server authoritative',
-    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+    label: 'ticket updates are lazily routed by authenticated actor',
+    text: 'function safeTicketUpdateByActor() {',
+  },
+  {
+    label: 'ticket update rule uses actor router',
+    text: 'allow update: if safeTicketUpdateByActor();',
   },
   {
     label: 'technician cannot replace assigned technician identity',
@@ -109,6 +117,10 @@ for (const fragment of requiredFragments) {
   if (!present) {
     failures.push(`Required rule fragment missing: ${fragment.label}`);
   }
+}
+
+if ((rules.split('allow update: if safeTicketUpdateByActor();').length - 1) !== 2) {
+  failures.push('Actor-routed ticket update rule must exist exactly twice.');
 }
 
 if (failures.length > 0) {
