@@ -31,7 +31,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /let dispatcher = authenticated && \(/);
     assert.match(rules, /\(admin && isNotSuspended\(\)\)/);
     assert.match(rules, /\(!admin && dispatcher && safeDispatcherTicketUpdate\(\)\)/);
-    assert.match(rules, /\(!admin && !dispatcher && role == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
+    assert.match(rules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
     assert.match(rules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
     assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
     assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
