@@ -29,7 +29,7 @@ if (!existsSync(rulesPath)) {
   process.exit(1);
 }
 
-let source = readFileSync(rulesPath, 'utf8').replace(/\r\n/g, '\n');
+let source = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
 if (!source.includes(secretMarker)) {
   const catchAllIndex = source.indexOf(legacyCatchAll);
@@ -47,13 +47,26 @@ if (source.includes(legacyCatchAll)) {
 const secretStart = source.indexOf(secretMarker);
 const secretSection = secretStart >= 0 ? source.slice(secretStart, secretStart + 180) : '';
 const secretDenied = secretSection.includes('allow read, write: if false;');
-const catchAllExcludesSecrets = source.includes("match /{collection}/{document=**}") &&
-  source.includes("collection != 'system_secrets' && hasAdminClaim()");
+const catchAllExcludesSecrets = source.includes('match /{collection}/{document=**}') && (
+  source.includes("collection != 'system_secrets' && hasAdminClaim()") ||
+  source.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()")
+);
+const simpleCatchAllWriteExcludesSecrets =
+  source.includes("allow create: if collection != 'system_secrets' && hasAdminClaim();") &&
+  source.includes("allow update: if collection != 'system_secrets' && hasAdminClaim();") &&
+  source.includes("allow delete: if collection != 'system_secrets' && hasAdminClaim();");
+const secretWriteExclusionCount = source.split("'system_secrets',").length - 1;
+const listCatchAllWriteExcludesSecrets =
+  source.includes('allow create: if !(') &&
+  source.includes('allow update, delete: if !(') &&
+  secretWriteExclusionCount >= 2;
+const catchAllWriteExcludesSecrets =
+  simpleCatchAllWriteExcludesSecrets || listCatchAllWriteExcludesSecrets;
 
-if (!secretDenied || !catchAllExcludesSecrets || source.includes(legacyCatchAll)) {
+if (!secretDenied || !catchAllExcludesSecrets || !catchAllWriteExcludesSecrets || source.includes(legacyCatchAll)) {
   console.error('[harden-system-secrets-rules] system_secrets is not fully excluded from every client allow path.');
   process.exit(1);
 }
 
 writeFileSync(rulesPath, source);
-console.log('[harden-system-secrets-rules] system_secrets denied and excluded from the admin catch-all.');
+console.log('[harden-system-secrets-rules] system_secrets denied; stronger unrelated exclusions preserved.');
