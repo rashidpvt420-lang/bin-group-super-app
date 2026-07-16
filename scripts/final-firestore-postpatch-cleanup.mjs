@@ -17,7 +17,7 @@ const requiredFragments = [
   'match /fcmTokens/{tokenId}',
   'match /deviceReadiness/{readinessId}',
   'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
-  "!(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim()",
+  "hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets'])",
   "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'",
 ];
 
