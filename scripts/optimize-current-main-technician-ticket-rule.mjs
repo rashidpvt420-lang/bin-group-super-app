@@ -46,9 +46,10 @@ if (!rules.includes('    function hasApprovedTechnicianRecord() {')) {
 }
 
 const optimized = `    function safeTechnicianTicketUpdate() {
-      // The outer rule proves the technician claim and current assignment.
-      // Reject unrelated fields before suspension and the single approval read.
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      // The router proves the technician role and current assignment. Expensive
+      // append-only checks run only for evidence arrays that actually changed.
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly([
           'updatedAt',
           'technicianNotes',
           'techNotes',
@@ -71,15 +72,23 @@ const optimized = `    function safeTechnicianTicketUpdate() {
         isNotSuspended() &&
         hasApprovedTechnicianRecord() &&
         !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
-        request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
-        request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', [])) &&
-        request.resource.data.get('proofPhotos', []).size() >= resource.data.get('proofPhotos', []).size() &&
-        request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', [])) &&
-        request.resource.data.get('completionPhotos', []).size() >= resource.data.get('completionPhotos', []).size() &&
-        request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', [])) &&
-        request.resource.data.get('evidencePhotos', []).size() >= resource.data.get('evidencePhotos', []).size() &&
-        request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', [])) &&
-        (
+        (!changed.hasAny(['afterPhotos']) || (
+          request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
+          request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', []))
+        )) &&
+        (!changed.hasAny(['proofPhotos']) || (
+          request.resource.data.get('proofPhotos', []).size() >= resource.data.get('proofPhotos', []).size() &&
+          request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))
+        )) &&
+        (!changed.hasAny(['completionPhotos']) || (
+          request.resource.data.get('completionPhotos', []).size() >= resource.data.get('completionPhotos', []).size() &&
+          request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))
+        )) &&
+        (!changed.hasAny(['evidencePhotos']) || (
+          request.resource.data.get('evidencePhotos', []).size() >= resource.data.get('evidencePhotos', []).size() &&
+          request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))
+        )) &&
+        (!changed.hasAny(['afterPhotoUrl']) ||
           resource.data.get('afterPhotoUrl', '') == '' ||
           request.resource.data.get('afterPhotoUrl', '') == resource.data.get('afterPhotoUrl', '')
         );
@@ -100,14 +109,15 @@ for (const forbidden of [
 
 for (const required of [
   'function hasApprovedTechnicianRecord() {',
-  "'afterPhotos',",
-  "'proofPhotos',",
-  "'completionPhotos',",
-  "'evidencePhotos',",
+  "let changed = request.resource.data.diff(resource.data).affectedKeys();",
+  "!changed.hasAny(['afterPhotos'])",
+  "!changed.hasAny(['proofPhotos'])",
+  "!changed.hasAny(['completionPhotos'])",
+  "!changed.hasAny(['evidencePhotos'])",
   'hasApprovedTechnicianRecord() &&',
 ]) {
   if (!rules.includes(required)) throw new Error(`Required technician rule fragment missing: ${required}`);
 }
 
 fs.writeFileSync(rulesPath, rules, 'utf8');
-console.log('[current-main-technician-budget] technician evidence rule bounded');
+console.log('[current-main-technician-budget] technician evidence rule bounded by changed fields');
