@@ -5,6 +5,7 @@
 
 export const ONBOARDING_STATES = [
   'draft',
+  'account_created',
   'property_details_complete',
   'documents_pending',
   'quote_ready',
@@ -27,6 +28,9 @@ export type OnboardingState = (typeof ONBOARDING_STATES)[number];
 
 const LEGACY_STATUS_ALIASES: Record<string, OnboardingState> = {
   draft: 'draft',
+  account_created: 'account_created',
+  auth_created: 'account_created',
+  owner_account_created: 'account_created',
   property_details_complete: 'property_details_complete',
   documents_pending: 'documents_pending',
   quote_ready: 'quote_ready',
@@ -72,16 +76,17 @@ const LEGACY_STATUS_ALIASES: Record<string, OnboardingState> = {
 
 const PROGRESS_PERCENT: Record<OnboardingState, number> = {
   draft: 5,
-  property_details_complete: 15,
-  documents_pending: 25,
-  quote_ready: 35,
-  contract_selected: 45,
-  deposit_pending: 55,
-  deposit_processing: 60,
-  deposit_paid: 70,
-  identity_pending: 75,
-  signature_pending: 80,
-  admin_review: 85,
+  account_created: 10,
+  property_details_complete: 20,
+  documents_pending: 30,
+  quote_ready: 40,
+  contract_selected: 50,
+  deposit_pending: 58,
+  deposit_processing: 63,
+  deposit_paid: 72,
+  identity_pending: 77,
+  signature_pending: 82,
+  admin_review: 87,
   changes_requested: 70,
   approved: 95,
   active: 100,
@@ -91,7 +96,8 @@ const PROGRESS_PERCENT: Record<OnboardingState, number> = {
 };
 
 const NEXT_STEP: Record<OnboardingState, string> = {
-  draft: 'Complete property details',
+  draft: 'Create and verify the owner account',
+  account_created: 'Complete property details and title-deed verification',
   property_details_complete: 'Upload ownership / title-deed documents',
   documents_pending: 'Finish document upload and wait for quote',
   quote_ready: 'Select a service package and contract',
@@ -111,7 +117,8 @@ const NEXT_STEP: Record<OnboardingState, string> = {
 };
 
 const BLOCKERS: Record<OnboardingState, string> = {
-  draft: 'Property details incomplete',
+  draft: 'Verified owner account required before document processing',
+  account_created: 'Property details incomplete',
   property_details_complete: 'Ownership documents required',
   documents_pending: 'Documents still pending',
   quote_ready: 'Contract package not selected',
@@ -131,7 +138,8 @@ const BLOCKERS: Record<OnboardingState, string> = {
 };
 
 const ALLOWED_TRANSITIONS: Record<OnboardingState, OnboardingState[]> = {
-  draft: ['property_details_complete', 'expired', 'suspended'],
+  draft: ['account_created', 'expired', 'suspended'],
+  account_created: ['property_details_complete', 'documents_pending', 'expired', 'suspended'],
   property_details_complete: ['documents_pending', 'quote_ready', 'expired', 'suspended'],
   documents_pending: ['quote_ready', 'changes_requested', 'expired', 'suspended'],
   quote_ready: ['contract_selected', 'expired', 'suspended'],
@@ -142,7 +150,7 @@ const ALLOWED_TRANSITIONS: Record<OnboardingState, OnboardingState[]> = {
   identity_pending: ['signature_pending', 'admin_review', 'suspended'],
   signature_pending: ['admin_review', 'approved', 'suspended'],
   admin_review: ['changes_requested', 'approved', 'rejected', 'signature_pending', 'suspended'],
-  changes_requested: ['documents_pending', 'quote_ready', 'contract_selected', 'deposit_pending', 'admin_review', 'expired', 'suspended'],
+  changes_requested: ['account_created', 'documents_pending', 'quote_ready', 'contract_selected', 'deposit_pending', 'admin_review', 'expired', 'suspended'],
   approved: ['active', 'suspended'],
   active: ['suspended'],
   rejected: ['draft'],
