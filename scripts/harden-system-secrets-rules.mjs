@@ -51,11 +51,11 @@ const catchAllExcludesSecrets = source.includes('match /{collection}/{document=*
   source.includes("collection != 'system_secrets' && hasAdminClaim()") ||
   source.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()")
 );
+const secretWriteExclusionCount = source.split("'system_secrets',").length - 1;
 const catchAllWriteExcludesSecrets =
   source.includes('allow create: if !(') &&
   source.includes('allow update, delete: if !(') &&
-  source.includes("'system_secrets',") &&
-  source.includes("'users',");
+  secretWriteExclusionCount >= 2;
 
 if (!secretDenied || !catchAllExcludesSecrets || !catchAllWriteExcludesSecrets || source.includes(legacyCatchAll)) {
   console.error('[harden-system-secrets-rules] system_secrets is not fully excluded from every client allow path.');
@@ -63,4 +63,4 @@ if (!secretDenied || !catchAllExcludesSecrets || !catchAllWriteExcludesSecrets |
 }
 
 writeFileSync(rulesPath, source);
-console.log('[harden-system-secrets-rules] system_secrets denied; stronger users exclusion preserved.');
+console.log('[harden-system-secrets-rules] system_secrets denied; stronger unrelated exclusions preserved.');
