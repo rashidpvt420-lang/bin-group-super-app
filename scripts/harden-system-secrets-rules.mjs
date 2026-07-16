@@ -11,10 +11,10 @@ const legacyCatchAll = `    match /{document=**} {
       allow delete: if hasAdminClaim();
     }`;
 const secureCatchAll = `    match /{collection}/{document=**} {
-      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
-      allow create: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
-      allow update: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
-      allow delete: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
+      allow read: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
+      allow create: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
+      allow update: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
+      allow delete: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
     }`;
 const secretBlock = `    // Server-managed cryptographic material. Cloud Functions use the Admin SDK;
     // no browser, tenant, owner, technician, broker, or admin client may access it.
@@ -51,12 +51,14 @@ const secretDenied = secretSection.includes('allow read, write: if false;');
 const catchAllStart = source.indexOf('match /{collection}/{document=**}');
 const catchAllSection = catchAllStart >= 0 ? source.slice(catchAllStart) : '';
 const legacyReadExclusion = catchAllSection.includes("collection != 'system_secrets' && hasAdminClaim()");
-const explicitReadExclusion = /!\(collection in \[[^\]]*'system_secrets'[^\]]*\]\) && hasAdminClaim\(\)/.test(catchAllSection);
+const exclusionFirst = /!\(collection in \[[^\]]*'system_secrets'[^\]]*\]\) && hasAdminClaim\(\)/.test(catchAllSection);
+const claimFirst = /hasAdminClaim\(\) && !\(collection in \[[^\]]*'system_secrets'[^\]]*\]\)/.test(catchAllSection);
 const writeExclusion = catchAllSection.includes("'system_secrets',") ||
   catchAllSection.includes("collection != 'system_secrets' && hasAdminClaim()") ||
-  explicitReadExclusion;
+  exclusionFirst ||
+  claimFirst;
 const catchAllExcludesSecrets = catchAllStart >= 0 &&
-  (legacyReadExclusion || explicitReadExclusion) &&
+  (legacyReadExclusion || exclusionFirst || claimFirst) &&
   writeExclusion;
 
 if (!secretDenied || !catchAllExcludesSecrets || source.includes(legacyCatchAll)) {
