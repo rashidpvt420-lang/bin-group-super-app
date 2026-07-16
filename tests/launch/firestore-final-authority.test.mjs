@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const hardener = path.join(root, 'scripts/harden-final-firestore-authority.mjs');
 
-test('final Firestore authority hardener is status-aware, explicit and idempotent', () => {
+test('final Firestore authority hardener is status-aware, explicit, actor-specific and idempotent', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-final-firestore-authority-'));
   try {
     const target = path.join(directory, 'firestore.rules');
@@ -21,12 +21,27 @@ test('final Firestore authority hardener is status-aware, explicit and idempoten
     assert.match(rules, /function profileAllowsAccess\(data\)/);
     assert.match(rules, /data\.get\('status', ''\) in \[/);
     assert.match(rules, /function hasDispatchAuthorityClaimOnly\(\)/);
+    assert.match(rules, /function hasNonAdminDispatchClaimOnly\(\)/);
     assert.match(rules, /return hasDispatchAuthorityClaimOnly\(\) && isNotSuspended\(\);/);
     assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
     assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
     assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\n\s*allow read, write: if false;/);
-    assert.match(rules, /tenantOwns\(resource\.data\) &&\n\s*isNotSuspended\(\) &&/);
-    assert.match(rules, /techOwns\(resource\.data\) &&\n\s*isNotSuspended\(\) &&\n\s*isApprovedTechnician\(\) &&/);
+
+    const actorSpecificRules = [
+      'allow update: if isAdmin() && isNotSuspended();',
+      'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+      'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+      'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+    ];
+    for (const rule of actorSpecificRules) {
+      assert.equal(rules.split(rule).length - 1, 2, `Expected actor-specific rule twice: ${rule}`);
+    }
+
+    assert.match(rules, /!\(collection in \['system_secrets', 'users', 'tickets', 'maintenanceTickets'\]\) && hasAdminClaim\(\)/);
+    assert.doesNotMatch(
+      rules,
+      /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
+    );
     assert.doesNotMatch(
       rules,
       /get\(\/databases\/\$\(database\)\/documents\/users\/\$\(request\.auth\.uid\)\)\.data\.get\('suspended', false\) != true/,

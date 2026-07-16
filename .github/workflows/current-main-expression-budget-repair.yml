@@ -1,0 +1,116 @@
+name: Current Main Expression Budget Repair
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: current-main-expression-budget-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/current-main-firestore-expression-budget
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply bounded ticket authorization
+        run: node scripts/apply-current-main-firestore-expression-budget.mjs
+
+      - name: Verify generated Firestore state
+        shell: bash
+        run: |
+          git diff --check
+          git diff --stat
+          git diff -- firestore.rules
+
+      - name: Commit generated Firestore rules when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- firestore.rules; then
+            echo "Generated Firestore rules are already committed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- firestore.rules
+          git diff --cached --check
+          git commit -m "Eliminate Firestore ticket expression overflows"
+          git push origin HEAD:fix/current-main-firestore-expression-budget
+
+      - name: Run Firestore and Storage rules suite
+        id: rules
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          npm run test:rules 2>&1 | tee rules-output.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build compact rule diagnostics
+        if: always()
+        shell: bash
+        run: |
+          {
+            grep -n -B 5 -A 8 -F "maximum of 1000 expressions" rules-output.log || true
+            grep -n -B 3 -A 10 -E "not ok|# fail [1-9]" rules-output.log || true
+            tail -n 35 rules-output.log
+          } > rules-diagnostics.txt
+          cat rules-diagnostics.txt
+
+      - name: Upload rule diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-main-expression-budget-${{ github.run_id }}
+          path: |
+            rules-output.log
+            rules-diagnostics.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce clean rules result
+        shell: bash
+        run: |
+          if grep -F "maximum of 1000 expressions" rules-output.log; then
+            echo "Firestore 1000-expression overflow remains."
+            exit 1
+          fi
+          if [ "${{ steps.rules.outputs.exit_code }}" != "0" ]; then
+            echo "Firestore/Storage rules suite failed."
+            exit 1
+          fi
+
+      - name: Run stability suite
+        run: npm run test:stability
+
+      - name: Run launch-honesty suite
+        run: npm run test:launch-honesty

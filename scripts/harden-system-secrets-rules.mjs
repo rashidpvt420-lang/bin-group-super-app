@@ -63,18 +63,23 @@ if (legacyRecursive && !legacyRecursive.text.includes('allow read, write: if fal
 const secretStart = source.indexOf(secretMarker);
 const secretSection = secretStart >= 0 ? source.slice(secretStart, secretStart + 220) : '';
 const secretDenied = secretSection.includes('allow read, write: if false;');
-const catchAllExcludesSecrets = source.includes('match /{collection}/{document=**}') && (
-  source.includes("collection != 'system_secrets' && hasAdminClaim()") ||
-  source.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()")
-);
+
+const simpleReadExclusion = source.includes("collection != 'system_secrets' && hasAdminClaim()");
+const listReadExclusion = /allow read: if !\(collection in \[[^\]]*'system_secrets'[^\]]*\]\) && hasAdminClaim\(\);/.test(source);
+const catchAllExcludesSecrets = source.includes('match /{collection}/{document=**}') &&
+  (simpleReadExclusion || listReadExclusion);
+
 const simpleCatchAllWriteExcludesSecrets =
   source.includes("allow create: if collection != 'system_secrets' && hasAdminClaim();") &&
   source.includes("allow update: if collection != 'system_secrets' && hasAdminClaim();") &&
   source.includes("allow delete: if collection != 'system_secrets' && hasAdminClaim();");
-const secretWriteExclusionCount = source.split("'system_secrets',").length - 1;
+
+const catchAllStart = source.indexOf('match /{collection}/{document=**}');
+const catchAllSection = catchAllStart >= 0 ? source.slice(catchAllStart) : '';
+const secretWriteExclusionCount = catchAllSection.split("'system_secrets',").length - 1;
 const listCatchAllWriteExcludesSecrets =
-  source.includes('allow create: if !(') &&
-  source.includes('allow update, delete: if !(') &&
+  catchAllSection.includes('allow create: if !(') &&
+  catchAllSection.includes('allow update, delete: if !(') &&
   secretWriteExclusionCount >= 2;
 const catchAllWriteExcludesSecrets =
   simpleCatchAllWriteExcludesSecrets || listCatchAllWriteExcludesSecrets;

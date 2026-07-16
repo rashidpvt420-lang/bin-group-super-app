@@ -15,7 +15,7 @@ test('legacy ownerToken REST clients are fail-closed stubs', () => {
   }
 });
 
-test('ticket updates are explicit, actor-gated, and cannot authorize technician self-claims', () => {
+test('ticket updates are actor-specific and cannot authorize technician self-claims', () => {
   const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
   assert.doesNotMatch(
@@ -34,13 +34,9 @@ test('ticket updates are explicit, actor-gated, and cannot authorize technician 
     assert.equal(
       rules.split(rule).length - 1,
       2,
-      `Expected the actor-gated rule exactly once for tickets and once for maintenanceTickets: ${rule}`,
+      `Expected the actor-specific rule once for tickets and once for maintenanceTickets: ${rule}`,
     );
   }
-
-  assert.match(rules, /function safeDispatcherTicketUpdate\(\)/);
-  assert.match(rules, /function safeTenantEvidenceUpdate\(\)/);
-  assert.match(rules, /function safeTechnicianTicketUpdate\(\)/);
 });
 
 test('owner activation delegates to the complete server-confirmed policy', () => {
