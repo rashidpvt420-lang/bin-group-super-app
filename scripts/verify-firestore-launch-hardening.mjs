@@ -45,7 +45,8 @@ const requiredFragments = [
   ['hardened notification create rule', 'allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);'],
   ['safe client notification helper', 'function safeClientNotificationCreate(data) {'],
   ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
-  ['approved technician helper', 'function isApprovedTechnician() {'],
+  ['approved technician read helper', 'function isApprovedTechnician() {'],
+  ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
   ['tenant ticket unit/property binding helper', 'function canCreateTenantBoundTicket(data) {'],
   ['tenant ticket create uses binding helper', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
@@ -98,12 +99,15 @@ if (!technicianUpdate || technicianUpdate.includes('hasTechnicianClaim() &&') ||
 } else {
   const diffIndex = technicianUpdate.indexOf('affectedKeys().hasOnly([');
   const suspensionIndex = technicianUpdate.indexOf('isNotSuspended() &&');
-  const approvalIndex = technicianUpdate.indexOf('isApprovedTechnician() &&');
+  const approvalIndex = technicianUpdate.indexOf('hasApprovedTechnicianRecord() &&');
   if (diffIndex < 0 || suspensionIndex < 0 || approvalIndex < 0 || !(diffIndex < suspensionIndex && suspensionIndex < approvalIndex)) {
-    failures.push('Technician helper must reject mutation shape before suspension and approval profile reads.');
+    failures.push('Technician helper must reject mutation shape before suspension and the dedicated approval read.');
   }
-  for (const immutableField of ["'assignedTechnicianId',", "'technicianId',", "'techId',", "'priority',", "'paymentVerified',"]) {
-    if (technicianUpdate.includes(immutableField)) failures.push(`Technician mutable allowlist contains immutable field: ${immutableField}`);
+  for (const immutableField of ["'beforePhotos',", "'assignedTechnicianId',", "'technicianId',", "'techId',", "'priority',", "'paymentVerified',"]) {
+    if (technicianUpdate.includes(immutableField)) failures.push(`Technician mutable allowlist contains obsolete or immutable field: ${immutableField}`);
+  }
+  for (const requiredProof of ["'afterPhotos',", "'proofPhotos',", "'completionPhotos',", "'evidencePhotos',"]) {
+    if (!technicianUpdate.includes(requiredProof)) failures.push(`Technician live proof field missing: ${requiredProof}`);
   }
 }
 
