@@ -51,11 +51,17 @@ const catchAllExcludesSecrets = source.includes('match /{collection}/{document=*
   source.includes("collection != 'system_secrets' && hasAdminClaim()") ||
   source.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()")
 );
+const simpleCatchAllWriteExcludesSecrets =
+  source.includes("allow create: if collection != 'system_secrets' && hasAdminClaim();") &&
+  source.includes("allow update: if collection != 'system_secrets' && hasAdminClaim();") &&
+  source.includes("allow delete: if collection != 'system_secrets' && hasAdminClaim();");
 const secretWriteExclusionCount = source.split("'system_secrets',").length - 1;
-const catchAllWriteExcludesSecrets =
+const listCatchAllWriteExcludesSecrets =
   source.includes('allow create: if !(') &&
   source.includes('allow update, delete: if !(') &&
   secretWriteExclusionCount >= 2;
+const catchAllWriteExcludesSecrets =
+  simpleCatchAllWriteExcludesSecrets || listCatchAllWriteExcludesSecrets;
 
 if (!secretDenied || !catchAllExcludesSecrets || !catchAllWriteExcludesSecrets || source.includes(legacyCatchAll)) {
   console.error('[harden-system-secrets-rules] system_secrets is not fully excluded from every client allow path.');
