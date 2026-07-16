@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'firestore.rules';
-let text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
 const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
@@ -66,9 +66,16 @@ if (directClaimReference.test(text)) {
   changed = true;
 }
 
-const canonicalTicketUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
-if (!text.includes(canonicalTicketUpdate)) {
-  throw new Error('[ticket-rule-binding] Tickets update rule is not server-authoritative after cleanup.');
+const legacyTicketUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
+const canonicalTicketUpdate = '      allow update: if safeTicketUpdateByActor();';
+if (text.includes(legacyTicketUpdate)) {
+  text = text.split(legacyTicketUpdate).join(canonicalTicketUpdate);
+  changed = true;
+}
+
+if (text.split(canonicalTicketUpdate).length - 1 !== 2 ||
+    !text.includes('function safeTicketUpdateByActor() {')) {
+  throw new Error('[ticket-rule-binding] Tickets update rule is not actor-routed and server-authoritative after cleanup.');
 }
 
 for (const forbidden of [
@@ -92,6 +99,6 @@ if (changed) writeFileSync(file, text);
 
 console.log(
   changed
-    ? `Applied server-authoritative ticket dispatch cleanup (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`
-    : 'Ticket and dispatch rules already server-authoritative.',
+    ? `Applied server-authoritative actor-routed ticket cleanup (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`
+    : 'Ticket and dispatch rules already actor-routed and server-authoritative.',
 );
