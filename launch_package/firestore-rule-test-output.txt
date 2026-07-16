@@ -102,6 +102,492 @@ Ticket and dispatch rules already server-authoritative.
 
 Firestore launch hardening verification passed.
 [33m[1m⚠  emulators:[22m[39m You are not currently authenticated so some features may not work correctly. Please run [1mfirebase login[22m to authenticate the CLI.
-[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  emulators:[22m[39m Starting emulators: firestore, storage
+[33m[1m⚠ [22m[39m It appears you are running in a CI environment. You can avoid downloading the Firestore Emulator repeatedly by caching the /home/runner/.cache/firebase/emulators directory.
+[36m[1mi  firestore:[22m[39m downloading cloud-firestore-emulator-v1.21.0.jar...
 
-[1m[31mError:[39m[22m firebase-tools no longer supports Java version before 21. Please install a JDK at version 21 or above to get a compatible runtime.
+[36m[1mi  firestore:[22m[39m Firestore Emulator logging to [1mfirestore-debug.log[22m
+[32m[1m✔  firestore:[22m[39m Firestore Emulator was started in standard edition.
+[32m[1m✔  firestore:[22m[39m Firestore Emulator UI websocket is running on 9150.
+[33m[1m⚠ [22m[39m It appears you are running in a CI environment. You can avoid downloading the Storage Emulator repeatedly by caching the /home/runner/.cache/firebase/emulators directory.
+[36m[1mi  storage:[22m[39m downloading cloud-storage-rules-runtime-v1.1.3.jar...
+
+[36m[1mi [22m[39m Running script: [1mnode --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js[22m
+TAP version 13
+# Subtest: Firestore Security Rules
+    # Subtest: properties read isolation: Owner A cannot read Owner B property
+    ok 1 - properties read isolation: Owner A cannot read Owner B property
+      ---
+      duration_ms: 638.414994
+      ...
+    # Subtest: units read isolation: Tenant A cannot read Tenant B unit
+    ok 2 - units read isolation: Tenant A cannot read Tenant B unit
+      ---
+      duration_ms: 176.082024
+      ...
+# [2026-07-16T04:54:09.017Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719684 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1013:24 for 'update' @ L1013, false for 'update' @ L1890, false for 'update' @ L1013, false for 'update' @ L1890
+    # Subtest: contracts activation protection: User cannot update contract to ACTIVE
+    ok 3 - contracts activation protection: User cannot update contract to ACTIVE
+      ---
+      duration_ms: 182.672092
+      ...
+# [2026-07-16T04:54:09.084Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719685 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1027, false for 'create' @ L1865, false for 'update' @ L1028, false for 'update' @ L1890
+    # Subtest: payment transaction protection: User cannot create payment transaction with paymentVerified true
+    ok 4 - payment transaction protection: User cannot create payment transaction with paymentVerified true
+      ---
+      duration_ms: 66.087458
+      ...
+# [2026-07-16T04:54:09.193Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719687 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L960:24 for 'update' @ L960, false for 'update' @ L1890, false for 'update' @ L960, false for 'update' @ L1890
+    # Subtest: owner profile activation fields remain server-authoritative
+    ok 5 - owner profile activation fields remain server-authoritative
+      ---
+      duration_ms: 107.866176
+      ...
+    # Subtest: admin override: Admin can read all
+    ok 6 - admin override: Admin can read all
+      ---
+      duration_ms: 84.285414
+      ...
+    # Subtest: suspended Auth claims deny access even to an owned record
+    ok 7 - suspended Auth claims deny access even to an owned record
+      ---
+      duration_ms: 95.300418
+      ...
+    # Subtest: tenant ticket access: Tenant can read their own tickets
+    ok 8 - tenant ticket access: Tenant can read their own tickets
+      ---
+      duration_ms: 123.378067
+      ...
+    # Subtest: technician assigned-ticket access: approved technician can read assigned tickets
+    ok 9 - technician assigned-ticket access: approved technician can read assigned tickets
+      ---
+      duration_ms: 111.971605
+      ...
+# [2026-07-16T04:54:09.709Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719691 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1048, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+# [2026-07-16T04:54:09.731Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719692 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1048, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+# [2026-07-16T04:54:09.752Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719693 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1048, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+    # Subtest: ticket update narrowing: approved technician cannot reassign or escalate ticket
+    ok 10 - ticket update narrowing: approved technician cannot reassign or escalate ticket
+      ---
+      duration_ms: 166.533666
+      ...
+# [2026-07-16T04:54:09.873Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719696 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1048:24 for 'update' @ L1048, false for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+    # Subtest: ticket update narrowing: Tenant cannot directly change ticket status
+    ok 11 - ticket update narrowing: Tenant cannot directly change ticket status
+      ---
+      duration_ms: 118.958407
+      ...
+# [2026-07-16T04:54:09.985Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719699 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1041:24 for 'update' @ L1041, false for 'update' @ L1890, false for 'update' @ L1041, false for 'update' @ L1890
+# [2026-07-16T04:54:10.024Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71969a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1041, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1041, false for 'update' @ L1890
+# [2026-07-16T04:54:10.038Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71969b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1048, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+# [2026-07-16T04:54:10.158Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71969d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1041, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1041, false for 'update' @ L1890
+# [2026-07-16T04:54:10.220Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71969e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1041:24 for 'update' @ L1041, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1041, false for 'update' @ L1890
+# [2026-07-16T04:54:10.242Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71969f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1048:24 for 'update' @ L1048, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+    # Subtest: open mission assignment: direct client claims fail and dispatcher authority assigns
+    ok 12 - open mission assignment: direct client claims fail and dispatcher authority assigns
+      ---
+      duration_ms: 348.216011
+      ...
+# [2026-07-16T04:54:10.321Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196a1 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1303, false for 'create' @ L1865, false for 'update' @ L1303, false for 'update' @ L1890
+# [2026-07-16T04:54:10.330Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196a2 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1403, false for 'create' @ L1865, evaluation error at L1404:24 for 'update' @ L1404, false for 'update' @ L1890, false for 'create' @ L1403, false for 'create' @ L1865
+# [2026-07-16T04:54:10.347Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196a3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1404:24 for 'update' @ L1404, false for 'update' @ L1890, false for 'update' @ L1404, false for 'update' @ L1890
+    # Subtest: physical access passes: tenants cannot mint or approve pass records directly
+    ok 13 - physical access passes: tenants cannot mint or approve pass records directly
+      ---
+      duration_ms: 105.083324
+      ...
+# [2026-07-16T04:54:10.455Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196a5 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1047:24 for 'create' @ L1047, false for 'create' @ L1865, evaluation error at L1048:24 for 'update' @ L1048, false for 'update' @ L1890, false for 'create' @ L1047, false for 'create' @ L1865
+# [2026-07-16T04:54:10.489Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196a6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1047:24 for 'create' @ L1047, false for 'create' @ L1865, evaluation error at L1048:24 for 'update' @ L1048, false for 'update' @ L1890, false for 'create' @ L1047, false for 'create' @ L1865
+    # Subtest: tenant ticket creation: tenant must use their own assigned unit and matching property
+    ok 14 - tenant ticket creation: tenant must use their own assigned unit and matching property
+      ---
+      duration_ms: 141.430377
+      ...
+# [2026-07-16T04:54:10.595Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196a9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1303, false for 'create' @ L1865, false for 'update' @ L1303, false for 'update' @ L1890
+    # Subtest: gatePasses isolation: Tenant can read own server pass but cannot mint one
+    ok 15 - gatePasses isolation: Tenant can read own server pass but cannot mint one
+      ---
+      duration_ms: 143.252908
+      ...
+    # Subtest: amenityBookings isolation: Tenant can manage own bookings, others blocked
+    ok 16 - amenityBookings isolation: Tenant can manage own bookings, others blocked
+      ---
+      duration_ms: 105.210849
+      ...
+    # Subtest: tenant property access: Tenant can read assigned property doc and another valid tenant is blocked
+    ok 17 - tenant property access: Tenant can read assigned property doc and another valid tenant is blocked
+      ---
+      duration_ms: 138.199048
+      ...
+# [2026-07-16T04:54:10.909Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196b1 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1218, false for 'create' @ L1865, false for 'update' @ L1219, false for 'update' @ L1890
+    # Subtest: notifications abuse guard: user cannot create notification for another recipient
+    ok 18 - notifications abuse guard: user cannot create notification for another recipient
+      ---
+      duration_ms: 33.181753
+      ...
+    # Subtest: owner tenant profile access: Owner can read assigned tenants
+    ok 19 - owner tenant profile access: Owner can read assigned tenants
+      ---
+      duration_ms: 95.557601
+      ...
+    # Subtest: paymentConfirmations: tenant can create their own pending confirmation
+    ok 20 - paymentConfirmations: tenant can create their own pending confirmation
+      ---
+      duration_ms: 28.141296
+      ...
+# [2026-07-16T04:54:11.066Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196b6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1033, false for 'create' @ L1865, false for 'update' @ L1034, false for 'update' @ L1890
+    # Subtest: paymentConfirmations: tenant cannot create a confirmation for another tenant
+    ok 21 - paymentConfirmations: tenant cannot create a confirmation for another tenant
+      ---
+      duration_ms: 32.557409
+      ...
+# [2026-07-16T04:54:11.094Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196b7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1033, false for 'create' @ L1865, false for 'update' @ L1034, false for 'update' @ L1890
+    # Subtest: paymentConfirmations: tenant cannot self-verify on create
+    ok 22 - paymentConfirmations: tenant cannot self-verify on create
+      ---
+      duration_ms: 28.079429
+      ...
+    # Subtest: paymentConfirmations: only the owning tenant or admin can read it
+    ok 23 - paymentConfirmations: only the owning tenant or admin can read it
+      ---
+      duration_ms: 89.555757
+      ...
+# [2026-07-16T04:54:11.250Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196bd error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L934:24 for 'update' @ L934, false for 'update' @ L1890, false for 'update' @ L934, false for 'update' @ L1890
+    # Subtest: broker KYC: broker cannot self-approve verified KYC fields
+    ok 24 - broker KYC: broker cannot self-approve verified KYC fields
+      ---
+      duration_ms: 67.07656
+      ...
+# [2026-07-16T04:54:11.324Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c0 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1267, false for 'create' @ L1865, false for 'update' @ L1267, false for 'update' @ L1890
+# [2026-07-16T04:54:11.332Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c1 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1267, false for 'create' @ L1865, false for 'update' @ L1267, false for 'update' @ L1890
+# [2026-07-16T04:54:11.341Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c2 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'update' @ L1267, false for 'update' @ L1890
+    # Subtest: broker payout requests: broker cannot bypass callable review by writing request records directly
+    ok 25 - broker payout requests: broker cannot bypass callable review by writing request records directly
+      ---
+      duration_ms: 90.123031
+      ...
+# [2026-07-16T04:54:11.375Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1005, false for 'create' @ L1865, false for 'update' @ L1006, false for 'update' @ L1890
+# [2026-07-16T04:54:11.384Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c4 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1005, false for 'create' @ L1865, false for 'update' @ L1006, false for 'update' @ L1890
+    # Subtest: tenant unit link fallback: tenant can request verification but cannot self-link or request for another tenant
+    ok 26 - tenant unit link fallback: tenant can request verification but cannot self-link or request for another tenant
+      ---
+      duration_ms: 43.346604
+      ...
+# [2026-07-16T04:54:11.463Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L998, false for 'create' @ L1865, false for 'update' @ L999, false for 'update' @ L1890
+    # Subtest: units owner isolation: owner cannot read or create units for another owner
+    ok 27 - units owner isolation: owner cannot read or create units for another owner
+      ---
+      duration_ms: 78.169574
+      ...
+# [2026-07-16T04:54:11.530Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196c9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1102, false for 'create' @ L1865, false for 'update' @ L1103, false for 'update' @ L1890
+    # Subtest: signed-in smoke checklist: admin can record proof and non-admin cannot
+    ok 28 - signed-in smoke checklist: admin can record proof and non-admin cannot
+      ---
+      duration_ms: 67.327383
+      ...
+# [2026-07-16T04:54:11.660Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196ce error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1351:24 for 'create' @ L1351, false for 'create' @ L1865, false for 'update' @ L1890, false for 'update' @ L1890
+# [2026-07-16T04:54:11.671Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196cf error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1357:24 for 'delete' @ L1357, false for 'delete' @ L1890, false for 'delete' @ L1357, false for 'delete' @ L1890
+    # Subtest: amenitySlots: same-property tenants can detect a lock but cannot replace its owner
+    ok 29 - amenitySlots: same-property tenants can detect a lock but cannot replace its owner
+      ---
+      duration_ms: 147.551785
+      ...
+# [2026-07-16T04:54:11.738Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196d1 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1351, false for 'create' @ L1865, false for 'update' @ L1890
+    # Subtest: amenitySlots: tenant cannot create an unscoped lock
+    ok 30 - amenitySlots: tenant cannot create an unscoped lock
+      ---
+      duration_ms: 60.37465
+      ...
+# [2026-07-16T04:54:11.802Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196d3 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1351, false for 'create' @ L1865, false for 'update' @ L1890
+    # Subtest: amenitySlots: a tenant cannot create a lock owned by someone else
+    ok 31 - amenitySlots: a tenant cannot create a lock owned by someone else
+      ---
+      duration_ms: 64.148139
+      ...
+# [2026-07-16T04:54:11.916Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196d7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1308:24 for 'create' @ L1308, false for 'create' @ L1865, evaluation error at L1309:24 for 'update' @ L1309, false for 'update' @ L1890, false for 'update' @ L1309, false for 'update' @ L1890
+    # Subtest: amenities catalog: scoped to the property tenant/owner/admin, not any signed-in user
+    ok 32 - amenities catalog: scoped to the property tenant/owner/admin, not any signed-in user
+      ---
+      duration_ms: 141.655623
+      ...
+# [2026-07-16T04:54:11.996Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196da error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'update' @ L1034, false for 'update' @ L1890
+    # Subtest: paymentConfirmations: tenant cannot update or delete after creation
+    ok 33 - paymentConfirmations: tenant cannot update or delete after creation
+      ---
+      duration_ms: 52.188889
+      ...
+    # Subtest: tenant cannot read another propertys amenity booking
+    ok 34 - tenant cannot read another propertys amenity booking
+      ---
+      duration_ms: 100.246255
+      ...
+# [2026-07-16T04:54:12.160Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196df error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1403, false for 'create' @ L1865, false for 'update' @ L1404, false for 'update' @ L1890
+# [2026-07-16T04:54:12.169Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196e0 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1403, false for 'create' @ L1865, false for 'update' @ L1404, false for 'update' @ L1890
+    # Subtest: tenant cannot create visitor parking records directly
+    ok 35 - tenant cannot create visitor parking records directly
+      ---
+      duration_ms: 72.419855
+      ...
+    # Subtest: tenant cannot read another tenants parcel
+    ok 36 - tenant cannot read another tenants parcel
+      ---
+      duration_ms: 74.485362
+      ...
+    # Subtest: admin can manage parcel/parking/amenity records
+    ok 37 - admin can manage parcel/parking/amenity records
+      ---
+      duration_ms: 48.09096
+      ...
+# [2026-07-16T04:54:12.356Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196e7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1308:24 for 'create' @ L1308, false for 'create' @ L1865, evaluation error at L1309:24 for 'update' @ L1309, false for 'update' @ L1890, false for 'create' @ L1308, false for 'create' @ L1865
+    # Subtest: owner can manage only owned property records
+    ok 38 - owner can manage only owned property records
+      ---
+      duration_ms: 64.363305
+      ...
+# [2026-07-16T04:54:12.431Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196ea error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1412, false for 'create' @ L1865, false for 'update' @ L1413, false for 'update' @ L1890
+    # Subtest: marketplace public/tenant access behaves as intended
+    ok 39 - marketplace public/tenant access behaves as intended
+      ---
+      duration_ms: 74.575842
+      ...
+# [2026-07-16T04:54:12.489Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196ec error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1450, false for 'create' @ L1865, evaluation error at L1451:24 for 'update' @ L1451, false for 'update' @ L1890, false for 'create' @ L1450, false for 'create' @ L1865
+    # Subtest: community posts require moderation
+    ok 40 - community posts require moderation
+      ---
+      duration_ms: 57.936606
+      ...
+    # Subtest: messages only visible to participants
+    ok 41 - messages only visible to participants
+      ---
+      duration_ms: 69.279235
+      ...
+    # Subtest: inspections: tenant can create own inspection and read it back
+    ok 42 - inspections: tenant can create own inspection and read it back
+      ---
+      duration_ms: 87.011179
+      ...
+# [2026-07-16T04:54:12.672Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196f5 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1694, false for 'create' @ L1865, false for 'update' @ L1695, false for 'update' @ L1890
+    # Subtest: inspections: tenant cannot create inspection for another tenant
+    ok 43 - inspections: tenant cannot create inspection for another tenant
+      ---
+      duration_ms: 26.307411
+      ...
+    # Subtest: maintenanceRequests: tenant can create and read own request
+    ok 44 - maintenanceRequests: tenant can create and read own request
+      ---
+      duration_ms: 80.411793
+      ...
+# [2026-07-16T04:54:12.782Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196fa error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1702, false for 'create' @ L1865, evaluation error at L1703:24 for 'update' @ L1703, false for 'update' @ L1890, false for 'create' @ L1702, false for 'create' @ L1865
+    # Subtest: maintenanceRequests: tenant cannot create request for another tenant
+    ok 45 - maintenanceRequests: tenant cannot create request for another tenant
+      ---
+      duration_ms: 30.230398
+      ...
+# [2026-07-16T04:54:12.831Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196fc error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1027, false for 'create' @ L1865, false for 'update' @ L1028, false for 'update' @ L1890
+# [2026-07-16T04:54:12.838Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196fd error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'update' @ L1028, false for 'update' @ L1890
+# [2026-07-16T04:54:12.844Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196fe error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'delete' @ L1028, false for 'delete' @ L1890
+# [2026-07-16T04:54:12.850Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f7196ff error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1019, false for 'create' @ L1865, false for 'update' @ L1019, false for 'update' @ L1890
+# [2026-07-16T04:54:12.857Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719700 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1822, false for 'create' @ L1865, false for 'update' @ L1823, false for 'update' @ L1890
+# [2026-07-16T04:54:12.865Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719701 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1284, false for 'create' @ L1865, false for 'update' @ L1284, false for 'update' @ L1890
+# [2026-07-16T04:54:12.888Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719702 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1027, false for 'create' @ L1865, false for 'update' @ L1028, false for 'update' @ L1890
+# [2026-07-16T04:54:12.895Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719703 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'update' @ L1028, false for 'update' @ L1890
+# [2026-07-16T04:54:12.900Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719704 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'delete' @ L1028, false for 'delete' @ L1890
+# [2026-07-16T04:54:12.906Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719705 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1019, false for 'create' @ L1865, false for 'update' @ L1019, false for 'update' @ L1890
+# [2026-07-16T04:54:12.912Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719706 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1822, false for 'create' @ L1865, false for 'update' @ L1823, false for 'update' @ L1890
+# [2026-07-16T04:54:12.919Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719707 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1284, false for 'create' @ L1865, false for 'update' @ L1284, false for 'update' @ L1890
+    # Subtest: financial ledgers are server-authored even for admin browser clients
+    ok 46 - financial ledgers are server-authored even for admin browser clients
+      ---
+      duration_ms: 136.286629
+      ...
+# [2026-07-16T04:54:12.946Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719708 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1836, false for 'create' @ L1865, false for 'update' @ L1836, false for 'update' @ L1890
+# [2026-07-16T04:54:12.952Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719709 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1832, false for 'create' @ L1865, false for 'update' @ L1832, false for 'update' @ L1890
+# [2026-07-16T04:54:12.958Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71970a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1841, false for 'create' @ L1865, false for 'update' @ L1841, false for 'update' @ L1890
+# [2026-07-16T04:54:12.964Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71970b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1845, false for 'create' @ L1865, false for 'update' @ L1845, false for 'update' @ L1890
+# [2026-07-16T04:54:12.968Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71970c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1828, false for 'create' @ L1865, false for 'update' @ L1828, false for 'update' @ L1890
+# [2026-07-16T04:54:12.991Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71970d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1836, false for 'create' @ L1865, false for 'update' @ L1836, false for 'update' @ L1890
+# [2026-07-16T04:54:12.997Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71970e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1832, false for 'create' @ L1865, false for 'update' @ L1832, false for 'update' @ L1890
+# [2026-07-16T04:54:13.003Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71970f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1841, false for 'create' @ L1865, false for 'update' @ L1841, false for 'update' @ L1890
+# [2026-07-16T04:54:13.008Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719710 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1845, false for 'create' @ L1865, false for 'update' @ L1845, false for 'update' @ L1890
+# [2026-07-16T04:54:13.014Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719711 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1828, false for 'create' @ L1865, false for 'update' @ L1828, false for 'update' @ L1890
+    # Subtest: server coordination and security evidence collections reject all client writes
+    ok 47 - server coordination and security evidence collections reject all client writes
+      ---
+      duration_ms: 95.095257
+      ...
+    # Subtest: email-based owner access requires a verified authentication email
+    ok 48 - email-based owner access requires a verified authentication email
+      ---
+      duration_ms: 83.341628
+      ...
+# [2026-07-16T04:54:13.153Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719716 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L1351, false for 'create' @ L1865, false for 'update' @ L1890
+    # Subtest: amenity slot creation fails closed when tenant property binding is absent
+    ok 49 - amenity slot creation fails closed when tenant property binding is absent
+      ---
+      duration_ms: 55.525799
+      ...
+    # Subtest: stale-token suspended user is denied access
+    ok 50 - stale-token suspended user is denied access
+      ---
+      duration_ms: 72.127095
+      ...
+    # Subtest: user subcollection restrictions: Operations and Finance can read top-level user directories but NOT subcollections
+    ok 51 - user subcollection restrictions: Operations and Finance can read top-level user directories but NOT subcollections
+      ---
+      duration_ms: 113.231474
+      ...
+    # Subtest: user subcollection restrictions: User, Admin, and HR can read user subcollections
+    ok 52 - user subcollection restrictions: User, Admin, and HR can read user subcollections
+      ---
+      duration_ms: 119.898228
+      ...
+# [2026-07-16T04:54:13.613Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719725 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'update' @ L939, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.639Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719727 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L939, false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L939, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.663Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719728 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L946, false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L946, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.666Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719721 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.670Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719729 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.675Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719720 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.680Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71972a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.684Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71972b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L953, false for 'update' @ L1890
+# [2026-07-16T04:54:13.691Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f71972c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# false for 'create' @ L953, false for 'create' @ L1865, false for 'update' @ L953, false for 'update' @ L1890
+    # Subtest: explicit user subcollection allowlist blocks unknown paths and enforces role policy
+    ok 53 - explicit user subcollection allowlist blocks unknown paths and enforces role policy
+      ---
+      duration_ms: 253.589076
+      ...
+# [2026-07-16T04:54:13.805Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719730 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1040:24 for 'create' @ L1040, false for 'create' @ L1865, evaluation error at L1041:24 for 'update' @ L1041, false for 'update' @ L1890, false for 'create' @ L1040, false for 'create' @ L1865
+# [2026-07-16T04:54:13.818Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719731 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1047:24 for 'create' @ L1047, false for 'create' @ L1865, evaluation error at L1048:24 for 'update' @ L1048, false for 'update' @ L1890, false for 'create' @ L1047, false for 'create' @ L1865
+# [2026-07-16T04:54:13.836Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719732 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1041:24 for 'update' @ L1041, false for 'update' @ L1890, false for 'update' @ L1041, false for 'update' @ L1890
+# [2026-07-16T04:54:13.851Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719733 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L1048:24 for 'update' @ L1048, false for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+# [2026-07-16T04:54:13.860Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719734 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L939:42 for 'create' @ L939, false for 'create' @ L953, false for 'create' @ L1865, evaluation error at L939:42 for 'update' @ L939, false for 'update' @ L953, false for 'update' @ L1890, false for 'create' @ L939, false for 'create' @ L953, false for 'create' @ L1865
+# [2026-07-16T04:54:13.910Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719735 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L987:24 for 'create' @ L987, false for 'create' @ L1865, evaluation error at L988:24 for 'update' @ L988, false for 'update' @ L1890, false for 'create' @ L987, false for 'create' @ L1865
+# [2026-07-16T04:54:13.919Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719736 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# evaluation error at L988:24 for 'update' @ L988, false for 'update' @ L1890, false for 'update' @ L988, false for 'update' @ L1890
+# [2026-07-16T04:54:13.968Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719737 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1041, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1041, false for 'update' @ L1890
+# [2026-07-16T04:54:13.977Z]  @firebase/firestore: Firestore (12.14.0): GrpcConnection RPC 'Write' stream 0x8f719738 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+# Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1048, Unable to evaluate the expression as the maximum of 1000 expressions to evaluate has been reached. for 'update' @ L1890, false for 'update' @ L1048, false for 'update' @ L1890
+    # Subtest: stale-token database suspension blocks all critical client write paths
+    ok 54 - stale-token database suspension blocks all critical client write paths
+      ---
+      duration_ms: 264.340915
+      ...
+    1..54
+ok 1 - Firestore Security Rules
+  ---
+  duration_ms: 12670.803461
+  type: 'suite'
+  ...
+# Subtest: Storage Security Rules
+    # Subtest: contract and invoice email access requires verified email claims
+    ok 1 - contract and invoice email access requires verified email claims
+      ---
+      duration_ms: 694.762689
+      ...
+    # Subtest: tenant receipts require owner path, bounded MIME and immutable evidence metadata
+    ok 2 - tenant receipts require owner path, bounded MIME and immutable evidence metadata
+      ---
+      duration_ms: 55.676885
+      ...
+    1..2
+ok 2 - Storage Security Rules
+  ---
+  duration_ms: 3912.582929
+  type: 'suite'
+  ...
+1..2
+# tests 56
+# suites 2
+# pass 56
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17053.066447
+[32m[1m✔ [22m[39m Script exited successfully (code 0)
+[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  firestore:[22m[39m Stopping Firestore Emulator
+[36m[1mi  storage:[22m[39m Stopping Storage Emulator
+[36m[1mi  hub:[22m[39m Stopping emulator hub
+[36m[1mi  logging:[22m[39m Stopping Logging Emulator
