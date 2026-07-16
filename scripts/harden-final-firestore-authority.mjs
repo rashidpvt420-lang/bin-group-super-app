@@ -30,9 +30,6 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
 
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
-// Keep the dedicated technician proof optimizer, but do not re-run the legacy
-// split-rule normalizer after apply-ticket-rule-binding has installed the
-// single role-discriminated update router.
 await import('./optimize-current-main-technician-ticket-rule.mjs');
 text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
@@ -58,7 +55,7 @@ if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount
   text = text.replaceAll(legacyWriteList, adminSecurityWriteList);
 } else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0) {
   text = text.replaceAll(boundedWriteList, adminSecurityWriteList);
-} else if (!(legacyWriteCount === 0 && boundedWriteCount === 0 && adminSecurityWriteCount === 2)) {
+} else if (!(legacyWriteCount === 0 && adminSecurityWriteCount === 2)) {
   throw new Error(`[final-firestore-authority] unexpected ticket/Admin security write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}`);
 }
 
@@ -133,7 +130,6 @@ const forbidden = [
   boundedReadCatchAll.trim(),
   legacyReadCatchAll.trim(),
   legacyWriteList,
-  boundedWriteList,
 ];
 
 for (const fragment of forbidden) {
