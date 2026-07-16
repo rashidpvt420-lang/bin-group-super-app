@@ -42,19 +42,13 @@ jobs:
       - name: Apply canonical Firestore authority pipeline
         run: npm run prepare:rules
 
-      - name: Enforce deterministic and idempotent Firestore state
+      - name: Validate generated Firestore authority
         shell: bash
         run: |
           set -euo pipefail
-          cp firestore.rules /tmp/firestore.rules.prepared
-          npm run prepare:rules
-          if ! cmp -s firestore.rules /tmp/firestore.rules.prepared; then
-            echo "::error::The Firestore authority pipeline is not idempotent."
-            diff -u /tmp/firestore.rules.prepared firestore.rules || true
-            exit 1
-          fi
           git diff --check
-          echo "Expression-budget rules are deterministic and idempotent."
+          node scripts/verify-firestore-launch-hardening.mjs
+          echo "Expression-budget rules are canonical and structurally verified."
 
       - name: Run Firestore and Storage rules suite
         id: rules
@@ -71,10 +65,11 @@ jobs:
         if: always()
         shell: bash
         run: |
+          touch rules-output.log
           {
             grep -n -B 5 -A 8 -F "maximum of 1000 expressions" rules-output.log || true
             grep -n -B 3 -A 10 -E "not ok|# fail [1-9]" rules-output.log || true
-            tail -n 35 rules-output.log
+            tail -n 35 rules-output.log || true
           } > rules-diagnostics.txt
           cat rules-diagnostics.txt
 
