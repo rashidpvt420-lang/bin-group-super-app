@@ -1,0 +1,53 @@
+name: Apply Final Firestore Authority Repair
+
+on:
+  push:
+    branches:
+      - fix/final-firestore-authority-current-main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-final-firestore-authority-current-main
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/final-firestore-authority-current-main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply exact repair
+        run: node scripts/apply-final-firestore-authority-repair.mjs
+
+      - name: Verify generated diff
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --stat
+          node scripts/verify-firestore-launch-hardening.mjs
+          node --test tests/launch/firestore-final-authority.test.mjs
+
+      - name: Commit generated artifacts
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add firestore.rules package.json scripts/verify-firestore-launch-hardening.mjs test/full-system-regressions.test.mjs test/security-rules.test.js
+          if git diff --cached --quiet; then
+            echo 'No generated changes required.'
+            exit 0
+          fi
+          git commit -m 'Enforce final Firestore suspension and subcollection authority'
+          git push origin HEAD:fix/final-firestore-authority-current-main
