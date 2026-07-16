@@ -4,6 +4,22 @@ import { readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(path, 'utf8');
 
+function readRulesMatchBlock(rules, matchPath) {
+  const needle = `match ${matchPath} {`;
+  const start = rules.indexOf(needle);
+  assert.ok(start >= 0, `Missing Firestore match block: ${matchPath}`);
+  const open = rules.indexOf('{', start);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  assert.fail(`Unterminated Firestore match block: ${matchPath}`);
+}
+
 test('new server-authoritative callables are exported and used by browser clients', () => {
   const runtime = read('functions/runtime.ts');
   const tenantPayments = read('src/tenant/pages/TenantPaymentsPage.tsx');
@@ -145,8 +161,10 @@ test('tenant physical access and service tickets are server authoritative', () =
   assert.match(qr, /assertTenantResidence/);
   assert.match(qr, /timingSafeEqual/);
   assert.match(qr, /issuedByFunction:\s*"generateSignedQrPass"/);
-  assert.match(rules, /match \/gatePasses\/\{passId\}[\s\S]{0,300}allow create, update, delete: if false;/);
-  assert.match(rules, /match \/visitorParkingRequests\/\{requestId\}[\s\S]{0,250}allow create: if false;/);
+  const gatePassBlock = readRulesMatchBlock(rules, '/gatePasses/{passId}');
+  const visitorParkingBlock = readRulesMatchBlock(rules, '/visitorParkingRequests/{requestId}');
+  assert.match(gatePassBlock, /allow create, update, delete: if false;/);
+  assert.match(visitorParkingBlock, /allow create: if false;/);
   assert.doesNotMatch(gatePage, /addDoc\(collection\(db,\s*['"]gatePasses['"]/);
   assert.doesNotMatch(parkingPage, /addDoc\(collection\(db,\s*['"]visitorParkingRequests['"]/);
   assert.match(tenantTickets, /export const createTenantServiceTicket/);
