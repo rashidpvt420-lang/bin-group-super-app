@@ -20,10 +20,16 @@ test('ticket updates are actor-discriminated and cannot authorize technician sel
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
   assert.match(rules, /function safeTicketUpdateByActor\(\)/);
   assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
-  assert.match(rules, /hasAdminClaim\(\) && isNotSuspended\(\)/);
-  assert.match(rules, /hasNonAdminDispatchClaimOnly\(\) && safeDispatcherTicketUpdate\(\)/);
-  assert.match(rules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
-  assert.match(rules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
+  assert.match(rules, /let authenticated = signedIn\(\);/);
+  assert.match(rules, /let role = authenticated/);
+  assert.match(rules, /let admin = authenticated && \(/);
+  assert.match(rules, /let dispatcher = authenticated && \(/);
+  assert.match(rules, /\(admin && isNotSuspended\(\)\)/);
+  assert.match(rules, /\(!admin && dispatcher && safeDispatcherTicketUpdate\(\)\)/);
+  assert.match(rules, /\(!admin && !dispatcher && role == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
+  assert.match(rules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
+  assert.match(rules, /allow read: if collection != 'tickets' && collection != 'maintenanceTickets'/);
+  assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets'/);
 });
 
 test('owner activation delegates to the complete server-confirmed policy', () => {
