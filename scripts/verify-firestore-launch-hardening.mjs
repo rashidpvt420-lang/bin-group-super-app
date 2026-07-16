@@ -37,6 +37,8 @@ const forbiddenFragments = [
   ['boolean-only database suspension guard', "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true"],
   ['token-only directory list suspension guard', "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && ("],
   ['broad user-subcollection authorization', 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));'],
+  ['unbounded ticket read fallback', "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();"],
+  ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
 
@@ -52,8 +54,14 @@ const requiredFragments = [
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
   ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
-  ['tenant branch is role-discriminated', "claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()"],
-  ['technician branch is role-discriminated', "claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()"],
+  ['router caches authentication once', 'let authenticated = signedIn();'],
+  ['router caches canonical role once', 'let role = authenticated'],
+  ['router caches admin authority once', 'let admin = authenticated && ('],
+  ['router caches dispatcher authority once', 'let dispatcher = authenticated && ('],
+  ['admin branch uses cached authority', '(admin && isNotSuspended())'],
+  ['dispatcher branch uses cached authority', '(!admin && dispatcher && safeDispatcherTicketUpdate())'],
+  ['tenant branch is role-discriminated', "(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())"],
+  ['technician branch is role-discriminated', "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())"],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
   ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
@@ -62,8 +70,10 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket and Broker rate-limit read fallback exclusions', "!(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim()"],
-  ['ticket write fallback excludes explicit ticket hierarchies', "'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
+  ['ticket and Broker rate-limit read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits']) && hasAdminClaim();"],
+  ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
+  ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
+  ['ticket write fallback excludes explicit ticket hierarchies', "'system_secrets',\n          'users',\n          'audit_logs'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
 ];
@@ -79,12 +89,22 @@ const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
   failures.push('Ticket update router could not be parsed.');
 } else {
-  const admin = router.indexOf('(hasAdminClaim() && isNotSuspended())');
-  const dispatcher = router.indexOf('hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()');
-  const tenant = router.indexOf("claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()");
-  const technician = router.indexOf("claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()");
-  if (admin < 0 || dispatcher < 0 || tenant < 0 || technician < 0 || !(admin < dispatcher && dispatcher < tenant && tenant < technician)) {
+  const authentication = router.indexOf('let authenticated = signedIn();');
+  const role = router.indexOf('let role = authenticated');
+  const adminClaim = router.indexOf('let admin = authenticated && (');
+  const dispatcherClaim = router.indexOf('let dispatcher = authenticated && (');
+  const admin = router.indexOf('(admin && isNotSuspended())');
+  const dispatcher = router.indexOf('(!admin && dispatcher && safeDispatcherTicketUpdate())');
+  const tenant = router.indexOf("(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())");
+  const technician = router.indexOf("(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())");
+  if (
+    [authentication, role, adminClaim, dispatcherClaim, admin, dispatcher, tenant, technician].some((index) => index < 0) ||
+    !(authentication < role && role < adminClaim && adminClaim < dispatcherClaim && dispatcherClaim < admin && admin < dispatcher && dispatcher < tenant && tenant < technician)
+  ) {
     failures.push('Ticket update router must short-circuit in admin, dispatcher, tenant, technician order.');
+  }
+  for (const repeatedHelper of ['hasAdminClaim()', 'hasNonAdminDispatchClaimOnly()', 'claimedRole()']) {
+    if (router.includes(repeatedHelper)) failures.push(`Ticket update router re-evaluates expensive actor helper: ${repeatedHelper}`);
   }
 }
 
