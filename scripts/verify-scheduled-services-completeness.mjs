@@ -175,9 +175,7 @@ const checks = [
       'match /{document=**}',
       'fallbackDenied',
       'noAdminCatchAll',
-    ],
-    forbidden: [
-      'match /{collection}/{document=**}',
+      'fallbackCount !== 1',
     ],
   },
   {
