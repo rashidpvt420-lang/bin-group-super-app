@@ -19,12 +19,18 @@ const requiredFragments = [
   'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
   "hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets'])",
   "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'",
+  'function safeTicketUpdateByActor() {',
+  'allow update: if safeTicketUpdateByActor();',
 ];
 
 for (const fragment of requiredFragments) {
   if (!rules.includes(fragment)) {
     throw new Error(`Final Firestore hardening fragment missing: ${fragment}`);
   }
+}
+
+if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) {
+  throw new Error('Actor-routed ticket update rule must exist exactly twice.');
 }
 
 fs.writeFileSync(rulesPath, rules, 'utf8');
