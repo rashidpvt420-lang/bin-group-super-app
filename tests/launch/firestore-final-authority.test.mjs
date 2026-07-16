@@ -23,8 +23,11 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /return hasDispatchAuthorityClaimOnly\(\) && isNotSuspended\(\);/);
     assert.match(rules, /function safeTicketUpdateByActor\(\)/);
     assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
-    assert.match(rules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
-    assert.match(rules, /tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
+    assert.match(rules, /return !signedIn\(\) \? false :/);
+    assert.match(rules, /hasAdminClaim\(\) \? isNotSuspended\(\) :/);
+    assert.match(rules, /hasNonAdminDispatchClaimOnly\(\) \? safeDispatcherTicketUpdate\(\) :/);
+    assert.match(rules, /claimedRole\(\) in \['technician', 'tech'\] \? \(techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\) :/);
+    assert.match(rules, /tenantOwns\(resource\.data\) \? safeTenantEvidenceUpdate\(\) :/);
     assert.match(rules, /let changed = request\.resource\.data\.diff\(resource\.data\)\.affectedKeys\(\);/);
     assert.match(rules, /!changed\.hasAny\(\['afterPhotos'\]\)/);
     assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
