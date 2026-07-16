@@ -16,7 +16,7 @@ test('Functions pricing engine remains byte-identical to the canonical shared im
   assert.equal(functionMatrix, sharedMatrix, 'Functions pricing matrix drifted from @bin/shared');
 });
 
-test('owner quote issuance is App Check protected, owner bound, versioned, hashed and expiring', async () => {
+test('owner quote issuance is App Check protected, owner bound, live-account checked, versioned, hashed and expiring', async () => {
   const source = await read('functions/ownerPortfolioQuote.ts');
   assert.match(source, /issueOwnerPortfolioQuote = onCall/);
   assert.match(source, /validateOwnerPortfolioQuote = onCall/);
@@ -24,6 +24,11 @@ test('owner quote issuance is App Check protected, owner bound, versioned, hashe
   assert.match(source, /roleOf\(request\.auth\) !== ["']owner["']/);
   assert.match(source, /email_verified !== true/);
   assert.match(source, /suspended === true/);
+  assert.match(source, /await admin\.auth\(\)\.getUser\(request\.auth\.uid\)/);
+  assert.match(source, /userRecord\.disabled/);
+  assert.match(source, /userRecord\.emailVerified !== true/);
+  assert.match(source, /userRecord\.customClaims\?\.suspended === true/);
+  assert.match(source, /await assertVerifiedOwner\(request\)/);
   assert.match(source, /QUOTE_SCHEMA_VERSION = ["']OWNER_PORTFOLIO_QUOTE_V1["']/);
   assert.match(source, /PRICING_ENGINE_VERSION/);
   assert.match(source, /QUOTE_TTL_MS = 30 \* 60 \* 1000/);
