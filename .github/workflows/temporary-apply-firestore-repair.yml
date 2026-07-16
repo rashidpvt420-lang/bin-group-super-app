@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened]
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -40,28 +40,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply complete Firestore clearance patch
-        run: node scripts/apply-final-firestore-clearance-entry.mjs
+      - name: Split ticket update authorization by actor
+        run: node scripts/split-ticket-update-rules.mjs
 
       - name: Verify generated changes
         shell: bash
         run: |
           git diff --check
           git diff --stat
-          git diff -- firestore.rules test/security-rules.test.js
-          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
-            echo "Expected final Firestore changes were not produced."
+          git diff -- firestore.rules
+          if git diff --quiet -- firestore.rules; then
+            echo "Expected split ticket-rule changes were not produced."
             exit 1
           fi
 
-      - name: Commit generated security changes
+      - name: Commit generated rule changes
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- firestore.rules test/security-rules.test.js
+          git add -- firestore.rules
           git diff --cached --check
-          git commit -m "Finalize Firestore security rules and actor-routed ticket updates"
+          git commit -m "Split ticket updates into explicit actor-gated rules"
           git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Run rules suite and reject expression overflow
@@ -84,7 +84,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- launch_package/firestore-rule-test-output.txt
-          git commit -m "Record final Firestore rule-test diagnostics" || true
+          git commit -m "Record split-rule Firestore diagnostics" || true
           git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Enforce clean rules result
