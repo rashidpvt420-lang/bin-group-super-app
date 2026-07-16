@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, reopened]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -43,20 +43,20 @@ jobs:
       - name: Apply bounded ticket authorization
         run: node scripts/apply-current-main-firestore-expression-budget.mjs
 
-      - name: Verify generated Firestore diff
+      - name: Verify generated Firestore state
         shell: bash
         run: |
           git diff --check
           git diff --stat
           git diff -- firestore.rules
-          if git diff --quiet -- firestore.rules; then
-            echo "Expected Firestore expression-budget changes were not produced."
-            exit 1
-          fi
 
-      - name: Commit generated Firestore rules
+      - name: Commit generated Firestore rules when needed
         shell: bash
         run: |
+          if git diff --quiet -- firestore.rules; then
+            echo "Generated Firestore rules are already committed."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- firestore.rules
