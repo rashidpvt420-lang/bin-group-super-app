@@ -44,6 +44,18 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
+      - name: Print expression-overflow context
+        if: always()
+        shell: bash
+        run: |
+          if grep -Fq "maximum of 1000 expressions" current-main-rules-output.log; then
+            echo "===== FIRESTORE EXPRESSION OVERFLOW CONTEXT ====="
+            grep -n -B 5 -A 8 -F "maximum of 1000 expressions" current-main-rules-output.log || true
+            echo "===== END OVERFLOW CONTEXT ====="
+          else
+            echo "No Firestore 1000-expression overflow detected."
+          fi
+
       - name: Enforce expression-budget and rules result
         shell: bash
         run: |
