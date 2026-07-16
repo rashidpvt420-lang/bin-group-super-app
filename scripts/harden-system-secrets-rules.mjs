@@ -11,10 +11,10 @@ const legacyCatchAll = `    match /{document=**} {
       allow delete: if hasAdminClaim();
     }`;
 const secureCatchAll = `    match /{collection}/{document=**} {
-      allow read: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
-      allow create: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
-      allow update: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
-      allow delete: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
+      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
+      allow create: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
+      allow update: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
+      allow delete: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
     }`;
 const secretBlock = `    // Server-managed cryptographic material. Cloud Functions use the Admin SDK;
     // no browser, tenant, owner, technician, broker, or admin client may access it.
@@ -51,10 +51,10 @@ const secretDenied = secretSection.includes('allow read, write: if false;');
 const catchAllStart = source.indexOf('match /{collection}/{document=**}');
 const catchAllSection = catchAllStart >= 0 ? source.slice(catchAllStart) : '';
 const legacyReadExclusion = catchAllSection.includes("collection != 'system_secrets' && hasAdminClaim()");
-const explicitReadExclusion = catchAllSection.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()");
+const explicitReadExclusion = /!\(collection in \[[^\]]*'system_secrets'[^\]]*\]\) && hasAdminClaim\(\)/.test(catchAllSection);
 const writeExclusion = catchAllSection.includes("'system_secrets',") ||
   catchAllSection.includes("collection != 'system_secrets' && hasAdminClaim()") ||
-  catchAllSection.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()");
+  explicitReadExclusion;
 const catchAllExcludesSecrets = catchAllStart >= 0 &&
   (legacyReadExclusion || explicitReadExclusion) &&
   writeExclusion;
