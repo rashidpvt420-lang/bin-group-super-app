@@ -6,6 +6,12 @@ import fs from 'fs';
 
 let testEnv;
 
+async function seedServerDocument(documentPath, data) {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), documentPath), data);
+  });
+}
+
 describe('Firestore Security Rules', () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
@@ -28,7 +34,6 @@ describe('Firestore Security Rules', () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'properties/prop_b'), { ownerId: 'owner_b' });
-    await setDoc(doc(adminDb, 'propertyMembers/prop_b/members/owner_b'), { role: 'owner', active: true });
 
     const ownerADb = testEnv.authenticatedContext('owner_a').firestore();
     await assertFails(getDoc(doc(ownerADb, 'properties/prop_b')));
@@ -255,7 +260,7 @@ describe('Firestore Security Rules', () => {
       status: 'approved',
       qrToken: 'forged',
     }));
-    await setDoc(doc(adminDb, 'visitorParkingRequests/server_created'), {
+    await seedServerDocument('visitorParkingRequests/server_created', {
       passId: 'server_created',
       tenantUid: 'tenant_a',
       propertyId: 'prop_a',
@@ -316,7 +321,7 @@ describe('Firestore Security Rules', () => {
   it('gatePasses isolation: Tenant can read own server pass but cannot mint one', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'gatePasses/pass_1'), { tenantUid: 'tenant_a', visitorName: 'Visitor 1' });
+    await seedServerDocument('gatePasses/pass_1', { tenantUid: 'tenant_a', visitorName: 'Visitor 1' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
