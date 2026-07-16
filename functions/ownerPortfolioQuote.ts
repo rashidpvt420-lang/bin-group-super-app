@@ -26,10 +26,15 @@ function roleOf(auth: any): string {
   return String(auth?.token?.role || auth?.token?.userRole || auth?.token?.primaryRole || "").trim().toLowerCase();
 }
 
-function assertVerifiedOwner(request: any): string {
+async function assertVerifiedOwner(request: any): Promise<string> {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner login required.");
   if (roleOf(request.auth) !== "owner") throw new HttpsError("permission-denied", "Only an owner can issue a portfolio quote.");
   if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "A verified, active owner account is required.");
+  }
+
+  const userRecord = await admin.auth().getUser(request.auth.uid);
+  if (userRecord.disabled || userRecord.emailVerified !== true || userRecord.customClaims?.suspended === true) {
     throw new HttpsError("permission-denied", "A verified, active owner account is required.");
   }
   return request.auth.uid;
@@ -138,7 +143,7 @@ export async function assertOwnerPortfolioQuoteRecord(ownerUid: string, data: Ow
 export const issueOwnerPortfolioQuote = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    const ownerUid = assertVerifiedOwner(request);
+    const ownerUid = await assertVerifiedOwner(request);
     const properties = parseProperties(request.data?.properties);
     const issuedAtMs = Date.now();
     const expiresAtMs = issuedAtMs + QUOTE_TTL_MS;
@@ -173,5 +178,5 @@ export const issueOwnerPortfolioQuote = onCall(
 
 export const validateOwnerPortfolioQuote = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
-  async (request) => assertOwnerPortfolioQuoteRecord(assertVerifiedOwner(request), request.data || {}),
+  async (request) => assertOwnerPortfolioQuoteRecord(await assertVerifiedOwner(request), request.data || {}),
 );
