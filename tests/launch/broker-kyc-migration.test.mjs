@@ -22,3 +22,12 @@ test('Broker KYC submission purges legacy raw fields from public user profiles',
   assert.match(source, /transaction\.set\(publicRef,[\s\S]*FieldValue\.delete\(\)/);
   assert.doesNotMatch(source, /if \(existingPrivate\.submissionHash === submissionHash\) \{[\s\S]{0,100}return;/);
 });
+
+test('Broker KYC collections are excluded from generic admin fallbacks', async () => {
+  const hardener = await read('scripts/harden-broker-kyc-rules.mjs');
+  assert.match(hardener, /broker_kyc_submission_limits'\]\) && hasAdminClaim/);
+  assert.match(hardener, /'broker_kyc_profiles',\n          'broker_kyc_submission_limits'/);
+  assert.match(hardener, /legacyWriteCount === 2/);
+  assert.match(hardener, /hardenedWriteCount === 2/);
+  assert.match(hardener, /replaceAll\(legacyWriteAnchor, hardenedWriteAnchor\)/);
+});
