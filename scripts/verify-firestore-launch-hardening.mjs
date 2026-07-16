@@ -122,7 +122,6 @@ for (const rule of [
   }
 }
 
-const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
 if (!technicianUpdate) {
   failures.push('Technician update helper could not be parsed.');
 } else {
