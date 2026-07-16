@@ -1874,62 +1874,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /{collection}/{document=**} {
-      allow read: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
-      allow create: if !(
-        collection in [
-          'system_secrets',
-          'users',
-          'tickets',
-          'maintenanceTickets',
-          'audit_logs',
-          'auditLogs',
-          'analytics_events',
-          'security_audit_logs',
-          'telemetry_logs',
-          'payment_transactions',
-          'payments',
-          'transactions',
-          'invoices',
-          'invoice_registry',
-          'commissions',
-          'broker_commissions',
-          'broker_payout_requests',
-          'stripe_webhook_events',
-          'contract_signature_otps',
-          'contract_signature_otp_audit',
-          'notification_dispatch_claims',
-          'public_rate_limits',
-          'ai_usage'
-        ]
-      ) && hasAdminClaim();
-      allow update, delete: if !(
-        collection in [
-          'system_secrets',
-          'users',
-          'tickets',
-          'maintenanceTickets',
-          'audit_logs',
-          'auditLogs',
-          'analytics_events',
-          'security_audit_logs',
-          'telemetry_logs',
-          'payment_transactions',
-          'payments',
-          'transactions',
-          'invoices',
-          'invoice_registry',
-          'commissions',
-          'broker_commissions',
-          'broker_payout_requests',
-          'stripe_webhook_events',
-          'contract_signature_otps',
-          'contract_signature_otp_audit',
-          'notification_dispatch_claims',
-          'public_rate_limits',
-          'ai_usage'
-        ]
-      ) && hasAdminClaim();
+    // Collections without an explicit policy are denied. Privileged browser
+    // clients must use an explicit collection rule or a server-side callable.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

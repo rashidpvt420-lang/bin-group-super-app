@@ -172,9 +172,12 @@ const checks = [
     required: [
       'match /system_secrets/{secretId}',
       'allow read, write: if false;',
+      'match /{document=**}',
+      'fallbackDenied',
+      'noAdminCatchAll',
+    ],
+    forbidden: [
       'match /{collection}/{document=**}',
-      "collection != 'system_secrets' && hasAdminClaim()",
-      'source.includes(legacyCatchAll)',
     ],
   },
   {

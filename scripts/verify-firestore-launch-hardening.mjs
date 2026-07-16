@@ -59,6 +59,10 @@ const forbiddenFragments = [
     label: 'shared actor-router helper remains',
     text: 'function safeTicketUpdateByActor() {',
   },
+  {
+    label: 'global admin catch-all remains',
+    text: 'match /{collection}/{document=**}',
+  },
 ];
 
 const requiredFragments = [
@@ -73,6 +77,10 @@ const requiredFragments = [
   {
     label: 'safe client notification helper',
     text: 'function safeClientNotificationCreate(data) {',
+  },
+  {
+    label: 'fail-closed recursive fallback',
+    text: 'match /{document=**} {\n      allow read, write: if false;',
   },
   {
     label: 'technician dispatch authority helper',
