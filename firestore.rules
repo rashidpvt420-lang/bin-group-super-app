@@ -1861,8 +1861,8 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
-      allow create: if !(
+      allow read: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
+      allow create: if hasAdminClaim() && !(
         collection in [
           'system_secrets',
           'users',
@@ -1888,8 +1888,8 @@ service cloud.firestore {
           'public_rate_limits',
           'ai_usage'
         ]
-      ) && hasAdminClaim();
-      allow update, delete: if !(
+      );
+      allow update, delete: if hasAdminClaim() && !(
         collection in [
           'system_secrets',
           'users',
@@ -1915,7 +1915,7 @@ service cloud.firestore {
           'public_rate_limits',
           'ai_usage'
         ]
-      ) && hasAdminClaim();
+      );
     }
   }
 }
