@@ -10,6 +10,13 @@ const ticketBindingScript = path.join(root, 'scripts/apply-ticket-rule-binding.m
 const rulesVerifier = path.join(root, 'scripts/verify-firestore-launch-hardening.mjs');
 const scheduledVerifier = path.join(root, 'scripts/verify-scheduled-services-completeness.mjs');
 
+const actorSpecificTicketRules = [
+  'allow update: if isAdmin() && isNotSuspended();',
+  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+];
+
 function runNode(script, cwd = root) {
   return spawnSync(process.execPath, [script], {
     cwd,
@@ -33,10 +40,17 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /\|\|\s*safeOpenMissionClaim\(\)/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionPoolRead\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
-    assert.match(
+    assert.doesNotMatch(
       preparedRules,
       /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
     );
+    for (const rule of actorSpecificTicketRules) {
+      assert.equal(
+        preparedRules.split(rule).length - 1,
+        2,
+        `actor-specific ticket rule must exist once in tickets and once in maintenanceTickets: ${rule}`,
+      );
+    }
 
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);
@@ -77,5 +91,7 @@ test('launch-hardening verifier explicitly rejects direct technician assignment 
   const verifierSource = readFileSync(rulesVerifier, 'utf8');
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
-  assert.match(verifierSource, /ticket assignment and status transitions are dispatcher\/server authoritative/);
+  assert.match(verifierSource, /monolithic ticket update authorization/);
+  assert.match(verifierSource, /Actor-specific ticket update rule must exist exactly twice/);
+  assert.match(verifierSource, /Technician helper must rely on the outer actor\/assignment gate/);
 });

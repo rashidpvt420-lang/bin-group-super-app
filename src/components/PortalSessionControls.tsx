@@ -4,6 +4,7 @@ import { Globe, LogOut } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
+import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -16,13 +17,12 @@ type PortalSessionControlsProps = {
   compact?: boolean;
 };
 
-const preserveSafePreferences = () => {
+const clearSessionAndPreserveLanguage = async () => {
   const preferredLanguage = localStorage.getItem('bin_language');
-  const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
+  await clearOnboardingSessionArtifacts();
   localStorage.clear();
   sessionStorage.clear();
   if (preferredLanguage) localStorage.setItem('bin_language', preferredLanguage);
-  if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
 };
 
 export default function PortalSessionControls({
@@ -43,10 +43,15 @@ export default function PortalSessionControls({
 
   const handleLogout = async () => {
     try {
-      preserveSafePreferences();
+      await clearSessionAndPreserveLanguage();
       await signOut(auth);
     } catch (error) {
       console.warn(`[${role}] Secure logout fallback triggered.`, error);
+      try {
+        await signOut(auth);
+      } catch {
+        // Navigation below still terminates the local portal session.
+      }
     } finally {
       window.location.replace(logoutRedirect || `/login?intendedRole=${role}&logout=1`);
     }

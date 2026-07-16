@@ -29,6 +29,7 @@ interface PaymentSubmissionStepProps {
 }
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport';
+
 type CanonicalQuote = {
     annualContractValue: number;
     activationDeposit: number;
@@ -55,7 +56,10 @@ const resolveMoney = (...values: unknown[]): number => {
     return 0;
 };
 
-const formatMoney = (value: number) => value.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatMoney = (value: number) => value.toLocaleString('en-AE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
 
 const isAuthStorageFailure = (error: unknown) => {
     const record = error as { code?: string; message?: string };
@@ -96,15 +100,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         isContractSigned,
         signatureName,
         contractOtpVerificationId,
+        reset,
     } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
-    const ar = isRTL;
-    const copy = (en: string, arText: string) => (ar ? arText : en);
+    const copy = (en: string, ar: string) => (isRTL ? ar : en);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
-    const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({});
     const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     const [confirmDialog, setConfirmDialog] = useState(false);
     const [reauthRequired, setReauthRequired] = useState(false);
@@ -137,7 +140,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 'تم إلغاء الدفع بالبطاقة. ما زالت حزمة التسجيل والعقد محفوظة ويمكن إعادة المحاولة.',
             ));
         }
-    }, [ar]);
+    }, [isRTL]);
 
     const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => new Promise((resolve) => {
         if (auth.currentUser) {
@@ -169,8 +172,8 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             const stagedFile = await getStagedFile(documentType.key);
             if (!stagedFile) {
                 throw new Error(copy(
-                    `${documentType.en} file is missing from this device. Upload it again.`,
-                    `ملف ${documentType.ar} غير موجود على هذا الجهاز. يرجى رفعه مرة أخرى.`,
+                    `${documentType.en} file is missing from this browser session. Upload it again.`,
+                    `ملف ${documentType.ar} غير موجود في جلسة المتصفح. يرجى رفعه مرة أخرى.`,
                 ));
             }
 
@@ -219,12 +222,18 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     const validateSubmission = () => {
         if (!ownerAccount?.uid) throw new Error(copy('Owner account is missing. Return to the account step.', 'حساب المالك غير موجود. ارجع إلى خطوة إنشاء الحساب.'));
         if (!paymentMethod) throw new Error(copy('Select a payment method first.', 'اختر طريقة الدفع أولاً.'));
+        if (!paymentManifest?.configVersion || !paymentManifest?.configHash) {
+            throw new Error(copy(
+                'The verified corporate payment configuration is missing. Return to payment options and generate new instructions.',
+                'إعداد الدفع المؤسسي الموثق غير موجود. ارجع إلى خيارات الدفع وأنشئ تعليمات جديدة.',
+            ));
+        }
         if (!isContractSigned || signatureName.trim().length < 3) throw new Error(copy('A valid signed agreement is required.', 'يلزم توقيع صحيح على الاتفاقية.'));
         if (!contractOtpVerificationId) throw new Error(copy('Verify the contract email OTP before payment.', 'تحقق من رمز توقيع العقد عبر البريد الإلكتروني قبل الدفع.'));
         if (paymentMethod !== 'STRIPE' && (paymentReference.trim().length < 4 || !paymentReceipt)) {
             throw new Error(copy(
-                'Manual payments require a bank/cheque reference and an uploaded receipt.',
-                'تتطلب المدفوعات اليدوية مرجع التحويل أو الشيك وإيصالاً مرفوعاً.',
+                'Manual payments require a bank, cheque or cash reference and an uploaded receipt.',
+                'تتطلب المدفوعات اليدوية مرجع التحويل أو الشيك أو النقد وإيصالاً مرفوعاً.',
             ));
         }
         const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);
@@ -258,6 +267,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 'لم يُرجع الخادم عرض تسجيل صالحًا بالدرهم الإماراتي.',
             ));
         }
+
         const quoteChanged =
             Math.abs(serverQuote.annualContractValue - annualContractValue) > 0.01 ||
             Math.abs(serverQuote.activationDeposit - amountDue) > 0.01;
@@ -271,13 +281,16 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
 
         const effectiveIntakeId = intakeId || onboardingSessionId || user.uid;
         setIntakeId(effectiveIntakeId);
-        const urls = await uploadProofDocuments(user, effectiveIntakeId);
-        setUploadedUrls(urls);
-        let manualPaymentEvidence: Record<string, string> | null = null;
+        const documentUrls = await uploadProofDocuments(user, effectiveIntakeId);
+
+        let manualPaymentEvidence: Record<string, string> = {};
         if (paymentMethod !== 'STRIPE' && paymentReceipt) {
             const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']);
             if (!allowedTypes.has(paymentReceipt.type)) {
-                throw new Error(copy('Payment receipt must be PDF, JPEG, PNG, WEBP, or HEIC.', 'يجب أن يكون إيصال الدفع بصيغة PDF أو JPEG أو PNG أو WEBP أو HEIC.'));
+                throw new Error(copy(
+                    'Payment receipt must be PDF, JPEG, PNG, WEBP, or HEIC.',
+                    'يجب أن يكون إيصال الدفع بصيغة PDF أو JPEG أو PNG أو WEBP أو HEIC.',
+                ));
             }
             const safeName = paymentReceipt.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'payment-receipt';
             const paymentProofPath = `payment-references/owners/${user.uid}/${effectiveIntakeId}/${Date.now()}_${safeName}`;
@@ -302,6 +315,19 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             };
         }
 
+        const verifiedPaymentManifest = {
+            ...(paymentManifest || {}),
+            ...manualPaymentEvidence,
+            amount: serverQuote.activationDeposit,
+            activationDeposit: serverQuote.activationDeposit,
+            annualContractValue: serverQuote.annualContractValue,
+            currency: 'AED',
+            method: paymentMethod,
+            configVersion: paymentManifest.configVersion,
+            configHash: paymentManifest.configHash,
+            configEffectiveAtMs: paymentManifest.configEffectiveAtMs,
+        };
+
         const submitPackage = httpsCallable(functions, 'submitOwnerOnboardingPaymentPackage');
         await submitPackage({
             ownerUid: user.uid,
@@ -309,12 +335,14 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             intakeId: effectiveIntakeId,
             onboardingSessionId: onboardingSessionId || effectiveIntakeId,
             paymentMethod,
-            amount: amountDue,
-            activationDeposit: amountDue,
-            annualContractValue,
+            amount: serverQuote.activationDeposit,
+            activationDeposit: serverQuote.activationDeposit,
+            annualContractValue: serverQuote.annualContractValue,
             quoteHash: serverQuote.quoteHash,
             quoteQuotedAtMs: serverQuote.quotedAtMs,
-            paymentManifest: manualPaymentEvidence || paymentManifest || null,
+            paymentConfigVersion: paymentManifest.configVersion,
+            paymentConfigHash: paymentManifest.configHash,
+            paymentManifest: verifiedPaymentManifest,
             companyProfile: {
                 name: companyProfile.name,
                 licenseNumber: companyProfile.licenseNumber,
@@ -331,7 +359,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             properties,
             signatureName: signatureName.trim(),
             otpVerificationId: contractOtpVerificationId,
-            documentUrls: urls,
+            documentUrls,
         });
 
         if (paymentMethod === 'STRIPE') {
@@ -345,11 +373,13 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             const checkout = result.data as { url?: string };
             if (!checkout.url) throw new Error(copy('Stripe did not return a secure checkout URL.', 'لم يتم إنشاء رابط دفع آمن من Stripe.'));
             await clearStagedFiles();
+            reset();
             window.location.assign(checkout.url);
             return;
         }
 
         await clearStagedFiles();
+        reset();
         setSuccess(true);
     };
 
@@ -361,14 +391,13 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             if (!user) {
                 setReauthRequired(true);
                 throw new Error(copy(
-                    'Your secure session expired. Re-enter the owner password below; your form and documents remain on this device.',
-                    'انتهت الجلسة الآمنة. أدخل كلمة مرور المالك أدناه؛ ستبقى البيانات والمستندات محفوظة على هذا الجهاز.',
+                    'Your secure session expired. Re-enter the owner password below. Encrypted documents remain available only in this browser-tab session.',
+                    'انتهت الجلسة الآمنة. أدخل كلمة مرور المالك أدناه. تبقى المستندات المشفرة متاحة فقط في جلسة علامة تبويب المتصفح الحالية.',
                 ));
             }
             await submitWithUser(user);
         } catch (submissionError) {
-            const message = submissionError instanceof Error ? submissionError.message : String(submissionError);
-            setError(message);
+            setError(submissionError instanceof Error ? submissionError.message : String(submissionError));
         } finally {
             setLoading(false);
         }
@@ -395,22 +424,15 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     if (success) {
         return (
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 10 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
-                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22, 22, 24, 0.8)', border: '1px solid #4ADE80', backdropFilter: 'blur(10px)' }}>
-                    <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
-                        <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(74, 222, 128, 0.1)' }}>
-                            <CheckCircle size={48} color="#4ADE80" />
-                        </Box>
-                    </Box>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
-                        {t('onboarding.payment.success_title') || 'Payment Submitted Successfully'}
+                <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22,22,24,0.8)', border: '1px solid #4ADE80' }}>
+                    <CheckCircle size={56} color="#4ADE80" />
+                    <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 3 }}>
+                        {t('onboarding.payment.success_title') || copy('Payment Submitted Successfully', 'تم إرسال الدفع بنجاح')}
                     </Typography>
-                    <Typography variant="body1" sx={{ color: '#4ADE80', fontWeight: 700, mb: 2 }}>
-                        {t('onboarding.payment.success_body') || 'Your payment proof and documents were uploaded successfully. BIN GROUP will review and activate your owner dashboard after admin verification.'}
-                    </Typography>
-                    <Typography sx={{ color: '#4ADE80', fontWeight: 700, mt: 2 }}>
+                    <Typography color="#4ADE80" fontWeight={700} sx={{ mt: 2 }}>
                         {copy(
-                            'The contract, documents, property data, and payment record are saved. The dashboard remains locked until admin approval.',
-                            'تم حفظ العقد والمستندات وبيانات العقار وسجل الدفع. ستبقى لوحة التحكم مقفلة حتى موافقة الإدارة.',
+                            'The contract, documents, property data and payment evidence are saved. Local onboarding data and the browser-session encryption key have been cleared.',
+                            'تم حفظ العقد والمستندات وبيانات العقار وإثبات الدفع. وتم مسح بيانات التسجيل المحلية ومفتاح تشفير جلسة المتصفح.',
                         )}
                     </Typography>
                     <Button onClick={() => window.location.assign('/owner/activation')} variant="contained" sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
@@ -422,31 +444,37 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
     }
 
     return (
-        <Box dir={ar ? 'rtl' : 'ltr'} sx={{ maxWidth: 840, mx: 'auto', width: '100%', py: { xs: 2, md: 4 }, pb: { xs: 12, md: 4 } }}>
+        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 840, mx: 'auto', width: '100%', py: { xs: 2, md: 4 }, pb: { xs: 12, md: 4 } }}>
             <Stack spacing={3}>
-                <Box sx={{ textAlign: 'center' }}>
+                <Box textAlign="center">
                     <Typography variant="h4" fontWeight={950} color="#fff">
                         {t('onboarding.payment_submission') || copy('Payment Submission', 'إرسال الدفع')}
                     </Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.58)', mt: 1 }}>
+                    <Typography color="rgba(255,255,255,0.58)" sx={{ mt: 1 }}>
                         {copy(
-                            'The signed package is saved before any external card checkout begins.',
-                            'يتم حفظ الحزمة الموقعة قبل بدء أي عملية دفع خارجية بالبطاقة.',
+                            'Your package uses the active server payment configuration and a locked server quotation.',
+                            'تستخدم الحزمة إعداد الدفع النشط من الخادم وعرض سعر مقفلاً من الخادم.',
                         )}
                     </Typography>
                 </Box>
 
                 {error && <Alert severity="error">{error}</Alert>}
+                {canonicalQuote && (
+                    <Alert severity="info">
+                        {copy(
+                            `Server quote ${canonicalQuote.version} verified.`,
+                            `تم التحقق من عرض الخادم ${canonicalQuote.version}.`,
+                        )}
+                    </Alert>
+                )}
 
                 {reauthRequired && (
                     <Paper sx={{ p: 2.5, bgcolor: 'rgba(0,0,0,0.45)' }}>
                         <Stack spacing={2}>
-                            <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
-                                {copy('Reconnect Owner Session', 'إعادة ربط جلسة المالك')}
-                            </Typography>
+                            <Typography color={binThemeTokens.gold} fontWeight={900}>{copy('Reconnect Owner Session', 'إعادة ربط جلسة المالك')}</Typography>
                             <TextField fullWidth label={copy('Owner Email', 'بريد المالك')} value={ownerEmail} disabled />
                             <TextField fullWidth label={copy('Owner Password', 'كلمة مرور المالك')} type="password" value={reauthPassword} onChange={(event) => setReauthPassword(event.target.value)} />
-                            <Button onClick={reconnectAndSubmit} disabled={loading} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
+                            <Button onClick={() => void reconnectAndSubmit()} disabled={loading} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
                                 {loading ? <CircularProgress size={20} color="inherit" /> : copy('Sign In and Submit', 'تسجيل الدخول والإرسال')}
                             </Button>
                         </Stack>
@@ -454,40 +482,28 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 )}
 
                 <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, mb: 2 }}>
-                        {copy('Payment Summary', 'ملخص الدفع')}
-                    </Typography>
-                    {canonicalQuote && (
-                        <Alert severity="info" sx={{ mb: 2 }}>
-                            {copy(
-                                `Server quote ${canonicalQuote.version} verified. Expires ${new Date(canonicalQuote.expiresAtMs).toLocaleString('en-AE')}.`,
-                                `تم التحقق من عرض الخادم ${canonicalQuote.version}. تنتهي صلاحيته في ${new Date(canonicalQuote.expiresAtMs).toLocaleString('ar-AE')}.`,
-                            )}
-                        </Alert>
-                    )}
+                    <Typography variant="h6" fontWeight={950} color={binThemeTokens.gold} sx={{ mb: 2 }}>{copy('Payment Summary', 'ملخص الدفع')}</Typography>
                     <Grid container spacing={2}>
                         <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Amount Due', 'المبلغ المستحق')}</Typography><Typography color="#fff" fontWeight={800}>AED {formatMoney(amountDue)}</Typography></Grid>
                         <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Payment Method', 'طريقة الدفع')}</Typography><Typography color="#fff" fontWeight={800}>{paymentMethod || copy('Not selected', 'غير محددة')}</Typography></Grid>
                         <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Annual Contract Value', 'قيمة العقد السنوية')}</Typography><Typography color="#fff" fontWeight={800}>AED {formatMoney(annualContractValue)}</Typography></Grid>
-                        <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Properties / Units', 'العقارات / الوحدات')}</Typography><Typography color="#fff" fontWeight={800}>{properties.length} / {portfolioSummary.totalUnits}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="rgba(255,255,255,0.5)">{copy('Payment Configuration', 'إعداد الدفع')}</Typography><Typography color="#fff" fontWeight={800}>{paymentManifest?.configVersion || '—'}</Typography></Grid>
                     </Grid>
                 </Paper>
 
                 {paymentMethod && paymentMethod !== 'STRIPE' && (
                     <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
                         <Stack spacing={2}>
-                            <Typography variant="h6" fontWeight={950} color="#fff">
-                                {copy('Manual Payment Evidence', 'إثبات الدفع اليدوي')}
-                            </Typography>
+                            <Typography variant="h6" fontWeight={950} color="#fff">{copy('Manual Payment Evidence', 'إثبات الدفع اليدوي')}</Typography>
                             <TextField
                                 fullWidth
                                 required
-                                label={copy('Bank transfer / cheque reference', 'مرجع التحويل البنكي / الشيك')}
+                                label={copy('Bank transfer / cheque / cash reference', 'مرجع التحويل البنكي / الشيك / النقد')}
                                 value={paymentReference}
                                 onChange={(event) => setPaymentReference(event.target.value)}
                             />
-                            <Button variant="outlined" component="label" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>
-                                {paymentReceipt ? paymentReceipt.name : copy('Attach receipt (PDF or image)', 'إرفاق الإيصال (PDF أو صورة)')}
+                            <Button component="label" variant="outlined" startIcon={<Upload size={18} />} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}>
+                                {paymentReceipt ? paymentReceipt.name : copy('Upload payment receipt', 'رفع إيصال الدفع')}
                                 <input
                                     hidden
                                     type="file"
@@ -500,76 +516,55 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 )}
 
                 <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <Typography variant="h6" fontWeight={950} color="#fff" sx={{ mb: 2 }}>
-                        {copy('Documents Ready for Secure Upload', 'المستندات الجاهزة للرفع الآمن')}
-                    </Typography>
-                    <Stack spacing={1.25}>
+                    <Typography variant="h6" fontWeight={950} color="#fff" sx={{ mb: 2 }}>{copy('Protected Documents', 'المستندات المحمية')}</Typography>
+                    <Stack spacing={1.5}>
                         {documentTypes.map((documentType) => {
-                            const file = proofDocuments[documentType.key];
-                            const progress = uploadProgress[documentType.key] || 0;
+                            const meta = proofDocuments[documentType.key];
+                            if (!meta) return null;
                             return (
-                                <Stack key={documentType.key} direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.28)' }}>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <FileText size={16} color={binThemeTokens.gold} />
-                                        <Box>
-                                            <Typography color="#fff" fontWeight={800}>{ar ? documentType.ar : documentType.en}</Typography>
-                                            {file && <Typography variant="caption" color="rgba(255,255,255,0.5)">{file.name}</Typography>}
-                                        </Box>
-                                    </Stack>
-                                    <Typography variant="caption" sx={{ color: file ? '#4ADE80' : 'rgba(255,255,255,0.45)', fontWeight: 800 }}>
-                                        {file ? (progress === 100 ? copy('Uploaded', 'تم الرفع') : copy('Ready', 'جاهز')) : copy('Not provided', 'غير مرفق')}
+                                <Box key={documentType.key} display="flex" alignItems="center" justifyContent="space-between" gap={2}>
+                                    <Box display="flex" alignItems="center" gap={1.5}>
+                                        <FileText size={18} color={binThemeTokens.gold} />
+                                        <Typography color="#fff" fontWeight={700}>{isRTL ? documentType.ar : documentType.en}</Typography>
+                                    </Box>
+                                    <Typography variant="caption" color={uploadProgress[documentType.key] === 100 ? '#4ADE80' : 'rgba(255,255,255,0.55)'}>
+                                        {uploadProgress[documentType.key] === 100 ? copy('Uploaded', 'تم الرفع') : copy('Encrypted locally', 'مشفر محلياً')}
                                     </Typography>
-                                </Stack>
+                                </Box>
                             );
                         })}
                     </Stack>
                 </Paper>
 
-                <Alert severity="info">
-                    {copy(
-                        'A successful card charge verifies funds only. Final dashboard activation still requires admin approval.',
-                        'نجاح الدفع بالبطاقة يثبت استلام المبلغ فقط. يتطلب تفعيل لوحة التحكم موافقة الإدارة النهائية.',
-                    )}
-                </Alert>
-
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                    <Button onClick={onBack} disabled={loading} fullWidth variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}>
-                        {copy('Back', 'رجوع')}
-                    </Button>
-                    <Button
-                        onClick={() => setConfirmDialog(true)}
-                        disabled={
-                            loading ||
-                            !ownerAccount?.uid ||
-                            !paymentMethod ||
-                            !isContractSigned ||
-                            amountDue <= 0 ||
-                            (paymentMethod !== 'STRIPE' && (paymentReference.trim().length < 4 || !paymentReceipt))
-                        }
-                        fullWidth
-                        variant="contained"
-                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                    >
-                        {loading ? <CircularProgress size={22} color="inherit" /> : <Stack direction="row" spacing={1} alignItems="center"><Upload size={18} />{copy(paymentMethod === 'STRIPE' ? 'Save Package and Open Checkout' : 'Submit Payment Package', paymentMethod === 'STRIPE' ? 'حفظ الحزمة وفتح الدفع' : 'إرسال حزمة الدفع')}</Stack>}
+                <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={2} justifyContent="space-between">
+                    <Button onClick={onBack} disabled={loading} variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}>{copy('Back', 'رجوع')}</Button>
+                    <Button onClick={() => setConfirmDialog(true)} disabled={loading || reauthRequired} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4 }}>
+                        {loading ? <CircularProgress size={20} color="inherit" /> : copy('Submit Secure Package', 'إرسال الحزمة الآمنة')}
                     </Button>
                 </Stack>
             </Stack>
 
-            <Dialog open={confirmDialog} onClose={() => setConfirmDialog(false)}>
+            <Dialog open={confirmDialog} onClose={() => !loading && setConfirmDialog(false)} dir={isRTL ? 'rtl' : 'ltr'}>
                 <DialogTitle>{copy('Confirm Submission', 'تأكيد الإرسال')}</DialogTitle>
                 <DialogContent>
-                    <Typography sx={{ mt: 1 }}>
+                    <Typography>
                         {copy(
-                            'The signed agreement, property data, proof documents, and canonical payment record will be saved before payment continues.',
-                            'سيتم حفظ الاتفاقية الموقعة وبيانات العقار والمستندات وسجل الدفع الأساسي قبل متابعة الدفع.',
+                            `Submit the signed package and the mandatory 15% mobilisation deposit evidence of AED ${formatMoney(amountDue)}?`,
+                            `هل تريد إرسال الحزمة الموقعة وإثبات دفعة التجهيز الإلزامية بنسبة 15٪ وبقيمة ${formatMoney(amountDue)} درهم؟`,
                         )}
                     </Typography>
-                    <Typography variant="body2" sx={{ mt: 2 }}>AED {formatMoney(amountDue)} · {paymentMethod}</Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmDialog(false)}>{copy('Cancel', 'إلغاء')}</Button>
-                    <Button onClick={() => { setConfirmDialog(false); void submitPayment(); }} variant="contained">
-                        {copy('Confirm and Continue', 'تأكيد ومتابعة')}
+                    <Button onClick={() => setConfirmDialog(false)} disabled={loading}>{copy('Cancel', 'إلغاء')}</Button>
+                    <Button
+                        onClick={() => {
+                            setConfirmDialog(false);
+                            void submitPayment();
+                        }}
+                        disabled={loading}
+                        variant="contained"
+                    >
+                        {copy('Confirm and Submit', 'تأكيد وإرسال')}
                     </Button>
                 </DialogActions>
             </Dialog>
