@@ -60,14 +60,35 @@ if (directClaimReference.test(text)) {
 }
 
 const router = `    function safeTicketUpdateByActor() {
-      // Exactly one actor branch performs database-backed authorization. This
-      // avoids Firestore evaluating four overlapping allow-update expressions
-      // on denied writes and exhausting the 1,000-expression budget.
-      return signedIn() && (
-        (hasAdminClaim() && isNotSuspended()) ||
-        (!hasAdminClaim() && hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
-        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
-        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
+      // Resolve authentication and actor claims once. Re-evaluating nested role,
+      // admin and dispatcher helpers in every denied branch can exhaust
+      // Firestore's 1,000-expression budget.
+      let authenticated = signedIn();
+      let role = authenticated
+        ? request.auth.token.get('role', request.auth.token.get('userRole', request.auth.token.get('primaryRole', '')))
+        : '';
+      let admin = authenticated && (
+        (
+          role == '' &&
+          (
+            request.auth.token.get('admin', false) == true ||
+            request.auth.token.get('isAdmin', false) == true
+          )
+        ) ||
+        request.auth.token.get('superAdmin', false) == true ||
+        request.auth.token.get('super_admin', false) == true ||
+        request.auth.token.get('ceo', false) == true ||
+        role in ['admin', 'super_admin', 'ceo']
+      );
+      let dispatcher = authenticated && (
+        ('permissions' in request.auth.token && request.auth.token.permissions.get('canDispatchJobs', false) == true) ||
+        role in ['operations_admin', 'operations_manager', 'dispatcher']
+      );
+      return authenticated && (
+        (admin && isNotSuspended()) ||
+        (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
+        (!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
+        (!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
       );
     }
 
@@ -104,6 +125,19 @@ if (text.split(canonicalUpdate).length - 1 !== 2) {
 }
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
+}
+
+for (const required of [
+  'let authenticated = signedIn();',
+  'let role = authenticated',
+  'let admin = authenticated && (',
+  'let dispatcher = authenticated && (',
+  '(admin && isNotSuspended())',
+  '(!admin && dispatcher && safeDispatcherTicketUpdate())',
+  "(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
+  "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())",
+]) {
+  if (!text.includes(required)) throw new Error(`[ticket-rule-binding] Bounded router fragment missing: ${required}`);
 }
 
 for (const forbidden of [
