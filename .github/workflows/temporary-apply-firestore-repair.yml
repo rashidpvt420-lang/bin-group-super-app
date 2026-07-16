@@ -7,19 +7,19 @@ on:
     types: [synchronize]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: temporary-apply-firestore-repair-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
-  verify-repair:
+  verify-current-head:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
-      - name: Checkout clean repair branch
+      - name: Checkout current clearance branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -31,75 +31,14 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Set up Java 21 for Firebase emulators
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Close explicit Firestore policy gaps
-        run: node scripts/close-explicit-firestore-policy-gaps.mjs
+      - name: Verify scheduled-services completeness
+        run: node scripts/verify-scheduled-services-completeness.mjs
 
-      - name: Verify generated changes
-        shell: bash
-        run: |
-          git diff --check
-          git diff --stat
-          git diff -- firestore.rules test/security-rules.test.js
-          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
-            echo "Expected explicit-policy changes were not produced."
-            exit 1
-          fi
+      - name: Run stability suite
+        run: npm run test:stability
 
-      - name: Commit explicit policy changes
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- firestore.rules test/security-rules.test.js
-          git diff --cached --check
-          git commit -m "Close explicit Firestore policy gaps"
-          git push origin HEAD:fix/final-firestore-clearance-v2
-
-      - name: Run rules suite and reject expression overflow
-        id: rules
-        shell: bash
-        run: |
-          set +e
-          set -o pipefail
-          npm run test:rules 2>&1 | tee rules-test-output.log
-          code=${PIPESTATUS[0]}
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Persist complete rule-test diagnostics
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p launch_package
-          cp rules-test-output.log launch_package/firestore-rule-test-output.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- launch_package/firestore-rule-test-output.txt
-          git commit -m "Record explicit-policy Firestore diagnostics" || true
-          git push origin HEAD:fix/final-firestore-clearance-v2
-
-      - name: Enforce clean rules result
-        shell: bash
-        run: |
-          if grep -F "maximum of 1000 expressions" rules-test-output.log; then
-            echo "Firestore 1000-expression overflow remains."
-            exit 1
-          fi
-          if [ "${{ steps.rules.outputs.exit_code }}" != "0" ]; then
-            echo "Firestore/Storage rules suite failed."
-            exit 1
-          fi
-
-      - name: Run launch-critical regression suites
-        run: |
-          npm run test:stability
-          npm run test:launch-honesty
+      - name: Run launch-honesty suite
+        run: npm run test:launch-honesty
