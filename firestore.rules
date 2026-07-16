@@ -1861,11 +1861,13 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
+      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
       allow create: if !(
         collection in [
           'system_secrets',
           'users',
+          'tickets',
+          'maintenanceTickets',
           'audit_logs',
           'auditLogs',
           'analytics_events',
@@ -1891,6 +1893,8 @@ service cloud.firestore {
         collection in [
           'system_secrets',
           'users',
+          'tickets',
+          'maintenanceTickets',
           'audit_logs',
           'auditLogs',
           'analytics_events',
