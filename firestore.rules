@@ -288,6 +288,14 @@ service cloud.firestore {
         );
     }
 
+    function hasApprovedTechnicianRecord() {
+      // Technician writes require the dedicated operational profile. The users
+      // document remains an identity/cache record and is not an approval source.
+      return signedIn() &&
+        exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) &&
+        approvedTechnicianProfile(get(/databases/$(database)/documents/technicians/$(request.auth.uid)).data);
+    }
+
     function isApprovedTechnician() {
       return hasTechnicianClaim() && (
         (
@@ -522,18 +530,16 @@ service cloud.firestore {
     }
 
     function safeTechnicianTicketUpdate() {
-      // Non-technicians, unassigned technicians, and unrelated mutations
-      // fail before suspension and approval profile reads.
-      return hasTechnicianClaim() &&
-        techOwns(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      // The outer allow rule already verifies the technician claim and current
+      // assignment. Keep this helper bounded to mutable evidence fields,
+      // suspension, dedicated-profile approval, final-state protection, and
+      // append-only completion proof.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
           'techNotes',
           'workNotes',
           'notes',
-          'beforePhotos',
-          'afterPhotos',
           'afterPhotoUrl',
           'proofPhotos',
           'completionPhotos',
@@ -548,23 +554,18 @@ service cloud.firestore {
           'technicianLocationUpdatedAt'
         ]) &&
         isNotSuspended() &&
-        isApprovedTechnician() &&
+        hasApprovedTechnicianRecord() &&
         !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
-        request.resource.data.get('beforePhotos', []).size() >= resource.data.get('beforePhotos', []).size() &&
-        request.resource.data.get('beforePhotos', []).hasAll(resource.data.get('beforePhotos', [])) &&
-        request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
-        request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', [])) &&
         request.resource.data.get('proofPhotos', []).size() >= resource.data.get('proofPhotos', []).size() &&
         request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', [])) &&
         request.resource.data.get('completionPhotos', []).size() >= resource.data.get('completionPhotos', []).size() &&
         request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', [])) &&
         request.resource.data.get('evidencePhotos', []).size() >= resource.data.get('evidencePhotos', []).size() &&
         request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', [])) &&
-        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)) &&
-        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.get('technicianId', null)) &&
-        (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.get('techId', null)) &&
-        (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.get('priority', null)) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null));
+        (
+          resource.data.get('afterPhotoUrl', '') == '' ||
+          request.resource.data.get('afterPhotoUrl', '') == resource.data.get('afterPhotoUrl', '')
+        );
     }
 
     function safeTechnicianProfileUpdate(techId) {
