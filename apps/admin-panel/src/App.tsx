@@ -27,6 +27,7 @@ import TenantsPage from './pages/tenants/TenantsManagementPage';
 import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import AdminSecurityProfilePage from './pages/settings/AdminSecurityProfilePage';
 import ReportsPage from './pages/reports/ReportsPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
 import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
@@ -85,7 +86,7 @@ function AppContent() {
             <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
                 <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
                 <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                    {t('dash.command_subtitle') || 'Authenticating Admin Command Center'}
+                    {t('dash.command_subtitle') || (isRTL ? 'جارٍ التحقق من مركز قيادة المسؤول' : 'Authenticating Admin Command Center')}
                 </Typography>
             </Box>
         );
@@ -99,6 +100,7 @@ function AppContent() {
                 <Route element={<Layout />}>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute adminOnly><AdminSecurityProfilePage /></ProtectedRoute>} />
                     <Route path="/financials" element={<ProtectedRoute adminOnly><ProfitabilityDashboardPage /></ProtectedRoute>} />
                     <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
                     <Route path="/transactions" element={<ProtectedRoute adminOnly><TransactionsPage /></ProtectedRoute>} />
@@ -176,9 +178,11 @@ function Layout() {
     const { t, isRTL } = useLanguage();
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const shellText = (en: string, ar: string) => (isRTL ? ar : en);
 
     const handleLogout = async () => {
         try {
+            sessionStorage.removeItem('bin-admin-security-session');
             await logout();
         } catch (error) {
             console.error('Admin logout failure:', error);
@@ -193,22 +197,35 @@ function Layout() {
                 <BrandWatermark opacity={0.035} />
                 <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100 }}>
                     <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                        {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>COMMAND · UAE 🇦🇪</Box>
+                        {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>{shellText('COMMAND · UAE 🇦🇪', 'القيادة · الإمارات 🇦🇪')}</Box>
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <LanguageSwitcher />
                         <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <Box
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate('/profile')}
+                            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') navigate('/profile'); }}
+                            sx={{ width: '1px', height: 24, display: 'none' }}
+                        />
+                        <Box
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate('/profile')}
+                            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') navigate('/profile'); }}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}
+                        >
                             <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <UserIcon size={14} color="#000" />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || 'ADMIN'}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || 'operator'}</Typography>
+                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || shellText('ADMIN', 'مسؤول')}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || shellText('operator', 'مشغّل')}</Typography>
                             </Box>
                         </Box>
                         <Button onClick={handleLogout} data-testid="admin-logout" startIcon={<LogOut size={16} />} sx={{ color: '#ef4444', fontWeight: 900, fontSize: '0.75rem', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>
-                            {t('nav.logout') || 'LOGOUT'}
+                            {t('nav.logout') || shellText('LOGOUT', 'تسجيل الخروج')}
                         </Button>
                     </Box>
                 </Box>
@@ -217,7 +234,7 @@ function Layout() {
                     <Box sx={{ flexGrow: 1 }}><Outlet /></Box>
                     <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
                         <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
-                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | MADE IN UAE 🇦🇪
+                            © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | {shellText('MADE IN UAE 🇦🇪', 'صُنع في الإمارات 🇦🇪')}
                         </Typography>
                     </Box>
                 </Box>

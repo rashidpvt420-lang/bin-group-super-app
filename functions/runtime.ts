@@ -20,6 +20,7 @@ export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./adminUserProvisioning";
 export * from "./adminBridgeAuth";
+export * from "./adminSecurityProfile";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./contractSignatureOtp";
