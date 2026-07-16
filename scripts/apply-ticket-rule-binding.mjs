@@ -23,7 +23,6 @@ function removeRuleFunction(functionName) {
   while (true) {
     const start = text.indexOf(needle);
     if (start < 0) break;
-
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
 
@@ -40,14 +39,11 @@ function removeRuleFunction(functionName) {
         }
       }
     }
-
     if (end < 0) throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
-
     text = `${text.slice(0, start)}${text.slice(end)}`;
     removed += 1;
     changed = true;
   }
-
   return removed;
 }
 
@@ -94,12 +90,10 @@ if (text.includes(monolithicUpdate)) {
   text = text.split(monolithicUpdate).join(canonicalUpdate);
   changed = true;
 }
-for (let index = 0; index <= splitRules.length - 4; index += 1) {
-  const block = splitRules.join('\n');
-  if (text.includes(block)) {
-    text = text.split(block).join(canonicalUpdate);
-    changed = true;
-  }
+const splitBlock = splitRules.join('\n');
+if (text.includes(splitBlock)) {
+  text = text.split(splitBlock).join(canonicalUpdate);
+  changed = true;
 }
 
 if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
@@ -108,7 +102,7 @@ if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
 if (text.split(canonicalUpdate).length - 1 !== 2) {
   throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates.');
 }
-if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 2) {
+if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 }
 
@@ -132,7 +126,4 @@ if (!text.includes(canonicalCreate)) {
 }
 
 if (changed) writeFileSync(file, text);
-
-console.log(
-  `Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`,
-);
+console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
