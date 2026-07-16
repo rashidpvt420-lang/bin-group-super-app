@@ -1,3 +1,4 @@
+// Combined-candidate guard: verifier recovery plus server-authoritative Admin security profile.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
