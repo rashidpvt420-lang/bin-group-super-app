@@ -67,7 +67,7 @@ const required = [
   'let dispatcher = authenticated && (',
   '(admin && isNotSuspended())',
   '(!admin && dispatcher && safeDispatcherTicketUpdate())',
-  "(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
+  "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
   "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())",
   'return hasDispatchAuthorityClaimOnly() && isNotSuspended();',
   'function hasApprovedTechnicianRecord() {',
