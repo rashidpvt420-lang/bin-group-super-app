@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-current-head:
+  capture-launch-honesty:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -34,28 +34,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Align scheduled fallback verifier
-        run: node scripts/fix-scheduled-fallback-verifier.mjs
-
-      - name: Commit verifier alignment
+      - name: Run and capture launch-honesty suite
+        id: honesty
         shell: bash
         run: |
-          git diff --check
-          if git diff --quiet -- scripts/verify-scheduled-services-completeness.mjs; then
-            echo "Expected scheduled verifier change was not produced."
-            exit 1
-          fi
+          set +e
+          set -o pipefail
+          npm run test:launch-honesty 2>&1 | tee launch-honesty-output.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Persist launch-honesty diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p launch_package
+          cp launch-honesty-output.log launch_package/launch-honesty-output.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- scripts/verify-scheduled-services-completeness.mjs
-          git commit -m "Validate fail-closed fallback outcomes"
+          git add -- launch_package/launch-honesty-output.txt
+          git commit -m "Record launch-honesty diagnostics" || true
           git push origin HEAD:fix/final-firestore-clearance-v2
 
-      - name: Verify scheduled-services completeness
-        run: node scripts/verify-scheduled-services-completeness.mjs
-
-      - name: Run stability suite
-        run: npm run test:stability
-
-      - name: Run launch-honesty suite
-        run: npm run test:launch-honesty
+      - name: Enforce launch-honesty result
+        shell: bash
+        run: |
+          if [ "${{ steps.honesty.outputs.exit_code }}" != "0" ]; then
+            echo "Launch-honesty suite failed."
+            exit 1
+          fi
