@@ -2,6 +2,22 @@ import { readFileSync } from 'node:fs';
 
 const rules = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
 
+function readFunction(name) {
+  const needle = `    function ${name}(`;
+  const start = rules.indexOf(needle);
+  if (start < 0) return null;
+  const open = rules.indexOf('{', start);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
 const forbiddenFragments = [
   {
     label: 'broad tenant property read fallback',
@@ -67,8 +83,12 @@ const requiredFragments = [
     text: 'function hasNonAdminDispatchClaimOnly() {',
   },
   {
-    label: 'approved technician helper',
+    label: 'approved technician read helper',
     text: 'function isApprovedTechnician() {',
+  },
+  {
+    label: 'dedicated technician write-approval helper',
+    text: 'function hasApprovedTechnicianRecord() {',
   },
   {
     label: 'tenant ticket unit/property binding helper',
@@ -97,10 +117,6 @@ const requiredFragments = [
   {
     label: 'technician evidence update is explicitly actor-and-assignment-gated',
     text: 'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
-  },
-  {
-    label: 'technician cannot replace assigned technician identity',
-    text: "request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)",
   },
   {
     label: 'payment transaction writes are server-only',
@@ -147,6 +163,32 @@ for (const rule of [
 ]) {
   if ((rules.split(rule).length - 1) !== 2) {
     failures.push(`Explicit actor-gated ticket update rule must exist exactly twice: ${rule}`);
+  }
+}
+
+const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
+if (!technicianUpdate) {
+  failures.push('Technician update helper could not be parsed.');
+} else {
+  for (const forbiddenField of [
+    "'assignedTechnicianId',",
+    "'technicianId',",
+    "'techId',",
+    "'priority',",
+    "'paymentVerified',",
+  ]) {
+    if (technicianUpdate.includes(forbiddenField)) {
+      failures.push(`Technician update allowlist exposes immutable field: ${forbiddenField}`);
+    }
+  }
+  for (const requiredProof of [
+    "request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))",
+    "request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))",
+    "request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))",
+  ]) {
+    if (!technicianUpdate.includes(requiredProof)) {
+      failures.push(`Technician append-only proof guard missing: ${requiredProof}`);
+    }
   }
 }
 
