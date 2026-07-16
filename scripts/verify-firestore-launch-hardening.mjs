@@ -50,8 +50,11 @@ const requiredFragments = [
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
   ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
-  ['tenant branch uses ownership', 'tenantOwns(resource.data) && safeTenantEvidenceUpdate()'],
-  ['technician branch is role-discriminated', "claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()"],
+  ['conditional unauthenticated branch', 'return !signedIn() ? false :'],
+  ['conditional admin branch', 'hasAdminClaim() ? isNotSuspended() :'],
+  ['conditional dispatcher branch', 'hasNonAdminDispatchClaimOnly() ? safeDispatcherTicketUpdate() :'],
+  ['conditional technician branch', "claimedRole() in ['technician', 'tech'] ? (techOwns(resource.data) && safeTechnicianTicketUpdate()) :"],
+  ['conditional tenant branch', 'tenantOwns(resource.data) ? safeTenantEvidenceUpdate() :'],
   ['technician checks changed fields', 'let changed = request.resource.data.diff(resource.data).affectedKeys();'],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
@@ -76,12 +79,13 @@ if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failur
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) failures.push('Ticket update router could not be parsed.');
 else {
-  const admin = router.indexOf('(hasAdminClaim() && isNotSuspended())');
-  const dispatcher = router.indexOf('hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()');
-  const technician = router.indexOf("claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()");
-  const tenant = router.indexOf('tenantOwns(resource.data) && safeTenantEvidenceUpdate()');
-  if (admin < 0 || dispatcher < 0 || technician < 0 || tenant < 0 || !(admin < dispatcher && dispatcher < technician && technician < tenant)) failures.push('Ticket update router must short-circuit in admin, dispatcher, technician, tenant order.');
-  if (router.includes('!hasAdminClaim()') || router.includes('!hasNonAdminDispatchClaimOnly()')) failures.push('Ticket router must not repeat expensive negative authority predicates.');
+  const unauthenticated = router.indexOf('return !signedIn() ? false :');
+  const admin = router.indexOf('hasAdminClaim() ? isNotSuspended() :');
+  const dispatcher = router.indexOf('hasNonAdminDispatchClaimOnly() ? safeDispatcherTicketUpdate() :');
+  const technician = router.indexOf("claimedRole() in ['technician', 'tech'] ? (techOwns(resource.data) && safeTechnicianTicketUpdate()) :");
+  const tenant = router.indexOf('tenantOwns(resource.data) ? safeTenantEvidenceUpdate() :');
+  if (unauthenticated < 0 || admin < 0 || dispatcher < 0 || technician < 0 || tenant < 0 || !(unauthenticated < admin && admin < dispatcher && dispatcher < technician && technician < tenant)) failures.push('Ticket update router must dispatch through nested conditions in unauthenticated, admin, dispatcher, technician, tenant order.');
+  if (router.includes('||')) failures.push('Ticket update router must not use overlapping OR branches.');
 }
 
 const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
