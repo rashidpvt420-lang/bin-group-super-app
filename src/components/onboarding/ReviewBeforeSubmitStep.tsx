@@ -23,13 +23,14 @@ const badCopy = (value?: string) => {
     return !text || text.includes('.') || /\b(Title|Desc|Btn|Val|Perf)\b/i.test(text);
 };
 
+export const reviewPlanKeyForStrategy = (strategy?: string) => {
+    if (strategy === 'fm_only' || strategy === 'fm') return 'amc';
+    if (strategy === 'pm_only' || strategy === 'rent') return 'pm';
+    return 'ifm';
+};
+
 const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const {
-        companyProfile,
-        properties,
-        portfolioSummary,
-        ownerAccount
-    } = useOnboardingStore();
+    const { companyProfile, properties, portfolioSummary, ownerAccount } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
     const copy = (key: string, fallback: string, variables?: Record<string, any>) => {
@@ -39,7 +40,12 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
 
     const primaryProperty = properties[0];
     const quote = portfolioSummary.quoteResults?.[primaryProperty?.id];
-    const planKey = primaryProperty?.strategy === 'fm' ? 'amc' : (primaryProperty?.strategy === 'rent' ? 'pm' : 'ifm');
+    const planKey = reviewPlanKeyForStrategy(primaryProperty?.strategy);
+    const planFallback = planKey === 'amc'
+        ? 'Maintenance Only'
+        : planKey === 'pm'
+            ? 'Property Management Only'
+            : 'Maintenance + Property Management';
     const installmentValue = primaryProperty?.paymentPlan === 'monthly'
         ? quote?.monthlyPayment || 0
         : (primaryProperty?.paymentPlan === 'quarterly' ? quote?.quarterlyPayment || 0 : quote?.annualTotal || 0);
@@ -84,7 +90,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                     <Paper sx={{ p: 3, height: '100%', borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.07)', textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy('onboarding.contract_perf', 'Contract Performance')}</Typography>
                         <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{copy(`onboarding.plan.${planKey}`, planKey === 'ifm' ? 'Maintenance + Property Management' : 'Maintenance Only')}</Typography>
+                            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{copy(`onboarding.plan.${planKey}`, planFallback)}</Typography>
                             <Chip label={copy(`onboarding.sla.${primaryProperty?.slaTier}`, primaryProperty?.slaTier || 'Standard')} size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
                         </Stack>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.44)', fontWeight: 900, display: 'block', mb: 2 }}>{copy('onboarding.pricing_explanation', 'Pricing Explanation')}</Typography>
