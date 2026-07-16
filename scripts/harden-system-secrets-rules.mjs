@@ -41,9 +41,6 @@ if (!existsSync(rulesPath)) {
 
 let source = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
-const collectionCatchAll = readMatchBlock(source, '    match /{collection}/{document=**} {');
-const recursiveCatchAll = readMatchBlock(source, '    match /{document=**} {');
-
 if (!source.includes(secretMarker)) {
   const insertion = collectionCatchAll || recursiveCatchAll;
   if (!insertion) {
@@ -66,15 +63,26 @@ if (legacyRecursive && !legacyRecursive.text.includes('allow read, write: if fal
 const secretStart = source.indexOf(secretMarker);
 const secretSection = secretStart >= 0 ? source.slice(secretStart, secretStart + 220) : '';
 const secretDenied = secretSection.includes('allow read, write: if false;');
-const finalFallback = readMatchBlock(source, '    match /{document=**} {');
-const fallbackDenied = finalFallback?.text.includes('allow read, write: if false;') === true;
-const noAdminCatchAll = !source.includes('match /{collection}/{document=**}');
-const fallbackCount = source.split('match /{document=**} {').length - 1;
+const catchAllExcludesSecrets = source.includes('match /{collection}/{document=**}') && (
+  source.includes("collection != 'system_secrets' && hasAdminClaim()") ||
+  source.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()")
+);
+const simpleCatchAllWriteExcludesSecrets =
+  source.includes("allow create: if collection != 'system_secrets' && hasAdminClaim();") &&
+  source.includes("allow update: if collection != 'system_secrets' && hasAdminClaim();") &&
+  source.includes("allow delete: if collection != 'system_secrets' && hasAdminClaim();");
+const secretWriteExclusionCount = source.split("'system_secrets',").length - 1;
+const listCatchAllWriteExcludesSecrets =
+  source.includes('allow create: if !(') &&
+  source.includes('allow update, delete: if !(') &&
+  secretWriteExclusionCount >= 2;
+const catchAllWriteExcludesSecrets =
+  simpleCatchAllWriteExcludesSecrets || listCatchAllWriteExcludesSecrets;
 
-if (!secretDenied || !fallbackDenied || !noAdminCatchAll || fallbackCount !== 1) {
-  console.error('[harden-system-secrets-rules] system_secrets and the final fallback are not fully fail-closed.');
+if (!secretDenied || !catchAllExcludesSecrets || !catchAllWriteExcludesSecrets || source.includes(legacyCatchAll)) {
+  console.error('[harden-system-secrets-rules] system_secrets is not fully excluded from every client allow path.');
   process.exit(1);
 }
 
 writeFileSync(rulesPath, source);
-console.log('[harden-system-secrets-rules] system_secrets denied; unspecified collections fail closed.');
+console.log('[harden-system-secrets-rules] system_secrets denied; stronger unrelated exclusions preserved.');

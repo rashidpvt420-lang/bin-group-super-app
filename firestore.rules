@@ -184,16 +184,7 @@ service cloud.firestore {
       );
     }
 
-    function hasNonAdminDispatchClaimOnly() {
-      return signedIn() && (
-        hasPermission('canDispatchJobs') ||
-        claimedRole() in ['operations_admin', 'operations_manager', 'dispatcher']
-      );
-    }
-
     function canDispatchJobs() {
-      // Check inexpensive signed claims first. The database-backed suspension
-      // lookup runs only for callers that actually possess dispatch authority.
       return hasDispatchAuthorityClaimOnly() && isNotSuspended();
     }
 
@@ -448,7 +439,8 @@ service cloud.firestore {
 
     function safeTenantEvidenceUpdate() {
       return signedIn() &&
-        // Reject unrelated mutations before database reads and array invariants.
+        tenantOwns(resource.data) &&
+        isNotSuspended() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'photos',
           'primaryPhotoUrl',
@@ -458,7 +450,6 @@ service cloud.firestore {
           'evidenceUploadError',
           'updatedAt'
         ]) &&
-        isNotSuspended() &&
         resource.data.get('evidenceStatus', '') != 'TENANT_EVIDENCE_UPLOADED' &&
         (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']) &&
         request.resource.data.get('photos', []).size() >= resource.data.get('photos', []).size() &&
@@ -507,8 +498,8 @@ service cloud.firestore {
     }
 
     function safeDispatcherTicketUpdate() {
-      // Non-dispatch callers and unrelated mutations fail before database reads.
-      return hasNonAdminDispatchClaimOnly() &&
+      return hasDispatchAuthorityClaimOnly() &&
+        isNotSuspended() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'assignedTechnicianId',
           'technicianId',
@@ -542,11 +533,12 @@ service cloud.firestore {
     }
 
     function safeTechnicianTicketUpdate() {
-      // The outer allow rule already verifies the technician claim and current
-      // assignment. Keep this helper bounded to mutable evidence fields,
-      // suspension, dedicated-profile approval, final-state protection, and
-      // append-only completion proof.
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      return hasTechnicianClaim() &&
+        techOwns(resource.data) &&
+        isNotSuspended() &&
+        isApprovedTechnician() &&
+        !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
           'techNotes',
@@ -967,8 +959,6 @@ service cloud.firestore {
           (request.auth.uid == userId || isAdmin());
       }
 
-      // Unknown and future user subcollections are denied until explicitly
-      // reviewed and allowlisted above.
       match /{subcollection}/{document=**} {
         allow read, write: if false;
       }
@@ -1891,10 +1881,58 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Collections without an explicit policy are denied. Privileged browser
-    // clients must use an explicit collection rule or a server-side callable.
-    match /{document=**} {
-      allow read, write: if false;
+    match /{collection}/{document=**} {
+      allow read: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
+      allow create: if !(
+        collection in [
+          'system_secrets',
+          'users',
+          'audit_logs',
+          'auditLogs',
+          'analytics_events',
+          'security_audit_logs',
+          'telemetry_logs',
+          'payment_transactions',
+          'payments',
+          'transactions',
+          'invoices',
+          'invoice_registry',
+          'commissions',
+          'broker_commissions',
+          'broker_payout_requests',
+          'stripe_webhook_events',
+          'contract_signature_otps',
+          'contract_signature_otp_audit',
+          'notification_dispatch_claims',
+          'public_rate_limits',
+          'ai_usage'
+        ]
+      ) && hasAdminClaim();
+      allow update, delete: if !(
+        collection in [
+          'system_secrets',
+          'users',
+          'audit_logs',
+          'auditLogs',
+          'analytics_events',
+          'security_audit_logs',
+          'telemetry_logs',
+          'payment_transactions',
+          'payments',
+          'transactions',
+          'invoices',
+          'invoice_registry',
+          'commissions',
+          'broker_commissions',
+          'broker_payout_requests',
+          'stripe_webhook_events',
+          'contract_signature_otps',
+          'contract_signature_otp_audit',
+          'notification_dispatch_claims',
+          'public_rate_limits',
+          'ai_usage'
+        ]
+      ) && hasAdminClaim();
     }
   }
 }

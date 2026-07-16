@@ -994,37 +994,39 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(selfDb, 'users/some_user/fcmTokens/token_123')));
   });
 
-  it('explicit user subcollection allowlist blocks unknown paths and enforces role policy', async () => {
+  it('explicit user subcollection allowlist enforces read/write policy and denies unknown paths', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'users/user_a'), { role: 'tenant', suspended: false });
-    await setDoc(doc(adminDb, 'users/user_b'), { role: 'tenant', suspended: false });
+    await setDoc(doc(adminDb, 'users/user_a'), { role: 'tenant', status: 'active' });
+    await setDoc(doc(adminDb, 'users/user_b'), { role: 'tenant', status: 'active' });
 
     const selfDb = testEnv.authenticatedContext('user_a', { role: 'tenant' }).firestore();
     const otherDb = testEnv.authenticatedContext('user_b', { role: 'tenant' }).firestore();
     const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin' }).firestore();
+    const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
+    const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
 
     const selfToken = doc(selfDb, 'users/user_a/fcmTokens/token_self');
     await assertSucceeds(setDoc(selfToken, { token: 'token_self', platform: 'web' }));
     await assertSucceeds(getDoc(selfToken));
     await assertSucceeds(updateDoc(selfToken, { platform: 'android-web' }));
-
     await assertSucceeds(getDoc(doc(adminDb, 'users/user_a/fcmTokens/token_self')));
     await assertSucceeds(getDoc(doc(hrDb, 'users/user_a/fcmTokens/token_self')));
+    await assertFails(getDoc(doc(opsDb, 'users/user_a/fcmTokens/token_self')));
+    await assertFails(getDoc(doc(financeDb, 'users/user_a/fcmTokens/token_self')));
+    await assertFails(getDoc(doc(otherDb, 'users/user_a/fcmTokens/token_self')));
     await assertFails(updateDoc(doc(hrDb, 'users/user_a/fcmTokens/token_self'), { platform: 'forged' }));
 
-    await assertFails(getDoc(doc(otherDb, 'users/user_a/fcmTokens/token_self')));
-    await assertFails(setDoc(doc(otherDb, 'users/user_a/fcmTokens/token_other'), { token: 'token_other' }));
-
-    await assertSucceeds(setDoc(doc(selfDb, 'users/user_a/deviceReadiness/push'), {
-      platform: 'web',
-      supportsMessaging: true,
-    }));
+    const readiness = doc(selfDb, 'users/user_a/deviceReadiness/push');
+    await assertSucceeds(setDoc(readiness, { platform: 'web', supportsMessaging: true }));
+    await assertSucceeds(getDoc(readiness));
     await assertSucceeds(getDoc(doc(adminDb, 'users/user_a/deviceReadiness/push')));
     await assertSucceeds(getDoc(doc(hrDb, 'users/user_a/deviceReadiness/push')));
+    await assertFails(getDoc(doc(opsDb, 'users/user_a/deviceReadiness/push')));
+    await assertFails(getDoc(doc(financeDb, 'users/user_a/deviceReadiness/push')));
     await assertFails(setDoc(doc(hrDb, 'users/user_a/deviceReadiness/forged'), { platform: 'forged' }));
 
-    for (const database of [selfDb, adminDb, hrDb]) {
+    for (const database of [selfDb, adminDb, hrDb, opsDb, financeDb]) {
       await assertFails(setDoc(doc(database, 'users/user_a/permissions/escalated'), { admin: true }));
       await assertFails(setDoc(doc(database, 'users/user_a/security/session'), { bypass: true }));
     }
@@ -1037,13 +1039,14 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(deleteDoc(selfToken));
   });
 
-  it('stale-token database suspension blocks all critical client write paths', async () => {
+  it('production-shaped stale-token suspension blocks critical client writes', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     await setDoc(doc(adminDb, 'users/suspended_tenant'), {
       role: 'tenant',
-      suspended: true,
+      status: 'suspended',
+      suspended: false,
       propertyId: 'prop_suspended',
       unitId: 'unit_suspended',
     });
@@ -1053,7 +1056,6 @@ describe('Firestore Security Rules', () => {
       propertyId: 'prop_suspended',
       ownerId: 'owner_suspended',
     });
-
     const existingTenantTicket = {
       tenantId: 'suspended_tenant',
       tenantUid: 'suspended_tenant',
@@ -1070,10 +1072,7 @@ describe('Firestore Security Rules', () => {
     await setDoc(doc(adminDb, 'tickets/suspended_tenant_existing'), existingTenantTicket);
     await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tenant_existing'), existingTenantTicket);
 
-    const staleTenantDb = testEnv.authenticatedContext('suspended_tenant', {
-      role: 'tenant',
-    }).firestore();
-
+    const staleTenantDb = testEnv.authenticatedContext('suspended_tenant', { role: 'tenant' }).firestore();
     const newTicket = {
       tenantId: 'suspended_tenant',
       tenantUid: 'suspended_tenant',
@@ -1097,32 +1096,26 @@ describe('Firestore Security Rules', () => {
       photos: ['https://storage.example.com/suspended.jpg'],
       updatedAt: new Date().toISOString(),
     }));
-    await assertFails(setDoc(doc(staleTenantDb, 'users/suspended_tenant/fcmTokens/blocked'), {
-      token: 'blocked',
-    }));
+    await assertFails(setDoc(doc(staleTenantDb, 'users/suspended_tenant/fcmTokens/blocked'), { token: 'blocked' }));
 
-    await setDoc(doc(adminDb, 'users/suspended_owner'), { role: 'owner', suspended: true });
+    await setDoc(doc(adminDb, 'users/suspended_owner'), { role: 'owner', status: 'suspended', suspended: false });
     await setDoc(doc(adminDb, 'properties/suspended_owner_existing'), {
       ownerId: 'suspended_owner',
       status: 'draft',
       name: 'Existing property',
     });
-    const staleOwnerDb = testEnv.authenticatedContext('suspended_owner', {
-      role: 'owner',
-    }).firestore();
+    const staleOwnerDb = testEnv.authenticatedContext('suspended_owner', { role: 'owner' }).firestore();
     await assertFails(setDoc(doc(staleOwnerDb, 'properties/suspended_owner_new'), {
       ownerId: 'suspended_owner',
       status: 'draft',
       name: 'Blocked property',
     }));
-    await assertFails(updateDoc(doc(staleOwnerDb, 'properties/suspended_owner_existing'), {
-      name: 'Blocked update',
-    }));
+    await assertFails(updateDoc(doc(staleOwnerDb, 'properties/suspended_owner_existing'), { name: 'Blocked update' }));
 
     await setDoc(doc(adminDb, 'users/suspended_tech'), {
       role: 'technician',
-      suspended: true,
-      status: 'active',
+      status: 'suspended',
+      suspended: false,
       approvalStatus: 'approved',
     });
     await setDoc(doc(adminDb, 'technicians/suspended_tech'), {
@@ -1142,10 +1135,7 @@ describe('Firestore Security Rules', () => {
     };
     await setDoc(doc(adminDb, 'tickets/suspended_tech_existing'), existingTechTicket);
     await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tech_existing'), existingTechTicket);
-
-    const staleTechDb = testEnv.authenticatedContext('suspended_tech', {
-      role: 'technician',
-    }).firestore();
+    const staleTechDb = testEnv.authenticatedContext('suspended_tech', { role: 'technician' }).firestore();
     await assertFails(updateDoc(doc(staleTechDb, 'tickets/suspended_tech_existing'), {
       technicianNotes: 'Blocked stale-token update',
       updatedAt: new Date().toISOString(),

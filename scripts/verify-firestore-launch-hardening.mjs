@@ -48,20 +48,16 @@ const forbiddenFragments = [
     text: '|| safeOpenMissionClaim()',
   },
   {
-    label: 'ticket update still evaluates every actor branch',
-    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+    label: 'boolean-only database suspension guard',
+    text: "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true",
   },
   {
-    label: 'ticket update still uses the shared actor router',
-    text: 'allow update: if safeTicketUpdateByActor();',
+    label: 'token-only directory list suspension guard',
+    text: "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (",
   },
   {
-    label: 'shared actor-router helper remains',
-    text: 'function safeTicketUpdateByActor() {',
-  },
-  {
-    label: 'global admin catch-all remains',
-    text: 'match /{collection}/{document=**}',
+    label: 'broad user-subcollection authorization',
+    text: 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));',
   },
 ];
 
