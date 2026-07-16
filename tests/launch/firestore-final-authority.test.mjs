@@ -25,8 +25,10 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /return hasDispatchAuthorityClaimOnly\(\) && isNotSuspended\(\);/);
     assert.match(rules, /function safeTicketUpdateByActor\(\)/);
     assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
-    assert.match(rules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
     assert.match(rules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
+    assert.match(rules, /tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
+    assert.match(rules, /let changed = request\.resource\.data\.diff\(resource\.data\)\.affectedKeys\(\);/);
+    assert.match(rules, /!changed\.hasAny\(\['afterPhotos'\]\)/);
     assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
     assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
     assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\n\s*allow read, write: if false;/);
