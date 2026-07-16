@@ -26,13 +26,19 @@ test('logout clears onboarding records and does not preserve the onboarding blob
 
 test('payment instructions are server-authoritative and versioned', async () => {
   const server = await read('functions/paymentConfiguration.ts');
+  const packageGate = await read('functions/secureOwnerRegistrationRequest.ts');
   const client = await read('src/components/onboarding/PaymentSummaryStep.tsx');
   const submission = await read('src/components/onboarding/PaymentSubmissionStep.tsx');
+  const runtime = await read('functions/runtime.ts');
 
   assert.match(server, /system_payment_config/);
   assert.match(server, /EXPECTED_BENEFICIARY = "BIN GROUP L\.L\.C - S\.P\.C"/);
   assert.match(server, /\^AE\\d\{21\}\$/);
   assert.match(server, /configHash/);
+  assert.match(packageGate, /assertCurrentPaymentConfiguration/);
+  assert.match(packageGate, /submittedVersion !== activeConfiguration\.version/);
+  assert.match(packageGate, /submittedHash !== activeConfiguration\.configHash/);
+  assert.match(packageGate, /submitted bank-transfer instructions do not match/);
   assert.match(client, /getOwnerPaymentConfiguration/);
   assert.match(client, /configVersion: configuration\.version/);
   assert.match(client, /configHash: configuration\.configHash/);
@@ -41,6 +47,8 @@ test('payment instructions are server-authoritative and versioned', async () => 
   assert.match(submission, /paymentConfigVersion: paymentManifest\.configVersion/);
   assert.match(submission, /paymentConfigHash: paymentManifest\.configHash/);
   assert.match(submission, /reset\(\)/);
+  assert.match(runtime, /export \* from "\.\/secureOwnerRegistrationRequest"/);
+  assert.doesNotMatch(runtime, /export \* from "\.\/ownerRegistrationRequest"/);
 });
 
 test('owner activation geo gate fails closed', async () => {
