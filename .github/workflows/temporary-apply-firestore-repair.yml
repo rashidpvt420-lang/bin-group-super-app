@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened]
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -40,8 +40,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Split ticket update authorization by actor
-        run: node scripts/split-ticket-update-rules.mjs
+      - name: Optimize technician evidence authorization
+        run: node scripts/optimize-technician-ticket-update.mjs
 
       - name: Verify generated changes
         shell: bash
@@ -50,7 +50,7 @@ jobs:
           git diff --stat
           git diff -- firestore.rules
           if git diff --quiet -- firestore.rules; then
-            echo "Expected split ticket-rule changes were not produced."
+            echo "Expected technician-rule optimization was not produced."
             exit 1
           fi
 
@@ -61,7 +61,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- firestore.rules
           git diff --cached --check
-          git commit -m "Split ticket updates into explicit actor-gated rules"
+          git commit -m "Bound technician evidence rule complexity"
           git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Run rules suite and reject expression overflow
@@ -84,7 +84,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- launch_package/firestore-rule-test-output.txt
-          git commit -m "Record split-rule Firestore diagnostics" || true
+          git commit -m "Record bounded technician-rule diagnostics" || true
           git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Enforce clean rules result
