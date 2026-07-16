@@ -97,18 +97,25 @@ const simpleReadExclusion = catchAllText.includes(
 const listReadExclusion = /allow read: if !\(collection in \[[^\]]*'system_secrets'[^\]]*\]\) && hasAdminClaim\(\);/.test(
   catchAllText,
 );
-const catchAllExcludesSecrets = simpleReadExclusion || listReadExclusion;
+const boundedListReadExclusion = /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \[[^\]]*'system_secrets'[^\]]*\]\) && hasAdminClaim\(\);/.test(
+  catchAllText,
+);
+const catchAllExcludesSecrets = simpleReadExclusion || listReadExclusion || boundedListReadExclusion;
 
 const simpleCatchAllWriteExcludesSecrets =
   catchAllText.includes("allow create: if collection != 'system_secrets' && hasAdminClaim();") &&
   catchAllText.includes("allow update: if collection != 'system_secrets' && hasAdminClaim();") &&
   catchAllText.includes("allow delete: if collection != 'system_secrets' && hasAdminClaim();");
 
-const createRule = catchAllText.match(/allow create: if !\([\s\S]*?\) && hasAdminClaim\(\);/)?.[0] || '';
+const boundedTicketPrefix = "collection != 'tickets' && collection != 'maintenanceTickets' && ";
+const createRule =
+  catchAllText.match(/allow create: if (?:collection != 'tickets' && collection != 'maintenanceTickets' && )?!\([\s\S]*?\) && hasAdminClaim\(\);/)?.[0] || '';
 const updateDeleteRule =
-  catchAllText.match(/allow update, delete: if !\([\s\S]*?\) && hasAdminClaim\(\);/)?.[0] || '';
+  catchAllText.match(/allow update, delete: if (?:collection != 'tickets' && collection != 'maintenanceTickets' && )?!\([\s\S]*?\) && hasAdminClaim\(\);/)?.[0] || '';
 const listCatchAllWriteExcludesSecrets =
-  createRule.includes("'system_secrets'") && updateDeleteRule.includes("'system_secrets'");
+  createRule.includes("'system_secrets'") && updateDeleteRule.includes("'system_secrets'") &&
+  (!createRule.includes("collection != 'tickets'") || createRule.includes(boundedTicketPrefix.trim())) &&
+  (!updateDeleteRule.includes("collection != 'tickets'") || updateDeleteRule.includes(boundedTicketPrefix.trim()));
 
 const catchAllWriteExcludesSecrets =
   simpleCatchAllWriteExcludesSecrets || listCatchAllWriteExcludesSecrets;
