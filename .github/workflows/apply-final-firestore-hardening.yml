@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/apply-final-firestore-hardening.yml
       - scripts/apply-final-firestore-security-hardening.mjs
+      - scripts/final-firestore-postpatch-cleanup.mjs
   pull_request:
     branches:
       - main
@@ -41,8 +42,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply deterministic Firestore hardening
-        run: node scripts/apply-final-firestore-security-hardening.mjs
+      - name: Apply deterministic Firestore hardening when absent
+        shell: bash
+        run: |
+          if grep -Fq "match /fcmTokens/{tokenId}" firestore.rules; then
+            echo "Primary Firestore hardening already applied."
+          else
+            node scripts/apply-final-firestore-security-hardening.mjs
+          fi
+          node scripts/final-firestore-postpatch-cleanup.mjs
 
       - name: Verify generated state
         shell: bash
@@ -62,7 +70,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- firestore.rules test/security-rules.test.js
           git diff --cached --check
-          git commit -m "Apply explicit user subcollections and stale-token suspension"
+          git commit -m "Normalize final Firestore security hardening"
           git push origin HEAD:fix/final-firestore-security-clearance
 
       - name: Run Firestore and Storage rule tests
@@ -76,14 +84,17 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload complete rule-test log
+      - name: Persist complete rule-test diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: firestore-rule-test-log-${{ github.run_id }}
-          path: rules-test-output.log
-          if-no-files-found: error
-          retention-days: 7
+        shell: bash
+        run: |
+          mkdir -p launch_package
+          cp rules-test-output.log launch_package/firestore-rule-test-output.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- launch_package/firestore-rule-test-output.txt
+          git commit -m "Record Firestore rule-test diagnostics" || true
+          git push origin HEAD:fix/final-firestore-security-clearance
 
       - name: Enforce clean rule-test result
         shell: bash
