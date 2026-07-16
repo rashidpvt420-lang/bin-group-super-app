@@ -16,10 +16,22 @@ service cloud.firestore {
         : '';
     }
 
+    function profileAllowsAccess(data) {
+      return data.get('suspended', false) != true &&
+        !(data.get('status', '') in [
+          'suspended',
+          'SUSPENDED',
+          'disabled',
+          'DISABLED',
+          'rejected',
+          'REJECTED'
+        ]);
+    }
+
     function isNotSuspended() {
       return signedIn() && (
         !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true
+        profileAllowsAccess(get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
       );
     }
 
@@ -919,10 +931,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if signedIn() && (
-                    (request.auth.uid == userId && (resource == null || resource.data.get('suspended', false) != true)) ||
+                    (request.auth.uid == userId && (resource == null || profileAllowsAccess(resource.data))) ||
                     (
                       request.auth.uid != userId &&
-                      request.auth.token.get('suspended', false) != true &&
+                      isNotSuspended() &&
                       (
                         (resource.data.get('role', '') == 'tenant' &&
                          ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
@@ -932,7 +944,7 @@ service cloud.firestore {
                       )
                     )
                   );
-      allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (
+      allow list: if isNotSuspended() && (
                     canReadUserDirectoryCycleFree() ||
                     (signedIn() &&
                      resource.data.get('role', '') == 'tenant' &&

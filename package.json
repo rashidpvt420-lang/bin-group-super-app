@@ -36,7 +36,7 @@
     "harden:bin-connect-rules": "node scripts/harden-bin-connect-rules.mjs",
     "harden:system-secrets": "node scripts/harden-system-secrets-rules.mjs",
     "harden:ticket-binding": "node scripts/apply-ticket-rule-binding.mjs",
-    "prepare:rules": "npm run normalize:rules && npm run harden:rules && npm run harden:rules:warnings && npm run harden:owner-trust-rules && npm run harden:bin-connect-rules && npm run harden:system-secrets && node scripts/apply-profile-admin-rule.mjs && npm run harden:ticket-binding",
+    "prepare:rules": "npm run normalize:rules && npm run harden:rules && npm run harden:rules:warnings && npm run harden:owner-trust-rules && npm run harden:bin-connect-rules && npm run harden:system-secrets && node scripts/apply-profile-admin-rule.mjs && npm run harden:ticket-binding && npm run harden:final-firestore-authority",
     "verify:rules-hardening": "node scripts/verify-firestore-launch-hardening.mjs",
     "verify:audit-bridge": "node scripts/verify-audit-write-bridge.mjs",
     "verify:uae-domination": "node scripts/verify-uae-domination-foundation.mjs",
@@ -102,7 +102,8 @@
     "mobile:sync": "npm run build && npx cap sync",
     "mobile:open:android": "npx cap open android",
     "mobile:open:ios": "npx cap open ios",
-    "mobile:check": "npm run test:mobile-store-readiness && npm run build"
+    "mobile:check": "npm run test:mobile-store-readiness && npm run build",
+    "harden:final-firestore-authority": "node scripts/harden-final-firestore-authority.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^7.1.0",
