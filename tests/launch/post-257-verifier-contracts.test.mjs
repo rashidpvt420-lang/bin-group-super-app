@@ -11,11 +11,7 @@ const rulesVerifier = path.join(root, 'scripts/verify-firestore-launch-hardening
 const scheduledVerifier = path.join(root, 'scripts/verify-scheduled-services-completeness.mjs');
 
 function runNode(script, cwd = root) {
-  return spawnSync(process.execPath, [script], {
-    cwd,
-    encoding: 'utf8',
-    env: { ...process.env },
-  });
+  return spawnSync(process.execPath, [script], { cwd, encoding: 'utf8', env: { ...process.env } });
 }
 
 test('checked-in rules become server-authoritative under the final prepare:rules transform', () => {
@@ -23,10 +19,8 @@ test('checked-in rules become server-authoritative under the final prepare:rules
   try {
     const sourceRules = readFileSync(path.join(root, 'firestore.rules'), 'utf8');
     writeFileSync(path.join(directory, 'firestore.rules'), sourceRules);
-
     const first = runNode(ticketBindingScript, directory);
     assert.equal(first.status, 0, first.stderr || first.stdout);
-
     const preparedRules = readFileSync(path.join(directory, 'firestore.rules'), 'utf8');
     assert.doesNotMatch(preparedRules, /function\s+safeOpenMissionClaim\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+missionClaimFieldsLookValid\s*\(/);
@@ -35,12 +29,11 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
     assert.match(preparedRules, /function safeTicketUpdateByActor\(\)/);
     assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
-    assert.match(preparedRules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
     assert.match(preparedRules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
-
+    assert.match(preparedRules, /tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
+    assert.doesNotMatch(preparedRules, /!hasAdminClaim\(\)|!hasNonAdminDispatchClaimOnly\(\)/);
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);
-
     const beforeSecondRun = readFileSync(path.join(directory, 'firestore.rules'));
     const second = runNode(ticketBindingScript, directory);
     assert.equal(second.status, 0, second.stderr || second.stdout);
@@ -54,17 +47,9 @@ test('checked-in rules become server-authoritative under the final prepare:rules
 test('scheduled-service verifier follows the centralized protected production lifecycle', () => {
   const result = runNode(scheduledVerifier);
   assert.equal(result.status, 0, result.stderr || result.stdout);
-
-  const retiredWorkflow = readFileSync(
-    path.join(root, '.github/workflows/scheduled-services-production.yml'),
-    'utf8',
-  );
-  const protectedWorkflow = readFileSync(
-    path.join(root, '.github/workflows/firebase-production-deploy.yml'),
-    'utf8',
-  );
+  const retiredWorkflow = readFileSync(path.join(root, '.github/workflows/scheduled-services-production.yml'), 'utf8');
+  const protectedWorkflow = readFileSync(path.join(root, '.github/workflows/firebase-production-deploy.yml'), 'utf8');
   const deployRunner = readFileSync(path.join(root, 'scripts/deploy-firebase-production.mjs'), 'utf8');
-
   assert.match(retiredWorkflow, /Scheduled Services Production \(Retired\)/);
   assert.match(retiredWorkflow, /Refuse parallel production deployment/);
   assert.doesNotMatch(retiredWorkflow, /firebase deploy/);
@@ -73,13 +58,14 @@ test('scheduled-service verifier follows the centralized protected production li
   assert.match(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
 });
 
-test('launch-hardening verifier explicitly rejects direct assignment and overlapping ticket gates', () => {
+test('launch-hardening verifier rejects direct assignment, overlapping gates and repeated authority predicates', () => {
   const verifierSource = readFileSync(rulesVerifier, 'utf8');
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /overlapping ticket update authorization/);
   assert.match(verifierSource, /bounded ticket update router/);
   assert.match(verifierSource, /Single ticket update gate must exist exactly twice/);
-  assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, tenant, technician order/);
-  assert.match(verifierSource, /Technician append-only proof guard missing/);
+  assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, technician, tenant order/);
+  assert.match(verifierSource, /must not repeat expensive negative authority predicates/);
+  assert.match(verifierSource, /Technician bounded proof guard missing/);
 });
