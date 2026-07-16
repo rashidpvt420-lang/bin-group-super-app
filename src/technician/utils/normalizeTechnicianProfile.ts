@@ -9,6 +9,41 @@ export const normalizeTechnicianStatus = (value: unknown) => {
   return 'pending';
 };
 
+const toMillis = (value: unknown): number | null => {
+  if (!present(value)) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+  if (typeof value === 'object') {
+    const candidate = value as { toMillis?: () => number; seconds?: number; _seconds?: number };
+    if (typeof candidate.toMillis === 'function') {
+      const millis = candidate.toMillis();
+      return Number.isFinite(millis) ? millis : null;
+    }
+    const seconds = candidate.seconds ?? candidate._seconds;
+    if (Number.isFinite(seconds)) return Number(seconds) * 1000;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const statusFromExpiry = (statusValue: unknown, expiryValue: unknown, nowMs: number) => {
+  const expiryMs = toMillis(expiryValue);
+  if (expiryMs !== null && expiryMs <= nowMs) return 'expired';
+  return normalizeTechnicianStatus(statusValue ?? expiryValue);
+};
+
+const certificationExpiry = (certification: unknown): unknown => {
+  if (!certification || typeof certification !== 'object') return null;
+  const row = certification as Record<string, unknown>;
+  return firstPresent(row.expiryAt, row.expiresAt, row.expiryDate, row.expiry, row.validUntil, row.validTo);
+};
+
+const certificationStatus = (certification: unknown, nowMs: number) => {
+  if (!certification || typeof certification !== 'object') return 'missing';
+  const row = certification as Record<string, unknown>;
+  return statusFromExpiry(firstPresent(row.status, row.verificationStatus, row.approvalStatus), certificationExpiry(row), nowMs);
+};
+
 const normalizeSkillLevel = (value: unknown) => {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return 'Standard field technician';
@@ -71,6 +106,7 @@ export function normalizeTechnicianProfile(sources: {
   user?: Record<string, any> | null;
   attendance?: Record<string, any> | null;
   certifications?: unknown[];
+  nowMs?: number;
 }) {
   const merged = {
     ...(sources.attendance || {}),
@@ -84,13 +120,27 @@ export function normalizeTechnicianProfile(sources: {
     ...(sources.technician || {}),
   } as Record<string, any>;
 
+  const nowMs = Number.isFinite(sources.nowMs) ? Number(sources.nowMs) : Date.now();
   const embeddedCertifications = Array.isArray(merged.certifications) ? merged.certifications : [];
   const certificationRows = Array.isArray(sources.certifications) ? sources.certifications : [];
   const allCertifications = [...embeddedCertifications, ...certificationRows];
-  const certificationsStatus = allCertifications.length > 0 ? 'valid' : normalizeTechnicianStatus(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus));
+  const certificationStates = allCertifications.map((row) => certificationStatus(row, nowMs));
+  const certificationsStatus = allCertifications.length === 0
+    ? normalizeTechnicianStatus(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus))
+    : certificationStates.every((status) => status === 'valid')
+      ? 'valid'
+      : certificationStates.some((status) => status === 'expired')
+        ? 'expired'
+        : 'pending';
   const dutyStatus = normalizeDutyStatus(firstPresent(merged.dutyStatus, merged.rosterStatus, merged.attendanceStatus, merged.status, merged.isAvailable === true ? 'available' : undefined));
   const onDuty = boolValue(merged.onDuty, merged.isOnDuty, merged.isAvailable, dutyStatus === 'available');
   const primaryTrade = textValue(merged.primaryTrade, merged.trade, merged.specialization, merged.skill, merged.department, 'General Maintenance');
+  const medicalCardExpiry = firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry) || null;
+  const drivingLicenseExpiry = firstPresent(merged.drivingLicenseExpiry, merged.licenseExpiry) || null;
+  const medicalCardStatus = statusFromExpiry(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus), medicalCardExpiry, nowMs);
+  const drivingLicenseStatus = statusFromExpiry(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus), drivingLicenseExpiry, nowMs);
+  const explicitBlocked = String(firstPresent(merged.dispatchReadiness, merged.dispatchStatus, '')).toLowerCase().includes('block');
+  const complianceBlocked = medicalCardStatus !== 'valid' || drivingLicenseStatus !== 'valid' || certificationsStatus !== 'valid';
 
   const normalized = {
     uid: textValue(merged.uid, merged.userId, merged.technicianId, merged.id),
@@ -105,15 +155,21 @@ export function normalizeTechnicianProfile(sources: {
     vehicleNumber: textValue(merged.vehicleNumber, merged.assignedVehicle, merged.vehiclePlate),
     toolKitIssued: boolValue(merged.toolKitIssued, merged.toolsIssued, merged.toolKitStatus),
     ppeIssued: boolValue(merged.ppeIssued, merged.ppeStatus, merged.ppeIssuedAt),
-    medicalCardStatus: normalizeTechnicianStatus(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus, merged.medicalExpiry, merged.healthCardExpiry)),
-    medicalCardExpiry: firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry) || null,
-    drivingLicenseStatus: normalizeTechnicianStatus(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus, merged.drivingLicenseExpiry, merged.licenseExpiry)),
-    drivingLicenseExpiry: firstPresent(merged.drivingLicenseExpiry, merged.licenseExpiry) || null,
+    medicalCardStatus,
+    medicalCardExpiry,
+    drivingLicenseStatus,
+    drivingLicenseExpiry,
     certificationsStatus,
     certifications: allCertifications,
     onDuty,
     dutyStatus,
-    dispatchReadiness: String(firstPresent(merged.dispatchReadiness, merged.dispatchStatus, '')).toLowerCase().includes('block') ? 'blocked' : dutyStatus === 'available' || onDuty ? 'ready' : 'not_ready',
+    dispatchReadiness: explicitBlocked || complianceBlocked ? 'blocked' : dutyStatus === 'available' || onDuty ? 'ready' : 'not_ready',
+    complianceBlocked,
+    complianceBlockReasons: [
+      medicalCardStatus !== 'valid' ? 'medicalCardStatus' : null,
+      drivingLicenseStatus !== 'valid' ? 'drivingLicenseStatus' : null,
+      certificationsStatus !== 'valid' ? 'certificationsStatus' : null,
+    ].filter(Boolean) as string[],
     lastSyncedAt: firstPresent(merged.lastSyncedAt, merged.updatedAt, merged.createdAt) || null,
     syncStatus: 'missing',
     missingFields: [] as string[],
@@ -147,7 +203,7 @@ export const formatMissingTechnicianField = (field: string) => ({
   vehicleAssigned: 'Vehicle assignment is missing.',
   toolKitIssued: 'Tool kit status is missing.',
   ppeIssued: 'PPE issue status is missing.',
-  medicalCardStatus: 'Medical card status is missing or not valid.',
-  drivingLicenseStatus: 'Driving license status is missing or not valid.',
-  certificationsStatus: 'Certifications are missing.',
+  medicalCardStatus: 'Medical card status is missing, pending, or expired.',
+  drivingLicenseStatus: 'Driving license status is missing, pending, or expired.',
+  certificationsStatus: 'One or more required certifications are missing, pending, or expired.',
 }[field] || `${field} is missing.`);
