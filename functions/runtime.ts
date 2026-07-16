@@ -4,7 +4,7 @@ export * from "./index";
 export * from "./contractActivation";
 export * from "./brokerCommissions";
 export * from "./ownerOnboarding";
-export * from "./ownerRegistrationRequest";
+export * from "./secureOwnerRegistrationRequest";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
