@@ -21,46 +21,47 @@ import { useAuth } from '../context/AuthContext';
 const Navigation = () => {
     const { t, tx, isRTL } = useLanguage();
     const { user } = useAuth();
+    const navText = (en: string, ar: string) => (isRTL ? ar : en);
     
     const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
 
-const primaryMenu = [
-    { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
-    { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
-    { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
-    { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
-    { text: 'Design Studio Manager', icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
-    { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
-    { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
-    { text: 'Sovereign Control', icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
-    { text: 'BIN Connect Inbox', icon: <ReceiptIcon />, path: '/ops/bin-connect', color: '#38bdf8' },
-    { text: 'Pilot Completion', icon: <PendingActionsIcon />, path: '/ops/pilot-completion', color: '#3b82f6' },
-    { text: 'Public Launch Command', icon: <SecurityIcon />, path: '/ops/public-launch-command', color: binThemeTokens.gold },
-    { text: 'Pricing Matrix 2026', icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
-    { text: 'BIN-GPT Engineer', icon: <Sparkles size={20} />, path: '/admin/bin-gpt-engineer', color: '#10b981' },
-];
+    const primaryMenu = [
+        { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
+        { text: tx('fin.payroll', 'Payroll Hub'), icon: <AccountBalanceWalletIcon />, path: '/financials', color: '#6366f1' },
+        { text: tx('nav.docs', 'Document Vault'), icon: <FileTextIcon />, path: '/document-vault', color: binThemeTokens.gold },
+        { text: tx('nav.audit', 'Institutional Audit'), icon: <SecurityIcon />, path: '/vault', color: binThemeTokens.gold },
+        { text: navText('Design Studio Manager', 'مدير استوديو التصميم'), icon: <Sparkles size={20} />, path: '/design-studio', color: binThemeTokens.gold },
+        { text: tx('nav.orphans', 'Orphan War Room'), icon: <SecurityIcon />, path: '/orphans', color: '#ef4444' },
+        { text: tx('onboarding.payment.verify_btn', 'Verify Payment'), icon: <PendingActionsIcon />, path: '/manual-approvals', color: '#10b981' },
+        { text: navText('Sovereign Control', 'التحكم السيادي'), icon: <SecurityIcon />, path: '/control-center', color: '#ef4444' },
+        { text: navText('BIN Connect Inbox', 'صندوق وارد BIN Connect'), icon: <ReceiptIcon />, path: '/ops/bin-connect', color: '#38bdf8' },
+        { text: navText('Pilot Completion', 'إكمال التشغيل التجريبي'), icon: <PendingActionsIcon />, path: '/ops/pilot-completion', color: '#3b82f6' },
+        { text: navText('Public Launch Command', 'قيادة الإطلاق العام'), icon: <SecurityIcon />, path: '/ops/public-launch-command', color: binThemeTokens.gold },
+        { text: navText('Pricing Matrix 2026', 'مصفوفة التسعير 2026'), icon: <AccountBalanceWalletIcon />, path: '/admin/pricing-matrix', color: binThemeTokens.gold },
+        { text: navText('BIN-GPT Engineer', 'مهندس BIN-GPT'), icon: <Sparkles size={20} />, path: '/admin/bin-gpt-engineer', color: '#10b981' },
+    ];
 
     const managementMenu = [
-        { text: tx('admin.active_tenants', 'ACTIVE TENANTS'), icon: <PeopleIcon />, path: '/owners' },
+        { text: navText('Owners', 'الملاك'), icon: <PeopleIcon />, path: '/owners' },
         { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
-        { text: 'Broker Attribution Queue', icon: <PendingActionsIcon />, path: '/broker-attributions', color: binThemeTokens.gold },
-        { text: 'Broker Commission Hub', icon: <AccountBalanceWalletIcon />, path: '/broker-commissions', color: '#10b981' },
+        { text: navText('Broker Attribution Queue', 'قائمة إسناد الوسطاء'), icon: <PendingActionsIcon />, path: '/broker-attributions', color: binThemeTokens.gold },
+        { text: navText('Broker Commission Hub', 'مركز عمولات الوسطاء'), icon: <AccountBalanceWalletIcon />, path: '/broker-commissions', color: '#10b981' },
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
-        { text: 'Tenant Unit Links', icon: <PendingActionsIcon />, path: '/unit-links', color: '#f59e0b' },
-        { text: 'Tenant Services', icon: <ReceiptIcon />, path: '/tenant-services', color: '#38bdf8' },
-        { text: 'Operations Messages', icon: <ReceiptIcon />, path: '/ops/messages', color: '#8b5cf6' },
+        { text: navText('Tenant Unit Links', 'روابط وحدات المستأجرين'), icon: <PendingActionsIcon />, path: '/unit-links', color: '#f59e0b' },
+        { text: navText('Tenant Services', 'خدمات المستأجرين'), icon: <ReceiptIcon />, path: '/tenant-services', color: '#38bdf8' },
+        { text: navText('Operations Messages', 'رسائل العمليات'), icon: <ReceiptIcon />, path: '/ops/messages', color: '#8b5cf6' },
         { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
-        { text: 'Unit Status Control', icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
+        { text: navText('Unit Status Control', 'التحكم في حالة الوحدات'), icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
-        { text: "Duty Command Center", icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
-        { text: 'WhatsApp Triage', icon: <ReceiptIcon />, path: '/ops/whatsapp-triage', color: '#10b981' },
-        { text: 'RFQ Trust Workflow', icon: <PendingActionsIcon />, path: '/ops/rfq', color: binThemeTokens.gold },
-        { text: 'Vendor Command', icon: <PeopleIcon />, path: '/ops/vendors', color: '#38bdf8' },
-        { text: 'PDPL Governance', icon: <SecurityIcon />, path: '/ops/data-governance', color: '#c084fc' },
+        { text: navText('Duty Command Center', 'مركز قيادة المناوبات'), icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
+        { text: navText('WhatsApp Triage', 'فرز واتساب'), icon: <ReceiptIcon />, path: '/ops/whatsapp-triage', color: '#10b981' },
+        { text: navText('RFQ Trust Workflow', 'مسار موثوقية طلبات الأسعار'), icon: <PendingActionsIcon />, path: '/ops/rfq', color: binThemeTokens.gold },
+        { text: navText('Vendor Command', 'قيادة الموردين'), icon: <PeopleIcon />, path: '/ops/vendors', color: '#38bdf8' },
+        { text: navText('PDPL Governance', 'حوكمة حماية البيانات الشخصية'), icon: <SecurityIcon />, path: '/ops/data-governance', color: '#c084fc' },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
-        ...(isHRAuthorized ? [{ text: 'HR Command', icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
+        ...(isHRAuthorized ? [{ text: navText('HR Command', 'قيادة الموارد البشرية'), icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
     ];
 
     const systemMenu = [
@@ -178,16 +179,14 @@ const primaryMenu = [
                         button
                         onClick={() => { 
                             const currentLang = localStorage.getItem('bin_language');
-                            const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
                             localStorage.clear(); 
                             if (currentLang) localStorage.setItem('bin_language', currentLang);
-                            if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
                             signOut(auth).then(() => window.location.href = '/'); 
                         }}
                         sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
                     >
                         <ListItemIcon sx={{ color: '#ef4444', minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}><LogoutIcon /></ListItemIcon>
-                        <ListItemText primary={t('nav.logout') || 'Sign Out'} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#ef4444' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
+                        <ListItemText primary={t('nav.logout') || navText('Sign Out', 'تسجيل الخروج')} primaryTypographyProps={{ fontWeight: 900, fontSize: '0.85rem', color: '#ef4444' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
                     </ListItem>
                 </List>
             </Box>
