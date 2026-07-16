@@ -39,7 +39,7 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.match(preparedRules, /let role = authenticated/);
     assert.match(preparedRules, /let admin = authenticated && \(/);
     assert.match(preparedRules, /let dispatcher = authenticated && \(/);
-    assert.match(preparedRules, /\(!admin && !dispatcher && role == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
+    assert.match(preparedRules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
     assert.match(preparedRules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
 
     const verification = runNode(rulesVerifier, directory);
