@@ -1,0 +1,3 @@
+Candidate: 123e693fd0e54bb9da9cfb5fba21dfd0bcf7a986
+Purpose: run required pull-request verification workflows against the exact current main candidate.
+No runtime code is changed.
