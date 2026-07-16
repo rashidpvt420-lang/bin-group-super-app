@@ -146,7 +146,9 @@ test('tenant physical access and service tickets are server authoritative', () =
   assert.match(qr, /timingSafeEqual/);
   assert.match(qr, /issuedByFunction:\s*"generateSignedQrPass"/);
   assert.match(rules, /match \/gatePasses\/\{passId\}[\s\S]{0,300}allow create, update, delete: if false;/);
-  assert.match(rules, /match \/visitorParkingRequests\/\{requestId\}[\s\S]{0,250}allow create: if false;/);
+  assert.match(rules, /match \/visitorParkingRequests\/\{requestId\}[\s\S]{0,350}allow create: if isAdmin\(\) &&/);
+  assert.match(rules, /match \/visitorParkingRequests\/\{requestId\}[\s\S]{0,550}!request\.resource\.data\.keys\(\)\.hasAny\(\['qrToken', 'passId', 'approvedAt', 'approvedBy'\]\);/);
+  assert.doesNotMatch(rules, /match \/visitorParkingRequests\/\{requestId\}[\s\S]{0,350}allow create: if signedIn\(\)/);
   assert.doesNotMatch(gatePage, /addDoc\(collection\(db,\s*['"]gatePasses['"]/);
   assert.doesNotMatch(parkingPage, /addDoc\(collection\(db,\s*['"]visitorParkingRequests['"]/);
   assert.match(tenantTickets, /export const createTenantServiceTicket/);
