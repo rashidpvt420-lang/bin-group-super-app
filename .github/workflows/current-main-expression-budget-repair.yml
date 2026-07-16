@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run launch-honesty suite against committed source
+        run: npm run test:launch-honesty
+
       - name: Apply bounded ticket authorization
         run: node scripts/apply-current-main-firestore-expression-budget.mjs
 
@@ -101,6 +104,3 @@ jobs:
 
       - name: Run stability suite
         run: npm run test:stability
-
-      - name: Run launch-honesty suite
-        run: npm run test:launch-honesty
