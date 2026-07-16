@@ -1,0 +1,44 @@
+name: Apply Post-267 Firestore Repair
+
+on:
+  push:
+    branches:
+      - fix/post-267-firestore-authority
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-post-267-firestore-repair
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/post-267-firestore-authority
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply exact repairs
+        run: node scripts/apply-post-267-repairs.mjs
+
+      - name: Commit repaired artifacts
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add firestore.rules package.json scripts/verify-firestore-launch-hardening.mjs test/full-system-regressions.test.mjs test/security-rules.test.js
+          if git diff --cached --quiet; then
+            echo 'No repair changes required.'
+            exit 0
+          fi
+          git commit -m 'Fix production suspension rules and regressions'
+          git push origin HEAD:fix/post-267-firestore-authority
