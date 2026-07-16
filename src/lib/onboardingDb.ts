@@ -168,7 +168,7 @@ export async function getStagedFile(key: string): Promise<File | null> {
         const plaintext = await cryptoApi.subtle.decrypt(
             {
                 name: 'AES-GCM',
-                iv: stored.iv,
+                iv: new Uint8Array(stored.iv),
                 additionalData: textEncoder.encode(key),
                 tagLength: 128,
             },
