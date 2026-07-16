@@ -4,22 +4,14 @@ const rulesPath = 'firestore.rules';
 const standardReadCatchAll = "      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();";
 const brokerHardenedReadCatchAll = "      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 
-// The expression-budget normalizer predates the private Broker KYC rate-limit
-// collection. Present its recognised baseline, then restore the stronger
-// exclusion immediately after the canonical ticket transforms complete.
-let before = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
-const hadBrokerRateLimitExclusion = before.includes(brokerHardenedReadCatchAll);
-if (hadBrokerRateLimitExclusion) {
-  before = before.replace(brokerHardenedReadCatchAll, standardReadCatchAll);
-  writeFileSync(rulesPath, before, 'utf8');
-}
-
-// Both normalizers are deterministic and idempotent. Importing them keeps
-// local prepare:rules, CI, and the committed Firestore policy aligned.
-await import('./apply-current-main-firestore-expression-budget.mjs');
-await import('./optimize-current-main-technician-ticket-rule.mjs');
-
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
+
+// Keep the dedicated technician proof optimizer, but do not re-run the legacy
+// split-rule normalizer after apply-ticket-rule-binding has installed the
+// single role-discriminated update router.
+await import('./optimize-current-main-technician-ticket-rule.mjs');
+text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
+
 if (text.includes(standardReadCatchAll)) {
   text = text.replace(standardReadCatchAll, brokerHardenedReadCatchAll);
   writeFileSync(rulesPath, text, 'utf8');
@@ -32,16 +24,16 @@ const required = [
   "data.get('status', '') in [",
   'function hasDispatchAuthorityClaimOnly() {',
   'function hasNonAdminDispatchClaimOnly() {',
+  'function safeTicketUpdateByActor() {',
+  "claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()",
+  "claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()",
   'return hasDispatchAuthorityClaimOnly() && isNotSuspended();',
   'function hasApprovedTechnicianRecord() {',
   'match /fcmTokens/{tokenId} {',
   'match /deviceReadiness/{readinessId} {',
   'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
   'allow list: if isNotSuspended() && (',
-  'allow update: if isAdmin() && isNotSuspended();',
-  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
-  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
-  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+  'allow update: if safeTicketUpdateByActor();',
   "!(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim()",
   "'tickets',\n          'maintenanceTickets',\n          'audit_logs'",
   "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
@@ -51,15 +43,11 @@ for (const fragment of required) {
   if (!text.includes(fragment)) throw new Error(`[final-firestore-authority] missing required fragment: ${fragment}`);
 }
 
-for (const rule of [
-  'allow update: if isAdmin() && isNotSuspended();',
-  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
-  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
-  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
-]) {
-  if (text.split(rule).length - 1 !== 2) {
-    throw new Error(`[final-firestore-authority] actor-specific ticket rule must exist exactly twice: ${rule}`);
-  }
+if (text.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) {
+  throw new Error('[final-firestore-authority] bounded ticket update gate must exist exactly twice');
+}
+if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
+  throw new Error('[final-firestore-authority] shared ticket update router must exist exactly once');
 }
 
 const forbidden = [
@@ -68,10 +56,14 @@ const forbidden = [
   'allow read: if (signedIn() && request.auth.uid == userId) || canReadUserDirectory();',
   'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));',
   'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+  'allow update: if isAdmin() && isNotSuspended();',
+  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
 
 for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware, explicit, bounded rules are canonical');
+console.log('[final-firestore-authority] status-aware single-branch ticket authorization is canonical');

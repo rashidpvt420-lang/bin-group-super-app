@@ -23,7 +23,6 @@ function removeRuleFunction(functionName) {
   while (true) {
     const start = text.indexOf(needle);
     if (start < 0) break;
-
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
 
@@ -40,14 +39,11 @@ function removeRuleFunction(functionName) {
         }
       }
     }
-
     if (end < 0) throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
-
     text = `${text.slice(0, start)}${text.slice(end)}`;
     removed += 1;
     changed = true;
   }
-
   return removed;
 }
 
@@ -55,13 +51,31 @@ const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
 const removedDirectClaims = removeRuleFunction('safeOpenMissionClaim');
 const removedOpenPool = removeRuleFunction('openMissionPoolRead');
 const removedOpenAvailability = removeRuleFunction('openMissionAvailable');
-const removedSharedRouter = removeRuleFunction('safeTicketUpdateByActor');
+removeRuleFunction('safeTicketUpdateByActor');
 
 const directClaimReference = /\s*\|\|\s*safeOpenMissionClaim\(\)/g;
 if (directClaimReference.test(text)) {
   text = text.replace(directClaimReference, '');
   changed = true;
 }
+
+const router = `    function safeTicketUpdateByActor() {
+      // Exactly one actor branch performs database-backed authorization. This
+      // avoids Firestore evaluating four overlapping allow-update expressions
+      // on denied writes and exhausting the 1,000-expression budget.
+      return signedIn() && (
+        (hasAdminClaim() && isNotSuspended()) ||
+        (!hasAdminClaim() && hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
+        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
+        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
+      );
+    }
+
+`;
+const routerAnchor = '    function canDispatchJobs() {';
+if (!text.includes(routerAnchor)) throw new Error('[ticket-rule-binding] canDispatchJobs anchor is missing.');
+text = text.replace(routerAnchor, `${router}${routerAnchor}`);
+changed = true;
 
 const monolithicUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
 const splitRules = [
@@ -70,20 +84,26 @@ const splitRules = [
   '      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
   '      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
+const canonicalUpdate = '      allow update: if safeTicketUpdateByActor();';
 
 if (text.includes(monolithicUpdate)) {
-  text = text.split(monolithicUpdate).join(splitRules.join('\n'));
+  text = text.split(monolithicUpdate).join(canonicalUpdate);
+  changed = true;
+}
+const splitBlock = splitRules.join('\n');
+if (text.includes(splitBlock)) {
+  text = text.split(splitBlock).join(canonicalUpdate);
   changed = true;
 }
 
 if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
   throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
 }
-
-for (const rule of splitRules) {
-  if (text.split(rule).length - 1 !== 2) {
-    throw new Error(`[ticket-rule-binding] Expected exactly two actor-specific update rules: ${rule}`);
-  }
+if (text.split(canonicalUpdate).length - 1 !== 2) {
+  throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates.');
+}
+if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
+  throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 }
 
 for (const forbidden of [
@@ -94,6 +114,7 @@ for (const forbidden of [
   'function openMissionAvailable(',
   'openMissionPoolRead(resource.data)',
   monolithicUpdate.trim(),
+  ...splitRules.map((rule) => rule.trim()),
 ]) {
   if (text.includes(forbidden)) {
     throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
@@ -105,9 +126,4 @@ if (!text.includes(canonicalCreate)) {
 }
 
 if (changed) writeFileSync(file, text);
-
-console.log(
-  changed
-    ? `Applied actor-specific ticket dispatch cleanup (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`
-    : 'Ticket and dispatch rules already actor-specific and server-authoritative.',
-);
+console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
