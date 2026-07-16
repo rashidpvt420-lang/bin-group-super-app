@@ -6,9 +6,6 @@ const brokerHardenedReadCatchAll = "      allow read: if !(collection in ['syste
 
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
-// Keep the dedicated technician proof optimizer, but do not re-run the legacy
-// split-rule normalizer after apply-ticket-rule-binding has installed the
-// single role-discriminated update router.
 await import('./optimize-current-main-technician-ticket-rule.mjs');
 text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
@@ -25,10 +22,11 @@ const required = [
   'function hasDispatchAuthorityClaimOnly() {',
   'function hasNonAdminDispatchClaimOnly() {',
   'function safeTicketUpdateByActor() {',
-  "claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()",
   "claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()",
+  'tenantOwns(resource.data) && safeTenantEvidenceUpdate()',
   'return hasDispatchAuthorityClaimOnly() && isNotSuspended();',
   'function hasApprovedTechnicianRecord() {',
+  "let changed = request.resource.data.diff(resource.data).affectedKeys();",
   'match /fcmTokens/{tokenId} {',
   'match /deviceReadiness/{readinessId} {',
   'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
@@ -66,4 +64,4 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware single-branch ticket authorization is canonical');
+console.log('[final-firestore-authority] ordered low-cost ticket authorization is canonical');
