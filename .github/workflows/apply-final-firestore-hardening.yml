@@ -1,0 +1,76 @@
+name: Apply Final Firestore Hardening
+
+on:
+  push:
+    branches:
+      - fix/final-firestore-security-clearance
+    paths:
+      - .github/workflows/apply-final-firestore-hardening.yml
+      - scripts/apply-final-firestore-security-hardening.mjs
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-final-firestore-hardening
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/final-firestore-security-clearance
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply deterministic Firestore hardening
+        run: node scripts/apply-final-firestore-security-hardening.mjs
+
+      - name: Verify generated diff
+        shell: bash
+        run: |
+          git diff --check
+          git diff --stat
+          git diff -- firestore.rules test/security-rules.test.js
+          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
+            echo "No rule/test changes were produced."
+            exit 1
+          fi
+
+      - name: Run Firestore and Storage rule tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:rules 2>&1 | tee rules-test-output.log
+          if grep -F "maximum of 1000 expressions" rules-test-output.log; then
+            echo "Firestore expression-limit failure detected."
+            exit 1
+          fi
+
+      - name: Run stability and launch-honesty suites
+        run: |
+          npm run test:stability
+          npm run test:launch-honesty
+
+      - name: Commit verified rule and regression-test changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- firestore.rules test/security-rules.test.js
+          git diff --cached --check
+          git commit -m "Enforce explicit user subcollections and stale-token suspension"
+          git push origin HEAD:fix/final-firestore-security-clearance
