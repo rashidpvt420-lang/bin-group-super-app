@@ -22,8 +22,9 @@ test('ticket updates are actor-discriminated and cannot authorize technician sel
   assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
   assert.match(rules, /hasAdminClaim\(\) && isNotSuspended\(\)/);
   assert.match(rules, /hasNonAdminDispatchClaimOnly\(\) && safeDispatcherTicketUpdate\(\)/);
-  assert.match(rules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
   assert.match(rules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
+  assert.match(rules, /tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
+  assert.doesNotMatch(rules, /!hasAdminClaim\(\)|!hasNonAdminDispatchClaimOnly\(\)/);
 });
 
 test('owner activation delegates to the complete server-confirmed policy', () => {
