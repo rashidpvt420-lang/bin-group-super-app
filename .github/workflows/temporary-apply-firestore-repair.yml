@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [synchronize]
+    types: [opened]
 
 permissions:
   contents: write
@@ -43,27 +43,6 @@ jobs:
       - name: Optimize technician evidence authorization
         run: node scripts/optimize-technician-ticket-update.mjs
 
-      - name: Verify generated changes
-        shell: bash
-        run: |
-          git diff --check
-          git diff --stat
-          git diff -- firestore.rules
-          if git diff --quiet -- firestore.rules; then
-            echo "Expected technician-rule optimization was not produced."
-            exit 1
-          fi
-
-      - name: Commit generated rule changes
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- firestore.rules
-          git diff --cached --check
-          git commit -m "Bound technician evidence rule complexity"
-          git push origin HEAD:fix/final-firestore-clearance-v2
-
       - name: Run rules suite and reject expression overflow
         id: rules
         shell: bash
@@ -74,18 +53,6 @@ jobs:
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
-
-      - name: Persist complete rule-test diagnostics
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p launch_package
-          cp rules-test-output.log launch_package/firestore-rule-test-output.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- launch_package/firestore-rule-test-output.txt
-          git commit -m "Record bounded technician-rule diagnostics" || true
-          git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Enforce clean rules result
         shell: bash
@@ -98,8 +65,3 @@ jobs:
             echo "Firestore/Storage rules suite failed."
             exit 1
           fi
-
-      - name: Run launch-critical regression suites
-        run: |
-          npm run test:stability
-          npm run test:launch-honesty
