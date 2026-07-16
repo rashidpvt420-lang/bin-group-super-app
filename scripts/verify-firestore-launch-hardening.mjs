@@ -35,6 +35,14 @@ const forbiddenFragments = [
     label: 'ticket update still evaluates every actor branch',
     text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
   },
+  {
+    label: 'ticket update still uses the shared actor router',
+    text: 'allow update: if safeTicketUpdateByActor();',
+  },
+  {
+    label: 'shared actor-router helper remains',
+    text: 'function safeTicketUpdateByActor() {',
+  },
 ];
 
 const requiredFragments = [
@@ -55,6 +63,10 @@ const requiredFragments = [
     text: 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }',
   },
   {
+    label: 'non-admin dispatch authority helper',
+    text: 'function hasNonAdminDispatchClaimOnly() {',
+  },
+  {
     label: 'approved technician helper',
     text: 'function isApprovedTechnician() {',
   },
@@ -71,12 +83,20 @@ const requiredFragments = [
     text: 'function safeTechnicianTicketUpdate() {',
   },
   {
-    label: 'ticket updates are lazily routed by authenticated actor',
-    text: 'function safeTicketUpdateByActor() {',
+    label: 'admin ticket update is suspension-gated',
+    text: 'allow update: if isAdmin() && isNotSuspended();',
   },
   {
-    label: 'ticket update rule uses actor router',
-    text: 'allow update: if safeTicketUpdateByActor();',
+    label: 'dispatcher ticket update is explicitly actor-gated',
+    text: 'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  },
+  {
+    label: 'tenant evidence update is explicitly ownership-gated',
+    text: 'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  },
+  {
+    label: 'technician evidence update is explicitly actor-and-assignment-gated',
+    text: 'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
   },
   {
     label: 'technician cannot replace assigned technician identity',
@@ -119,8 +139,15 @@ for (const fragment of requiredFragments) {
   }
 }
 
-if ((rules.split('allow update: if safeTicketUpdateByActor();').length - 1) !== 2) {
-  failures.push('Actor-routed ticket update rule must exist exactly twice.');
+for (const rule of [
+  'allow update: if isAdmin() && isNotSuspended();',
+  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+]) {
+  if ((rules.split(rule).length - 1) !== 2) {
+    failures.push(`Explicit actor-gated ticket update rule must exist exactly twice: ${rule}`);
+  }
 }
 
 if (failures.length > 0) {
