@@ -79,6 +79,7 @@ test('launch-hardening verifier explicitly rejects direct assignment and overlap
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /overlapping ticket update authorization/);
   assert.match(verifierSource, /bounded ticket update router/);
-  assert.match(verifierSource, /Expected exactly two single ticket update gates/);
-  assert.match(verifierSource, /Technician helper must rely on the outer actor\/assignment gate/);
+  assert.match(verifierSource, /Single ticket update gate must exist exactly twice/);
+  assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, tenant, technician order/);
+  assert.match(verifierSource, /Technician append-only proof guard missing/);
 });
