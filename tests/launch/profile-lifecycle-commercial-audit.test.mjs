@@ -68,7 +68,10 @@ test('Technician workforce center includes credential document classes, payroll 
 test('Technician portal exposes profile, HR, offline, map and proof-readiness surfaces', async () => {
   const source = await read('src/technician/TechnicianApp.tsx');
   for (const route of ['/profile', '/hr', '/offline', '/map', '/proof-readiness']) {
-    assert.match(source, new RegExp(`path=["']\\${route.replaceAll('/', '\\/')}["']`), `Missing technician route ${route}`);
+    assert.ok(
+      source.includes(`path="${route}"`) || source.includes(`path='${route}'`),
+      `Missing technician route ${route}`,
+    );
   }
 });
 
@@ -111,7 +114,7 @@ test('Payment summary is server-configured, AED-only, versioned and mathematical
   const source = await read('src/components/onboarding/PaymentSummaryStep.tsx');
   expectAll(source, [
     /getOwnerPaymentConfiguration/,
-    /configuration\.currency !== ['"]AED['"]/,
+    /nextConfiguration\.currency !== ['"]AED['"]/,
     /configVersion/,
     /configHash/,
     /configEffectiveAtMs/,
