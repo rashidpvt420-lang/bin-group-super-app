@@ -53,7 +53,23 @@ jobs:
         run: node --test test/functions-tsconfig.test.mjs
 
       - name: Production stability guard
-        run: npm run test:stability
+        id: production_stability
+        shell: bash
+        run: |
+          set +e
+          npm run test:stability > production-stability-output.txt 2>&1
+          status=$?
+          cat production-stability-output.txt
+          exit $status
+
+      - name: Upload production-stability diagnostics
+        if: failure() && steps.production_stability.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-stability-diagnostics-${{ github.sha }}
+          path: production-stability-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Launch honesty and workflow-security tests
         id: launch_honesty

@@ -45,7 +45,13 @@ test('technician privacy is dispatch-first with explicit denied and listener-err
   const detail = read('src/technician/pages/TechnicianJobDetailPage.tsx');
 
   assert.doesNotMatch(rules, /function openMissionPoolRead\(|function safeOpenMissionClaim\(/);
-  assert.match(rules, /allow read: if participantCanRead\(resource\.data\) \|\| canDispatchJobs\(\);/);
+  assert.match(rules, /allow read: if isNotSuspended\(\) && \(participantCanRead\(resource\.data\) \|\| canDispatchJobs\(\)\);/);
+  assert.match(rules, /function profileAllowsAccess\(data\)/);
+  assert.match(rules, /data\.get\('status', ''\) in \[/);
+  assert.match(rules, /function hasDispatchAuthorityClaimOnly\(\)/);
+  assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
+  assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
+  assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\n\s*allow read, write: if false;/);
   assert.doesNotMatch(dashboard, /assignedTechnicianId['"],\s*['"]==['"],\s*null/);
   assert.doesNotMatch(dashboard, /CLAIM MISSION|Available Mission Pool/);
   assert.match(jobs, /setLoadError/);
