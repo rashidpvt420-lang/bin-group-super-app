@@ -1,6 +1,10 @@
 name: Temporary Apply Firestore Repair
 
 on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened]
   push:
     branches:
       - main
@@ -11,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: temporary-apply-firestore-repair
+  group: temporary-apply-firestore-repair-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -32,29 +36,76 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Set up Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply deterministic hardening
-        run: node scripts/apply-final-firestore-security-hardening.mjs
+      - name: Apply all remaining Firestore hardening
+        shell: bash
+        run: |
+          node scripts/exclude-ticket-rules-from-admin-catchall.mjs
+          node scripts/short-circuit-admin-catchall.mjs
+          node scripts/route-ticket-updates-by-actor.mjs
+          node scripts/final-firestore-postpatch-cleanup.mjs
 
       - name: Verify generated changes
         shell: bash
         run: |
           git diff --check
           git diff --stat
-          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
-            echo "Expected Firestore rule/test changes were not produced."
-            exit 1
-          fi
+          git diff -- firestore.rules test/security-rules.test.js
 
-      - name: Run rules suite and reject expression overflow
+      - name: Commit generated rule changes before testing
         shell: bash
         run: |
+          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
+            echo "Generated Firestore changes are already committed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- firestore.rules test/security-rules.test.js
+          git diff --cached --check
+          git commit -m "Route ticket updates through one actor authorization path"
+          git push origin HEAD:fix/final-firestore-security-clearance
+
+      - name: Run rules suite and reject expression overflow
+        id: rules
+        shell: bash
+        run: |
+          set +e
           set -o pipefail
           npm run test:rules 2>&1 | tee rules-test-output.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Persist rule-test diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p launch_package
+          cp rules-test-output.log launch_package/firestore-rule-test-output.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- launch_package/firestore-rule-test-output.txt
+          git commit -m "Record Firestore rule-test diagnostics" || true
+          git push origin HEAD:fix/final-firestore-security-clearance
+
+      - name: Enforce clean rules result
+        shell: bash
+        run: |
           if grep -F "maximum of 1000 expressions" rules-test-output.log; then
             echo "Firestore 1000-expression overflow remains."
+            exit 1
+          fi
+          if [ "${{ steps.rules.outputs.exit_code }}" != "0" ]; then
+            echo "Firestore/Storage rules suite failed."
             exit 1
           fi
 
@@ -62,13 +113,3 @@ jobs:
         run: |
           npm run test:stability
           npm run test:launch-honesty
-
-      - name: Commit and push verified changes
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- firestore.rules test/security-rules.test.js
-          git diff --cached --check
-          git commit -m "Enforce explicit user subcollections and stale-token suspension"
-          git push origin HEAD:fix/final-firestore-security-clearance
