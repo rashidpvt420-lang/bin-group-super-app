@@ -184,7 +184,16 @@ service cloud.firestore {
       );
     }
 
+    function hasNonAdminDispatchClaimOnly() {
+      return signedIn() && (
+        hasPermission('canDispatchJobs') ||
+        claimedRole() in ['operations_admin', 'operations_manager', 'dispatcher']
+      );
+    }
+
     function canDispatchJobs() {
+      // Check inexpensive signed claims first. The database-backed suspension
+      // lookup runs only for callers that actually possess dispatch authority.
       return hasDispatchAuthorityClaimOnly() && isNotSuspended();
     }
 
@@ -289,6 +298,14 @@ service cloud.firestore {
           data.get('status', '') in ['active', 'ACTIVE', 'approved', 'APPROVED'] ||
           data.get('approvalStatus', '') in ['approved', 'APPROVED']
         );
+    }
+
+    function hasApprovedTechnicianRecord() {
+      // Technician writes require the dedicated operational profile. The users
+      // document remains an identity/cache record and is not an approval source.
+      return signedIn() &&
+        exists(/databases/$(database)/documents/technicians/$(request.auth.uid)) &&
+        approvedTechnicianProfile(get(/databases/$(database)/documents/technicians/$(request.auth.uid)).data);
     }
 
     function isApprovedTechnician() {
@@ -431,8 +448,7 @@ service cloud.firestore {
 
     function safeTenantEvidenceUpdate() {
       return signedIn() &&
-        tenantOwns(resource.data) &&
-        isNotSuspended() &&
+        // Reject unrelated mutations before database reads and array invariants.
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'photos',
           'primaryPhotoUrl',
@@ -442,6 +458,7 @@ service cloud.firestore {
           'evidenceUploadError',
           'updatedAt'
         ]) &&
+        isNotSuspended() &&
         resource.data.get('evidenceStatus', '') != 'TENANT_EVIDENCE_UPLOADED' &&
         (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']) &&
         request.resource.data.get('photos', []).size() >= resource.data.get('photos', []).size() &&
@@ -490,8 +507,8 @@ service cloud.firestore {
     }
 
     function safeDispatcherTicketUpdate() {
-      return hasDispatchAuthorityClaimOnly() &&
-        isNotSuspended() &&
+      // Non-dispatch callers and unrelated mutations fail before database reads.
+      return hasNonAdminDispatchClaimOnly() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'assignedTechnicianId',
           'technicianId',
@@ -507,6 +524,7 @@ service cloud.firestore {
           'assignedByRole',
           'updatedAt'
         ]) &&
+        isNotSuspended() &&
         request.resource.data.get('status', resource.data.get('status', '')) in [
           'OPEN',
           'open',
@@ -524,19 +542,16 @@ service cloud.firestore {
     }
 
     function safeTechnicianTicketUpdate() {
-      return hasTechnicianClaim() &&
-        techOwns(resource.data) &&
-        isNotSuspended() &&
-        isApprovedTechnician() &&
-        !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      // The outer allow rule already verifies the technician claim and current
+      // assignment. Keep this helper bounded to mutable evidence fields,
+      // suspension, dedicated-profile approval, final-state protection, and
+      // append-only completion proof.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
           'techNotes',
           'workNotes',
           'notes',
-          'beforePhotos',
-          'afterPhotos',
           'afterPhotoUrl',
           'proofPhotos',
           'completionPhotos',
@@ -550,21 +565,19 @@ service cloud.firestore {
           'technicianLocation',
           'technicianLocationUpdatedAt'
         ]) &&
-        request.resource.data.get('beforePhotos', []).size() >= resource.data.get('beforePhotos', []).size() &&
-        request.resource.data.get('beforePhotos', []).hasAll(resource.data.get('beforePhotos', [])) &&
-        request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
-        request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', [])) &&
+        isNotSuspended() &&
+        hasApprovedTechnicianRecord() &&
+        !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
         request.resource.data.get('proofPhotos', []).size() >= resource.data.get('proofPhotos', []).size() &&
         request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', [])) &&
         request.resource.data.get('completionPhotos', []).size() >= resource.data.get('completionPhotos', []).size() &&
         request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', [])) &&
         request.resource.data.get('evidencePhotos', []).size() >= resource.data.get('evidencePhotos', []).size() &&
         request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', [])) &&
-        (!('assignedTechnicianId' in request.resource.data) || request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)) &&
-        (!('technicianId' in request.resource.data) || request.resource.data.technicianId == resource.data.get('technicianId', null)) &&
-        (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.get('techId', null)) &&
-        (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.get('priority', null)) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null));
+        (
+          resource.data.get('afterPhotoUrl', '') == '' ||
+          request.resource.data.get('afterPhotoUrl', '') == resource.data.get('afterPhotoUrl', '')
+        );
     }
 
     function safeTechnicianProfileUpdate(techId) {
@@ -954,6 +967,8 @@ service cloud.firestore {
           (request.auth.uid == userId || isAdmin());
       }
 
+      // Unknown and future user subcollections are denied until explicitly
+      // reviewed and allowlisted above.
       match /{subcollection}/{document=**} {
         allow read, write: if false;
       }
@@ -1043,14 +1058,20 @@ service cloud.firestore {
     match /tickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
+      allow update: if isAdmin() && isNotSuspended();
+      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
+      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
+      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
+      allow update: if isAdmin() && isNotSuspended();
+      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
+      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
+      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -1317,7 +1338,7 @@ service cloud.firestore {
 
     match /amenityBookings/{bookingId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
-      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data);
+      allow create: if isAdmin() || (signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data));
       allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data));
       allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
     }
@@ -1405,7 +1426,12 @@ service cloud.firestore {
 
     match /visitorParkingRequests/{requestId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
-      allow create: if false;
+      // Tenant submissions use the server-authoritative callable. Operations
+      // admins may create only an unsigned pending request; QR/pass material is
+      // generated by Cloud Functions after approval.
+      allow create: if isAdmin() &&
+        request.resource.data.get('status', 'pending') == 'pending' &&
+        !request.resource.data.keys().hasAny(['qrToken', 'passId', 'approvedAt', 'approvedBy']);
       allow update: if (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)))) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
         request.resource.data.get('status', '') in ['approved', 'rejected'];
@@ -1435,10 +1461,10 @@ service cloud.firestore {
 
     match /conversations/{conversationId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.get('participantUids', []));
-      allow create: if signedIn() &&
+      allow create: if isAdmin() || (signedIn() &&
         request.resource.data.get('participantUids', []) is list &&
         request.resource.data.get('participantUids', []).size() == 1 &&
-        request.resource.data.get('participantUids', [])[0] == request.auth.uid;
+        request.resource.data.get('participantUids', [])[0] == request.auth.uid);
       allow update: if isAdmin() || (signedIn() && request.auth.uid in resource.data.get('participantUids', []) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'status']));
       allow delete: if isAdmin();
 
@@ -1865,58 +1891,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /{collection}/{document=**} {
-      allow read: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();
-      allow create: if !(
-        collection in [
-          'system_secrets',
-          'users',
-          'audit_logs',
-          'auditLogs',
-          'analytics_events',
-          'security_audit_logs',
-          'telemetry_logs',
-          'payment_transactions',
-          'payments',
-          'transactions',
-          'invoices',
-          'invoice_registry',
-          'commissions',
-          'broker_commissions',
-          'broker_payout_requests',
-          'stripe_webhook_events',
-          'contract_signature_otps',
-          'contract_signature_otp_audit',
-          'notification_dispatch_claims',
-          'public_rate_limits',
-          'ai_usage'
-        ]
-      ) && hasAdminClaim();
-      allow update, delete: if !(
-        collection in [
-          'system_secrets',
-          'users',
-          'audit_logs',
-          'auditLogs',
-          'analytics_events',
-          'security_audit_logs',
-          'telemetry_logs',
-          'payment_transactions',
-          'payments',
-          'transactions',
-          'invoices',
-          'invoice_registry',
-          'commissions',
-          'broker_commissions',
-          'broker_payout_requests',
-          'stripe_webhook_events',
-          'contract_signature_otps',
-          'contract_signature_otp_audit',
-          'notification_dispatch_claims',
-          'public_rate_limits',
-          'ai_usage'
-        ]
-      ) && hasAdminClaim();
+    // Collections without an explicit policy are denied. Privileged browser
+    // clients must use an explicit collection rule or a server-side callable.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

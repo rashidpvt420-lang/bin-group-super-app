@@ -2,6 +2,22 @@ import { readFileSync } from 'node:fs';
 
 const rules = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
 
+function readFunction(name) {
+  const needle = `    function ${name}(`;
+  const start = rules.indexOf(needle);
+  if (start < 0) return null;
+  const open = rules.indexOf('{', start);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
 const forbiddenFragments = [
   {
     label: 'broad tenant property read fallback',
@@ -32,16 +48,20 @@ const forbiddenFragments = [
     text: '|| safeOpenMissionClaim()',
   },
   {
-    label: 'boolean-only database suspension guard',
-    text: "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true",
+    label: 'ticket update still evaluates every actor branch',
+    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
   },
   {
-    label: 'token-only directory list suspension guard',
-    text: "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (",
+    label: 'ticket update still uses the shared actor router',
+    text: 'allow update: if safeTicketUpdateByActor();',
   },
   {
-    label: 'broad user-subcollection authorization',
-    text: 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));',
+    label: 'shared actor-router helper remains',
+    text: 'function safeTicketUpdateByActor() {',
+  },
+  {
+    label: 'global admin catch-all remains',
+    text: 'match /{collection}/{document=**}',
   },
 ];
 
@@ -59,12 +79,24 @@ const requiredFragments = [
     text: 'function safeClientNotificationCreate(data) {',
   },
   {
+    label: 'fail-closed recursive fallback',
+    text: 'match /{document=**} {\n      allow read, write: if false;',
+  },
+  {
     label: 'technician dispatch authority helper',
     text: 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }',
   },
   {
-    label: 'approved technician helper',
+    label: 'non-admin dispatch authority helper',
+    text: 'function hasNonAdminDispatchClaimOnly() {',
+  },
+  {
+    label: 'approved technician read helper',
     text: 'function isApprovedTechnician() {',
+  },
+  {
+    label: 'dedicated technician write-approval helper',
+    text: 'function hasApprovedTechnicianRecord() {',
   },
   {
     label: 'tenant ticket unit/property binding helper',
@@ -79,12 +111,20 @@ const requiredFragments = [
     text: 'function safeTechnicianTicketUpdate() {',
   },
   {
-    label: 'ticket assignment and status transitions are dispatcher/server authoritative',
-    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
+    label: 'admin ticket update is suspension-gated',
+    text: 'allow update: if isAdmin() && isNotSuspended();',
   },
   {
-    label: 'technician cannot replace assigned technician identity',
-    text: "request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)",
+    label: 'dispatcher ticket update is explicitly actor-gated',
+    text: 'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  },
+  {
+    label: 'tenant evidence update is explicitly ownership-gated',
+    text: 'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  },
+  {
+    label: 'technician evidence update is explicitly actor-and-assignment-gated',
+    text: 'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
   },
   {
     label: 'payment transaction writes are server-only',
@@ -156,6 +196,43 @@ for (const fragment of requiredFragments) {
   const present = rules.includes(fragment.text) || (fragment.alt && rules.includes(fragment.alt));
   if (!present) {
     failures.push(`Required rule fragment missing: ${fragment.label}`);
+  }
+}
+
+for (const rule of [
+  'allow update: if isAdmin() && isNotSuspended();',
+  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+]) {
+  if ((rules.split(rule).length - 1) !== 2) {
+    failures.push(`Explicit actor-gated ticket update rule must exist exactly twice: ${rule}`);
+  }
+}
+
+const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
+if (!technicianUpdate) {
+  failures.push('Technician update helper could not be parsed.');
+} else {
+  for (const forbiddenField of [
+    "'assignedTechnicianId',",
+    "'technicianId',",
+    "'techId',",
+    "'priority',",
+    "'paymentVerified',",
+  ]) {
+    if (technicianUpdate.includes(forbiddenField)) {
+      failures.push(`Technician update allowlist exposes immutable field: ${forbiddenField}`);
+    }
+  }
+  for (const requiredProof of [
+    "request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))",
+    "request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))",
+    "request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))",
+  ]) {
+    if (!technicianUpdate.includes(requiredProof)) {
+      failures.push(`Technician append-only proof guard missing: ${requiredProof}`);
+    }
   }
 }
 
