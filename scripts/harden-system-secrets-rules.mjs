@@ -20,7 +20,9 @@ const failClosedCatchAll = `    // Collections without an explicit policy are de
 function readMatchBlock(source, marker) {
   const start = source.indexOf(marker);
   if (start < 0) return null;
-  const open = source.indexOf('{', start);
+  const markerOpen = marker.lastIndexOf('{');
+  if (markerOpen < 0) throw new Error(`Match marker has no block-opening brace: ${marker}`);
+  const open = start + markerOpen;
   let depth = 0;
   for (let index = open; index < source.length; index += 1) {
     if (source[index] === '{') depth += 1;
