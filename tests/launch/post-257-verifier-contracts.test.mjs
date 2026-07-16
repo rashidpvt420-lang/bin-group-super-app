@@ -10,13 +10,6 @@ const ticketBindingScript = path.join(root, 'scripts/apply-ticket-rule-binding.m
 const rulesVerifier = path.join(root, 'scripts/verify-firestore-launch-hardening.mjs');
 const scheduledVerifier = path.join(root, 'scripts/verify-scheduled-services-completeness.mjs');
 
-const actorSpecificTicketRules = [
-  'allow update: if isAdmin() && isNotSuspended();',
-  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
-  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
-  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
-];
-
 function runNode(script, cwd = root) {
   return spawnSync(process.execPath, [script], {
     cwd,
@@ -40,17 +33,10 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /\|\|\s*safeOpenMissionClaim\(\)/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionPoolRead\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
-    assert.doesNotMatch(
-      preparedRules,
-      /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
-    );
-    for (const rule of actorSpecificTicketRules) {
-      assert.equal(
-        preparedRules.split(rule).length - 1,
-        2,
-        `actor-specific ticket rule must exist once in tickets and once in maintenanceTickets: ${rule}`,
-      );
-    }
+    assert.match(preparedRules, /function safeTicketUpdateByActor\(\)/);
+    assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+    assert.match(preparedRules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
+    assert.match(preparedRules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
 
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);
@@ -87,11 +73,12 @@ test('scheduled-service verifier follows the centralized protected production li
   assert.match(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
 });
 
-test('launch-hardening verifier explicitly rejects direct technician assignment authority', () => {
+test('launch-hardening verifier explicitly rejects direct assignment and overlapping ticket gates', () => {
   const verifierSource = readFileSync(rulesVerifier, 'utf8');
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
-  assert.match(verifierSource, /monolithic ticket update authorization/);
-  assert.match(verifierSource, /Actor-specific ticket update rule must exist exactly twice/);
+  assert.match(verifierSource, /overlapping ticket update authorization/);
+  assert.match(verifierSource, /bounded ticket update router/);
+  assert.match(verifierSource, /Expected exactly two single ticket update gates/);
   assert.match(verifierSource, /Technician helper must rely on the outer actor\/assignment gate/);
 });
