@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'firestore.rules';
-let text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
 const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
@@ -25,9 +25,7 @@ function removeRuleFunction(functionName) {
     if (start < 0) break;
 
     const openingBrace = text.indexOf('{', start);
-    if (openingBrace < 0) {
-      throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
-    }
+    if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
 
     let depth = 0;
     let end = -1;
@@ -43,9 +41,7 @@ function removeRuleFunction(functionName) {
       }
     }
 
-    if (end < 0) {
-      throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
-    }
+    if (end < 0) throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
 
     text = `${text.slice(0, start)}${text.slice(end)}`;
     removed += 1;
@@ -66,9 +62,27 @@ if (directClaimReference.test(text)) {
   changed = true;
 }
 
-const canonicalTicketUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
-if (!text.includes(canonicalTicketUpdate)) {
-  throw new Error('[ticket-rule-binding] Tickets update rule is not server-authoritative after cleanup.');
+const monolithicUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
+const splitRules = [
+  '      allow update: if isAdmin() && isNotSuspended();',
+  '      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  '      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  '      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+];
+
+if (text.includes(monolithicUpdate)) {
+  text = text.split(monolithicUpdate).join(splitRules.join('\n'));
+  changed = true;
+}
+
+if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
+  throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
+}
+
+for (const rule of splitRules) {
+  if (text.split(rule).length - 1 !== 2) {
+    throw new Error(`[ticket-rule-binding] Expected exactly two actor-specific update rules: ${rule}`);
+  }
 }
 
 for (const forbidden of [
@@ -78,9 +92,10 @@ for (const forbidden of [
   'function openMissionPoolRead(',
   'function openMissionAvailable(',
   'openMissionPoolRead(resource.data)',
+  monolithicUpdate.trim(),
 ]) {
   if (text.includes(forbidden)) {
-    throw new Error(`[ticket-rule-binding] Forbidden direct technician claim fragment remains: ${forbidden}`);
+    throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
   }
 }
 
@@ -92,6 +107,6 @@ if (changed) writeFileSync(file, text);
 
 console.log(
   changed
-    ? `Applied server-authoritative ticket dispatch cleanup (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`
-    : 'Ticket and dispatch rules already server-authoritative.',
+    ? `Applied actor-specific ticket dispatch cleanup (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`
+    : 'Ticket and dispatch rules already actor-specific and server-authoritative.',
 );
