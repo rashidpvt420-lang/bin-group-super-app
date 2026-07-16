@@ -72,9 +72,27 @@ if (!rules.includes('match /broker_kyc_profiles/{brokerId}')) {
   rules = `${rules.slice(0, markerIndex)}${brokerRules}${rules.slice(markerIndex)}`;
 }
 
+const legacyAdminRead = "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();";
+const hardenedAdminRead = "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();";
+if (rules.includes(legacyAdminRead)) {
+  rules = rules.replace(legacyAdminRead, hardenedAdminRead);
+} else if (!rules.includes(hardenedAdminRead)) {
+  throw new Error('Unable to harden generic admin read fallback for Broker KYC rate limits.');
+}
+
+const legacyWriteAnchor = "          'public_rate_limits',\n          'ai_usage'";
+const hardenedWriteAnchor = "          'public_rate_limits',\n          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
+const legacyWriteCount = rules.split(legacyWriteAnchor).length - 1;
+const hardenedWriteCount = rules.split(hardenedWriteAnchor).length - 1;
+if (legacyWriteCount === 2 && hardenedWriteCount === 0) {
+  rules = rules.replaceAll(legacyWriteAnchor, hardenedWriteAnchor);
+} else if (!(legacyWriteCount === 0 && hardenedWriteCount === 2)) {
+  throw new Error(`Unexpected generic admin write fallback shape: legacy=${legacyWriteCount}, hardened=${hardenedWriteCount}`);
+}
+
 if (rules !== original) {
   fs.writeFileSync(rulesPath, `${rules.trimEnd()}\n`);
-  console.log('Broker KYC rules hardened.');
+  console.log('Broker KYC rules and generic admin fallbacks hardened.');
 } else {
-  console.log('Broker KYC rules already hardened.');
+  console.log('Broker KYC rules and generic admin fallbacks already hardened.');
 }
