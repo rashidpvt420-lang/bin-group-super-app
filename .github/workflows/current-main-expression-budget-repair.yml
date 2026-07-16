@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Set up Java 21 for Firebase emulators
@@ -39,20 +39,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply bounded ticket authorization
-        run: node scripts/apply-current-main-firestore-expression-budget.mjs
+      - name: Apply canonical Firestore authority pipeline
+        run: npm run prepare:rules
 
-      - name: Enforce committed and idempotent Firestore state
+      - name: Enforce deterministic and idempotent Firestore state
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check
-          if ! git diff --quiet -- firestore.rules; then
-            echo "::error::The deterministic expression-budget patch changes firestore.rules. Commit the generated canonical rules before merge."
-            git diff -- firestore.rules
+          cp firestore.rules /tmp/firestore.rules.prepared
+          npm run prepare:rules
+          if ! cmp -s firestore.rules /tmp/firestore.rules.prepared; then
+            echo "::error::The Firestore authority pipeline is not idempotent."
+            diff -u /tmp/firestore.rules.prepared firestore.rules || true
             exit 1
           fi
-          echo "Expression-budget rules are already canonical and committed."
+          git diff --check
+          echo "Expression-budget rules are deterministic and idempotent."
 
       - name: Run Firestore and Storage rules suite
         id: rules
