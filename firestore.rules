@@ -452,6 +452,7 @@ service cloud.firestore {
         claimedRole() == 'tenant' &&
         tenantOwns(data) &&
         isNotSuspended() &&
+        isNotSuspended() &&
         data.keys().hasAll(['unitId', 'propertyId']) &&
         data.get('unitId', null) is string &&
         data.get('propertyId', null) is string &&
