@@ -44,20 +44,20 @@ jobs:
       - name: Apply deterministic Firestore hardening
         run: node scripts/apply-final-firestore-security-hardening.mjs
 
-      - name: Verify generated diff
+      - name: Verify generated state
         shell: bash
         run: |
           git diff --check
           git diff --stat
           git diff -- firestore.rules test/security-rules.test.js
-          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
-            echo "No rule/test changes were produced."
-            exit 1
-          fi
 
-      - name: Commit generated repair to the PR branch
+      - name: Commit generated repair when needed
         shell: bash
         run: |
+          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
+            echo "Rule and test patch already applied."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- firestore.rules test/security-rules.test.js
@@ -66,12 +66,34 @@ jobs:
           git push origin HEAD:fix/final-firestore-security-clearance
 
       - name: Run Firestore and Storage rule tests
+        id: rule_tests
         shell: bash
         run: |
+          set +e
           set -o pipefail
           npm run test:rules 2>&1 | tee rules-test-output.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload complete rule-test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-rule-test-log-${{ github.run_id }}
+          path: rules-test-output.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce clean rule-test result
+        shell: bash
+        run: |
           if grep -F "maximum of 1000 expressions" rules-test-output.log; then
             echo "Firestore expression-limit failure detected."
+            exit 1
+          fi
+          if [ "${{ steps.rule_tests.outputs.exit_code }}" != "0" ]; then
+            echo "Firestore/Storage rule suite failed."
             exit 1
           fi
 
