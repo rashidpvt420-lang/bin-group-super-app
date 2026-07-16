@@ -21,8 +21,11 @@ const required = [
   'function hasDispatchAuthorityClaimOnly() {',
   'function hasNonAdminDispatchClaimOnly() {',
   'function safeTicketUpdateByActor() {',
-  "claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()",
-  'tenantOwns(resource.data) && safeTenantEvidenceUpdate()',
+  'return !signedIn() ? false :',
+  'hasAdminClaim() ? isNotSuspended() :',
+  'hasNonAdminDispatchClaimOnly() ? safeDispatcherTicketUpdate() :',
+  "claimedRole() in ['technician', 'tech'] ? (techOwns(resource.data) && safeTechnicianTicketUpdate()) :",
+  'tenantOwns(resource.data) ? safeTenantEvidenceUpdate() :',
   'return hasDispatchAuthorityClaimOnly() && isNotSuspended();',
   'function hasApprovedTechnicianRecord() {',
   "let changed = request.resource.data.diff(resource.data).affectedKeys();",
@@ -51,4 +54,4 @@ const forbidden = [
   'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
 for (const fragment of forbidden) if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
-console.log('[final-firestore-authority] ordered low-cost ticket authorization is canonical');
+console.log('[final-firestore-authority] single-path conditional ticket authorization is canonical');
