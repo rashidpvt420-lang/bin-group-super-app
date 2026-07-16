@@ -128,7 +128,8 @@ rules = replaceFunction(rules, 'safeDispatcherTicketUpdate', dispatcherUpdate);
 
 const technicianUpdate = `    function safeTechnicianTicketUpdate() {
       // The outer rule proves the technician claim and current assignment.
-      // Mutation shape is checked before suspension and approval profile reads.
+      // The follow-up optimizer narrows this helper to the live evidence fields
+      // and a single dedicated technician approval record.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
@@ -172,9 +173,9 @@ rules = replaceFunction(rules, 'safeTechnicianTicketUpdate', technicianUpdate);
 
 const monolithicUpdate = '      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
 const splitUpdate = `      allow update: if isAdmin() && isNotSuspended();
-      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
-      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
-      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();`;
+       allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
+       allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
+       allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();`;
 rules = replaceExpectedCount(rules, monolithicUpdate, splitUpdate, 2, 'actor-specific ticket update rules');
 
 const readCatchAll = "      allow read: if !(collection in ['system_secrets', 'users']) && hasAdminClaim();";
@@ -211,4 +212,9 @@ for (const required of [
 if (rules.includes(monolithicUpdate)) throw new Error('Monolithic ticket update rule remains.');
 
 fs.writeFileSync(rulesPath, rules, 'utf8');
-console.log('[current-main-expression-budget] Firestore ticket rules patched');
+
+// Always finish with the bounded live technician evidence policy. This makes
+// direct execution of this patcher as safe as prepare:rules.
+await import('./optimize-current-main-technician-ticket-rule.mjs');
+
+console.log('[current-main-expression-budget] Firestore ticket rules patched and technician rule bounded');
