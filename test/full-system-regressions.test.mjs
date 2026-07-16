@@ -8,7 +8,7 @@ function readRulesMatchBlock(rules, matchPath) {
   const needle = `match ${matchPath} {`;
   const start = rules.indexOf(needle);
   assert.ok(start >= 0, `Missing Firestore match block: ${matchPath}`);
-  const open = rules.indexOf('{', start);
+  const open = start + needle.length - 1;
   let depth = 0;
   for (let index = open; index < rules.length; index += 1) {
     if (rules[index] === '{') depth += 1;
