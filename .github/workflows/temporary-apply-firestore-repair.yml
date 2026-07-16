@@ -7,7 +7,7 @@ on:
     types: [synchronize]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: temporary-apply-firestore-repair-${{ github.event.pull_request.number }}
@@ -33,6 +33,23 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Align scheduled fallback verifier
+        run: node scripts/fix-scheduled-fallback-verifier.mjs
+
+      - name: Commit verifier alignment
+        shell: bash
+        run: |
+          git diff --check
+          if git diff --quiet -- scripts/verify-scheduled-services-completeness.mjs; then
+            echo "Expected scheduled verifier change was not produced."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- scripts/verify-scheduled-services-completeness.mjs
+          git commit -m "Validate fail-closed fallback outcomes"
+          git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Verify scheduled-services completeness
         run: node scripts/verify-scheduled-services-completeness.mjs
