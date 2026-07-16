@@ -164,14 +164,18 @@ service cloud.firestore {
         )
       );
     }
-    function canDispatchJobs() {
-      return hasAdminClaim() ||
+    function hasDispatchAuthorityClaimOnly() {
+      return signedIn() && (
+        hasAdminClaim() ||
         hasPermission('canDispatchJobs') ||
-        (signedIn() && (
-          request.auth.token.get('role', '') in ['operations_manager', 'dispatcher'] ||
-          request.auth.token.get('userRole', '') in ['operations_manager', 'dispatcher'] ||
-          request.auth.token.get('primaryRole', '') in ['operations_manager', 'dispatcher']
-        ));
+        claimedRole() in ['operations_admin', 'operations_manager', 'dispatcher']
+      );
+    }
+
+    function canDispatchJobs() {
+      // Check inexpensive signed claims first. The database-backed suspension
+      // lookup runs only for callers that actually possess dispatch authority.
+      return hasDispatchAuthorityClaimOnly() && isNotSuspended();
     }
 
     function authEmail() { return signedIn() ? request.auth.token.get('email', null) : null; }
@@ -416,7 +420,19 @@ service cloud.firestore {
     }
 
     function safeTenantEvidenceUpdate() {
-      return signedIn() && tenantOwns(resource.data) &&
+      return signedIn() &&
+        tenantOwns(resource.data) &&
+        isNotSuspended() &&
+        // Reject unrelated mutations before evaluating array invariants.
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'photos',
+          'primaryPhotoUrl',
+          'tenantPhotos',
+          'evidenceStatus',
+          'evidenceUploadedAt',
+          'evidenceUploadError',
+          'updatedAt'
+        ]) &&
         resource.data.get('evidenceStatus', '') != 'TENANT_EVIDENCE_UPLOADED' &&
         (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']) &&
         request.resource.data.get('photos', []).size() >= resource.data.get('photos', []).size() &&
@@ -426,8 +442,7 @@ service cloud.firestore {
         (
           resource.data.get('primaryPhotoUrl', '') == '' ||
           request.resource.data.get('primaryPhotoUrl', '') == resource.data.get('primaryPhotoUrl', '')
-        ) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photos', 'primaryPhotoUrl', 'tenantPhotos', 'evidenceStatus', 'evidenceUploadedAt', 'evidenceUploadError', 'updatedAt']);
+        );
     }
 
 
@@ -436,6 +451,7 @@ service cloud.firestore {
       return signedIn() &&
         claimedRole() == 'tenant' &&
         tenantOwns(data) &&
+        isNotSuspended() &&
         data.keys().hasAll(['unitId', 'propertyId']) &&
         data.get('unitId', null) is string &&
         data.get('propertyId', null) is string &&
@@ -465,7 +481,9 @@ service cloud.firestore {
     }
 
     function safeDispatcherTicketUpdate() {
-      return canDispatchJobs() &&
+      // Non-dispatch callers fail on claims before any Firestore profile read.
+      return hasDispatchAuthorityClaimOnly() &&
+        isNotSuspended() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'assignedTechnicianId',
           'technicianId',
@@ -498,7 +516,11 @@ service cloud.firestore {
     }
 
     function safeTechnicianTicketUpdate() {
-      return isApprovedTechnician() && techOwns(resource.data) &&
+      // Non-technicians and unassigned technicians fail before profile reads.
+      return hasTechnicianClaim() &&
+        techOwns(resource.data) &&
+        isNotSuspended() &&
+        isApprovedTechnician() &&
         !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
@@ -536,6 +558,21 @@ service cloud.firestore {
         (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.get('techId', null)) &&
         (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.get('priority', null)) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null));
+    }
+
+    function safeTicketUpdateByActor() {
+      // Select exactly one authorization path. Nested conditionals are lazy,
+      // preventing dispatcher, tenant, and technician predicates from all
+      // consuming the same Firestore Rules expression budget.
+      return isAdmin()
+        ? isNotSuspended()
+        : hasDispatchAuthorityClaimOnly()
+          ? safeDispatcherTicketUpdate()
+          : claimedRole() == 'tenant'
+            ? safeTenantEvidenceUpdate()
+            : claimedRole() == 'technician'
+              ? safeTechnicianTicketUpdate()
+              : false;
     }
 
     function safeTechnicianProfileUpdate(techId) {
@@ -911,11 +948,24 @@ service cloud.firestore {
       allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
       allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
       allow delete: if isNotSuspended() && isAdmin();
+      match /fcmTokens/{tokenId} {
+        allow read: if isNotSuspended() &&
+          (request.auth.uid == userId || isAdmin() || isHr());
+        allow create, update, delete: if isNotSuspended() &&
+          (request.auth.uid == userId || isAdmin());
+      }
+
+      match /deviceReadiness/{readinessId} {
+        allow read: if isNotSuspended() &&
+          (request.auth.uid == userId || isAdmin() || isHr());
+        allow create, update, delete: if isNotSuspended() &&
+          (request.auth.uid == userId || isAdmin());
+      }
+
+      // Unknown and future user subcollections are denied until explicitly
+      // reviewed and allowlisted above.
       match /{subcollection}/{document=**} {
-        allow read: if isNotSuspended() && ((signedIn() && request.auth.uid == userId) || isAdmin() || isHr());
-        allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));
-        allow update: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));
-        allow delete: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));
+        allow read, write: if false;
       }
     }
 
@@ -1003,14 +1053,14 @@ service cloud.firestore {
     match /tickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
+      allow update: if safeTicketUpdateByActor();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();
+      allow update: if safeTicketUpdateByActor();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -1826,10 +1876,13 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if collection != 'system_secrets' && hasAdminClaim();
+      allow read: if hasAdminClaim() && !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']);
       allow create: if !(
         collection in [
           'system_secrets',
+          'users',
+          'tickets',
+          'maintenanceTickets',
           'audit_logs',
           'auditLogs',
           'analytics_events',
@@ -1854,6 +1907,9 @@ service cloud.firestore {
       allow update, delete: if !(
         collection in [
           'system_secrets',
+          'users',
+          'tickets',
+          'maintenanceTickets',
           'audit_logs',
           'auditLogs',
           'analytics_events',
