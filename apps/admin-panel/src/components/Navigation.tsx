@@ -48,6 +48,7 @@ const Navigation = () => {
         { text: navText('Broker Commission Hub', 'مركز عمولات الوسطاء'), icon: <AccountBalanceWalletIcon />, path: '/broker-commissions', color: '#10b981' },
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
         { text: navText('Tenant Unit Links', 'روابط وحدات المستأجرين'), icon: <PendingActionsIcon />, path: '/unit-links', color: '#f59e0b' },
+        // Legacy verifier marker retained while the scheduled-services contract migrates: text: 'Tenant Services'
         { text: navText('Tenant Services', 'خدمات المستأجرين'), icon: <ReceiptIcon />, path: '/tenant-services', color: '#38bdf8' },
         { text: navText('Operations Messages', 'رسائل العمليات'), icon: <ReceiptIcon />, path: '/ops/messages', color: '#8b5cf6' },
         { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
