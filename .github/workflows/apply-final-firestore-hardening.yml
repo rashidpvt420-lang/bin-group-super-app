@@ -8,6 +8,7 @@ on:
       - .github/workflows/apply-final-firestore-hardening.yml
       - scripts/apply-final-firestore-security-hardening.mjs
       - scripts/final-firestore-postpatch-cleanup.mjs
+      - scripts/harden-system-secrets-rules.mjs
   pull_request:
     branches:
       - main
