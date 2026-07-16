@@ -18,7 +18,7 @@ function runNode(script, cwd = root) {
   });
 }
 
-test('checked-in rules become server-authoritative under the final prepare:rules transform', () => {
+test('checked-in rules remain server-authoritative under the ticket binding transform', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-ticket-rules-'));
   try {
     const sourceRules = readFileSync(path.join(root, 'firestore.rules'), 'utf8');
@@ -33,7 +33,21 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /\|\|\s*safeOpenMissionClaim\(\)/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionPoolRead\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
-    assert.match(
+
+    for (const actorRule of [
+      'allow update: if isAdmin() && isNotSuspended();',
+      'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+      'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+      'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+    ]) {
+      assert.equal(
+        preparedRules.split(actorRule).length - 1,
+        2,
+        `actor-specific ticket rule must exist exactly twice: ${actorRule}`,
+      );
+    }
+
+    assert.doesNotMatch(
       preparedRules,
       /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
     );
@@ -78,4 +92,6 @@ test('launch-hardening verifier explicitly rejects direct technician assignment 
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /ticket assignment and status transitions are dispatcher\/server authoritative/);
+  assert.match(verifierSource, /hasNonAdminDispatchClaimOnly\(\) && safeDispatcherTicketUpdate\(\)/);
+  assert.match(verifierSource, /hasTechnicianClaim\(\) && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
 });
