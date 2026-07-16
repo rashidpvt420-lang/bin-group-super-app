@@ -60,7 +60,7 @@ const requiredFragments = [
   ['router caches dispatcher authority once', 'let dispatcher = authenticated && ('],
   ['admin branch uses cached authority', '(admin && isNotSuspended())'],
   ['dispatcher branch uses cached authority', '(!admin && dispatcher && safeDispatcherTicketUpdate())'],
-  ['tenant branch is role-discriminated', "(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())"],
+  ['tenant branch supports roleless legacy claims but excludes named non-tenant roles', "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())"],
   ['technician branch is role-discriminated', "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())"],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
@@ -95,7 +95,7 @@ if (!router) {
   const dispatcherClaim = router.indexOf('let dispatcher = authenticated && (');
   const admin = router.indexOf('(admin && isNotSuspended())');
   const dispatcher = router.indexOf('(!admin && dispatcher && safeDispatcherTicketUpdate())');
-  const tenant = router.indexOf("(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())");
+  const tenant = router.indexOf("(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())");
   const technician = router.indexOf("(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())");
   if (
     [authentication, role, adminClaim, dispatcherClaim, admin, dispatcher, tenant, technician].some((index) => index < 0) ||
