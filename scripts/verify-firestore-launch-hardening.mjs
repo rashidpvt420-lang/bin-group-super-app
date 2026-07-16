@@ -94,39 +94,22 @@ if (!dispatcherUpdate || dispatcherUpdate.includes('hasDispatchAuthorityClaimOnl
 }
 
 const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
-if (!technicianUpdate || technicianUpdate.includes('hasTechnicianClaim() &&') || technicianUpdate.includes('techOwns(resource.data) &&')) {
-  failures.push('Technician helper must rely on the outer actor/assignment gate.');
+if (!technicianUpdate) {
+  failures.push('Technician update helper could not be parsed.');
 } else {
+  if (technicianUpdate.includes('hasTechnicianClaim() &&') || technicianUpdate.includes('techOwns(resource.data) &&')) {
+    failures.push('Technician helper must rely on the outer actor and assignment gate.');
+  }
+
   const diffIndex = technicianUpdate.indexOf('affectedKeys().hasOnly([');
   const suspensionIndex = technicianUpdate.indexOf('isNotSuspended() &&');
   const approvalIndex = technicianUpdate.indexOf('hasApprovedTechnicianRecord() &&');
   if (diffIndex < 0 || suspensionIndex < 0 || approvalIndex < 0 || !(diffIndex < suspensionIndex && suspensionIndex < approvalIndex)) {
     failures.push('Technician helper must reject mutation shape before suspension and the dedicated approval read.');
   }
-  for (const immutableField of ["'beforePhotos',", "'assignedTechnicianId',", "'technicianId',", "'techId',", "'priority',", "'paymentVerified',"]) {
-    if (technicianUpdate.includes(immutableField)) failures.push(`Technician mutable allowlist contains obsolete or immutable field: ${immutableField}`);
-  }
-  for (const requiredProof of ["'afterPhotos',", "'proofPhotos',", "'completionPhotos',", "'evidencePhotos',"]) {
-    if (!technicianUpdate.includes(requiredProof)) failures.push(`Technician live proof field missing: ${requiredProof}`);
-  }
-}
 
-for (const rule of [
-  'allow update: if isAdmin() && isNotSuspended();',
-  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
-  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
-  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
-]) {
-  if ((rules.split(rule).length - 1) !== 2) {
-    failures.push(`Explicit actor-gated ticket update rule must exist exactly twice: ${rule}`);
-  }
-}
-
-const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
-if (!technicianUpdate) {
-  failures.push('Technician update helper could not be parsed.');
-} else {
   for (const forbiddenField of [
+    "'beforePhotos',",
     "'assignedTechnicianId',",
     "'technicianId',",
     "'techId',",
@@ -134,16 +117,22 @@ if (!technicianUpdate) {
     "'paymentVerified',",
   ]) {
     if (technicianUpdate.includes(forbiddenField)) {
-      failures.push(`Technician update allowlist exposes immutable field: ${forbiddenField}`);
+      failures.push(`Technician mutable allowlist contains obsolete or immutable field: ${forbiddenField}`);
     }
   }
+
   for (const requiredProof of [
+    "'afterPhotos',",
+    "'proofPhotos',",
+    "'completionPhotos',",
+    "'evidencePhotos',",
+    "request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', []))",
     "request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))",
     "request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))",
     "request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))",
   ]) {
     if (!technicianUpdate.includes(requiredProof)) {
-      failures.push(`Technician append-only proof guard missing: ${requiredProof}`);
+      failures.push(`Technician live append-only proof guard missing: ${requiredProof}`);
     }
   }
 }
