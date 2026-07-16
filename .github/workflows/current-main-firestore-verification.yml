@@ -44,17 +44,25 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Print expression-overflow context
+      - name: Build expression-overflow diagnostic
         if: always()
         shell: bash
         run: |
           if grep -Fq "maximum of 1000 expressions" current-main-rules-output.log; then
-            echo "===== FIRESTORE EXPRESSION OVERFLOW CONTEXT ====="
-            grep -n -B 5 -A 8 -F "maximum of 1000 expressions" current-main-rules-output.log || true
-            echo "===== END OVERFLOW CONTEXT ====="
+            grep -n -B 8 -A 12 -F "maximum of 1000 expressions" current-main-rules-output.log > overflow-context.txt || true
           else
-            echo "No Firestore 1000-expression overflow detected."
+            echo "No Firestore 1000-expression overflow detected." > overflow-context.txt
           fi
+          cat overflow-context.txt
+
+      - name: Upload expression-overflow diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-main-overflow-context-${{ github.run_id }}
+          path: overflow-context.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Enforce expression-budget and rules result
         shell: bash
