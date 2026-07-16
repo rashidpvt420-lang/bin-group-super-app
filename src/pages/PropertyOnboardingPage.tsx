@@ -5,12 +5,12 @@ import { ArrowLeft } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useOnboardingStore } from '../store/onboardingStore';
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
+import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import AssetProfileStep from '../components/onboarding/AssetProfileStep';
 import PropertyLocationStep from '../components/onboarding/PropertyLocationStep';
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
 import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
 import ProofUploadStep from '../components/onboarding/ProofUploadStep';
-import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
 import ContractSignatureStep from '../components/onboarding/ContractSignatureStep';
 import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
@@ -18,9 +18,10 @@ import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionSte
 
 const INTERNAL_STEP_COUNT = 11;
 const VISIBLE_STAGE_COUNT = 5;
-// Groups the 11 data-collection steps into 5 owner-facing stages:
-// Company(1) | Property(2-4: asset+location+systems) | Service Plan(5) | Account(6-8: proof+signup+review) | Contract & Payment(9-11)
-const stageByInternalStep = [1, 2, 2, 2, 3, 4, 4, 4, 5, 5, 5];
+// Company(1) | Account(2) | Property(3-5: asset+location+systems) |
+// Service Plan & Proof(6-8) | Contract & Payment(9-11).
+// Authentication is deliberately completed before title-deed upload/OCR.
+const stageByInternalStep = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5];
 
 const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
 const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampStep(step, INTERNAL_STEP_COUNT) - 1] || 1;
@@ -35,9 +36,9 @@ export default function PropertyOnboardingPage() {
 
     const visibleStages = [
         readable(t('onboarding.company'), label('Company', 'الشركة')),
-        readable(t('onboarding.property'), label('Property', 'العقار')),
-        readable(t('onboarding.service_plan'), label('Service Plan', 'خطة الخدمة')),
         readable(t('onboarding.verification'), label('Account', 'الحساب')),
+        readable(t('onboarding.property'), label('Property', 'العقار')),
+        readable(t('onboarding.service_plan'), label('Service & Proof', 'الخدمة والإثبات')),
         readable(t('onboarding.contract_payment'), label('Contract & Payment', 'العقد والدفع')),
     ];
 
@@ -53,12 +54,12 @@ export default function PropertyOnboardingPage() {
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
             case 1: return <CompanyProfileStep onNext={nextStep} />;
-            case 2: return <AssetProfileStep onNext={nextStep} onBack={prevStep} />;
-            case 3: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
-            case 4: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
-            case 5: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
-            case 6: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
-            case 7: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 2: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 3: return <AssetProfileStep onNext={nextStep} onBack={prevStep} />;
+            case 4: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
+            case 5: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
+            case 6: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
+            case 7: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
             case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
             case 9: return <ContractSignatureStep onNext={nextStep} onBack={prevStep} />;
             case 10: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
