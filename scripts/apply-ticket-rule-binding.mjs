@@ -55,6 +55,7 @@ const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
 const removedDirectClaims = removeRuleFunction('safeOpenMissionClaim');
 const removedOpenPool = removeRuleFunction('openMissionPoolRead');
 const removedOpenAvailability = removeRuleFunction('openMissionAvailable');
+const removedSharedRouter = removeRuleFunction('safeTicketUpdateByActor');
 
 const directClaimReference = /\s*\|\|\s*safeOpenMissionClaim\(\)/g;
 if (directClaimReference.test(text)) {

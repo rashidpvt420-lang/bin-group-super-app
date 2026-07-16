@@ -111,6 +111,43 @@ if (!technicianUpdate || technicianUpdate.includes('hasTechnicianClaim() &&') ||
   }
 }
 
+for (const rule of [
+  'allow update: if isAdmin() && isNotSuspended();',
+  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+]) {
+  if ((rules.split(rule).length - 1) !== 2) {
+    failures.push(`Explicit actor-gated ticket update rule must exist exactly twice: ${rule}`);
+  }
+}
+
+const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
+if (!technicianUpdate) {
+  failures.push('Technician update helper could not be parsed.');
+} else {
+  for (const forbiddenField of [
+    "'assignedTechnicianId',",
+    "'technicianId',",
+    "'techId',",
+    "'priority',",
+    "'paymentVerified',",
+  ]) {
+    if (technicianUpdate.includes(forbiddenField)) {
+      failures.push(`Technician update allowlist exposes immutable field: ${forbiddenField}`);
+    }
+  }
+  for (const requiredProof of [
+    "request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))",
+    "request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))",
+    "request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))",
+  ]) {
+    if (!technicianUpdate.includes(requiredProof)) {
+      failures.push(`Technician append-only proof guard missing: ${requiredProof}`);
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Firestore launch hardening verification failed:');
   for (const failure of failures) console.error(`- ${failure}`);
