@@ -58,15 +58,14 @@ if (directClaimReference.test(text)) {
 }
 
 const router = `    function safeTicketUpdateByActor() {
-      // One ordered actor branch performs database-backed authorization. Cheap
-      // token and ownership checks select the branch before profile reads or
-      // append-only evidence validation.
-      return signedIn() && (
-        (hasAdminClaim() && isNotSuspended()) ||
-        (hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
-        (claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()) ||
-        (tenantOwns(resource.data) && safeTenantEvidenceUpdate())
-      );
+      // Nested conditionals force Firestore to evaluate exactly one actor path.
+      // This avoids evaluator exhaustion on denied writes.
+      return !signedIn() ? false :
+        hasAdminClaim() ? isNotSuspended() :
+        hasNonAdminDispatchClaimOnly() ? safeDispatcherTicketUpdate() :
+        claimedRole() in ['technician', 'tech'] ? (techOwns(resource.data) && safeTechnicianTicketUpdate()) :
+        tenantOwns(resource.data) ? safeTenantEvidenceUpdate() :
+        false;
     }
 
 `;
@@ -109,4 +108,4 @@ for (const forbidden of [
 }
 if (!text.includes(canonicalCreate)) throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
 if (changed) writeFileSync(file, text);
-console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
+console.log(`Applied bounded single-path ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
