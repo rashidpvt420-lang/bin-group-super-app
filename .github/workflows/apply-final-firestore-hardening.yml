@@ -9,6 +9,7 @@ on:
       - scripts/apply-final-firestore-security-hardening.mjs
       - scripts/final-firestore-postpatch-cleanup.mjs
       - scripts/exclude-ticket-rules-from-admin-catchall.mjs
+      - scripts/short-circuit-admin-catchall.mjs
       - scripts/harden-system-secrets-rules.mjs
   pull_request:
     branches:
@@ -59,6 +60,7 @@ jobs:
             node scripts/apply-final-firestore-security-hardening.mjs
           fi
           node scripts/exclude-ticket-rules-from-admin-catchall.mjs
+          node scripts/short-circuit-admin-catchall.mjs
           node scripts/final-firestore-postpatch-cleanup.mjs
 
       - name: Verify generated state
@@ -79,7 +81,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- firestore.rules test/security-rules.test.js
           git diff --cached --check
-          git commit -m "Isolate ticket rules from the global admin catch-all"
+          git commit -m "Short-circuit global admin catch-all authorization"
           git push origin HEAD:fix/final-firestore-security-clearance
 
       - name: Run Firestore and Storage rule tests
