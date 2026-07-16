@@ -172,6 +172,13 @@ service cloud.firestore {
       );
     }
 
+    function hasNonAdminDispatchClaimOnly() {
+      return signedIn() && (
+        hasPermission('canDispatchJobs') ||
+        claimedRole() in ['operations_admin', 'operations_manager', 'dispatcher']
+      );
+    }
+
     function canDispatchJobs() {
       // Check inexpensive signed claims first. The database-backed suspension
       // lookup runs only for callers that actually possess dispatch authority.
@@ -421,9 +428,7 @@ service cloud.firestore {
 
     function safeTenantEvidenceUpdate() {
       return signedIn() &&
-        tenantOwns(resource.data) &&
-        isNotSuspended() &&
-        // Reject unrelated mutations before evaluating array invariants.
+        // Reject unrelated mutations before database reads and array invariants.
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'photos',
           'primaryPhotoUrl',
@@ -433,6 +438,7 @@ service cloud.firestore {
           'evidenceUploadError',
           'updatedAt'
         ]) &&
+        isNotSuspended() &&
         resource.data.get('evidenceStatus', '') != 'TENANT_EVIDENCE_UPLOADED' &&
         (!('evidenceStatus' in request.resource.data) || request.resource.data.evidenceStatus in ['PENDING_TENANT_UPLOAD', 'TENANT_EVIDENCE_UPLOADED', 'TENANT_EVIDENCE_UPLOAD_FAILED']) &&
         request.resource.data.get('photos', []).size() >= resource.data.get('photos', []).size() &&
@@ -481,9 +487,8 @@ service cloud.firestore {
     }
 
     function safeDispatcherTicketUpdate() {
-      // Non-dispatch callers fail on claims before any Firestore profile read.
-      return hasDispatchAuthorityClaimOnly() &&
-        isNotSuspended() &&
+      // Non-dispatch callers and unrelated mutations fail before database reads.
+      return hasNonAdminDispatchClaimOnly() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'assignedTechnicianId',
           'technicianId',
@@ -499,6 +504,7 @@ service cloud.firestore {
           'assignedByRole',
           'updatedAt'
         ]) &&
+        isNotSuspended() &&
         request.resource.data.get('status', resource.data.get('status', '')) in [
           'OPEN',
           'open',
@@ -516,12 +522,10 @@ service cloud.firestore {
     }
 
     function safeTechnicianTicketUpdate() {
-      // Non-technicians and unassigned technicians fail before profile reads.
+      // Non-technicians, unassigned technicians, and unrelated mutations
+      // fail before suspension and approval profile reads.
       return hasTechnicianClaim() &&
         techOwns(resource.data) &&
-        isNotSuspended() &&
-        isApprovedTechnician() &&
-        !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
@@ -543,6 +547,9 @@ service cloud.firestore {
           'technicianLocation',
           'technicianLocationUpdatedAt'
         ]) &&
+        isNotSuspended() &&
+        isApprovedTechnician() &&
+        !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
         request.resource.data.get('beforePhotos', []).size() >= resource.data.get('beforePhotos', []).size() &&
         request.resource.data.get('beforePhotos', []).hasAll(resource.data.get('beforePhotos', [])) &&
         request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
@@ -558,21 +565,6 @@ service cloud.firestore {
         (!('techId' in request.resource.data) || request.resource.data.techId == resource.data.get('techId', null)) &&
         (!('priority' in request.resource.data) || request.resource.data.priority == resource.data.get('priority', null)) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null));
-    }
-
-    function safeTicketUpdateByActor() {
-      // Select exactly one authorization path. Nested conditionals are lazy,
-      // preventing dispatcher, tenant, and technician predicates from all
-      // consuming the same Firestore Rules expression budget.
-      return isAdmin()
-        ? isNotSuspended()
-        : hasDispatchAuthorityClaimOnly()
-          ? safeDispatcherTicketUpdate()
-          : claimedRole() == 'tenant'
-            ? safeTenantEvidenceUpdate()
-            : claimedRole() == 'technician'
-              ? safeTechnicianTicketUpdate()
-              : false;
     }
 
     function safeTechnicianProfileUpdate(techId) {
@@ -1053,14 +1045,20 @@ service cloud.firestore {
     match /tickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if safeTicketUpdateByActor();
+      allow update: if isAdmin() && isNotSuspended();
+      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
+      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
+      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if safeTicketUpdateByActor();
+      allow update: if isAdmin() && isNotSuspended();
+      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
+      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
+      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
