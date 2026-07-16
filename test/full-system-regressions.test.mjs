@@ -164,7 +164,10 @@ test('tenant physical access and service tickets are server authoritative', () =
   const gatePassBlock = readRulesMatchBlock(rules, '/gatePasses/{passId}');
   const visitorParkingBlock = readRulesMatchBlock(rules, '/visitorParkingRequests/{requestId}');
   assert.match(gatePassBlock, /allow create, update, delete: if false;/);
-  assert.match(visitorParkingBlock, /allow create: if false;/);
+  assert.match(visitorParkingBlock, /allow create: if isAdmin\(\) &&/);
+  assert.match(visitorParkingBlock, /request\.resource\.data\.get\('status', 'pending'\) == 'pending'/);
+  assert.match(visitorParkingBlock, /!request\.resource\.data\.keys\(\)\.hasAny\(\['qrToken', 'passId', 'approvedAt', 'approvedBy'\]\)/);
+  assert.match(visitorParkingBlock, /allow delete: if false;/);
   assert.doesNotMatch(gatePage, /addDoc\(collection\(db,\s*['"]gatePasses['"]/);
   assert.doesNotMatch(parkingPage, /addDoc\(collection\(db,\s*['"]visitorParkingRequests['"]/);
   assert.match(tenantTickets, /export const createTenantServiceTicket/);
