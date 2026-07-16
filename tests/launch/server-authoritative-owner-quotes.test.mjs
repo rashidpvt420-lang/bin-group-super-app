@@ -1,3 +1,4 @@
+// Combined candidate guard: expression-safe Firestore rules plus server-authoritative owner quotes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
