@@ -57,6 +57,7 @@ describe('Broker KYC security rules', () => {
   it('allows only the owning broker and authorised admins to read the private KYC vault', async () => {
     await seed('users/broker_a', { uid: 'broker_a', role: 'broker', status: 'active' });
     await seed('users/broker_b', { uid: 'broker_b', role: 'broker', status: 'active' });
+    await seed('users/admin_user', { uid: 'admin_user', role: 'admin', status: 'active', suspended: false });
     await seed('broker_kyc_profiles/broker_a', {
       uid: 'broker_a',
       reraLicense: 'RERA-PRIVATE',
@@ -65,26 +66,31 @@ describe('Broker KYC security rules', () => {
 
     const brokerADb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
     const brokerBDb = testEnv.authenticatedContext('broker_b', { role: 'broker' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
 
     await assertSucceeds(getDoc(doc(brokerADb, 'broker_kyc_profiles/broker_a')));
     await assertFails(getDoc(doc(brokerBDb, 'broker_kyc_profiles/broker_a')));
     await assertSucceeds(getDoc(doc(adminDb, 'broker_kyc_profiles/broker_a')));
   });
 
-  it('denies all client writes to Broker KYC and rate-limit documents', async () => {
+  it('denies all client writes to Broker KYC and all client access to rate-limit documents', async () => {
     await seed('users/broker_a', { uid: 'broker_a', role: 'broker', status: 'active' });
+    await seed('users/admin_user', { uid: 'admin_user', role: 'admin', status: 'active', suspended: false });
     await seed('broker_kyc_profiles/broker_a', { uid: 'broker_a', brokerKycStatus: 'INCOMPLETE' });
+    await seed('broker_kyc_submission_limits/broker_a', { brokerUid: 'broker_a', count: 1 });
 
     const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
 
     await assertFails(updateDoc(doc(brokerDb, 'broker_kyc_profiles/broker_a'), {
       brokerKycStatus: 'APPROVED',
     }));
-    await assertFails(setDoc(doc(brokerDb, 'broker_kyc_submission_limits/broker_a'), { count: 0 }));
     await assertFails(updateDoc(doc(adminDb, 'broker_kyc_profiles/broker_a'), {
       brokerKycStatus: 'APPROVED',
     }));
+    await assertFails(getDoc(doc(brokerDb, 'broker_kyc_submission_limits/broker_a')));
+    await assertFails(getDoc(doc(adminDb, 'broker_kyc_submission_limits/broker_a')));
+    await assertFails(setDoc(doc(brokerDb, 'broker_kyc_submission_limits/broker_a'), { count: 0 }));
+    await assertFails(setDoc(doc(adminDb, 'broker_kyc_submission_limits/broker_a'), { count: 0 }));
   });
 });

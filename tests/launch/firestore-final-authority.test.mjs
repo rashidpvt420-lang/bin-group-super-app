@@ -37,7 +37,13 @@ test('final Firestore authority hardener is status-aware, explicit, actor-specif
       assert.equal(rules.split(rule).length - 1, 2, `Expected actor-specific rule twice: ${rule}`);
     }
 
-    assert.match(rules, /!\(collection in \['system_secrets', 'users', 'tickets', 'maintenanceTickets'\]\) && hasAdminClaim\(\)/);
+    assert.match(
+      rules,
+      /!\(collection in \['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits'\]\) && hasAdminClaim\(\)/,
+    );
+    assert.match(rules, /match \/broker_kyc_profiles\/\{brokerId\} \{/);
+    assert.match(rules, /match \/broker_kyc_submission_limits\/\{brokerId\} \{\n\s*allow read, write: if false;/);
+    assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
     assert.doesNotMatch(
       rules,
       /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,

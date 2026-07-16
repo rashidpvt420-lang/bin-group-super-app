@@ -167,45 +167,44 @@ export const submitBrokerKycProfile = onCall(
         transaction.get(rateRef),
       ]);
       const existingPrivate = privateSnap.data() || {};
-      if (existingPrivate.submissionHash === submissionHash) {
-        idempotent = true;
-        return;
-      }
-
-      const nowMs = Date.now();
-      const rate = rateSnap.data() || {};
-      const previousWindow = toMillis(rate.windowStartedAtMs || rate.windowStartedAt);
-      const inWindow = previousWindow > 0 && nowMs - previousWindow < SUBMISSION_WINDOW_MS;
-      const count = inWindow ? Number(rate.count || 0) : 0;
-      if (count >= SUBMISSION_LIMIT) {
-        throw new HttpsError("resource-exhausted", "Too many Broker KYC updates. Try again later.");
-      }
+      idempotent = existingPrivate.submissionHash === submissionHash;
 
       const now = FieldValue.serverTimestamp();
-      transaction.set(rateRef, {
-        brokerUid: uid,
-        windowStartedAtMs: inWindow ? previousWindow : nowMs,
-        count: count + 1,
-        updatedAt: now,
-      }, { merge: true });
+      if (!idempotent) {
+        const nowMs = Date.now();
+        const rate = rateSnap.data() || {};
+        const previousWindow = toMillis(rate.windowStartedAtMs || rate.windowStartedAt);
+        const inWindow = previousWindow > 0 && nowMs - previousWindow < SUBMISSION_WINDOW_MS;
+        const count = inWindow ? Number(rate.count || 0) : 0;
+        if (count >= SUBMISSION_LIMIT) {
+          throw new HttpsError("resource-exhausted", "Too many Broker KYC updates. Try again later.");
+        }
 
-      transaction.set(privateRef, {
-        ...canonical,
-        email: request.auth?.token?.email || publicSnap.data()?.email || null,
-        reraStatus,
-        reraVerified: false,
-        brokerKycStatus,
-        profileCompletionScore,
-        bankIbanMasked: maskIdentifier(bankIban),
-        reraLicenseMasked: maskIdentifier(reraLicense),
-        tradeLicenseMasked: maskIdentifier(tradeLicenseNumber),
-        emiratesIdMasked: maskIdentifier(emiratesIdNumber),
-        passportMasked: maskIdentifier(passportNumber),
-        submissionHash,
-        submittedAt: now,
-        updatedAt: now,
-        createdAt: existingPrivate.createdAt || now,
-      }, { merge: true });
+        transaction.set(rateRef, {
+          brokerUid: uid,
+          windowStartedAtMs: inWindow ? previousWindow : nowMs,
+          count: count + 1,
+          updatedAt: now,
+        }, { merge: true });
+
+        transaction.set(privateRef, {
+          ...canonical,
+          email: request.auth?.token?.email || publicSnap.data()?.email || null,
+          reraStatus,
+          reraVerified: false,
+          brokerKycStatus,
+          profileCompletionScore,
+          bankIbanMasked: maskIdentifier(bankIban),
+          reraLicenseMasked: maskIdentifier(reraLicense),
+          tradeLicenseMasked: maskIdentifier(tradeLicenseNumber),
+          emiratesIdMasked: maskIdentifier(emiratesIdNumber),
+          passportMasked: maskIdentifier(passportNumber),
+          submissionHash,
+          submittedAt: now,
+          updatedAt: now,
+          createdAt: existingPrivate.createdAt || now,
+        }, { merge: true });
+      }
 
       transaction.set(publicRef, {
         uid,
@@ -226,26 +225,37 @@ export const submitBrokerKycProfile = onCall(
         brokerProfileCompletion: profileCompletionScore,
         profileCompletionScore,
         language,
+        // Remove fields written by the retired direct-client Broker profile.
+        reraLicense: FieldValue.delete(),
+        tradeLicenseNumber: FieldValue.delete(),
+        emiratesIdNumber: FieldValue.delete(),
+        passportNumber: FieldValue.delete(),
+        bankName: FieldValue.delete(),
+        bankAccountHolder: FieldValue.delete(),
+        bankIban: FieldValue.delete(),
+        iban: FieldValue.delete(),
         updatedAt: now,
       }, { merge: true });
 
-      transaction.set(db.collection("audit_logs").doc(), {
-        action: "BROKER_KYC_PROFILE_SUBMITTED",
-        actorId: uid,
-        actorRole: "broker",
-        targetType: "broker_kyc_profiles",
-        targetId: uid,
-        metadata: {
-          brokerKycStatus,
-          profileCompletionScore,
-          reraSubmitted: Boolean(reraLicense),
-          identityProvided,
-          bankSubmitted: Boolean(bankIban),
-          agreementAccepted: commissionAgreementAccepted,
-          submissionHash,
-        },
-        createdAt: now,
-      });
+      if (!idempotent) {
+        transaction.set(db.collection("audit_logs").doc(), {
+          action: "BROKER_KYC_PROFILE_SUBMITTED",
+          actorId: uid,
+          actorRole: "broker",
+          targetType: "broker_kyc_profiles",
+          targetId: uid,
+          metadata: {
+            brokerKycStatus,
+            profileCompletionScore,
+            reraSubmitted: Boolean(reraLicense),
+            identityProvided,
+            bankSubmitted: Boolean(bankIban),
+            agreementAccepted: commissionAgreementAccepted,
+            submissionHash,
+          },
+          createdAt: now,
+        });
+      }
     });
 
     return {
