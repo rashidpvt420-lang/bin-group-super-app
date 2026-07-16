@@ -62,15 +62,17 @@ test('review issues and revalidates the server quote before contract progression
   assert.match(source, /setValuationResult/);
 });
 
-test('payment package callable independently enforces the active owner quote and manifest totals', async () => {
+test('payment package accepts only a recorded quote or a fresh server-recalculated legacy quote', async () => {
   const source = await read('functions/secureOwnerRegistrationRequest.ts');
+  assert.match(source, /async function assertServerQuote/);
+  assert.match(source, /if \(text\(data\.quoteId\)\)/);
   assert.match(source, /assertOwnerPortfolioQuoteRecord/);
-  assert.match(source, /quoteId:\s*data\.quoteId/);
-  assert.match(source, /quoteHash:\s*data\.quoteHash/);
   assert.match(source, /inputHash:\s*data\.quoteInputHash \|\| data\.inputHash/);
-  assert.match(source, /portfolioAnnualTotal:\s*data\.annualContractValue/);
-  assert.match(source, /mobilisationDeposit:\s*data\.activationDeposit \|\| data\.amount/);
-  assert.match(source, /paymentManifest\?\.annualContractValue/);
+  assert.match(source, /previewOwnerOnboardingQuote as any\)\.run/);
+  assert.match(source, /Number\(quote\.expiresAtMs \|\| 0\) <= Date\.now\(\)/);
+  assert.match(source, /text\(quote\.quoteHash\) !== text\(data\.quoteHash\)/);
+  assert.match(source, /money\(quote\.annualContractValue\) !== money\(data\.annualContractValue\)/);
+  assert.match(source, /money\(quote\.activationDeposit\) !== money\(data\.activationDeposit \|\| data\.amount\)/);
   assert.match(source, /payment manifest does not match the active owner quote/i);
   assert.match(source, /await assertCurrentPaymentConfiguration\(data\)/);
 });
