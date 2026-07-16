@@ -548,6 +548,8 @@ service cloud.firestore {
           'techNotes',
           'workNotes',
           'notes',
+          'beforePhotos',
+          'afterPhotos',
           'afterPhotoUrl',
           'proofPhotos',
           'completionPhotos',
