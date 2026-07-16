@@ -24,6 +24,7 @@ test('Admin navigation exposes explicit Arabic labels for launch-critical entrie
   for (const [english, arabic] of bilingualLabels) {
     assert.ok(source.includes(`navText('${english}', '${arabic}')`), `Missing bilingual Admin navigation label: ${english}`);
   }
+  assert.match(source, /text: 'Tenant Services'/, 'Scheduled-services verifier compatibility marker is missing');
 });
 
 test('Owners route is not mislabeled as active tenants', () => {
