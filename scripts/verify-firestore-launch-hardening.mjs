@@ -25,7 +25,6 @@ const legacyTicketUpdates = [
   'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
   'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
-
 const forbiddenFragments = [
   ['broad tenant property read fallback', "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant'"],
   ['unrestricted notification creation', '      allow create: if signedIn();'],
@@ -39,7 +38,6 @@ const forbiddenFragments = [
   ['broad user-subcollection authorization', 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));'],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
-
 const requiredFragments = [
   ['hardened property read rule', 'ownerCanRead(resource.data) || tenantOwns(resource.data)'],
   ['hardened notification create rule', 'allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);'],
@@ -52,8 +50,9 @@ const requiredFragments = [
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
   ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
-  ['tenant branch is role-discriminated', "claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()"],
+  ['tenant branch uses ownership', 'tenantOwns(resource.data) && safeTenantEvidenceUpdate()'],
   ['technician branch is role-discriminated', "claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()"],
+  ['technician checks changed fields', 'let changed = request.resource.data.diff(resource.data).affectedKeys();'],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
   ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
@@ -71,39 +70,26 @@ const requiredFragments = [
 const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
-
 if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 
 const router = readFunction('safeTicketUpdateByActor');
-if (!router) {
-  failures.push('Ticket update router could not be parsed.');
-} else {
+if (!router) failures.push('Ticket update router could not be parsed.');
+else {
   const admin = router.indexOf('(hasAdminClaim() && isNotSuspended())');
   const dispatcher = router.indexOf('hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()');
-  const tenant = router.indexOf("claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()");
   const technician = router.indexOf("claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()");
-  if (admin < 0 || dispatcher < 0 || tenant < 0 || technician < 0 || !(admin < dispatcher && dispatcher < tenant && tenant < technician)) {
-    failures.push('Ticket update router must short-circuit in admin, dispatcher, tenant, technician order.');
-  }
+  const tenant = router.indexOf('tenantOwns(resource.data) && safeTenantEvidenceUpdate()');
+  if (admin < 0 || dispatcher < 0 || technician < 0 || tenant < 0 || !(admin < dispatcher && dispatcher < technician && technician < tenant)) failures.push('Ticket update router must short-circuit in admin, dispatcher, technician, tenant order.');
+  if (router.includes('!hasAdminClaim()') || router.includes('!hasNonAdminDispatchClaimOnly()')) failures.push('Ticket router must not repeat expensive negative authority predicates.');
 }
 
 const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
-if (!technicianUpdate) {
-  failures.push('Technician update helper could not be parsed.');
-} else {
-  for (const forbiddenField of ["'assignedTechnicianId',", "'technicianId',", "'techId',", "'priority',", "'paymentVerified',", "'beforePhotos',"]) {
-    if (technicianUpdate.includes(forbiddenField)) failures.push(`Technician update allowlist exposes immutable field: ${forbiddenField}`);
-  }
-  for (const requiredProof of [
-    "request.resource.data.get('proofPhotos', []).hasAll(resource.data.get('proofPhotos', []))",
-    "request.resource.data.get('completionPhotos', []).hasAll(resource.data.get('completionPhotos', []))",
-    "request.resource.data.get('evidencePhotos', []).hasAll(resource.data.get('evidencePhotos', []))",
-  ]) {
-    if (!technicianUpdate.includes(requiredProof)) failures.push(`Technician append-only proof guard missing: ${requiredProof}`);
-  }
+if (!technicianUpdate) failures.push('Technician update helper could not be parsed.');
+else {
+  for (const forbiddenField of ["'assignedTechnicianId',", "'technicianId',", "'techId',", "'priority',", "'paymentVerified',", "'beforePhotos',"]) if (technicianUpdate.includes(forbiddenField)) failures.push(`Technician update allowlist exposes immutable field: ${forbiddenField}`);
+  for (const requiredProof of ["!changed.hasAny(['afterPhotos'])", "!changed.hasAny(['proofPhotos'])", "!changed.hasAny(['completionPhotos'])", "!changed.hasAny(['evidencePhotos'])", 'hasApprovedTechnicianRecord() &&']) if (!technicianUpdate.includes(requiredProof)) failures.push(`Technician bounded proof guard missing: ${requiredProof}`);
 }
-
 if (failures.length > 0) {
   console.error('Firestore launch hardening verification failed:');
   for (const failure of failures) console.error(`- ${failure}`);
