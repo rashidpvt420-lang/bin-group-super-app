@@ -15,28 +15,15 @@ test('legacy ownerToken REST clients are fail-closed stubs', () => {
   }
 });
 
-test('ticket updates are actor-specific and cannot authorize technician self-claims', () => {
+test('ticket updates are actor-discriminated and cannot authorize technician self-claims', () => {
   const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
-  assert.doesNotMatch(
-    rules,
-    /allow update: if isAdmin\(\) \|\| safeDispatcherTicketUpdate\(\) \|\| safeTenantEvidenceUpdate\(\) \|\| safeTechnicianTicketUpdate\(\);/,
-  );
-
-  const requiredRules = [
-    'allow update: if isAdmin() && isNotSuspended();',
-    'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
-    'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
-    'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
-  ];
-
-  for (const rule of requiredRules) {
-    assert.equal(
-      rules.split(rule).length - 1,
-      2,
-      `Expected the actor-specific rule once for tickets and once for maintenanceTickets: ${rule}`,
-    );
-  }
+  assert.match(rules, /function safeTicketUpdateByActor\(\)/);
+  assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+  assert.match(rules, /hasAdminClaim\(\) && isNotSuspended\(\)/);
+  assert.match(rules, /hasNonAdminDispatchClaimOnly\(\) && safeDispatcherTicketUpdate\(\)/);
+  assert.match(rules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
+  assert.match(rules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
 });
 
 test('owner activation delegates to the complete server-confirmed policy', () => {
