@@ -60,14 +60,14 @@ if (directClaimReference.test(text)) {
 }
 
 const router = `    function safeTicketUpdateByActor() {
-      // Exactly one actor branch performs database-backed authorization. This
-      // avoids Firestore evaluating four overlapping allow-update expressions
-      // on denied writes and exhausting the 1,000-expression budget.
+      // One ordered actor branch performs database-backed authorization. Cheap
+      // token and ownership checks select the branch before profile reads or
+      // append-only evidence validation.
       return signedIn() && (
         (hasAdminClaim() && isNotSuspended()) ||
-        (!hasAdminClaim() && hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
-        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
-        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
+        (hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
+        (claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()) ||
+        (tenantOwns(resource.data) && safeTenantEvidenceUpdate())
       );
     }
 
