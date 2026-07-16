@@ -51,3 +51,5 @@ jobs:
           fi
           git commit -m 'Enforce final Firestore suspension and subcollection authority'
           git push origin HEAD:fix/final-firestore-authority-current-main
+
+# Retriggered after the permanent idempotency regression was added.
