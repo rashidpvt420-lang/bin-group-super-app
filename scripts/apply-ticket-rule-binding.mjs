@@ -19,13 +19,11 @@ for (const legacyCreate of [
 function removeRuleFunction(functionName) {
   const needle = `    function ${functionName}(`;
   let removed = 0;
-
   while (true) {
     const start = text.indexOf(needle);
     if (start < 0) break;
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
-
     let depth = 0;
     let end = -1;
     for (let index = openingBrace; index < text.length; index += 1) {
@@ -60,14 +58,14 @@ if (directClaimReference.test(text)) {
 }
 
 const router = `    function safeTicketUpdateByActor() {
-      // Exactly one actor branch performs database-backed authorization. This
-      // avoids Firestore evaluating four overlapping allow-update expressions
-      // on denied writes and exhausting the 1,000-expression budget.
+      // One ordered actor branch performs database-backed authorization. Cheap
+      // token and ownership checks select the branch before profile reads or
+      // append-only evidence validation.
       return signedIn() && (
         (hasAdminClaim() && isNotSuspended()) ||
-        (!hasAdminClaim() && hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
-        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
-        (!hasAdminClaim() && !hasNonAdminDispatchClaimOnly() && claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
+        (hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate()) ||
+        (claimedRole() in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate()) ||
+        (tenantOwns(resource.data) && safeTenantEvidenceUpdate())
       );
     }
 
@@ -85,7 +83,6 @@ const splitRules = [
   '      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
 const canonicalUpdate = '      allow update: if safeTicketUpdateByActor();';
-
 if (text.includes(monolithicUpdate)) {
   text = text.split(monolithicUpdate).join(canonicalUpdate);
   changed = true;
@@ -95,17 +92,9 @@ if (text.includes(splitBlock)) {
   text = text.split(splitBlock).join(canonicalUpdate);
   changed = true;
 }
-
-if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
-  throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
-}
-if (text.split(canonicalUpdate).length - 1 !== 2) {
-  throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates.');
-}
-if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
-  throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
-}
-
+if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
+if (text.split(canonicalUpdate).length - 1 !== 2) throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates.');
+if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 for (const forbidden of [
   'function safeOpenMissionClaim(',
   'function missionClaimFieldsLookValid(',
@@ -116,14 +105,8 @@ for (const forbidden of [
   monolithicUpdate.trim(),
   ...splitRules.map((rule) => rule.trim()),
 ]) {
-  if (text.includes(forbidden)) {
-    throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
-  }
+  if (text.includes(forbidden)) throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
 }
-
-if (!text.includes(canonicalCreate)) {
-  throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
-}
-
+if (!text.includes(canonicalCreate)) throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
 if (changed) writeFileSync(file, text);
 console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
