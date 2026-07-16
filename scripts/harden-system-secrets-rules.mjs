@@ -51,11 +51,9 @@ const catchAllExcludesSecrets = source.includes('match /{collection}/{document=*
   source.includes("collection != 'system_secrets' && hasAdminClaim()") ||
   source.includes("!(collection in ['system_secrets', 'users']) && hasAdminClaim()")
 );
-const catchAllWriteExcludesSecrets = [
-  'allow create: if !(',
-  'allow update: if !(',
-  'allow delete: if !(',
-].every((prefix) => source.includes(prefix)) &&
+const catchAllWriteExcludesSecrets =
+  source.includes('allow create: if !(') &&
+  source.includes('allow update, delete: if !(') &&
   source.includes("'system_secrets',") &&
   source.includes("'users',");
 
