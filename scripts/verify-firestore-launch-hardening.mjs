@@ -70,12 +70,13 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket and Broker rate-limit read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits']) && hasAdminClaim();"],
+  ['ticket, Broker rate-limit, and Admin-session read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies', "'system_secrets',\n          'users',\n          'audit_logs'"],
+  ['ticket write fallback excludes explicit ticket hierarchies', "'system_secrets',\n          'users',\n          'audit_logs',\n          'admin_security_sessions'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
+  ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
 ];
 
 const failures = [];
@@ -84,6 +85,7 @@ for (const [label, text] of requiredFragments) if (!rules.includes(text)) failur
 
 if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
+if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
