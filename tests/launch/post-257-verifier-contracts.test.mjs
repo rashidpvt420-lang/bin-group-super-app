@@ -29,9 +29,11 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
     assert.match(preparedRules, /function safeTicketUpdateByActor\(\)/);
     assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
-    assert.match(preparedRules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
-    assert.match(preparedRules, /tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
-    assert.doesNotMatch(preparedRules, /!hasAdminClaim\(\)|!hasNonAdminDispatchClaimOnly\(\)/);
+    assert.match(preparedRules, /return !signedIn\(\) \? false :/);
+    assert.match(preparedRules, /hasAdminClaim\(\) \? isNotSuspended\(\) :/);
+    assert.match(preparedRules, /hasNonAdminDispatchClaimOnly\(\) \? safeDispatcherTicketUpdate\(\) :/);
+    assert.match(preparedRules, /claimedRole\(\) in \['technician', 'tech'\] \? \(techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\) :/);
+    assert.match(preparedRules, /tenantOwns\(resource\.data\) \? safeTenantEvidenceUpdate\(\) :/);
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);
     const beforeSecondRun = readFileSync(path.join(directory, 'firestore.rules'));
@@ -58,14 +60,14 @@ test('scheduled-service verifier follows the centralized protected production li
   assert.match(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
 });
 
-test('launch-hardening verifier rejects direct assignment, overlapping gates and repeated authority predicates', () => {
+test('launch-hardening verifier requires conditional single-path dispatch and bounded proofs', () => {
   const verifierSource = readFileSync(rulesVerifier, 'utf8');
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /overlapping ticket update authorization/);
   assert.match(verifierSource, /bounded ticket update router/);
   assert.match(verifierSource, /Single ticket update gate must exist exactly twice/);
-  assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, technician, tenant order/);
-  assert.match(verifierSource, /must not repeat expensive negative authority predicates/);
+  assert.match(verifierSource, /nested conditions in unauthenticated, admin, dispatcher, technician, tenant order/);
+  assert.match(verifierSource, /must not use overlapping OR branches/);
   assert.match(verifierSource, /Technician bounded proof guard missing/);
 });
