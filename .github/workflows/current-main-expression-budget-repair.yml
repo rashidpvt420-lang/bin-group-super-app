@@ -7,11 +7,11 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: current-main-expression-budget-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   repair-and-verify:
@@ -19,11 +19,10 @@ jobs:
     timeout-minutes: 55
 
     steps:
-      - name: Checkout repair branch
+      - name: Checkout current pull request merge
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          ref: fix/current-main-firestore-expression-budget
+          fetch-depth: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -43,26 +42,17 @@ jobs:
       - name: Apply bounded ticket authorization
         run: node scripts/apply-current-main-firestore-expression-budget.mjs
 
-      - name: Verify generated Firestore state
+      - name: Enforce committed and idempotent Firestore state
         shell: bash
         run: |
+          set -euo pipefail
           git diff --check
-          git diff --stat
-          git diff -- firestore.rules
-
-      - name: Commit generated Firestore rules when needed
-        shell: bash
-        run: |
-          if git diff --quiet -- firestore.rules; then
-            echo "Generated Firestore rules are already committed."
-            exit 0
+          if ! git diff --quiet -- firestore.rules; then
+            echo "::error::The deterministic expression-budget patch changes firestore.rules. Commit the generated canonical rules before merge."
+            git diff -- firestore.rules
+            exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- firestore.rules
-          git diff --cached --check
-          git commit -m "Eliminate Firestore ticket expression overflows"
-          git push origin HEAD:fix/current-main-firestore-expression-budget
+          echo "Expression-budget rules are already canonical and committed."
 
       - name: Run Firestore and Storage rules suite
         id: rules
