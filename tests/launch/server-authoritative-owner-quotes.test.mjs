@@ -36,6 +36,7 @@ test('owner quote issuance is App Check protected, owner bound, versioned, hashe
 
 test('owner quote validation rejects cross-owner, stale, altered and mismatched totals', async () => {
   const source = await read('functions/ownerPortfolioQuote.ts');
+  assert.match(source, /assertOwnerPortfolioQuoteRecord/);
   assert.match(source, /quote\.ownerUid !== ownerUid/);
   assert.match(source, /quote\.status !== ["']ACTIVE["']/);
   assert.match(source, /quote\.quoteSchemaVersion !== QUOTE_SCHEMA_VERSION/);
@@ -59,6 +60,19 @@ test('review issues and revalidates the server quote before contract progression
   assert.match(source, /mobilisationDeposit:\s*serverQuote\.mobilisationDeposit/);
   assert.match(source, /disabled=\{quoteLoading \|\| validating \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
   assert.match(source, /setValuationResult/);
+});
+
+test('payment package callable independently enforces the active owner quote and manifest totals', async () => {
+  const source = await read('functions/secureOwnerRegistrationRequest.ts');
+  assert.match(source, /assertOwnerPortfolioQuoteRecord/);
+  assert.match(source, /quoteId:\s*data\.quoteId/);
+  assert.match(source, /quoteHash:\s*data\.quoteHash/);
+  assert.match(source, /inputHash:\s*data\.quoteInputHash \|\| data\.inputHash/);
+  assert.match(source, /portfolioAnnualTotal:\s*data\.annualContractValue/);
+  assert.match(source, /mobilisationDeposit:\s*data\.activationDeposit \|\| data\.amount/);
+  assert.match(source, /paymentManifest\?\.annualContractValue/);
+  assert.match(source, /payment manifest does not match the active owner quote/i);
+  assert.match(source, /await assertCurrentPaymentConfiguration\(data\)/);
 });
 
 test('server quote state remains memory-only and is not added to persisted onboarding state', async () => {
