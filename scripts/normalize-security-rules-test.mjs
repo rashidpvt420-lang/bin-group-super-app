@@ -4,12 +4,15 @@ const file = 'test/security-rules.test.js';
 const sourceRaw = readFileSync(file, 'utf8');
 const newline = sourceRaw.includes('\r\n') ? '\r\n' : '\n';
 const source = sourceRaw.replace(/\r\n/g, '\n');
-const brokerKycImport = "import './broker-kyc-security-rules.test.js';";
+const requiredImports = [
+  "import './broker-kyc-security-rules.test.js';",
+  "import './five-profile-protected-fields-rules.test.js';",
+];
 const obsoleteBlock = `    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
       updatedAt: new Date().toISOString(),
     }));
-`;
+ `;
 const canonicalBlock = `    await assertFails(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
       updatedAt: new Date().toISOString(),
@@ -18,7 +21,7 @@ const canonicalBlock = `    await assertFails(updateDoc(doc(techADb, 'maintenanc
       technicianNotes: 'Verified evidence note from assigned technician.',
       updatedAt: new Date().toISOString(),
     }));
-`;
+ `;
 
 const obsoleteCount = source.split(obsoleteBlock).length - 1;
 const canonicalCount = source.split(canonicalBlock).length - 1;
@@ -33,14 +36,16 @@ if (obsoleteCount === 1 && canonicalCount === 0) {
   );
 }
 
-if (!next.includes(brokerKycImport)) {
-  next = `${brokerKycImport}\n${next}`;
+for (const requiredImport of [...requiredImports].reverse()) {
+  if (!next.includes(requiredImport)) {
+    next = `${requiredImport}\n${next}`;
+  }
 }
 
 if (next === source) {
-  console.log('[normalize-rule-tests] callable-only lifecycle and Broker KYC rules tests already canonical');
+  console.log('[normalize-rule-tests] callable-only lifecycle, Broker KYC and five-profile rules tests already canonical');
   process.exit(0);
 }
 
 writeFileSync(file, next.replace(/\n/g, newline));
-console.log('[normalize-rule-tests] technician lifecycle and Broker KYC rules tests normalized');
+console.log('[normalize-rule-tests] technician lifecycle, Broker KYC and five-profile rules tests normalized');
