@@ -1,11 +1,31 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const rulesPath = 'firestore.rules';
+const standardReadCatchAll = "      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();";
+const brokerHardenedReadCatchAll = "      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();";
+
+// The expression-budget normalizer predates the private Broker KYC rate-limit
+// collection. Present its recognised baseline, then restore the stronger
+// exclusion immediately after the canonical ticket transforms complete.
+let before = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
+const hadBrokerRateLimitExclusion = before.includes(brokerHardenedReadCatchAll);
+if (hadBrokerRateLimitExclusion) {
+  before = before.replace(brokerHardenedReadCatchAll, standardReadCatchAll);
+  writeFileSync(rulesPath, before, 'utf8');
+}
 
 // Both normalizers are deterministic and idempotent. Importing them keeps
 // local prepare:rules, CI, and the committed Firestore policy aligned.
 await import('./apply-current-main-firestore-expression-budget.mjs');
 await import('./optimize-current-main-technician-ticket-rule.mjs');
 
-const text = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
+let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
+if (text.includes(standardReadCatchAll)) {
+  text = text.replace(standardReadCatchAll, brokerHardenedReadCatchAll);
+  writeFileSync(rulesPath, text, 'utf8');
+} else if (!text.includes(brokerHardenedReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be restored with Broker KYC rate-limit exclusion');
+}
 
 const required = [
   'function profileAllowsAccess(data) {',
@@ -22,8 +42,9 @@ const required = [
   'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
   'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
   'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
-  "!(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim()",
+  "!(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim()",
   "'tickets',\n          'maintenanceTickets',\n          'audit_logs'",
+  "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
 ];
 
 for (const fragment of required) {

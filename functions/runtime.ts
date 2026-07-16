@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 export * from "./index";
 export * from "./contractActivation";
 export * from "./brokerCommissions";
+export * from "./brokerKycProfile";
 export * from "./ownerOnboarding";
 export * from "./secureOwnerRegistrationRequest";
 export * from "./ownerFinancialOperations";

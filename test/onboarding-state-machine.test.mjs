@@ -8,6 +8,7 @@ import {
 } from '../src/lib/onboardingStateMachine.ts';
 
 test('normalizes fragmented onboarding statuses onto the canonical machine', () => {
+  assert.equal(normalizeOnboardingState('AUTH_CREATED'), 'account_created');
   assert.equal(normalizeOnboardingState('pending_admin_review'), 'admin_review');
   assert.equal(normalizeOnboardingState('PAYMENT_PENDING'), 'deposit_pending');
   assert.equal(normalizeOnboardingState('payment_pending_approval'), 'deposit_processing');
@@ -17,8 +18,14 @@ test('normalizes fragmented onboarding statuses onto the canonical machine', () 
   assert.equal(normalizeOnboardingState('ACTIVE'), 'active');
 });
 
-test('rejects illegal onboarding transitions and allows deposit -> admin_review path', () => {
+test('requires account creation before property onboarding', () => {
+  assert.equal(canTransitionOnboarding('draft', 'property_details_complete'), false);
+  assert.equal(canTransitionOnboarding('draft', 'account_created'), true);
+  assert.equal(canTransitionOnboarding('account_created', 'property_details_complete'), true);
   assert.equal(canTransitionOnboarding('draft', 'active'), false);
+});
+
+test('allows the verified deposit to admin-review path', () => {
   assert.equal(canTransitionOnboarding('deposit_processing', 'deposit_paid'), true);
   assert.equal(canTransitionOnboarding('admin_review', 'approved'), true);
   assert.equal(canTransitionOnboarding('approved', 'active'), true);

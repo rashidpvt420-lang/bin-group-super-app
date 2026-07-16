@@ -1,12 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { calculateUaeQuote2026, ADD_ON_PRICING } from '../utils/calculateUaeQuote2026';
+import { calculateUaeQuote2026 } from '../utils/calculateUaeQuote2026';
 import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
 
 const createOnboardingSessionId = () => {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-        return crypto.randomUUID();
-    }
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
     return `onb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 };
 
@@ -30,7 +28,6 @@ export interface PropertyData {
     age: number;
     annualRent?: number;
     annualRevenue?: number;
-    // Systems
     pool: boolean;
     lifts: number;
     tank: boolean;
@@ -53,56 +50,18 @@ export interface PropertyData {
     bms: boolean;
     iotSensors: boolean;
     gym: boolean;
-    // Institutional / Majlis / Mosque Specific
     majlis: boolean;
     majlisType: 'government' | 'none' | string;
-    majlisSubtype?: string;
-    mosqueProfile?: Record<string, any>;
-    assetClass?: string;
-    riskProfile?: string;
-    serviceModel?: string;
-    majlisGarden?: boolean;
-    authorityName?: string;
-    departmentName?: string;
-    govPropertySubtype?: 'office' | 'service_center' | 'facility' | 'accommodation' | 'compound' | 'mixed_government_building';
-    protocolLevel?: 'Standard' | 'High' | 'Sovereign';
-    securityLevel?: 'Standard' | 'Enhanced' | 'Maximum';
-    hospitalityReadiness?: boolean;
-    guestCapacity?: number;
-    parkingCapacity?: number;
-    heritageSensitivity?: 'Standard' | 'Cultural' | 'Protected' | 'Sovereign';
-    eventUse?: boolean;
-    publicAccessLevel?: 'Private' | 'Restricted' | 'Public';
-    irrigationSystem?: boolean;
-    solarIntegration?: boolean;
-    evReadiness?: boolean;
-    publicGathering?: boolean;
-    governmentUse?: boolean;
-    hvacCount?: number;
-    hvacType?: string;
-    // Hotel Specific
-    hotelClass?: '3_STAR' | '4_STAR' | '5_STAR' | 'DELUXE' | 'ULTRA_LUXURY'; 
-    roomCount?: number;
-    restaurantCount?: number;
-    eventHalls?: number;
-    spaGym?: boolean;
-    laundryKitchenComplexity?: 'Low' | 'Medium' | 'High';
-    backOfHouseComplexity?: 'Standard' | 'Complex';
-    occupancyProfile?: string;
-    chilledWaterProfile?: string;
-    commonAreaIntensity?: 'Standard' | 'High' | 'Intense';
-    poolsCount?: number;
-    // Compliance missions
     missions: string[];
-    // Status
     condition: 'Mint' | 'Good' | 'Fair' | 'Poor';
     assetGrade: 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
     currentStatus: string;
-    titleDeedStatus?: 'uploaded' | 'queued' | 'scanning' | 'extracted' | 'verification_pending' | 'verified' | 'mismatch' | 'manual_review_required' | 'rejected';
     address: string;
-    addressLine?: string;
-    city?: string;
-    googlePlaceId?: string;
+    strategy?: 'fm_only' | 'pm_only' | 'both' | 'sale' | 'rent' | 'fm';
+    slaTier?: 'standard' | 'premium' | 'elite';
+    paymentPlan?: 'annual' | 'quarterly' | 'monthly';
+    titleDeedStatus?: 'uploaded' | 'queued' | 'scanning' | 'extracted' | 'verification_pending' | 'verified' | 'mismatch' | 'manual_review_required' | 'rejected';
+    mosqueProfile?: Record<string, any>;
     geo?: {
         point?: { latitude: number; longitude: number };
         lat: number;
@@ -120,32 +79,7 @@ export interface PropertyData {
         verifiedAt?: string;
         updatedAt?: string;
     };
-    location?: {
-        lat?: number;
-        lng?: number;
-        latitude?: number;
-        longitude?: number;
-        address?: string;
-        formattedAddress?: string;
-        emirate?: string;
-        googleMapsUrl?: string;
-        plusCode?: string;
-        accuracy?: "EXACT" | "APPROXIMATE" | "MISSING";
-        quality?: string;
-        updatedAt?: string;
-        updatedBy?: string;
-    };
-    latitude?: number;
-    longitude?: number;
-    lat?: number;
-    lng?: number;
-    googleMapsUrl?: string;
-    plusCode?: string;
-    ownerEmail?: string;
-    exposure?: string;
-    strategy?: 'fm_only' | 'pm_only' | 'both' | 'sale' | 'rent' | 'fm';
-    slaTier?: 'standard' | 'premium' | 'elite';
-    paymentPlan?: 'annual' | 'quarterly' | 'monthly';
+    [key: string]: any;
 }
 
 export interface PortfolioSummary {
@@ -177,34 +111,13 @@ export interface OnboardingState {
     onboardingSessionId: string;
     paymentManifest: any | null;
     paymentMethod: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'STRIPE' | null;
-    companyProfile: {
-        name: string;
-        licenseNumber: string;
-        contactPerson: string;
-        phone: string;
-        email: string;
-    };
-    signupData: {
-        name: string;
-        email: string;
-        phone: string;
-        password?: string;
-    };
+    companyProfile: { name: string; licenseNumber: string; contactPerson: string; phone: string; email: string };
+    signupData: { name: string; email: string; phone: string; password?: string };
     isContractSigned: boolean;
     signatureName: string;
     contractOtpVerificationId: string | null;
-    kycUrls: {
-        emiratesId?: string;
-        passport?: string;
-        titleDeed?: string;
-        tradeLicense?: string;
-    };
-    ownerAccount: {
-        uid: string;
-        fullName: string;
-        email: string;
-        mobile: string;
-    } | null;
+    kycUrls: { emiratesId?: string; passport?: string; titleDeed?: string; tradeLicense?: string };
+    ownerAccount: { uid: string; fullName: string; email: string; mobile: string } | null;
     proofDocuments: {
         propertyProof: { name: string; size: number; type: string } | null;
         emiratesId: { name: string; size: number; type: string } | null;
@@ -213,9 +126,7 @@ export interface OnboardingState {
         tenancySupport: { name: string; size: number; type: string } | null;
         labels: Record<string, string>;
     };
-    propertyData: PropertyData; // Backward compatibility
-    
-    // Actions
+    propertyData: PropertyData;
     setStep: (step: number) => void;
     nextStep: () => void;
     prevStep: () => void;
@@ -237,7 +148,7 @@ export interface OnboardingState {
     setAccountCreated: (status: boolean) => void;
     setValuationResult: (result: any) => void;
     setPaymentManifest: (manifest: any) => void;
-    setPaymentMethod: (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'STRIPE' | null) => void;
+    setPaymentMethod: (method: OnboardingState['paymentMethod']) => void;
     setOwnerAccount: (account: OnboardingState['ownerAccount']) => void;
     setProofDocument: (key: keyof Omit<OnboardingState['proofDocuments'], 'labels'>, file: { name: string; size: number; type: string } | null) => void;
     updatePropertyData: (data: Partial<PropertyData>) => void;
@@ -245,48 +156,43 @@ export interface OnboardingState {
     reset: () => void;
 }
 
-const isMosqueAsset = (property: PropertyData): boolean => {
-    const label = `${property.propertyType || ''} ${property.subType || ''} ${property.assetClass || ''} ${property.serviceModel || ''}`.toLowerCase();
-    return label.includes('mosque') || label.includes('masjid') || label.includes('religious_facility') || label.includes('mosque_fm');
+const isMosqueAsset = (property: PropertyData) => {
+    const descriptor = `${property.propertyType || ''} ${property.subType || ''} ${property.assetClass || ''} ${property.serviceModel || ''}`.toLowerCase();
+    return descriptor.includes('mosque') || descriptor.includes('masjid') || descriptor.includes('religious_facility') || descriptor.includes('mosque_fm');
 };
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
     const mosqueProfile = property.mosqueProfile || {};
     const isMosque = isMosqueAsset(property);
-
-    // Map internal types to Pricing Matrix types
     let assetClassId = 'apt-std';
     if (isMosque) assetClassId = 'mosque_fm';
     else if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'villa-lux' : 'villa-std';
-    else if (property.propertyType === 'Building') assetClassId = 'com-twr';
-    else if (property.propertyType === 'Commercial') assetClassId = 'off-sml';
+    else if (property.propertyType === 'Building' || property.propertyType === 'Residential Building') assetClassId = 'com-twr';
+    else if (property.propertyType === 'Commercial' || property.propertyType === 'Commercial Building') assetClassId = 'off-sml';
     else if (property.propertyType === 'Government Majlis' || property.propertyType?.toLowerCase() === 'majlis' || property.majlis) assetClassId = 'government_majlis';
     else if (property.propertyType === 'Hotel') assetClassId = 'mid_scale_hotel';
-    
-    // Map emirate to camelCase
+
     const emirateMap: Record<string, string> = {
-        'Dubai': 'dubai',
+        Dubai: 'dubai',
         'Abu Dhabi': 'abuDhabi',
-        'Sharjah': 'sharjah',
-        'Ajman': 'ajman',
-        'RAK': 'rasAlKhaimah',
+        Sharjah: 'sharjah',
+        Ajman: 'ajman',
+        RAK: 'rasAlKhaimah',
         'Ras Al Khaimah': 'rasAlKhaimah',
-        'Fujairah': 'fujairah',
-        'UAQ': 'ummAlQuwain',
-        'Umm Al Quwain': 'ummAlQuwain'
+        Fujairah: 'fujairah',
+        UAQ: 'ummAlQuwain',
+        'Umm Al Quwain': 'ummAlQuwain',
     };
 
-    const quote = calculateUaeQuote2026({
+    return calculateUaeQuote2026({
         assetClassId,
         emirate: emirateMap[property.emirate] || 'dubai',
         zone: property.zone || 'B',
-        contractType: 
-            property.strategy === 'pm_only' || property.strategy === 'rent' ? 'PM_ONLY' : 
-            (property.strategy === 'fm_only' || property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
-        sqft: isMosque ? (Number(mosqueProfile.grossFloorAreaSqft) || property.sqft) : property.sqft,
-        units: isMosque ? (Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units) : property.units,
+        contractType: property.strategy === 'pm_only' || property.strategy === 'rent' ? 'PM_ONLY' : property.strategy === 'fm_only' || property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH',
+        sqft: isMosque ? Number(mosqueProfile.grossFloorAreaSqft) || property.sqft : property.sqft,
+        units: isMosque ? Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units : property.units,
         annualRent: property.annualRent,
-        propertyAge: isMosque ? (Number(mosqueProfile.propertyAgeYears) || property.age) : property.age,
+        propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
         floors: property.floors,
         lifts: property.lifts,
         hasPool: property.pool,
@@ -302,81 +208,49 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         hasWaterTank: property.tank,
         hvacCount: property.hvacCount,
         offices: property.offices,
-        shops: property.shops
+        shops: property.shops,
     });
-
-    return quote;
 };
 
 const defaultProperty: PropertyData = {
-    id: '',
-    emirate: 'Dubai',
-    area: '',
-    zone: 'B',
-    propertyType: 'Residential',
-    subType: 'Apartment',
-    useType: 'Rental',
-    ownerType: 'Private',
-    floors: 1,
-    units: 1,
-    bedrooms: 1,
-    bathrooms: 1,
-    shops: 0,
-    offices: 0,
-    rooms: 0,
-    sqft: 1200,
-    age: 5,
-    pool: false,
-    lifts: 0,
-    tank: false,
-    bmu: false,
-    sira: false,
-    fireAlarm: false,
-    firePump: false,
-    escalators: false,
-    centralLPG: false,
-    wasteMan: false,
-    gen: false,
-    hvac: false,
-    districtCooling: false,
-    electrical: false,
-    plumbing: false,
-    drainage: false,
-    pumps: false,
-    emergencyLighting: false,
-    accessControl: false,
-    bms: false,
-    iotSensors: false,
-    gym: false,
-    majlis: false,
-    majlisType: 'none',
-    missions: [],
-    condition: 'Good',
-    assetGrade: 'Premium',
-    currentStatus: 'Active',
-    address: '',
-    strategy: 'fm',
-    slaTier: 'standard',
-    paymentPlan: 'annual'
+    id: '', emirate: 'Dubai', area: '', zone: 'B', propertyType: 'Residential', subType: 'Apartment',
+    useType: 'Rental', ownerType: 'Private', floors: 1, units: 1, bedrooms: 1, bathrooms: 1,
+    shops: 0, offices: 0, rooms: 0, sqft: 1200, age: 5, pool: false, lifts: 0, tank: false,
+    bmu: false, sira: false, fireAlarm: false, firePump: false, escalators: false, centralLPG: false,
+    wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
+    drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,
+    gym: false, majlis: false, majlisType: 'none', missions: [], condition: 'Good', assetGrade: 'Premium',
+    currentStatus: 'Active', address: '', strategy: 'fm', slaTier: 'standard', paymentPlan: 'annual',
 };
+
+const emptySummary = (): PortfolioSummary => ({
+    totalProperties: 0,
+    totalUnits: 0,
+    totalRentable: 0,
+    totalPersonal: 0,
+    totalMajlis: 0,
+    totalSqFt: 0,
+    estimatedACV: 0,
+    recommendedTier: 'Premium',
+    isMixedUsePortfolio: false,
+    isSovereignPortfolio: false,
+});
+
+const emptyProofDocuments = (): OnboardingState['proofDocuments'] => ({
+    propertyProof: null,
+    emiratesId: null,
+    passport: null,
+    tradeLicense: null,
+    tenancySupport: null,
+    labels: {},
+});
 
 export const useOnboardingStore = create<OnboardingState>()(
     persist(
         (set, get) => ({
             step: 1,
             properties: [],
-            portfolioSummary: {
-                totalProperties: 0,
-                totalUnits: 0,
-                totalRentable: 0,
-                totalPersonal: 0,
-                totalMajlis: 0,
-                totalSqFt: 0,
-                estimatedACV: 0,
-                recommendedTier: 'Premium',
-                isMixedUsePortfolio: false,
-                isSovereignPortfolio: false,
-            },
+            portfolioSummary: emptySummary(),
             selectedPlan: null,
             selectedAddOns: [],
             contractId: null,
@@ -395,81 +269,47 @@ export const useOnboardingStore = create<OnboardingState>()(
             contractOtpVerificationId: null,
             kycUrls: {},
             ownerAccount: null,
-            proofDocuments: {
-                propertyProof: null,
-                emiratesId: null,
-                passport: null,
-                tradeLicense: null,
-                tenancySupport: null,
-                labels: {}
-            },
+            proofDocuments: emptyProofDocuments(),
             propertyData: { ...defaultProperty, id: 'prop-1' },
-
             setStep: (step) => set({ step }),
             nextStep: () => set((state) => ({ step: state.step + 1 })),
-            prevStep: () => set((state) => ({ step: state.step - 1 })),
-            setIntakeId: (id) => set({ intakeId: id }),
-            
+            prevStep: () => set((state) => ({ step: Math.max(1, state.step - 1) })),
+            setIntakeId: (intakeId) => set({ intakeId }),
             addProperty: (data) => {
-                const newProperty = { ...defaultProperty, ...data, id: `prop-${get().properties.length + 1}` };
+                const newProperty = { ...defaultProperty, ...data, id: data?.id || `prop-${get().properties.length + 1}` };
                 set((state) => ({ properties: [...state.properties, newProperty] }));
                 get().calculateSummary();
             },
-
             bulkAddProperties: (items) => {
                 const currentCount = get().properties.length;
-                const newProperties = items.map((item, index) => ({
-                    ...defaultProperty,
-                    ...item,
-                    id: item.id || `prop-${currentCount + index + 1}`
-                }));
-                set((state) => ({ properties: [...state.properties, ...newProperties] }));
+                const additions = items.map((item, index) => ({ ...defaultProperty, ...item, id: item.id || `prop-${currentCount + index + 1}` }));
+                set((state) => ({ properties: [...state.properties, ...additions] }));
                 get().calculateSummary();
             },
-
             removeProperty: (index) => {
-                set((state) => ({ properties: state.properties.filter((_, i) => i !== index) }));
+                set((state) => ({ properties: state.properties.filter((_, itemIndex) => itemIndex !== index) }));
                 get().calculateSummary();
             },
-
             updateProperty: (index, data) => {
                 set((state) => {
-                    const newProperties = [...state.properties];
-                    if (newProperties[index]) {
-                        newProperties[index] = { ...newProperties[index], ...data };
-                    }
-                    const newPropertyData = index === 0 ? { ...state.propertyData, ...data } : state.propertyData;
-                    return { properties: newProperties, propertyData: newPropertyData };
+                    const properties = [...state.properties];
+                    if (properties[index]) properties[index] = { ...properties[index], ...data };
+                    return { properties, propertyData: index === 0 ? { ...state.propertyData, ...data } : state.propertyData };
                 });
                 get().calculateSummary();
             },
-
-            updateCompanyProfile: (data) => set((state) => ({
-                companyProfile: { ...state.companyProfile, ...data }
-            })),
-            
-            updateSignupData: (data) => set((state) => ({
-                signupData: { ...state.signupData, ...data }
-            })),
-
-            updateKycUrls: (data) => set((state) => ({
-                kycUrls: { ...state.kycUrls, ...data }
-            })),
-
-            setContractSignature: (isSigned, name) => set((state) => ({
-                isContractSigned: isSigned,
-                signatureName: name,
-                contractOtpVerificationId: state.signatureName === name ? state.contractOtpVerificationId : null,
+            updateCompanyProfile: (data) => set((state) => ({ companyProfile: { ...state.companyProfile, ...data } })),
+            updateSignupData: (data) => set((state) => ({ signupData: { ...state.signupData, ...data } })),
+            updateKycUrls: (data) => set((state) => ({ kycUrls: { ...state.kycUrls, ...data } })),
+            setContractSignature: (isContractSigned, signatureName) => set((state) => ({
+                isContractSigned,
+                signatureName,
+                contractOtpVerificationId: state.signatureName === signatureName ? state.contractOtpVerificationId : null,
             })),
             setContractOtpVerificationId: (contractOtpVerificationId) => set({ contractOtpVerificationId }),
-
             setSelectedPlan: (selectedPlan) => set({ selectedPlan }),
             toggleAddOn: (id) => {
-                set((state) => ({
-                    selectedAddOns: state.selectedAddOns.includes(id)
-                        ? state.selectedAddOns.filter(a => a !== id)
-                        : [...state.selectedAddOns, id]
-                }));
+                set((state) => ({ selectedAddOns: state.selectedAddOns.includes(id) ? state.selectedAddOns.filter((item) => item !== id) : [...state.selectedAddOns, id] }));
                 get().calculateSummary();
             },
             setContractId: (contractId) => set({ contractId }),
@@ -479,83 +319,76 @@ export const useOnboardingStore = create<OnboardingState>()(
             setValuationResult: (valuationResult) => set({ valuationResult }),
             setPaymentManifest: (paymentManifest) => set({ paymentManifest }),
             setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
-            setOwnerAccount: (ownerAccount) => set({ ownerAccount, accountCreated: !!ownerAccount }),
+            setOwnerAccount: (ownerAccount) => set({ ownerAccount, accountCreated: Boolean(ownerAccount) }),
             updatePropertyData: (data) => {
-                set((state) => ({
-                    propertyData: { ...state.propertyData, ...data }
-                }));
+                set((state) => ({ propertyData: { ...state.propertyData, ...data } }));
                 get().calculateSummary();
             },
             setProofDocument: (key, file) => set((state) => ({
                 proofDocuments: {
                     ...state.proofDocuments,
                     [key]: file,
-                    labels: {
-                        ...state.proofDocuments.labels,
-                        [key]: file?.name || ''
-                    }
-                }
+                    labels: { ...state.proofDocuments.labels, [key]: file?.name || '' },
+                },
             })),
-
             calculateSummary: () => {
-                const props = get().properties.length > 0 ? get().properties : [get().propertyData];
-                const selectedAddOns = get().selectedAddOns || [];
+                const properties = get().properties.length > 0 ? get().properties : [get().propertyData];
                 const quoteResults: Record<string, QuoteOutput> = {};
-                
-                props.forEach(p => {
-                    quoteResults[p.id] = calculatePropertyAnnualValue(p, selectedAddOns);
-                });
-
-                let estimatedACV = Object.values(quoteResults).reduce((acc, q) => acc + q.annualTotal, 0);
-                if (estimatedACV === 0) {
-                    const totalRent = props.reduce((acc, p) => acc + (p.annualRent || 0), 0);
-                    estimatedACV = Math.round(totalRent * 0.95);
-                }
-
+                for (const property of properties) quoteResults[property.id] = calculatePropertyAnnualValue(property, get().selectedAddOns || []);
+                let estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + quote.annualTotal, 0);
+                if (estimatedACV === 0) estimatedACV = Math.round(properties.reduce((total, property) => total + (property.annualRent || 0), 0) * 0.95);
                 const summary: PortfolioSummary = {
-                    totalProperties: get().properties.length > 0 ? props.length : 1,
-                    totalUnits: props.reduce((acc, p) => acc + (p.units || 0), 0),
-                    totalRentable: props.filter(p => p.useType === 'Rental' || p.useType === 'Mixed').length,
-                    totalPersonal: props.filter(p => p.useType === 'Personal').length,
-                    totalMajlis: props.filter(p => p.majlis).length,
-                    totalSqFt: props.reduce((acc, p) => acc + (p.sqft || 0), 0),
+                    totalProperties: get().properties.length > 0 ? properties.length : 1,
+                    totalUnits: properties.reduce((total, property) => total + (property.units || 0), 0),
+                    totalRentable: properties.filter((property) => property.useType === 'Rental' || property.useType === 'Mixed').length,
+                    totalPersonal: properties.filter((property) => property.useType === 'Personal').length,
+                    totalMajlis: properties.filter((property) => property.majlis).length,
+                    totalSqFt: properties.reduce((total, property) => total + (property.sqft || 0), 0),
                     estimatedACV,
                     recommendedTier: 'Premium',
-                    isMixedUsePortfolio: props.some(p => p.propertyType === 'Mixed-Use' || p.useType === 'Mixed'),
-                    isSovereignPortfolio: props.some(p => p.majlisType === 'government' || p.assetGrade === 'Sovereign' || isMosqueAsset(p)),
-                    quoteResults
+                    isMixedUsePortfolio: properties.some((property) => property.propertyType === 'Mixed-Use' || property.useType === 'Mixed'),
+                    isSovereignPortfolio: properties.some((property) => property.majlisType === 'government' || property.assetGrade === 'Sovereign' || isMosqueAsset(property)),
+                    quoteResults,
                 };
                 if (summary.totalUnits > 100 || summary.isSovereignPortfolio) summary.recommendedTier = 'Sovereign Institutional';
                 else if (summary.totalUnits > 20) summary.recommendedTier = 'Institutional';
                 set({ portfolioSummary: summary });
             },
-
             reset: () => set({
-                step: 1, properties: [], selectedPlan: null, selectedAddOns: [], contractId: null,
-                intakeId: null, onboardingSessionId: createOnboardingSessionId(),
-                paymentVerified: false, paymentRequested: false, accountCreated: false,
-                valuationResult: null, paymentManifest: null, paymentMethod: null,
-                isContractSigned: false, signatureName: '', contractOtpVerificationId: null,
+                step: 1,
+                properties: [],
+                portfolioSummary: emptySummary(),
+                selectedPlan: null,
+                selectedAddOns: [],
+                contractId: null,
+                paymentVerified: false,
+                paymentRequested: false,
+                accountCreated: false,
+                valuationResult: null,
+                intakeId: null,
+                onboardingSessionId: createOnboardingSessionId(),
+                paymentManifest: null,
+                paymentMethod: null,
                 companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
-                signupData: { name: '', email: '', phone: '' }, kycUrls: {},
+                signupData: { name: '', email: '', phone: '' },
+                isContractSigned: false,
+                signatureName: '',
+                contractOtpVerificationId: null,
+                kycUrls: {},
                 ownerAccount: null,
-                proofDocuments: {
-                    propertyProof: null,
-                    emiratesId: null,
-                    passport: null,
-                    tradeLicense: null,
-                    tenancySupport: null,
-                    labels: {}
-                }
-            })
+                proofDocuments: emptyProofDocuments(),
+                propertyData: { ...defaultProperty, id: 'prop-1' },
+            }),
         }),
         {
             name: 'bin-group-onboarding-v3',
+            // Version bump intentionally invalidates legacy browser blobs that
+            // persisted passwords, KYC URLs, payment manifests and property data.
+            version: 4,
             partialize: (state) => ({
-                ...state,
-                proofDocuments: state.proofDocuments
-            })
-        }
-    )
+                step: state.step,
+                intakeId: state.intakeId,
+            }),
+        },
+    ),
 );
-

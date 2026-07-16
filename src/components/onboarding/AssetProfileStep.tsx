@@ -1,112 +1,105 @@
 import React, { useMemo, useState } from 'react';
 import {
-    Box, Typography, Grid, Paper, alpha, Stack, TextField, MenuItem, Container, Button, CircularProgress, Snackbar, Alert, Chip
+    Alert,
+    Box,
+    Button,
+    Chip,
+    CircularProgress,
+    Container,
+    Grid,
+    MenuItem,
+    Paper,
+    Snackbar,
+    Stack,
+    TextField,
+    Typography,
+    alpha,
 } from '@mui/material';
 import {
-    Home, Building2, Building, Hotel, Landmark, Gem,
-    Briefcase, Warehouse, ShieldCheck, ArrowRight, ArrowLeft, Scan, AlertTriangle, RefreshCcw
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    Briefcase,
+    Building,
+    Building2,
+    Gem,
+    Home,
+    Hotel,
+    Landmark,
+    RefreshCcw,
+    Scan,
+    ShieldCheck,
+    Warehouse,
 } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
 import { useOnboardingStore } from '../../store/onboardingStore';
+import type { PropertyData } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { storage, ref, uploadBytes, getDownloadURL, functions, auth } from '../../lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { auth, functions, getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
 
 const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
+const ASSET_TYPE_IDS = new Set([
+    'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office', 'Retail Center', 'Mall',
+    'Hotel', 'Resort', 'Hospital', 'Clinic', 'School', 'Warehouse', 'Industrial Property', 'Labour Camp',
+    'Staff Accommodation', 'Government Property', 'Government Majlis', 'Private Majlis', 'Mosque / Masjid',
+    'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue', 'Farm / Estate',
+]);
 
 const getMosqueRegulatoryAuthority = (emirate: string) => {
     if (emirate === 'Abu Dhabi') return 'Awqaf / ADMDR';
     if (emirate === 'Dubai') return 'IACAD / SIRA';
     if (emirate === 'Sharjah') return 'Sharjah Islamic Affairs';
-    return 'Local Islamic Affairs Authority';
+    return emirate ? 'Local Islamic Affairs Authority' : '';
 };
 
-const createDefaultMosqueProfile = (emirate = 'Dubai') => ({
+const createEmptyMosqueProfile = (emirate = '') => ({
     mosqueName: '',
     emirate,
     regulatoryAuthority: getMosqueRegulatoryAuthority(emirate),
     assetClass: 'RELIGIOUS_FACILITY',
-    riskProfile: 'HIGH_FOOTFALL_SENSITIVE_ASSET',
+    riskProfile: 'ASSESSMENT_REQUIRED',
     serviceModel: 'MOSQUE_FM',
-    grossFloorAreaSqm: 0,
     grossFloorAreaSqft: 0,
-    commissioningYear: new Date().getFullYear(),
     propertyAgeYears: 0,
-    maxWorshipperCapacity: 300,
-    dailyPrayerFootfallEstimate: 150,
-    fridayJummahCapacity: 500,
-    ramadanPeakCapacity: 750,
-    hasImamResidence: false,
-    hasMuezzinResidence: false,
-    hasFemalePrayerArea: true,
-    hasQuranClassrooms: false,
-    hasMajlisArea: false,
-    hasParkingArea: true,
-    hasExternalCourtyard: false,
-    hasMinaret: true,
-    numberOfMinarets: 1,
-    hasDome: true,
-    numberOfDomes: 1,
-    wuduAreasCount: 1,
-    toiletsCount: 4,
-    waterTanksCount: 1,
-    ablutionFountainsCount: 0,
+    maxWorshipperCapacity: 0,
+    ramadanPeakCapacity: 0,
+    wuduAreasCount: 0,
+    toiletsCount: 0,
     carpetAreaSqm: 0,
-    carpetMaterial: 'Synthetic',
     marbleAreaSqm: 0,
-    marbleCondition: 'Good',
-    chandeliersCount: 0,
-    chandelierSizeCategory: 'Medium',
-    ceilingHeightMeters: 5,
     hvacUnitsCount: 0,
-    hvacTotalTonnage: 0,
-    hvacType: 'Split Units',
-    paSystemInstalled: true,
-    internalSpeakersCount: 0,
-    externalSpeakersCount: 0,
-    amplifierCount: 1,
     cctvInstalled: false,
     cctvCameraCount: 0,
-    cctvResolution: '4MP',
+    cctvResolution: '',
+    storageDays: 0,
     hasDonationBoxCoverage: false,
-    hasEntranceFacialCoverage: false,
-    storageDays: 30,
-    siraOrAdmccCompliant: false,
-    serviceScope: 'Full IFM',
-    shariaCompliantContractRequired: true,
-    preferredContractStructure: 'Wakalah',
-    complianceRules: {
-        noMaintenanceDuringPrayerTimes: true,
-        wuduCleaningAfterEveryPrayer: true,
-        emergencyMepResponseRequired: true,
-        maxUtilityDowntimeHours: 5,
-        emergencyContainmentTargetHours: 24,
-        documentationRequiredOnSite: true,
-        prayerTimeSchedulingRequired: true,
-        ramadanSurgePlanRequired: true,
-        cctvComplianceRequired: true,
-        audioRecordingProhibitedUnlessApproved: true,
-    },
-    cleaningSchedule: {
-        fajr: 'Post-prayer cleaning',
-        dhuhr: 'Post-prayer cleaning',
-        asr: 'Post-prayer cleaning',
-        maghrib: 'Post-prayer cleaning',
-        isha: 'Post-prayer cleaning',
-        jummah: 'Deep crowd cleaning',
-        ramadanTaraweeh: 'Additional night cleaning',
-    },
-    complianceBadges: [
-        'Prayer-Time Safe Scheduling',
-        'Wudu Cleaning Active',
-        'Ramadan Ready',
-        'CCTV 30-Day Storage Verified',
-    ],
+    ramadanSurgePlanConfirmed: false,
+    prayerTimeSchedulingConfirmed: false,
+    serviceScope: '',
+    preferredContractStructure: '',
 });
+
+const cleanExtractedText = (value: unknown) => typeof value === 'string' ? value.trim() : '';
+
+const buildVerifiedOcrPatch = (extracted: any): Partial<PropertyData> => {
+    const patch: Partial<PropertyData> = {};
+    const propertyType = cleanExtractedText(extracted?.propertyType);
+    const area = cleanExtractedText(extracted?.area);
+    const emirate = cleanExtractedText(extracted?.emirate);
+    const sqft = Number(extracted?.sqft);
+
+    if (propertyType && ASSET_TYPE_IDS.has(propertyType)) patch.propertyType = propertyType;
+    if (area) patch.area = area;
+    if (UAE_EMIRATES.includes(emirate)) patch.emirate = emirate;
+    if (Number.isFinite(sqft) && sqft > 0) patch.sqft = Math.round(sqft);
+    return patch;
+};
 
 const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty, addProperty } = useOnboardingStore();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, lang } = useLanguage();
+    const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
     const [scanning, setScanning] = useState(false);
     const [scanned, setScanned] = useState(false);
     const [ocrError, setOcrError] = useState<string | null>(null);
@@ -117,375 +110,171 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     }, [properties.length, addProperty]);
 
     const activeProperty = properties[0];
-    const mosqueProfile = (activeProperty as any)?.mosqueProfile || createDefaultMosqueProfile(activeProperty?.emirate || 'Dubai');
     const isMosque = activeProperty?.propertyType === 'Mosque / Masjid';
+    const mosqueProfile = (activeProperty?.mosqueProfile || createEmptyMosqueProfile(activeProperty?.emirate || '')) as Record<string, any>;
 
-    const mosqueComplianceWarnings = useMemo(() => {
+    const types = [
+        { id: 'Villa', label: label('Villa', 'فيلا'), icon: <Home size={22} />, category: 'Residential' },
+        { id: 'Apartment', label: label('Apartment', 'شقة'), icon: <Building size={22} />, category: 'Residential' },
+        { id: 'Residential Building', label: label('Residential Building', 'مبنى سكني'), icon: <Building2 size={22} />, category: 'Residential' },
+        { id: 'Commercial Building', label: label('Commercial Building', 'مبنى تجاري'), icon: <Warehouse size={22} />, category: 'Commercial' },
+        { id: 'Office', label: label('Office', 'مكتب'), icon: <Briefcase size={22} />, category: 'Commercial' },
+        { id: 'Retail Center', label: label('Retail Center', 'مركز تجزئة'), icon: <Building size={22} />, category: 'Retail' },
+        { id: 'Mall', label: label('Mall', 'مركز تسوق'), icon: <Building2 size={22} />, premium: true, category: 'Retail' },
+        { id: 'Hotel', label: label('Hotel', 'فندق'), icon: <Hotel size={22} />, premium: true, useType: 'hospitality', category: 'Hospitality' },
+        { id: 'Resort', label: label('Resort', 'منتجع'), icon: <Hotel size={22} />, premium: true, useType: 'hospitality', category: 'Hospitality' },
+        { id: 'Hospital', label: label('Hospital', 'مستشفى'), icon: <ShieldCheck size={22} />, premium: true, useType: 'healthcare', category: 'Healthcare' },
+        { id: 'Clinic', label: label('Clinic', 'عيادة'), icon: <ShieldCheck size={22} />, premium: true, useType: 'healthcare', category: 'Healthcare' },
+        { id: 'School', label: label('School', 'مدرسة'), icon: <Landmark size={22} />, premium: true, useType: 'education', category: 'Education' },
+        { id: 'Warehouse', label: label('Warehouse', 'مستودع'), icon: <Warehouse size={22} />, category: 'Industrial' },
+        { id: 'Industrial Property', label: label('Industrial Property', 'عقار صناعي'), icon: <Warehouse size={22} />, category: 'Industrial' },
+        { id: 'Labour Camp', label: label('Labour Camp', 'سكن عمال'), icon: <Building2 size={22} />, premium: true, category: 'Accommodation' },
+        { id: 'Staff Accommodation', label: label('Staff Accommodation', 'سكن موظفين'), icon: <Building2 size={22} />, category: 'Accommodation' },
+        { id: 'Government Property', label: label('Government Property', 'عقار حكومي'), icon: <ShieldCheck size={22} />, premium: true, ownerType: 'government', category: 'Government' },
+        { id: 'Government Majlis', label: label('Government Majlis', 'مجلس حكومي'), icon: <Landmark size={22} />, premium: true, ownerType: 'government', majlis: true, majlisType: 'government', category: 'Majlis' },
+        { id: 'Private Majlis', label: label('Private Majlis', 'مجلس خاص'), icon: <Landmark size={22} />, premium: true, majlis: true, majlisType: 'private', category: 'Majlis' },
+        { id: 'Mosque / Masjid', label: label('Mosque / Masjid', 'مسجد'), icon: <Landmark size={22} />, premium: true, useType: 'religious', ownerType: 'government', category: 'Religious' },
+        { id: 'Mixed-Use Tower', label: label('Mixed-Use Tower', 'برج متعدد الاستخدامات'), icon: <Gem size={22} />, premium: true, category: 'Tower' },
+        { id: 'Skyscraper', label: label('Skyscraper', 'ناطحة سحاب'), icon: <Building2 size={22} />, premium: true, category: 'Tower' },
+        { id: 'Stadium', label: label('Stadium', 'استاد'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
+        { id: 'Sports Complex', label: label('Sports Complex', 'مجمع رياضي'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
+        { id: 'Event Venue', label: label('Event Venue', 'موقع فعاليات'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
+        { id: 'Farm / Estate', label: label('Farm / Estate', 'مزرعة / عزبة'), icon: <Home size={22} />, category: 'Estate' },
+    ];
+
+    const mosqueWarnings = useMemo(() => {
+        if (!isMosque) return [];
         const warnings: string[] = [];
-        if (!isMosque) return warnings;
-        if ((mosqueProfile.storageDays || 0) < 30) warnings.push('CCTV storage must be minimum 30 days.');
-        if (mosqueProfile.cctvResolution === '2MP') warnings.push('CCTV resolution should be upgraded to 4MP minimum.');
-        if (!mosqueProfile.hasDonationBoxCoverage) warnings.push('Donation box CCTV coverage is required.');
-        if ((mosqueProfile.wuduAreasCount || 0) < 1) warnings.push('At least one Wudu area must be registered.');
-        if (!mosqueProfile.complianceRules?.ramadanSurgePlanRequired) warnings.push('Ramadan surge plan must be active.');
+        if (!mosqueProfile.mosqueName) warnings.push(label('Mosque name is required.', 'اسم المسجد مطلوب.'));
+        if (!(Number(mosqueProfile.grossFloorAreaSqft) > 0)) warnings.push(label('Measured gross floor area is required.', 'المساحة الإجمالية المقاسة مطلوبة.'));
+        if (!(Number(mosqueProfile.maxWorshipperCapacity) > 0)) warnings.push(label('Verified worshipper capacity is required.', 'السعة الموثقة للمصلين مطلوبة.'));
+        if (!(Number(mosqueProfile.wuduAreasCount) > 0)) warnings.push(label('Register the actual Wudu areas.', 'سجل مناطق الوضوء الفعلية.'));
+        if (mosqueProfile.cctvInstalled && !(Number(mosqueProfile.storageDays) > 0)) warnings.push(label('Enter verified CCTV retention days.', 'أدخل أيام الاحتفاظ الموثقة لتسجيلات الكاميرات.'));
         return warnings;
-    }, [isMosque, mosqueProfile]);
+    }, [isMosque, mosqueProfile, lang]);
 
-    const handleTitleDeedUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const handleTitleDeedUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
         if (!file) return;
-
         setScanning(true);
+        setScanned(false);
         setOcrError(null);
+        updateProperty(0, { titleDeedStatus: 'scanning' });
         try {
             const uploaderUid = auth.currentUser?.uid;
             if (!uploaderUid) throw new Error('AUTH_REQUIRED_FOR_KYC_UPLOAD');
             const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
             const storageRef = ref(storage, `temp_kyc/${uploaderUid}/${Date.now()}_${safeFileName}`);
-            await uploadBytes(storageRef, file);
+            await uploadBytes(storageRef, file, { contentType: file.type || 'application/octet-stream' });
             const fileUrl = await getDownloadURL(storageRef);
-
             const ocrNode = httpsCallable(functions, 'processTitleDeedOCR');
             const result: any = await ocrNode({ fileUrl });
+            if (result.data?.status !== 'SUCCESS') throw new Error('OCR_NODE_BUSY');
 
-            if (result.data.status === 'SUCCESS') {
-                const extracted = result.data.data;
-                updateProperty(0, {
-                    propertyType: extracted.propertyType || 'Apartment',
-                    sqft: extracted.sqft || 1850,
-                    area: extracted.area || '',
-                    emirate: extracted.emirate || 'Dubai',
-                    titleDeedStatus: 'extracted'
-                });
-                setScanned(true);
-                setSnackbar({ open: true, message: 'Title deed data extracted successfully.', severity: 'success' });
-            } else {
-                throw new Error('OCR_NODE_BUSY');
+            const verifiedPatch = buildVerifiedOcrPatch(result.data?.data);
+            if (Object.keys(verifiedPatch).length === 0) {
+                updateProperty(0, { titleDeedStatus: 'manual_review_required' });
+                setOcrError(label('No reliable property values were extracted. Enter the details manually or upload a clearer document.', 'لم يتم استخراج بيانات عقار موثوقة. أدخل البيانات يدوياً أو ارفع مستنداً أوضح.'));
+                return;
             }
-        } catch (err) {
-            console.error('OCR Failure:', err);
-            setOcrError('Scanner node busy or document unclear. Please fill data manually or retry.');
+
+            updateProperty(0, { ...verifiedPatch, titleDeedStatus: 'extracted' });
+            setScanned(true);
+            setSnackbar({ open: true, message: label('Only verified title-deed values were applied.', 'تم تطبيق القيم الموثقة فقط من سند الملكية.'), severity: 'success' });
+        } catch (error) {
+            console.error('OCR Failure:', error);
             updateProperty(0, { titleDeedStatus: 'manual_review_required' });
+            setOcrError(label('The document could not be verified. No placeholder values were added.', 'تعذر التحقق من المستند. لم تتم إضافة أي قيم افتراضية.'));
         } finally {
             setScanning(false);
+            event.target.value = '';
         }
     };
 
-    const types: any[] = [
-        { id: 'Villa', label: t('onboarding.type.villa'), icon: <Home size={22} />, category: 'Residential' },
-        { id: 'Apartment', label: t('onboarding.type.apartment'), icon: <Building size={22} />, category: 'Residential' },
-        { id: 'Residential Building', label: t('onboarding.type.res_building'), icon: <Building2 size={22} />, category: 'Residential' },
-        { id: 'Commercial Building', label: t('onboarding.type.com_building'), icon: <Warehouse size={22} />, category: 'Commercial' },
-        { id: 'Office', label: t('onboarding.type.office'), icon: <Briefcase size={22} />, category: 'Commercial' },
-        { id: 'Retail Center', label: t('onboarding.type.retail'), icon: <Building size={22} />, category: 'Commercial' },
-        { id: 'Mall', label: t('onboarding.type.mall'), icon: <Building2 size={22} />, premium: true, category: 'Retail' },
-        { id: 'Hotel', label: t('onboarding.type.hotel'), icon: <Hotel size={22} />, premium: true, useType: 'hospitality', category: 'Hospitality' },
-        { id: 'Resort', label: t('onboarding.type.resort'), icon: <Hotel size={22} />, premium: true, useType: 'hospitality', category: 'Hospitality' },
-        { id: 'Hospital', label: t('onboarding.type.hospital'), icon: <ShieldCheck size={22} />, premium: true, useType: 'healthcare', category: 'Healthcare' },
-        { id: 'Clinic', label: t('onboarding.type.clinic'), icon: <ShieldCheck size={22} />, premium: true, useType: 'healthcare', category: 'Healthcare' },
-        { id: 'School', label: t('onboarding.type.school'), icon: <Landmark size={22} />, premium: true, useType: 'education', category: 'Education' },
-        { id: 'Warehouse', label: t('onboarding.type.warehouse'), icon: <Warehouse size={22} />, category: 'Industrial' },
-        { id: 'Industrial Property', label: t('onboarding.type.industrial'), icon: <Warehouse size={22} />, category: 'Industrial' },
-        { id: 'Labour Camp', label: t('onboarding.type.labour_camp'), icon: <Building2 size={22} />, premium: true, category: 'Accommodation' },
-        { id: 'Staff Accommodation', label: t('onboarding.type.staff_acc'), icon: <Building2 size={22} />, category: 'Accommodation' },
-        { id: 'Government Property', label: t('onboarding.type.gov_prop'), icon: <ShieldCheck size={22} />, premium: true, ownerType: 'government', category: 'Government' },
-        { id: 'Government Majlis', label: t('onboarding.type.gov_majlis'), icon: <Landmark size={22} />, premium: true, ownerType: 'government', majlis: true, majlisType: 'government', category: 'Majlis' },
-        { id: 'Private Majlis', label: t('onboarding.type.priv_majlis'), icon: <Landmark size={22} />, premium: true, majlis: true, majlisType: 'private', category: 'Majlis' },
-        { id: 'Mosque / Masjid', label: isRTL ? 'مسجد' : 'Mosque / Masjid', icon: <Landmark size={22} />, premium: true, useType: 'religious', ownerType: 'government', assetClass: 'RELIGIOUS_FACILITY', category: 'Religious' },
-        { id: 'Mixed-Use Tower', label: t('onboarding.type.mixed_tower'), icon: <Gem size={22} />, premium: true, category: 'Tower' },
-        { id: 'Skyscraper', label: t('onboarding.type.skyscraper'), icon: <Building2 size={22} />, premium: true, category: 'Tower' },
-        { id: 'Stadium', label: t('onboarding.type.stadium'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
-        { id: 'Sports Complex', label: t('onboarding.type.sports_complex'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
-        { id: 'Event Venue', label: t('onboarding.type.event_venue'), icon: <Gem size={22} />, premium: true, useType: 'event', category: 'Event' },
-        { id: 'Farm / Estate', label: t('onboarding.type.farm'), icon: <Home size={22} />, category: 'Estate' },
-    ];
-
     const selectPropertyType = (type: any) => {
-        const isSelectedMosque = type.id === 'Mosque / Masjid';
-        const nextEmirate = activeProperty?.emirate || 'Dubai';
+        const mosqueSelected = type.id === 'Mosque / Masjid';
         updateProperty(0, {
             propertyType: type.id,
-            subType: isSelectedMosque ? 'Mosque Facilities Management' : activeProperty?.subType,
+            subType: mosqueSelected ? 'Mosque Facilities Management' : activeProperty?.subType,
             majlis: Boolean(type.majlis),
             majlisType: type.majlisType || 'none',
             ownerType: type.ownerType || activeProperty?.ownerType || 'Private',
             useType: type.useType || activeProperty?.useType || 'Rental',
-            assetGrade: isSelectedMosque || type.premium ? 'Sovereign' : activeProperty?.assetGrade || 'Premium',
-            sira: isSelectedMosque ? true : activeProperty?.sira,
-            tank: isSelectedMosque ? true : activeProperty?.tank,
-            hvac: isSelectedMosque ? true : activeProperty?.hvac,
-            fireAlarm: isSelectedMosque ? true : activeProperty?.fireAlarm,
-            mosqueProfile: isSelectedMosque ? createDefaultMosqueProfile(nextEmirate) : (activeProperty as any)?.mosqueProfile,
-            assetClass: isSelectedMosque ? 'RELIGIOUS_FACILITY' : (activeProperty as any)?.assetClass,
-            riskProfile: isSelectedMosque ? 'HIGH_FOOTFALL_SENSITIVE_ASSET' : (activeProperty as any)?.riskProfile,
-            serviceModel: isSelectedMosque ? 'MOSQUE_FM' : (activeProperty as any)?.serviceModel,
-            missions: isSelectedMosque
-                ? ['Prayer-time safe scheduling', '5 daily Wudu cleaning cycles', 'Ramadan surge readiness', 'Awqaf/IACAD compliance reporting', 'CCTV/SIRA review']
-                : activeProperty?.missions || [],
-        } as any);
+            assetGrade: mosqueSelected || type.premium ? 'Sovereign' : activeProperty?.assetGrade || 'Premium',
+            mosqueProfile: mosqueSelected ? (activeProperty?.mosqueProfile || createEmptyMosqueProfile(activeProperty?.emirate || '')) : undefined,
+            assetClass: mosqueSelected ? 'RELIGIOUS_FACILITY' : undefined,
+            riskProfile: mosqueSelected ? 'ASSESSMENT_REQUIRED' : undefined,
+            serviceModel: mosqueSelected ? 'MOSQUE_FM' : undefined,
+            missions: [],
+        });
     };
 
     const updateMosqueProfile = (patch: Record<string, any>) => {
         const nextProfile = { ...mosqueProfile, ...patch };
-        if (patch.emirate) nextProfile.regulatoryAuthority = getMosqueRegulatoryAuthority(patch.emirate);
+        if ('emirate' in patch) nextProfile.regulatoryAuthority = getMosqueRegulatoryAuthority(String(patch.emirate || ''));
         updateProperty(0, {
-            emirate: nextProfile.emirate,
-            age: nextProfile.propertyAgeYears || activeProperty?.age || 0,
-            sqft: nextProfile.grossFloorAreaSqft || activeProperty?.sqft || 0,
-            units: Math.max(1, nextProfile.wuduAreasCount || activeProperty?.units || 1),
-            rooms: nextProfile.maxWorshipperCapacity || activeProperty?.rooms || 0,
+            emirate: nextProfile.emirate || activeProperty?.emirate,
             mosqueProfile: nextProfile,
-        } as any);
+        });
     };
 
-    const canProceed = activeProperty?.propertyType && activeProperty?.units > 0 && activeProperty?.sqft > 0;
-    const selectedType = types.find((type) => type.id === activeProperty?.propertyType);
+    const canProceed = isMosque
+        ? Boolean(activeProperty?.propertyType && Number(mosqueProfile.grossFloorAreaSqft) > 0 && Number(mosqueProfile.maxWorshipperCapacity) > 0)
+        : Boolean(activeProperty?.propertyType && activeProperty?.units > 0 && activeProperty?.sqft > 0);
 
     return (
         <Box sx={{ py: 2 }}>
             <Box sx={{ textAlign: 'center', mb: 4 }}>
-                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
-                    {t('onboarding.asset_profile')}
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 760, mx: 'auto' }}>
-                    {t('onboarding.asset_desc')}
-                </Typography>
+                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{t('onboarding.asset_profile')}</Typography>
+                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)' }}>{label('Select the actual asset and enter verified measurements. OCR never invents missing values.', 'حدد العقار الفعلي وأدخل القياسات الموثقة. لا ينشئ المسح الضوئي قيماً مفقودة.')}</Typography>
             </Box>
 
             <Container maxWidth="lg">
-                {ocrError && (
-                    <Alert
-                        severity="warning"
-                        icon={<AlertTriangle />}
-                        sx={{ mb: 4, bgcolor: 'rgba(255, 152, 0, 0.1)', color: '#ffb74d', border: '1px solid rgba(255,152,0,0.2)' }}
-                        action={
-                            <Button size="small" color="inherit" component="label" startIcon={<RefreshCcw size={14} />}>
-                                {t('onboarding.retry_scan')}
-                                <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />
-                            </Button>
-                        }
-                    >
-                        {ocrError}
-                    </Alert>
-                )}
-
+                {ocrError && <Alert severity="warning" icon={<AlertTriangle />} sx={{ mb: 3 }} action={<Button component="label" color="inherit" startIcon={<RefreshCcw size={14} />}>{label('Retry', 'إعادة المحاولة')}<input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} /></Button>}>{ocrError}</Alert>}
                 <Grid container spacing={4}>
                     <Grid item xs={12} lg={7}>
-                        <Paper sx={{ p: { xs: 2.2, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Stack spacing={1.5} sx={{ mb: 3 }}>
-                                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2}>
-                                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block' }}>
-                                        1. {t('onboarding.asset_type').toUpperCase()}
-                                    </Typography>
-                                    <Chip size="small" label={`${types.length} asset types`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
-                                </Stack>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', lineHeight: 1.6 }}>
-                                    Scroll or tap below. BIN GROUP supports villas, apartments, towers, hotels, hospitals, schools, mosques, majlis, warehouses, labour camps, staff accommodation and government assets.
-                                </Typography>
-                                <Stack direction="row" flexWrap="wrap" gap={1}>
-                                    {['Residential', 'Commercial', 'Hospitality', 'Healthcare', 'Government', 'Majlis', 'Industrial'].map((category) => (
-                                        <Chip key={category} size="small" label={category} sx={{ height: 22, bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: 10 }} />
-                                    ))}
-                                </Stack>
-                            </Stack>
-
-                            <Grid container spacing={{ xs: 1.2, sm: 2 }}>
+                        <Paper sx={{ p: { xs: 2, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Asset type', 'نوع العقار')}</Typography>
+                            <Grid container spacing={1.5} sx={{ mt: 1 }}>
                                 {types.map((type) => {
-                                    const isSelected = activeProperty?.propertyType === type.id;
-                                    return (
-                                        <Grid item xs={6} sm={4} key={type.id}>
-                                            <Paper
-                                                onClick={() => selectPropertyType(type)}
-                                                sx={{
-                                                    p: { xs: 1.4, sm: 2 },
-                                                    minHeight: { xs: 104, sm: 122 },
-                                                    cursor: 'pointer',
-                                                    bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.12) : 'rgba(255,255,255,0.02)',
-                                                    border: `1px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.06)'}`,
-                                                    borderRadius: { xs: 3, sm: 3.5 },
-                                                    transition: 'all 0.2s ease',
-                                                    textAlign: 'center',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: 0.75,
-                                                    '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198, 167, 94, 0.05)' }
-                                                }}
-                                            >
-                                                <Box sx={{ color: isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.35)', display: 'flex', justifyContent: 'center' }}>
-                                                    {type.icon}
-                                                </Box>
-                                                <Typography variant="caption" fontWeight="950" sx={{ color: '#FFF', display: 'block', lineHeight: 1.18, fontSize: { xs: '0.68rem', sm: '0.75rem' } }}>
-                                                    {type.label}
-                                                </Typography>
-                                                <Stack direction="row" spacing={0.5} justifyContent="center" flexWrap="wrap" useFlexGap>
-                                                    {type.premium && <Chip size="small" label="Sovereign" sx={{ height: 17, fontSize: 9, color: '#000', bgcolor: binThemeTokens.gold, fontWeight: 900 }} />}
-                                                    {type.ownerType === 'government' && <Chip size="small" label="Gov" sx={{ height: 17, fontSize: 9, color: '#bfdbfe', bgcolor: 'rgba(59,130,246,0.14)', fontWeight: 900 }} />}
-                                                    {type.assetClass === 'RELIGIOUS_FACILITY' && <Chip size="small" label="Awqaf" sx={{ height: 17, fontSize: 9, color: '#000', bgcolor: binThemeTokens.gold, fontWeight: 900 }} />}
-                                                </Stack>
-                                            </Paper>
-                                        </Grid>
-                                    );
+                                    const selected = activeProperty?.propertyType === type.id;
+                                    return <Grid item xs={6} sm={4} key={type.id}><Paper onClick={() => selectPropertyType(type)} sx={{ p: 1.5, minHeight: 105, cursor: 'pointer', borderRadius: 3, textAlign: 'center', bgcolor: selected ? alpha(binThemeTokens.gold, 0.14) : 'rgba(255,255,255,0.03)', border: `1px solid ${selected ? binThemeTokens.gold : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 0.7 }}><Box sx={{ color: selected ? binThemeTokens.gold : 'rgba(255,255,255,0.45)' }}>{type.icon}</Box><Typography variant="caption" fontWeight="900" color="#FFF">{type.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.5)">{type.category}</Typography></Paper></Grid>;
                                 })}
                             </Grid>
                         </Paper>
 
-                        {isMosque && (
-                            <Paper sx={{ mt: 4, p: { xs: 2.5, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}` }}>
-                                <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-                                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>Mosque Facility Profile</Typography>
-                                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Clean. Compliant. Prayer-Time Safe. Ramadan Ready.</Typography>
-                                    </Box>
-                                    <Landmark color={binThemeTokens.gold} />
-                                </Stack>
-
-                                {mosqueComplianceWarnings.length > 0 && (
-                                    <Alert severity="warning" sx={{ mb: 3, bgcolor: 'rgba(255,152,0,0.1)', color: '#ffb74d', border: '1px solid rgba(255,152,0,0.25)' }}>
-                                        {mosqueComplianceWarnings.join(' ')}
-                                    </Alert>
-                                )}
-
-                                <Grid container spacing={2}>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField fullWidth size="small" label="Mosque name" value={mosqueProfile.mosqueName || ''} onChange={(e) => updateMosqueProfile({ mosqueName: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField select fullWidth size="small" label="Emirate / Authority" value={mosqueProfile.emirate || 'Dubai'} onChange={(e) => updateMosqueProfile({ emirate: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                            {UAE_EMIRATES.map((emirate) => <MenuItem key={emirate} value={emirate}>{emirate} — {getMosqueRegulatoryAuthority(emirate)}</MenuItem>)}
-                                        </TextField>
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="GFA sq.ft" value={mosqueProfile.grossFloorAreaSqft || 0} onChange={(e) => updateMosqueProfile({ grossFloorAreaSqft: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Age years" value={mosqueProfile.propertyAgeYears || 0} onChange={(e) => updateMosqueProfile({ propertyAgeYears: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Capacity" value={mosqueProfile.maxWorshipperCapacity || 0} onChange={(e) => updateMosqueProfile({ maxWorshipperCapacity: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Ramadan peak" value={mosqueProfile.ramadanPeakCapacity || 0} onChange={(e) => updateMosqueProfile({ ramadanPeakCapacity: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Wudu areas" value={mosqueProfile.wuduAreasCount || 0} onChange={(e) => updateMosqueProfile({ wuduAreasCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Carpet sqm" value={mosqueProfile.carpetAreaSqm || 0} onChange={(e) => updateMosqueProfile({ carpetAreaSqm: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Marble sqm" value={mosqueProfile.marbleAreaSqm || 0} onChange={(e) => updateMosqueProfile({ marbleAreaSqm: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="Chandeliers" value={mosqueProfile.chandeliersCount || 0} onChange={(e) => updateMosqueProfile({ chandeliersCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="HVAC units" value={mosqueProfile.hvacUnitsCount || 0} onChange={(e) => updateMosqueProfile({ hvacUnitsCount: Number(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField fullWidth size="small" type="number" label="CCTV cameras" value={mosqueProfile.cctvCameraCount || 0} onChange={(e) => updateMosqueProfile({ cctvCameraCount: Number(e.target.value) || 0, cctvInstalled: Number(e.target.value) > 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6} sm={3}>
-                                        <TextField select fullWidth size="small" label="CCTV resolution" value={mosqueProfile.cctvResolution || '4MP'} onChange={(e) => updateMosqueProfile({ cctvResolution: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                            {['2MP', '4MP', '8MP', 'Mixed'].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
-                                        </TextField>
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField select fullWidth size="small" label="Mosque FM package" value={mosqueProfile.serviceScope || 'Full IFM'} onChange={(e) => updateMosqueProfile({ serviceScope: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                            {['Basic MEP', 'Comprehensive AMC', 'Full IFM'].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
-                                        </TextField>
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField select fullWidth size="small" label="Contract structure" value={mosqueProfile.preferredContractStructure || 'Wakalah'} onChange={(e) => updateMosqueProfile({ preferredContractStructure: e.target.value })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                            {['Standard AMC', 'FIDIC Short Form', 'Ijarah', 'Wakalah'].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
-                                        </TextField>
-                                    </Grid>
-                                </Grid>
-
-                                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 3 }}>
-                                    {['No maintenance during prayer', '5x Wudu cleaning daily', 'Emergency MEP 24/7', 'Ramadan surge plan', 'Awqaf/IACAD report export', 'CCTV 30-day storage'].map((badge) => (
-                                        <Chip key={badge} label={badge} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }} />
-                                    ))}
-                                </Stack>
-                            </Paper>
-                        )}
+                        {isMosque && <Paper sx={{ mt: 3, p: { xs: 2, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
+                            <Typography variant="h6" fontWeight="950" color="#FFF">{label('Verified mosque facility profile', 'ملف مرافق المسجد الموثق')}</Typography>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>{label('Enter measured facts only. Compliance is not claimed until reviewed.', 'أدخل الحقائق المقاسة فقط. لا يتم اعتماد الامتثال قبل المراجعة.')}</Typography>
+                            {mosqueWarnings.length > 0 && <Alert severity="warning" sx={{ mb: 3 }}>{mosqueWarnings.join(' ')}</Alert>}
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}><TextField fullWidth label={label('Mosque name', 'اسم المسجد')} value={mosqueProfile.mosqueName || ''} onChange={(e) => updateMosqueProfile({ mosqueName: e.target.value })} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField select fullWidth label={label('Emirate', 'الإمارة')} value={mosqueProfile.emirate || ''} onChange={(e) => updateMosqueProfile({ emirate: e.target.value })}><MenuItem value="">{label('Select', 'اختر')}</MenuItem>{UAE_EMIRATES.map((emirate) => <MenuItem key={emirate} value={emirate}>{emirate}</MenuItem>)}</TextField></Grid>
+                                <Grid item xs={6} sm={4}><TextField fullWidth type="number" label={label('GFA sq.ft', 'المساحة قدم²')} value={mosqueProfile.grossFloorAreaSqft || 0} onChange={(e) => updateMosqueProfile({ grossFloorAreaSqft: Number(e.target.value) || 0 })} /></Grid>
+                                <Grid item xs={6} sm={4}><TextField fullWidth type="number" label={label('Age years', 'العمر بالسنوات')} value={mosqueProfile.propertyAgeYears || 0} onChange={(e) => updateMosqueProfile({ propertyAgeYears: Number(e.target.value) || 0 })} /></Grid>
+                                <Grid item xs={6} sm={4}><TextField fullWidth type="number" label={label('Verified capacity', 'السعة الموثقة')} value={mosqueProfile.maxWorshipperCapacity || 0} onChange={(e) => updateMosqueProfile({ maxWorshipperCapacity: Number(e.target.value) || 0 })} /></Grid>
+                                <Grid item xs={6} sm={4}><TextField fullWidth type="number" label={label('Wudu areas', 'مناطق الوضوء')} value={mosqueProfile.wuduAreasCount || 0} onChange={(e) => updateMosqueProfile({ wuduAreasCount: Number(e.target.value) || 0 })} /></Grid>
+                                <Grid item xs={6} sm={4}><TextField fullWidth type="number" label={label('CCTV cameras', 'كاميرات المراقبة')} value={mosqueProfile.cctvCameraCount || 0} onChange={(e) => updateMosqueProfile({ cctvCameraCount: Number(e.target.value) || 0, cctvInstalled: Number(e.target.value) > 0 })} /></Grid>
+                                <Grid item xs={6} sm={4}><TextField fullWidth type="number" label={label('Retention days', 'أيام الاحتفاظ')} value={mosqueProfile.storageDays || 0} onChange={(e) => updateMosqueProfile({ storageDays: Number(e.target.value) || 0 })} /></Grid>
+                            </Grid>
+                        </Paper>}
                     </Grid>
 
                     <Grid item xs={12} lg={5}>
-                        <Paper sx={{ p: { xs: 3, sm: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>
-                                2. {t('onboarding.verification').toUpperCase()}
-                            </Typography>
-                            <Stack spacing={3}>
-                                <Button
-                                    variant="outlined"
-                                    component="label"
-                                    fullWidth
-                                    startIcon={scanning ? <CircularProgress size={16} color="inherit" /> : <Scan size={18} />}
-                                    sx={{ mb: 1, py: 1.5, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, borderStyle: 'dashed' }}
-                                >
-                                    {scanning ? t('onboarding.scanning') : scanned ? t('onboarding.scanned') : t('onboarding.scan_btn')}
-                                    {!scanning && !scanned && <input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} />}
-                                </Button>
-
-                                {selectedType && (
-                                    <Paper sx={{ p: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>Selected asset</Typography>
-                                        <Typography variant="subtitle2" sx={{ color: '#FFF', fontWeight: 950 }}>{selectedType.label}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)' }}>{selectedType.category} · {selectedType.premium ? 'Sovereign / enhanced pricing logic' : 'Standard pricing logic'}</Typography>
-                                    </Paper>
-                                )}
-
-                                <TextField
-                                    select fullWidth label={t('onboarding.asset_type')} size="small"
-                                    value={activeProperty?.assetGrade || 'Premium'}
-                                    onChange={(e) => updateProperty(0, { assetGrade: e.target.value as any })}
-                                    sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
-                                >
-                                    <MenuItem value="Standard">{t('onboarding.grade.standard')}</MenuItem>
-                                    <MenuItem value="Premium">{t('onboarding.grade.premium')}</MenuItem>
-                                    <MenuItem value="Luxury">{t('onboarding.grade.luxury')}</MenuItem>
-                                    <MenuItem value="Sovereign">{t('onboarding.grade.sovereign')}</MenuItem>
-                                </TextField>
-
-                                <Grid container spacing={2}>
-                                    <Grid item xs={6}>
-                                        <TextField fullWidth label={isMosque ? 'Wudu areas' : t('onboarding.units')} type="number" size="small" value={activeProperty?.units || 0} onChange={(e) => updateProperty(0, { units: parseInt(e.target.value) || 0 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <TextField fullWidth label={t('onboarding.floors')} type="number" size="small" value={activeProperty?.floors || 1} onChange={(e) => updateProperty(0, { floors: parseInt(e.target.value) || 1 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <TextField fullWidth label={t('onboarding.sqft')} type="number" size="small" value={activeProperty?.sqft || 0} onChange={(e) => updateProperty(0, { sqft: parseInt(e.target.value) || 0 })} InputProps={{ endAdornment: scanned ? <ShieldCheck size={16} color="#10b981" /> : null }} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <TextField fullWidth label={t('onboarding.age')} type="number" size="small" value={activeProperty?.age || 0} onChange={(e) => updateProperty(0, { age: parseInt(e.target.value) || 0 })} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }} />
-                                    </Grid>
-                                </Grid>
-
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                    {onBack && (
-                                        <Button
-                                            variant="outlined"
-                                            fullWidth
-                                            size="large"
-                                            onClick={onBack}
-                                            startIcon={!isRTL ? <ArrowLeft /> : null}
-                                            endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null}
-                                            sx={{ mt: 2, borderRadius: 4, color: 'rgba(255,255,255,0.72)', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}
-                                        >
-                                            {t('onboarding.back')}
-                                        </Button>
-                                    )}
-                                    <Button
-                                        variant="contained" fullWidth size="large"
-                                        onClick={onNext} disabled={!canProceed}
-                                        endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
-                                        sx={{ mt: 2, borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
-                                    >
-                                        {t('onboarding.continue')}
-                                    </Button>
+                        <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Verified details', 'البيانات الموثقة')}</Typography>
+                            <Stack spacing={2.5} sx={{ mt: 2 }}>
+                                <Button variant="outlined" component="label" startIcon={scanning ? <CircularProgress size={16} /> : <Scan size={18} />} disabled={scanning} sx={{ py: 1.5, borderStyle: 'dashed' }}>{scanning ? label('Scanning', 'جارٍ المسح') : scanned ? label('Verified values applied', 'تم تطبيق القيم الموثقة') : label('Upload title deed for OCR', 'رفع سند الملكية للمسح')}<input type="file" accept="image/*,.pdf" hidden onChange={handleTitleDeedUpload} /></Button>
+                                <TextField select fullWidth label={label('Asset grade', 'درجة العقار')} value={activeProperty?.assetGrade || 'Premium'} onChange={(e) => updateProperty(0, { assetGrade: e.target.value as PropertyData['assetGrade'] })}><MenuItem value="Standard">Standard</MenuItem><MenuItem value="Premium">Premium</MenuItem><MenuItem value="Luxury">Luxury</MenuItem><MenuItem value="Sovereign">Sovereign</MenuItem></TextField>
+                                {!isMosque && <Grid container spacing={2}>
+                                    <Grid item xs={6}><TextField fullWidth label={label('Units', 'الوحدات')} type="number" value={activeProperty?.units || 0} onChange={(e) => updateProperty(0, { units: Number(e.target.value) || 0 })} /></Grid>
+                                    <Grid item xs={6}><TextField fullWidth label={label('Floors', 'الطوابق')} type="number" value={activeProperty?.floors || 0} onChange={(e) => updateProperty(0, { floors: Number(e.target.value) || 0 })} /></Grid>
+                                    <Grid item xs={6}><TextField fullWidth label={label('Area sq.ft', 'المساحة قدم²')} type="number" value={activeProperty?.sqft || 0} onChange={(e) => updateProperty(0, { sqft: Number(e.target.value) || 0 })} /></Grid>
+                                    <Grid item xs={6}><TextField fullWidth label={label('Age', 'العمر')} type="number" value={activeProperty?.age || 0} onChange={(e) => updateProperty(0, { age: Number(e.target.value) || 0 })} /></Grid>
+                                </Grid>}
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                    {onBack && <Button fullWidth variant="outlined" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : undefined}>{label('Back', 'رجوع')}</Button>}
+                                    <Button fullWidth variant="contained" onClick={onNext} disabled={!canProceed} endIcon={<ArrowRight style={{ transform: isRTL ? 'rotate(180deg)' : undefined }} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{label('Continue', 'متابعة')}</Button>
                                 </Stack>
                             </Stack>
                         </Paper>
@@ -493,11 +282,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                 </Grid>
             </Container>
 
-            <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-                <Alert severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
+            <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}><Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert></Snackbar>
         </Box>
     );
 };
