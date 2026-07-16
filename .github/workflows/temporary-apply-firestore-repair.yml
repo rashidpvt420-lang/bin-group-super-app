@@ -4,18 +4,13 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, reopened]
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/temporary-apply-firestore-repair.yml
+    types: [opened]
 
 permissions:
   contents: write
 
 concurrency:
-  group: temporary-apply-firestore-repair-${{ github.event.pull_request.number || github.ref }}
+  group: temporary-apply-firestore-repair-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
@@ -24,11 +19,11 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout repair branch
+      - name: Checkout clean repair branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: fix/final-firestore-security-clearance
+          ref: fix/final-firestore-clearance-v2
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,13 +40,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply all remaining Firestore hardening
-        shell: bash
-        run: |
-          node scripts/exclude-ticket-rules-from-admin-catchall.mjs
-          node scripts/short-circuit-admin-catchall.mjs
-          node scripts/route-ticket-updates-by-actor.mjs
-          node scripts/final-firestore-postpatch-cleanup.mjs
+      - name: Apply complete Firestore clearance patch
+        run: node scripts/apply-final-firestore-clearance-v2.mjs
 
       - name: Verify generated changes
         shell: bash
@@ -59,20 +49,20 @@ jobs:
           git diff --check
           git diff --stat
           git diff -- firestore.rules test/security-rules.test.js
+          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
+            echo "Expected final Firestore changes were not produced."
+            exit 1
+          fi
 
-      - name: Commit generated rule changes before testing
+      - name: Commit generated security changes
         shell: bash
         run: |
-          if git diff --quiet -- firestore.rules test/security-rules.test.js; then
-            echo "Generated Firestore changes are already committed."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- firestore.rules test/security-rules.test.js
           git diff --cached --check
-          git commit -m "Route ticket updates through one actor authorization path"
-          git push origin HEAD:fix/final-firestore-security-clearance
+          git commit -m "Finalize Firestore security rules and actor-routed ticket updates"
+          git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Run rules suite and reject expression overflow
         id: rules
@@ -85,7 +75,7 @@ jobs:
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Persist rule-test diagnostics
+      - name: Persist complete rule-test diagnostics
         if: always()
         shell: bash
         run: |
@@ -94,8 +84,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- launch_package/firestore-rule-test-output.txt
-          git commit -m "Record Firestore rule-test diagnostics" || true
-          git push origin HEAD:fix/final-firestore-security-clearance
+          git commit -m "Record final Firestore rule-test diagnostics" || true
+          git push origin HEAD:fix/final-firestore-clearance-v2
 
       - name: Enforce clean rules result
         shell: bash
