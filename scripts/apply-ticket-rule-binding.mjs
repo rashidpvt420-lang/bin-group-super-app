@@ -87,7 +87,7 @@ const router = `    function safeTicketUpdateByActor() {
       return authenticated && (
         (admin && isNotSuspended()) ||
         (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
-        (!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
+        (!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
         (!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
       );
     }
@@ -134,7 +134,7 @@ for (const required of [
   'let dispatcher = authenticated && (',
   '(admin && isNotSuspended())',
   '(!admin && dispatcher && safeDispatcherTicketUpdate())',
-  "(!admin && !dispatcher && role == 'tenant' && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
+  "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
   "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())",
 ]) {
   if (!text.includes(required)) throw new Error(`[ticket-rule-binding] Bounded router fragment missing: ${required}`);
