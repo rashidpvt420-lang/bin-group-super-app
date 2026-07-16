@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened]
+    types: [opened, synchronize]
 
 permissions:
   contents: write
@@ -41,7 +41,7 @@ jobs:
         run: npm ci
 
       - name: Apply complete Firestore clearance patch
-        run: node scripts/apply-final-firestore-clearance-v2.mjs
+        run: node scripts/apply-final-firestore-clearance-entry.mjs
 
       - name: Verify generated changes
         shell: bash
