@@ -4,6 +4,7 @@ import {
     Box,
     Button,
     Chip,
+    CircularProgress,
     Container,
     Divider,
     Grid,
@@ -17,6 +18,8 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { functions, httpsCallable } from '../../lib/firebase';
+import { ownerPortfolioQuoteRequest } from '../../utils/ownerPortfolioQuotePayload';
 
 const badCopy = (value?: string) => {
     const text = String(value || '').trim();
@@ -29,17 +32,89 @@ export const reviewPlanKeyForStrategy = (strategy?: string) => {
     return 'ifm';
 };
 
+type ServerQuote = {
+    quoteId: string;
+    quoteHash: string;
+    inputHash: string;
+    quoteSchemaVersion: string;
+    pricingEngineVersion: string;
+    issuedAtMs: number;
+    expiresAtMs: number;
+    currency: 'AED';
+    portfolioAnnualTotal: number;
+    mobilisationDeposit: number;
+    propertyQuotes: Array<{ propertyId: string; output: any }>;
+};
+
 const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { companyProfile, properties, portfolioSummary, ownerAccount } = useOnboardingStore();
+    const {
+        companyProfile,
+        properties,
+        portfolioSummary,
+        ownerAccount,
+        selectedAddOns,
+        valuationResult,
+        setValuationResult,
+    } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
+    const [quoteLoading, setQuoteLoading] = React.useState(false);
+    const [quoteError, setQuoteError] = React.useState('');
+    const [validating, setValidating] = React.useState(false);
 
     const copy = (key: string, fallback: string, variables?: Record<string, any>) => {
         const value = t(key, variables);
         return badCopy(value) ? fallback : value;
     };
 
+    const quoteRequest = React.useMemo(
+        () => ownerPortfolioQuoteRequest(properties, selectedAddOns || []),
+        [properties, selectedAddOns],
+    );
+    const quoteRequestKey = React.useMemo(() => JSON.stringify(quoteRequest), [quoteRequest]);
+    const serverQuote = valuationResult?.serverQuote as ServerQuote | undefined;
+
+    React.useEffect(() => {
+        let active = true;
+        const issueQuote = async () => {
+            if (!ownerAccount?.uid || quoteRequest.properties.length === 0) {
+                if (active) setQuoteError(copy(
+                    'onboarding.server_quote_account_required',
+                    'A verified owner account and at least one property are required before pricing.',
+                ));
+                return;
+            }
+            setQuoteLoading(true);
+            setQuoteError('');
+            try {
+                const callable = httpsCallable(functions, 'issueOwnerPortfolioQuote');
+                const result = await callable(quoteRequest);
+                if (!active) return;
+                const nextQuote = result.data as ServerQuote;
+                if (!nextQuote?.quoteId || !nextQuote?.quoteHash || !nextQuote?.inputHash || nextQuote.currency !== 'AED') {
+                    throw new Error('The server returned an invalid portfolio quote.');
+                }
+                setValuationResult({ ...(valuationResult || {}), serverQuote: nextQuote, serverQuoteRequestKey: quoteRequestKey });
+            } catch (error: any) {
+                if (!active) return;
+                setValuationResult({ ...(valuationResult || {}), serverQuote: null, serverQuoteRequestKey: null });
+                setQuoteError(String(error?.details || error?.message || copy(
+                    'onboarding.server_quote_failed',
+                    'The server quote could not be generated. Review cannot continue.',
+                )));
+            } finally {
+                if (active) setQuoteLoading(false);
+            }
+        };
+
+        if (valuationResult?.serverQuoteRequestKey !== quoteRequestKey || !serverQuote || serverQuote.expiresAtMs <= Date.now()) {
+            void issueQuote();
+        }
+        return () => { active = false; };
+    }, [ownerAccount?.uid, quoteRequestKey]);
+
     const primaryProperty = properties[0];
-    const quote = portfolioSummary.quoteResults?.[primaryProperty?.id];
+    const serverPropertyQuote = serverQuote?.propertyQuotes?.find((item) => item.propertyId === primaryProperty?.id)?.output;
+    const quote = serverPropertyQuote || portfolioSummary.quoteResults?.[primaryProperty?.id];
     const planKey = reviewPlanKeyForStrategy(primaryProperty?.strategy);
     const planFallback = planKey === 'amc'
         ? 'Maintenance Only'
@@ -49,6 +124,34 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
     const installmentValue = primaryProperty?.paymentPlan === 'monthly'
         ? quote?.monthlyPayment || 0
         : (primaryProperty?.paymentPlan === 'quarterly' ? quote?.quarterlyPayment || 0 : quote?.annualTotal || 0);
+    const quoteExpired = !serverQuote || serverQuote.expiresAtMs <= Date.now();
+
+    const handleNext = async () => {
+        if (!serverQuote || quoteExpired) {
+            setQuoteError(copy('onboarding.server_quote_expired', 'The server quote expired. Generate a new quote before continuing.'));
+            return;
+        }
+        setValidating(true);
+        setQuoteError('');
+        try {
+            const callable = httpsCallable(functions, 'validateOwnerPortfolioQuote');
+            await callable({
+                quoteId: serverQuote.quoteId,
+                quoteHash: serverQuote.quoteHash,
+                inputHash: serverQuote.inputHash,
+                portfolioAnnualTotal: serverQuote.portfolioAnnualTotal,
+                mobilisationDeposit: serverQuote.mobilisationDeposit,
+            });
+            onNext();
+        } catch (error: any) {
+            setQuoteError(String(error?.details || error?.message || copy(
+                'onboarding.server_quote_validation_failed',
+                'Server quote validation failed. Generate a new quote before continuing.',
+            )));
+        } finally {
+            setValidating(false);
+        }
+    };
 
     return (
         <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -62,8 +165,12 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
             </Box>
 
             <Alert icon={<ShieldCheck size={18} />} severity="info" sx={{ mb: 3, bgcolor: 'rgba(198,167,94,0.08)', color: binThemeTokens.gold, border: '1px solid rgba(198,167,94,0.24)' }}>
-                {copy('onboarding.review_info', 'Review all details carefully. Admin will verify documents, location and payment before dashboard activation.')}
+                {serverQuote && !quoteExpired
+                    ? copy('onboarding.server_quote_verified', `Server quote verified · Expires ${new Date(serverQuote.expiresAtMs).toLocaleTimeString()}`)
+                    : copy('onboarding.review_info', 'Review all details carefully. Admin will verify documents, location and payment before dashboard activation.')}
             </Alert>
+            {quoteError && <Alert severity="error" sx={{ mb: 3 }}>{quoteError}</Alert>}
+            {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{copy('onboarding.server_quote_loading', 'Generating the protected server quote…')}</Alert>}
 
             <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Grid item xs={12} md={6}>
@@ -95,7 +202,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         </Stack>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.44)', fontWeight: 900, display: 'block', mb: 2 }}>{copy('onboarding.pricing_explanation', 'Pricing Explanation')}</Typography>
                         <Stack spacing={1}>
-                            {quote?.pricingExplanation?.map((exp, i) => (
+                            {quote?.pricingExplanation?.map((exp: string, i: number) => (
                                 <Stack key={i} direction="row" spacing={1} alignItems="flex-start" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                     <CheckCircle2 size={12} color={binThemeTokens.gold} style={{ marginTop: 2 }} />
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textAlign: isRTL ? 'right' : 'left' }}>{exp}</Typography>
@@ -110,8 +217,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy('onboarding.financial_recap', 'Financial Recap')}</Typography>
                         <Stack spacing={2} sx={{ mt: 2 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Typography variant="body2" color="rgba(255,255,255,0.6)">{copy('onboarding.annual_val', 'Annual Value')}</Typography>
-                                <Typography variant="body2" fontWeight="950" color="#FFF">AED {formatAED(quote?.annualTotal || 0)}</Typography>
+                                <Typography variant="body2" color="rgba(255,255,255,0.6)">{copy('onboarding.annual_val', 'Portfolio Annual Value')}</Typography>
+                                <Typography variant="body2" fontWeight="950" color="#FFF">AED {formatAED(serverQuote?.portfolioAnnualTotal || 0)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                 <Typography variant="body2" color="rgba(255,255,255,0.6)">{copy(`onboarding.payment.${primaryProperty?.paymentPlan}`, 'Annual')} {copy('onboarding.installment', 'Installment')}</Typography>
@@ -119,8 +226,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2 }}>
-                                <Typography variant="caption" display="block" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>{copy('onboarding.mobilization_due', 'Mobilization Due')}</Typography>
-                                <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>AED {formatAED(quote?.mobilizationFee || 0)}</Typography>
+                                <Typography variant="caption" display="block" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>{copy('onboarding.mobilization_due', '15% Mobilisation Due')}</Typography>
+                                <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>AED {formatAED(serverQuote?.mobilisationDeposit || 0)}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
@@ -142,8 +249,15 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                 <Button variant="outlined" size="large" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>
                     {copy('onboarding.back', 'Back')}
                 </Button>
-                <Button variant="contained" size="large" onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                    {copy('onboarding.finalize_btn', 'Finalize Payment')}
+                <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => void handleNext()}
+                    disabled={quoteLoading || validating || quoteExpired || Boolean(quoteError)}
+                    endIcon={validating ? <CircularProgress size={18} /> : (isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />)}
+                    sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                >
+                    {copy('onboarding.finalize_btn', 'Continue to Contract')}
                 </Button>
             </Box>
         </Container>
