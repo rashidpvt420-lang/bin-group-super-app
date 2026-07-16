@@ -55,6 +55,16 @@ jobs:
             exit 1
           fi
 
+      - name: Commit generated repair to the PR branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- firestore.rules test/security-rules.test.js
+          git diff --cached --check
+          git commit -m "Apply explicit user subcollections and stale-token suspension"
+          git push origin HEAD:fix/final-firestore-security-clearance
+
       - name: Run Firestore and Storage rule tests
         shell: bash
         run: |
@@ -69,13 +79,3 @@ jobs:
         run: |
           npm run test:stability
           npm run test:launch-honesty
-
-      - name: Commit verified rule and regression-test changes
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- firestore.rules test/security-rules.test.js
-          git diff --cached --check
-          git commit -m "Enforce explicit user subcollections and stale-token suspension"
-          git push origin HEAD:fix/final-firestore-security-clearance
