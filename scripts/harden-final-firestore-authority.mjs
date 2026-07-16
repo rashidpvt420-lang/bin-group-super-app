@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 
-// The expression-budget patcher is deterministic and idempotent. Importing it
-// keeps local prepare:rules, CI, and the committed Firestore policy aligned.
+// Both normalizers are deterministic and idempotent. Importing them keeps
+// local prepare:rules, CI, and the committed Firestore policy aligned.
 await import('./apply-current-main-firestore-expression-budget.mjs');
+await import('./optimize-current-main-technician-ticket-rule.mjs');
 
 const text = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
 
@@ -12,6 +13,7 @@ const required = [
   'function hasDispatchAuthorityClaimOnly() {',
   'function hasNonAdminDispatchClaimOnly() {',
   'return hasDispatchAuthorityClaimOnly() && isNotSuspended();',
+  'function hasApprovedTechnicianRecord() {',
   'match /fcmTokens/{tokenId} {',
   'match /deviceReadiness/{readinessId} {',
   'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
@@ -51,4 +53,4 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware, explicit, actor-specific rules are canonical');
+console.log('[final-firestore-authority] status-aware, explicit, bounded rules are canonical');
