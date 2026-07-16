@@ -7,16 +7,21 @@ on:
     paths:
       - .github/workflows/apply-final-firestore-hardening.yml
       - scripts/apply-final-firestore-security-hardening.mjs
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 concurrency:
-  group: apply-final-firestore-hardening
+  group: apply-final-firestore-hardening-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
   apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
