@@ -1,0 +1,92 @@
+
+> bin-group-super-app@1.0.0 test:rules
+> npm run normalize:rule-tests && npm run prepare:rules && npm run verify:rules-hardening && firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
+
+
+> bin-group-super-app@1.0.0 normalize:rule-tests
+> node scripts/normalize-security-rules-test.mjs
+
+[normalize-rule-tests] callable-only lifecycle contract already canonical
+
+> bin-group-super-app@1.0.0 prepare:rules
+> npm run normalize:rules && npm run harden:rules && npm run harden:rules:warnings && npm run harden:owner-trust-rules && npm run harden:bin-connect-rules && npm run harden:system-secrets && node scripts/apply-profile-admin-rule.mjs && npm run harden:ticket-binding
+
+
+> bin-group-super-app@1.0.0 normalize:rules
+> node scripts/normalize-firestore-rules.mjs
+
+Already normalized/hardened: properties read rule
+Already normalized/hardened: notifications create rule
+Firestore rules normalization complete. brokerOwns: kept 1, removed 0; canCreateTenantBoundTicket: kept 1, removed 0; removed 0 duplicate helper(s), hardened launch-critical and Owner Trust workflow access rules.
+
+> bin-group-super-app@1.0.0 harden:rules
+> node scripts/harden-firestore-rules.mjs
+
+Firestore hardening skipped (pattern not found): owner helper should include ownerUid. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): users self-update allowlist must exclude activation/payment/admin approval fields. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): technician profile read access must be role-scoped. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): notification writes must be server/admin gated. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): legacy notification creation must not allow arbitrary signed-in writes. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): auditLogs creation must be actor scoped. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): audit_logs creation must be actor scoped. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): payment transaction creation must be owner/payer scoped. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): design request creation must be caller scoped. Assuming already secured manually.
+Already hardened: broker ownership helpers for dashboard collections
+Already hardened: broker dashboard collections must be broker-owned
+Firestore hardening skipped (pattern not found): open mission pool must be technician/dispatcher scoped. Assuming already secured manually.
+Already hardened: tenant-created tickets must match assigned unit and property
+Firestore hardening skipped (pattern not found): tickets tenant creation must use unit/property binding helper. Assuming already secured manually.
+Firestore hardening skipped (pattern not found): open mission claim must require technician/dispatch authority explicitly. Assuming already secured manually.
+Firestore rules already hardened. No changes written.
+
+> bin-group-super-app@1.0.0 harden:rules:warnings
+> node scripts/harden-firestore-warning-rules.mjs
+
+Already hardened: safe authEmail
+Already hardened: safe isAdmin
+Already hardened: safe isAdmin isAdmin
+Already hardened: safe isAdmin superAdmin
+Already hardened: safe isAdmin super_admin
+Already hardened: safe isAdmin ceo
+Skipped: safe isAdmin manager
+Skipped: safe admin role
+Skipped: safe admin userRole
+Skipped: safe admin primaryRole
+Already hardened: safe ownership helper ownerId
+Already hardened: safe ownership helper ownerUid
+Already hardened: safe ownership helper authUid
+Already hardened: safe ownership helper userId
+Already hardened: safe ownership helper createdBy
+Already hardened: safe ownership helper createdByUid
+Already hardened: safe tenantUid
+Already hardened: safe assignedTechnicianId
+Already hardened: safe technicianId
+Already hardened: safe techId
+Already hardened: safe brokerId
+Already hardened: safe brokerUid
+Already hardened: safe email
+Already hardened: safe ownerEmail
+Already hardened: safe tenantEmail
+Already hardened: safe technicianEmail
+Already hardened: safe staffEmail
+Already hardened: safe brokerEmail
+Already hardened: safe recipientEmail
+Already hardened: safe contactEmail
+Firestore warning hardening already present.
+
+> bin-group-super-app@1.0.0 harden:owner-trust-rules
+> node scripts/harden-owner-trust-rules.mjs
+
+Already hardened: owner approvals must be decision-field only for owners
+Already hardened: maintenance ledger must be admin/server authored
+Owner trust Firestore rules already hardened.
+
+> bin-group-super-app@1.0.0 harden:bin-connect-rules
+> node scripts/harden-bin-connect-rules.mjs
+
+BIN Connect rules already present.
+
+> bin-group-super-app@1.0.0 harden:system-secrets
+> node scripts/harden-system-secrets-rules.mjs
+
+[harden-system-secrets-rules] system_secrets is not fully excluded from every client allow path.
