@@ -31,6 +31,18 @@ const forbiddenFragments = [
     label: 'tickets update rule still permits direct technician claiming',
     text: '|| safeOpenMissionClaim()',
   },
+  {
+    label: 'boolean-only database suspension guard',
+    text: "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true",
+  },
+  {
+    label: 'token-only directory list suspension guard',
+    text: "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (",
+  },
+  {
+    label: 'broad user-subcollection authorization',
+    text: 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));',
+  },
 ];
 
 const requiredFragments = [
@@ -93,6 +105,42 @@ const requiredFragments = [
   {
     label: 'AI quota records are server-only',
     text: "match /ai_usage/{usageId} {\n      allow read: if isAdmin();\n      allow write: if false;",
+  },
+  {
+    label: 'production status-aware suspension helper',
+    text: 'function profileAllowsAccess(data) {',
+  },
+  {
+    label: 'production suspension status variants',
+    text: "data.get('status', '') in [",
+  },
+  {
+    label: 'dispatch checks claims before database suspension',
+    text: 'function hasDispatchAuthorityClaimOnly() {',
+  },
+  {
+    label: 'directory list checks database-backed suspension once',
+    text: 'allow list: if isNotSuspended() && (',
+  },
+  {
+    label: 'FCM token path is explicitly allowlisted',
+    text: 'match /fcmTokens/{tokenId} {',
+  },
+  {
+    label: 'device readiness path is explicitly allowlisted',
+    text: 'match /deviceReadiness/{readinessId} {',
+  },
+  {
+    label: 'unknown user subcollections are denied',
+    text: 'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
+  },
+  {
+    label: 'tenant evidence updates verify suspension',
+    text: 'tenantOwns(resource.data) &&\n        isNotSuspended() &&',
+  },
+  {
+    label: 'technician updates verify suspension after cheap identity checks',
+    text: 'techOwns(resource.data) &&\n        isNotSuspended() &&\n        isApprovedTechnician() &&',
   },
 ];
 
