@@ -929,8 +929,8 @@ describe('Firestore Security Rules', () => {
   it('stale-token suspended user is denied access', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    // User profile in firestore is suspended: true
-    await setDoc(doc(adminDb, 'users/suspended_user'), { suspended: true });
+    // Production suspension callables write status='suspended' before the stale token refreshes.
+    await setDoc(doc(adminDb, 'users/suspended_user'), { status: 'suspended', suspended: false });
     await setDoc(doc(adminDb, 'properties/suspended_owner_prop'), { ownerId: 'suspended_user' });
 
     // The user's token does NOT have suspended claim (stale token representation)

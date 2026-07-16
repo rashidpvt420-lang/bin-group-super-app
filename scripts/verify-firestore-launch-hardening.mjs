@@ -31,6 +31,18 @@ const forbiddenFragments = [
     label: 'tickets update rule still permits direct technician claiming',
     text: '|| safeOpenMissionClaim()',
   },
+  {
+    label: 'boolean-only database suspension guard',
+    text: "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true",
+  },
+  {
+    label: 'token-only directory list suspension guard',
+    text: "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (",
+  },
+  {
+    label: 'directory roles can recursively read user subcollections',
+    text: 'allow read: if (signedIn() && request.auth.uid == userId) || canReadUserDirectory();',
+  },
 ];
 
 const requiredFragments = [
@@ -93,6 +105,26 @@ const requiredFragments = [
   {
     label: 'AI quota records are server-only',
     text: "match /ai_usage/{usageId} {\n      allow read: if isAdmin();\n      allow write: if false;",
+  },
+  {
+    label: 'production status-aware suspension helper',
+    text: 'function profileAllowsAccess(data) {',
+  },
+  {
+    label: 'production suspension status variants',
+    text: "data.get('status', '') in [",
+  },
+  {
+    label: 'directory list checks database-backed suspension once',
+    text: 'allow list: if isNotSuspended() && (',
+  },
+  {
+    label: 'user subcollections use an isolated nested path',
+    text: 'match /{subcollection}/{document=**} {',
+  },
+  {
+    label: 'user subcollections exclude finance and operations directory roles',
+    text: 'allow read: if isNotSuspended() && ((signedIn() && request.auth.uid == userId) || isAdmin() || isHr());',
   },
 ];
 
