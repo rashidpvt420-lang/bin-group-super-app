@@ -35,8 +35,12 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
     assert.match(preparedRules, /function safeTicketUpdateByActor\(\)/);
     assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
-    assert.match(preparedRules, /claimedRole\(\) == 'tenant' && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)/);
-    assert.match(preparedRules, /claimedRole\(\) in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)/);
+    assert.match(preparedRules, /let authenticated = signedIn\(\);/);
+    assert.match(preparedRules, /let role = authenticated/);
+    assert.match(preparedRules, /let admin = authenticated && \(/);
+    assert.match(preparedRules, /let dispatcher = authenticated && \(/);
+    assert.match(preparedRules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
+    assert.match(preparedRules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
 
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);

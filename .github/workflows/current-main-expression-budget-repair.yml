@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Set up Java 21 for Firebase emulators
@@ -39,20 +39,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply bounded ticket authorization
-        run: node scripts/apply-current-main-firestore-expression-budget.mjs
+      - name: Apply canonical Firestore authority pipeline
+        run: npm run prepare:rules
 
-      - name: Enforce committed and idempotent Firestore state
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-          if ! git diff --quiet -- firestore.rules; then
-            echo "::error::The deterministic expression-budget patch changes firestore.rules. Commit the generated canonical rules before merge."
-            git diff -- firestore.rules
-            exit 1
-          fi
-          echo "Expression-budget rules are already canonical and committed."
+      - name: Validate generated Firestore authority
+        run: node scripts/verify-firestore-launch-hardening.mjs
 
       - name: Run Firestore and Storage rules suite
         id: rules
@@ -69,10 +60,11 @@ jobs:
         if: always()
         shell: bash
         run: |
+          touch rules-output.log
           {
             grep -n -B 5 -A 8 -F "maximum of 1000 expressions" rules-output.log || true
             grep -n -B 3 -A 10 -E "not ok|# fail [1-9]" rules-output.log || true
-            tail -n 35 rules-output.log
+            tail -n 35 rules-output.log || true
           } > rules-diagnostics.txt
           cat rules-diagnostics.txt
 
