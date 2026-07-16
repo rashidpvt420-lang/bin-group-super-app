@@ -2,160 +2,108 @@ import { readFileSync } from 'node:fs';
 
 const rules = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
 
+function readFunction(name) {
+  const needle = `    function ${name}(`;
+  const start = rules.indexOf(needle);
+  if (start < 0) return null;
+  const open = rules.indexOf('{', start);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+const monolithicUpdate = 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();';
+const actorSpecificRules = [
+  'allow update: if isAdmin() && isNotSuspended();',
+  'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
+  'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
+  'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
+];
+
 const forbiddenFragments = [
-  {
-    label: 'broad tenant property read fallback',
-    text: "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant'",
-  },
-  {
-    label: 'unrestricted notification creation',
-    text: '      allow create: if signedIn();',
-  },
-  {
-    label: 'open mission pool exposes private tickets before dispatch',
-    text: 'function openMissionPoolRead(data)',
-  },
-  {
-    label: 'tenant ticket create without unit/property validation',
-    text: "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
-  },
-  {
-    label: 'direct client-side technician mission claim helper',
-    text: 'function safeOpenMissionClaim() {',
-  },
-  {
-    label: 'direct client-side mission assignment field helper',
-    text: 'function missionClaimFieldsLookValid() {',
-  },
-  {
-    label: 'tickets update rule still permits direct technician claiming',
-    text: '|| safeOpenMissionClaim()',
-  },
-  {
-    label: 'boolean-only database suspension guard',
-    text: "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true",
-  },
-  {
-    label: 'token-only directory list suspension guard',
-    text: "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (",
-  },
-  {
-    label: 'broad user-subcollection authorization',
-    text: 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));',
-  },
+  ['broad tenant property read fallback', "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant'"],
+  ['unrestricted notification creation', '      allow create: if signedIn();'],
+  ['open mission pool exposes private tickets before dispatch', 'function openMissionPoolRead(data)'],
+  ['tenant ticket create without unit/property validation', "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);"],
+  ['direct client-side technician mission claim helper', 'function safeOpenMissionClaim() {'],
+  ['direct client-side mission assignment field helper', 'function missionClaimFieldsLookValid() {'],
+  ['tickets update rule still permits direct technician claiming', '|| safeOpenMissionClaim()'],
+  ['boolean-only database suspension guard', "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true"],
+  ['token-only directory list suspension guard', "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && ("],
+  ['broad user-subcollection authorization', 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));'],
+  ['monolithic ticket update authorization', monolithicUpdate],
 ];
 
 const requiredFragments = [
-  {
-    label: 'hardened property read rule',
-    text: 'ownerCanRead(resource.data) || tenantOwns(resource.data)',
-  },
-  {
-    label: 'hardened notification create rule',
-    text: 'allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);',
-  },
-  {
-    label: 'safe client notification helper',
-    text: 'function safeClientNotificationCreate(data) {',
-  },
-  {
-    label: 'technician dispatch authority helper',
-    text: 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }',
-  },
-  {
-    label: 'approved technician helper',
-    text: 'function isApprovedTechnician() {',
-  },
-  {
-    label: 'tenant ticket unit/property binding helper',
-    text: 'function canCreateTenantBoundTicket(data) {',
-  },
-  {
-    label: 'tenant ticket create uses binding helper',
-    text: 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
-  },
-  {
-    label: 'technician evidence update helper',
-    text: 'function safeTechnicianTicketUpdate() {',
-  },
-  {
-    label: 'ticket assignment and status transitions are dispatcher/server authoritative',
-    text: 'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
-  },
-  {
-    label: 'technician cannot replace assigned technician identity',
-    text: "request.resource.data.assignedTechnicianId == resource.data.get('assignedTechnicianId', null)",
-  },
-  {
-    label: 'payment transaction writes are server-only',
-    text: "match /payment_transactions/{paymentId} {\n      allow read:",
-  },
-  {
-    label: 'payment transaction create denied',
-    text: "// transaction type and enter a weaker admin approval path.\n      allow create: if false;\n      allow update, delete: if false;",
-  },
-  {
-    label: 'financial transaction create denied',
-    text: 'allow create: if false; // Financial ledger rows are server-authored only.',
-  },
-  {
-    label: 'public rate limits are server-only',
-    text: "match /public_rate_limits/{rateId} {\n      allow read, write: if false;",
-  },
-  {
-    label: 'AI quota records are server-only',
-    text: "match /ai_usage/{usageId} {\n      allow read: if isAdmin();\n      allow write: if false;",
-  },
-  {
-    label: 'production status-aware suspension helper',
-    text: 'function profileAllowsAccess(data) {',
-  },
-  {
-    label: 'production suspension status variants',
-    text: "data.get('status', '') in [",
-  },
-  {
-    label: 'dispatch checks claims before database suspension',
-    text: 'function hasDispatchAuthorityClaimOnly() {',
-  },
-  {
-    label: 'directory list checks database-backed suspension once',
-    text: 'allow list: if isNotSuspended() && (',
-  },
-  {
-    label: 'FCM token path is explicitly allowlisted',
-    text: 'match /fcmTokens/{tokenId} {',
-  },
-  {
-    label: 'device readiness path is explicitly allowlisted',
-    text: 'match /deviceReadiness/{readinessId} {',
-  },
-  {
-    label: 'unknown user subcollections are denied',
-    text: 'match /{subcollection}/{document=**} {\n        allow read, write: if false;',
-  },
-  {
-    label: 'tenant evidence updates verify suspension',
-    text: 'tenantOwns(resource.data) &&\n        isNotSuspended() &&',
-  },
-  {
-    label: 'technician updates verify suspension after cheap identity checks',
-    text: 'techOwns(resource.data) &&\n        isNotSuspended() &&\n        isApprovedTechnician() &&',
-  },
+  ['hardened property read rule', 'ownerCanRead(resource.data) || tenantOwns(resource.data)'],
+  ['hardened notification create rule', 'allow create: if isAdmin() || safeClientNotificationCreate(request.resource.data);'],
+  ['safe client notification helper', 'function safeClientNotificationCreate(data) {'],
+  ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
+  ['approved technician helper', 'function isApprovedTechnician() {'],
+  ['tenant ticket unit/property binding helper', 'function canCreateTenantBoundTicket(data) {'],
+  ['tenant ticket create uses binding helper', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
+  ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
+  ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
+  ['production suspension status variants', "data.get('status', '') in ["],
+  ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
+  ['non-admin dispatch helper exists', 'function hasNonAdminDispatchClaimOnly() {'],
+  ['directory list checks database-backed suspension once', 'allow list: if isNotSuspended() && ('],
+  ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
+  ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
+  ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
+  ['ticket read fallback excludes explicit ticket hierarchies', "!(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim()"],
+  ['ticket write fallback excludes explicit ticket hierarchies', "'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
+  ['payment transaction writes are server-only', "match /payment_transactions/{paymentId} {\n      allow read:"],
+  ['payment transaction create denied', "// transaction type and enter a weaker admin approval path.\n      allow create: if false;\n      allow update, delete: if false;"],
+  ['financial transaction create denied', 'allow create: if false; // Financial ledger rows are server-authored only.'],
+  ['public rate limits are server-only', "match /public_rate_limits/{rateId} {\n      allow read, write: if false;"],
+  ['AI quota records are server-only', "match /ai_usage/{usageId} {\n      allow read: if isAdmin();\n      allow write: if false;"],
 ];
 
 const failures = [];
 
-for (const fragment of forbiddenFragments) {
-  if (rules.includes(fragment.text)) {
-    failures.push(`Forbidden rule fragment still exists: ${fragment.label}`);
+for (const [label, text] of forbiddenFragments) {
+  if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
+}
+
+for (const [label, text] of requiredFragments) {
+  if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
+}
+
+for (const rule of actorSpecificRules) {
+  if (rules.split(rule).length - 1 !== 2) {
+    failures.push(`Actor-specific ticket update rule must exist exactly twice: ${rule}`);
   }
 }
 
-for (const fragment of requiredFragments) {
-  const present = rules.includes(fragment.text) || (fragment.alt && rules.includes(fragment.alt));
-  if (!present) {
-    failures.push(`Required rule fragment missing: ${fragment.label}`);
+const tenantUpdate = readFunction('safeTenantEvidenceUpdate');
+if (!tenantUpdate || !tenantUpdate.includes('affectedKeys().hasOnly([') || !tenantUpdate.includes('isNotSuspended() &&')) {
+  failures.push('Tenant evidence helper must reject mutation shape before enforcing suspension and append-only evidence.');
+}
+
+const dispatcherUpdate = readFunction('safeDispatcherTicketUpdate');
+if (!dispatcherUpdate || dispatcherUpdate.includes('hasDispatchAuthorityClaimOnly() &&') || !dispatcherUpdate.includes('affectedKeys().hasOnly([') || !dispatcherUpdate.includes('isNotSuspended() &&')) {
+  failures.push('Dispatcher helper must rely on the outer claim gate and check mutation shape before database suspension.');
+}
+
+const technicianUpdate = readFunction('safeTechnicianTicketUpdate');
+if (!technicianUpdate || technicianUpdate.includes('hasTechnicianClaim() &&') || technicianUpdate.includes('techOwns(resource.data) &&')) {
+  failures.push('Technician helper must rely on the outer actor/assignment gate.');
+} else {
+  const diffIndex = technicianUpdate.indexOf('affectedKeys().hasOnly([');
+  const suspensionIndex = technicianUpdate.indexOf('isNotSuspended() &&');
+  const approvalIndex = technicianUpdate.indexOf('isApprovedTechnician() &&');
+  if (diffIndex < 0 || suspensionIndex < 0 || approvalIndex < 0 || !(diffIndex < suspensionIndex && suspensionIndex < approvalIndex)) {
+    failures.push('Technician helper must reject mutation shape before suspension and approval profile reads.');
+  }
+  for (const immutableField of ["'assignedTechnicianId',", "'technicianId',", "'techId',", "'priority',", "'paymentVerified',"]) {
+    if (technicianUpdate.includes(immutableField)) failures.push(`Technician mutable allowlist contains immutable field: ${immutableField}`);
   }
 }
 
