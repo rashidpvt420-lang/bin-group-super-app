@@ -24,6 +24,16 @@ test('logout clears onboarding records and does not preserve the onboarding blob
   assert.doesNotMatch(source, /setItem\('bin-group-onboarding-v3'/);
 });
 
+test('onboarding browser persistence contains only safe draft coordinates', async () => {
+  const store = await read('src/store/onboardingStore.ts');
+  assert.match(store, /version: 4/);
+  assert.match(store, /partialize: \(state\) => \(\{\s*step: state\.step,\s*intakeId: state\.intakeId,?\s*\}\)/s);
+  const persistenceBlock = store.slice(store.indexOf('partialize:'));
+  for (const forbidden of ['signupData', 'password', 'kycUrls', 'paymentManifest', 'proofDocuments', 'signatureName', 'properties: state.properties']) {
+    assert.doesNotMatch(persistenceBlock, new RegExp(forbidden));
+  }
+});
+
 test('payment instructions are server-authoritative and versioned', async () => {
   const server = await read('functions/paymentConfiguration.ts');
   const packageGate = await read('functions/secureOwnerRegistrationRequest.ts');
@@ -78,6 +88,18 @@ test('owner account creation precedes property upload and OCR', async () => {
     assert.match(machine, /draft: \['account_created', 'expired', 'suspended'\]/);
     assert.match(machine, /account_created: \['property_details_complete'/);
   }
+});
+
+test('title-deed OCR applies verified values only and never fabricates property data', async () => {
+  const assetStep = await read('src/components/onboarding/AssetProfileStep.tsx');
+  assert.match(assetStep, /buildVerifiedOcrPatch/);
+  assert.match(assetStep, /Object\.keys\(verifiedPatch\)\.length === 0/);
+  assert.match(assetStep, /No placeholder values were added/);
+  assert.doesNotMatch(assetStep, /extracted\.propertyType \|\| ['"]Apartment['"]/);
+  assert.doesNotMatch(assetStep, /extracted\.sqft \|\| 1850/);
+  assert.doesNotMatch(assetStep, /extracted\.emirate \|\| ['"]Dubai['"]/);
+  assert.match(assetStep, /riskProfile: 'ASSESSMENT_REQUIRED'/);
+  assert.doesNotMatch(assetStep, /maxWorshipperCapacity: 300/);
 });
 
 test('Broker KYC is written only through the App Check callable', async () => {
