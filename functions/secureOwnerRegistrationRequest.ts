@@ -5,6 +5,7 @@ import {
   submitPendingOwnerRegistration,
 } from "./ownerRegistrationRequest";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
+import { assertOwnerPortfolioQuoteRecord } from "./ownerPortfolioQuote";
 
 const SUPPORTED_METHODS = new Set(["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"]);
 const MANUAL_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
@@ -15,23 +16,15 @@ const compactUpper = (value: unknown) => upper(value).replace(/\s+/g, "");
 
 async function assertCurrentPaymentConfiguration(data: any) {
   const method = upper(data?.paymentMethod || data?.paymentManifest?.method);
-  if (!SUPPORTED_METHODS.has(method)) {
-    throw new HttpsError("invalid-argument", "Unsupported payment method.");
-  }
+  if (!SUPPORTED_METHODS.has(method)) throw new HttpsError("invalid-argument", "Unsupported payment method.");
 
   const activeConfiguration = await loadActivePaymentConfiguration();
   const manifest = data?.paymentManifest || {};
   const submittedVersion = text(
-    data?.paymentConfigVersion ||
-    data?.paymentConfigurationVersion ||
-    manifest.configVersion ||
-    manifest.paymentConfigVersion,
+    data?.paymentConfigVersion || data?.paymentConfigurationVersion || manifest.configVersion || manifest.paymentConfigVersion,
   );
   const submittedHash = text(
-    data?.paymentConfigHash ||
-    data?.paymentConfigurationHash ||
-    manifest.configHash ||
-    manifest.paymentConfigHash,
+    data?.paymentConfigHash || data?.paymentConfigurationHash || manifest.configHash || manifest.paymentConfigHash,
   );
 
   if (
@@ -39,10 +32,7 @@ async function assertCurrentPaymentConfiguration(data: any) {
     submittedHash !== activeConfiguration.configHash ||
     !activeConfiguration.approvedMethods.includes(method)
   ) {
-    throw new HttpsError(
-      "failed-precondition",
-      "The payment instructions are missing, stale or not approved. Generate a new payment manifest.",
-    );
+    throw new HttpsError("failed-precondition", "The payment instructions are missing, stale or not approved. Generate a new payment manifest.");
   }
 
   if (text(manifest.legalBeneficiary || manifest.payableTo) !== activeConfiguration.legalBeneficiary) {
@@ -59,23 +49,13 @@ async function assertCurrentPaymentConfiguration(data: any) {
       compactUpper(manifest.iban) !== compactUpper(activeConfiguration.iban) ||
       compactUpper(manifest.swiftBic) !== compactUpper(activeConfiguration.swiftBic)
     ) {
-      throw new HttpsError(
-        "failed-precondition",
-        "The submitted bank-transfer instructions do not match the active corporate account.",
-      );
+      throw new HttpsError("failed-precondition", "The submitted bank-transfer instructions do not match the active corporate account.");
     }
   }
 
-  if (
-    method === "CASH" &&
-    text(manifest.officeLocation) !== activeConfiguration.officeLocation
-  ) {
-    throw new HttpsError(
-      "failed-precondition",
-      "The submitted cash-payment location does not match the active corporate configuration.",
-    );
+  if (method === "CASH" && text(manifest.officeLocation) !== activeConfiguration.officeLocation) {
+    throw new HttpsError("failed-precondition", "The submitted cash-payment location does not match the active corporate configuration.");
   }
-
   if (MANUAL_METHODS.has(method) && text(manifest.reference).length < 4) {
     throw new HttpsError("failed-precondition", "Manual payment instructions require a valid immutable reference.");
   }
@@ -84,9 +64,7 @@ async function assertCurrentPaymentConfiguration(data: any) {
 export const submitOwnerOnboardingPaymentPackage = onCall(
   { cors: true, enforceAppCheck: true },
   async (request) => {
-    if (!request.auth?.uid) {
-      throw new HttpsError("unauthenticated", "Owner authentication is required.");
-    }
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication is required.");
     if (request.auth.token?.email_verified !== true) {
       throw new HttpsError("failed-precondition", "Verify the owner email before submitting payment evidence.");
     }
@@ -94,7 +72,20 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
       throw new HttpsError("permission-denied", "Suspended owner accounts cannot continue onboarding.");
     }
 
-    await assertCurrentPaymentConfiguration(request.data || {});
+    const data = request.data || {};
+    const quote = await assertOwnerPortfolioQuoteRecord(request.auth.uid, {
+      quoteId: data.quoteId,
+      quoteHash: data.quoteHash,
+      inputHash: data.quoteInputHash || data.inputHash,
+      portfolioAnnualTotal: data.annualContractValue,
+      mobilisationDeposit: data.activationDeposit || data.amount,
+    });
+    if (Number(data.paymentManifest?.annualContractValue) !== quote.portfolioAnnualTotal ||
+        Number(data.paymentManifest?.activationDeposit || data.paymentManifest?.amount) !== quote.mobilisationDeposit) {
+      throw new HttpsError("failed-precondition", "The payment manifest does not match the active owner quote.");
+    }
+
+    await assertCurrentPaymentConfiguration(data);
 
     const legacyRunner = (legacySubmitOwnerOnboardingPaymentPackage as any).run;
     if (typeof legacyRunner !== "function") {
