@@ -4,7 +4,7 @@ import {
     DialogTitle, Divider, Grid, Paper, Stack, TextField, Typography, alpha,
 } from '@mui/material';
 import { CheckCircle2, Home, Link, XCircle } from 'lucide-react';
-import { collection, functions, httpsCallable, onSnapshot, orderBy, query } from '../../lib/firebase';
+import { collection, db, functions, httpsCallable, onSnapshot, orderBy, query } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
