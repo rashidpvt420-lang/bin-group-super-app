@@ -1,0 +1,44 @@
+name: Apply Owner Handler Refactor
+
+on:
+  push:
+    branches:
+      - feat/owner-contract-commercial-authority
+    paths:
+      - scripts/refactor-owner-registration-handlers.mjs
+      - .github/workflows/apply-owner-handler-refactor.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: ${{ !contains(github.event.head_commit.message, '[owner-handler-refactor-applied]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply exact handler extraction
+        run: node scripts/refactor-owner-registration-handlers.mjs
+
+      - name: Remove one-time automation
+        run: |
+          rm scripts/refactor-owner-registration-handlers.mjs
+          rm .github/workflows/apply-owner-handler-refactor.yml
+
+      - name: Commit refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/ownerRegistrationRequest.ts scripts/refactor-owner-registration-handlers.mjs .github/workflows/apply-owner-handler-refactor.yml
+          git commit -m "Export Owner onboarding handlers [owner-handler-refactor-applied]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
