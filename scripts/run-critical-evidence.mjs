@@ -56,14 +56,31 @@ if (mainUrl !== PRODUCTION.mainUrl) {
   process.exit(1);
 }
 
+const SUITE_FIXTURES = Object.freeze({
+  businessBroker: {
+    label: 'request-only Broker payout OTP evidence',
+    script: 'scripts/prepare-broker-payout-otp-e2e.mjs',
+  },
+  launchAuditLive: {
+    label: 'repeatable Tenant correction evidence',
+    script: 'scripts/prepare-tenant-correction-e2e.mjs',
+  },
+});
+
 function prepareSuiteFixture(suiteKey) {
-  if (suiteKey !== 'businessBroker') return 0;
-  console.log('[critical-evidence] preparing request-only Broker payout OTP evidence fixture');
-  const result = spawnSync(process.execPath, ['scripts/prepare-broker-payout-otp-e2e.mjs'], {
+  const fixture = SUITE_FIXTURES[suiteKey];
+  if (!fixture) return 0;
+
+  console.log(`[critical-evidence] preparing ${fixture.label} fixture`);
+  const result = spawnSync(process.execPath, [fixture.script], {
     stdio: 'inherit',
     env: process.env,
   });
-  return result.status ?? 1;
+  const status = result.status ?? 1;
+  if (status !== 0) {
+    console.error(`[critical-evidence] ${suiteKey} fixture ${fixture.script} failed with exit code ${status}`);
+  }
+  return status;
 }
 
 function runPlaywrightSuite(suiteKey, def) {
