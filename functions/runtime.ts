@@ -40,6 +40,7 @@ export * from "./paymentEvidence";
 export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
+export { requestBrokerPayoutOtp, verifyBrokerPayoutOtp } from "./brokerPayoutOtp";
 
 export {
   resumeTechnicianDuty,
