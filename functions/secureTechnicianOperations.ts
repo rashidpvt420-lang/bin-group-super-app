@@ -9,12 +9,14 @@ import {
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-const normalizeRole = (value: unknown) => String(value || "").trim().toLowerCase();
+const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
 const firstPresent = (...values: unknown[]) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
+
+type TechnicianAction = "RESUME_DUTY" | "ACCEPT_TICKET" | "UPDATE_LIFECYCLE";
 
 function isAdmin(auth: any) {
   const token = auth?.token || {};
-  const role = normalizeRole(token.role || token.userRole || token.primaryRole);
+  const role = normalize(token.role || token.userRole || token.primaryRole);
   return token.admin === true || token.super_admin === true || token.superAdmin === true || ["admin", "super_admin", "operations_admin"].includes(role);
 }
 
@@ -41,7 +43,7 @@ export function technicianCredentialMillis(value: unknown): number | null {
 function credentialState(statusValue: unknown, expiryValue: unknown, nowMs: number) {
   const expiryMs = technicianCredentialMillis(expiryValue);
   if (expiryMs !== null && expiryMs <= nowMs) return "expired";
-  const status = normalizeRole(statusValue ?? expiryValue);
+  const status = normalize(statusValue ?? expiryValue);
   if (["valid", "verified", "approved", "active", "current"].includes(status)) return "valid";
   if (["expired", "revoked", "rejected", "invalid", "blocked", "suspended"].includes(status)) return "expired";
   return "pending";
@@ -51,7 +53,70 @@ function certificationExpiry(value: any) {
   return firstPresent(value?.expiryAt, value?.expiresAt, value?.expiryDate, value?.expiry, value?.validUntil, value?.validTo);
 }
 
-async function assertTechnicianCredentials(auth: any, nowMs = Date.now()) {
+export function evaluateTechnicianReadiness(
+  merged: Record<string, any>,
+  action: TechnicianAction,
+  nowMs = Date.now(),
+) {
+  const medicalExpiry = firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry);
+  const licenceExpiry = firstPresent(merged.drivingLicenseExpiry, merged.licenseExpiry);
+  const medicalState = credentialState(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus), medicalExpiry, nowMs);
+  const licenceState = credentialState(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus), licenceExpiry, nowMs);
+  const certifications = Array.isArray(merged.certifications) ? merged.certifications : [];
+  const certificationState = certifications.length > 0
+    ? certifications.every((item) => credentialState(firstPresent(item?.status, item?.verificationStatus, item?.approvalStatus), certificationExpiry(item), nowMs) === "valid")
+      ? "valid"
+      : "invalid"
+    : credentialState(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus), null, nowMs);
+
+  const currentShiftId = String(firstPresent(merged.currentShiftId, merged.activeShiftId) || "").trim();
+  const shiftStatus = normalize(firstPresent(merged.shiftStatus, merged.currentShiftStatus, merged.dutyStatus));
+  const hasActiveShift = Boolean(currentShiftId) && !["ended", "closed", "cancelled", "off_duty"].includes(shiftStatus);
+
+  const deviceId = String(firstPresent(merged.registeredDeviceId, merged.currentDeviceId, merged.deviceId) || "").trim();
+  const deviceReady = merged.deviceRegistered === true || merged.deviceVerified === true || Boolean(deviceId);
+
+  const gpsAt = technicianCredentialMillis(firstPresent(merged.lastGpsAt, merged.lastLocationAt, merged.locationUpdatedAt, merged.gpsUpdatedAt));
+  const gpsMaxAgeMs = Math.max(60_000, Number(merged.gpsMaxAgeMs || 15 * 60_000));
+  const gpsFresh = gpsAt !== null && nowMs - gpsAt >= 0 && nowMs - gpsAt <= gpsMaxAgeMs;
+
+  const dutyStatus = normalize(firstPresent(merged.dutyStatus, merged.shiftStatus));
+  const onDuty = merged.onDuty === true || ["on_duty", "active", "available"].includes(dutyStatus);
+  const available = merged.isAvailable !== false && merged.available !== false;
+
+  const activeJobs = Math.max(0, Number(firstPresent(merged.activeJobCount, merged.activeTicketCount, merged.currentWorkload) || 0));
+  const maxJobs = Math.max(1, Number(firstPresent(merged.maxConcurrentJobs, merged.workloadCapacity) || 3));
+  const hasCapacity = activeJobs < maxJobs;
+
+  const failures = [
+    medicalState !== "valid" ? "medical card" : null,
+    licenceState !== "valid" ? "driving licence" : null,
+    certificationState !== "valid" ? "required certifications" : null,
+    !hasActiveShift ? "active shift" : null,
+    !deviceReady ? "registered device" : null,
+    !gpsFresh ? "fresh GPS location" : null,
+    action !== "RESUME_DUTY" && !onDuty ? "on-duty status" : null,
+    action !== "RESUME_DUTY" && !available ? "dispatch availability" : null,
+    action !== "RESUME_DUTY" && !hasCapacity ? "workload capacity" : null,
+  ].filter(Boolean) as string[];
+
+  return {
+    ready: failures.length === 0,
+    failures,
+    medicalState,
+    licenceState,
+    certificationState,
+    hasActiveShift,
+    deviceReady,
+    gpsFresh,
+    onDuty,
+    available,
+    activeJobs,
+    maxJobs,
+  };
+}
+
+async function assertTechnicianReadiness(auth: any, action: TechnicianAction, nowMs = Date.now()) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
   if (isAdmin(auth)) return;
 
@@ -66,38 +131,27 @@ async function assertTechnicianCredentials(auth: any, nowMs = Date.now()) {
   ]);
   const user = userSnap.data() || {};
   const technician = technicianSnap.data() || {};
-  const merged = { ...user, ...technician } as Record<string, any>;
+  const merged = {
+    ...user,
+    ...technician,
+    certifications: [
+      ...(Array.isArray(user.certifications) ? user.certifications : []),
+      ...(Array.isArray(technician.certifications) ? technician.certifications : []),
+    ],
+  } as Record<string, any>;
 
-  const medicalExpiry = firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry);
-  const licenceExpiry = firstPresent(merged.drivingLicenseExpiry, merged.licenseExpiry);
-  const medicalState = credentialState(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus), medicalExpiry, nowMs);
-  const licenceState = credentialState(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus), licenceExpiry, nowMs);
-  const certifications = [
-    ...(Array.isArray(user.certifications) ? user.certifications : []),
-    ...(Array.isArray(technician.certifications) ? technician.certifications : []),
-  ];
-  const certificationState = certifications.length > 0
-    ? certifications.every((item) => credentialState(firstPresent(item?.status, item?.verificationStatus, item?.approvalStatus), certificationExpiry(item), nowMs) === "valid")
-      ? "valid"
-      : "invalid"
-    : credentialState(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus), null, nowMs);
-
-  const failures = [
-    medicalState !== "valid" ? "medical card" : null,
-    licenceState !== "valid" ? "driving licence" : null,
-    certificationState !== "valid" ? "required certifications" : null,
-  ].filter(Boolean);
-
-  if (failures.length > 0) {
+  const readiness = evaluateTechnicianReadiness(merged, action, nowMs);
+  if (!readiness.ready) {
     throw new HttpsError(
       "failed-precondition",
-      `Technician credentials are missing, pending, or expired: ${failures.join(", ")}.`,
+      `Technician is not operationally ready: ${readiness.failures.join(", ")}.`,
+      { action, failures: readiness.failures },
     );
   }
 }
 
-async function runSecured(legacyCallable: any, request: any) {
-  await assertTechnicianCredentials(request.auth);
+async function runSecured(legacyCallable: any, request: any, action: TechnicianAction) {
+  await assertTechnicianReadiness(request.auth, action);
   if (typeof legacyCallable?.run !== "function") {
     throw new HttpsError("internal", "Operational callable handler is unavailable.");
   }
@@ -106,15 +160,15 @@ async function runSecured(legacyCallable: any, request: any) {
 
 export const resumeTechnicianDuty = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
-  async (request) => runSecured(legacyResumeTechnicianDuty, request),
+  async (request) => runSecured(legacyResumeTechnicianDuty, request, "RESUME_DUTY"),
 );
 
 export const acceptTechnicianTicket = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
-  async (request) => runSecured(legacyAcceptTechnicianTicket, request),
+  async (request) => runSecured(legacyAcceptTechnicianTicket, request, "ACCEPT_TICKET"),
 );
 
 export const updateTicketLifecycle = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
-  async (request) => runSecured(legacyUpdateTicketLifecycle, request),
+  async (request) => runSecured(legacyUpdateTicketLifecycle, request, "UPDATE_LIFECYCLE"),
 );
