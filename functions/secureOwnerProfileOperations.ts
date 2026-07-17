@@ -60,18 +60,6 @@ function profilePresenceSummary(value: {
   };
 }
 
-function changedProfileFields(before: ReturnType<typeof profilePresenceSummary>, after: ReturnType<typeof profilePresenceSummary>) {
-  const changed: string[] = [];
-  if (before.displayNamePresent !== after.displayNamePresent) changed.push("displayName");
-  if (before.phonePresent !== after.phonePresent) changed.push("phoneNumber");
-  if (before.companyNamePresent !== after.companyNamePresent) changed.push("companyName");
-  if (before.billingNamePresent !== after.billingNamePresent) changed.push("billingName");
-  if (before.billingEmailPresent !== after.billingEmailPresent) changed.push("billingEmail");
-  if (before.billingPhonePresent !== after.billingPhonePresent) changed.push("billingPhone");
-  if (before.preferredContact !== after.preferredContact) changed.push("preferredContact");
-  return changed;
-}
-
 export function validateOwnerProfileChange(input: any, profile: FirebaseFirestore.DocumentData, authRecord: admin.auth.UserRecord) {
   const displayName = text(input?.displayName);
   const phone = normalizePhone(input?.phone || input?.phoneNumber);
@@ -115,6 +103,18 @@ export function validateOwnerProfileChange(input: any, profile: FirebaseFirestor
     ? "FIREBASE_AUTH_PHONE"
     : "UNCHANGED_PROFILE_PHONE";
   return { displayName, phone: resolvedPhone, phoneAuthority, companyName, billingName, billingEmail, billingPhone, preferredContact, language };
+}
+
+function changedOwnerProfileFields(profile: FirebaseFirestore.DocumentData, value: ReturnType<typeof validateOwnerProfileChange>) {
+  const changed: string[] = [];
+  if (text(profile.displayName) !== value.displayName) changed.push("displayName");
+  if (normalizePhone(profile.phoneNumber || profile.phone) !== value.phone) changed.push("phoneNumber");
+  if (text(profile.companyName || profile.ownerCompanyName) !== value.companyName) changed.push("companyName");
+  if (text(profile.billingContact?.name || profile.billingName) !== value.billingName) changed.push("billingName");
+  if (lower(profile.billingContact?.email || profile.billingEmail) !== value.billingEmail) changed.push("billingEmail");
+  if (normalizePhone(profile.billingContact?.phone || profile.billingPhone) !== value.billingPhone) changed.push("billingPhone");
+  if (lower(profile.notificationPreferences?.preferredContact || profile.preferredContact) !== value.preferredContact) changed.push("preferredContact");
+  return changed;
 }
 
 export const syncVerifiedOwnerPhone = onCall(
@@ -188,6 +188,7 @@ export const updateVerifiedOwnerProfile = onCall(
     const now = FieldValue.serverTimestamp();
     const userRef = db.collection("users").doc(uid);
     const auditRef = db.collection("audit_logs").doc();
+    const changedFields = changedOwnerProfileFields(profile, value);
     const before = profilePresenceSummary({
       displayName: profile.displayName,
       phone: profile.phoneNumber || profile.phone,
@@ -232,7 +233,7 @@ export const updateVerifiedOwnerProfile = onCall(
         targetId: uid,
         before,
         after,
-        changedFields: changedProfileFields(before, after),
+        changedFields,
         phoneAuthority: value.phoneAuthority,
         identityAuthority: "OWNER_KYC_RECORD",
         sensitiveValuesExcluded: true,
