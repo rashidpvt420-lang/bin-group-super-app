@@ -61,7 +61,15 @@ function profilePresenceSummary(value: {
 }
 
 function changedProfileFields(before: ReturnType<typeof profilePresenceSummary>, after: ReturnType<typeof profilePresenceSummary>) {
-  return Object.keys(after).filter((key) => before[key as keyof typeof before] !== after[key as keyof typeof after]);
+  const changed: string[] = [];
+  if (before.displayNamePresent !== after.displayNamePresent) changed.push("displayName");
+  if (before.phonePresent !== after.phonePresent) changed.push("phoneNumber");
+  if (before.companyNamePresent !== after.companyNamePresent) changed.push("companyName");
+  if (before.billingNamePresent !== after.billingNamePresent) changed.push("billingName");
+  if (before.billingEmailPresent !== after.billingEmailPresent) changed.push("billingEmail");
+  if (before.billingPhonePresent !== after.billingPhonePresent) changed.push("billingPhone");
+  if (before.preferredContact !== after.preferredContact) changed.push("preferredContact");
+  return changed;
 }
 
 export function validateOwnerProfileChange(input: any, profile: FirebaseFirestore.DocumentData, authRecord: admin.auth.UserRecord) {
