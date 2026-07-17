@@ -118,3 +118,18 @@ retryFirebase(
   'functions,hosting,firestore:rules,firestore:indexes,storage',
   'complete Firebase production stack',
 );
+
+const metadataStatus = run(process.execPath, [
+  'scripts/write-production-deployment-metadata.mjs',
+  '--components',
+  'hosting,firestoreRules,firestoreIndexes,storageRules,functions',
+]);
+if (metadataStatus !== 0) process.exit(metadataStatus);
+
+const verifyStatus = run(process.execPath, [
+  'scripts/verify-production-deployment.mjs',
+  '--write-evidence',
+]);
+if (verifyStatus !== 0) process.exit(verifyStatus);
+
+console.log('[production-deploy] production deployment and identity verification passed');
