@@ -14,6 +14,7 @@ const inputSx = {
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 type ResidenceRecord = Record<string, any> & { id: string };
+type PropertySummary = { name?: string; propertyName?: string; address?: string };
 
 const normalizeStatus = (record: ResidenceRecord) => String(
     record.leaseStatus || record.tenancyStatus || record.contractStatus || record.status || 'ACTIVE',
@@ -31,6 +32,23 @@ const dateValue = (value: unknown) => {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const arabicResidenceStatus = (status: string) => {
+    switch (status) {
+        case 'ACTIVE': return 'نشط';
+        case 'OCCUPIED': return 'مشغول';
+        case 'PENDING': return 'قيد الانتظار';
+        case 'EXPIRED': return 'منتهي';
+        case 'ENDED': return 'منتهٍ';
+        case 'TERMINATED': return 'مفسوخ';
+        case 'CANCELLED': return 'ملغى';
+        case 'CLOSED': return 'مغلق';
+        case 'MOVED_OUT': return 'تم الإخلاء';
+        case 'INACTIVE': return 'غير نشط';
+        case 'HISTORICAL': return 'سابق';
+        default: return status;
+    }
+};
+
 export default function TenantProfilePage() {
     const { user } = useRole();
     const { isRTL, lang } = useLanguage();
@@ -39,7 +57,7 @@ export default function TenantProfilePage() {
     const [saving, setSaving] = useState(false);
     const [resetting, setResetting] = useState(false);
     const [residences, setResidences] = useState<ResidenceRecord[]>([]);
-    const [propertiesById, setPropertiesById] = useState<Record<string, any>>({});
+    const [propertiesById, setPropertiesById] = useState<Map<string, PropertySummary>>(new Map());
     const [profileData, setProfileData] = useState<any>(null);
     const [displayName, setDisplayName] = useState('');
     const [phone, setPhone] = useState('');
@@ -82,9 +100,9 @@ export default function TenantProfilePage() {
                 const propertyIds = [...new Set(nextResidences.map((item) => String(item.propertyId || '')).filter(Boolean))];
                 const propertyEntries = await Promise.all(propertyIds.map(async (propertyId) => {
                     const propertySnap = await getDoc(doc(db, 'properties', propertyId));
-                    return [propertyId, propertySnap.exists() ? propertySnap.data() : null] as const;
+                    return [propertyId, propertySnap.exists() ? propertySnap.data() as PropertySummary : {}] as const;
                 }));
-                setPropertiesById(Object.fromEntries(propertyEntries));
+                setPropertiesById(new Map(propertyEntries));
             } catch (err) {
                 console.error('Profile fetch failed:', err);
                 setNotice({ type: 'error', text: label('Tenant profile could not be loaded.', 'تعذر تحميل ملف المستأجر.') });
@@ -154,12 +172,7 @@ export default function TenantProfilePage() {
 
     const localizedStatus = (record: ResidenceRecord) => {
         const status = normalizeStatus(record);
-        if (lang !== 'ar') return status.replaceAll('_', ' ');
-        const statuses: Record<string, string> = {
-            ACTIVE: 'نشط', OCCUPIED: 'مشغول', PENDING: 'قيد الانتظار', EXPIRED: 'منتهي', ENDED: 'منتهٍ',
-            TERMINATED: 'مفسوخ', CANCELLED: 'ملغى', CLOSED: 'مغلق', MOVED_OUT: 'تم الإخلاء', INACTIVE: 'غير نشط', HISTORICAL: 'سابق',
-        };
-        return statuses[status] || status;
+        return lang === 'ar' ? arabicResidenceStatus(status) : status.replaceAll('_', ' ');
     };
 
     const ResidenceSection = ({ titleEn, titleAr, records, historical = false }: { titleEn: string; titleAr: string; records: ResidenceRecord[]; historical?: boolean }) => (
@@ -171,7 +184,7 @@ export default function TenantProfilePage() {
             {records.length ? (
                 <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     {records.map((record) => {
-                        const property = propertiesById[String(record.propertyId || '')] || {};
+                        const property = propertiesById.get(String(record.propertyId || '')) || {};
                         return (
                             <Grid item xs={12} md={6} key={record.id}>
                                 <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4, textAlign: isRTL ? 'right' : 'left' }}>
