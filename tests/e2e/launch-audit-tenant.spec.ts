@@ -117,13 +117,13 @@ test.describe('Tenant launch audit', () => {
     await expect(page.getByLabel(/Phone Number|رقم الهاتف/i).first()).toBeDisabled();
 
     const fieldControl = page.getByTestId('tenant-correction-field');
-    await fieldControl.click();
+    await fieldControl.getByRole('combobox').click();
     await page.getByRole('option', { name: /Emergency contact name|اسم جهة اتصال الطوارئ/i }).click();
 
     const requestedValue = `E2E Correction ${Date.now()}`;
     const reason = `E2E launch audit Tenant correction proof ${Date.now()}`;
-    await page.getByTestId('tenant-correction-value').locator('input').fill(requestedValue);
-    await page.getByTestId('tenant-correction-reason').locator('textarea').fill(reason);
+    await page.getByTestId('tenant-correction-value').getByRole('textbox').fill(requestedValue);
+    await page.getByTestId('tenant-correction-reason').getByRole('textbox').fill(reason);
 
     const submit = page.getByTestId('tenant-correction-submit');
     await expect(submit).toBeEnabled();
