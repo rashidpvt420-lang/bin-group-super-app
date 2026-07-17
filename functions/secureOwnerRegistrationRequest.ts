@@ -1,7 +1,8 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   previewOwnerOnboardingQuote,
-  submitOwnerOnboardingPaymentPackage as legacySubmitOwnerOnboardingPaymentPackage,
+  previewOwnerOnboardingQuoteHandler,
+  submitOwnerOnboardingPaymentPackageHandler,
   submitPendingOwnerRegistration,
 } from "./ownerRegistrationRequest";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
@@ -347,9 +348,7 @@ async function assertServerQuote(request: any, data: ReturnType<typeof assertCan
     });
   }
 
-  const previewRunner = (previewOwnerOnboardingQuote as any).run;
-  if (typeof previewRunner !== "function") throw new HttpsError("internal", "The server quote calculator is unavailable.");
-  const previewResult = await previewRunner({
+  const previewResult = await previewOwnerOnboardingQuoteHandler({
     auth: request.auth,
     data: {
       properties: data.properties,
@@ -400,12 +399,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
     }
 
     await assertCurrentPaymentConfiguration(data);
-
-    const legacyRunner = (legacySubmitOwnerOnboardingPaymentPackage as any).run;
-    if (typeof legacyRunner !== "function") {
-      throw new HttpsError("internal", "The protected onboarding package handler is unavailable.");
-    }
-    return legacyRunner({ auth: request.auth, data });
+    return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });
   },
 );
 
