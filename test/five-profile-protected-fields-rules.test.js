@@ -22,15 +22,20 @@ const roleCases = [
       notificationPreferences: { preferredContact: 'email', language: 'en' },
       language: 'en',
     },
+    denied: [],
   },
   {
     role: 'tenant',
     allowed: {
-      displayName: 'Updated Tenant',
-      phoneNumber: '+971500000201',
-      emergencyContact: { name: 'Emergency Contact', phone: '+971500000202' },
       language: 'ar',
     },
+    denied: [
+      { displayName: 'Bypassed Tenant Name' },
+      { phoneNumber: '+971500000201' },
+      { phone: '+971500000201' },
+      { mobile: '+971500000201' },
+      { emergencyContact: { name: 'Bypassed Contact', phone: '+971500000202' } },
+    ],
   },
   {
     role: 'technician',
@@ -42,6 +47,7 @@ const roleCases = [
       emergencyContact: { name: 'Emergency Contact', phone: '+971500000302' },
       language: 'en',
     },
+    denied: [],
   },
   {
     role: 'broker',
@@ -50,6 +56,7 @@ const roleCases = [
       phoneNumber: '+971500000401',
       language: 'ar',
     },
+    denied: [],
   },
 ];
 
@@ -89,7 +96,7 @@ describe('Five-profile protected user fields', () => {
   });
 
   for (const roleCase of roleCases) {
-    it(`${roleCase.role} can update allowlisted profile data but cannot mutate server-owned authority`, async () => {
+    it(`${roleCase.role} can update its allowed profile data but cannot mutate reviewed or server-owned authority`, async () => {
       const uid = `${roleCase.role}_profile_user`;
       await seed(`users/${uid}`, {
         uid,
@@ -100,6 +107,9 @@ describe('Five-profile protected user fields', () => {
         status: 'active',
         displayName: `Original ${roleCase.role}`,
         phoneNumber: '+971500000000',
+        phone: '+971500000000',
+        mobile: '+971500000000',
+        emergencyContact: { name: 'Original Contact', phone: '+971500000001' },
         language: 'en',
         adminApproved: false,
         paymentVerified: false,
@@ -118,6 +128,13 @@ describe('Five-profile protected user fields', () => {
         ...roleCase.allowed,
         updatedAt: new Date().toISOString(),
       }));
+
+      for (const deniedMutation of roleCase.denied) {
+        await assertFails(updateDoc(profileRef, {
+          ...deniedMutation,
+          updatedAt: new Date().toISOString(),
+        }));
+      }
 
       for (const mutation of protectedMutations) {
         await assertFails(updateDoc(profileRef, {
