@@ -27,6 +27,28 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
     }
 
 `;
+const tenantDirectIdentityAnchor = `          'profileCompletionScore',
+          'updatedAt'
+        ]) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'reraLicense',`;
+const tenantDirectIdentityHardened = `          'profileCompletionScore',
+          'updatedAt'
+        ]) &&
+        (
+          claimedRole() != 'tenant' ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'displayName',
+            'phone',
+            'phoneNumber',
+            'mobile',
+            'emergencyContact'
+          ])
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'reraLicense',`;
 
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
@@ -70,6 +92,12 @@ if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)
   throw new Error('[final-firestore-authority] global update/delete catch-all could not be bounded');
 }
 
+if (text.includes(tenantDirectIdentityAnchor)) {
+  text = text.replace(tenantDirectIdentityAnchor, tenantDirectIdentityHardened);
+} else if (!text.includes("claimedRole() != 'tenant' ||\n          !request.resource.data.diff(resource.data).affectedKeys().hasAny([\n            'displayName'")) {
+  throw new Error('[final-firestore-authority] Tenant direct identity mutation anchor missing');
+}
+
 writeFileSync(rulesPath, text, 'utf8');
 
 const required = [
@@ -95,6 +123,8 @@ const required = [
   'allow update: if safeTicketUpdateByActor();',
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
+  "claimedRole() != 'tenant' ||",
+  "'displayName',\n            'phone',\n            'phoneNumber',\n            'mobile',\n            'emergencyContact'",
   adminSecurityReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
@@ -136,4 +166,4 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, and bounded global fallbacks are canonical');
+console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, Tenant reviewed identity changes, and bounded global fallbacks are canonical');
