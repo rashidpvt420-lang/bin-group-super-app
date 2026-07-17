@@ -69,11 +69,14 @@ test('review issues and revalidates the server quote before contract progression
 
 test('payment package accepts only a recorded quote or a fresh server-recalculated legacy quote', async () => {
   const source = await read('functions/secureOwnerRegistrationRequest.ts');
+  const handlerSource = await read('functions/ownerRegistrationRequest.ts');
   assert.match(source, /async function assertServerQuote/);
   assert.match(source, /if \(text\(data\.quoteId\)\)/);
   assert.match(source, /assertOwnerPortfolioQuoteRecord/);
   assert.match(source, /inputHash:\s*data\.quoteInputHash \|\| data\.inputHash/);
-  assert.match(source, /previewOwnerOnboardingQuote as any\)\.run/);
+  assert.match(source, /await previewOwnerOnboardingQuoteHandler\(\{/);
+  assert.doesNotMatch(source, /previewOwnerOnboardingQuote as any\)\.run/);
+  assert.match(handlerSource, /export async function previewOwnerOnboardingQuoteHandler/);
   assert.match(source, /Number\(quote\.expiresAtMs \|\| 0\) <= Date\.now\(\)/);
   assert.match(source, /text\(quote\.quoteHash\) !== text\(data\.quoteHash\)/);
   assert.match(source, /money\(quote\.annualContractValue\) !== money\(data\.annualContractValue\)/);
