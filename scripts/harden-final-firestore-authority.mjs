@@ -27,15 +27,7 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
     }
 
 `;
-const tenantDirectIdentityAnchor = `          'profileCompletionScore',
-          'updatedAt'
-        ]) &&
-        (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'reraLicense',`;
-const tenantDirectIdentityHardened = `          'profileCompletionScore',
-          'updatedAt'
-        ]) &&
+const tenantIdentityGuard = `
         (
           claimedRole() != 'tenant' ||
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -45,10 +37,30 @@ const tenantDirectIdentityHardened = `          'profileCompletionScore',
             'mobile',
             'emergencyContact'
           ])
-        ) &&
-        (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'reraLicense',`;
+        ) &&`;
+const tenantIdentityMarker = "claimedRole() != 'tenant' ||\n          !request.resource.data.diff(resource.data).affectedKeys().hasAny([\n            'displayName'";
+
+function hardenTenantSelfUpdate(rulesText) {
+  const functionStart = rulesText.indexOf('    function safeUserSelfUpdate(userId) {');
+  const functionEnd = rulesText.indexOf('    function safeOwnerProfileCreate', functionStart);
+  if (functionStart < 0 || functionEnd < 0) {
+    throw new Error('[final-firestore-authority] safeUserSelfUpdate function boundaries missing');
+  }
+
+  const block = rulesText.slice(functionStart, functionEnd);
+  if (block.includes(tenantIdentityMarker)) return rulesText;
+
+  const allowlistStart = block.indexOf('request.resource.data.diff(resource.data).affectedKeys().hasOnly([');
+  const allowlistEndToken = '        ]) &&';
+  const allowlistEnd = block.indexOf(allowlistEndToken, allowlistStart);
+  if (allowlistStart < 0 || allowlistEnd < 0) {
+    throw new Error('[final-firestore-authority] Tenant direct identity mutation allowlist boundary missing');
+  }
+
+  const insertionPoint = allowlistEnd + allowlistEndToken.length;
+  const hardenedBlock = `${block.slice(0, insertionPoint)}${tenantIdentityGuard}${block.slice(insertionPoint)}`;
+  return `${rulesText.slice(0, functionStart)}${hardenedBlock}${rulesText.slice(functionEnd)}`;
+}
 
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
@@ -92,12 +104,7 @@ if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)
   throw new Error('[final-firestore-authority] global update/delete catch-all could not be bounded');
 }
 
-if (text.includes(tenantDirectIdentityAnchor)) {
-  text = text.replace(tenantDirectIdentityAnchor, tenantDirectIdentityHardened);
-} else if (!text.includes("claimedRole() != 'tenant' ||\n          !request.resource.data.diff(resource.data).affectedKeys().hasAny([\n            'displayName'")) {
-  throw new Error('[final-firestore-authority] Tenant direct identity mutation anchor missing');
-}
-
+text = hardenTenantSelfUpdate(text);
 writeFileSync(rulesPath, text, 'utf8');
 
 const required = [
@@ -123,8 +130,7 @@ const required = [
   'allow update: if safeTicketUpdateByActor();',
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
-  "claimedRole() != 'tenant' ||",
-  "'displayName',\n            'phone',\n            'phoneNumber',\n            'mobile',\n            'emergencyContact'",
+  tenantIdentityMarker,
   adminSecurityReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
@@ -144,6 +150,9 @@ if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
 }
 if (text.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) {
   throw new Error('[final-firestore-authority] Admin security session block must exist exactly once');
+}
+if (text.split(tenantIdentityMarker).length - 1 !== 1) {
+  throw new Error('[final-firestore-authority] Tenant reviewed identity guard must exist exactly once');
 }
 
 const forbidden = [
