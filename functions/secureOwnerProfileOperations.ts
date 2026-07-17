@@ -78,7 +78,11 @@ export function validateOwnerProfileChange(input: any, profile: FirebaseFirestor
     if (billingName && !allowed.has(compact(billingName))) throw new HttpsError("failed-precondition", "Billing name must match the verified Owner KYC identity.");
   }
 
-  return { displayName, phone: phone || existingPhone, companyName, billingName, billingEmail, billingPhone, preferredContact, language };
+  const resolvedPhone = phone || existingPhone;
+  const phoneAuthority = resolvedPhone && livePhone && resolvedPhone === livePhone
+    ? "FIREBASE_AUTH_PHONE"
+    : "UNCHANGED_PROFILE_PHONE";
+  return { displayName, phone: resolvedPhone, phoneAuthority, companyName, billingName, billingEmail, billingPhone, preferredContact, language };
 }
 
 export const syncVerifiedOwnerPhone = onCall(
@@ -193,7 +197,7 @@ export const updateVerifiedOwnerProfile = onCall(
         targetId: uid,
         before,
         after,
-        phoneAuthority: value.phone ? "FIREBASE_AUTH_PHONE" : "UNCHANGED",
+        phoneAuthority: value.phoneAuthority,
         identityAuthority: "OWNER_KYC_RECORD",
         createdAt: now,
       });
