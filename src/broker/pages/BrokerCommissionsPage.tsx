@@ -134,7 +134,7 @@ export default function BrokerCommissionsPage() {
       subtitle="Verified commission settlement and payout tracking"
       loading={loading}
       actions={<Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
-        <Button variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
+        <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
           {payoutBusy ? 'PROCESSING...' : `REQUEST PAYOUT (${payableIds.length})`}
         </Button>
         <Button variant="outlined" startIcon={<Download size={18} />} onClick={exportReport}>EXPORT REPORT</Button>
@@ -175,15 +175,15 @@ export default function BrokerCommissionsPage() {
 
       <Paper sx={{ mt: 4, p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.03) }}><Stack direction="row" spacing={2}><Info size={20} /><Typography variant="body2">Payments remain pending until Admin Finance approves and records the bank transfer.</Typography></Stack></Paper>
 
-      <Dialog open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
+      <Dialog data-testid="broker-payout-otp-dialog" open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle>Verify payout request</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>
-          <TextField autoFocus fullWidth label="Six-digit verification code" value={otp.code} inputProps={{ inputMode: 'numeric', maxLength: 6 }} onChange={(event) => setOtp((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))} />
+          <TextField autoFocus fullWidth label="Six-digit verification code" value={otp.code} inputProps={{ inputMode: 'numeric', maxLength: 6, 'data-testid': 'broker-payout-otp-code' }} onChange={(event) => setOtp((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))} />
         </DialogContent>
         <DialogActions>
-          <Button disabled={payoutBusy} onClick={() => setOtp(emptyOtp)}>Cancel</Button>
-          <Button disabled={payoutBusy || otp.code.length !== 6 || Date.now() > otp.expiresAt} variant="contained" onClick={verifyAndSubmitPayout}>Verify and submit</Button>
+          <Button data-testid="broker-payout-otp-cancel" disabled={payoutBusy} onClick={() => setOtp(emptyOtp)}>Cancel</Button>
+          <Button data-testid="broker-payout-otp-submit" disabled={payoutBusy || otp.code.length !== 6 || Date.now() > otp.expiresAt} variant="contained" onClick={verifyAndSubmitPayout}>Verify and submit</Button>
         </DialogActions>
       </Dialog>
     </BrokerPageFrame>

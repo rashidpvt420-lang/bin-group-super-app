@@ -1,14 +1,15 @@
 /**
  * business-broker.spec.ts
  * Deep E2E business flow for the Broker role.
- * Verifies: authenticated broker identity, lead attribution, and commission visibility.
+ * Verifies: authenticated broker identity, lead attribution, commission visibility,
+ * and request-only payout OTP challenge issuance without reading or consuming the code.
  */
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -34,7 +35,7 @@ async function login(page: Page) {
   const identitySpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
   await expect(
     identitySpinner,
-    'Broker identity must resolve. Seed/repair the broker Auth role claim and users/{uid} profile when this remains visible.'
+    'Broker identity must resolve. Seed/repair the broker Auth role claim and users/{uid} profile when this remains visible.',
   ).toBeHidden({ timeout: 15_000 });
 
   await expect(page.locator('body')).not.toContainText(
@@ -45,11 +46,12 @@ async function login(page: Page) {
 
 test.describe('Broker Business Workflow', () => {
   test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+    const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = appCheckMonitor;
+    await appCheckMonitor.assertTokenFingerprint();
     await login(page);
   });
+
   test.afterEach(async ({ page }) => {
     const monitor = (page as any).__binAppCheckMonitor;
     if (!monitor) return;
@@ -57,9 +59,8 @@ test.describe('Broker Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-
-  test('Broker can submit an attributed property lead and view commissions', async ({ page }) => {
-    test.setTimeout(100_000);
+  test('Broker can submit a lead, view commissions, and request a payout OTP challenge', async ({ page }) => {
+    test.setTimeout(130_000);
     const uniqueLead = `E2E Lead ${Date.now()}`;
 
     await page.goto('/broker/leads/new', { waitUntil: 'domcontentloaded' });
@@ -76,9 +77,9 @@ test.describe('Broker Business Workflow', () => {
     await page.getByLabel(/Budget Range/i).fill('50000');
     await page.getByLabel(/Mission Notes/i).fill('Credentialed staging verification of broker attribution and lead creation.');
 
-    const submit = page.getByTestId('broker-lead-submit');
-    await expect(submit).toBeEnabled({ timeout: 10_000 });
-    await submit.click();
+    const submitLead = page.getByTestId('broker-lead-submit');
+    await expect(submitLead).toBeEnabled({ timeout: 10_000 });
+    await submitLead.click();
 
     await expect(page.getByText(/Lead recorded with attribution/i)).toBeVisible({ timeout: 25_000 });
     const createdLeadCard = page.getByTestId('broker-lead-card').filter({ hasText: uniqueLead }).first();
@@ -90,5 +91,24 @@ test.describe('Broker Business Workflow', () => {
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
     await expect(page.getByText(/Finance & Payouts/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 15_000 });
+
+    const requestOtp = page.getByTestId('broker-payout-request-otp');
+    await expect(requestOtp).toBeVisible({ timeout: 15_000 });
+    await expect(requestOtp).toBeEnabled({ timeout: 15_000 });
+    await expect(requestOtp).toContainText(/REQUEST PAYOUT \(1\)/i);
+    await requestOtp.click();
+
+    await expect(page.getByText(/A six-digit payout verification code was sent to your verified Broker email/i)).toBeVisible({ timeout: 35_000 });
+    const otpDialog = page.getByTestId('broker-payout-otp-dialog');
+    await expect(otpDialog).toBeVisible({ timeout: 35_000 });
+    await expect(otpDialog).toContainText(/Code sent for AED 500 across 1 commission/i);
+
+    const otpCode = page.getByTestId('broker-payout-otp-code');
+    await expect(otpCode).toHaveValue('');
+    await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
+
+    await page.getByTestId('broker-payout-otp-cancel').click();
+    await expect(otpDialog).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('body')).not.toContainText(/Unable to send payout verification code|payout verification or submission failed/i);
   });
 });
