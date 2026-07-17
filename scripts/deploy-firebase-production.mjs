@@ -81,6 +81,14 @@ function run(command, args, options = {}) {
   return result.status ?? 1;
 }
 
+const secretPreflightStatus = run(process.execPath, [
+  'scripts/verify-firebase-production-secrets.mjs',
+]);
+if (secretPreflightStatus !== 0) {
+  console.error('[production-deploy] Required Firebase production function secret preflight failed');
+  process.exit(secretPreflightStatus);
+}
+
 function retryFirebase(target, label) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     console.log(`[production-deploy] ${label} attempt ${attempt}/3`);
