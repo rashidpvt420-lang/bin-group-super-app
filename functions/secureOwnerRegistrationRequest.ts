@@ -348,14 +348,13 @@ async function assertServerQuote(request: any, data: ReturnType<typeof assertCan
     });
   }
 
-  const previewResult = await previewOwnerOnboardingQuoteHandler({
+  const quote = await previewOwnerOnboardingQuoteHandler({
     auth: request.auth,
     data: {
       properties: data.properties,
       selectedAddOns: data.serviceDetails.selectedAddOns,
     },
   });
-  const quote = previewResult?.data || previewResult;
   if (
     !quote ||
     quote.currency !== "AED" ||
