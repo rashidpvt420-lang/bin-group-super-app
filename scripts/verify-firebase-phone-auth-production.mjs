@@ -79,6 +79,34 @@ export function validateFirebasePhoneAuthConfig(
   };
 }
 
+export function buildFirebasePhoneAuthEvidence(summary, {
+  env = process.env,
+  now = new Date(),
+} = {}) {
+  return {
+    schemaVersion: 1,
+    status: 'passed',
+    source: 'identity-toolkit-admin-v2',
+    projectId: String(summary?.projectId || '').trim(),
+    commitSha: String(env.GITHUB_SHA || '').trim() || null,
+    repository: String(env.GITHUB_REPOSITORY || '').trim() || null,
+    ref: String(env.GITHUB_REF || '').trim() || null,
+    workflowRunId: String(env.GITHUB_RUN_ID || '').trim() || null,
+    workflowRunAttempt: Number(env.GITHUB_RUN_ATTEMPT || 0) || null,
+    verifiedAt: now.toISOString(),
+    phoneProviderEnabled: summary?.phoneProviderEnabled === true,
+    requiredDomainsPresent: summary?.requiredDomainsPresent === true,
+    authorizedDomainCount: Number(summary?.authorizedDomainCount || 0),
+    smsPolicy: String(summary?.smsPolicy || ''),
+    requiredSmsRegion: String(summary?.requiredSmsRegion || '').toUpperCase(),
+    requiredSmsRegionAllowed: summary?.requiredSmsRegionAllowed === true,
+    allowedRegionCount: Number(summary?.allowedRegionCount || 0),
+    testPhoneNumberCount: Number(summary?.testPhoneNumberCount || 0),
+    sensitiveValuesExcluded: true,
+    hardLaunchClaim: false,
+  };
+}
+
 export async function fetchFirebasePhoneAuthConfig({ projectId = EXPECTED_PROJECT_ID } = {}) {
   const app = initializeFirebaseAdmin(admin, projectId);
   const credential = app.options.credential || admin.credential.applicationDefault();
@@ -105,6 +133,8 @@ export async function verifyFirebasePhoneAuthProduction({
   requiredDomains = process.env.FIREBASE_PHONE_AUTH_REQUIRED_DOMAINS || DEFAULT_REQUIRED_DOMAINS,
   requiredSmsRegion = process.env.FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION || DEFAULT_REQUIRED_SMS_REGION,
   configFetcher = fetchFirebasePhoneAuthConfig,
+  env = process.env,
+  now = new Date(),
 } = {}) {
   if (String(projectId || '').trim() !== EXPECTED_PROJECT_ID) {
     throw new Error(`GCP_PROJECT_ID must equal ${EXPECTED_PROJECT_ID}.`);
@@ -121,6 +151,7 @@ export async function verifyFirebasePhoneAuthProduction({
   }
 
   const summary = result.summary;
+  const evidence = buildFirebasePhoneAuthEvidence(summary, { env, now });
   console.log(
     '[firebase-phone-auth] production preflight passed '
       + `provider=${summary.phoneProviderEnabled ? 'enabled' : 'disabled'} `
@@ -129,7 +160,7 @@ export async function verifyFirebasePhoneAuthProduction({
       + `region_${summary.requiredSmsRegion}=${summary.requiredSmsRegionAllowed ? 'allowed' : 'blocked'} `
       + `test_numbers=${summary.testPhoneNumberCount}`,
   );
-  return summary;
+  return evidence;
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
