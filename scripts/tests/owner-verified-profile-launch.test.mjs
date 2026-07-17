@@ -24,7 +24,9 @@ test('Owner profile update is fail-closed and auditable', () => {
   assert.match(server, /OWNER_VERIFIED_PROFILE_UPDATED/);
   assert.match(server, /before,/);
   assert.match(server, /after,/);
-  assert.match(server, /phoneAuthority: value\.phone \? "FIREBASE_AUTH_PHONE"/);
+  assert.match(server, /phoneAuthority: value\.phoneAuthority/);
+  assert.match(server, /"FIREBASE_AUTH_PHONE"/);
+  assert.match(server, /"UNCHANGED_PROFILE_PHONE"/);
   assert.match(server, /identityAuthority: "OWNER_KYC_RECORD"/);
   assert.match(server, /db\.runTransaction/);
   assert.match(server, /Owner account is disabled or suspended/);
