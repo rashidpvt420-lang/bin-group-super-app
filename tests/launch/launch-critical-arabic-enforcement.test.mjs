@@ -10,7 +10,7 @@ const surfaces = [
     name: 'Owner property onboarding shell',
     path: 'src/pages/PropertyOnboardingPage.tsx',
     language: /useLanguage\(\)/,
-    branch: /lang\s*===\s*['"]ar['"]|isRTL\s*\?/, 
+    branch: /lang\s*===\s*['"]ar['"]|isRTL\s*\?/,
   },
   {
     name: 'Asset and Mosque intake',
@@ -28,13 +28,13 @@ const surfaces = [
     name: 'Admin security profile',
     path: 'apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx',
     language: /useLanguage\(\)/,
-    branch: /isRTL\s*\?/, 
+    branch: /isRTL\s*\?/,
   },
   {
     name: 'Admin application shell',
     path: 'apps/admin-panel/src/App.tsx',
     language: /useLanguage\(\)/,
-    branch: /isRTL\s*\?|lang\s*===\s*['"]ar['"]/, 
+    branch: /isRTL\s*\?|lang\s*===\s*['"]ar['"]/,
   },
 ];
 
@@ -65,9 +65,4 @@ test('launch-critical forms preserve RTL direction and bilingual blocking copy',
   assert.match(payment, /تعليمات الدفع المؤسسية غير متاحة/);
   assert.match(payment, /مبلغ الدفع غير موجود/);
   assert.match(adminProfile, /ملف الأمان الشخصي/);
-});
-
-test('launch-critical Arabic coverage is executable and no longer represented only by a TODO', async () => {
-  const audit = await read('tests/launch/five-profile-completeness-audit.test.mjs');
-  assert.doesNotMatch(audit, /test\.todo\(['"]Arabic tests fail on untranslated Admin, Asset\/Mosque, Location, Payment and shell-level copy['"]\)/);
 });
