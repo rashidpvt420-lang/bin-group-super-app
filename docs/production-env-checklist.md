@@ -60,14 +60,18 @@
    - `bin-group-57c60.web.app`
    - `bin-group-57c60.firebaseapp.com`
    - the production custom domain
-3. Confirm the production domain can render Firebase's invisible reCAPTCHA challenge without Content Security Policy blocking Google reCAPTCHA resources
-4. Confirm the project has sufficient Firebase Authentication SMS quota/billing for the UAE launch volume
-5. Use Firebase test phone numbers only in emulator/staging workflows; never configure a production Owner number as a test number
-6. On a real production Owner account, complete one SMS verification and confirm:
+3. Firebase Console → **Authentication** → **Settings** → **SMS region policy** → use **Allowlist only** and include United Arab Emirates (`AE`)
+4. Grant the protected deployment service account `firebaseauth.configs.get` so the predeploy Identity Toolkit configuration check can run
+5. Confirm the production domain can render Firebase's invisible reCAPTCHA challenge without Content Security Policy blocking Google reCAPTCHA resources
+6. Confirm the project has sufficient Firebase Authentication SMS quota/billing for the UAE launch volume
+7. Use Firebase test phone numbers only in emulator/staging workflows; never configure a production Owner number as a test number
+8. On a real production Owner account, complete one SMS verification and confirm:
    - Firebase Authentication user record contains the verified E.164 phone
    - `users/{uid}.phoneAuthority` is `FIREBASE_AUTH_PHONE`
    - an `OWNER_PHONE_VERIFIED_SYNCED` audit record exists
-7. Record the live verification evidence in the protected launch artifact; do not record the SMS code
+9. Record the live verification evidence in the protected launch artifact; do not record the SMS code
+
+The protected production deploy entrypoint runs `scripts/verify-firebase-phone-auth-production.mjs` after Google Cloud authentication and Secret Manager preflight. Deployment fails before the first Firebase deploy attempt when Phone Auth is disabled, a required production domain is absent, the SMS policy is not allowlist-only, or `AE` is not allowed. The script reports only aggregate configuration counts and never prints test phone numbers or codes.
 
 ---
 
@@ -164,6 +168,9 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 - [ ] App Check enforcement active for Firestore, Storage, and Functions
 - [ ] Firebase Authentication **Phone** provider enabled
 - [ ] Production domains authorized for Firebase Phone Authentication and invisible reCAPTCHA
+- [ ] Firebase Authentication SMS policy is **allowlist-only** and includes `AE`
+- [ ] Deployment service account can call Identity Toolkit `projects.getConfig` (`firebaseauth.configs.get`)
+- [ ] Automated Firebase Phone Auth production preflight passes before deployment
 - [ ] Firebase Authentication SMS quota/billing confirmed for UAE production traffic
 - [ ] Real Owner SMS verification writes `FIREBASE_AUTH_PHONE` authority and `OWNER_PHONE_VERIFIED_SYNCED` audit evidence without storing the code
 - [ ] `VITE_FIREBASE_VAPID_KEY` set from Firebase Cloud Messaging → Web Push certificate
