@@ -47,7 +47,7 @@ test('launch-critical surfaces retain Arabic, language state and bilingual branc
   }
 });
 
-test('launch-critical forms preserve RTL direction and bilingual blocking copy', async () => {
+test('launch-critical forms preserve root RTL direction, nested RTL behavior and bilingual blocking copy', async () => {
   const [onboarding, asset, payment, adminProfile] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/components/onboarding/AssetProfileStep.tsx'),
@@ -55,10 +55,11 @@ test('launch-critical forms preserve RTL direction and bilingual blocking copy',
     read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'),
   ]);
 
-  assert.match(onboarding, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
-  assert.match(asset, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
-  assert.match(payment, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
-  assert.match(adminProfile, /dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
+  const explicitDirection = /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/;
+  assert.match(onboarding, explicitDirection);
+  assert.match(payment, explicitDirection);
+  assert.match(adminProfile, explicitDirection);
+  assert.match(asset, /transform:\s*isRTL\s*\?\s*['"]rotate\(180deg\)['"]\s*:\s*undefined/);
 
   assert.match(asset, /اسم المسجد مطلوب/);
   assert.match(asset, /المساحة الإجمالية المقاسة مطلوبة/);
