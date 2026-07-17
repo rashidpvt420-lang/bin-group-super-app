@@ -33,9 +33,12 @@ test('Tenant corrections are server-authoritative, allowlisted, stale-safe, and 
 
 test('Tenant direct identity mutations are blocked by canonical rule preparation', async () => {
   const hardener = await read('scripts/harden-final-firestore-authority.mjs');
+  assert.match(hardener, /function hardenTenantSelfUpdate/);
+  assert.match(hardener, /function safeUserSelfUpdate\(userId\)/);
   assert.match(hardener, /claimedRole\(\) != 'tenant'/);
   assert.match(hardener, /'displayName',[\s\S]*'phone',[\s\S]*'phoneNumber',[\s\S]*'mobile',[\s\S]*'emergencyContact'/);
-  assert.match(hardener, /Tenant direct identity mutation anchor missing/);
+  assert.match(hardener, /Tenant direct identity mutation allowlist boundary missing/);
+  assert.match(hardener, /Tenant reviewed identity guard must exist exactly once/);
   assert.match(hardener, /Tenant reviewed identity changes/);
 });
 
