@@ -39,13 +39,15 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
 
     assert.match(
       rules,
-      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits'\]\) && hasAdminClaim\(\);/,
+      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'\]\) && hasAdminClaim\(\);/,
     );
     assert.match(rules, /allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.doesNotMatch(rules, /'users',\n\s*'tickets',\n\s*'maintenanceTickets',\n\s*'audit_logs'/);
     assert.match(rules, /match \/broker_kyc_profiles\/\{brokerId\} \{/);
     assert.match(rules, /match \/broker_kyc_submission_limits\/\{brokerId\} \{\n\s*allow read, write: if false;/);
+    assert.match(rules, /match \/admin_security_sessions\/\{sessionId\} \{\n\s*allow read, write: if false;/);
+    assert.match(rules, /'system_secrets',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions'/);
     assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
     for (const legacy of [
       'allow update: if isAdmin() && isNotSuspended();',
