@@ -52,6 +52,12 @@ export {
   verifyBrokerPayoutOtp,
   submitBrokerPayoutRequest,
 } from "./secureBrokerPayoutOperations";
+export {
+  submitTenantCorrectionRequest,
+  listTenantCorrectionRequests,
+  listAdminTenantCorrectionRequests,
+  adminResolveTenantCorrectionRequest,
+} from "./tenantCorrectionOperations";
 
 if (!admin.apps.length) {
   admin.initializeApp();
