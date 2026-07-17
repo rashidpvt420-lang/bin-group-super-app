@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
 import { verifyFirebaseProductionSecrets } from './verify-firebase-production-secrets.mjs';
+import { verifyFirebasePhoneAuthProduction } from './verify-firebase-phone-auth-production.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
@@ -77,6 +78,14 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : 'secret metadata verification failed';
   console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
+  process.exit(1);
+}
+
+try {
+  await verifyFirebasePhoneAuthProduction({ projectId });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Phone Auth configuration verification failed';
+  console.error(`[production-deploy] Firebase Phone Auth production preflight failed: ${message}`);
   process.exit(1);
 }
 
