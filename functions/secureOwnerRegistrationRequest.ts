@@ -76,20 +76,44 @@ function assertCanonicalCommercialTerms(rawData: any) {
     const units = Number(property?.units || property?.bedrooms || property?.beds || 0);
     return total + (Number.isFinite(units) && units > 0 ? units : 0);
   }, 0);
-  const submittedServiceDetails = data.serviceDetails && typeof data.serviceDetails === "object"
-    ? data.serviceDetails
-    : {};
-  const canonicalServiceDetails = Object.assign({}, submittedServiceDetails, {
-    properties: properties.length,
-    totalUnits,
-    selectedPlan: canonicalPlanName,
-    contractMode,
+  const selectedAddOns = Array.isArray(data.serviceDetails?.selectedAddOns)
+    ? data.serviceDetails.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
+    : [];
+
+  const canonicalData = {
+    ownerUid: data.ownerUid,
+    ownerEmail: data.ownerEmail,
+    intakeId: data.intakeId,
+    onboardingSessionId: data.onboardingSessionId,
+    paymentMethod: data.paymentMethod,
+    amount: data.amount,
+    activationDeposit: data.activationDeposit,
+    annualContractValue: data.annualContractValue,
+    quoteId: data.quoteId,
+    quoteHash: data.quoteHash,
+    quoteInputHash: data.quoteInputHash,
+    inputHash: data.inputHash,
+    quoteQuotedAtMs: data.quoteQuotedAtMs,
+    paymentConfigVersion: data.paymentConfigVersion,
+    paymentConfigurationVersion: data.paymentConfigurationVersion,
+    paymentConfigHash: data.paymentConfigHash,
+    paymentConfigurationHash: data.paymentConfigurationHash,
+    paymentManifest: data.paymentManifest,
+    companyProfile: data.companyProfile,
+    serviceDetails: {
+      properties: properties.length,
+      totalUnits,
+      selectedPlan: canonicalPlanName,
+      selectedAddOns,
+      contractMode,
+      paymentPlan,
+    },
+    properties,
+    signatureName: data.signatureName,
+    otpVerificationId: data.otpVerificationId,
+    documentUrls: data.documentUrls,
     paymentPlan,
-  });
-  const canonicalData = Object.assign({}, data, {
-    serviceDetails: canonicalServiceDetails,
-    paymentPlan,
-  });
+  };
 
   return {
     data: canonicalData,
@@ -157,7 +181,7 @@ async function assertServerQuote(request: any, data: any) {
   const previewRunner = (previewOwnerOnboardingQuote as any).run;
   if (typeof previewRunner !== "function") throw new HttpsError("internal", "The server quote calculator is unavailable.");
   const previewResult = await previewRunner({
-    ...request,
+    auth: request.auth,
     data: {
       properties: data.properties,
       selectedAddOns: data.serviceDetails?.selectedAddOns || [],
@@ -212,7 +236,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
     if (typeof legacyRunner !== "function") {
       throw new HttpsError("internal", "The protected onboarding package handler is unavailable.");
     }
-    return legacyRunner({ ...request, data });
+    return legacyRunner({ auth: request.auth, data });
   },
 );
 
