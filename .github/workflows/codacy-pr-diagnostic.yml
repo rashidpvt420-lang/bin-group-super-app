@@ -20,35 +20,53 @@ jobs:
     timeout-minutes: 8
     steps:
       - name: Fetch public Codacy issue metadata
-        env:
-          CODACY_API_URL: https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues
         run: |
           set -euo pipefail
+          urls=(
+            'https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues'
+            'https://app.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues'
+          )
           for attempt in $(seq 1 20); do
             echo "Codacy issue metadata attempt ${attempt}/20"
-            if response="$(curl --fail --silent --show-error --max-time 20 "$CODACY_API_URL")"; then
-              printf '%s' "$response" > codacy-pr-issues.json
-              if node <<'NODE'
+            for url in "${urls[@]}"; do
+              echo "Trying host: $(printf '%s' "$url" | cut -d/ -f3)"
+              if response="$(curl --fail --silent --show-error --max-time 20 "$url")"; then
+                printf '%s' "$response" > codacy-pr-issues.json
+                if node <<'NODE'
           const fs = require('fs');
           const payload = JSON.parse(fs.readFileSync('codacy-pr-issues.json', 'utf8'));
-          const rows = Array.isArray(payload?.data) ? payload.data : [];
-          const output = rows.map((issue) => ({
-            filePath: issue.filePath || issue.file?.path || null,
-            lineNumber: issue.lineNumber || issue.line || null,
-            patternId: issue.patternInfo?.id || issue.patternId || null,
-            patternTitle: issue.patternInfo?.title || issue.title || null,
-            level: issue.patternInfo?.level || issue.level || null,
-            category: issue.patternInfo?.category || issue.category || null,
-            message: issue.message || issue.description || null,
-            status: issue.status || null,
-          }));
-          console.log(JSON.stringify({ count: output.length, issues: output }, null, 2));
+          const candidates = [
+            payload?.data,
+            payload?.issues,
+            payload?.items,
+            payload?.results,
+            payload?.data?.issues,
+            payload?.data?.items,
+          ];
+          const rows = Array.isArray(payload)
+            ? payload
+            : (candidates.find(Array.isArray) || []);
+          const output = rows.map((entry) => {
+            const issue = entry?.issue || entry;
+            return {
+              filePath: issue?.filePath || issue?.file?.path || issue?.location?.filePath || null,
+              lineNumber: issue?.lineNumber || issue?.line || issue?.location?.line || null,
+              patternId: issue?.patternInfo?.id || issue?.patternId || issue?.pattern?.id || null,
+              patternTitle: issue?.patternInfo?.title || issue?.title || issue?.pattern?.title || null,
+              level: issue?.patternInfo?.level || issue?.level || null,
+              category: issue?.patternInfo?.category || issue?.category || null,
+              message: issue?.message || issue?.description || null,
+              status: issue?.status || entry?.status || null,
+            };
+          });
+          console.log(JSON.stringify({ topLevelKeys: Object.keys(payload || {}), count: output.length, issues: output }, null, 2));
           process.exit(output.length > 0 ? 0 : 2);
           NODE
-              then
-                exit 0
+                then
+                  exit 0
+                fi
               fi
-            fi
+            done
             sleep 20
           done
           echo "::error::Codacy issue metadata was unavailable or empty after retries."
