@@ -21,9 +21,9 @@ const hash = (value: string) => crypto.createHash("sha256").update(value).digest
 const otpHash = (otp: string, salt: string) => hash(`${otp}:${salt}`);
 const makeOtp = () => String(crypto.randomInt(100000, 1000000));
 
-function normalizedCommissionIds(value: unknown) {
-  const ids = Array.isArray(value) ? value.map(text).filter(Boolean) : [];
-  return Array.from(new Set(ids)).sort().slice(0, 50);
+function normalizedCommissionIds(value: unknown): string[] {
+  const ids = Array.isArray(value) ? value.map((entry) => text(entry)).filter(Boolean) : [];
+  return Array.from(new Set<string>(ids)).sort().slice(0, 50);
 }
 
 function payoutBinding(uid: string, commissionIds: string[], amount: number) {
@@ -239,6 +239,8 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
         ["REQUESTED", "APPROVED", "PAID"].includes(text(data.payoutStatus).toUpperCase());
     });
     if (invalid) throw new HttpsError("permission-denied", "One or more commissions changed after MFA verification.");
+    const currentAmount = commissionDocs.reduce((sum, document) => sum + numberValue(document.data()?.amount), 0);
+    if (currentAmount.toFixed(2) !== commissions.amount.toFixed(2)) throw new HttpsError("failed-precondition", "Payout amount changed after MFA verification.");
     transaction.set(payoutRef, {
       brokerId: broker.uid,
       brokerUid: broker.uid,
@@ -255,7 +257,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
       status: "PENDING_ADMIN_REVIEW",
       approvalStatus: "PENDING",
       paymentStatus: "REQUESTED",
-      verificationState: "MFA_VERIFIED_ADMIN_FINANCE_REVIEW_REQUIRED",
+      verificationState: "BROKER_MFA_VERIFIED_ADMIN_FINANCE_REVIEW_REQUIRED",
       mfaChallengeId: challengeId,
       mfaBindingHash: bindingHash,
       requestedBy: broker.uid,
@@ -269,9 +271,14 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
       payoutRequestedAt: now,
       updatedAt: now,
     }, { merge: true }));
-    transaction.set(challengeRef, { status: "CONSUMED", consumedAt: now, payoutRequestId: payoutRef.id, updatedAt: now }, { merge: true });
+    transaction.set(challengeRef, {
+      status: "CONSUMED",
+      consumedAt: now,
+      payoutRequestId: payoutRef.id,
+      updatedAt: now,
+    }, { merge: true });
     transaction.set(db.collection("audit_logs").doc(), {
-      action: "BROKER_PAYOUT_REQUEST_SUBMITTED",
+      action: "BROKER_PAYOUT_REQUEST_SUBMITTED_WITH_MFA",
       actorId: broker.uid,
       actorEmail: broker.email,
       brokerId: broker.uid,
@@ -280,7 +287,6 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
       bindingHash,
       commissionIds: commissions.ids,
       amount: commissions.amount,
-      mfaAuthority: "EMAIL_OTP_SINGLE_USE",
       createdAt: now,
     });
   });
