@@ -18,67 +18,95 @@ jobs:
     name: Inspect public Codacy PR issues
     if: ${{ github.event.pull_request.number == 330 }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Fetch Codacy annotations from GitHub Checks
+      - name: Probe Codacy metadata sources
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 32); do
-            echo "GitHub Codacy annotation attempt ${attempt}/32"
-            check_runs="$(curl --fail --silent --show-error --max-time 20 \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'X-GitHub-Api-Version: 2022-11-28' \
-              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100")"
-            printf '%s' "$check_runs" > check-runs.json
-            node <<'NODE'
+
+          curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \
+            > check-runs.json
+
+          node <<'NODE'
           const fs = require('fs');
           const payload = JSON.parse(fs.readFileSync('check-runs.json', 'utf8'));
           const runs = Array.isArray(payload?.check_runs) ? payload.check_runs : [];
           const codacyRuns = runs.filter((run) => /codacy/i.test(`${run.name} ${run.app?.name || ''}`));
-          console.log(JSON.stringify({ codacyRuns: codacyRuns.map((run) => ({ id: run.id, name: run.name, app: run.app?.name, status: run.status, conclusion: run.conclusion, detailsUrl: run.details_url, output: run.output })) }, null, 2));
-          const completed = codacyRuns.find((run) => run.status === 'completed');
-          const selected = completed || codacyRuns[0];
-          if (selected?.id) fs.writeFileSync('codacy-check-id.txt', String(selected.id));
-          if (completed?.id) fs.writeFileSync('codacy-check-completed.txt', String(completed.id));
+          console.log('GITHUB_CHECKS');
+          console.log(JSON.stringify(codacyRuns.map((run) => ({
+            id: run.id,
+            name: run.name,
+            app: run.app?.name,
+            status: run.status,
+            conclusion: run.conclusion,
+            detailsUrl: run.details_url,
+            output: run.output,
+          })), null, 2));
           NODE
-            if [[ -s codacy-check-id.txt ]]; then
-              check_id="$(cat codacy-check-id.txt)"
-              annotations="$(curl --fail --silent --show-error --max-time 20 \
-                -H "Authorization: Bearer $GH_TOKEN" \
-                -H 'Accept: application/vnd.github+json' \
-                -H 'X-GitHub-Api-Version: 2022-11-28' \
-                "https://api.github.com/repos/$REPOSITORY/check-runs/$check_id/annotations?per_page=100")"
-              printf '%s' "$annotations" > codacy-annotations.json
-              if node <<'NODE'
+
+          urls=(
+            'https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues'
+            'https://app.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues'
+          )
+          index=0
+          for url in "${urls[@]}"; do
+            index=$((index + 1))
+            output="codacy-api-${index}.txt"
+            status="$(curl --location --silent --show-error --max-time 30 --output "$output" --write-out '%{http_code}' "$url" || true)"
+            echo "CODACY_API_${index}_STATUS=$status SIZE=$(wc -c < "$output") HOST=$(printf '%s' "$url" | cut -d/ -f3)"
+            FILE="$output" node <<'NODE'
           const fs = require('fs');
-          const rows = JSON.parse(fs.readFileSync('codacy-annotations.json', 'utf8'));
-          const output = (Array.isArray(rows) ? rows : []).map((item) => ({
-            path: item.path,
-            startLine: item.start_line,
-            endLine: item.end_line,
-            level: item.annotation_level,
-            title: item.title,
-            message: item.message,
-            rawDetails: item.raw_details,
-          }));
-          console.log(JSON.stringify({ annotationCount: output.length, annotations: output }, null, 2));
-          process.exit(output.length > 0 ? 0 : 2);
+          const file = process.env.FILE;
+          const text = fs.readFileSync(file, 'utf8');
+          try {
+            const payload = JSON.parse(text);
+            const candidates = [payload, payload?.data, payload?.issues, payload?.items, payload?.results, payload?.data?.issues, payload?.data?.items];
+            const rows = candidates.find(Array.isArray) || [];
+            const issues = rows.map((entry) => {
+              const issue = entry?.issue || entry;
+              return {
+                filePath: issue?.filePath || issue?.file?.path || issue?.location?.filePath || null,
+                lineNumber: issue?.lineNumber || issue?.line || issue?.location?.line || null,
+                patternId: issue?.patternInfo?.id || issue?.patternId || issue?.pattern?.id || null,
+                patternTitle: issue?.patternInfo?.title || issue?.title || issue?.pattern?.title || null,
+                level: issue?.patternInfo?.level || issue?.level || null,
+                category: issue?.patternInfo?.category || issue?.category || null,
+                message: issue?.message || issue?.description || null,
+              };
+            });
+            console.log(JSON.stringify({ topLevelKeys: Object.keys(payload || {}), issueCount: issues.length, issues }, null, 2));
+          } catch {
+            console.log(JSON.stringify({ nonJsonPrefix: text.slice(0, 800) }, null, 2));
+          }
           NODE
-              then
-                exit 0
-              fi
-              if [[ -s codacy-check-completed.txt ]]; then
-                echo "Codacy check completed without GitHub annotations; full check output is printed above."
-                exit 0
-              fi
-            fi
-            rm -f codacy-check-id.txt codacy-check-completed.txt
-            sleep 15
           done
-          echo "::error::Codacy check output was unavailable after retries."
-          exit 1
+
+          page='codacy-pr-issues.html'
+          page_status="$(curl --location --silent --show-error --max-time 30 --output "$page" --write-out '%{http_code}' 'https://app.codacy.com/gh/rashidpvt420-lang/bin-group-super-app/pull-requests/330/issues' || true)"
+          echo "CODACY_PAGE_STATUS=$page_status SIZE=$(wc -c < "$page")"
+          node <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('codacy-pr-issues.html', 'utf8');
+          const needles = [
+            'secureOwnerProfileOperations.ts',
+            'OwnerPhoneVerificationCard.tsx',
+            'OwnerProfilePage.tsx',
+            'critical',
+            'patternId',
+            'security',
+          ];
+          const matches = {};
+          for (const needle of needles) {
+            const index = html.toLowerCase().indexOf(needle.toLowerCase());
+            matches[needle] = index >= 0 ? html.slice(Math.max(0, index - 300), index + 700) : null;
+          }
+          console.log(JSON.stringify({ htmlMatches: matches }, null, 2));
+          NODE
