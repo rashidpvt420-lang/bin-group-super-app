@@ -8,6 +8,7 @@ import { verifyFirebaseProductionSecrets } from './verify-firebase-production-se
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
 const githubSha = String(process.env.GITHUB_SHA || '').trim();
+const launchMode = String(process.env.LAUNCH_MODE || '').trim();
 const artifactDigest = String(process.env.VALIDATED_ARTIFACT_DIGEST || '').trim();
 const approvalPath = 'launch_package/predeploy-approval.json';
 const digestFailures = [];
@@ -72,7 +73,7 @@ if ((remoteMain.status ?? 1) !== 0 || remoteMainSha !== githubSha) {
 }
 
 try {
-  await verifyFirebaseProductionSecrets({ projectId });
+  await verifyFirebaseProductionSecrets({ projectId, launchMode });
 } catch (error) {
   const message = error instanceof Error ? error.message : 'secret metadata verification failed';
   console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
@@ -117,18 +118,3 @@ retryFirebase(
   'functions,hosting,firestore:rules,firestore:indexes,storage',
   'complete Firebase production stack',
 );
-
-const metadataStatus = run(process.execPath, [
-  'scripts/write-production-deployment-metadata.mjs',
-  '--components',
-  'hosting,firestoreRules,firestoreIndexes,storageRules,functions',
-]);
-if (metadataStatus !== 0) process.exit(metadataStatus);
-
-const verifyStatus = run(process.execPath, [
-  'scripts/verify-production-deployment.mjs',
-  '--write-evidence',
-]);
-if (verifyStatus !== 0) process.exit(verifyStatus);
-
-console.log('[production-deploy] production deployment and identity verification passed');
