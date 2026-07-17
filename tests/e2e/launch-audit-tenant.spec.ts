@@ -2,17 +2,16 @@
  * launch-audit-tenant.spec.ts
  * Deep E2E launch audit for the Tenant role.
  * Verifies: dashboard, unit, request form, tickets, documents,
- * emergency form, chat, profile, gate pass, AR/EN switch.
+ * emergency form, chat, profile, reviewed correction history, gate pass, AR/EN switch.
  */
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TENANT_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
-const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -51,11 +50,10 @@ test.describe('Tenant launch audit', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-
   test('tenant dashboard loads with unit card', async ({ page }) => {
     await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
     await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     await assertHealthy(page, 'tenant/dashboard');
@@ -73,7 +71,6 @@ test.describe('Tenant launch audit', () => {
     await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'tenant/request');
-    // Verify a form element is present (do NOT submit)
     const hasForm = await page.locator('form, [role="form"], textarea, input[type="text"]').first().isVisible({ timeout: 8_000 }).catch(() => false);
     expect(hasForm, 'Maintenance request form must render an input').toBe(true);
   });
@@ -94,7 +91,6 @@ test.describe('Tenant launch audit', () => {
     await page.goto('/tenant/emergency', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'tenant/emergency');
-    // Verify the emergency UI rendered
     const body = await page.locator('body').innerText({ timeout: 10_000 });
     expect(body, 'Emergency page must have relevant content').toMatch(/emergency|sos|urgent|استغاثة|طارئ/i);
   });
@@ -109,6 +105,38 @@ test.describe('Tenant launch audit', () => {
     await page.goto('/tenant/profile', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'tenant/profile');
+  });
+
+  test('tenant correction submission and immutable history are reachable', async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.goto('/tenant/profile', { waitUntil: 'domcontentloaded' });
+    await assertHealthy(page, 'tenant/profile correction evidence');
+
+    await expect(page.getByTestId('tenant-correction-panel')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByLabel(/Full Name|الاسم الكامل/i).first()).toBeDisabled();
+    await expect(page.getByLabel(/Phone Number|رقم الهاتف/i).first()).toBeDisabled();
+
+    const fieldControl = page.getByTestId('tenant-correction-field');
+    await fieldControl.click();
+    await page.getByRole('option', { name: /Emergency contact name|اسم جهة اتصال الطوارئ/i }).click();
+
+    const requestedValue = `E2E Correction ${Date.now()}`;
+    const reason = `E2E launch audit Tenant correction proof ${Date.now()}`;
+    await page.getByTestId('tenant-correction-value').locator('input').fill(requestedValue);
+    await page.getByTestId('tenant-correction-reason').locator('textarea').fill(reason);
+
+    const submit = page.getByTestId('tenant-correction-submit');
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    await expect(page.getByTestId('tenant-correction-success')).toContainText(/submitted|تم إرسال/i, { timeout: 25_000 });
+    const history = page.getByTestId('tenant-correction-history');
+    await expect(history).toContainText(requestedValue, { timeout: 25_000 });
+    const requestCard = history.locator('[data-testid^="tenant-correction-request-"]').filter({ hasText: requestedValue }).first();
+    await expect(requestCard).toBeVisible({ timeout: 20_000 });
+    await expect(requestCard.getByTestId('tenant-correction-status')).toContainText(/PENDING ADMIN REVIEW/i);
+    await expect(requestCard.getByTestId('tenant-correction-events')).toContainText(/SUBMITTED/i);
+    await expect(requestCard).toContainText(/E2E Emergency Contact Baseline/i);
   });
 
   test('tenant gate pass page renders', async ({ page }) => {
@@ -137,7 +165,6 @@ test.describe('Tenant launch audit', () => {
     expect(afterText.trim().length, 'Content must render after AR switch').toBeGreaterThan(0);
     expect(afterText, 'No crash after language switch').not.toMatch(/application error|unhandled runtime error/i);
 
-    // Switch back
     const langBtnAfter = page.locator('button:has-text("AR"), button:has-text("EN")').first();
     await langBtnAfter.click();
     await page.waitForTimeout(500);
