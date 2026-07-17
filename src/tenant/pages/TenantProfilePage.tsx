@@ -6,6 +6,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
+import TenantCorrectionPanel from '../components/TenantCorrectionPanel';
 
 const inputSx = {
     '& .MuiOutlinedInput-root': { color: '#FFF', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 },
@@ -245,6 +246,7 @@ export default function TenantProfilePage() {
             </Paper>
             <ResidenceSection titleEn="Active residences" titleAr="المساكن النشطة" records={activeResidences} />
             <ResidenceSection titleEn="Residence and lease history" titleAr="سجل السكن وعقود الإيجار" records={historicalResidences} historical />
+            <TenantCorrectionPanel residences={residences} />
         </Box>
     );
 }
