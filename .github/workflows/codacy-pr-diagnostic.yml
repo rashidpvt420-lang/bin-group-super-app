@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   inspect-codacy-issues:
@@ -19,55 +20,59 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Fetch public Codacy issue metadata
+      - name: Fetch Codacy annotations from GitHub Checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          urls=(
-            'https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues'
-            'https://app.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues'
-          )
-          for attempt in $(seq 1 20); do
-            echo "Codacy issue metadata attempt ${attempt}/20"
-            for url in "${urls[@]}"; do
-              echo "Trying host: $(printf '%s' "$url" | cut -d/ -f3)"
-              if response="$(curl --fail --silent --show-error --max-time 20 "$url")"; then
-                printf '%s' "$response" > codacy-pr-issues.json
-                if node <<'NODE'
+          for attempt in $(seq 1 24); do
+            echo "GitHub Codacy annotation attempt ${attempt}/24"
+            check_runs="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100")"
+            printf '%s' "$check_runs" > check-runs.json
+            node <<'NODE'
           const fs = require('fs');
-          const payload = JSON.parse(fs.readFileSync('codacy-pr-issues.json', 'utf8'));
-          const candidates = [
-            payload?.data,
-            payload?.issues,
-            payload?.items,
-            payload?.results,
-            payload?.data?.issues,
-            payload?.data?.items,
-          ];
-          const rows = Array.isArray(payload)
-            ? payload
-            : (candidates.find(Array.isArray) || []);
-          const output = rows.map((entry) => {
-            const issue = entry?.issue || entry;
-            return {
-              filePath: issue?.filePath || issue?.file?.path || issue?.location?.filePath || null,
-              lineNumber: issue?.lineNumber || issue?.line || issue?.location?.line || null,
-              patternId: issue?.patternInfo?.id || issue?.patternId || issue?.pattern?.id || null,
-              patternTitle: issue?.patternInfo?.title || issue?.title || issue?.pattern?.title || null,
-              level: issue?.patternInfo?.level || issue?.level || null,
-              category: issue?.patternInfo?.category || issue?.category || null,
-              message: issue?.message || issue?.description || null,
-              status: issue?.status || entry?.status || null,
-            };
-          });
-          console.log(JSON.stringify({ topLevelKeys: Object.keys(payload || {}), count: output.length, issues: output }, null, 2));
+          const payload = JSON.parse(fs.readFileSync('check-runs.json', 'utf8'));
+          const runs = Array.isArray(payload?.check_runs) ? payload.check_runs : [];
+          const summary = runs.map((run) => ({ id: run.id, name: run.name, app: run.app?.name, status: run.status, conclusion: run.conclusion, detailsUrl: run.details_url }));
+          console.log(JSON.stringify({ checkRuns: summary.filter((run) => /codacy/i.test(`${run.name} ${run.app || ''}`)) }, null, 2));
+          const codacy = runs.find((run) => /codacy/i.test(`${run.name} ${run.app?.name || ''}`));
+          if (codacy?.id) fs.writeFileSync('codacy-check-id.txt', String(codacy.id));
+          NODE
+            if [[ -s codacy-check-id.txt ]]; then
+              check_id="$(cat codacy-check-id.txt)"
+              annotations="$(curl --fail --silent --show-error --max-time 20 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/$REPOSITORY/check-runs/$check_id/annotations?per_page=100")"
+              printf '%s' "$annotations" > codacy-annotations.json
+              if node <<'NODE'
+          const fs = require('fs');
+          const rows = JSON.parse(fs.readFileSync('codacy-annotations.json', 'utf8'));
+          const output = (Array.isArray(rows) ? rows : []).map((item) => ({
+            path: item.path,
+            startLine: item.start_line,
+            endLine: item.end_line,
+            level: item.annotation_level,
+            title: item.title,
+            message: item.message,
+            rawDetails: item.raw_details,
+          }));
+          console.log(JSON.stringify({ annotationCount: output.length, annotations: output }, null, 2));
           process.exit(output.length > 0 ? 0 : 2);
           NODE
-                then
-                  exit 0
-                fi
+              then
+                exit 0
               fi
-            done
-            sleep 20
+            fi
+            rm -f codacy-check-id.txt
+            sleep 15
           done
-          echo "::error::Codacy issue metadata was unavailable or empty after retries."
+          echo "::error::Codacy check annotations were unavailable after retries."
           exit 1
