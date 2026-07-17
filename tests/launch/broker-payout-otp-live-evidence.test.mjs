@@ -27,7 +27,7 @@ test('critical evidence prepares the Broker payout fixture before browser execut
   const suiteGuard = runner.indexOf("suiteKey !== 'businessBroker'");
   const fixtureCommand = runner.indexOf("'scripts/prepare-broker-payout-otp-e2e.mjs'");
   const fixtureFailure = runner.indexOf('fixture preparation failed — evidence not recorded');
-  const playwrightExecution = runner.indexOf('spawnNpmPlaywrightJson');
+  const playwrightExecution = runner.indexOf('const result = spawnNpmPlaywrightJson');
 
   assert.ok(suiteGuard >= 0, 'fixture preparation must be restricted to businessBroker');
   assert.ok(fixtureCommand > suiteGuard, 'businessBroker must execute the dedicated fixture script');
@@ -37,7 +37,7 @@ test('critical evidence prepares the Broker payout fixture before browser execut
 
 test('Broker live evidence requests and cancels an OTP challenge without consuming it', () => {
   assert.match(brokerSpec, /broker-payout-request-otp/);
-  assert.match(brokerSpec, /REQUEST PAYOUT \\(1\\)/);
+  assert.ok(brokerSpec.includes('REQUEST PAYOUT \\(1\\)'), 'live evidence must require exactly one prepared commission');
   assert.match(brokerSpec, /broker-payout-otp-dialog/);
   assert.match(brokerSpec, /broker-payout-otp-code/);
   assert.match(brokerSpec, /toHaveValue\(''\)/);
