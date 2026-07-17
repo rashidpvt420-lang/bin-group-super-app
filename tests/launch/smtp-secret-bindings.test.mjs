@@ -4,11 +4,13 @@ import { readFileSync } from 'node:fs';
 
 const mailDelivery = readFileSync('functions/mailDelivery.ts', 'utf8');
 const contractOtp = readFileSync('functions/contractSignatureOtp.ts', 'utf8');
+const brokerPayoutOtp = readFileSync('functions/secureBrokerPayoutOperations.ts', 'utf8');
 const runtime = readFileSync('functions/runtime.ts', 'utf8');
 
 for (const [label, source] of [
   ['mailDelivery', mailDelivery],
   ['contractSignatureOtp', contractOtp],
+  ['secureBrokerPayoutOperations', brokerPayoutOtp],
 ]) {
   test(`${label} imports Firebase Secret Manager parameters`, () => {
     assert.match(source, /import\s*\{\s*defineSecret\s*\}\s*from\s*["']firebase-functions\/params["']/);
@@ -39,7 +41,17 @@ test('contract signature OTP request binds both SMTP secrets at deployment', () 
   assert.match(requestBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*\]/);
 });
 
+test('Broker payout OTP request binds both SMTP secrets at deployment', () => {
+  const requestBlock = brokerPayoutOtp.slice(
+    brokerPayoutOtp.indexOf('export const requestBrokerPayoutOtp'),
+    brokerPayoutOtp.indexOf('export const verifyBrokerPayoutOtp'),
+  );
+  assert.match(requestBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*\]/);
+});
+
 test('corrected mail and OTP functions are exported by the deployed runtime', () => {
   assert.match(runtime, /export\s+\*\s+from\s+["']\.\/mailDelivery["']/);
   assert.match(runtime, /export\s+\*\s+from\s+["']\.\/contractSignatureOtp["']/);
+  assert.match(runtime, /requestBrokerPayoutOtp/);
+  assert.match(runtime, /from\s+["']\.\/secureBrokerPayoutOperations["']/);
 });
