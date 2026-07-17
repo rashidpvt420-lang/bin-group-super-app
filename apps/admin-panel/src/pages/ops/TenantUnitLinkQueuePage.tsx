@@ -1,121 +1,104 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Box, Typography, Paper, Grid, Stack, Button, CircularProgress,
-    Chip, Divider, alpha
+    Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
+    DialogTitle, Divider, Grid, Paper, Stack, TextField, Typography, alpha,
 } from '@mui/material';
-import {
-    CheckCircle2, XCircle, Search, Filter, Link, Home
-} from 'lucide-react';
-import { db, functions, httpsCallable, collection, query, orderBy, onSnapshot } from '../../lib/firebase';
+import { CheckCircle2, Home, Link, XCircle } from 'lucide-react';
+import { collection, functions, httpsCallable, onSnapshot, orderBy, query } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
 
 export default function TenantUnitLinkQueuePage() {
     const { isRTL } = useLanguage();
+    const copy = (en: string, ar: string) => (isRTL ? ar : en);
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<any[]>([]);
     const [notice, setNotice] = useState('');
+    const [rejecting, setRejecting] = useState<any | null>(null);
+    const [reason, setReason] = useState('');
+    const [busyId, setBusyId] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'tenant_unit_link_requests'), orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snap) => {
-            setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        return onSnapshot(q, (snap) => {
+            setRequests(snap.docs.map((document) => ({ id: document.id, ...document.data() })));
             setLoading(false);
-        }, (err) => {
-            console.error('Failed to load unit requests:', err);
+        }, (error) => {
+            console.error('Failed to load unit requests:', error);
+            setNotice(copy('Failed to load Tenant unit-link requests.', 'تعذر تحميل طلبات ربط وحدات المستأجرين.'));
             setLoading(false);
         });
-        return () => unsubscribe();
-    }, []);
+    }, [isRTL]);
 
-    const handleAction = async (req: any, action: 'approved' | 'rejected') => {
+    const handleAction = async (requestRecord: any, decision: 'APPROVE' | 'REJECT', rejectionReason = '') => {
+        if (decision === 'REJECT' && rejectionReason.trim().length < 8) {
+            setNotice(copy('A rejection reason of at least 8 characters is required.', 'يلزم إدخال سبب رفض لا يقل عن 8 أحرف.'));
+            return;
+        }
         try {
+            setBusyId(requestRecord.id);
             setNotice('');
             const resolveUnitLink = httpsCallable(functions, 'adminResolveTenantUnitLink');
             await resolveUnitLink({
-                requestId: req.id,
-                decision: action === 'approved' ? 'APPROVE' : 'REJECT',
-                unitId: req.candidateUnitId || null,
+                requestId: requestRecord.id,
+                decision,
+                unitId: requestRecord.candidateUnitId || null,
+                reason: rejectionReason.trim() || null,
             });
-            setNotice(action === 'approved'
-                ? 'Tenant unit link approved and attached to the existing unit.'
-                : 'Tenant unit link request rejected.');
-        } catch (err) {
-            console.error('Failed to update request:', err);
-            setNotice('Failed to update tenant unit link request.');
+            setNotice(decision === 'APPROVE'
+                ? copy('Tenant unit link approved and attached to the existing unit.', 'تمت الموافقة على ربط المستأجر وإرفاقه بالوحدة الحالية.')
+                : copy('Tenant unit-link request rejected with a recorded reason.', 'تم رفض طلب ربط الوحدة مع تسجيل السبب.'));
+            setRejecting(null);
+            setReason('');
+        } catch (error) {
+            console.error('Failed to update request:', error);
+            setNotice(copy('Failed to update Tenant unit-link request.', 'تعذر تحديث طلب ربط وحدة المستأجر.'));
+        } finally {
+            setBusyId('');
         }
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <AdminPageFrame title="Tenant Unit-Link Requests">
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h5" color="#FFF" fontWeight="950">Unit Linking Queue</Typography>
-                <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Filter size={18} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>Filter</Button>
-                    <Button variant="outlined" startIcon={<Search size={18} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>Search</Button>
-                </Stack>
+        <AdminPageFrame title={copy('Tenant Unit-Link Requests', 'طلبات ربط وحدات المستأجرين')}>
+            <Box dir={isRTL ? 'rtl' : 'ltr'}>
+                <Typography variant="h5" color="#FFF" fontWeight="950" sx={{ mb: 3 }}>{copy('Unit Linking Queue', 'قائمة مراجعة ربط الوحدات')}</Typography>
+                {notice && <Alert severity="info" sx={{ mb: 3 }}>{notice}</Alert>}
+                <Grid container spacing={3}>
+                    {requests.map((requestRecord) => {
+                        const pending = ['PENDING_ADMIN_REVIEW', 'pending', ''].includes(String(requestRecord.status || ''));
+                        return <Grid item xs={12} md={6} key={requestRecord.id}>
+                            <Paper sx={{ p: 3, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid rgba(255,255,255,.05)', borderRadius: 4 }}>
+                                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                                        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, .1), color: binThemeTokens.gold }}><Home size={24} /></Box>
+                                        <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                                            <Typography color="#FFF" fontWeight="bold">{requestRecord.tenantName || requestRecord.tenantEmail || copy('Unknown Tenant', 'مستأجر غير معروف')}</Typography>
+                                            <Typography variant="body2" color="text.secondary">{copy('Requested unit', 'الوحدة المطلوبة')}: {requestRecord.unitNumber || '—'}</Typography>
+                                        </Box>
+                                    </Stack>
+                                    <Chip label={requestRecord.status || 'PENDING'} size="small" sx={{ fontWeight: 900 }} />
+                                </Stack>
+                                <Divider sx={{ borderColor: 'rgba(255,255,255,.05)', mb: 2 }} />
+                                {(requestRecord.reviewReason || requestRecord.rejectionReason) && <Alert severity={String(requestRecord.status).toLowerCase().includes('reject') ? 'error' : 'info'} sx={{ mb: 2 }}>{requestRecord.reviewReason || requestRecord.rejectionReason}</Alert>}
+                                {(requestRecord.reviewedByEmail || requestRecord.reviewedBy) && <Typography variant="caption" color="text.secondary">{copy('Reviewed by', 'تمت المراجعة بواسطة')}: {requestRecord.reviewedByEmail || requestRecord.reviewedBy}</Typography>}
+                                {pending ? <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+                                    <Button disabled={busyId === requestRecord.id} onClick={() => { setRejecting(requestRecord); setReason(''); }} color="error" startIcon={<XCircle size={18} />}>{copy('Reject', 'رفض')}</Button>
+                                    <Button disabled={busyId === requestRecord.id} onClick={() => void handleAction(requestRecord, 'APPROVE')} sx={{ color: '#10b981' }} startIcon={<CheckCircle2 size={18} />}>{copy('Approve & link', 'موافقة وربط')}</Button>
+                                </Stack> : <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: isRTL ? 'left' : 'right' }}>{copy('Processed', 'تمت المعالجة')}</Typography>}
+                            </Paper>
+                        </Grid>;
+                    })}
+                    {!requests.length && <Grid item xs={12}><Box sx={{ p: 5, textAlign: 'center' }}><Link size={48} color={binThemeTokens.gold} /><Typography color="text.secondary">{copy('No unit-link requests.', 'لا توجد طلبات ربط وحدات.')}</Typography></Box></Grid>}
+                </Grid>
+                <Dialog open={Boolean(rejecting)} onClose={() => setRejecting(null)} fullWidth maxWidth="sm" dir={isRTL ? 'rtl' : 'ltr'}>
+                    <DialogTitle>{copy('Reject Tenant unit-link request', 'رفض طلب ربط وحدة المستأجر')}</DialogTitle>
+                    <DialogContent><TextField autoFocus fullWidth multiline minRows={3} value={reason} onChange={(event) => setReason(event.target.value)} label={copy('Rejection reason', 'سبب الرفض')} helperText={copy('Required and retained in review history.', 'مطلوب ويتم الاحتفاظ به في سجل المراجعة.')} sx={{ mt: 1 }} /></DialogContent>
+                    <DialogActions><Button onClick={() => setRejecting(null)}>{copy('Cancel', 'إلغاء')}</Button><Button color="error" disabled={reason.trim().length < 8 || busyId === rejecting?.id} onClick={() => void handleAction(rejecting, 'REJECT', reason)}>{copy('Confirm rejection', 'تأكيد الرفض')}</Button></DialogActions>
+                </Dialog>
             </Box>
-            {notice && <Paper sx={{ p: 2, mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, color: '#FFF' }}>{notice}</Paper>}
-
-            <Grid container spacing={3}>
-                {requests.map(req => (
-                    <Grid item xs={12} md={6} key={req.id}>
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
-                                <Stack direction="row" spacing={2} alignItems="center">
-                                    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }}>
-                                        <Home size={24} />
-                                    </Box>
-                                    <Box>
-                                        <Typography variant="subtitle1" color="#FFF" fontWeight="bold">
-                                            {req.tenantName || req.tenantEmail || 'Unknown Tenant'}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            Requested Unit: {req.unitNumber || 'N/A'}
-                                        </Typography>
-                                    </Box>
-                                </Stack>
-                                <Chip 
-                                    label={req.status || 'PENDING'} 
-                                    size="small" 
-                                    sx={{ 
-                                        bgcolor: req.status === 'approved' ? alpha('#10b981', 0.2) : req.status === 'rejected' ? alpha('#ef4444', 0.2) : alpha(binThemeTokens.gold, 0.2), 
-                                        color: req.status === 'approved' ? '#10b981' : req.status === 'rejected' ? '#ef4444' : binThemeTokens.gold,
-                                        fontWeight: 'bold' 
-                                    }} 
-                                />
-                            </Stack>
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', mb: 2 }} />
-                            
-                            {req.status === 'PENDING_ADMIN_REVIEW' || req.status === 'pending' || !req.status ? (
-                                <Stack direction="row" spacing={2} justifyContent="flex-end">
-                                    <Button onClick={() => handleAction(req, 'rejected')} color="error" startIcon={<XCircle size={18} />}>
-                                        REJECT
-                                    </Button>
-                                    <Button onClick={() => handleAction(req, 'approved')} sx={{ color: '#10b981' }} startIcon={<CheckCircle2 size={18} />}>
-                                        APPROVE & LINK
-                                    </Button>
-                                </Stack>
-                            ) : (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right' }}>
-                                    Processed
-                                </Typography>
-                            )}
-                        </Paper>
-                    </Grid>
-                ))}
-                {requests.length === 0 && (
-                    <Grid item xs={12}>
-                        <Box sx={{ p: 5, textAlign: 'center' }}>
-                            <Link size={48} color={binThemeTokens.gold} style={{ opacity: 0.5, marginBottom: 16 }} />
-                            <Typography color="text.secondary">No pending unit linking requests.</Typography>
-                        </Box>
-                    </Grid>
-                )}
-            </Grid>
         </AdminPageFrame>
     );
 }
