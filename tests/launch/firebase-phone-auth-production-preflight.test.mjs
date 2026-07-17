@@ -14,7 +14,7 @@ const RUN_ID = '991122';
 const RUN_ATTEMPT = 2;
 
 const validConfig = {
-  name: 'projects/bin-group-57c60/config',
+  name: 'projects/123413252227/config',
   signIn: {
     phoneNumber: {
       enabled: true,
@@ -76,6 +76,30 @@ test('Firebase Phone Auth production preflight accepts enabled provider, product
   const serialized = JSON.stringify(result);
   assert.doesNotMatch(serialized, /\+971500000001/);
   assert.doesNotMatch(serialized, /123456/);
+});
+
+test('Firebase Phone Auth production preflight accepts project-ID and canonical numeric config resource names', () => {
+  const projectIdResource = validateFirebasePhoneAuthConfig({
+    ...validConfig,
+    name: 'projects/bin-group-57c60/config',
+  });
+  assert.equal(projectIdResource.ok, true);
+
+  const numericResource = validateFirebasePhoneAuthConfig({
+    ...validConfig,
+    name: 'projects/123413252227/config',
+  });
+  assert.equal(numericResource.ok, true);
+});
+
+test('Firebase Phone Auth production preflight rejects a config resource from another project', () => {
+  const result = validateFirebasePhoneAuthConfig({
+    ...validConfig,
+    name: 'projects/999999999999/config',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.failures.join('\n'), /does not match the production project/);
 });
 
 test('Firebase Phone Auth production preflight rejects disabled provider and missing production domains', () => {

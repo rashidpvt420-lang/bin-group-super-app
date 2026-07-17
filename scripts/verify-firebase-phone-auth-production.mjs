@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
+const EXPECTED_PROJECT_NUMBER = '123413252227';
 const DEFAULT_REQUIRED_DOMAINS = Object.freeze([
   'bin-group-57c60.web.app',
   'bin-group-57c60.firebaseapp.com',
@@ -22,16 +23,25 @@ function normalizedList(value) {
     .filter(Boolean);
 }
 
+function expectedConfigResourceNames(projectId, projectNumber) {
+  return new Set([
+    `projects/${projectId}/config`,
+    `projects/${projectNumber}/config`,
+  ]);
+}
+
 export function validateFirebasePhoneAuthConfig(
   config,
   {
     projectId = EXPECTED_PROJECT_ID,
+    projectNumber = EXPECTED_PROJECT_NUMBER,
     requiredDomains = DEFAULT_REQUIRED_DOMAINS,
     requiredSmsRegion = DEFAULT_REQUIRED_SMS_REGION,
   } = {},
 ) {
   const failures = [];
   const normalizedProjectId = String(projectId || '').trim();
+  const normalizedProjectNumber = String(projectNumber || '').trim();
   const requiredRegion = String(requiredSmsRegion || '').trim().toUpperCase();
   const domains = new Set(normalizedList(config?.authorizedDomains).map((domain) => domain.toLowerCase()));
   const missingDomains = normalizedList(requiredDomains)
@@ -41,7 +51,11 @@ export function validateFirebasePhoneAuthConfig(
   if (normalizedProjectId !== EXPECTED_PROJECT_ID) {
     failures.push(`project must be ${EXPECTED_PROJECT_ID}`);
   }
-  if (String(config?.name || '') !== `projects/${EXPECTED_PROJECT_ID}/config`) {
+  if (normalizedProjectNumber !== EXPECTED_PROJECT_NUMBER) {
+    failures.push(`project number must be ${EXPECTED_PROJECT_NUMBER}`);
+  }
+  const configResourceName = String(config?.name || '').trim();
+  if (!expectedConfigResourceNames(normalizedProjectId, normalizedProjectNumber).has(configResourceName)) {
     failures.push('Identity Toolkit config resource does not match the production project');
   }
   if (config?.signIn?.phoneNumber?.enabled !== true) {
@@ -201,6 +215,7 @@ export async function verifyFirebasePhoneAuthProduction({
   const config = await configFetcher({ projectId: EXPECTED_PROJECT_ID });
   const result = validateFirebasePhoneAuthConfig(config, {
     projectId: EXPECTED_PROJECT_ID,
+    projectNumber: EXPECTED_PROJECT_NUMBER,
     requiredDomains,
     requiredSmsRegion,
   });
