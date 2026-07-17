@@ -13,17 +13,18 @@ const requiredSecrets = [
   'STRIPE_WEBHOOK_SECRET',
 ];
 
-test('production secret preflight verifies mail and payment secrets without printing values', () => {
+test('production secret preflight verifies mail and payment metadata without reading values', () => {
   for (const secretName of requiredSecrets) {
     assert.match(script, new RegExp(`['"]${secretName}['"]`));
   }
-  assert.match(script, /functions:secrets:access/);
+  assert.match(script, /functions:secrets:get/);
+  assert.doesNotMatch(script, /functions:secrets:access/);
   assert.match(script, /--project/);
   assert.match(script, /--non-interactive/);
   assert.match(script, /--no-install/);
-  assert.match(script, /stdio:\s*\['ignore',\s*'pipe',\s*'pipe'\]/);
-  assert.doesNotMatch(script, /console\.log\([^\n]*(?:stdout|value)/);
-  assert.match(script, /if \(result\.error \|\| result\.status !== 0 \|\| !value\)/);
+  assert.match(script, /stdio:\s*\['ignore',\s*'ignore',\s*'pipe'\]/);
+  assert.doesNotMatch(script, /result\.stdout|const\s+value\s*=/);
+  assert.match(script, /if \(result\.error \|\| result\.status !== 0\)/);
 });
 
 test('protected production deploy requires secret preflight before Firebase deployment', () => {
