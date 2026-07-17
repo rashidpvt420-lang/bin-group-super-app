@@ -210,23 +210,20 @@ export const updateVerifiedOwnerProfile = onCall(
     await db.runTransaction(async (transaction) => {
       const fresh = await transaction.get(userRef);
       if (!fresh.exists) throw new HttpsError("not-found", "Owner profile not found.");
-      transaction.set(userRef, {
+      transaction.update(userRef, {
         displayName: value.displayName,
         phoneNumber: value.phone,
         phone: value.phone,
         companyName: value.companyName,
         ownerCompanyName: value.companyName,
         billingContact: { name: value.billingName, email: value.billingEmail, phone: value.billingPhone },
-        notificationPreferences: {
-          ...(fresh.data()?.notificationPreferences || {}),
-          preferredContact: value.preferredContact,
-          language: value.language,
-        },
+        "notificationPreferences.preferredContact": value.preferredContact,
+        "notificationPreferences.language": value.language,
         language: value.language,
         ownerProfileUpdatedAt: now,
         ownerProfileUpdatedBy: uid,
         updatedAt: now,
-      }, { merge: true });
+      });
       transaction.set(auditRef, {
         action: "OWNER_VERIFIED_PROFILE_UPDATED",
         actorId: uid,
