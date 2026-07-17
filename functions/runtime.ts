@@ -48,6 +48,7 @@ export {
   updateTicketLifecycle,
 } from "./secureTechnicianOperations";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
+export { submitBrokerPayoutRequest } from "./secureBrokerPayoutOperations";
 
 if (!admin.apps.length) {
   admin.initializeApp();
