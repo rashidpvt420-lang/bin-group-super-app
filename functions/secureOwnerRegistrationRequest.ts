@@ -10,18 +10,21 @@ import { assertOwnerPortfolioQuoteRecord } from "./ownerPortfolioQuote";
 const SUPPORTED_METHODS = new Set(["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"]);
 const MANUAL_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
 const PAYMENT_PLANS = new Set(["annual", "quarterly", "monthly"]);
-const CONTRACT_MODE_NAMES: Record<string, string> = {
-  FM_ONLY: "MAINTENANCE ONLY",
-  PM_ONLY: "PROPERTY MANAGEMENT",
-  BOTH: "TOTAL CARE HYBRID",
-};
+
+type ContractMode = "FM_ONLY" | "PM_ONLY" | "BOTH";
+
+const CONTRACT_MODE_NAMES = new Map<ContractMode, string>([
+  ["FM_ONLY", "MAINTENANCE ONLY"],
+  ["PM_ONLY", "PROPERTY MANAGEMENT"],
+  ["BOTH", "TOTAL CARE HYBRID"],
+]);
 
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
 const compactUpper = (value: unknown) => upper(value).replace(/\s+/g, "");
 const money = (value: unknown) => Math.round(Number(value) * 100) / 100;
 
-function contractModeForProperty(property: any): string {
+function contractModeForProperty(property: any): ContractMode {
   const strategy = text(property?.strategy).toLowerCase();
   if (["pm_only", "rent"].includes(strategy)) return "PM_ONLY";
   if (["fm_only", "fm"].includes(strategy)) return "FM_ONLY";
@@ -29,21 +32,23 @@ function contractModeForProperty(property: any): string {
   throw new HttpsError("invalid-argument", "Every property must use maintenance, property management, or hybrid service mode.");
 }
 
-function assertCanonicalCommercialTerms(data: any) {
-  const properties = Array.isArray(data?.properties) ? data.properties : [];
+function assertCanonicalCommercialTerms(rawData: any) {
+  const data = rawData && typeof rawData === "object" ? rawData : {};
+  const properties = Array.isArray(data.properties) ? data.properties : [];
   if (!properties.length || properties.length > 100) {
     throw new HttpsError("invalid-argument", "One to 100 properties are required for the contract package.");
   }
 
-  const modes = new Set<string>(properties.map((property: any) => contractModeForProperty(property)));
-  if (modes.size !== 1) {
+  const resolvedModes = properties.map((property: any) => contractModeForProperty(property));
+  const contractMode = resolvedModes[0];
+  if (!contractMode || resolvedModes.some((mode: ContractMode) => mode !== contractMode)) {
     throw new HttpsError("failed-precondition", "A single contract cannot mix maintenance, property-management, and hybrid service modes.");
   }
-  const contractMode = modes.values().next().value as string | undefined;
-  if (!contractMode || !CONTRACT_MODE_NAMES[contractMode]) {
+
+  const canonicalPlanName = CONTRACT_MODE_NAMES.get(contractMode);
+  if (!canonicalPlanName) {
     throw new HttpsError("failed-precondition", "The contract service mode could not be resolved.");
   }
-  const canonicalPlanName = CONTRACT_MODE_NAMES[contractMode];
   const submittedPlanName = upper(data?.serviceDetails?.selectedPlan);
   if (submittedPlanName !== canonicalPlanName) {
     throw new HttpsError("failed-precondition", "The selected contract plan does not match the server-priced property strategy.");
@@ -53,28 +58,47 @@ function assertCanonicalCommercialTerms(data: any) {
   if (paymentPlans.some((plan: string) => !PAYMENT_PLANS.has(plan))) {
     throw new HttpsError("invalid-argument", "Payment plan must be annual, quarterly, or monthly.");
   }
-  const uniquePaymentPlans = new Set<string>(paymentPlans);
-  if (uniquePaymentPlans.size !== 1) {
+  const paymentPlan = paymentPlans[0];
+  if (!paymentPlan || paymentPlans.some((plan: string) => plan !== paymentPlan)) {
     throw new HttpsError("failed-precondition", "All properties in one contract must use the same payment plan.");
   }
-  const paymentPlan = uniquePaymentPlans.values().next().value as string | undefined;
-  if (!paymentPlan || !PAYMENT_PLANS.has(paymentPlan)) {
-    throw new HttpsError("failed-precondition", "The contract payment plan could not be resolved.");
+
+  const submittedCadences = [
+    data.paymentPlan,
+    data.serviceDetails?.paymentPlan,
+    data.paymentManifest?.paymentPlan,
+  ].map((value) => text(value).toLowerCase()).filter(Boolean);
+  if (submittedCadences.some((plan) => !PAYMENT_PLANS.has(plan) || plan !== paymentPlan)) {
+    throw new HttpsError("failed-precondition", "The submitted payment cadence does not match the server-priced property cadence.");
   }
+
   const totalUnits = properties.reduce((total: number, property: any) => {
     const units = Number(property?.units || property?.bedrooms || property?.beds || 0);
     return total + (Number.isFinite(units) && units > 0 ? units : 0);
   }, 0);
-
-  data.serviceDetails = {
-    ...(data.serviceDetails || {}),
+  const submittedServiceDetails = data.serviceDetails && typeof data.serviceDetails === "object"
+    ? data.serviceDetails
+    : {};
+  const canonicalServiceDetails = Object.assign({}, submittedServiceDetails, {
     properties: properties.length,
     totalUnits,
     selectedPlan: canonicalPlanName,
     contractMode,
     paymentPlan,
+  });
+  const canonicalData = Object.assign({}, data, {
+    serviceDetails: canonicalServiceDetails,
+    paymentPlan,
+  });
+
+  return {
+    data: canonicalData,
+    contractMode,
+    canonicalPlanName,
+    paymentPlan,
+    propertyCount: properties.length,
+    totalUnits,
   };
-  return { contractMode, canonicalPlanName, paymentPlan, propertyCount: properties.length, totalUnits };
 }
 
 async function assertCurrentPaymentConfiguration(data: any) {
@@ -172,8 +196,8 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
       throw new HttpsError("permission-denied", "Suspended owner accounts cannot continue onboarding.");
     }
 
-    const data = request.data || {};
-    assertCanonicalCommercialTerms(data);
+    const commercial = assertCanonicalCommercialTerms(request.data || {});
+    const data = commercial.data;
     const quote = await assertServerQuote(request, data);
     if (
       money(data.paymentManifest?.annualContractValue) !== quote.portfolioAnnualTotal ||
