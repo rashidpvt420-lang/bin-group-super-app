@@ -40,9 +40,8 @@ export * from "./paymentEvidence";
 export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
+export * from "./secureBrokerPayoutOperations";
 
-// Explicit exports take precedence over legacy star exports. These wrappers
-// enforce live server-side authority before delegating to established handlers.
 export {
   resumeTechnicianDuty,
   acceptTechnicianTicket,
