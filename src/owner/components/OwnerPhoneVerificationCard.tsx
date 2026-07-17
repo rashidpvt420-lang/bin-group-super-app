@@ -27,6 +27,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
   const [targetPhone, setTargetPhone] = useState(currentPhone);
   const [sentPhone, setSentPhone] = useState('');
   const [verificationId, setVerificationId] = useState('');
+  const [challengeUid, setChallengeUid] = useState('');
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -42,12 +43,19 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
     verifierRef.current = null;
   }, []);
 
+  const clearChallenge = () => {
+    setVerificationId('');
+    setChallengeUid('');
+    setSentPhone('');
+    setOtp('');
+  };
+
   const syncVerifiedPhone = async () => {
     const syncPhone = httpsCallable(functions, 'syncVerifiedOwnerPhone');
     const result = await syncPhone({});
     const data = result.data as { phoneNumber?: string };
     const verifiedPhone = normalizePhone(data.phoneNumber || auth.currentUser?.phoneNumber || '');
-    if (!verifiedPhone) throw new Error(label('Verified phone sync returned no phone number.', 'لم تُرجع مزامنة الهاتف الموثق أي رقم.'));
+    if (!verifiedPhone) throw new Error('VERIFIED_PHONE_SYNC_EMPTY');
     setTargetPhone(verifiedPhone);
     onVerified(verifiedPhone);
     return verifiedPhone;
@@ -59,7 +67,8 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
       setNotice({ type: 'warning', text: label('Enter a valid international phone number, for example +9715XXXXXXXX.', 'أدخل رقم هاتف دولي صالح، مثل +9715XXXXXXXX.') });
       return;
     }
-    if (!auth.currentUser) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
       setNotice({ type: 'error', text: label('Owner login is required before phone verification.', 'يجب تسجيل دخول المالك قبل التحقق من الهاتف.') });
       return;
     }
@@ -67,7 +76,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
     setBusy(true);
     setNotice(null);
     try {
-      if (normalizePhone(auth.currentUser.phoneNumber || '') === normalized) {
+      if (normalizePhone(currentUser.phoneNumber || '') === normalized) {
         const verifiedPhone = await syncVerifiedPhone();
         setNotice({ type: 'success', text: label(`Firebase Auth phone ${verifiedPhone} is synchronized.`, `تمت مزامنة رقم Firebase Auth ${verifiedPhone}.`) });
         return;
@@ -81,17 +90,17 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
       const provider = new PhoneAuthProvider(auth);
       const id = await provider.verifyPhoneNumber(normalized, verifierRef.current);
       setVerificationId(id);
+      setChallengeUid(currentUser.uid);
       setSentPhone(normalized);
       setOtp('');
       setNotice({ type: 'info', text: label(`SMS verification code sent to ${normalized}.`, `تم إرسال رمز التحقق برسالة نصية إلى ${normalized}.`) });
-    } catch (error: any) {
-      const code = String(error?.code || '');
-      const fallback = code === 'auth/too-many-requests'
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code || '') : '';
+      const message = code === 'auth/too-many-requests'
         ? label('Too many SMS attempts. Try again later.', 'عدد محاولات الرسائل النصية كبير. حاول لاحقاً.')
         : label('Could not send the Firebase phone verification code.', 'تعذر إرسال رمز التحقق من الهاتف عبر Firebase.');
-      setNotice({ type: 'error', text: error?.message || fallback });
-      setVerificationId('');
-      setSentPhone('');
+      setNotice({ type: 'error', text: message });
+      clearChallenge();
     } finally {
       verifierRef.current?.clear();
       verifierRef.current = null;
@@ -100,36 +109,39 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
   };
 
   const verifyOtp = async () => {
-    if (!auth.currentUser || !verificationId || !/^\d{6}$/.test(otp)) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser || !verificationId || !/^\d{6}$/.test(otp)) return;
+    if (!challengeUid || currentUser.uid !== challengeUid) {
+      clearChallenge();
+      setNotice({ type: 'error', text: label('The authenticated Owner changed. Request a new SMS challenge.', 'تغيّر حساب المالك المصادق عليه. اطلب تحدي رسالة نصية جديداً.') });
+      return;
+    }
+
     setBusy(true);
     setNotice(null);
     try {
       const credential = PhoneAuthProvider.credential(verificationId, otp);
-      await updatePhoneNumber(auth.currentUser, credential);
-      await auth.currentUser.reload();
-      await auth.currentUser.getIdToken(true);
+      await updatePhoneNumber(currentUser, credential);
+      await currentUser.reload();
+      await currentUser.getIdToken(true);
       const verifiedPhone = await syncVerifiedPhone();
-      setVerificationId('');
-      setSentPhone('');
-      setOtp('');
+      clearChallenge();
       setNotice({ type: 'success', text: label(`Phone ${verifiedPhone} is verified and saved.`, `تم توثيق الرقم ${verifiedPhone} وحفظه.`) });
-    } catch (error: any) {
-      const code = String(error?.code || '');
-      const fallback = code === 'auth/requires-recent-login'
+    } catch (error: unknown) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code || '') : '';
+      const message = code === 'auth/requires-recent-login'
         ? label('For security, sign out and sign in again before changing the phone.', 'لأسباب أمنية، سجّل الخروج ثم الدخول مجدداً قبل تغيير الهاتف.')
         : code === 'auth/invalid-verification-code'
           ? label('The SMS verification code is incorrect.', 'رمز التحقق المرسل غير صحيح.')
           : label('Phone verification failed.', 'فشل التحقق من الهاتف.');
-      setNotice({ type: 'error', text: error?.message || fallback });
+      setNotice({ type: 'error', text: message });
     } finally {
       setBusy(false);
     }
   };
 
   const resetChallenge = () => {
-    setVerificationId('');
-    setSentPhone('');
-    setOtp('');
+    clearChallenge();
     setNotice(null);
   };
 
@@ -163,14 +175,14 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
           </Button>
         ) : (
           <Stack spacing={2}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>{label(`Challenge issued for ${sentPhone}. The code is never stored by the browser.`, `تم إصدار التحدي للرقم ${sentPhone}. لا يتم تخزين الرمز في المتصفح.`)}</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>{label(`Challenge issued for ${sentPhone}. The code stays only in this verification session and is submitted directly to Firebase Authentication.`, `تم إصدار التحدي للرقم ${sentPhone}. يبقى الرمز في جلسة التحقق هذه فقط ويُرسل مباشرة إلى مصادقة Firebase.`)}</Typography>
             <TextField
               data-testid="owner-phone-otp"
               fullWidth
               label={label('6-digit SMS code', 'رمز الرسالة النصية من 6 أرقام')}
               value={otp}
               onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputProps={{ inputMode: 'numeric', maxLength: 6 }}
+              inputProps={{ inputMode: 'numeric', maxLength: 6, autoComplete: 'one-time-code' }}
               sx={{ '& .MuiOutlinedInput-root': { color: '#FFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}
             />
             <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
