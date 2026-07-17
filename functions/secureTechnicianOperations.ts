@@ -144,7 +144,7 @@ async function assertTechnicianReadiness(auth: any, action: TechnicianAction, no
   if (!readiness.ready) {
     throw new HttpsError(
       "failed-precondition",
-      `Technician is not operationally ready: ${readiness.failures.join(", ")}.`,
+      `Technician credentials or readiness controls are missing, pending, or expired: ${readiness.failures.join(", ")}.`,
       { action, failures: readiness.failures },
     );
   }
