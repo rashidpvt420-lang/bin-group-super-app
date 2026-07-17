@@ -13,15 +13,20 @@ test('server technician guard validates live Auth and credential expiry', async 
   assert.match(source, /medicalCardExpiry/);
   assert.match(source, /drivingLicenseExpiry/);
   assert.match(source, /certifications\.every/);
-  assert.match(source, /missing, pending, or expired/);
+  assert.match(source, /Technician is not operationally ready/);
+  assert.match(source, /medicalState !== "valid" \? "medical card"/);
+  assert.match(source, /licenceState !== "valid" \? "driving licence"/);
+  assert.match(source, /certificationState !== "valid" \? "required certifications"/);
+  assert.match(source, /\{ action, failures: readiness\.failures \}/);
 });
 
-test('all technician operational entry points use the server credential guard', async () => {
+test('all technician operational entry points use the unified server readiness guard', async () => {
   const source = await read('functions/secureTechnicianOperations.ts');
   assert.match(source, /resumeTechnicianDuty = onCall/);
   assert.match(source, /acceptTechnicianTicket = onCall/);
   assert.match(source, /updateTicketLifecycle = onCall/);
   assert.equal((source.match(/runSecured\(/g) || []).length, 4);
+  assert.match(source, /assertTechnicianReadiness\(request\.auth, action\)/);
   assert.match(source, /enforceAppCheck: true/);
 });
 
