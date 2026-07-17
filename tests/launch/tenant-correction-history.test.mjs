@@ -18,6 +18,7 @@ test('Tenant corrections are server-authoritative, allowlisted, stale-safe, and 
   assert.match(source, /A pending correction already exists/);
   assert.match(source, /The residence record changed after this correction was submitted/);
   assert.match(source, /The Tenant profile changed after this correction was submitted/);
+  assert.match(source, /runTransaction<ResolutionResult>/);
   assert.match(source, /transaction\.create\(eventRef/);
   assert.match(source, /TENANT_CORRECTION_REQUESTED/);
   assert.match(source, /ADMIN_APPROVE_TENANT_CORRECTION/);
@@ -28,6 +29,14 @@ test('Tenant corrections are server-authoritative, allowlisted, stale-safe, and 
   assert.match(runtime, /listTenantCorrectionRequests/);
   assert.match(runtime, /listAdminTenantCorrectionRequests/);
   assert.match(runtime, /adminResolveTenantCorrectionRequest/);
+});
+
+test('Tenant direct identity mutations are blocked by canonical rule preparation', async () => {
+  const hardener = await read('scripts/harden-final-firestore-authority.mjs');
+  assert.match(hardener, /claimedRole\(\) != 'tenant'/);
+  assert.match(hardener, /'displayName',[\s\S]*'phone',[\s\S]*'phoneNumber',[\s\S]*'mobile',[\s\S]*'emergencyContact'/);
+  assert.match(hardener, /Tenant direct identity mutation anchor missing/);
+  assert.match(hardener, /Tenant reviewed identity changes/);
 });
 
 test('Tenant and Admin interfaces expose submission, review, application, and immutable history', async () => {
@@ -42,6 +51,9 @@ test('Tenant and Admin interfaces expose submission, review, application, and im
   assert.match(tenantPanel, /item\.events\.map/);
   assert.match(tenantPanel, /Request a record correction/);
   assert.match(tenantPanel, /طلب تصحيح سجل/);
+  assert.match(tenantProfile, /Verified identity and contact records are read-only/);
+  assert.match(tenantProfile, /بيانات الهوية والاتصال الموثقة للقراءة فقط/);
+  assert.match(tenantProfile, /<TextField disabled fullWidth label=\{label\('Full Name'/);
   assert.match(tenantProfile, /<TenantCorrectionPanel residences=\{residences\} \/>/);
 
   assert.match(adminPanel, /listAdminTenantCorrectionRequests/);
