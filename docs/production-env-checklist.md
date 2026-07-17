@@ -50,6 +50,27 @@
 
 ---
 
+## 2A. Firebase Phone Authentication — Required for Owner Mobile Changes
+
+> [!CAUTION]
+> Owner phone changes are accepted only after Firebase Authentication completes a real SMS challenge. The profile sync callable reads the verified phone from Firebase Auth and ignores browser-supplied phone values.
+
+1. Firebase Console → **Authentication** → **Sign-in method** → enable **Phone** provider
+2. Firebase Console → **Authentication** → **Settings** → **Authorized domains** → confirm:
+   - `bin-group-57c60.web.app`
+   - `bin-group-57c60.firebaseapp.com`
+   - the production custom domain
+3. Confirm the production domain can render Firebase's invisible reCAPTCHA challenge without Content Security Policy blocking Google reCAPTCHA resources
+4. Confirm the project has sufficient Firebase Authentication SMS quota/billing for the UAE launch volume
+5. Use Firebase test phone numbers only in emulator/staging workflows; never configure a production Owner number as a test number
+6. On a real production Owner account, complete one SMS verification and confirm:
+   - Firebase Authentication user record contains the verified E.164 phone
+   - `users/{uid}.phoneAuthority` is `FIREBASE_AUTH_PHONE`
+   - an `OWNER_PHONE_VERIFIED_SYNCED` audit record exists
+7. Record the live verification evidence in the protected launch artifact; do not record the SMS code
+
+---
+
 ## 3. Firebase Cloud Messaging — Required for Push Notifications
 
 > [!IMPORTANT]
@@ -57,7 +78,7 @@
 
 | Secret Name | Where to Get It |
 |---|---|
-| `VITE_FIREBASE_VAPID_KEY` | 1. Firebase Console → **Project Settings** (gear icon) <br>2. Tab: **Cloud Messaging** <br>3. Scroll to **Web Push certificates** section <br>4. Click **Generate key pair** (if not already done) <br>5. Copy the **Key pair** value (starts with `B`) |
+| `VITE_FIREBASE_VAPID_KEY` | 1. Firebase Console → **Project Settings** (gear icon) <br>2. Tab: **Cloud Messaging** <br>3. Scroll to **Web Push certificates** section <br>4. Click **Generate key pair** (if not already done)<br>5. Copy the **Key pair** value (starts with `B`) |
 
 ---
 
@@ -141,6 +162,10 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 - [ ] `VITE_APP_CHECK_SITE_KEY` set and registered in Firebase App Check console
 - [ ] `VITE_ENABLE_FIREBASE_APPCHECK=true` set in GitHub Secrets (production only)
 - [ ] App Check enforcement active for Firestore, Storage, and Functions
+- [ ] Firebase Authentication **Phone** provider enabled
+- [ ] Production domains authorized for Firebase Phone Authentication and invisible reCAPTCHA
+- [ ] Firebase Authentication SMS quota/billing confirmed for UAE production traffic
+- [ ] Real Owner SMS verification writes `FIREBASE_AUTH_PHONE` authority and `OWNER_PHONE_VERIFIED_SYNCED` audit evidence without storing the code
 - [ ] `VITE_FIREBASE_VAPID_KEY` set from Firebase Cloud Messaging → Web Push certificate
 - [ ] `VITE_GOOGLE_MAPS_API_KEY` set with proper domain restrictions
 - [ ] Firebase Authorized Domains includes custom domain

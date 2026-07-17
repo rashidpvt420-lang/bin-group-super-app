@@ -1,0 +1,40 @@
+name: Codacy PR Diagnostic
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'functions/secureOwnerProfileOperations.ts'
+      - 'src/owner/**'
+      - 'tests/launch/owner-*.test.mjs'
+      - 'scripts/codacy-pr-diagnostic.mjs'
+      - '.github/workflows/codacy-pr-diagnostic.yml'
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  inspect-codacy-issues:
+    name: Inspect public Codacy PR issues
+    if: ${{ github.event.pull_request.number == 330 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe Codacy metadata sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/codacy-pr-diagnostic.mjs
+      - name: Upload compact Codacy diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: codacy-pr-330-diagnostic-${{ github.event.pull_request.head.sha }}
+          path: codacy-pr-diagnostic.json
+          if-no-files-found: error
+          retention-days: 1
