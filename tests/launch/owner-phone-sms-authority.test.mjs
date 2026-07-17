@@ -19,6 +19,11 @@ test('Owner phone sync trusts Firebase Auth rather than browser phone input', ()
   assert.match(syncBlock, /Firebase Authentication has no verified Owner phone number to sync/);
   assert.match(syncBlock, /OWNER_PHONE_VERIFIED_SYNCED/);
   assert.match(syncBlock, /phoneAuthority: "FIREBASE_AUTH_PHONE"/);
+  assert.match(syncBlock, /sensitiveValuesExcluded: true/);
+  assert.match(syncBlock, /before: \{ phonePresent: Boolean\(previousPhone\) \}/);
+  assert.match(syncBlock, /after: \{ phonePresent: true \}/);
+  assert.doesNotMatch(syncBlock, /before: \{ phoneNumber:/);
+  assert.doesNotMatch(syncBlock, /after: \{ phoneNumber:/);
   assert.match(syncBlock, /db\.runTransaction/);
   assert.doesNotMatch(syncBlock, /request\.data/);
 });
@@ -67,6 +72,19 @@ test('Owner profile keeps verified phone read-only and embeds SMS authority work
   assert.match(page, /Use Firebase SMS verification below to change this number/);
   assert.match(page, /onVerified=\{handleVerifiedPhone\}/);
   assert.doesNotMatch(page, /label=\{label\('Verified Mobile Number'[\s\S]{0,300}onChange=/);
+});
+
+test('Owner authoritative profile writes are explicit and audit values are minimized', () => {
+  const updateStart = server.indexOf('export const updateVerifiedOwnerProfile');
+  const updateBlock = server.slice(updateStart);
+  assert.match(updateBlock, /transaction\.update\(userRef/);
+  assert.match(updateBlock, /"notificationPreferences\.preferredContact"/);
+  assert.match(updateBlock, /"notificationPreferences\.language"/);
+  assert.doesNotMatch(updateBlock, /\.\.\.\(fresh\.data\(\)\?\.notificationPreferences/);
+  assert.match(updateBlock, /changedFields,/);
+  assert.match(updateBlock, /sensitiveValuesExcluded: true/);
+  assert.match(server, /changedOwnerProfileFields/);
+  assert.doesNotMatch(server, /Object\.keys\(after\)/);
 });
 
 test('Owner phone sync callable is deployed through the secured runtime', () => {
