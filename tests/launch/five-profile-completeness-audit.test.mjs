@@ -53,7 +53,14 @@ test('all live profile pages retain bilingual, RTL, mobile and account-recovery 
     assert.match(source, /lang\s*===\s*['"]ar['"]/, `${contract.role} profile has no Arabic branch`);
     assert.match(source, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]/, `${contract.role} profile does not set visual direction`);
     assert.match(source, /<Avatar\b/, `${contract.role} profile has no identity/avatar surface`);
-    assert.match(source, /handleSave/, `${contract.role} profile has no save workflow`);
+    if (contract.role === 'Tenant') {
+      assert.match(source, /TenantCorrectionPanel/, 'Tenant profile has no reviewed correction workflow');
+      assert.match(source, /Verified identity and contact records are read-only/i, 'Tenant profile does not explain reviewed identity authority');
+      assert.doesNotMatch(source, /\bsetDoc\s*\(/, 'Tenant profile must not directly persist reviewed identity fields');
+      assert.doesNotMatch(source, /\bupdateProfile\s*\(/, 'Tenant profile must not directly mutate Firebase Auth identity');
+    } else {
+      assert.match(source, /handleSave/, `${contract.role} profile has no save workflow`);
+    }
     assert.match(source, /sendPasswordResetEmail/, `${contract.role} profile has no account-recovery workflow`);
     assert.match(source, /xs=/, `${contract.role} profile has no mobile grid breakpoint`);
   }

@@ -8,6 +8,7 @@ import { collection, db, functions, httpsCallable, onSnapshot, orderBy, query } 
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
+import TenantCorrectionQueuePanel from './TenantCorrectionQueuePanel';
 
 export default function TenantUnitLinkQueuePage() {
     const { isRTL } = useLanguage();
@@ -98,6 +99,7 @@ export default function TenantUnitLinkQueuePage() {
                     <DialogContent><TextField autoFocus fullWidth multiline minRows={3} value={reason} onChange={(event) => setReason(event.target.value)} label={copy('Rejection reason', 'سبب الرفض')} helperText={copy('Required and retained in review history.', 'مطلوب ويتم الاحتفاظ به في سجل المراجعة.')} sx={{ mt: 1 }} /></DialogContent>
                     <DialogActions><Button onClick={() => setRejecting(null)}>{copy('Cancel', 'إلغاء')}</Button><Button color="error" disabled={reason.trim().length < 8 || busyId === rejecting?.id} onClick={() => void handleAction(rejecting, 'REJECT', reason)}>{copy('Confirm rejection', 'تأكيد الرفض')}</Button></DialogActions>
                 </Dialog>
+                <TenantCorrectionQueuePanel />
             </Box>
         </AdminPageFrame>
     );
