@@ -41,10 +41,27 @@ type TenantAuthority = {
   authRecord: admin.auth.UserRecord;
 };
 
+type DisplayNameSync = { tenantUid: string; value: string };
+
+type ResolutionResult = {
+  tenantUid: string;
+  field: CorrectionField;
+  requestedValue: string;
+  displayNameSync: DisplayNameSync | null;
+};
+
 const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
 const timestamp = () => FieldValue.serverTimestamp();
 const millis = (value: any) => Number(value?.toMillis?.() || 0);
+
+function storedValue(value: unknown): string {
+  if (value && typeof value === "object" && "toDate" in value) {
+    const toDate = (value as { toDate?: () => Date }).toDate;
+    if (typeof toDate === "function") return toDate.call(value).toISOString().slice(0, 10);
+  }
+  return text(value);
+}
 
 function fieldOf(value: unknown): CorrectionField {
   const field = text(value);
@@ -81,11 +98,7 @@ async function requireTenant(auth: any): Promise<TenantAuthority> {
     profile.userRole,
   );
   if (role !== "tenant") throw new HttpsError("permission-denied", "Tenant role required.");
-  if (
-    authRecord.disabled ||
-    auth.token?.suspended === true ||
-    !activeProfile(profile)
-  ) {
+  if (authRecord.disabled || auth.token?.suspended === true || !activeProfile(profile)) {
     throw new HttpsError("permission-denied", "Tenant account is not active.");
   }
   if (!authRecord.emailVerified || !authRecord.email) {
@@ -96,23 +109,19 @@ async function requireTenant(auth: any): Promise<TenantAuthority> {
 
 async function requireAdmin(auth: any): Promise<{ uid: string; email: string }> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
-  const record = await admin.auth().getUser(auth.uid);
-  const claims = record.customClaims || {};
+  const authRecord = await admin.auth().getUser(auth.uid);
+  const claims = authRecord.customClaims || {};
   const role = lower(claims.role || claims.userRole || claims.primaryRole || auth.token?.role);
-  if (
-    record.disabled ||
-    auth.token?.suspended === true ||
-    !(
-      claims.admin === true ||
-      claims.isAdmin === true ||
-      claims.superAdmin === true ||
-      claims.super_admin === true ||
-      ADMIN_ROLES.has(role)
-    )
-  ) {
+  const authorized =
+    claims.admin === true ||
+    claims.isAdmin === true ||
+    claims.superAdmin === true ||
+    claims.super_admin === true ||
+    ADMIN_ROLES.has(role);
+  if (authRecord.disabled || auth.token?.suspended === true || !authorized) {
     throw new HttpsError("permission-denied", "Admin permission required.");
   }
-  return { uid: auth.uid, email: lower(record.email || auth.token?.email) };
+  return { uid: auth.uid, email: lower(authRecord.email || auth.token?.email) };
 }
 
 function residenceBelongsToTenant(
@@ -131,8 +140,7 @@ async function residenceForTenant(
   authority: TenantAuthority,
   residenceId: string,
 ): Promise<FirebaseFirestore.DocumentSnapshot> {
-  const cleanResidenceId = cleanRequestId(residenceId);
-  const residenceSnap = await db.collection("units").doc(cleanResidenceId).get();
+  const residenceSnap = await db.collection("units").doc(cleanRequestId(residenceId)).get();
   if (!residenceSnap.exists) throw new HttpsError("not-found", "Tenant residence was not found.");
   if (!residenceBelongsToTenant(residenceSnap.data() || {}, authority.uid, authority.email)) {
     throw new HttpsError("permission-denied", "This residence is not linked to the signed-in Tenant.");
@@ -142,13 +150,13 @@ async function residenceForTenant(
 
 function normalizeRequestedValue(field: CorrectionField, value: unknown): string {
   const requested = text(value);
-  if (["displayName", "emergencyContactName"].includes(field)) {
+  if (field === "displayName" || field === "emergencyContactName") {
     if (requested.length < 2 || requested.length > 120) {
       throw new HttpsError("invalid-argument", "The requested name must contain 2 to 120 characters.");
     }
     return requested;
   }
-  if (["phoneNumber", "emergencyContactPhone"].includes(field)) {
+  if (field === "phoneNumber" || field === "emergencyContactPhone") {
     const compact = requested.replace(/[\s()-]/g, "");
     if (!/^\+?[0-9]{8,20}$/.test(compact)) {
       throw new HttpsError("invalid-argument", "A valid phone number is required.");
@@ -185,8 +193,8 @@ function residenceCurrentValue(
   residence: FirebaseFirestore.DocumentData,
 ): string {
   if (field === "floorNumber") return text(residence.floorNumber || residence.floor);
-  if (field === "leaseStart") return text(residence.leaseStart || residence.startDate);
-  if (field === "leaseEnd") return text(residence.leaseEnd || residence.endDate);
+  if (field === "leaseStart") return storedValue(residence.leaseStart || residence.startDate);
+  if (field === "leaseEnd") return storedValue(residence.leaseEnd || residence.endDate);
   return "";
 }
 
@@ -226,7 +234,7 @@ async function serializeRequest(document: FirebaseFirestore.QueryDocumentSnapsho
     createdAtMs: millis(data.createdAt),
     updatedAtMs: millis(data.updatedAt),
     resolvedAtMs: millis(data.resolvedAt),
-    events: eventsSnap.docs.map(serializeEvent),
+    events: eventsSnap.docs.map((eventDocument) => serializeEvent(eventDocument)),
   };
 }
 
@@ -259,9 +267,14 @@ export const submitTenantCorrectionRequest = onCall(
       .where("tenantUid", "==", authority.uid)
       .limit(30)
       .get();
-    const pending = existingSnap.docs.filter((document) => text(document.data().status) === "PENDING_ADMIN_REVIEW");
+    const pending = existingSnap.docs.filter(
+      (document) => text(document.data().status) === "PENDING_ADMIN_REVIEW",
+    );
     if (pending.length >= MAX_PENDING_REQUESTS) {
-      throw new HttpsError("resource-exhausted", "Resolve an existing Tenant correction before submitting another request.");
+      throw new HttpsError(
+        "resource-exhausted",
+        "Resolve an existing Tenant correction before submitting another request.",
+      );
     }
     const duplicate = pending.some((document) => {
       const data = document.data() || {};
@@ -327,8 +340,10 @@ export const listTenantCorrectionRequests = onCall(
       .where("tenantUid", "==", authority.uid)
       .limit(50)
       .get();
-    const sorted = [...snapshot.docs].sort((left, right) => millis(right.data().createdAt) - millis(left.data().createdAt));
-    return { requests: await Promise.all(sorted.map(serializeRequest)) };
+    const sorted = [...snapshot.docs].sort(
+      (left, right) => millis(right.data().createdAt) - millis(left.data().createdAt),
+    );
+    return { requests: await Promise.all(sorted.map((document) => serializeRequest(document))) };
   },
 );
 
@@ -346,8 +361,10 @@ export const listAdminTenantCorrectionRequests = onCall(
       .get();
     const documents = requestedStatus === "ALL"
       ? snapshot.docs
-      : snapshot.docs.filter((document) => text(document.data().status).toUpperCase() === requestedStatus);
-    return { requests: await Promise.all(documents.map(serializeRequest)) };
+      : snapshot.docs.filter(
+        (document) => text(document.data().status).toUpperCase() === requestedStatus,
+      );
+    return { requests: await Promise.all(documents.map((document) => serializeRequest(document))) };
   },
 );
 
@@ -367,11 +384,12 @@ export const adminResolveTenantCorrectionRequest = onCall(
 
     const correctionRef = db.collection("tenant_correction_requests").doc(requestId);
     const eventRef = correctionRef.collection("events").doc();
-    let displayNameSync: { tenantUid: string; value: string } | null = null;
 
-    await db.runTransaction(async (transaction) => {
+    const resolution = await db.runTransaction<ResolutionResult>(async (transaction) => {
       const correctionSnap = await transaction.get(correctionRef);
-      if (!correctionSnap.exists) throw new HttpsError("not-found", "Tenant correction request not found.");
+      if (!correctionSnap.exists) {
+        throw new HttpsError("not-found", "Tenant correction request not found.");
+      }
       const correction = correctionSnap.data() || {};
       if (text(correction.status) !== "PENDING_ADMIN_REVIEW") {
         throw new HttpsError("failed-precondition", "Tenant correction request has already been resolved.");
@@ -379,62 +397,86 @@ export const adminResolveTenantCorrectionRequest = onCall(
       const tenantUid = text(correction.tenantUid || correction.tenantId);
       const field = fieldOf(correction.field);
       const requestedValue = normalizeRequestedValue(field, correction.requestedValue);
-      if (!tenantUid) throw new HttpsError("failed-precondition", "Tenant identity is missing from the correction request.");
+      if (!tenantUid) {
+        throw new HttpsError("failed-precondition", "Tenant identity is missing from the correction request.");
+      }
 
-      let liveValue = "";
+      let displayNameSync: DisplayNameSync | null = null;
       if (RESIDENCE_FIELDS.has(field)) {
         const residenceId = cleanRequestId(correction.residenceId);
         const residenceRef = db.collection("units").doc(residenceId);
         const residenceSnap = await transaction.get(residenceRef);
-        if (!residenceSnap.exists) throw new HttpsError("not-found", "Tenant residence no longer exists.");
+        if (!residenceSnap.exists) {
+          throw new HttpsError("not-found", "Tenant residence no longer exists.");
+        }
         const residence = residenceSnap.data() || {};
         if (!residenceBelongsToTenant(residence, tenantUid, lower(correction.tenantEmail))) {
-          throw new HttpsError("failed-precondition", "Tenant residence ownership changed after submission.");
+          throw new HttpsError(
+            "failed-precondition",
+            "Tenant residence ownership changed after submission.",
+          );
         }
-        liveValue = residenceCurrentValue(field, residence);
+        const liveValue = residenceCurrentValue(field, residence);
         if (text(liveValue) !== text(correction.currentValue)) {
-          throw new HttpsError("aborted", "The residence record changed after this correction was submitted.");
+          throw new HttpsError(
+            "aborted",
+            "The residence record changed after this correction was submitted.",
+          );
         }
         if (decision === "APPROVE") {
           if (field === "leaseStart" || field === "leaseEnd") {
-            const startValue = field === "leaseStart" ? requestedValue : text(residence.leaseStart || residence.startDate);
-            const endValue = field === "leaseEnd" ? requestedValue : text(residence.leaseEnd || residence.endDate);
+            const startValue = field === "leaseStart"
+              ? requestedValue
+              : residenceCurrentValue("leaseStart", residence);
+            const endValue = field === "leaseEnd"
+              ? requestedValue
+              : residenceCurrentValue("leaseEnd", residence);
             if (startValue && endValue && new Date(endValue).getTime() < new Date(startValue).getTime()) {
-              throw new HttpsError("failed-precondition", "Lease end date cannot be before the lease start date.");
+              throw new HttpsError(
+                "failed-precondition",
+                "Lease end date cannot be before the lease start date.",
+              );
             }
           }
           const residencePatch: Record<string, unknown> = { updatedAt: timestamp() };
-          if (field === "floorNumber") Object.assign(residencePatch, { floorNumber: requestedValue, floor: requestedValue });
-          if (field === "leaseStart") Object.assign(residencePatch, { leaseStart: requestedValue, startDate: requestedValue });
-          if (field === "leaseEnd") Object.assign(residencePatch, { leaseEnd: requestedValue, endDate: requestedValue });
+          if (field === "floorNumber") {
+            Object.assign(residencePatch, { floorNumber: requestedValue, floor: requestedValue });
+          } else if (field === "leaseStart") {
+            Object.assign(residencePatch, { leaseStart: requestedValue, startDate: requestedValue });
+          } else if (field === "leaseEnd") {
+            Object.assign(residencePatch, { leaseEnd: requestedValue, endDate: requestedValue });
+          }
           transaction.set(residenceRef, residencePatch, { merge: true });
         }
       } else {
         const profileRef = db.collection("users").doc(tenantUid);
         const profileSnap = await transaction.get(profileRef);
-        if (!profileSnap.exists) throw new HttpsError("not-found", "Tenant profile no longer exists.");
+        if (!profileSnap.exists) {
+          throw new HttpsError("not-found", "Tenant profile no longer exists.");
+        }
         const profile = profileSnap.data() || {};
-        liveValue = profileCurrentValue(field, profile);
-        if (!liveValue) liveValue = text(correction.currentValue);
+        const liveValue = profileCurrentValue(field, profile) || text(correction.currentValue);
         if (text(liveValue) !== text(correction.currentValue)) {
-          throw new HttpsError("aborted", "The Tenant profile changed after this correction was submitted.");
+          throw new HttpsError(
+            "aborted",
+            "The Tenant profile changed after this correction was submitted.",
+          );
         }
         if (decision === "APPROVE") {
           const profilePatch: Record<string, unknown> = { updatedAt: timestamp() };
           if (field === "displayName") {
             Object.assign(profilePatch, { displayName: requestedValue, name: requestedValue });
             displayNameSync = { tenantUid, value: requestedValue };
-          }
-          if (field === "phoneNumber") Object.assign(profilePatch, { phoneNumber: requestedValue, phone: requestedValue });
-          if (field === "emergencyContactName") {
+          } else if (field === "phoneNumber") {
+            Object.assign(profilePatch, { phoneNumber: requestedValue, phone: requestedValue });
+          } else if (field === "emergencyContactName") {
             Object.assign(profilePatch, {
               emergencyContact: {
                 name: requestedValue,
                 phone: text(profile.emergencyContact?.phone),
               },
             });
-          }
-          if (field === "emergencyContactPhone") {
+          } else if (field === "emergencyContactPhone") {
             Object.assign(profilePatch, {
               emergencyContact: {
                 name: text(profile.emergencyContact?.name),
@@ -449,7 +491,9 @@ export const adminResolveTenantCorrectionRequest = onCall(
       const resolvedStatus = decision === "APPROVE" ? "APPROVED" : "REJECTED";
       transaction.set(correctionRef, {
         status: resolvedStatus,
-        verificationState: decision === "APPROVE" ? "ADMIN_APPROVED_AND_APPLIED" : "ADMIN_REJECTED",
+        verificationState: decision === "APPROVE"
+          ? "ADMIN_APPROVED_AND_APPLIED"
+          : "ADMIN_REJECTED",
         decision,
         reviewReason: reviewReason || null,
         resolvedBy: adminAuthority.uid,
@@ -467,7 +511,9 @@ export const adminResolveTenantCorrectionRequest = onCall(
         createdAt: timestamp(),
       });
       transaction.create(db.collection("audit_logs").doc(), {
-        action: decision === "APPROVE" ? "ADMIN_APPROVE_TENANT_CORRECTION" : "ADMIN_REJECT_TENANT_CORRECTION",
+        action: decision === "APPROVE"
+          ? "ADMIN_APPROVE_TENANT_CORRECTION"
+          : "ADMIN_REJECT_TENANT_CORRECTION",
         actorId: adminAuthority.uid,
         actorEmail: adminAuthority.email || null,
         actorRole: "admin",
@@ -480,12 +526,16 @@ export const adminResolveTenantCorrectionRequest = onCall(
         reason: reviewReason || null,
         createdAt: timestamp(),
       });
+
+      return { tenantUid, field, requestedValue, displayNameSync };
     });
 
     let authSyncState = "NOT_REQUIRED";
-    if (displayNameSync) {
+    if (resolution.displayNameSync) {
       try {
-        await admin.auth().updateUser(displayNameSync.tenantUid, { displayName: displayNameSync.value });
+        await admin.auth().updateUser(resolution.displayNameSync.tenantUid, {
+          displayName: resolution.displayNameSync.value,
+        });
         authSyncState = "SYNCED";
       } catch (error) {
         console.error("Tenant display-name Auth sync failed:", error);
@@ -493,7 +543,9 @@ export const adminResolveTenantCorrectionRequest = onCall(
       }
       await correctionRef.set({ authSyncState, updatedAt: timestamp() }, { merge: true });
       await correctionRef.collection("events").add({
-        eventType: authSyncState === "SYNCED" ? "AUTH_PROFILE_SYNCED" : "AUTH_PROFILE_SYNC_FAILED",
+        eventType: authSyncState === "SYNCED"
+          ? "AUTH_PROFILE_SYNCED"
+          : "AUTH_PROFILE_SYNC_FAILED",
         actorId: adminAuthority.uid,
         actorRole: "admin",
         status: decision === "APPROVE" ? "APPROVED" : "REJECTED",
