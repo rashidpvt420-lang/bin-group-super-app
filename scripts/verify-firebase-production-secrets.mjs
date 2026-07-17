@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import firebaseTools from 'firebase-tools';
 
 const expectedProjectId = 'bin-group-57c60';
 const configuredProjectId = String(process.env.GCP_PROJECT_ID || '').trim();
@@ -16,32 +16,25 @@ if (configuredProjectId !== expectedProjectId) {
 
 const failures = [];
 for (const secretName of requiredSecrets) {
-  const result = spawnSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    [
-      '--no-install',
-      'firebase',
-      'functions:secrets:get',
-      secretName,
-      '--project',
-      expectedProjectId,
-      '--non-interactive',
-    ],
-    {
-      encoding: 'utf8',
-      env: process.env,
-      stdio: ['ignore', 'ignore', 'pipe'],
-      timeout: 60_000,
-    },
-  );
-
-  if (result.error || result.status !== 0) {
-    const reason = result.error?.message || String(result.stderr || '').trim() || `exit code ${result.status}`;
-    failures.push(`${secretName}: ${reason}`);
-    continue;
+  try {
+    const result = await firebaseTools.functions.secrets.get(secretName, {
+      project: expectedProjectId,
+      nonInteractive: true,
+    });
+    const versions = Array.isArray(result?.secrets) ? result.secrets : [];
+    const hasAvailableVersion = versions.some((version) => {
+      const state = String(version?.state || '').toUpperCase();
+      return state === 'ENABLED';
+    });
+    if (!hasAvailableVersion) {
+      failures.push(`${secretName}: no enabled secret version is available`);
+      continue;
+    }
+    console.log(`Verified Firebase production secret metadata: ${secretName}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'metadata lookup failed';
+    failures.push(`${secretName}: ${message}`);
   }
-
-  console.log(`Verified Firebase production secret metadata: ${secretName}`);
 }
 
 if (failures.length) {
