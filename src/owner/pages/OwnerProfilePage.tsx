@@ -56,7 +56,7 @@ export default function OwnerProfilePage() {
         setLoading(false);
       }
     };
-    loadProfile();
+    void loadProfile();
   }, [user?.uid, user?.displayName, user?.email, user?.phoneNumber, lang]);
 
   const handleSave = async () => {
@@ -134,6 +134,10 @@ export default function OwnerProfilePage() {
 
   const profilePhoto = pickProfilePhoto(profileData, user);
   const profileCover = pickProfileCover(profileData, user);
+  const verifiedFieldHelp = label(
+    'Verified field. Changes require the protected OTP / KYC review workflow.',
+    'حقل موثق. تتطلب التغييرات مسار رمز التحقق / مراجعة اعرف عميلك المحمي.',
+  );
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -153,6 +157,7 @@ export default function OwnerProfilePage() {
         </Stack>
 
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 4 }} />
+        <Alert severity="warning" sx={{ mb: 3 }}>{verifiedFieldHelp}</Alert>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Mobile Number', 'رقم الهاتف المتحرك الموثق')} value={phone} onChange={(e) => setPhone(e.target.value)} helperText={label('A changed number must already be verified in Firebase Authentication.', 'يجب أن يكون الرقم الجديد موثقاً مسبقاً في مصادقة Firebase.')} sx={inputSx} /></Grid>
