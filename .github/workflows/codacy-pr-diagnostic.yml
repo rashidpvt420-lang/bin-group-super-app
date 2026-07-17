@@ -41,8 +41,10 @@ jobs:
           const runs = Array.isArray(payload?.check_runs) ? payload.check_runs : [];
           const codacyRuns = runs.filter((run) => /codacy/i.test(`${run.name} ${run.app?.name || ''}`));
           console.log(JSON.stringify({ codacyRuns: codacyRuns.map((run) => ({ id: run.id, name: run.name, app: run.app?.name, status: run.status, conclusion: run.conclusion, detailsUrl: run.details_url, output: run.output })) }, null, 2));
-          const completed = codacyRuns.find((run) => run.status === 'completed') || codacyRuns[0];
-          if (completed?.id) fs.writeFileSync('codacy-check-id.txt', String(completed.id));
+          const completed = codacyRuns.find((run) => run.status === 'completed');
+          const selected = completed || codacyRuns[0];
+          if (selected?.id) fs.writeFileSync('codacy-check-id.txt', String(selected.id));
+          if (completed?.id) fs.writeFileSync('codacy-check-completed.txt', String(completed.id));
           NODE
             if [[ -s codacy-check-id.txt ]]; then
               check_id="$(cat codacy-check-id.txt)"
@@ -70,9 +72,13 @@ jobs:
               then
                 exit 0
               fi
+              if [[ -s codacy-check-completed.txt ]]; then
+                echo "Codacy check completed without GitHub annotations; full check output is printed above."
+                exit 0
+              fi
             fi
-            rm -f codacy-check-id.txt
+            rm -f codacy-check-id.txt codacy-check-completed.txt
             sleep 15
           done
-          echo "::error::Codacy check annotations were unavailable after retries."
+          echo "::error::Codacy check output was unavailable after retries."
           exit 1
