@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const source = fs.readFileSync(new URL('../../functions/secureOwnerRegistrationRequest.ts', import.meta.url), 'utf8');
+const legacy = fs.readFileSync(new URL('../../functions/ownerRegistrationRequest.ts', import.meta.url), 'utf8');
 
 const required = [
   'const PAYMENT_PLANS = new Set(["annual", "quarterly", "monthly"])',
@@ -27,15 +28,20 @@ const required = [
   'properties: properties.length',
   'const commercial = assertCanonicalCommercialTerms(request.data);',
   'const data = commercial.data;',
-  'return legacyRunner({ auth: request.auth, data });',
+  'previewOwnerOnboardingQuoteHandler({',
+  'return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });',
 ];
 
 for (const token of required) {
   assert.ok(source.includes(token), `missing commercial authority contract: ${token}`);
 }
 
+assert.ok(legacy.includes('export async function previewOwnerOnboardingQuoteHandler'), 'preview quote handler must be explicitly exported');
+assert.ok(legacy.includes('export async function submitOwnerOnboardingPaymentPackageHandler'), 'payment-package handler must be explicitly exported');
+assert.ok(legacy.includes('previewOwnerOnboardingQuoteHandler,'), 'preview callable must use the explicit handler');
+assert.ok(legacy.includes('submitOwnerOnboardingPaymentPackageHandler,'), 'payment callable must use the explicit handler');
 assert.ok(source.indexOf('const commercial = assertCanonicalCommercialTerms(request.data);') < source.indexOf('const quote = await assertServerQuote(request, data);'), 'commercial terms must be validated before quote acceptance');
-assert.ok(source.indexOf('const quote = await assertServerQuote(request, data);') < source.indexOf('return legacyRunner({ auth: request.auth, data });'), 'server quote must be validated before persistence');
+assert.ok(source.indexOf('const quote = await assertServerQuote(request, data);') < source.indexOf('return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });'), 'server quote must be validated before persistence');
 assert.ok(!source.includes('CONTRACT_MODE_NAMES[contractMode]'), 'dynamic object indexing must not be used for contract mode resolution');
 assert.ok(!source.includes('Object.assign'), 'untrusted onboarding objects must not be broadly copied');
 assert.ok(!source.includes('data.serviceDetails ='), 'browser request data must not be mutated in place');
@@ -43,6 +49,7 @@ assert.ok(!source.includes('...request'), 'the complete callable request must no
 assert.ok(!source.includes('paymentManifest: data.paymentManifest'), 'raw payment manifests must not be delegated');
 assert.ok(!source.includes('companyProfile: data.companyProfile'), 'raw company profiles must not be delegated');
 assert.ok(!source.includes('documentUrls: data.documentUrls'), 'raw document maps must not be delegated');
+assert.ok(!source.includes('.run'), 'private Firebase callable execution must not be used');
 assert.ok(!source.includes('return legacyRunner(request);'), 'raw browser request must not be delegated after canonicalization');
 
 console.log('owner contract commercial authority launch regression: PASS');
