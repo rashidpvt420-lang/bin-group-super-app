@@ -28,7 +28,7 @@ const required = [
   'properties: properties.length',
   'const commercial = assertCanonicalCommercialTerms(request.data);',
   'const data = commercial.data;',
-  'previewOwnerOnboardingQuoteHandler({',
+  'const quote = await previewOwnerOnboardingQuoteHandler({',
   'return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });',
 ];
 
@@ -49,6 +49,7 @@ assert.ok(!source.includes('...request'), 'the complete callable request must no
 assert.ok(!source.includes('paymentManifest: data.paymentManifest'), 'raw payment manifests must not be delegated');
 assert.ok(!source.includes('companyProfile: data.companyProfile'), 'raw company profiles must not be delegated');
 assert.ok(!source.includes('documentUrls: data.documentUrls'), 'raw document maps must not be delegated');
+assert.ok(!source.includes('previewResult?.data'), 'direct handlers must return typed data rather than callable envelopes');
 assert.ok(!source.includes('.run'), 'private Firebase callable execution must not be used');
 assert.ok(!source.includes('return legacyRunner(request);'), 'raw browser request must not be delegated after canonicalization');
 
