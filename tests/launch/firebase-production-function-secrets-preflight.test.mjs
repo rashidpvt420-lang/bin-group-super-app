@@ -13,18 +13,18 @@ const requiredSecrets = [
   'STRIPE_WEBHOOK_SECRET',
 ];
 
-test('production secret preflight verifies mail and payment metadata without reading values', () => {
+test('production secret preflight uses Firebase metadata API without child processes or secret access', () => {
   for (const secretName of requiredSecrets) {
     assert.match(script, new RegExp(`['"]${secretName}['"]`));
   }
-  assert.match(script, /functions:secrets:get/);
-  assert.doesNotMatch(script, /functions:secrets:access/);
-  assert.match(script, /--project/);
-  assert.match(script, /--non-interactive/);
-  assert.match(script, /--no-install/);
-  assert.match(script, /stdio:\s*\['ignore',\s*'ignore',\s*'pipe'\]/);
-  assert.doesNotMatch(script, /result\.stdout|const\s+value\s*=/);
-  assert.match(script, /if \(result\.error \|\| result\.status !== 0\)/);
+  assert.match(script, /import firebaseTools from ['"]firebase-tools['"]/);
+  assert.match(script, /firebaseTools\.functions\.secrets\.get\(secretName/);
+  assert.match(script, /project:\s*expectedProjectId/);
+  assert.match(script, /nonInteractive:\s*true/);
+  assert.match(script, /Array\.isArray\(result\?\.secrets\)/);
+  assert.match(script, /state === ['"]ENABLED['"]/);
+  assert.doesNotMatch(script, /node:child_process|spawnSync|execSync|functions:secrets:access/);
+  assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
 test('protected production deploy requires secret preflight before Firebase deployment', () => {
