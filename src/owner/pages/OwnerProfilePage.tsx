@@ -56,7 +56,7 @@ export default function OwnerProfilePage() {
         setLoading(false);
       }
     };
-    loadProfile();
+    void loadProfile();
   }, [user?.uid, user?.displayName, user?.email, user?.phoneNumber, lang]);
 
   const handleSave = async () => {
@@ -74,15 +74,8 @@ export default function OwnerProfilePage() {
         email: user.email || profileData?.email || '',
         role: profileData?.role || 'owner',
         displayName: displayName.trim(),
-        phoneNumber: phone.trim(),
-        phone: phone.trim(),
         companyName: companyName.trim(),
         ownerCompanyName: companyName.trim(),
-        billingContact: {
-          name: billingName.trim(),
-          email: billingEmail.trim().toLowerCase(),
-          phone: billingPhone.trim(),
-        },
         notificationPreferences: {
           ...(profileData?.notificationPreferences || {}),
           preferredContact,
@@ -92,8 +85,8 @@ export default function OwnerProfilePage() {
         updatedAt: serverTimestamp(),
       };
       await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
-      setProfileData((prev: any) => ({ ...prev, ...payload }));
-      setNotice({ type: 'success', text: label('Owner profile updated successfully.', 'تم تحديث ملف المالك بنجاح.') });
+      setProfileData((previous: any) => ({ ...previous, ...payload }));
+      setNotice({ type: 'success', text: label('Owner profile updated. Verified phone and billing identity were not changed.', 'تم تحديث ملف المالك. لم يتم تغيير الهاتف الموثق أو هوية الفوترة.') });
     } catch (error: any) {
       console.error('[OwnerProfile] save failed:', error);
       setNotice({ type: 'error', text: error?.message || label('Failed to update owner profile.', 'فشل تحديث ملف المالك.') });
@@ -127,11 +120,15 @@ export default function OwnerProfilePage() {
 
   const profilePhoto = pickProfilePhoto(profileData, user);
   const profileCover = pickProfileCover(profileData, user);
+  const verifiedFieldHelp = label(
+    'Verified field. Changes require the protected OTP / KYC review workflow.',
+    'حقل موثق. تتطلب التغييرات مسار رمز التحقق / مراجعة اعرف عميلك المحمي.',
+  );
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Manage identity, billing contact, notification preference, and account recovery.', 'إدارة الهوية، جهة اتصال الفوترة، تفضيلات الإشعارات، واسترداد الحساب.')}</Typography>
+      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Manage non-sensitive profile details and account recovery. Verified identity fields are protected.', 'إدارة بيانات الملف غير الحساسة واسترداد الحساب. حقول الهوية الموثقة محمية.')}</Typography>
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
       <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
@@ -146,25 +143,26 @@ export default function OwnerProfilePage() {
         </Stack>
 
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 4 }} />
+        <Alert severity="warning" sx={{ mb: 3 }}>{verifiedFieldHelp}</Alert>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Mobile Number', 'رقم الهاتف المتحرك')} value={phone} onChange={(e) => setPhone(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Company / Portfolio Name', 'اسم الشركة / المحفظة')} value={companyName} onChange={(e) => setCompanyName(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Preferred Contact Channel', 'قناة التواصل المفضلة')} value={preferredContact} onChange={(e) => setPreferredContact(e.target.value)} helperText={label('email, phone, whatsapp', 'البريد الإلكتروني، الهاتف، واتساب')} sx={inputSx} /></Grid>
-          <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Billing Contact', 'جهة اتصال الفوترة')}</Typography></Grid>
-          <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Name', 'اسم جهة الفوترة')} value={billingName} onChange={(e) => setBillingName(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Email', 'بريد الفوترة الإلكتروني')} value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} onChange={(e) => setBillingPhone(e.target.value)} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth disabled label={label('Verified Mobile Number', 'رقم الهاتف المتحرك الموثق')} value={phone} helperText={verifiedFieldHelp} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label={label('Company / Portfolio Name', 'اسم الشركة / المحفظة')} value={companyName} onChange={(event) => setCompanyName(event.target.value)} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label={label('Preferred Contact Channel', 'قناة التواصل المفضلة')} value={preferredContact} onChange={(event) => setPreferredContact(event.target.value)} helperText={label('email, phone, whatsapp', 'البريد الإلكتروني، الهاتف، واتساب')} sx={inputSx} /></Grid>
+          <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Verified Billing Identity', 'هوية الفوترة الموثقة')}</Typography></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth disabled label={label('Billing Name', 'اسم جهة الفوترة')} value={billingName} helperText={verifiedFieldHelp} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth disabled label={label('Billing Email', 'بريد الفوترة الإلكتروني')} value={billingEmail} helperText={verifiedFieldHelp} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth disabled label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} helperText={verifiedFieldHelp} sx={inputSx} /></Grid>
         </Grid>
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
-          <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Saving...', 'جارٍ الحفظ...') : label('Save Owner Profile', 'حفظ ملف المالك')}</Button>
+          <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Saving...', 'جارٍ الحفظ...') : label('Save Non-Sensitive Profile', 'حفظ بيانات الملف غير الحساسة')}</Button>
           <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}</Button>
         </Stack>
       </Paper>
 
       <Paper sx={{ p: 3, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 4 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Your IBAN and payout details remain managed separately under Owner → IBAN / Payout Accounts.', 'تظل تفاصيل الآيبان وحسابات التحويل مُدارة بشكل منفصل ضمن المالك ← الآيبان / حسابات التحويل.')}</Typography></Stack>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Phone, billing identity, IBAN and payout details can only change through protected verification workflows.', 'لا يمكن تغيير الهاتف وهوية الفوترة والآيبان وتفاصيل التحويل إلا عبر مسارات التحقق المحمية.')}</Typography></Stack>
       </Paper>
     </Box>
   );
