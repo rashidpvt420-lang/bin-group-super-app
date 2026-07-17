@@ -24,14 +24,18 @@ test('Broker payout OTP fixture is restricted to the verified dedicated E2E Brok
 });
 
 test('critical evidence prepares the Broker payout fixture before browser execution', () => {
-  const suiteGuard = runner.indexOf("suiteKey !== 'businessBroker'");
-  const fixtureCommand = runner.indexOf("'scripts/prepare-broker-payout-otp-e2e.mjs'");
+  const fixtureMap = runner.indexOf('const SUITE_FIXTURES = Object.freeze');
+  const brokerEntry = runner.indexOf('businessBroker:', fixtureMap);
+  const fixtureCommand = runner.indexOf("script: 'scripts/prepare-broker-payout-otp-e2e.mjs'", brokerEntry);
+  const fixtureLookup = runner.indexOf('const fixture = SUITE_FIXTURES[suiteKey]');
   const fixtureFailure = runner.indexOf('fixture preparation failed — evidence not recorded');
   const playwrightExecution = runner.indexOf('const result = spawnNpmPlaywrightJson');
 
-  assert.ok(suiteGuard >= 0, 'fixture preparation must be restricted to businessBroker');
-  assert.ok(fixtureCommand > suiteGuard, 'businessBroker must execute the dedicated fixture script');
-  assert.ok(fixtureFailure > fixtureCommand, 'fixture failure must block evidence');
+  assert.ok(fixtureMap >= 0, 'critical evidence must use the central suite fixture map');
+  assert.ok(brokerEntry > fixtureMap, 'fixture preparation must remain scoped to businessBroker');
+  assert.ok(fixtureCommand > brokerEntry, 'businessBroker must execute the dedicated fixture script');
+  assert.ok(fixtureLookup > fixtureCommand, 'suite fixture lookup must use the central map');
+  assert.ok(fixtureFailure > fixtureLookup, 'fixture failure must block evidence');
   assert.ok(playwrightExecution > fixtureFailure, 'fixture preparation must happen before browser execution');
 });
 
