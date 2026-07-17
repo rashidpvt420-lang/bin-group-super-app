@@ -23,9 +23,10 @@ test('Tenant correction UI exposes stable live-evidence selectors', async () => 
   assert.match(panel, /tenant-correction-request-\$\{item\.id\}/);
 });
 
-test('Gate 11 and live launch audit reset only the E2E Tenant correction evidence', async () => {
+test('all launch-audit entry points centrally prepare only the E2E Tenant correction evidence', async () => {
   const fixture = await read('scripts/prepare-tenant-correction-e2e.mjs');
   const gate11 = await read('scripts/seed-gate11-fixtures.mjs');
+  const criticalRunner = await read('scripts/run-critical-evidence.mjs');
   const liveAudit = await read('scripts/run-live-launch-audit.mjs');
 
   assert.match(fixture, /E2E_TENANT_EMAIL/);
@@ -36,9 +37,16 @@ test('Gate 11 and live launch audit reset only the E2E Tenant correction evidenc
   assert.match(fixture, /correction\.ref\.collection\('events'\)/);
   assert.match(fixture, /e2eTenantCorrectionBaseline: true/);
   assert.match(gate11, /prepare-tenant-correction-e2e\.mjs/);
-  assert.match(liveAudit, /preparing repeatable Tenant correction evidence fixture/);
-  assert.match(liveAudit, /prepare-tenant-correction-e2e\.mjs/);
-  assert.match(liveAudit, /evidence fixture failed — live evidence will not run/);
+
+  assert.match(criticalRunner, /const SUITE_FIXTURES = Object\.freeze/);
+  assert.match(criticalRunner, /businessBroker:[\s\S]*prepare-broker-payout-otp-e2e\.mjs/);
+  assert.match(criticalRunner, /launchAuditLive:[\s\S]*prepare-tenant-correction-e2e\.mjs/);
+  assert.match(criticalRunner, /const fixture = SUITE_FIXTURES\[suiteKey\]/);
+  assert.match(criticalRunner, /fixture preparation failed — evidence not recorded/);
+  assert.match(criticalRunner, /\[\.\.\.allBusiness, 'launchAuditLive'\]/);
+
+  assert.match(liveAudit, /run-critical-evidence\.mjs', '--suite', 'launchAuditLive'/);
+  assert.doesNotMatch(liveAudit, /prepare-tenant-correction-e2e\.mjs/);
 });
 
 test('Tenant production launch audit submits and verifies correction history under App Check', async () => {
