@@ -13,6 +13,7 @@ import {
   readJsonSafe,
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
+import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
 
 const writeEvidence = process.argv.includes('--write-evidence');
 const commitSha = gitSha();
@@ -127,6 +128,17 @@ if (!existing) {
     fail(`deployedCommitSha ${existing.deployedCommitSha} != current ${commitSha}`);
   }
   if (!existing.deployedAt) fail('metadata missing deployedAt timestamp');
+
+  for (const phoneAuthFailure of validateFirebasePhoneAuthEvidence(existing.firebasePhoneAuth, {
+    commitSha,
+    repository: existing.repository,
+    ref: existing.workflowRef,
+    workflowRunId: existing.workflowRunId,
+    workflowRunAttempt: existing.workflowRunAttempt,
+    now: Date.now(),
+  })) {
+    fail(phoneAuthFailure);
+  }
 }
 
 const doc = {
