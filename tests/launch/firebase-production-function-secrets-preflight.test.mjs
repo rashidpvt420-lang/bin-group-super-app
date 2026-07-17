@@ -6,7 +6,7 @@ const script = readFileSync('scripts/verify-firebase-production-secrets.mjs', 'u
 const deploy = readFileSync('scripts/deploy-firebase-production.mjs', 'utf8');
 const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
 
-const requiredSecrets = [
+const allProviderSecrets = [
   'SMTP_USER',
   'SMTP_PASS',
   'STRIPE_SECRET_KEY',
@@ -14,7 +14,7 @@ const requiredSecrets = [
 ];
 
 test('production secret preflight uses Firebase metadata API without child processes or secret access', () => {
-  for (const secretName of requiredSecrets) {
+  for (const secretName of allProviderSecrets) {
     assert.match(script, new RegExp(`['"]${secretName}['"]`));
   }
   assert.match(script, /import firebaseTools from ['"]firebase-tools['"]/);
@@ -28,12 +28,20 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('protected production deploy imports secret preflight before Firebase deployment', () => {
+test('bank-pilot requires SMTP while public mode additionally requires Stripe', () => {
+  assert.match(script, /requiredFirebaseBankPilotSecrets[\s\S]*SMTP_USER[\s\S]*SMTP_PASS/);
+  assert.match(script, /requiredFirebasePublicSecrets[\s\S]*STRIPE_SECRET_KEY[\s\S]*STRIPE_WEBHOOK_SECRET/);
+  assert.match(script, /normalizedMode === ['"]public['"]/);
+  assert.match(script, /LAUNCH_MODE must be bank-pilot or public/);
+});
+
+test('protected production deploy imports mode-aware secret preflight before Firebase deployment', () => {
   const contextIndex = deploy.indexOf("process.env.GITHUB_ACTIONS !== 'true'");
   const mainIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
-  const secretIndex = deploy.indexOf('await verifyFirebaseProductionSecrets({ projectId });');
+  const secretIndex = deploy.indexOf('await verifyFirebaseProductionSecrets({ projectId, launchMode });');
   const deployIndex = deploy.indexOf("'firebase',\n      'deploy'");
   assert.match(deploy, /import \{ verifyFirebaseProductionSecrets \} from ['"]\.\/verify-firebase-production-secrets\.mjs['"]/);
+  assert.match(deploy, /const launchMode = String\(process\.env\.LAUNCH_MODE \|\| ['"]['"]\)\.trim\(\)/);
   assert.ok(contextIndex >= 0, 'protected GitHub Actions context gate is required');
   assert.ok(mainIndex > contextIndex, 'origin/main binding must be checked after protected context');
   assert.ok(secretIndex > mainIndex, 'secret preflight must run after exact-main verification');
