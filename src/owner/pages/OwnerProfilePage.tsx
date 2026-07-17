@@ -6,6 +6,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
+import OwnerPhoneVerificationCard from '../components/OwnerPhoneVerificationCard';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -109,6 +110,20 @@ export default function OwnerProfilePage() {
     }
   };
 
+  const handleVerifiedPhone = (verifiedPhone: string) => {
+    const previousPhone = phone;
+    setPhone(verifiedPhone);
+    if (!billingPhone.trim() || billingPhone.trim() === previousPhone.trim()) setBillingPhone(verifiedPhone);
+    setProfileData((prev: any) => ({
+      ...prev,
+      phoneNumber: verifiedPhone,
+      phone: verifiedPhone,
+      phoneVerified: true,
+      phoneAuthority: 'FIREBASE_AUTH_PHONE',
+    }));
+    setNotice({ type: 'success', text: label('Firebase SMS verification completed and the Owner profile phone was synchronized.', 'اكتمل التحقق برسالة Firebase وتمت مزامنة هاتف ملف المالك.') });
+  };
+
   const handlePasswordReset = async () => {
     if (!user?.email) {
       setNotice({ type: 'warning', text: label('No email is attached to this account.', 'لا يوجد بريد إلكتروني مرتبط بهذا الحساب.') });
@@ -135,8 +150,8 @@ export default function OwnerProfilePage() {
   const profilePhoto = pickProfilePhoto(profileData, user);
   const profileCover = pickProfileCover(profileData, user);
   const verifiedFieldHelp = label(
-    'Verified field. Changes require the protected OTP / KYC review workflow.',
-    'حقل موثق. تتطلب التغييرات مسار رمز التحقق / مراجعة اعرف عميلك المحمي.',
+    'Verified field. Phone changes use Firebase SMS. Legal and billing identity changes require the protected KYC review workflow.',
+    'حقل موثق. تستخدم تغييرات الهاتف رسالة Firebase النصية. وتتطلب تغييرات الهوية القانونية والفوترة مسار مراجعة اعرف عميلك المحمي.',
   );
 
   return (
@@ -160,14 +175,16 @@ export default function OwnerProfilePage() {
         <Alert severity="warning" sx={{ mb: 3 }}>{verifiedFieldHelp}</Alert>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Mobile Number', 'رقم الهاتف المتحرك الموثق')} value={phone} onChange={(e) => setPhone(e.target.value)} helperText={label('A changed number must already be verified in Firebase Authentication.', 'يجب أن يكون الرقم الجديد موثقاً مسبقاً في مصادقة Firebase.')} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField data-testid="owner-verified-phone" fullWidth label={label('Verified Mobile Number', 'رقم الهاتف المتحرك الموثق')} value={phone} InputProps={{ readOnly: true }} helperText={label('Read-only. Use Firebase SMS verification below to change this number.', 'للقراءة فقط. استخدم التحقق برسالة Firebase أدناه لتغيير الرقم.')} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Company / Portfolio Name', 'اسم الشركة / المحفظة الموثق')} value={companyName} onChange={(e) => setCompanyName(e.target.value)} helperText={label('Legal changes must match the verified Owner KYC record.', 'يجب أن تتطابق التغييرات القانونية مع سجل اعرف عميلك الموثق للمالك.')} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Preferred Contact Channel', 'قناة التواصل المفضلة')} value={preferredContact} onChange={(e) => setPreferredContact(e.target.value)} helperText={label('email, phone, whatsapp', 'البريد الإلكتروني، الهاتف، واتساب')} sx={inputSx} /></Grid>
           <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Verified Billing Contact', 'جهة اتصال الفوترة الموثقة')}</Typography></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Name', 'اسم جهة الفوترة')} value={billingName} onChange={(e) => setBillingName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Email', 'بريد الفوترة الإلكتروني')} value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} onChange={(e) => setBillingPhone(e.target.value)} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} onChange={(e) => setBillingPhone(e.target.value)} helperText={label('Must match the Firebase-verified Owner phone.', 'يجب أن يطابق هاتف المالك الموثق في Firebase.')} sx={inputSx} /></Grid>
         </Grid>
+
+        <OwnerPhoneVerificationCard currentPhone={phone} isRTL={isRTL} lang={lang} onVerified={handleVerifiedPhone} />
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
           <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Verifying and saving...', 'جارٍ التحقق والحفظ...') : label('Save Verified Profile', 'حفظ الملف الموثق')}</Button>
