@@ -11,6 +11,8 @@ const DEFAULT_REQUIRED_DOMAINS = Object.freeze([
   'bin-group-57c60.firebaseapp.com',
 ]);
 const DEFAULT_REQUIRED_SMS_REGION = 'AE';
+const EVIDENCE_MAX_AGE_MS = 1000 * 60 * 60 * 24;
+const MAX_CLOCK_SKEW_MS = 1000 * 60 * 5;
 
 function normalizedList(value) {
   if (Array.isArray(value)) return value.map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -105,6 +107,62 @@ export function buildFirebasePhoneAuthEvidence(summary, {
     sensitiveValuesExcluded: true,
     hardLaunchClaim: false,
   };
+}
+
+export function validateFirebasePhoneAuthEvidence(evidence, {
+  commitSha,
+  repository,
+  ref,
+  workflowRunId,
+  workflowRunAttempt,
+  now = Date.now(),
+  maxAgeMs = EVIDENCE_MAX_AGE_MS,
+} = {}) {
+  const failures = [];
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    return ['Firebase Phone Auth deployment evidence is missing.'];
+  }
+
+  const requireExact = (actual, expected, label) => {
+    if (String(actual ?? '') !== String(expected ?? '')) failures.push(`${label} mismatch.`);
+  };
+  requireExact(evidence.schemaVersion, 1, 'Phone Auth evidence schemaVersion');
+  requireExact(evidence.status, 'passed', 'Phone Auth evidence status');
+  requireExact(evidence.source, 'identity-toolkit-admin-v2', 'Phone Auth evidence source');
+  requireExact(evidence.projectId, EXPECTED_PROJECT_ID, 'Phone Auth evidence projectId');
+  requireExact(evidence.commitSha, commitSha, 'Phone Auth evidence commitSha');
+  requireExact(evidence.repository, repository, 'Phone Auth evidence repository');
+  requireExact(evidence.ref, ref, 'Phone Auth evidence ref');
+  requireExact(evidence.workflowRunId, workflowRunId, 'Phone Auth evidence workflowRunId');
+  requireExact(evidence.workflowRunAttempt, workflowRunAttempt, 'Phone Auth evidence workflowRunAttempt');
+  requireExact(evidence.phoneProviderEnabled, true, 'Phone Auth provider enabled');
+  requireExact(evidence.requiredDomainsPresent, true, 'Phone Auth required domains');
+  requireExact(evidence.smsPolicy, 'allowlist-only', 'Phone Auth SMS policy');
+  requireExact(evidence.requiredSmsRegion, DEFAULT_REQUIRED_SMS_REGION, 'Phone Auth required SMS region');
+  requireExact(evidence.requiredSmsRegionAllowed, true, 'Phone Auth required SMS region allowed');
+  requireExact(evidence.sensitiveValuesExcluded, true, 'Phone Auth sensitiveValuesExcluded');
+  requireExact(evidence.hardLaunchClaim, false, 'Phone Auth hardLaunchClaim');
+
+  for (const key of ['authorizedDomainCount', 'allowedRegionCount', 'testPhoneNumberCount']) {
+    if (!Number.isInteger(evidence[key]) || evidence[key] < 0) {
+      failures.push(`Phone Auth evidence ${key} must be a non-negative integer.`);
+    }
+  }
+
+  const verifiedAt = Date.parse(String(evidence.verifiedAt || ''));
+  if (!Number.isFinite(verifiedAt)) {
+    failures.push('Phone Auth evidence verifiedAt must be a valid ISO timestamp.');
+  } else {
+    if (verifiedAt > now + MAX_CLOCK_SKEW_MS) failures.push('Phone Auth evidence verifiedAt is in the future.');
+    if (now - verifiedAt > maxAgeMs) failures.push('Phone Auth evidence verifiedAt is stale.');
+  }
+
+  for (const forbidden of ['accessToken', 'authorization', 'phoneNumber', 'phoneNumbers', 'testPhoneNumbers', 'verificationCode', 'smsCode']) {
+    if (Object.prototype.hasOwnProperty.call(evidence, forbidden)) {
+      failures.push(`Phone Auth evidence must not contain ${forbidden}.`);
+    }
+  }
+  return failures;
 }
 
 export async function fetchFirebasePhoneAuthConfig({ projectId = EXPECTED_PROJECT_ID } = {}) {
