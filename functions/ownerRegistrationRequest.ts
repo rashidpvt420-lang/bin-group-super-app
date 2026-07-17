@@ -167,7 +167,7 @@ async function resolveOrCreateOwnerAuth(email: string, password: string, fullNam
   }
 }
 
-export const previewOwnerOnboardingQuote = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+export async function previewOwnerOnboardingQuoteHandler(request: any) {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Owner authentication is required to calculate a locked quote.");
   }
@@ -197,7 +197,12 @@ export const previewOwnerOnboardingQuote = onCall({ cors: true, enforceAppCheck:
       error?.message || "The server could not calculate this property quote.",
     );
   }
-});
+}
+
+export const previewOwnerOnboardingQuote = onCall(
+  { cors: true, enforceAppCheck: true },
+  previewOwnerOnboardingQuoteHandler,
+);
 
 export const submitPendingOwnerRegistration = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
@@ -339,7 +344,7 @@ export const submitPendingOwnerRegistration = onCall({ cors: true, enforceAppChe
   };
 });
 
-export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
   const data = request.data || {};
   const ownerUid = cleanText(data.ownerUid, "ownerUid", 120);
   const ownerEmail = cleanEmail(data.ownerEmail);
@@ -723,4 +728,9 @@ export const submitOwnerOnboardingPaymentPackage = onCall({ cors: true, enforceA
   }
 
   return { success: true, idempotent: false, paymentId: intakeId, contractId: intakeId, quoteHash };
-});
+}
+
+export const submitOwnerOnboardingPaymentPackage = onCall(
+  { cors: true, enforceAppCheck: true },
+  submitOwnerOnboardingPaymentPackageHandler,
+);
