@@ -51,7 +51,7 @@ export function validateOwnerProfileChange(input: any, profile: FirebaseFirestor
   const language = lower(input?.language || "en") === "ar" ? "ar" : "en";
 
   if (displayName.length < 2 || displayName.length > 120) throw new HttpsError("invalid-argument", "Owner full name must be between 2 and 120 characters.");
-  if (!['email', 'phone', 'whatsapp'].includes(preferredContact)) throw new HttpsError("invalid-argument", "Preferred contact must be email, phone, or whatsapp.");
+  if (!["email", "phone", "whatsapp"].includes(preferredContact)) throw new HttpsError("invalid-argument", "Preferred contact must be email, phone, or whatsapp.");
 
   const livePhone = normalizePhone(authRecord.phoneNumber);
   const existingPhone = normalizePhone(profile.phoneNumber || profile.phone);
@@ -80,6 +80,58 @@ export function validateOwnerProfileChange(input: any, profile: FirebaseFirestor
 
   return { displayName, phone: phone || existingPhone, companyName, billingName, billingEmail, billingPhone, preferredContact, language };
 }
+
+export const syncVerifiedOwnerPhone = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner login required.");
+    const uid = request.auth.uid;
+    const [authRecord, profileSnap] = await Promise.all([
+      admin.auth().getUser(uid),
+      db.collection("users").doc(uid).get(),
+    ]);
+    if (authRecord.disabled || authRecord.customClaims?.suspended === true) throw new HttpsError("permission-denied", "Owner account is disabled or suspended.");
+    const profile = profileSnap.data() || {};
+    if (ownerRole(authRecord, profile) !== "owner") throw new HttpsError("permission-denied", "Owner role required.");
+
+    const verifiedPhone = normalizePhone(authRecord.phoneNumber);
+    if (!verifiedPhone || !/^\+[1-9]\d{7,14}$/.test(verifiedPhone)) {
+      throw new HttpsError("failed-precondition", "Firebase Authentication has no verified Owner phone number to sync.");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const auditRef = db.collection("audit_logs").doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (transaction) => {
+      const fresh = await transaction.get(userRef);
+      if (!fresh.exists) throw new HttpsError("not-found", "Owner profile not found.");
+      const previousPhone = normalizePhone(fresh.data()?.phoneNumber || fresh.data()?.phone) || null;
+      transaction.set(userRef, {
+        phoneNumber: verifiedPhone,
+        phone: verifiedPhone,
+        phoneVerified: true,
+        phoneAuthority: "FIREBASE_AUTH_PHONE",
+        phoneVerifiedAt: now,
+        ownerProfileUpdatedAt: now,
+        ownerProfileUpdatedBy: uid,
+        updatedAt: now,
+      }, { merge: true });
+      transaction.set(auditRef, {
+        action: "OWNER_PHONE_VERIFIED_SYNCED",
+        actorId: uid,
+        actorRole: "owner",
+        targetType: "user",
+        targetId: uid,
+        before: { phoneNumber: previousPhone },
+        after: { phoneNumber: verifiedPhone },
+        phoneAuthority: "FIREBASE_AUTH_PHONE",
+        createdAt: now,
+      });
+    });
+
+    return { status: "SUCCESS", phoneNumber: verifiedPhone, authority: "FIREBASE_AUTH_PHONE" };
+  },
+);
 
 export const updateVerifiedOwnerProfile = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
