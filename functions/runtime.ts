@@ -39,6 +39,7 @@ export * from "./ticketDispatchOperations";
 export * from "./paymentEvidence";
 export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
+export * from "./secureOwnerProfileOperations";
 
 // Explicit exports take precedence over legacy star exports. These wrappers
 // enforce live server-side authority before delegating to established handlers.
