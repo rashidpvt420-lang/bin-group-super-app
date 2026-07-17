@@ -28,14 +28,17 @@ test('Owner browser verifies SMS through Firebase Auth before server synchroniza
   assert.match(card, /RecaptchaVerifier/);
   assert.match(card, /updatePhoneNumber/);
   assert.match(card, /provider\.verifyPhoneNumber\(normalized, verifierRef\.current\)/);
+  assert.match(card, /setChallengeUid\(currentUser\.uid\)/);
+  assert.match(card, /currentUser\.uid !== challengeUid/);
   assert.match(card, /PhoneAuthProvider\.credential\(verificationId, otp\)/);
-  assert.match(card, /await updatePhoneNumber\(auth\.currentUser, credential\)/);
-  assert.match(card, /await auth\.currentUser\.reload\(\)/);
-  assert.match(card, /await auth\.currentUser\.getIdToken\(true\)/);
+  assert.match(card, /await updatePhoneNumber\(currentUser, credential\)/);
+  assert.match(card, /await currentUser\.reload\(\)/);
+  assert.match(card, /await currentUser\.getIdToken\(true\)/);
   assert.match(card, /httpsCallable\(functions, 'syncVerifiedOwnerPhone'\)/);
   assert.match(card, /await syncPhone\(\{\}\)/);
   assert.doesNotMatch(card, /setDoc\(|updateDoc\(|addDoc\(/);
   assert.doesNotMatch(card, /otp\s*[:=]\s*['"]\d{6}['"]/);
+  assert.doesNotMatch(card, /text:\s*error\?\.message/);
 });
 
 test('Owner phone verification UI is explicit, stable, and fail-closed', () => {
@@ -54,6 +57,7 @@ test('Owner phone verification UI is explicit, stable, and fail-closed', () => {
   assert.match(card, /auth\/too-many-requests/);
   assert.match(card, /\^\\\+\[1-9\]\\d\{7,14\}\$/);
   assert.match(card, /otp\.length !== 6/);
+  assert.match(card, /autoComplete: 'one-time-code'/);
 });
 
 test('Owner profile keeps verified phone read-only and embeds SMS authority workflow', () => {
