@@ -40,14 +40,14 @@ export * from "./paymentEvidence";
 export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 
-// Explicit exports take precedence over the legacy star export above. These
-// wrappers perform live server-side credential validation before delegating to
-// the established operational handlers.
+// Explicit exports take precedence over legacy star exports. These wrappers
+// enforce live server-side authority before delegating to established handlers.
 export {
   resumeTechnicianDuty,
   acceptTechnicianTicket,
   updateTicketLifecycle,
 } from "./secureTechnicianOperations";
+export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
 
 if (!admin.apps.length) {
   admin.initializeApp();
