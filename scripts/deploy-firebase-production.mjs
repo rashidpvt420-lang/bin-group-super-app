@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
 import { verifyFirebaseProductionSecrets } from './verify-firebase-production-secrets.mjs';
 import { verifyFirebasePhoneAuthProduction } from './verify-firebase-phone-auth-production.mjs';
@@ -12,6 +12,7 @@ const githubSha = String(process.env.GITHUB_SHA || '').trim();
 const launchMode = String(process.env.LAUNCH_MODE || '').trim();
 const artifactDigest = String(process.env.VALIDATED_ARTIFACT_DIGEST || '').trim();
 const approvalPath = 'launch_package/predeploy-approval.json';
+const deploymentMetadataPath = 'launch_package/production-deployment.json';
 const digestFailures = [];
 const validatedArtifactDigest = requireArtifactDigest(
   artifactDigest,
@@ -81,8 +82,9 @@ try {
   process.exit(1);
 }
 
+let phoneAuthEvidence;
 try {
-  await verifyFirebasePhoneAuthProduction({ projectId });
+  phoneAuthEvidence = await verifyFirebasePhoneAuthProduction({ projectId });
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Phone Auth configuration verification failed';
   console.error(`[production-deploy] Firebase Phone Auth production preflight failed: ${message}`);
@@ -134,6 +136,17 @@ const metadataStatus = run(process.execPath, [
   'hosting,firestoreRules,firestoreIndexes,storageRules,functions',
 ]);
 if (metadataStatus !== 0) process.exit(metadataStatus);
+
+try {
+  const deploymentMetadata = JSON.parse(readFileSync(deploymentMetadataPath, 'utf8'));
+  deploymentMetadata.firebasePhoneAuth = phoneAuthEvidence;
+  writeFileSync(deploymentMetadataPath, `${JSON.stringify(deploymentMetadata, null, 2)}\n`);
+  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth preflight evidence');
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'metadata embedding failed';
+  console.error(`[production-deploy] Could not bind Firebase Phone Auth evidence to deployment metadata: ${message}`);
+  process.exit(1);
+}
 
 const verifyStatus = run(process.execPath, [
   'scripts/verify-production-deployment.mjs',
