@@ -9,11 +9,67 @@ import { assertOwnerPortfolioQuoteRecord } from "./ownerPortfolioQuote";
 
 const SUPPORTED_METHODS = new Set(["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"]);
 const MANUAL_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
+const PAYMENT_PLANS = new Set(["annual", "quarterly", "monthly"]);
+const CONTRACT_MODE_NAMES: Record<string, string> = {
+  FM_ONLY: "MAINTENANCE ONLY",
+  PM_ONLY: "PROPERTY MANAGEMENT",
+  BOTH: "TOTAL CARE HYBRID",
+};
 
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
 const compactUpper = (value: unknown) => upper(value).replace(/\s+/g, "");
 const money = (value: unknown) => Math.round(Number(value) * 100) / 100;
+
+function contractModeForProperty(property: any): string {
+  const strategy = text(property?.strategy).toLowerCase();
+  if (["pm_only", "rent"].includes(strategy)) return "PM_ONLY";
+  if (["fm_only", "fm"].includes(strategy)) return "FM_ONLY";
+  if (["both", "hybrid", "combined"].includes(strategy)) return "BOTH";
+  throw new HttpsError("invalid-argument", "Every property must use maintenance, property management, or hybrid service mode.");
+}
+
+function assertCanonicalCommercialTerms(data: any) {
+  const properties = Array.isArray(data?.properties) ? data.properties : [];
+  if (!properties.length || properties.length > 100) {
+    throw new HttpsError("invalid-argument", "One to 100 properties are required for the contract package.");
+  }
+
+  const modes = new Set(properties.map((property: any) => contractModeForProperty(property)));
+  if (modes.size !== 1) {
+    throw new HttpsError("failed-precondition", "A single contract cannot mix maintenance, property-management, and hybrid service modes.");
+  }
+  const contractMode = Array.from(modes)[0];
+  const canonicalPlanName = CONTRACT_MODE_NAMES[contractMode];
+  const submittedPlanName = upper(data?.serviceDetails?.selectedPlan);
+  if (submittedPlanName !== canonicalPlanName) {
+    throw new HttpsError("failed-precondition", "The selected contract plan does not match the server-priced property strategy.");
+  }
+
+  const paymentPlans = properties.map((property: any) => text(property?.paymentPlan || "annual").toLowerCase());
+  if (paymentPlans.some((plan: string) => !PAYMENT_PLANS.has(plan))) {
+    throw new HttpsError("invalid-argument", "Payment plan must be annual, quarterly, or monthly.");
+  }
+  const uniquePaymentPlans = new Set(paymentPlans);
+  if (uniquePaymentPlans.size !== 1) {
+    throw new HttpsError("failed-precondition", "All properties in one contract must use the same payment plan.");
+  }
+  const paymentPlan = Array.from(uniquePaymentPlans)[0];
+  const totalUnits = properties.reduce((total: number, property: any) => {
+    const units = Number(property?.units || property?.bedrooms || property?.beds || 0);
+    return total + (Number.isFinite(units) && units > 0 ? units : 0);
+  }, 0);
+
+  data.serviceDetails = {
+    ...(data.serviceDetails || {}),
+    properties: properties.length,
+    totalUnits,
+    selectedPlan: canonicalPlanName,
+    contractMode,
+    paymentPlan,
+  };
+  return { contractMode, canonicalPlanName, paymentPlan, propertyCount: properties.length, totalUnits };
+}
 
 async function assertCurrentPaymentConfiguration(data: any) {
   const method = upper(data?.paymentMethod || data?.paymentManifest?.method);
@@ -68,8 +124,6 @@ async function assertServerQuote(request: any, data: any) {
     });
   }
 
-  // Transitional support for the already-shipped client. The server recalculates
-  // the complete package and accepts it only when hash, expiry and amounts match.
   const previewRunner = (previewOwnerOnboardingQuote as any).run;
   if (typeof previewRunner !== "function") throw new HttpsError("internal", "The server quote calculator is unavailable.");
   const previewResult = await previewRunner({
@@ -113,6 +167,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
     }
 
     const data = request.data || {};
+    assertCanonicalCommercialTerms(data);
     const quote = await assertServerQuote(request, data);
     if (
       money(data.paymentManifest?.annualContractValue) !== quote.portfolioAnnualTotal ||
@@ -127,7 +182,7 @@ export const submitOwnerOnboardingPaymentPackage = onCall(
     if (typeof legacyRunner !== "function") {
       throw new HttpsError("internal", "The protected onboarding package handler is unavailable.");
     }
-    return legacyRunner(request);
+    return legacyRunner({ ...request, data });
   },
 );
 
