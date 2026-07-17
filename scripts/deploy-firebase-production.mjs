@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
+import { verifyFirebaseProductionSecrets } from './verify-firebase-production-secrets.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
@@ -70,6 +71,14 @@ if ((remoteMain.status ?? 1) !== 0 || remoteMainSha !== githubSha) {
   process.exit(1);
 }
 
+try {
+  await verifyFirebaseProductionSecrets({ projectId });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'secret metadata verification failed';
+  console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
+  process.exit(1);
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
@@ -79,14 +88,6 @@ function run(command, args, options = {}) {
     ...options,
   });
   return result.status ?? 1;
-}
-
-const secretPreflightStatus = run(process.execPath, [
-  'scripts/verify-firebase-production-secrets.mjs',
-]);
-if (secretPreflightStatus !== 0) {
-  console.error('[production-deploy] Required Firebase production function secret preflight failed');
-  process.exit(secretPreflightStatus);
 }
 
 function retryFirebase(target, label) {
