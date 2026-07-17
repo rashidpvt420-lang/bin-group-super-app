@@ -35,11 +35,14 @@ function assertCanonicalCommercialTerms(data: any) {
     throw new HttpsError("invalid-argument", "One to 100 properties are required for the contract package.");
   }
 
-  const modes = new Set(properties.map((property: any) => contractModeForProperty(property)));
+  const modes = new Set<string>(properties.map((property: any) => contractModeForProperty(property)));
   if (modes.size !== 1) {
     throw new HttpsError("failed-precondition", "A single contract cannot mix maintenance, property-management, and hybrid service modes.");
   }
-  const contractMode = Array.from(modes)[0];
+  const contractMode = modes.values().next().value as string | undefined;
+  if (!contractMode || !CONTRACT_MODE_NAMES[contractMode]) {
+    throw new HttpsError("failed-precondition", "The contract service mode could not be resolved.");
+  }
   const canonicalPlanName = CONTRACT_MODE_NAMES[contractMode];
   const submittedPlanName = upper(data?.serviceDetails?.selectedPlan);
   if (submittedPlanName !== canonicalPlanName) {
@@ -50,11 +53,14 @@ function assertCanonicalCommercialTerms(data: any) {
   if (paymentPlans.some((plan: string) => !PAYMENT_PLANS.has(plan))) {
     throw new HttpsError("invalid-argument", "Payment plan must be annual, quarterly, or monthly.");
   }
-  const uniquePaymentPlans = new Set(paymentPlans);
+  const uniquePaymentPlans = new Set<string>(paymentPlans);
   if (uniquePaymentPlans.size !== 1) {
     throw new HttpsError("failed-precondition", "All properties in one contract must use the same payment plan.");
   }
-  const paymentPlan = Array.from(uniquePaymentPlans)[0];
+  const paymentPlan = uniquePaymentPlans.values().next().value as string | undefined;
+  if (!paymentPlan || !PAYMENT_PLANS.has(paymentPlan)) {
+    throw new HttpsError("failed-precondition", "The contract payment plan could not be resolved.");
+  }
   const totalUnits = properties.reduce((total: number, property: any) => {
     const units = Number(property?.units || property?.bedrooms || property?.beds || 0);
     return total + (Number.isFinite(units) && units > 0 ? units : 0);
