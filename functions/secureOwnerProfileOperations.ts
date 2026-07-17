@@ -40,6 +40,30 @@ function hasVerifiedIdentity(profile: FirebaseFirestore.DocumentData) {
   return profile.kycVerified === true || profile.identityVerified === true || profile.ownerVerified === true || ["verified", "approved", "active"].includes(status);
 }
 
+function profilePresenceSummary(value: {
+  displayName?: unknown;
+  phone?: unknown;
+  companyName?: unknown;
+  billingName?: unknown;
+  billingEmail?: unknown;
+  billingPhone?: unknown;
+  preferredContact?: unknown;
+}) {
+  return {
+    displayNamePresent: Boolean(text(value.displayName)),
+    phonePresent: Boolean(normalizePhone(value.phone)),
+    companyNamePresent: Boolean(text(value.companyName)),
+    billingNamePresent: Boolean(text(value.billingName)),
+    billingEmailPresent: Boolean(lower(value.billingEmail)),
+    billingPhonePresent: Boolean(normalizePhone(value.billingPhone)),
+    preferredContact: lower(value.preferredContact) || null,
+  };
+}
+
+function changedProfileFields(before: ReturnType<typeof profilePresenceSummary>, after: ReturnType<typeof profilePresenceSummary>) {
+  return Object.keys(after).filter((key) => before[key as keyof typeof before] !== after[key as keyof typeof after]);
+}
+
 export function validateOwnerProfileChange(input: any, profile: FirebaseFirestore.DocumentData, authRecord: admin.auth.UserRecord) {
   const displayName = text(input?.displayName);
   const phone = normalizePhone(input?.phone || input?.phoneNumber);
@@ -109,7 +133,7 @@ export const syncVerifiedOwnerPhone = onCall(
     await db.runTransaction(async (transaction) => {
       const fresh = await transaction.get(userRef);
       if (!fresh.exists) throw new HttpsError("not-found", "Owner profile not found.");
-      const previousPhone = normalizePhone(fresh.data()?.phoneNumber || fresh.data()?.phone) || null;
+      const previousPhone = normalizePhone(fresh.data()?.phoneNumber || fresh.data()?.phone);
       transaction.set(userRef, {
         phoneNumber: verifiedPhone,
         phone: verifiedPhone,
@@ -126,9 +150,11 @@ export const syncVerifiedOwnerPhone = onCall(
         actorRole: "owner",
         targetType: "user",
         targetId: uid,
-        before: { phoneNumber: previousPhone },
-        after: { phoneNumber: verifiedPhone },
+        before: { phonePresent: Boolean(previousPhone) },
+        after: { phonePresent: true },
+        phoneChanged: previousPhone !== verifiedPhone,
         phoneAuthority: "FIREBASE_AUTH_PHONE",
+        sensitiveValuesExcluded: true,
         createdAt: now,
       });
     });
@@ -154,20 +180,24 @@ export const updateVerifiedOwnerProfile = onCall(
     const now = FieldValue.serverTimestamp();
     const userRef = db.collection("users").doc(uid);
     const auditRef = db.collection("audit_logs").doc();
-    const before = {
-      displayName: profile.displayName || null,
-      phoneNumber: profile.phoneNumber || profile.phone || null,
-      companyName: profile.companyName || profile.ownerCompanyName || null,
-      billingContact: profile.billingContact || null,
-      preferredContact: profile.notificationPreferences?.preferredContact || profile.preferredContact || null,
-    };
-    const after = {
+    const before = profilePresenceSummary({
+      displayName: profile.displayName,
+      phone: profile.phoneNumber || profile.phone,
+      companyName: profile.companyName || profile.ownerCompanyName,
+      billingName: profile.billingContact?.name || profile.billingName,
+      billingEmail: profile.billingContact?.email || profile.billingEmail,
+      billingPhone: profile.billingContact?.phone || profile.billingPhone,
+      preferredContact: profile.notificationPreferences?.preferredContact || profile.preferredContact,
+    });
+    const after = profilePresenceSummary({
       displayName: value.displayName,
-      phoneNumber: value.phone,
+      phone: value.phone,
       companyName: value.companyName,
-      billingContact: { name: value.billingName, email: value.billingEmail, phone: value.billingPhone },
+      billingName: value.billingName,
+      billingEmail: value.billingEmail,
+      billingPhone: value.billingPhone,
       preferredContact: value.preferredContact,
-    };
+    });
 
     await db.runTransaction(async (transaction) => {
       const fresh = await transaction.get(userRef);
@@ -178,7 +208,7 @@ export const updateVerifiedOwnerProfile = onCall(
         phone: value.phone,
         companyName: value.companyName,
         ownerCompanyName: value.companyName,
-        billingContact: after.billingContact,
+        billingContact: { name: value.billingName, email: value.billingEmail, phone: value.billingPhone },
         notificationPreferences: {
           ...(fresh.data()?.notificationPreferences || {}),
           preferredContact: value.preferredContact,
@@ -197,13 +227,24 @@ export const updateVerifiedOwnerProfile = onCall(
         targetId: uid,
         before,
         after,
+        changedFields: changedProfileFields(before, after),
         phoneAuthority: value.phoneAuthority,
         identityAuthority: "OWNER_KYC_RECORD",
+        sensitiveValuesExcluded: true,
         createdAt: now,
       });
     });
 
     if (authRecord.displayName !== value.displayName) await admin.auth().updateUser(uid, { displayName: value.displayName });
-    return { status: "SUCCESS", profile: after };
+    return {
+      status: "SUCCESS",
+      profile: {
+        displayName: value.displayName,
+        phoneNumber: value.phone,
+        companyName: value.companyName,
+        billingContact: { name: value.billingName, email: value.billingEmail, phone: value.billingPhone },
+        preferredContact: value.preferredContact,
+      },
+    };
   },
 );
