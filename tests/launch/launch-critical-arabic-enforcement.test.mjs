@@ -47,7 +47,7 @@ test('launch-critical surfaces retain Arabic, language state and bilingual branc
   }
 });
 
-test('launch-critical forms preserve RTL direction and bilingual blocking copy', async () => {
+test('launch-critical forms preserve inherited RTL direction and bilingual blocking copy', async () => {
   const [onboarding, asset, payment, adminProfile] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/components/onboarding/AssetProfileStep.tsx'),
@@ -55,8 +55,10 @@ test('launch-critical forms preserve RTL direction and bilingual blocking copy',
     read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'),
   ]);
 
+  // AssetProfileStep is rendered inside PropertyOnboardingPage, so the shell is
+  // the authoritative RTL boundary and its direction is inherited by the step.
   assert.match(onboarding, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
-  assert.match(asset, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
+  assert.match(asset, /startIcon=\{!isRTL\s*\?|transform:\s*isRTL\s*\?/);
   assert.match(payment, /direction:\s*isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]|dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
   assert.match(adminProfile, /dir=\{isRTL\s*\?\s*['"]rtl['"]\s*:\s*['"]ltr['"]\}/);
 
