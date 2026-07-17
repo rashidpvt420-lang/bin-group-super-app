@@ -1,0 +1,55 @@
+name: Codacy PR Diagnostic
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'functions/secureOwnerProfileOperations.ts'
+      - 'src/owner/**'
+      - 'tests/launch/owner-*.test.mjs'
+      - '.github/workflows/codacy-pr-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-codacy-issues:
+    name: Inspect public Codacy PR issues
+    if: ${{ github.event.pull_request.number == 330 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch public Codacy issue metadata
+        env:
+          CODACY_API_URL: https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            echo "Codacy issue metadata attempt ${attempt}/20"
+            if response="$(curl --fail --silent --show-error --max-time 20 "$CODACY_API_URL")"; then
+              printf '%s' "$response" > codacy-pr-issues.json
+              node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync('codacy-pr-issues.json', 'utf8'));
+          const rows = Array.isArray(payload?.data) ? payload.data : [];
+          const output = rows.map((issue) => ({
+            filePath: issue.filePath || issue.file?.path || null,
+            lineNumber: issue.lineNumber || issue.line || null,
+            patternId: issue.patternInfo?.id || issue.patternId || null,
+            patternTitle: issue.patternInfo?.title || issue.title || null,
+            level: issue.patternInfo?.level || issue.level || null,
+            category: issue.patternInfo?.category || issue.category || null,
+            message: issue.message || issue.description || null,
+            status: issue.status || null,
+          }));
+          console.log(JSON.stringify({ count: output.length, issues: output }, null, 2));
+          if (output.length > 0) process.exit(0);
+          process.exitCode = 2;
+          NODE
+              status=$?
+              if [[ "$status" == "0" ]]; then exit 0; fi
+            fi
+            sleep 20
+          done
+          echo "::error::Codacy issue metadata was unavailable or empty after retries."
+          exit 1
