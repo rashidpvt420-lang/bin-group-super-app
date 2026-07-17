@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Avatar, Box, Button, CircularProgress, Divider, Grid, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Building2, KeyRound, Mail, Phone, Save, Shield, User } from 'lucide-react';
-import { auth, db, doc, getDoc, sendPasswordResetEmail, serverTimestamp, setDoc, updateProfile } from '../../lib/firebase';
+import { auth, db, doc, functions, getDoc, httpsCallable, sendPasswordResetEmail } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -68,35 +68,42 @@ export default function OwnerProfilePage() {
     setSaving(true);
     setNotice(null);
     try {
-      if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-      const payload = {
-        uid: user.uid,
-        email: user.email || profileData?.email || '',
-        role: profileData?.role || 'owner',
+      const updateOwnerProfile = httpsCallable(functions, 'updateVerifiedOwnerProfile');
+      const result: any = await updateOwnerProfile({
         displayName: displayName.trim(),
-        phoneNumber: phone.trim(),
         phone: phone.trim(),
         companyName: companyName.trim(),
-        ownerCompanyName: companyName.trim(),
         billingContact: {
           name: billingName.trim(),
           email: billingEmail.trim().toLowerCase(),
           phone: billingPhone.trim(),
         },
+        preferredContact,
+        language: lang,
+      });
+      const confirmed = result?.data?.profile || {};
+      setProfileData((prev: any) => ({
+        ...prev,
+        displayName: confirmed.displayName || displayName.trim(),
+        phoneNumber: confirmed.phoneNumber || phone.trim(),
+        phone: confirmed.phoneNumber || phone.trim(),
+        companyName: confirmed.companyName || companyName.trim(),
+        ownerCompanyName: confirmed.companyName || companyName.trim(),
+        billingContact: confirmed.billingContact || {
+          name: billingName.trim(),
+          email: billingEmail.trim().toLowerCase(),
+          phone: billingPhone.trim(),
+        },
         notificationPreferences: {
-          ...(profileData?.notificationPreferences || {}),
+          ...(prev?.notificationPreferences || {}),
           preferredContact,
           language: lang,
         },
-        language: lang,
-        updatedAt: serverTimestamp(),
-      };
-      await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
-      setProfileData((prev: any) => ({ ...prev, ...payload }));
-      setNotice({ type: 'success', text: label('Owner profile updated successfully.', 'تم تحديث ملف المالك بنجاح.') });
+      }));
+      setNotice({ type: 'success', text: label('Verified Owner profile updated successfully.', 'تم تحديث ملف المالك الموثق بنجاح.') });
     } catch (error: any) {
       console.error('[OwnerProfile] save failed:', error);
-      setNotice({ type: 'error', text: error?.message || label('Failed to update owner profile.', 'فشل تحديث ملف المالك.') });
+      setNotice({ type: 'error', text: error?.message || label('Failed to update verified Owner profile.', 'فشل تحديث ملف المالك الموثق.') });
     } finally {
       setSaving(false);
     }
@@ -131,7 +138,7 @@ export default function OwnerProfilePage() {
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Manage identity, billing contact, notification preference, and account recovery.', 'إدارة الهوية، جهة اتصال الفوترة، تفضيلات الإشعارات، واسترداد الحساب.')}</Typography>
+      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Identity and billing changes are verified against Firebase Auth and Owner KYC records before they are accepted.', 'يتم التحقق من تغييرات الهوية والفوترة مقابل مصادقة Firebase وسجلات اعرف عميلك للمالك قبل قبولها.')}</Typography>
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
       <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
@@ -148,23 +155,23 @@ export default function OwnerProfilePage() {
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 4 }} />
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Mobile Number', 'رقم الهاتف المتحرك')} value={phone} onChange={(e) => setPhone(e.target.value)} sx={inputSx} /></Grid>
-          <Grid item xs={12} md={6}><TextField fullWidth label={label('Company / Portfolio Name', 'اسم الشركة / المحفظة')} value={companyName} onChange={(e) => setCompanyName(e.target.value)} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Mobile Number', 'رقم الهاتف المتحرك الموثق')} value={phone} onChange={(e) => setPhone(e.target.value)} helperText={label('A changed number must already be verified in Firebase Authentication.', 'يجب أن يكون الرقم الجديد موثقاً مسبقاً في مصادقة Firebase.')} sx={inputSx} /></Grid>
+          <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Company / Portfolio Name', 'اسم الشركة / المحفظة الموثق')} value={companyName} onChange={(e) => setCompanyName(e.target.value)} helperText={label('Legal changes must match the verified Owner KYC record.', 'يجب أن تتطابق التغييرات القانونية مع سجل اعرف عميلك الموثق للمالك.')} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Preferred Contact Channel', 'قناة التواصل المفضلة')} value={preferredContact} onChange={(e) => setPreferredContact(e.target.value)} helperText={label('email, phone, whatsapp', 'البريد الإلكتروني، الهاتف، واتساب')} sx={inputSx} /></Grid>
-          <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Billing Contact', 'جهة اتصال الفوترة')}</Typography></Grid>
+          <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Verified Billing Contact', 'جهة اتصال الفوترة الموثقة')}</Typography></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Name', 'اسم جهة الفوترة')} value={billingName} onChange={(e) => setBillingName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Email', 'بريد الفوترة الإلكتروني')} value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} onChange={(e) => setBillingPhone(e.target.value)} sx={inputSx} /></Grid>
         </Grid>
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
-          <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Saving...', 'جارٍ الحفظ...') : label('Save Owner Profile', 'حفظ ملف المالك')}</Button>
+          <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Verifying and saving...', 'جارٍ التحقق والحفظ...') : label('Save Verified Profile', 'حفظ الملف الموثق')}</Button>
           <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}</Button>
         </Stack>
       </Paper>
 
       <Paper sx={{ p: 3, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 4 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Your IBAN and payout details remain managed separately under Owner → IBAN / Payout Accounts.', 'تظل تفاصيل الآيبان وحسابات التحويل مُدارة بشكل منفصل ضمن المالك ← الآيبان / حسابات التحويل.')}</Typography></Stack>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
       </Paper>
     </Box>
   );
