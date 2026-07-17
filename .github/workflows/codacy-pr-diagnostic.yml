@@ -1,0 +1,78 @@
+name: Codacy PR Diagnostic
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'functions/secureOwnerProfileOperations.ts'
+      - 'src/owner/**'
+      - 'tests/launch/owner-*.test.mjs'
+      - '.github/workflows/codacy-pr-diagnostic.yml'
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  inspect-codacy-issues:
+    name: Inspect public Codacy PR issues
+    if: ${{ github.event.pull_request.number == 330 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch Codacy annotations from GitHub Checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 32); do
+            echo "GitHub Codacy annotation attempt ${attempt}/32"
+            check_runs="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100")"
+            printf '%s' "$check_runs" > check-runs.json
+            node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync('check-runs.json', 'utf8'));
+          const runs = Array.isArray(payload?.check_runs) ? payload.check_runs : [];
+          const codacyRuns = runs.filter((run) => /codacy/i.test(`${run.name} ${run.app?.name || ''}`));
+          console.log(JSON.stringify({ codacyRuns: codacyRuns.map((run) => ({ id: run.id, name: run.name, app: run.app?.name, status: run.status, conclusion: run.conclusion, detailsUrl: run.details_url, output: run.output })) }, null, 2));
+          const completed = codacyRuns.find((run) => run.status === 'completed') || codacyRuns[0];
+          if (completed?.id) fs.writeFileSync('codacy-check-id.txt', String(completed.id));
+          NODE
+            if [[ -s codacy-check-id.txt ]]; then
+              check_id="$(cat codacy-check-id.txt)"
+              annotations="$(curl --fail --silent --show-error --max-time 20 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/$REPOSITORY/check-runs/$check_id/annotations?per_page=100")"
+              printf '%s' "$annotations" > codacy-annotations.json
+              if node <<'NODE'
+          const fs = require('fs');
+          const rows = JSON.parse(fs.readFileSync('codacy-annotations.json', 'utf8'));
+          const output = (Array.isArray(rows) ? rows : []).map((item) => ({
+            path: item.path,
+            startLine: item.start_line,
+            endLine: item.end_line,
+            level: item.annotation_level,
+            title: item.title,
+            message: item.message,
+            rawDetails: item.raw_details,
+          }));
+          console.log(JSON.stringify({ annotationCount: output.length, annotations: output }, null, 2));
+          process.exit(output.length > 0 ? 0 : 2);
+          NODE
+              then
+                exit 0
+              fi
+            fi
+            rm -f codacy-check-id.txt
+            sleep 15
+          done
+          echo "::error::Codacy check annotations were unavailable after retries."
+          exit 1
