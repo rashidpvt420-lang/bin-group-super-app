@@ -40,7 +40,6 @@ export * from "./paymentEvidence";
 export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
-export * from "./secureBrokerPayoutOperations";
 
 export {
   resumeTechnicianDuty,
@@ -48,6 +47,11 @@ export {
   updateTicketLifecycle,
 } from "./secureTechnicianOperations";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
+export {
+  requestBrokerPayoutOtp,
+  verifyBrokerPayoutOtp,
+  submitBrokerPayoutRequest,
+} from "./secureBrokerPayoutOperations";
 
 if (!admin.apps.length) {
   admin.initializeApp();
