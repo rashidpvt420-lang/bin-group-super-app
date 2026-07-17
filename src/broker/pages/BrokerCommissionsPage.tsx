@@ -1,341 +1,191 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { jsPDF } from 'jspdf';
-import { 
-    Alert, Box, Typography, Paper, Grid, Stack, CircularProgress,
-    Chip, Table, TableBody, TableCell, TableContainer, TableHead, 
-    TableRow, alpha, IconButton, Tooltip, Button 
+import {
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  Grid, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, TextField, Tooltip, Typography, alpha,
 } from '@mui/material';
-import { 
-    Wallet, Landmark, ArrowUpRight, TrendingUp, 
-    ShieldCheck, Calendar, Info, FileText, 
-    Download, ExternalLink, Filter, Clock, Send
-} from 'lucide-react';
-import { db, collection, query, where, getDocs, orderBy, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
+import { Clock, Download, ExternalLink, Info, Send, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
+import { collection, db, functions, getDocs, httpsCallable, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
+type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
+
+type OtpState = {
+  open: boolean;
+  challengeId: string;
+  code: string;
+  expiresAt: number;
+  amount: number;
+  commissionCount: number;
+};
+
+const emptyOtp: OtpState = { open: false, challengeId: '', code: '', expiresAt: 0, amount: 0, commissionCount: 0 };
+
 export default function BrokerCommissionsPage() {
-    const { user } = useRole();
-    const { isRTL } = useLanguage();
+  const { user } = useRole();
+  const { isRTL } = useLanguage();
+  const [commissions, setCommissions] = useState<any[]>([]);
+  const [payoutRequests, setPayoutRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [payoutBusy, setPayoutBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [otp, setOtp] = useState<OtpState>(emptyOtp);
 
-    const exportReport = () => {
-        const pdf = new jsPDF();
-        pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
-        pdf.setTextColor(198, 167, 94); pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
-        pdf.text('BROKER COMMISSION STATEMENT', 14, 20);
-        pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-        pdf.text(`Broker: ${user?.displayName || user?.email || 'N/A'}`, 14, 30);
-        pdf.text(`Generated: ${new Date().toLocaleDateString()} | BIN GROUP Platform`, 14, 37);
-        pdf.setDrawColor(198, 167, 94); pdf.line(14, 42, 196, 42);
-        let y = 52;
-        pdf.setTextColor(198, 167, 94); pdf.setFontSize(10); pdf.text('COMMISSION LEDGER', 14, y); y += 8;
-        commissions.forEach((c: any) => {
-            if (y > 265) { pdf.addPage(); pdf.setFillColor(5,5,5); pdf.rect(0,0,210,297,'F'); y = 20; }
-            pdf.setTextColor(255, 255, 255); pdf.setFontSize(8);
-            const date = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A';
-            const name = c.linkedLeadName || c.linkedReferralName || 'Direct Mission';
-            const prop = c.linkedProperty || c.propertyName || '';
-            pdf.text(`${date}  |  ${name}${prop ? ` — ${prop}` : ''}`, 14, y); y += 5;
-            pdf.setTextColor(198, 167, 94);
-            pdf.text(`AED ${(c.amount || 0).toLocaleString()}  |  ${String(c.status || '').toUpperCase()}`, 14, y); y += 8;
-        });
-        pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
-        pdf.text('BIN GROUP Sovereign Platform | Confidential Commission Record', 14, 285);
-        pdf.save(`commission-statement-${new Date().toISOString().split('T')[0]}.pdf`);
-    };
+  const payableCommissions = useMemo(() => commissions.filter((commission) => {
+    const status = String(commission.status || '').toLowerCase();
+    const payoutStatus = String(commission.payoutStatus || '').toLowerCase();
+    return status === 'approved' && !['requested', 'approved', 'paid'].includes(payoutStatus);
+  }), [commissions]);
 
-    const viewStatement = (c: any) => {
-        const pdf = new jsPDF();
-        pdf.setFillColor(5, 5, 5); pdf.rect(0, 0, 210, 297, 'F');
-        pdf.setTextColor(198, 167, 94); pdf.setFontSize(14); pdf.setFont('helvetica', 'bold');
-        pdf.text('COMMISSION STATEMENT', 14, 20);
-        pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-        pdf.text(`Ref: #${c.id.substring(0,8).toUpperCase()}`, 14, 30);
-        pdf.text(`Date: ${c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A'}`, 14, 37);
-        pdf.setDrawColor(198, 167, 94); pdf.line(14, 42, 196, 42);
-        let y = 52;
-        const fields = [
-            ['Client / Lead', c.linkedLeadName || c.linkedReferralName || 'Direct Mission'],
-            ['Property', c.linkedProperty || c.propertyName || 'Portfolio Wide'],
-            ['Amount', `AED ${(c.amount || 0).toLocaleString()}`],
-            ['Commission %', c.percentage ? `${c.percentage}%` : 'N/A'],
-            ['Status', String(c.status || '').toUpperCase()],
-            ['Payout Date', c.paidDate?.toDate ? c.paidDate.toDate().toLocaleDateString() : c.expectedPayoutDate?.toDate ? c.expectedPayoutDate.toDate().toLocaleDateString() : 'Cycle End'],
-        ];
-        fields.forEach(([label, val]) => {
-            pdf.setTextColor(198, 167, 94); pdf.text(`${label}:`, 14, y);
-            pdf.setTextColor(255, 255, 255); pdf.text(val, 70, y); y += 10;
-        });
-        pdf.setTextColor(100, 100, 100); pdf.setFontSize(8);
-        pdf.text('BIN GROUP Sovereign Platform | Confidential Commission Record', 14, 285);
-        pdf.save(`commission-${c.id.substring(0,8)}.pdf`);
-    };
-    const [commissions, setCommissions] = useState<any[]>([]);
-    const [payoutRequests, setPayoutRequests] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [payoutBusy, setPayoutBusy] = useState(false);
-    const [payoutNotice, setPayoutNotice] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; text: string } | null>(null);
+  const payableIds = useMemo(() => payableCommissions.map((commission) => commission.id).sort(), [payableCommissions]);
 
-    const fetchCommissions = async () => {
-        if (!user?.uid) {
-            setLoading(false);
-            return;
-        }
-        try {
-            const q = query(
-                collection(db, 'broker_commissions'),
-                where('brokerId', '==', user.uid),
-                orderBy('createdAt', 'desc')
-            );
-            const snap = await getDocs(q);
-            setCommissions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (err) {
-            console.error("Failed to fetch commissions:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const stats = useMemo(() => ({
+    pending: commissions.filter((item) => String(item.status || '').toLowerCase() === 'pending').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    approved: commissions.filter((item) => String(item.status || '').toLowerCase() === 'approved').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    totalPaid: commissions.filter((item) => String(item.status || '').toLowerCase() === 'paid').reduce((sum, item) => sum + Number(item.amount || 0), 0),
+  }), [commissions]);
 
-    useEffect(() => {
-        fetchCommissions();
-        if (!user?.uid) return () => undefined;
-        const payoutQuery = query(collection(db, 'broker_payout_requests'), where('brokerId', '==', user.uid));
-        const unsubscribe = onSnapshot(payoutQuery, (snapshot) => {
-            const rows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            rows.sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
-                const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
-                return bTime - aTime;
-            });
-            setPayoutRequests(rows);
-        }, (err) => console.warn('[BrokerCommissions] payout request listener failed:', err));
-        return () => unsubscribe();
-    }, [user?.uid]);
+  const fetchCommissions = async () => {
+    if (!user?.uid) { setLoading(false); return; }
+    try {
+      const snapshot = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc')));
+      setCommissions(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+    } catch (error) {
+      console.error('[BrokerCommissions] commission query failed:', error);
+      setNotice({ type: 'error', text: 'Unable to load commission records.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const getStatusColor = (status: string) => {
-        const s = String(status || '').toLowerCase();
-        switch (s) {
-            case 'paid': return '#10b981';
-            case 'approved': return '#3b82f6';
-            case 'rejected': return '#ef4444';
-            case 'pending': return binThemeTokens.gold;
-            default: return binThemeTokens.textSecondary;
-        }
-    };
+  useEffect(() => {
+    void fetchCommissions();
+    if (!user?.uid) return () => undefined;
+    const unsubscribe = onSnapshot(query(collection(db, 'broker_payout_requests'), where('brokerId', '==', user.uid)), (snapshot) => {
+      const rows = snapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
+      rows.sort((a: any, b: any) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      setPayoutRequests(rows);
+    }, (error) => console.warn('[BrokerCommissions] payout listener failed:', error));
+    return () => unsubscribe();
+  }, [user?.uid]);
 
-    const stats = {
-        pending: commissions.filter(c => String(c.status || '').toLowerCase() === 'pending').reduce((acc, curr) => acc + (curr.amount || 0), 0),
-        approved: commissions.filter(c => String(c.status || '').toLowerCase() === 'approved').reduce((acc, curr) => acc + (curr.amount || 0), 0),
-        totalPaid: commissions.filter(c => String(c.status || '').toLowerCase() === 'paid').reduce((acc, curr) => acc + (curr.amount || 0), 0)
-    };
-    const payableCommissions = commissions.filter((c) => {
-        const status = String(c.status || '').toLowerCase();
-        const payoutStatus = String(c.payoutStatus || '').toLowerCase();
-        return status === 'approved' && !['requested', 'approved', 'paid'].includes(payoutStatus);
-    });
-    const latestPayout = payoutRequests[0];
+  const requestPayoutOtp = async () => {
+    if (!payableIds.length) { setNotice({ type: 'warning', text: 'No approved unpaid commissions are available for payout.' }); return; }
+    setPayoutBusy(true);
+    setNotice(null);
+    try {
+      const requestOtp = httpsCallable(functions, 'requestBrokerPayoutOtp');
+      const result = await requestOtp({ commissionIds: payableIds });
+      const data = result.data as any;
+      setOtp({ open: true, challengeId: String(data?.challengeId || ''), code: '', expiresAt: Number(data?.expiresAt || 0), amount: Number(data?.amount || 0), commissionCount: Number(data?.commissionCount || payableIds.length) });
+      setNotice({ type: 'info', text: 'A six-digit payout verification code was sent to your verified Broker email.' });
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error?.message || 'Unable to send payout verification code.' });
+    } finally {
+      setPayoutBusy(false);
+    }
+  };
 
-    const requestPayout = async () => {
-        if (!payableCommissions.length) {
-            setPayoutNotice({ type: 'warning', text: 'No approved unpaid commissions are available for payout.' });
-            return;
-        }
-        setPayoutBusy(true);
-        setPayoutNotice(null);
-        try {
-            const callable = httpsCallable(functions, 'submitBrokerPayoutRequest');
-            const result = await callable({ commissionIds: payableCommissions.map((commission) => commission.id) });
-            const data = result.data as any;
-            setPayoutNotice({ type: 'success', text: `Payout request submitted for AED ${Number(data?.amount || 0).toLocaleString()} across ${data?.commissionCount || payableCommissions.length} commission(s).` });
-            await fetchCommissions();
-        } catch (err: any) {
-            setPayoutNotice({ type: 'error', text: err?.message || 'Payout request failed. Complete KYC, bank details, and commission terms before requesting.' });
-        } finally {
-            setPayoutBusy(false);
-        }
-    };
+  const verifyAndSubmitPayout = async () => {
+    if (!/^\d{6}$/.test(otp.code)) { setNotice({ type: 'warning', text: 'Enter the six-digit verification code.' }); return; }
+    setPayoutBusy(true);
+    setNotice(null);
+    try {
+      const verifyOtp = httpsCallable(functions, 'verifyBrokerPayoutOtp');
+      await verifyOtp({ challengeId: otp.challengeId, otp: otp.code });
+      const submitPayout = httpsCallable(functions, 'submitBrokerPayoutRequest');
+      const result = await submitPayout({ challengeId: otp.challengeId, commissionIds: payableIds });
+      const data = result.data as any;
+      setOtp(emptyOtp);
+      setNotice({ type: 'success', text: `Payout request submitted for AED ${Number(data?.amount || 0).toLocaleString()} across ${Number(data?.commissionCount || payableIds.length)} commission(s).` });
+      await fetchCommissions();
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error?.message || 'Payout verification or submission failed.' });
+    } finally {
+      setPayoutBusy(false);
+    }
+  };
 
-    return (
-        <BrokerPageFrame
-            title="Finance & Payouts"
-            subtitle="Institutional tracking of earned brokerage commissions"
-            loading={loading}
-            actions={
-                <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
-                    <Button
-                        variant="contained"
-                        startIcon={<Send size={18} />}
-                        disabled={payoutBusy || payableCommissions.length === 0}
-                        onClick={requestPayout}
-                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}
-                    >
-                        {payoutBusy ? 'REQUESTING...' : `REQUEST PAYOUT (${payableCommissions.length})`}
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        startIcon={<Download size={18} />}
-                        onClick={exportReport}
-                        sx={{ color: binThemeTokens.textPrimary, borderColor: '#E5E7EB', fontWeight: 900, px: 3, borderRadius: 3 }}
-                    >
-                        EXPORT REPORT
-                    </Button>
-                </Stack>
-            }
-        >
-            {payoutNotice && <Alert severity={payoutNotice.type} sx={{ mb: 3 }} onClose={() => setPayoutNotice(null)}>{payoutNotice.text}</Alert>}
+  const exportReport = () => {
+    const pdf = new jsPDF();
+    pdf.text('BROKER COMMISSION STATEMENT', 14, 20);
+    pdf.text(`Broker: ${user?.displayName || user?.email || 'N/A'}`, 14, 30);
+    commissions.forEach((commission, index) => pdf.text(`${index + 1}. ${commission.id.slice(0, 8).toUpperCase()} - AED ${Number(commission.amount || 0).toLocaleString()} - ${String(commission.status || '').toUpperCase()}`, 14, 42 + (index * 7)));
+    pdf.save(`commission-statement-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
 
-            <Grid container spacing={3} sx={{ mb: 6 }}>
-                {[
-                    { label: 'PENDING SETTLEMENT', value: stats.pending, color: binThemeTokens.gold, icon: <Clock size={24} /> },
-                    { label: 'APPROVED FOR PAYOUT', value: stats.approved, color: '#3b82f6', icon: <ShieldCheck size={24} /> },
-                    { label: 'LIFETIME EARNED', value: stats.totalPaid, color: '#10b981', icon: <TrendingUp size={24} /> },
-                ].map((stat, idx) => (
-                    <Grid item xs={12} md={4} key={idx}>
-                        <Paper sx={{ 
-                            p: 4, 
-                            bgcolor: alpha(stat.color, 0.05), 
-                            border: `1px solid ${alpha(stat.color, 0.15)}`, 
-                            borderRadius: 6,
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }}>
-                            <Box sx={{ position: 'absolute', top: -10, right: -10, opacity: 0.1, color: stat.color }}>
-                                {stat.icon}
-                            </Box>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1.5 }}>{stat.label}</Typography>
-                            <Typography variant="h3" fontWeight="950" sx={{ color: stat.color, mt: 1, letterSpacing: -1 }}>
-                                <Typography component="span" variant="h5" sx={{ color: stat.color, mr: 1, fontWeight: 950 }}>AED</Typography>
-                                {stat.value.toLocaleString()}
-                            </Typography>
-                        </Paper>
-                    </Grid>
-                ))}
-            </Grid>
+  const latestPayout = payoutRequests[0];
+  const statusColor = (status: string) => {
+    switch (String(status || '').toLowerCase()) {
+      case 'paid': return '#10b981';
+      case 'approved': return '#3b82f6';
+      case 'rejected': return '#ef4444';
+      default: return binThemeTokens.gold;
+    }
+  };
 
-            <Paper sx={{ mb: 4, p: 3, bgcolor: binThemeTokens.softCanvas, borderRadius: 5, border: '1px solid #E5E7EB' }}>
-                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2}>
-                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>PAYOUT WORKFLOW</Typography>
-                        <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
-                            {payableCommissions.length ? `${payableCommissions.length} approved commission(s) ready to request` : 'No approved commission is currently payable'}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                            Requests stay pending until Admin Finance approves or marks the bank transfer paid.
-                        </Typography>
-                    </Box>
-                    <Stack spacing={0.7} sx={{ minWidth: { md: 260 }, textAlign: isRTL ? 'right' : 'left' }}>
-                        <Chip
-                            label={latestPayout ? String(latestPayout.status || 'PENDING_ADMIN_REVIEW').replaceAll('_', ' ').toUpperCase() : 'NO REQUEST YET'}
-                            sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: alpha(latestPayout?.status === 'PAID' ? '#10b981' : binThemeTokens.gold, 0.1), color: latestPayout?.status === 'PAID' ? '#10b981' : binThemeTokens.gold, fontWeight: 950 }}
-                        />
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>
-                            Latest payout: {latestPayout ? `AED ${Number(latestPayout.amount || 0).toLocaleString()} · ${latestPayout.commissionCount || latestPayout.commissionIds?.length || 0} commission(s)` : 'Submit once commissions are approved.'}
-                        </Typography>
-                    </Stack>
-                </Stack>
-                {payoutRequests.length > 0 && (
-                    <Stack spacing={1} sx={{ mt: 2 }}>
-                        {payoutRequests.slice(0, 3).map((request) => (
-                            <Box key={request.id} sx={{ p: 1.5, borderRadius: 3, bgcolor: '#fff', border: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                    <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>AED {Number(request.amount || 0).toLocaleString()}</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{request.id.substring(0, 8).toUpperCase()} · {request.commissionCount || request.commissionIds?.length || 0} commission(s)</Typography>
-                                </Box>
-                                <Chip size="small" label={String(request.status || 'PENDING').replaceAll('_', ' ').toUpperCase()} sx={{ fontWeight: 950, bgcolor: alpha(request.status === 'PAID' ? '#10b981' : request.status === 'REJECTED' ? '#ef4444' : binThemeTokens.gold, 0.1), color: request.status === 'PAID' ? '#10b981' : request.status === 'REJECTED' ? '#ef4444' : binThemeTokens.gold }} />
-                            </Box>
-                        ))}
-                    </Stack>
-                )}
-            </Paper>
+  return (
+    <BrokerPageFrame
+      title="Finance & Payouts"
+      subtitle="Verified commission settlement and payout tracking"
+      loading={loading}
+      actions={<Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+        <Button variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
+          {payoutBusy ? 'PROCESSING...' : `REQUEST PAYOUT (${payableIds.length})`}
+        </Button>
+        <Button variant="outlined" startIcon={<Download size={18} />} onClick={exportReport}>EXPORT REPORT</Button>
+      </Stack>}
+    >
+      {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-            {/* ─── COMMISSIONS TABLE ─────────────────────────────────────────── */}
-            <TableContainer component={Paper} sx={{ bgcolor: binThemeTokens.softCanvas, borderRadius: 8, border: '1px solid #E5E7EB', overflow: 'hidden' }}>
-                <Table>
-                    <TableHead sx={{ bgcolor: '#F3F4F6' }}>
-                        <TableRow>
-                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>MISSION REF</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>SOURCE / PROPERTY</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>ALLOCATION</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>STATUS</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }}>SETTLEMENT</TableCell>
-                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, borderBottom: '1px solid #E5E7EB' }} align="right">ACTIONS</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {commissions.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={6} align="center" sx={{ py: 10, border: 'none' }}>
-                                    <Box sx={{ color: '#9CA3AF' }}>
-                                        <Wallet size={48} />
-                                        <Typography variant="body2" sx={{ mt: 2, fontWeight: 900 }}>NO FINANCIAL RECORDS DETECTED</Typography>
-                                    </Box>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            commissions.map((c) => (
-                                <TableRow key={c.id} sx={{ '&:hover': { bgcolor: '#F3F4F6' } }}>
-                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
-                                        <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 950, fontFamily: 'monospace' }}>#{c.id.substring(0,8).toUpperCase()}</Typography>
-                                        <Typography variant="caption" sx={{ color: '#9CA3AF', fontWeight: 800 }}>{c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : 'N/A'}</Typography>
-                                    </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
-                                        <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{c.linkedLeadName || c.linkedReferralName || c.brokerName || 'Direct Mission'}</Typography>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.linkedProperty || c.propertyName || 'Portfolio Wide'}</Typography>
-                                    </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
-                                        <Typography variant="body1" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>AED {c.amount?.toLocaleString()}</Typography>
-                                        {c.percentage && <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900 }}>{c.percentage}% Yield</Typography>}
-                                    </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
-                                        <Chip
-                                            label={String(c.status || '').toUpperCase()}
-                                            size="small"
-                                            sx={{ bgcolor: alpha(getStatusColor(c.status), 0.1), color: getStatusColor(c.status), fontWeight: 950, fontSize: '0.65rem' }}
-                                        />
-                                    </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }}>
-                                        {String(c.status || '').toLowerCase() === 'paid' ? (
-                                            <Box>
-                                                <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>SETTLED</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.paidDate?.toDate ? c.paidDate.toDate().toLocaleDateString() : 'N/A'}</Typography>
-                                            </Box>
-                                        ) : c.payoutStatus ? (
-                                            <Box>
-                                                <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{String(c.payoutStatus).replaceAll('_', ' ').toUpperCase()}</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.payoutRequestId ? `Request ${String(c.payoutRequestId).substring(0, 8).toUpperCase()}` : 'Admin finance review'}</Typography>
-                                            </Box>
-                                        ) : (
-                                            <Box>
-                                                <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ESTIMATED</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{c.expectedPayoutDate?.toDate ? c.expectedPayoutDate.toDate().toLocaleDateString() : 'Cycle End'}</Typography>
-                                            </Box>
-                                        )}
-                                    </TableCell>
-                                    <TableCell sx={{ borderBottom: '1px solid #F1F2F4' }} align="right">
-                                        <Tooltip title="View Statement">
-                                            <IconButton onClick={() => viewStatement(c)} sx={{ color: binThemeTokens.textSecondary, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 2 }}>
-                                                <ExternalLink size={18} />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {[
+          { label: 'PENDING SETTLEMENT', value: stats.pending, icon: <Clock size={22} />, color: binThemeTokens.gold },
+          { label: 'APPROVED FOR PAYOUT', value: stats.approved, icon: <ShieldCheck size={22} />, color: '#3b82f6' },
+          { label: 'LIFETIME EARNED', value: stats.totalPaid, icon: <TrendingUp size={22} />, color: '#10b981' },
+        ].map((item) => <Grid item xs={12} md={4} key={item.label}><Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(item.color, 0.05), border: `1px solid ${alpha(item.color, 0.15)}` }}><Stack direction="row" justifyContent="space-between"><Box><Typography variant="caption" fontWeight={900}>{item.label}</Typography><Typography variant="h4" fontWeight={950}>AED {item.value.toLocaleString()}</Typography></Box>{item.icon}</Stack></Paper></Grid>)}
+      </Grid>
 
-            {/* ─── FINANCE NOTICE ────────────────────────────────────────────── */}
-            <Paper sx={{ mt: 4, p: 3, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}`, borderRadius: 4 }}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                    <Info size={20} color={binThemeTokens.gold} />
-                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>
-                        All commissions are subject to local tax laws and RERA brokerage fee regulations. Payments are processed within 14 business days of institutional approval.
-                    </Typography>
-                </Stack>
-            </Paper>
-        </BrokerPageFrame>
-    );
+      <Paper sx={{ p: 3, mb: 4, borderRadius: 4, border: '1px solid #E5E7EB' }}>
+        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>SECURE PAYOUT WORKFLOW</Typography>
+        <Typography variant="h6" fontWeight={950}>{payableIds.length ? `${payableIds.length} approved commission(s) ready` : 'No approved commission is payable'}</Typography>
+        <Typography variant="body2" color="text.secondary">Every request requires a short-lived, single-use code sent to the verified Broker email. The code is bound to the exact commissions and amount.</Typography>
+        {latestPayout && <Chip sx={{ mt: 2 }} label={String(latestPayout.status || 'PENDING_ADMIN_REVIEW').replaceAll('_', ' ').toUpperCase()} />}
+      </Paper>
+
+      <TableContainer component={Paper} sx={{ borderRadius: 4, border: '1px solid #E5E7EB' }}>
+        <Table>
+          <TableHead><TableRow><TableCell>MISSION REF</TableCell><TableCell>SOURCE / PROPERTY</TableCell><TableCell>ALLOCATION</TableCell><TableCell>STATUS</TableCell><TableCell>SETTLEMENT</TableCell><TableCell align="right">ACTION</TableCell></TableRow></TableHead>
+          <TableBody>
+            {commissions.length === 0 ? <TableRow><TableCell colSpan={6} align="center" sx={{ py: 8 }}><Wallet size={42} /><Typography>No financial records detected.</Typography></TableCell></TableRow> : commissions.map((commission) => <TableRow key={commission.id}>
+              <TableCell>#{commission.id.slice(0, 8).toUpperCase()}</TableCell>
+              <TableCell>{commission.linkedLeadName || commission.linkedReferralName || commission.brokerName || 'Direct Mission'}<Typography variant="caption" display="block">{commission.linkedProperty || commission.propertyName || 'Portfolio Wide'}</Typography></TableCell>
+              <TableCell>AED {Number(commission.amount || 0).toLocaleString()}</TableCell>
+              <TableCell><Chip size="small" label={String(commission.status || '').toUpperCase()} sx={{ color: statusColor(commission.status), bgcolor: alpha(statusColor(commission.status), 0.1) }} /></TableCell>
+              <TableCell>{commission.payoutStatus ? String(commission.payoutStatus).replaceAll('_', ' ').toUpperCase() : 'NOT REQUESTED'}</TableCell>
+              <TableCell align="right"><Tooltip title="Commission record"><IconButton><ExternalLink size={18} /></IconButton></Tooltip></TableCell>
+            </TableRow>)}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Paper sx={{ mt: 4, p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.03) }}><Stack direction="row" spacing={2}><Info size={20} /><Typography variant="body2">Payments remain pending until Admin Finance approves and records the bank transfer.</Typography></Stack></Paper>
+
+      <Dialog open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
+        <DialogTitle>Verify payout request</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>
+          <TextField autoFocus fullWidth label="Six-digit verification code" value={otp.code} inputProps={{ inputMode: 'numeric', maxLength: 6 }} onChange={(event) => setOtp((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))} />
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={payoutBusy} onClick={() => setOtp(emptyOtp)}>Cancel</Button>
+          <Button disabled={payoutBusy || otp.code.length !== 6 || Date.now() > otp.expiresAt} variant="contained" onClick={verifyAndSubmitPayout}>Verify and submit</Button>
+        </DialogActions>
+      </Dialog>
+    </BrokerPageFrame>
+  );
 }
