@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -68,7 +68,7 @@ async function requireMfaAdmin(auth: any) {
 }
 
 export const adminCloseContract = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  { cors: true, region: "europe-west3", enforceAppCheck: true, timeoutSeconds: 540, memory: "1GiB" },
   async (request) => {
     const actor = await requireMfaAdmin(request.auth);
     const contractId = text(request.data?.contractId, 180);
@@ -85,18 +85,75 @@ export const adminCloseContract = onCall(
     }
 
     const contractRef = db.collection("contracts").doc(contractId);
-    const renewalQuery = db.collection("contract_renewal_watch").where("contractId", "==", contractId).limit(100);
-    const propertyQuery = db.collection("properties").where("contractId", "==", contractId).limit(100);
-    const auditRef = db.collection("audit_logs").doc();
+    const contractSnap = await contractRef.get();
+    if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
+    const initialContract = contractSnap.data() || {};
+    const initialStatus = upper(initialContract.contractStatus || initialContract.status || initialContract.activationStatus);
+    if (initialStatus === "CLOSED") {
+      return {
+        status: "SUCCESS",
+        contractId,
+        idempotent: true,
+        ownerLocked: false,
+        renewalRecordsClosed: 0,
+        propertiesDisabled: 0,
+      };
+    }
+    if (TERMINAL_CONTRACT_STATES.has(initialStatus)) {
+      throw new HttpsError("failed-precondition", `Contract is already in terminal state ${initialStatus}.`);
+    }
 
+    const operationId = `contract_close_${randomUUID().replace(/-/g, "")}`;
+    const [renewalSnap, propertySnap] = await Promise.all([
+      db.collection("contract_renewal_watch").where("contractId", "==", contractId).get(),
+      db.collection("properties").where("contractId", "==", contractId).get(),
+    ]);
+
+    const bulkWriter = db.bulkWriter();
+    let permanentWriteFailureMessage = "";
+    bulkWriter.onWriteError((error) => {
+      if (error.failedAttempts < 3) return true;
+      permanentWriteFailureMessage = error.message;
+      return false;
+    });
+    const stagedAt = FieldValue.serverTimestamp();
+    for (const renewal of renewalSnap.docs) {
+      bulkWriter.set(renewal.ref, {
+        status: "CLOSED",
+        renewalStatus: "TERMINATED",
+        completed: true,
+        closureReason: reason,
+        closureOperationId: operationId,
+        closedBy: actor.uid,
+        closedAt: stagedAt,
+        updatedAt: stagedAt,
+      }, { merge: true });
+    }
+    for (const property of propertySnap.docs) {
+      bulkWriter.set(property.ref, {
+        contractStatus: "CLOSED",
+        activationState: "CONTRACT_CLOSED",
+        dispatchReady: false,
+        closureOperationId: operationId,
+        contractClosedAt: stagedAt,
+        updatedAt: stagedAt,
+      }, { merge: true });
+    }
+    try {
+      await bulkWriter.close();
+    } catch (error) {
+      const message = permanentWriteFailureMessage || (error instanceof Error ? error.message : "dependent write failure");
+      throw new HttpsError("internal", `Contract dependencies could not be closed safely: ${message}`);
+    }
+    if (permanentWriteFailureMessage) {
+      throw new HttpsError("internal", `Contract dependencies could not be closed safely: ${permanentWriteFailureMessage}`);
+    }
+
+    const auditRef = db.collection("audit_logs").doc();
     const result = await db.runTransaction(async (transaction) => {
-      const [contractSnap, renewalSnap, propertySnap] = await Promise.all([
-        transaction.get(contractRef),
-        transaction.get(renewalQuery),
-        transaction.get(propertyQuery),
-      ]);
-      if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
-      const contract = contractSnap.data() || {};
+      const freshContractSnap = await transaction.get(contractRef);
+      if (!freshContractSnap.exists) throw new HttpsError("not-found", "Contract disappeared during closure.");
+      const contract = freshContractSnap.data() || {};
       const currentStatus = upper(contract.contractStatus || contract.status || contract.activationStatus);
       if (currentStatus === "CLOSED") {
         return {
@@ -104,12 +161,12 @@ export const adminCloseContract = onCall(
           contractId,
           idempotent: true,
           ownerLocked: false,
-          renewalRecordsClosed: 0,
-          propertiesDisabled: 0,
+          renewalRecordsClosed: renewalSnap.size,
+          propertiesDisabled: propertySnap.size,
         };
       }
       if (TERMINAL_CONTRACT_STATES.has(currentStatus)) {
-        throw new HttpsError("failed-precondition", `Contract is already in terminal state ${currentStatus}.`);
+        throw new HttpsError("failed-precondition", `Contract changed to terminal state ${currentStatus} during closure.`);
       }
 
       const ownerUid = text(contract.ownerUid || contract.ownerId || contract.userId, 180);
@@ -126,33 +183,12 @@ export const adminCloseContract = onCall(
         renewalStatus: "TERMINATED",
         closureReason: reason,
         closureNote: note,
+        closureOperationId: operationId,
         closedBy: actor.uid,
         closedByRole: actor.role,
         closedAt: now,
         updatedAt: now,
       });
-
-      for (const renewal of renewalSnap.docs) {
-        transaction.set(renewal.ref, {
-          status: "CLOSED",
-          renewalStatus: "TERMINATED",
-          completed: true,
-          closureReason: reason,
-          closedBy: actor.uid,
-          closedAt: now,
-          updatedAt: now,
-        }, { merge: true });
-      }
-
-      for (const property of propertySnap.docs) {
-        transaction.set(property.ref, {
-          contractStatus: "CLOSED",
-          activationState: "CONTRACT_CLOSED",
-          dispatchReady: false,
-          contractClosedAt: now,
-          updatedAt: now,
-        }, { merge: true });
-      }
 
       if (ownerLocked && ownerRef) {
         transaction.set(ownerRef, {
@@ -193,6 +229,7 @@ export const adminCloseContract = onCall(
         reason,
         noteHash: sha256(note),
         noteLength: note.length,
+        closureOperationId: operationId,
         renewalRecordsClosed: renewalSnap.size,
         propertiesDisabled: propertySnap.size,
         mfaVerified: true,

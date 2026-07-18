@@ -110,9 +110,25 @@ jobs:
         run: npm run build
 
       - name: Build dedicated admin panel
-        run: npm run build:admin
+        id: build_admin
+        shell: bash
         env:
           CI: false
+        run: |
+          set +e
+          npm run build:admin > admin-build-output.txt 2>&1
+          status=$?
+          cat admin-build-output.txt
+          exit $status
+
+      - name: Upload Admin build diagnostics
+        if: failure() && steps.build_admin.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-build-diagnostics-${{ github.sha }}
+          path: admin-build-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build functions
         id: build_functions
