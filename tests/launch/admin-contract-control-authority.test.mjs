@@ -22,13 +22,15 @@ test('Admin contract closure is App Check and MFA protected', async () => {
   ], 'Admin contract closure security');
 });
 
-test('Contract closure transaction closes dependent operational state', async () => {
+test('Contract closure stages every dependency before final contract state', async () => {
   const source = await read('functions/secureAdminContractOperations.ts');
   expectAll(source, [
+    /where\("contractId", "==", contractId\)\.get\(\)/,
+    /const bulkWriter = db\.bulkWriter\(\)/,
+    /bulkWriter\.onWriteError/,
+    /await bulkWriter\.close\(\)/,
     /db\.runTransaction/,
     /transaction\.get\(contractRef\)/,
-    /transaction\.get\(renewalQuery\)/,
-    /transaction\.get\(propertyQuery\)/,
     /contractStatus: "CLOSED"/,
     /renewalStatus: "TERMINATED"/,
     /dispatchReady: false/,
@@ -38,7 +40,9 @@ test('Contract closure transaction closes dependent operational state', async ()
     /action: "ADMIN_CLOSE_CONTRACT_WITH_MFA"/,
     /noteHash: sha256\(note\)/,
     /sensitiveValuesExcluded: true/,
-  ], 'Contract closure transaction');
+  ], 'Contract closure staging');
+  assert.doesNotMatch(source, /\.limit\(100\)/);
+  assert.ok(source.indexOf('await bulkWriter.close()') < source.indexOf('const result = await db.runTransaction'), 'dependent writes must finish before the final contract transaction');
 });
 
 test('Admin contract UI is callable-only, bilingual and route-specific', async () => {
