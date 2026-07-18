@@ -1,6 +1,6 @@
 /**
  * Custom Hook: Push Notifications
- * Integrates FCM and local notifications
+ * Integrates server-authoritative FCM registration and local notifications.
  */
 
 import { useEffect, useState } from 'react';
@@ -8,7 +8,7 @@ import { notificationService } from '../lib/notificationService';
 
 export function useNotifications() {
   const [initialized, setInitialized] = useState(false);
-  const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [registrationId, setRegistrationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,16 +18,15 @@ export function useNotifications() {
         setInitialized(success);
 
         if (success) {
-          const token = await notificationService.getFCMToken();
-          setFcmToken(token);
-          console.log('[Notifications] FCM Token:', token);
+          const result = await notificationService.getFCMToken();
+          setRegistrationId(result ? 'sdk-token-available' : null);
         }
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Push notification initialization failed.');
       }
     };
 
-    initialize();
+    void initialize();
   }, []);
 
   const sendNotification = async (title: string, body: string, data?: Record<string, string>) => {
@@ -35,17 +34,17 @@ export function useNotifications() {
       await notificationService.sendLocalNotification({
         title,
         body,
-        data
+        data,
       });
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Local notification failed.');
     }
   };
 
   return {
     initialized,
-    fcmToken,
+    registrationId,
     error,
-    sendNotification
+    sendNotification,
   };
 }
