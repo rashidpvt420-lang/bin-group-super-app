@@ -51,6 +51,27 @@ function mutate(root, name, update) {
   writeJson(root, name, doc);
 }
 
+function adminMfaSummary() {
+  return {
+    claimedAdminCount: 3,
+    missingAdminProfileCount: 0,
+    disabledAdminCount: 0,
+    inactiveProfileAdminCount: 0,
+    activeAdminCount: 3,
+    phoneMfaEnrolledCount: 3,
+    missingPhoneFactorCount: 0,
+    unsupportedOnlyFactorCount: 0,
+    recoveryApproverCandidateCount: 2,
+    recoveryApproverMfaReadyCount: 2,
+    recoveryApproverEmailUnverifiedCount: 0,
+    recoveryApproverMissingPhoneFactorCount: 0,
+    recoveryCeoCount: 1,
+    recoverySuperAdminCount: 1,
+    recoveryQuorumReady: true,
+    allActiveAdminsPhoneMfaReady: true,
+  };
+}
+
 function createFixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'same-run-deployment-'));
   const now = Date.now();
@@ -83,15 +104,7 @@ function createFixture() {
     allowedRegionCount: 1,
     testPhoneNumberCount: 0,
   }, { env, now: new Date(now) });
-  const adminMfa = buildAdminMfaEvidence({
-    claimedAdminCount: 2,
-    disabledAdminCount: 0,
-    activeAdminCount: 2,
-    phoneMfaEnrolledCount: 2,
-    missingPhoneFactorCount: 0,
-    unsupportedOnlyFactorCount: 0,
-    allActiveAdminsPhoneMfaReady: true,
-  }, { env, now: new Date(now) });
+  const adminMfa = buildAdminMfaEvidence(adminMfaSummary(), { env, now: new Date(now) });
 
   writeJson(root, 'production-deployment.json', {
     status: 'passed',
@@ -171,7 +184,6 @@ function createFixture() {
     hardLaunchConfirmationDigest: sha256Text(HARD_LAUNCH_CONFIRMATION_PHRASE),
   };
   writeJson(root, 'hard-launch-authorization.json', signDocument(authorizationPayload, HMAC_KEY));
-
   return { root, env, now };
 }
 
@@ -184,18 +196,15 @@ function withFixture(run) {
   }
 }
 
-function verify(fixture) {
-  return runSameRunDeploymentArtifactVerification(fixture);
-}
-
-function rejected(result, pattern) {
+const verify = (fixture) => runSameRunDeploymentArtifactVerification(fixture);
+const rejected = (result, pattern) => {
   assert.equal(result.ok, false);
   assert.equal(result.hardLaunchClaim, false);
   assert.match(result.failures.join('\n'), pattern);
-}
+};
 
 describe('same-run production deployment artifact verifier', () => {
-  it('accepts a complete exact-run artifact with Phone Auth and Admin MFA evidence', () => {
+  it('accepts a complete exact-run artifact with Phone Auth and Admin MFA recovery quorum evidence', () => {
     withFixture((fixture) => {
       const result = verify(fixture);
       assert.equal(result.ok, true, result.failures.join('\n'));
@@ -251,16 +260,19 @@ describe('same-run production deployment artifact verifier', () => {
       });
     }
     withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.firebasePhoneAuth.mfaState = 'DISABLED';
-      });
+      mutate(fixture.root, 'production-deployment.json', (doc) => { doc.firebasePhoneAuth.mfaState = 'DISABLED'; });
       rejected(verify(fixture), /mfaState/i);
     });
     withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.adminMfa.missingPhoneFactorCount = 1;
-      });
+      mutate(fixture.root, 'production-deployment.json', (doc) => { doc.adminMfa.missingPhoneFactorCount = 1; });
       rejected(verify(fixture), /missing phone factors/i);
+    });
+    withFixture((fixture) => {
+      mutate(fixture.root, 'production-deployment.json', (doc) => {
+        doc.adminMfa.recoveryApproverMfaReadyCount = 1;
+        doc.adminMfa.recoveryQuorumReady = false;
+      });
+      rejected(verify(fixture), /recovery quorum|at least two MFA-ready recovery approvers/i);
     });
   });
 
@@ -273,24 +285,18 @@ describe('same-run production deployment artifact verifier', () => {
       rejected(verify(fixture), /P0\/P1|active production incidents/i);
     });
     withFixture((fixture) => {
-      mutate(fixture.root, 'predeploy-approval.json', (doc) => {
-        doc.releaseId = 'wrong-release';
-      });
+      mutate(fixture.root, 'predeploy-approval.json', (doc) => { doc.releaseId = 'wrong-release'; });
       rejected(verify(fixture), /releaseId/i);
     });
   });
 
   it('rejects authorization signature and run-attempt tampering', () => {
     withFixture((fixture) => {
-      mutate(fixture.root, 'hard-launch-authorization.json', (doc) => {
-        doc.signature = 'bad-signature';
-      });
+      mutate(fixture.root, 'hard-launch-authorization.json', (doc) => { doc.signature = 'bad-signature'; });
       rejected(verify(fixture), /signature/i);
     });
     withFixture((fixture) => {
-      mutate(fixture.root, 'hard-launch-authorization.json', (doc) => {
-        doc.runAttempt = 9;
-      });
+      mutate(fixture.root, 'hard-launch-authorization.json', (doc) => { doc.runAttempt = 9; });
       rejected(verify(fixture), /run attempt|runAttempt/i);
     });
   });
