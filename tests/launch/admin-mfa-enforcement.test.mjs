@@ -200,7 +200,7 @@ test('production deploy requires profile-backed recovery quorum before the first
   const deploy = await read('scripts/deploy-firebase-production.mjs');
   const phone = deploy.indexOf('await verifyFirebasePhoneAuthProduction');
   const accounts = deploy.indexOf('await verifyAdminMfaProduction');
-  const firebaseDeploy = deploy.indexOf("retryFirebase(\n  'functions,hosting,firestore:rules,firestore:indexes,storage'");
+  const firebaseDeploy = deploy.search(/retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/);
   const metadata = deploy.indexOf('deploymentMetadata.adminMfa = adminMfaEvidence');
   const verify = deploy.indexOf("'scripts/verify-production-deployment.mjs'");
   assert.ok(accounts > phone);

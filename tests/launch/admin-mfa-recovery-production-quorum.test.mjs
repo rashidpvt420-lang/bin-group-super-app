@@ -30,7 +30,7 @@ test('production Admin MFA preflight requires a profile-backed two-person recove
 test('protected deployment embeds quorum evidence before exact-SHA production verification', async () => {
   const source = await read('scripts/deploy-firebase-production.mjs');
   const preflight = source.indexOf('await verifyAdminMfaProduction');
-  const deploy = source.indexOf("retryFirebase(\n  'functions,hosting,firestore:rules,firestore:indexes,storage'");
+  const deploy = source.search(/retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/);
   const evidence = source.indexOf('deploymentMetadata.adminMfa = adminMfaEvidence');
   const verify = source.indexOf("'scripts/verify-production-deployment.mjs'");
   assert.ok(preflight >= 0 && deploy > preflight, 'Admin MFA quorum must run before deployment');
