@@ -24,6 +24,7 @@ const Navigation = () => {
     const navText = (en: string, ar: string) => (isRTL ? ar : en);
     
     const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
+    const isRecoveryApprover = user?.role === 'ceo' || user?.role === 'super_admin';
 
     const primaryMenu = [
         { text: tx('nav.dashboard', 'Dashboard'), icon: <DashboardIcon />, path: '/dashboard' },
@@ -67,6 +68,9 @@ const Navigation = () => {
     ];
 
     const systemMenu = [
+        ...(isRecoveryApprover
+            ? [{ text: navText('MFA Recovery', 'استعادة المصادقة'), icon: <SecurityIcon />, path: '/mfa-recovery' }]
+            : []),
         { text: tx('nav.support', 'Support'), icon: <SettingsIcon />, path: '/settings' },
     ];
 
