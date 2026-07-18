@@ -66,6 +66,7 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
   const [
     ownerPhone,
     ownerProfileBackend,
+    tenantProfile,
     tenantPanel,
     tenantBackend,
     technicianPage,
@@ -79,6 +80,7 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
   ] = await Promise.all([
     read('src/owner/components/OwnerPhoneVerificationCard.tsx'),
     read('functions/secureOwnerProfileOperations.ts'),
+    read('src/tenant/pages/TenantProfilePage.tsx'),
     read('src/tenant/components/TenantCorrectionPanel.tsx'),
     read('functions/tenantCorrectionOperations.ts'),
     read('src/technician/pages/TechnicianProfilePage.tsx'),
@@ -96,6 +98,11 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
   assert.match(ownerProfileBackend, /Owner full name must match the verified Owner KYC identity/);
   assert.match(ownerProfileBackend, /Billing email must match the verified account or verified billing email/);
 
+  assert.match(tenantProfile, /const activeResidences = useMemo/);
+  assert.match(tenantProfile, /const historicalResidences = useMemo/);
+  assert.match(tenantProfile, /isHistoricalResidence/);
+  assert.match(tenantProfile, /Lease start/);
+  assert.match(tenantProfile, /Lease end/);
   assert.match(tenantPanel, /submitTenantCorrectionRequest/);
   assert.match(tenantPanel, /item\.events\.map/);
   assert.match(tenantBackend, /ADMIN_APPROVE_TENANT_CORRECTION/);
@@ -137,7 +144,6 @@ test('protected same-commit English and Arabic role evidence remains wired', asy
 });
 
 test('remaining profile gaps stay explicit until implemented', async (t) => {
-  await t.test('Tenant multiple active and historical lease timeline with document-level evidence', { todo: true });
   await t.test('Technician credential expiry, renewal evidence, and dispatch freeze on expired credentials', { todo: true });
   await t.test('Admin recovery-factor lifecycle and controlled factor replacement after device loss', { todo: true });
 });
