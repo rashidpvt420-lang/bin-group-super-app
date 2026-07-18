@@ -92,8 +92,8 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
         try {
             const reference = `BIN-${properties?.[0]?.id || 'PORTFOLIO'}-${Date.now()}`;
             const manifest = {
-                payableTo: 'BIN GROUP / BIN Construction',
-                officeLocation: 'BIN GROUP UAE Operations Office',
+                payableTo: 'BIN GROUP L.L.C - S.P.C',
+                officeLocation: 'BIN GROUP L.L.C - S.P.C Head Office',
                 amount: activationDeposit,
                 annualContractValue: annualTotal,
                 activationDeposit,
@@ -181,10 +181,26 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
 
                         {method === 'BANK_TRANSFER' && (
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase' }}>Offline Bank Transfer Instruction</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary }}>
-                                    Proceed with manual wire transfer to the BIN GROUP corporate account. Upload the bank receipt in the next step.
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, textTransform: 'uppercase', display: 'block', mb: 1 }}>Offline Bank Transfer Instructions</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mb: 2 }}>
+                                    Please initiate a wire transfer to the corporate bank account below:
                                 </Typography>
+                                <Stack spacing={1} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Beneficiary Name</Typography>
+                                    <Typography variant="body2" fontWeight={800} sx={{ color: '#FFF' }}>BIN GROUP L.L.C - S.P.C</Typography>
+
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Bank</Typography>
+                                    <Typography variant="body2" fontWeight={800} sx={{ color: '#FFF' }}>Emirates NBD</Typography>
+
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Account Number</Typography>
+                                    <Typography variant="body2" fontWeight={800} sx={{ color: '#FFF' }}>1018247960301</Typography>
+
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>IBAN</Typography>
+                                    <Typography variant="body2" fontWeight={800} sx={{ color: '#FFF', fontFamily: 'monospace' }}>AE730230001018247960301</Typography>
+
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Payment Reference (Must Include)</Typography>
+                                    <Typography variant="body2" fontWeight={800} sx={{ color: binThemeTokens.gold }}>{paymentManifest.reference}</Typography>
+                                </Stack>
                             </Box>
                         )}
                     </Stack>

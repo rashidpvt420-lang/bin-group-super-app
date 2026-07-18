@@ -345,11 +345,13 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             const checkout = result.data as { url?: string };
             if (!checkout.url) throw new Error(copy('Stripe did not return a secure checkout URL.', 'لم يتم إنشاء رابط دفع آمن من Stripe.'));
             await clearStagedFiles();
+            useOnboardingStore.getState().reset();
             window.location.assign(checkout.url);
             return;
         }
 
         await clearStagedFiles();
+        useOnboardingStore.getState().reset();
         setSuccess(true);
     };
 

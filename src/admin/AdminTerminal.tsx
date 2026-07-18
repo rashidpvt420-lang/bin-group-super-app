@@ -217,11 +217,9 @@ export default function AdminTerminal() {
     }
     try {
       const currentLang = localStorage.getItem('bin_language');
-      const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
       localStorage.clear();
       sessionStorage.clear();
       if (currentLang) localStorage.setItem('bin_language', currentLang);
-      if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
     } catch {
       // Ignore storage failures and continue navigation.
     }

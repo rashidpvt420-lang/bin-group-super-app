@@ -131,16 +131,16 @@ const BLOCKERS: Record<OnboardingState, string> = {
 };
 
 const ALLOWED_TRANSITIONS: Record<OnboardingState, OnboardingState[]> = {
-  draft: ['property_details_complete', 'expired', 'suspended'],
-  property_details_complete: ['documents_pending', 'quote_ready', 'expired', 'suspended'],
+  draft: ['property_details_complete', 'identity_pending', 'expired', 'suspended'],
+  property_details_complete: ['documents_pending', 'quote_ready', 'identity_pending', 'expired', 'suspended'],
   documents_pending: ['quote_ready', 'changes_requested', 'expired', 'suspended'],
   quote_ready: ['contract_selected', 'expired', 'suspended'],
-  contract_selected: ['deposit_pending', 'expired', 'suspended'],
+  contract_selected: ['identity_pending', 'signature_pending', 'expired', 'suspended'],
   deposit_pending: ['deposit_processing', 'expired', 'suspended'],
   deposit_processing: ['deposit_paid', 'deposit_pending', 'expired', 'suspended'],
-  deposit_paid: ['identity_pending', 'signature_pending', 'admin_review', 'suspended'],
-  identity_pending: ['signature_pending', 'admin_review', 'suspended'],
-  signature_pending: ['admin_review', 'approved', 'suspended'],
+  deposit_paid: ['admin_review', 'suspended'],
+  identity_pending: ['signature_pending', 'property_details_complete', 'documents_pending', 'expired', 'suspended'],
+  signature_pending: ['deposit_pending', 'admin_review', 'approved', 'suspended'],
   admin_review: ['changes_requested', 'approved', 'rejected', 'signature_pending', 'suspended'],
   changes_requested: ['documents_pending', 'quote_ready', 'contract_selected', 'deposit_pending', 'admin_review', 'expired', 'suspended'],
   approved: ['active', 'suspended'],

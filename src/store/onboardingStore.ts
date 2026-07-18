@@ -552,8 +552,36 @@ export const useOnboardingStore = create<OnboardingState>()(
         {
             name: 'bin-group-onboarding-v3',
             partialize: (state) => ({
-                ...state,
-                proofDocuments: state.proofDocuments
+                step: state.step,
+                onboardingSessionId: state.onboardingSessionId,
+                intakeId: state.intakeId,
+                selectedPlan: state.selectedPlan,
+                selectedAddOns: state.selectedAddOns,
+                companyProfile: {
+                    name: state.companyProfile.name,
+                    licenseNumber: state.companyProfile.licenseNumber,
+                    contactPerson: state.companyProfile.contactPerson,
+                    phone: state.companyProfile.phone,
+                    email: state.companyProfile.email,
+                },
+                properties: state.properties.map((p: any) => ({
+                    id: p.id,
+                    propertyType: p.propertyType,
+                    address: p.address,
+                    emirate: p.emirate,
+                    area: p.area,
+                    sqft: p.sqft,
+                    units: p.units,
+                    age: p.age,
+                    strategy: p.strategy,
+                    paymentPlan: p.paymentPlan,
+                    slaTier: p.slaTier,
+                    mosqueProfile: p.mosqueProfile ? {
+                        mosqueName: p.mosqueProfile.mosqueName,
+                        emirate: p.mosqueProfile.emirate,
+                        regulatoryAuthority: p.mosqueProfile.regulatoryAuthority,
+                    } : undefined,
+                })),
             })
         }
     )

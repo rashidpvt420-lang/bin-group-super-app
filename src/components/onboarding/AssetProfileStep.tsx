@@ -150,13 +150,15 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
             if (result.data.status === 'SUCCESS') {
                 const extracted = result.data.data;
-                updateProperty(0, {
-                    propertyType: extracted.propertyType || 'Apartment',
-                    sqft: extracted.sqft || 1850,
-                    area: extracted.area || '',
-                    emirate: extracted.emirate || 'Dubai',
+                const updatePayload: Record<string, any> = {
                     titleDeedStatus: 'extracted'
-                });
+                };
+                if (extracted.propertyType) updatePayload.propertyType = extracted.propertyType;
+                if (extracted.sqft) updatePayload.sqft = extracted.sqft;
+                if (extracted.area) updatePayload.area = extracted.area;
+                if (extracted.emirate) updatePayload.emirate = extracted.emirate;
+
+                updateProperty(0, updatePayload);
                 setScanned(true);
                 setSnackbar({ open: true, message: 'Title deed data extracted successfully.', severity: 'success' });
             } else {

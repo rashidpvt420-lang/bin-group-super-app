@@ -20,7 +20,8 @@ import {
 import { Award, Briefcase, Calendar, KeyRound, Mail, MapPin, Save, ShieldCheck, User, Zap } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { auth, db, doc, getDoc, sendPasswordResetEmail, serverTimestamp, setDoc, updateProfile } from '../../lib/firebase';
+import { auth, db, doc, getDoc, sendPasswordResetEmail, serverTimestamp, setDoc, updateProfile, functions } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
@@ -98,35 +99,13 @@ export default function BrokerProfilePage() {
     setNotice(null);
     try {
       if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-      const isLicenseChanged = reraLicense.trim() !== (brokerData?.reraLicense || '').trim();
-      const reraStatus = isLicenseChanged ? (reraLicense.trim() ? 'PENDING' : 'NOT_SUBMITTED') : (brokerData?.reraStatus || 'NOT_SUBMITTED');
-      const reraVerified = isLicenseChanged ? false : Boolean(brokerData?.reraVerified);
-      const agreementJustAccepted = commissionAgreementAccepted && !brokerData?.commissionAgreementAccepted;
-      const profileChecks = [
-        displayName.trim(),
-        phone.trim(),
-        companyName.trim(),
-        reraLicense.trim(),
-        tradeLicenseNumber.trim() || emiratesIdNumber.trim() || passportNumber.trim(),
-        brokerTerritory.trim() || primaryRegion.trim(),
-        bankName.trim(),
-        bankAccountHolder.trim(),
-        bankIban.trim(),
-        commissionAgreementAccepted,
-      ];
-      const profileCompletionScore = Math.round((profileChecks.filter(Boolean).length / profileChecks.length) * 100);
-      const brokerKycStatus = profileCompletionScore === 100 ? 'PENDING_REVIEW' : 'INCOMPLETE';
-      const payload: Record<string, any> = {
-        uid: user.uid,
-        email: user.email || brokerData?.email || '',
-        role: brokerData?.role || 'broker',
+
+      const submitBrokerKycFn = httpsCallable(functions, 'submitBrokerKycProfile');
+      await submitBrokerKycFn({
         displayName: displayName.trim(),
-        phoneNumber: phone.trim(),
         phone: phone.trim(),
         companyName: companyName.trim(),
         reraLicense: reraLicense.trim(),
-        reraVerified,
-        reraStatus,
         primaryRegion: primaryRegion.trim(),
         brokerTerritory: brokerTerritory.trim(),
         tradeLicenseNumber: tradeLicenseNumber.trim(),
@@ -135,18 +114,14 @@ export default function BrokerProfilePage() {
         bankName: bankName.trim(),
         bankAccountHolder: bankAccountHolder.trim(),
         bankIban: bankIban.trim(),
-        iban: bankIban.trim(),
         commissionAgreementAccepted,
         commissionTermsVersion: brokerData?.commissionTermsVersion || 'BIN_BROKER_TERMS_2026_01',
-        brokerKycStatus,
-        brokerProfileCompletion: profileCompletionScore,
-        profileCompletionScore,
-        language: lang,
-        updatedAt: serverTimestamp(),
-      };
-      if (agreementJustAccepted) payload.commissionAgreementAcceptedAt = serverTimestamp();
-      await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
-      setBrokerData((prev: any) => ({ ...prev, ...payload }));
+      });
+
+      const updatedSnap = await getDoc(doc(db, 'users', user.uid));
+      if (updatedSnap.exists()) {
+        setBrokerData(updatedSnap.data());
+      }
       setNotice({ type: 'success', text: label('Broker profile updated successfully.', 'تم تحديث ملف الوسيط بنجاح.') });
     } catch (err: any) {
       console.error('Broker profile update failed:', err);

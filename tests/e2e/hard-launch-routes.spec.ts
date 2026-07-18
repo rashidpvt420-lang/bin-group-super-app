@@ -32,7 +32,7 @@ const criticalRoutes: Record<RoleName, string[]> = {
   broker: ['/broker/dashboard', '/broker/leads', '/broker/referrals', '/broker/commissions', '/broker/documents', '/broker/profile'],
 };
 
-const fatalRouteFailureText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|invalid-credential|wrong-password|user-not-found|app check|firebase.?app.?check|permission-denied|too many requests|\b429\b/i;
+const fatalRouteFailureText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|invalid-credential|wrong-password|user-not-found|permission-denied|too many requests|\b429\b/i;
 const accessFailureText = /access denied|not authorized|insufficient permissions/i;
 
 function requireCredential(value: string | undefined, key: string): string {

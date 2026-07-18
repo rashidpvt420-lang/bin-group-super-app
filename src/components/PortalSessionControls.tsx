@@ -18,11 +18,9 @@ type PortalSessionControlsProps = {
 
 const preserveSafePreferences = () => {
   const preferredLanguage = localStorage.getItem('bin_language');
-  const activeOnboarding = localStorage.getItem('bin-group-onboarding-v3');
   localStorage.clear();
   sessionStorage.clear();
   if (preferredLanguage) localStorage.setItem('bin_language', preferredLanguage);
-  if (activeOnboarding) localStorage.setItem('bin-group-onboarding-v3', activeOnboarding);
 };
 
 export default function PortalSessionControls({

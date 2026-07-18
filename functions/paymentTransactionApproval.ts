@@ -478,6 +478,12 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       if (String(property.ownerUid || property.ownerId || "") !== ownerUid || property.quoteHash !== payment.quoteHash) {
         throw new HttpsError("failed-precondition", "A property binding does not match the approved owner quote.");
       }
+      if (property.geo?.verified === false) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Location verification is outstanding for property: ${property.address || propertyDoc.id}. Activation blocked.`,
+        );
+      }
       transaction.set(propertyDoc.ref, {
         status: "ACTIVE",
         activationStatus: "ACTIVE",
