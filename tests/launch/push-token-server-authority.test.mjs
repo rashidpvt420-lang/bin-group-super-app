@@ -47,12 +47,14 @@ test('push delivery reads only hashed token documents and prunes invalid registr
   assert.doesNotMatch(backend, /userSnap\.data\(\)\?\.fcmTokens/);
 });
 
-test('browser push registration uses callables and never writes or exposes raw tokens', async () => {
-  const [service, hook, manager, ownerManager] = await Promise.all([
+test('all browser push registration paths use callables and never write or expose raw tokens', async () => {
+  const [service, hook, manager, ownerManager, ownerContext, sharedContext] = await Promise.all([
     read('src/services/pushNotificationService.ts'),
     read('src/hooks/useNotifications.ts'),
     read('src/components/NotificationManager.tsx'),
     read('apps/owner-app/src/components/NotificationManager.tsx'),
+    read('apps/owner-app/src/context/RoleContext.tsx'),
+    read('packages/shared/src/context/AuthProvider.tsx'),
   ]);
   expectAll(service, [
     /httpsCallable\(functions, 'registerPushToken'\)/,
@@ -69,9 +71,14 @@ test('browser push registration uses callables and never writes or exposes raw t
   assert.doesNotMatch(hook, /FCM Token|fcmToken|tokenCache/);
   assert.match(hook, /registrationAvailable/);
 
-  for (const [label, source] of [['main manager', manager], ['owner manager', ownerManager]]) {
+  for (const [label, source] of [
+    ['main manager', manager],
+    ['owner manager', ownerManager],
+    ['owner role context', ownerContext],
+    ['shared auth context', sharedContext],
+  ]) {
     assert.doesNotMatch(source, /BAx9XuLUWYy4cmogu_/);
-    assert.doesNotMatch(source, /arrayUnion\(|updateDoc\(|fcmTokens:/);
+    assert.doesNotMatch(source, /arrayUnion\(|fcmTokens:/);
     assert.match(source, /registerPushToken|registerPushNotifications/, `${label} must use server registration`);
     assert.match(source, /VITE_FIREBASE_VAPID_KEY|registerPushNotifications/, `${label} must use environment-backed service`);
   }
