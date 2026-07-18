@@ -1,5 +1,4 @@
-import { doc, getSafeMessaging, getToken, onMessage, setDoc, updateDoc, arrayUnion, serverTimestamp } from '../lib/firebase';
-import { db } from '../lib/firebase';
+import { auth, functions, getSafeMessaging, getToken, httpsCallable, onMessage } from '../lib/firebase';
 
 const readEnv = (key: string): string => {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
@@ -42,6 +41,15 @@ type PushReadiness = {
   permission: NotificationPermission | 'unsupported';
 };
 
+type PushRegistrationResult = {
+  enabled: boolean;
+  reason?: string;
+  registrationId?: string;
+  registeredTokenCount?: number;
+  prunedTokenCount?: number;
+  readiness: PushReadiness;
+};
+
 export function getPushReadiness(): PushReadiness {
   if (typeof window === 'undefined') {
     return {
@@ -76,112 +84,98 @@ export function getPushReadiness(): PushReadiness {
   };
 }
 
-async function persistPushReadiness(userId: string, role: string | null | undefined, readiness: PushReadiness, result: Record<string, any>) {
-  try {
-    await setDoc(doc(db, 'users', userId, 'deviceReadiness', 'push'), {
-      ...readiness,
-      role: role || 'unknown',
-      result,
-      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server',
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  } catch (err) {
-    console.warn('[Push] Failed to persist readiness diagnostics. Firestore rules must allow users/{uid}/deviceReadiness/push:', err);
-  }
-}
-
-export async function registerPushNotifications(userId: string, role?: string | null) {
+export async function registerPushNotifications(userId: string, role?: string | null): Promise<PushRegistrationResult> {
   const readiness = getPushReadiness();
+  const activeUser = auth.currentUser;
 
+  if (!activeUser || activeUser.uid !== userId) {
+    return { enabled: false, reason: 'authenticated_user_mismatch', readiness };
+  }
+  if (!shouldRequestPushForRole(role)) {
+    return { enabled: false, reason: 'role_not_push_enabled', readiness };
+  }
   if (typeof window === 'undefined') {
     return { enabled: false, reason: 'window_unavailable', readiness };
   }
-
   if (!readiness.supportsNotification) {
-    const result = { enabled: false, reason: 'notifications_unsupported', readiness };
-    await persistPushReadiness(userId, role, readiness, result);
-    return result;
+    return { enabled: false, reason: 'notifications_unsupported', readiness };
   }
-
   if (!readiness.supportsServiceWorker) {
-    const result = { enabled: false, reason: 'service_worker_unsupported', readiness };
-    await persistPushReadiness(userId, role, readiness, result);
-    return result;
+    return { enabled: false, reason: 'service_worker_unsupported', readiness };
   }
-
   if (readiness.isIOS && !readiness.isStandalone) {
-    const result = { enabled: false, reason: 'ios_requires_installed_pwa', readiness };
-    await persistPushReadiness(userId, role, readiness, result);
-    return result;
+    return { enabled: false, reason: 'ios_requires_installed_pwa', readiness };
   }
 
   const vapidKey = getVapidKey();
   if (!vapidKey) {
-    const result = { enabled: false, reason: 'vapid_key_missing', readiness };
-    await persistPushReadiness(userId, role, readiness, result);
-    return result;
+    return { enabled: false, reason: 'vapid_key_missing', readiness };
   }
 
   const permission = Notification.permission === 'granted'
     ? 'granted'
     : await Notification.requestPermission();
-
+  const permissionReadiness = { ...readiness, permission };
   if (permission !== 'granted') {
-    const result = { enabled: false, reason: 'permission_denied', permission, readiness: { ...readiness, permission } };
-    await persistPushReadiness(userId, role, { ...readiness, permission }, result);
-    return result;
+    return { enabled: false, reason: 'permission_denied', readiness: permissionReadiness };
   }
 
   const messaging = await getSafeMessaging();
   if (!messaging) {
-    const result = { enabled: false, reason: 'messaging_unsupported', readiness: { ...readiness, permission, supportsMessaging: false } };
-    await persistPushReadiness(userId, role, { ...readiness, permission, supportsMessaging: false }, result);
-    return result;
+    return {
+      enabled: false,
+      reason: 'messaging_unsupported',
+      readiness: { ...permissionReadiness, supportsMessaging: false },
+    };
   }
 
   const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
   const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
-
   if (!token) {
-    const result = { enabled: false, reason: 'token_unavailable', readiness: { ...readiness, permission, supportsMessaging: true } };
-    await persistPushReadiness(userId, role, { ...readiness, permission, supportsMessaging: true }, result);
-    return result;
+    return {
+      enabled: false,
+      reason: 'token_unavailable',
+      readiness: { ...permissionReadiness, supportsMessaging: true },
+    };
   }
 
-  const tokenRecord = {
+  const registerToken = httpsCallable(functions, 'registerPushToken');
+  const response = await registerToken({
     token,
     platform: readiness.platform,
-    role: role || 'unknown',
-    userAgent: navigator.userAgent,
     permission,
     isStandalone: readiness.isStandalone,
-    lastRegisteredAt: serverTimestamp(),
+  });
+  const data = response.data as {
+    enabled?: boolean;
+    registrationId?: string;
+    registeredTokenCount?: number;
+    prunedTokenCount?: number;
   };
 
-  await Promise.all([
-    setDoc(doc(db, 'users', userId, 'fcmTokens', token), tokenRecord, { merge: true }),
-    updateDoc(doc(db, 'users', userId), {
-      fcmTokens: arrayUnion(token),
-      pushEnabled: true,
-      pushPlatform: readiness.platform,
-      pushRole: role || 'unknown',
-      pushUpdatedAt: serverTimestamp(),
-    }).catch(async () => {
-      await setDoc(doc(db, 'users', userId), {
-        uid: userId,
-        role: role || 'unknown',
-        fcmTokens: [token],
-        pushEnabled: true,
-        pushPlatform: readiness.platform,
-        pushRole: role || 'unknown',
-        pushUpdatedAt: serverTimestamp(),
-      }, { merge: true });
-    })
-  ]);
+  return {
+    enabled: data.enabled === true,
+    registrationId: data.registrationId,
+    registeredTokenCount: data.registeredTokenCount,
+    prunedTokenCount: data.prunedTokenCount,
+    readiness: { ...permissionReadiness, supportsMessaging: true },
+  };
+}
 
-  const result = { enabled: true, token, readiness: { ...readiness, permission, supportsMessaging: true } };
-  await persistPushReadiness(userId, role, { ...readiness, permission, supportsMessaging: true }, { enabled: true, tokenPresent: true });
-  return result;
+export async function unregisterPushNotifications(): Promise<{ removed: boolean; registeredTokenCount?: number }> {
+  if (!auth.currentUser || typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return { removed: false };
+  }
+  const vapidKey = getVapidKey();
+  const messaging = await getSafeMessaging();
+  if (!vapidKey || !messaging) return { removed: false };
+  const registration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+  const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+  if (!token) return { removed: false };
+  const unregisterToken = httpsCallable(functions, 'unregisterPushToken');
+  const response = await unregisterToken({ token });
+  const data = response.data as { removed?: boolean; registeredTokenCount?: number };
+  return { removed: data.removed === true, registeredTokenCount: data.registeredTokenCount };
 }
 
 export async function attachForegroundPushListener(onForeground?: (payload: any) => void) {
