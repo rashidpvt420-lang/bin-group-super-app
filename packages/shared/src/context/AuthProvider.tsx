@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
-import { 
-    db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, 
-    isSupported, getMessaging, getToken, app, 
-    onAuthStateChanged, arrayUnion, onSnapshot
-} from "../lib/firebase";        
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import {
+    db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp,
+    isSupported, getMessaging, getToken, app, functions, httpsCallable,
+    onAuthStateChanged, onSnapshot
+} from "../lib/firebase";
 import type { User } from "../lib/firebase";
 import { signOut } from "../lib/firebase";
 import { LegalModal } from "../components/LegalModal";
@@ -21,17 +21,13 @@ export interface SovereignUser extends User {
     onDuty?: boolean;
     dutyStatus?: string;
     emirate?: string;
-    fcmTokens?: string[];
-    platform?: string;
-    isStandalone?: boolean;
-    userAgent?: string;
     legalAcceptedAt?: string;
     adminApproved?: boolean;
     onboardingComplete?: boolean;
     permissions?: Record<string, boolean>;
 }
 
-export type SovereignPermission = 
+export type SovereignPermission =
     | 'canViewPayments'
     | 'canVerifyPayments'
     | 'canManageTenants'
@@ -64,9 +60,25 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_BOOT_TIMEOUT_MS = 12000;
 
 const ADMIN_ROLES = new Set([
-    'admin', 'super_admin', 'ceo', 'manager', 
+    'admin', 'super_admin', 'ceo', 'manager',
     'operations_admin', 'finance_admin', 'hr_admin', 'support_admin'
 ]);
+
+const readVapidKey = () => {
+    const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    return String(metaEnv?.VITE_FIREBASE_VAPID_KEY || '').trim();
+};
+
+const pushPlatform = () => {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+    return {
+        value: isIOS ? (isStandalone ? 'ios-pwa' : 'ios-browser') : isAndroid ? 'android-web' : 'web',
+        isStandalone,
+    };
+};
 
 export function AuthProvider({ children, requireAdmin = false }: { children: any, requireAdmin?: boolean }) {
     const [role, setRole] = useState<string | null>(null);
@@ -89,12 +101,12 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
         try {
             const tokenPromise = currentUser.getIdTokenResult(true);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("AUTH_SYNC_TIMEOUT")), 10000));
-            
+
             const tokenResult: any = await Promise.race([tokenPromise, timeoutPromise]).catch(err => {
                 console.warn("🛡️ [SHARED-AUTH] Token refresh failed or timed out. Using cached claims.", err);
                 return currentUser.getIdTokenResult(false);
             });
-            
+
             const claims = tokenResult.claims || {};
             const userDocRef = doc(db, "users", currentUser.uid);
             let snap;
@@ -116,8 +128,7 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
 
             if (snap && snap.exists()) {
                 const data = snap.data();
-                
-                // Emergency Admin Grant Check
+
                 let finalRole = data.role;
                 let finalIsAdmin = data.isAdmin || data.role === 'admin' || ADMIN_ROLES.has(String(data.role).toLowerCase());
 
@@ -136,7 +147,7 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
 
                 const resolvedRole = String(claims.role || finalRole || 'tenant').toLowerCase();
                 const resolvedIsAdmin = !!(claims.admin || finalIsAdmin || ADMIN_ROLES.has(resolvedRole));
-                
+
                 if (requireAdmin && !resolvedIsAdmin) {
                     throw new Error("ADMIN_ACCESS_DENIED");
                 }
@@ -151,7 +162,6 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
                 setError(null);
 
             } else {
-                // Initialize profile if missing
                 const resolvedRole = String(claims.role || 'tenant').toLowerCase();
                 const resolvedIsAdmin = !!(claims.admin || ADMIN_ROLES.has(resolvedRole));
 
@@ -169,7 +179,7 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
                     createdAt: serverTimestamp()
                 };
                 await setDoc(userDocRef, newProfile);
-                
+
                 setUser({ ...currentUser, ...newProfile } as any);
                 setRole(resolvedRole);
                 setIsAdmin(resolvedIsAdmin);
@@ -191,26 +201,31 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
     };
 
     const enableNotifications = async (): Promise<boolean> => {
-        if (!user) return false;
+        if (!user?.uid) return false;
         try {
-            const supported = await isSupported();
-            if (!supported) return false;
+            if (!await isSupported() || !('serviceWorker' in navigator)) return false;
             const permission = await Notification.requestPermission();
-            if (permission === 'granted') {
-                const messaging = getMessaging(app);
-                const token = await getToken(messaging, {
-                    vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ'
-                });
-                if (token) {
-                    await updateDoc(doc(db, 'users', user.uid), {
-                        fcmTokens: arrayUnion(token),
-                        updatedAt: serverTimestamp()
-                    });
-                    return true;
-                }
-            }
-            return false;
-        } catch (e) {
+            if (permission !== 'granted') return false;
+            const key = readVapidKey();
+            if (!key) return false;
+            const device = pushPlatform();
+            if (device.value === 'ios-browser') return false;
+            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+            const token = await getToken(getMessaging(app), {
+                vapidKey: key,
+                serviceWorkerRegistration: registration,
+            });
+            if (!token) return false;
+            const registerToken = httpsCallable(functions, 'registerPushToken');
+            const response = await registerToken({
+                token,
+                platform: device.value,
+                permission,
+                isStandalone: device.isStandalone,
+            });
+            return (response.data as { enabled?: boolean }).enabled === true;
+        } catch (error) {
+            console.warn('[SHARED-AUTH] Push registration failed.', error);
             return false;
         }
     };
@@ -247,7 +262,6 @@ export function AuthProvider({ children, requireAdmin = false }: { children: any
             if (currentUser) {
                 await syncProfile(currentUser);
 
-                // Subscribe to real-time user document changes (like onDuty, dutyStatus, permissions)
                 userUnsub = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
