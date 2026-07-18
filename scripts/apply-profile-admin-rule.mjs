@@ -32,3 +32,7 @@ if (rules.includes('adminProfileGrantsAccess') || !rules.includes('return hasAdm
 
 writeFileSync(path, rules);
 console.log('Claims-only admin rule installed.');
+
+// Push registration and delivery authority is hardened immediately after the
+// profile/admin transformation so every existing prepare:rules path applies it.
+await import('./harden-push-token-authority.mjs');
