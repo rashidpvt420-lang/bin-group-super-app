@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { submitBrokerKycProfile as legacySubmitBrokerKycProfile } from "./brokerKycProfile";
+import { submitBrokerKycProfileHandler } from "./brokerKycProfile";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -10,10 +10,7 @@ const text = (value: unknown) => String(value ?? "").trim();
 export const submitBrokerKycProfile = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    if (typeof (legacySubmitBrokerKycProfile as any)?.run !== "function") {
-      throw new HttpsError("internal", "Broker KYC submission handler is unavailable.");
-    }
-    const result = await (legacySubmitBrokerKycProfile as any).run(request);
+    const result = await submitBrokerKycProfileHandler(request);
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Broker login required.");
 
