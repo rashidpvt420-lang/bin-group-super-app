@@ -19,6 +19,7 @@ import { useLanguage } from '@bin/shared';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
+import AdminMfaEnrollmentCard from '../../components/security/AdminMfaEnrollmentCard';
 
 type SessionRecord = {
   sessionId: string;
@@ -76,7 +77,7 @@ const formatDate = (value: string | number | undefined, locale: string) => {
 
 export default function AdminSecurityProfilePage() {
   const { isRTL } = useLanguage();
-  const { user, logout } = useAuth();
+  const { user, logout, mfaEnrollmentRequired } = useAuth();
   const copy = React.useCallback((en: string, ar: string) => (isRTL ? ar : en), [isRTL]);
   const locale = isRTL ? 'ar-AE' : 'en-AE';
   const [profile, setProfile] = React.useState<SecurityProfile | null>(null);
@@ -184,6 +185,21 @@ export default function AdminSecurityProfilePage() {
 
         {error && <Alert severity="error">{error}</Alert>}
         {success && <Alert severity="success">{success}</Alert>}
+        {mfaEnrollmentRequired && (
+          <Alert severity="warning" data-testid="admin-mfa-enrollment-required">
+            {copy(
+              'Admin access is restricted to this profile until Firebase MFA enrollment is completed. After enrollment, sign in again and verify the second factor.',
+              'يقتصر وصول المسؤول على هذا الملف حتى اكتمال تسجيل مصادقة Firebase متعددة العوامل. بعد التسجيل، سجّل الدخول مرة أخرى وتحقق من العامل الثاني.',
+            )}
+          </Alert>
+        )}
+
+        <AdminMfaEnrollmentCard
+          enrolled={profile?.mfa.enrolled === true}
+          currentPhone={profile?.phoneNumber || ''}
+          isRTL={isRTL}
+          onEnrolled={loadProfile}
+        />
 
         <Grid container spacing={3}>
           <Grid item xs={12} lg={5}>
