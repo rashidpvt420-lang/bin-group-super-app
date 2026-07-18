@@ -30,7 +30,24 @@ const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, 
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole, 80).toLowerCase();
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-async function requireAdmin(auth: any) {
+function secondFactorOf(token: any) {
+  return text(
+    token?.firebase?.sign_in_second_factor ||
+    token?.sign_in_second_factor,
+    120,
+  );
+}
+
+type AdminActor = {
+  uid: string;
+  role: string;
+  userRecord: admin.auth.UserRecord;
+  profile: FirebaseFirestore.DocumentData;
+  mfaFactorCount: number;
+  mfaVerified: boolean;
+};
+
+async function requireAdmin(auth: any): Promise<AdminActor> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const token = auth.token || {};
   const role = roleOf(token);
@@ -57,7 +74,26 @@ async function requireAdmin(auth: any) {
   ) {
     throw new HttpsError("permission-denied", "This Admin account is not active.");
   }
-  return { uid: auth.uid, role, userRecord, profile };
+
+  const factors = userRecord.multiFactor?.enrolledFactors || [];
+  const mfaFactorCount = factors.length;
+  const mfaVerified = Boolean(secondFactorOf(token));
+  if (mfaFactorCount > 0 && !mfaVerified) {
+    throw new HttpsError(
+      "permission-denied",
+      "This Admin token was not issued through a verified second-factor sign-in.",
+    );
+  }
+  return { uid: auth.uid, role, userRecord, profile, mfaFactorCount, mfaVerified };
+}
+
+function requireMfaReady(adminActor: AdminActor) {
+  if (adminActor.mfaFactorCount <= 0) {
+    throw new HttpsError("failed-precondition", "Admin MFA enrollment is required for this security action.");
+  }
+  if (!adminActor.mfaVerified) {
+    throw new HttpsError("permission-denied", "Verified Admin MFA is required for this security action.");
+  }
 }
 
 function requestFingerprint(request: any) {
@@ -103,6 +139,8 @@ export const registerAdminSecuritySession = onCall(
       adminUid: adminActor.uid,
       adminRole: adminActor.role,
       status: "ACTIVE",
+      mfaFactorCount: adminActor.mfaFactorCount,
+      mfaVerified: adminActor.mfaVerified,
       userAgent: fingerprint.userAgent,
       ipHash: fingerprint.ipHash,
       deviceHash: fingerprint.deviceHash,
@@ -116,16 +154,25 @@ export const registerAdminSecuritySession = onCall(
     });
 
     await db.collection("audit_logs").add({
-      action: "ADMIN_SECURITY_SESSION_REGISTERED",
+      action: adminActor.mfaFactorCount > 0
+        ? "ADMIN_SECURITY_SESSION_REGISTERED_WITH_MFA"
+        : "ADMIN_SECURITY_SESSION_REGISTERED_FOR_MFA_ENROLLMENT",
       actorId: adminActor.uid,
       actorRole: adminActor.role,
       targetType: "admin_security_sessions",
       targetId: sessionId,
+      mfaFactorCount: adminActor.mfaFactorCount,
+      mfaVerified: adminActor.mfaVerified,
       deviceHash: fingerprint.deviceHash,
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    return { sessionId, expiresAtMs: now + SESSION_TTL_MS };
+    return {
+      sessionId,
+      expiresAtMs: now + SESSION_TTL_MS,
+      mfaEnrollmentRequired: adminActor.mfaFactorCount === 0,
+      mfaVerified: adminActor.mfaVerified,
+    };
   },
 );
 
@@ -157,6 +204,7 @@ export const getAdminSecurityProfile = onCall(
         lastSeenAtMs: Number(session.lastSeenAtMs || session.createdAtMs || 0),
         expiresAtMs: Number(session.expiresAtMs || 0),
         status: text(session.status, 40),
+        mfaVerified: session.mfaVerified === true,
       }));
 
     const securityEvents = auditSnap.docs
@@ -185,6 +233,8 @@ export const getAdminSecurityProfile = onCall(
       mfa: {
         enrolled: factors.length > 0,
         factorCount: factors.length,
+        verifiedForCurrentSession: adminActor.mfaVerified,
+        enrollmentRequired: factors.length === 0,
         factors: factors.map((factor) => ({
           uid: factor.uid,
           displayName: factor.displayName || null,
@@ -211,6 +261,7 @@ export const revokeAdminSessions = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     const adminActor = await requireAdmin(request.auth);
+    requireMfaReady(adminActor);
     if (text(request.data?.confirmation, 80) !== "REVOKE_ALL_ADMIN_SESSIONS") {
       throw new HttpsError("failed-precondition", "Type the exact session-revocation confirmation phrase.");
     }
@@ -226,12 +277,13 @@ export const revokeAdminSessions = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true }));
     batch.set(db.collection("audit_logs").doc(), {
-      action: "ADMIN_REVOKE_ALL_SESSIONS",
+      action: "ADMIN_REVOKE_ALL_SESSIONS_WITH_MFA",
       actorId: adminActor.uid,
       actorRole: adminActor.role,
       targetType: "users",
       targetId: adminActor.uid,
       sessionCount: sessions.size,
+      mfaVerified: true,
       createdAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
@@ -243,6 +295,7 @@ export const lockOwnAdminAccount = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     const adminActor = await requireAdmin(request.auth);
+    requireMfaReady(adminActor);
     if (text(request.data?.confirmation, 80) !== "LOCK_MY_ADMIN_ACCOUNT") {
       throw new HttpsError("failed-precondition", "Type the exact emergency-lock confirmation phrase.");
     }
@@ -250,12 +303,13 @@ export const lockOwnAdminAccount = onCall(
     if (reason.length < 8) throw new HttpsError("invalid-argument", "An emergency-lock reason is required.");
 
     await db.collection("audit_logs").add({
-      action: "ADMIN_EMERGENCY_SELF_LOCK",
+      action: "ADMIN_EMERGENCY_SELF_LOCK_WITH_MFA",
       actorId: adminActor.uid,
       actorRole: adminActor.role,
       targetType: "users",
       targetId: adminActor.uid,
       reason,
+      mfaVerified: true,
       createdAt: FieldValue.serverTimestamp(),
     });
     await Promise.all([
