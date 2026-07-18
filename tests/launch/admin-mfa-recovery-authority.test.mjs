@@ -22,7 +22,7 @@ test('Admin MFA recovery requires two distinct MFA-verified privileged approvers
   ], 'two-approver recovery authority');
 });
 
-test('Recovery binds the target factor state and forces token revocation and re-enrollment', async () => {
+test('Recovery binds factor state, stays resumable after execution claim and stores no full target email', async () => {
   const source = await read('functions/adminMfaRecovery.ts');
   expectAll(source, [
     /factorStateHash: state\.hash/,
@@ -35,8 +35,16 @@ test('Recovery binds the target factor state and forces token revocation and re-
     /refreshTokensRevoked: true/,
     /reEnrollmentRequired: true/,
     /sensitiveValuesExcluded: true/,
+    /targetEmailMasked:/,
   ], 'factor reset and re-enrollment');
   assert.doesNotMatch(source, /verificationCode|smsCode|otpCode|factorPhoneNumber/);
+  assert.doesNotMatch(source, /\btargetEmail:\s*target\./, 'full target email must not be persisted in the recovery request');
+
+  const completedCheck = source.indexOf('if (status === "COMPLETED")');
+  const executingCheck = source.indexOf('if (status === "EXECUTING")');
+  const expiryCheck = source.indexOf('if (toMillis(data.expiresAt) <= nowMs)');
+  assert.ok(completedCheck >= 0 && completedCheck < expiryCheck, 'completed recovery must stay idempotent after the original approval window');
+  assert.ok(executingCheck >= 0 && executingCheck < expiryCheck, 'the same execution owner must be able to resume interrupted finalization after the original approval window');
 });
 
 test('Re-enrollment finalizes the Admin recovery lifecycle', async () => {
