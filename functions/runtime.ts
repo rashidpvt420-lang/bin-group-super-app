@@ -47,6 +47,8 @@ export {
   updateTicketLifecycle,
 } from "./secureTechnicianOperations";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
+export { submitBrokerKycProfile } from "./secureBrokerKycSubmission";
+export { adminReviewBrokerKyc } from "./secureBrokerKycReview";
 export {
   requestBrokerPayoutOtp,
   verifyBrokerPayoutOtp,
