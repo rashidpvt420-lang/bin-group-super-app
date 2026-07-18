@@ -8,7 +8,7 @@ const authority = await readFile(new URL('../../functions/adminSecurityProfile.t
 test('Admin security sessions are isolated from generic Firestore access', () => {
   assert.ok(hardener.includes('match /admin_security_sessions/{sessionId}'));
   assert.ok(hardener.includes("'broker_kyc_submission_limits', 'admin_security_sessions'"));
-  assert.ok(hardener.includes("'audit_logs',\n          'admin_security_sessions'"));
+  assert.match(hardener, /['"]audit_logs['"],\s*['"]admin_security_sessions['"]/);
   assert.ok(hardener.includes('Admin security session block must exist exactly once'));
 });
 

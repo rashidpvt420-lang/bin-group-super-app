@@ -80,7 +80,7 @@ const responseTextByTier: Record<string, LocalText> = {
 };
 
 const paymentPlanDetails: Record<string, LocalText> = {
-    annual: { en: 'One annual settlement with full contract activation.', ar: 'تسوية سنوية واحدة مع تفعيل كامل للعقد.' },
+    annual: { en: '15% mobilization first, then one annual settlement.', ar: 'دفعة تعبئة 15% أولاً، ثم تسوية سنوية واحدة.' },
     quarterly: { en: '15% mobilization first, then four scheduled payments.', ar: 'دفعة تعبئة 15% أولاً، ثم أربع دفعات مجدولة.' },
     monthly: { en: '15% mobilization first, then monthly billing after verification.', ar: 'دفعة تعبئة 15% أولاً، ثم فوترة شهرية بعد التحقق.' },
 };
@@ -234,7 +234,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Stack spacing={2} sx={{ mb: 4 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
-                                {isAnnualPayment ? <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="rgba(255,255,255,0.72)">{tx(copy.includedValue, ar)}</Typography></Box> : <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Box>}
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Box>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>

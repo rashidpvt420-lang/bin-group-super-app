@@ -948,3 +948,94 @@ export const adminRepairPropertyGeo = onCall({ cors: true, region: "europe-west3
 
   return { status: "REPAIRED", propertyId };
 });
+
+export const submitBrokerKycProfile = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const broker = await requireProfileRole(request.auth, BROKER_ROLES, "Broker");
+  const uid = request.auth!.uid;
+  const data = request.data || {};
+
+  const displayName = text(data.displayName);
+  const phone = text(data.phone || data.phoneNumber);
+  const companyName = text(data.companyName);
+  const reraLicense = text(data.reraLicense);
+  const primaryRegion = text(data.primaryRegion);
+  const brokerTerritory = text(data.brokerTerritory);
+  const tradeLicenseNumber = text(data.tradeLicenseNumber);
+  const emiratesIdNumber = text(data.emiratesIdNumber);
+  const passportNumber = text(data.passportNumber);
+  const bankName = text(data.bankName);
+  const bankAccountHolder = text(data.bankAccountHolder);
+  const bankIban = text(data.bankIban || data.iban);
+
+  if (!displayName || !phone || !companyName || !reraLicense || !bankName || !bankAccountHolder || !bankIban) {
+    throw new HttpsError("invalid-argument", "Missing required profile or banking details.");
+  }
+
+  // Validate IBAN format (UAE IBAN must start with AE and be 23 chars long)
+  const cleanIban = bankIban.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  if (!cleanIban.startsWith("AE") || cleanIban.length !== 23) {
+    throw new HttpsError("invalid-argument", "Invalid UAE IBAN format. Must start with AE and contain 23 characters.");
+  }
+
+  const profileChecks = [
+    displayName,
+    phone,
+    companyName,
+    reraLicense,
+    tradeLicenseNumber || emiratesIdNumber || passportNumber,
+    brokerTerritory || primaryRegion,
+    bankName,
+    bankAccountHolder,
+    bankIban,
+    broker.commissionAgreementAccepted === true || data.commissionAgreementAccepted === true,
+  ];
+  const profileCompletionScore = Math.round((profileChecks.filter(Boolean).length / profileChecks.length) * 100);
+  const brokerKycStatus = profileCompletionScore === 100 ? "PENDING_REVIEW" : "INCOMPLETE";
+  const reraStatus = reraLicense ? "PENDING" : "NOT_SUBMITTED";
+
+  const now = ts();
+  const brokerRef = db.collection("users").doc(uid);
+
+  const payload: Record<string, any> = {
+    displayName,
+    phoneNumber: phone,
+    phone,
+    companyName,
+    reraLicense,
+    reraStatus,
+    primaryRegion,
+    brokerTerritory,
+    tradeLicenseNumber,
+    emiratesIdNumber,
+    passportNumber,
+    bankName,
+    bankAccountHolder,
+    bankIban: cleanIban,
+    iban: cleanIban,
+    brokerKycStatus,
+    brokerProfileCompletion: profileCompletionScore,
+    profileCompletionScore,
+    updatedAt: now,
+  };
+
+  if (data.commissionAgreementAccepted === true && broker.commissionAgreementAccepted !== true) {
+    payload.commissionAgreementAccepted = true;
+    payload.commissionAgreementAcceptedAt = now;
+    payload.commissionTermsVersion = text(data.commissionTermsVersion || "BIN_BROKER_TERMS_2026_01");
+  }
+
+  await brokerRef.set(payload, { merge: true });
+
+  const auditRef = db.collection("audit_logs").doc();
+  await auditRef.set({
+    action: "BROKER_KYC_SUBMITTED",
+    actorId: uid,
+    actorRole: "broker",
+    brokerId: uid,
+    completionScore: profileCompletionScore,
+    kycStatus: brokerKycStatus,
+    createdAt: now,
+  });
+
+  return { status: "SUCCESS", uid, brokerKycStatus, profileCompletionScore };
+});

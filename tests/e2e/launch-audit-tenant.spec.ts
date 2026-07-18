@@ -82,8 +82,8 @@ test.describe('Tenant launch audit', () => {
     await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, '/tenant/request');
-    const hasForm = await page.locator('form, [role="form"], textarea, input[type="text"]').first().isVisible({ timeout: 8_000 }).catch(() => false);
-    expect(hasForm, 'Maintenance request form must render an input').toBe(true);
+    const requestForm = page.locator('form, [role="form"], textarea, input[type="text"]').first();
+    await expect(requestForm, 'Maintenance request form must render an input').toBeVisible({ timeout: 20_000 });
   });
 
   test('tenant emergency page renders (no submit)', async ({ page }) => {

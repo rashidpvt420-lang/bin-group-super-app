@@ -57,6 +57,34 @@ await db.collection('users').doc(tenantUid).set({
   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
 }, { merge: true });
 
+const e2ePropertyId = 'e2e-launch-property';
+const e2eUnitId = `e2e-launch-unit-${tenantUid}`;
+
+await db.collection('properties').doc(e2ePropertyId).set({
+  name: 'E2E Launch Property',
+  propertyName: 'E2E Launch Property',
+  address: 'Al Ain, United Arab Emirates',
+  location: {
+    lat: 24.2075,
+    lng: 55.7447,
+  },
+  status: 'active',
+  e2eLaunchSeed: true,
+  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+}, { merge: true });
+
+await db.collection('units').doc(e2eUnitId).set({
+  unitNumber: 'E2E-101',
+  propertyId: e2ePropertyId,
+  tenantId: tenantUid,
+  tenantEmail,
+  status: 'occupied',
+  e2eLaunchSeed: true,
+  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+}, { merge: true });
+
+console.log(`[tenant-correction-e2e] propertyId=${e2ePropertyId}`);
+console.log(`[tenant-correction-e2e] unitId=${e2eUnitId}`);
 const snapshot = await db.collection('tenant_correction_requests')
   .where('tenantUid', '==', tenantUid)
   .limit(100)

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const script = readFileSync('scripts/verify-firebase-production-secrets.mjs', 'utf8');
-const deploy = readFileSync('scripts/deploy-firebase-production.mjs', 'utf8');
+const deploy = readFileSync('scripts/deploy-firebase-production.mjs', 'utf8').replace(/\r\n?/g, '\n');
 const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
 
 const allProviderSecrets = [
