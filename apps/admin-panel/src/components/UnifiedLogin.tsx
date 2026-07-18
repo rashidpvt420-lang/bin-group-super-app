@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { auth, browserLocalPersistence, setPersistence, signInWithRedirect, signInWithEmailAndPassword } from '../lib/firebase';
-import { 
-    GoogleAuthProvider,
-    sendPasswordResetEmail
+import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
+import {
+    getMultiFactorResolver,
+    sendPasswordResetEmail,
 } from 'firebase/auth';
-import { Shield, Lock, Globe } from 'lucide-react';
+import type { MultiFactorResolver } from 'firebase/auth';
+import { Shield, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
+import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
 
 export default function UnifiedLogin() {
     const { error: authError } = useAuth();
@@ -15,6 +17,7 @@ export default function UnifiedLogin() {
     const [localError, setLocalError] = useState<string | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
 
     const error = authError || localError;
     const loading = localLoading;
@@ -22,18 +25,17 @@ export default function UnifiedLogin() {
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
         const message = err?.message || '';
-        
-        // Admin Diagnostic Logging
-        console.error("🛡️ [AUTH_DIAGNOSTIC]", {
+
+        console.error('🛡️ [AUTH_DIAGNOSTIC]', {
             code,
             message,
             authDomain: auth.config?.authDomain,
             currentUrl: window.location.href,
-            provider: code.includes('google') ? 'google.com' : 'password',
+            provider: 'password',
             env: process.env.NODE_ENV,
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
-            emailAttempted: email.replace(/(.{3}).*@/, "$1***@")
+            emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
@@ -42,50 +44,44 @@ export default function UnifiedLogin() {
         if (code === 'auth/too-many-requests') {
             return 'Security lockout: Too many attempts. Please wait.';
         }
-        if (code === 'auth/popup-closed-by-user') {
-            return 'Google sign-in was cancelled.';
-        }
         if (code === 'auth/unauthorized-domain') {
             return 'This admin domain is not authorized for Firebase sign-in. Add bin-group-admin-panel.web.app and bin-group-admin-panel.firebaseapp.com in Firebase Authentication authorized domains.';
         }
         if (code === 'auth/operation-not-allowed') {
-            return 'This admin sign-in method is not enabled in Firebase Authentication. Enable Email/Password or Google sign-in.';
+            return 'Email/password Admin sign-in is not enabled in Firebase Authentication.';
         }
         if (code === 'auth/network-request-failed') {
             return 'Network connection failed. Please try again.';
         }
-        
-        return 'Login could not be completed. Please contact BIN GROUP support.';
-    };
-
-    const handleGoogleLogin = async () => {
-        setLocalLoading(true);
-        setLocalError(null);
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        try {
-            console.log("🔍 [DIAG] Starting Admin Google sign-in...");
-            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
-            await signInWithRedirect(auth, provider);
-        } catch (err: any) {
-            setLocalError(getFriendlyAuthError(err));
-            setLocalLoading(false);
+        if (code === 'auth/multi-factor-auth-required') {
+            return 'Admin MFA is required to complete sign-in.';
         }
+        return 'Login could not be completed. Please contact BIN GROUP support.';
     };
 
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLocalLoading(true);
         setLocalError(null);
+        setMfaResolver(null);
         try {
-            console.log("🔍 [DIAG] Validating admin credentials...");
             await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
-            const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password.trim());
+            const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
             if (result.user) {
-                console.log("🛡️ [AUTH] Admin login successful for:", result.user.email);
+                console.info('🛡️ [AUTH] Primary Admin credential accepted.');
             }
         } catch (err: any) {
-            setLocalError(getFriendlyAuthError(err));
+            if (err?.code === 'auth/multi-factor-auth-required') {
+                try {
+                    const resolver = getMultiFactorResolver(auth, err);
+                    setMfaResolver(resolver);
+                    setLocalError(null);
+                } catch (resolverError) {
+                    setLocalError(getFriendlyAuthError(resolverError));
+                }
+            } else {
+                setLocalError(getFriendlyAuthError(err));
+            }
             setLocalLoading(false);
         }
     };
@@ -99,7 +95,7 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         try {
-            await sendPasswordResetEmail(auth, email);
+            await sendPasswordResetEmail(auth, email.trim().toLowerCase());
             setLocalError('Password reset email sent. Check your inbox.');
         } catch (err: any) {
             setLocalError(getFriendlyAuthError(err));
@@ -108,7 +104,7 @@ export default function UnifiedLogin() {
         }
     };
 
-    if (loading && !error) {
+    if (loading && !error && !mfaResolver) {
         return (
             <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
                 <div className="w-12 h-12 border-4 border-[#C6A75E] border-t-transparent rounded-full animate-spin mb-6"></div>
@@ -121,14 +117,12 @@ export default function UnifiedLogin() {
 
     return (
         <div className={`min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 selection:bg-[#C6A75E]/30 ${isRTL ? 'rtl' : 'ltr'}`}>
-            {/* Background Branding */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
             </div>
 
             <div className="w-full max-w-[420px] relative z-10">
-                {/* Branding Section */}
                 <div className="text-center mb-12">
                     <div className="inline-block p-4 rounded-3xl bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-[#C6A75E]/20 shadow-2xl mb-6">
                         <Shield className="w-12 h-12 text-[#C6A75E]" strokeWidth={1.5} />
@@ -141,79 +135,89 @@ export default function UnifiedLogin() {
                     </p>
                 </div>
 
-                {/* Login Card */}
                 <div className="bg-[#0f172a]/80 backdrop-blur-xl border border-white/5 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50"></div>
-                    
+
                     <div className="mb-8">
-                        <h2 className="text-xl font-black text-white mb-2">Admin Login</h2>
+                        <h2 className="text-xl font-black text-white mb-2">{mfaResolver ? 'Admin MFA Verification' : 'Admin Login'}</h2>
                         <p className="text-sm text-[#64748b] leading-relaxed">
-                            Authorized BIN GROUP administrators only.
+                            {mfaResolver
+                                ? 'The primary credential was accepted. Complete the enrolled Firebase second factor.'
+                                : 'Authorized BIN GROUP administrators only.'}
                         </p>
                     </div>
 
-                    {error && (
+                    {error && !mfaResolver && (
                         <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></div>
                             {error}
                         </div>
                     )}
 
-                    <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
-                        <div>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder={t('login.email')}
-                                className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder={t('login.password')}
-                                className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
-                                required
-                            />
-                        </div>
-                        <button 
-                            type="submit"
-                            disabled={loading || !email || !password}
-                            className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
-                        >
-                            {loading ? '...' : t('login.signin')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handlePasswordReset}
-                            disabled={loading}
-                            className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
-                        >
-                            {t('login.forgot_password')}
-                        </button>
-                    </form>
+                    {mfaResolver ? (
+                        <AdminMfaSignInChallenge
+                            resolver={mfaResolver}
+                            onResolved={() => {
+                                setLocalLoading(true);
+                                setMfaResolver(null);
+                                setPassword('');
+                            }}
+                            onCancel={() => {
+                                setMfaResolver(null);
+                                setPassword('');
+                                setLocalError(null);
+                            }}
+                        />
+                    ) : (
+                        <>
+                            <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
+                                <div>
+                                    <input
+                                        data-testid="admin-login-email"
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder={t('login.email')}
+                                        autoComplete="username"
+                                        className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <input
+                                        data-testid="admin-login-password"
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder={t('login.password')}
+                                        autoComplete="current-password"
+                                        className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    data-testid="admin-login-submit"
+                                    type="submit"
+                                    disabled={loading || !email || !password}
+                                    className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
+                                >
+                                    {loading ? '...' : t('login.signin')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handlePasswordReset}
+                                    disabled={loading}
+                                    className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
+                                >
+                                    {t('login.forgot_password')}
+                                </button>
+                            </form>
 
-                    <div className="flex items-center gap-4 mb-6 opacity-50">
-                        <div className="h-[1px] flex-1 bg-white/20"></div>
-                        <span className="text-[10px] text-white font-bold uppercase tracking-widest">Or Google</span>
-                        <div className="h-[1px] flex-1 bg-white/20"></div>
-                    </div>
-
-                    <button 
-                        type="button"
-                        onClick={handleGoogleLogin}
-                        disabled={loading}
-                        className="w-full group relative flex items-center justify-center bg-white text-black font-black py-4 px-8 rounded-xl transition-all duration-300 hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <div className="flex items-center gap-3">
-                            <Globe className="w-5 h-5" />
-                            <span className="uppercase tracking-widest text-sm">{t('login.google') || 'Sign in with Google'}</span>
-                        </div>
-                    </button>
+                            <div data-testid="admin-google-login-disabled" className="p-4 rounded-2xl border border-white/10 bg-white/[0.03] text-[#94a3b8] text-xs leading-relaxed">
+                                Google redirect Admin sign-in is disabled until its redirect-return MFA resolver is supported. Use the protected email/password + MFA path.
+                            </div>
+                        </>
+                    )}
 
                     <div className="mt-8 flex items-center justify-center gap-2 opacity-40">
                         <Lock className="w-3 h-3 text-[#94a3b8]" />
