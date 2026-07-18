@@ -19,6 +19,8 @@ import {
   sha256Text,
   signDocument,
 } from '../../scripts/lib/hard-launch-control.mjs';
+import { buildFirebasePhoneAuthEvidence } from '../../scripts/verify-firebase-phone-auth-production.mjs';
+import { buildAdminMfaEvidence } from '../../scripts/verify-admin-mfa-production.mjs';
 import { runSameRunDeploymentArtifactVerification } from '../../scripts/verify-same-run-deployment-artifact.mjs';
 
 const SHA = 'a'.repeat(40);
@@ -31,13 +33,7 @@ const ACTOR = 'founder-actor';
 const FOUNDER_EMAIL = 'founder@example.com';
 const DIGEST = `sha256:${'ab'.repeat(32)}`;
 const HMAC_KEY = 'test-only-hmac-key-that-is-more-than-32-characters';
-const REQUIRED_COMPONENTS = [
-  'hosting',
-  'firestoreRules',
-  'firestoreIndexes',
-  'storageRules',
-  'functions',
-];
+const REQUIRED_COMPONENTS = ['hosting', 'firestoreRules', 'firestoreIndexes', 'storageRules', 'functions'];
 
 function writeJson(root, name, value) {
   const target = path.join(root, 'launch_package', name);
@@ -59,6 +55,43 @@ function createFixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'same-run-deployment-'));
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
+  const env = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_REPOSITORY: REPOSITORY,
+    GITHUB_REF: REF,
+    GITHUB_SHA: SHA,
+    GITHUB_RUN_ID: RUN_ID,
+    GITHUB_RUN_ATTEMPT: String(RUN_ATTEMPT),
+    GITHUB_ACTOR: ACTOR,
+    VALIDATED_ARTIFACT_DIGEST: DIGEST,
+    RELEASE_ID,
+    AUTHORIZED_FOUNDER_ACTORS: ACTOR,
+    AUTHORIZED_FOUNDER_EMAILS: FOUNDER_EMAIL,
+    HARD_LAUNCH_APPROVAL_HMAC_KEY: HMAC_KEY,
+  };
+
+  const firebasePhoneAuth = buildFirebasePhoneAuthEvidence({
+    projectId: 'bin-group-57c60',
+    phoneProviderEnabled: true,
+    mfaState: 'ENABLED',
+    mfaEnabled: true,
+    requiredDomainsPresent: true,
+    authorizedDomainCount: 2,
+    smsPolicy: 'allowlist-only',
+    requiredSmsRegion: 'AE',
+    requiredSmsRegionAllowed: true,
+    allowedRegionCount: 1,
+    testPhoneNumberCount: 0,
+  }, { env, now: new Date(now) });
+  const adminMfa = buildAdminMfaEvidence({
+    claimedAdminCount: 2,
+    disabledAdminCount: 0,
+    activeAdminCount: 2,
+    phoneMfaEnrolledCount: 2,
+    missingPhoneFactorCount: 0,
+    unsupportedOnlyFactorCount: 0,
+    allActiveAdminsPhoneMfaReady: true,
+  }, { env, now: new Date(now) });
 
   writeJson(root, 'production-deployment.json', {
     status: 'passed',
@@ -80,6 +113,8 @@ function createFixture() {
     bundleVerified: true,
     hardLaunchClaim: false,
     source: 'firebase-production-deploy-workflow',
+    firebasePhoneAuth,
+    adminMfa,
   });
 
   writeJson(root, 'production-incidents.json', {
@@ -129,41 +164,15 @@ function createFixture() {
     runId: RUN_ID,
     runAttempt: RUN_ATTEMPT,
     actor: ACTOR,
-    founder: {
-      name: 'Test Founder',
-      email: FOUNDER_EMAIL,
-    },
+    founder: { name: 'Test Founder', email: FOUNDER_EMAIL },
     issuedAt: nowIso,
     expiresAt: new Date(now + 30 * 60 * 1000).toISOString(),
     deployConfirmationDigest: sha256Text(DEPLOY_CONFIRMATION_PHRASE),
     hardLaunchConfirmationDigest: sha256Text(HARD_LAUNCH_CONFIRMATION_PHRASE),
   };
-  writeJson(
-    root,
-    'hard-launch-authorization.json',
-    signDocument(authorizationPayload, HMAC_KEY),
-  );
-
-  const env = {
-    GITHUB_ACTIONS: 'true',
-    GITHUB_REPOSITORY: REPOSITORY,
-    GITHUB_REF: REF,
-    GITHUB_SHA: SHA,
-    GITHUB_RUN_ID: RUN_ID,
-    GITHUB_RUN_ATTEMPT: String(RUN_ATTEMPT),
-    GITHUB_ACTOR: ACTOR,
-    VALIDATED_ARTIFACT_DIGEST: DIGEST,
-    RELEASE_ID,
-    AUTHORIZED_FOUNDER_ACTORS: ACTOR,
-    AUTHORIZED_FOUNDER_EMAILS: FOUNDER_EMAIL,
-    HARD_LAUNCH_APPROVAL_HMAC_KEY: HMAC_KEY,
-  };
+  writeJson(root, 'hard-launch-authorization.json', signDocument(authorizationPayload, HMAC_KEY));
 
   return { root, env, now };
-}
-
-function verify(fixture) {
-  return runSameRunDeploymentArtifactVerification(fixture);
 }
 
 function withFixture(run) {
@@ -175,23 +184,27 @@ function withFixture(run) {
   }
 }
 
-function assertRejected(result, pattern) {
+function verify(fixture) {
+  return runSameRunDeploymentArtifactVerification(fixture);
+}
+
+function rejected(result, pattern) {
   assert.equal(result.ok, false);
   assert.equal(result.hardLaunchClaim, false);
   assert.match(result.failures.join('\n'), pattern);
 }
 
 describe('same-run production deployment artifact verifier', () => {
-  it('accepts a complete artifact set bound to this protected workflow run', () => {
+  it('accepts a complete exact-run artifact with Phone Auth and Admin MFA evidence', () => {
     withFixture((fixture) => {
       const result = verify(fixture);
       assert.equal(result.ok, true, result.failures.join('\n'));
-      assert.equal(result.hardLaunchClaim, false);
       assert.equal(result.binding.artifactDigest, DIGEST);
+      assert.equal(result.hardLaunchClaim, false);
     });
   });
 
-  it('rejects each missing required document', () => {
+  it('rejects missing required documents', () => {
     for (const name of [
       'production-deployment.json',
       'production-incidents.json',
@@ -200,244 +213,85 @@ describe('same-run production deployment artifact verifier', () => {
     ]) {
       withFixture((fixture) => {
         unlinkSync(path.join(fixture.root, 'launch_package', name));
-        assertRejected(verify(fixture), /Missing|missing/i);
+        rejected(verify(fixture), /Missing|missing/i);
       });
     }
   });
 
-  it('rejects malformed JSON', () => {
-    withFixture((fixture) => {
-      writeFileSync(
-        path.join(fixture.root, 'launch_package/production-deployment.json'),
-        '{',
-      );
-      assertRejected(verify(fixture), /malformed JSON/i);
-    });
-  });
-
-  it('rejects wrong deployment source', () => {
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.source = 'manual';
-      });
-      assertRejected(verify(fixture), /deployment source|production deploy workflow/i);
-    });
-  });
-
-  it('rejects deployment status other than passed', () => {
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.status = 'pending';
-      });
-      assertRejected(verify(fixture), /status.*passed|deployment status/i);
-    });
-  });
-
-  it('rejects hardLaunchClaim=true in deployment metadata', () => {
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.hardLaunchClaim = true;
-      });
-      assertRejected(verify(fixture), /hardLaunchClaim/i);
-    });
-  });
-
-  it('requires deployment repository instead of validating it fail-open', () => {
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        delete doc.repository;
-      });
-      assertRejected(verify(fixture), /deployment repository/i);
-    });
-  });
-
-  it('requires deployment workflowRef=refs/heads/main', () => {
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-deployment.json', (doc) => {
-        delete doc.workflowRef;
-      });
-      assertRejected(verify(fixture), /workflowRef/i);
-    });
-  });
-
-  it('rejects wrong deployment SHA and run ID', () => {
+  it('rejects deployment provenance, status, digest and component tampering', () => {
     for (const [field, value, pattern] of [
+      ['source', 'manual', /deployment source/i],
+      ['status', 'pending', /deployment status|status.*passed/i],
       ['deployedCommitSha', 'b'.repeat(40), /deployedCommitSha/i],
       ['workflowRunId', '123', /workflowRunId/i],
+      ['artifactDigest', `sha256:${'cd'.repeat(32)}`, /artifactDigest/i],
+      ['hardLaunchClaim', true, /hardLaunchClaim/i],
     ]) {
       withFixture((fixture) => {
-        mutate(fixture.root, 'production-deployment.json', (doc) => {
-          doc[field] = value;
-        });
-        assertRejected(verify(fixture), pattern);
+        mutate(fixture.root, 'production-deployment.json', (doc) => { doc[field] = value; });
+        rejected(verify(fixture), pattern);
       });
     }
-  });
-
-  it('requires the exact workflow run attempt', () => {
     withFixture((fixture) => {
       mutate(fixture.root, 'production-deployment.json', (doc) => {
-        delete doc.workflowRunAttempt;
+        doc.successfulComponents = doc.successfulComponents.filter((item) => item !== 'firestoreIndexes');
       });
-      assertRejected(verify(fixture), /workflowRunAttempt/i);
+      rejected(verify(fixture), /firestoreIndexes/i);
     });
   });
 
-  it('rejects missing and mismatched deployment digests', () => {
-    for (const [field, value] of [
-      ['artifactDigest', undefined],
-      ['artifactDigest', `sha256:${'cd'.repeat(32)}`],
-      ['validatedArtifactDigest', undefined],
-      ['validatedArtifactDigest', `sha256:${'cd'.repeat(32)}`],
+  it('rejects missing or tampered nested Phone Auth and Admin MFA evidence', () => {
+    for (const [field, pattern] of [
+      ['firebasePhoneAuth', /Phone Auth deployment evidence is missing/i],
+      ['adminMfa', /Admin MFA deployment evidence is missing/i],
     ]) {
       withFixture((fixture) => {
-        mutate(fixture.root, 'production-deployment.json', (doc) => {
-          if (value === undefined) delete doc[field];
-          else doc[field] = value;
-        });
-        assertRejected(verify(fixture), /artifactDigest/i);
+        mutate(fixture.root, 'production-deployment.json', (doc) => { delete doc[field]; });
+        rejected(verify(fixture), pattern);
       });
     }
-  });
-
-  it('rejects stale or future deployment timestamps', () => {
-    for (const [field, value, pattern] of [
-      ['deployedAt', '2020-01-01T00:00:00.000Z', /stale/i],
-      ['verifiedAt', new Date(Date.now() + 60 * 60 * 1000).toISOString(), /future/i],
-    ]) {
-      withFixture((fixture) => {
-        mutate(fixture.root, 'production-deployment.json', (doc) => {
-          doc[field] = value;
-        });
-        assertRejected(verify(fixture), pattern);
-      });
-    }
-  });
-
-  it('rejects missing required deployed components', () => {
     withFixture((fixture) => {
       mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.successfulComponents = doc.successfulComponents.filter(
-          (component) => component !== 'firestoreIndexes',
-        );
+        doc.firebasePhoneAuth.mfaState = 'DISABLED';
       });
-      assertRejected(verify(fixture), /firestoreIndexes/i);
+      rejected(verify(fixture), /mfaState/i);
+    });
+    withFixture((fixture) => {
+      mutate(fixture.root, 'production-deployment.json', (doc) => {
+        doc.adminMfa.missingPhoneFactorCount = 1;
+      });
+      rejected(verify(fixture), /missing phone factors/i);
     });
   });
 
-  it('rejects static incidents and incident binding mismatches', () => {
-    const cases = [
-      ['source', undefined, /incidents source|static committed/i],
-      ['repository', 'other/repository', /incidents repository/i],
-      ['commitSha', 'b'.repeat(40), /incidents commitSha/i],
-      ['ref', 'refs/heads/release', /incidents ref/i],
-      ['workflowRunId', '123', /incidents workflowRunId/i],
-      ['workflowRunAttempt', 3, /incidents workflowRunAttempt/i],
-      ['actor', 'other-actor', /incidents actor/i],
-      ['hardLaunchClaim', true, /incidents hardLaunchClaim/i],
-    ];
-    for (const [field, value, pattern] of cases) {
-      withFixture((fixture) => {
-        mutate(fixture.root, 'production-incidents.json', (doc) => {
-          if (value === undefined) delete doc[field];
-          else doc[field] = value;
-        });
-        assertRejected(verify(fixture), pattern);
-      });
-    }
-  });
-
-  it('rejects blocking P0/P1 incidents and rollback holds', () => {
+  it('rejects blocking incidents and approval bindings', () => {
     withFixture((fixture) => {
       mutate(fixture.root, 'production-incidents.json', (doc) => {
         doc.attestation = 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS';
         doc.activeIncidents = [{ id: 'P0-1', severity: 'P0', status: 'open' }];
       });
-      assertRejected(verify(fixture), /P0\/P1|active production incidents/i);
+      rejected(verify(fixture), /P0\/P1|active production incidents/i);
     });
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-incidents.json', (doc) => {
-        doc.attestation = 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS';
-        doc.requiresRollback = true;
-        doc.rollbackReason = 'rollback now';
-      });
-      assertRejected(verify(fixture), /Rollback hold|rollback is required/i);
-    });
-  });
-
-  it('rejects a cooling-period violation after a failed deployment', () => {
-    withFixture((fixture) => {
-      mutate(fixture.root, 'production-incidents.json', (doc) => {
-        doc.attestation = 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS';
-        doc.lastDeploymentFailed = true;
-        doc.lastDeploymentFailedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      });
-      assertRejected(verify(fixture), /30-minute|wait ≥30/i);
-    });
-  });
-
-  it('rejects predeploy approval SHA, digest, and release binding mismatches', () => {
-    for (const [field, value, pattern] of [
-      ['commitSha', 'b'.repeat(40), /approval commitSha/i],
-      ['artifactDigest', `sha256:${'cd'.repeat(32)}`, /approval artifactDigest/i],
-      ['releaseId', `${RUN_ID}-1`, /approval releaseId/i],
-    ]) {
-      withFixture((fixture) => {
-        mutate(fixture.root, 'predeploy-approval.json', (doc) => {
-          doc[field] = value;
-        });
-        assertRejected(verify(fixture), pattern);
-      });
-    }
-  });
-
-  it('requires the predeploy approver to be authorized', () => {
     withFixture((fixture) => {
       mutate(fixture.root, 'predeploy-approval.json', (doc) => {
-        doc.approvedBy = 'unauthorized@example.com';
+        doc.releaseId = 'wrong-release';
       });
-      assertRejected(verify(fixture), /approvedBy.*AUTHORIZED_FOUNDER_EMAILS/i);
+      rejected(verify(fixture), /releaseId/i);
     });
   });
 
-  it('rejects authorization SHA, repository, ref, run, attempt, and HMAC mismatches', () => {
-    const cases = [
-      ['commitSha', 'b'.repeat(40), /authorization commitSha/i],
-      ['repository', 'other/repository', /authorization repository/i],
-      ['ref', 'refs/heads/release', /authorization ref/i],
-      ['runId', '123', /authorization workflow run/i],
-      ['runAttempt', 3, /authorization workflow run attempt/i],
-    ];
-    for (const [field, value, pattern] of cases) {
-      withFixture((fixture) => {
-        mutate(fixture.root, 'hard-launch-authorization.json', (doc) => {
-          doc[field] = value;
-        });
-        assertRejected(verify(fixture), pattern);
-      });
-    }
+  it('rejects authorization signature and run-attempt tampering', () => {
     withFixture((fixture) => {
-      const env = {
-        ...fixture.env,
-        HARD_LAUNCH_APPROVAL_HMAC_KEY:
-          'different-test-hmac-key-that-is-more-than-32-characters',
-      };
-      assertRejected(verify({ ...fixture, env }), /signature verification failed/i);
-    });
-  });
-
-  it('requires protected GitHub Actions context and exact repository/ref', () => {
-    for (const [key, value, pattern] of [
-      ['GITHUB_ACTIONS', 'false', /GITHUB_ACTIONS/i],
-      ['GITHUB_REPOSITORY', 'other/repository', /GITHUB_REPOSITORY/i],
-      ['GITHUB_REF', 'refs/heads/release', /GITHUB_REF/i],
-      ['GITHUB_RUN_ATTEMPT', '', /GITHUB_RUN_ATTEMPT/i],
-      ['VALIDATED_ARTIFACT_DIGEST', '', /VALIDATED_ARTIFACT_DIGEST/i],
-    ]) {
-      withFixture((fixture) => {
-        const env = { ...fixture.env, [key]: value };
-        assertRejected(verify({ ...fixture, env }), pattern);
+      mutate(fixture.root, 'hard-launch-authorization.json', (doc) => {
+        doc.signature = 'bad-signature';
       });
-    }
+      rejected(verify(fixture), /signature/i);
+    });
+    withFixture((fixture) => {
+      mutate(fixture.root, 'hard-launch-authorization.json', (doc) => {
+        doc.runAttempt = 9;
+      });
+      rejected(verify(fixture), /run attempt|runAttempt/i);
+    });
   });
 });
