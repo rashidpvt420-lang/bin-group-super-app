@@ -27,39 +27,101 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
     }
 
 `;
-const tenantIdentityGuard = `
+
+const reviewedRoleFields = Object.freeze({
+  tenant: [
+    'displayName',
+    'phone',
+    'phoneNumber',
+    'mobile',
+    'emergencyContact',
+  ],
+  owner: [
+    'displayName',
+    'phone',
+    'phoneNumber',
+    'mobile',
+    'companyName',
+    'ownerCompanyName',
+    'billingContact',
+  ],
+  technician: [
+    'displayName',
+    'phone',
+    'phoneNumber',
+    'mobile',
+    'requestedTrade',
+    'serviceZonePreference',
+    'emergencyContact',
+  ],
+  broker: [
+    'displayName',
+    'phone',
+    'phoneNumber',
+    'mobile',
+    'companyName',
+    'reraLicense',
+    'reraStatus',
+    'reraVerified',
+    'primaryRegion',
+    'brokerTerritory',
+    'tradeLicenseNumber',
+    'emiratesIdNumber',
+    'passportNumber',
+    'bankName',
+    'bankAccountHolder',
+    'bankIban',
+    'iban',
+    'commissionAgreementAccepted',
+    'commissionAgreementAcceptedAt',
+    'commissionTermsVersion',
+    'brokerKycStatus',
+    'brokerProfileCompletion',
+    'profileCompletionScore',
+  ],
+});
+
+function reviewedRoleMarker(role) {
+  return `claimedRole() != '${role}' ||\n          !request.resource.data.diff(resource.data).affectedKeys().hasAny([\n            '${reviewedRoleFields[role][0]}'`;
+}
+
+function reviewedRoleGuard(role) {
+  const fields = reviewedRoleFields[role]
+    .map((field) => `            '${field}'`)
+    .join(',\n');
+  return `
         (
-          claimedRole() != 'tenant' ||
+          claimedRole() != '${role}' ||
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'displayName',
-            'phone',
-            'phoneNumber',
-            'mobile',
-            'emergencyContact'
+${fields}
           ])
         ) &&`;
-const tenantIdentityMarker = "claimedRole() != 'tenant' ||\n          !request.resource.data.diff(resource.data).affectedKeys().hasAny([\n            'displayName'";
+}
 
-function hardenTenantSelfUpdate(rulesText) {
+function hardenReviewedRoleSelfUpdates(rulesText) {
   const functionStart = rulesText.indexOf('    function safeUserSelfUpdate(userId) {');
   const functionEnd = rulesText.indexOf('    function safeOwnerProfileCreate', functionStart);
   if (functionStart < 0 || functionEnd < 0) {
     throw new Error('[final-firestore-authority] safeUserSelfUpdate function boundaries missing');
   }
 
-  const block = rulesText.slice(functionStart, functionEnd);
-  if (block.includes(tenantIdentityMarker)) return rulesText;
-
+  let block = rulesText.slice(functionStart, functionEnd);
   const allowlistStart = block.indexOf('request.resource.data.diff(resource.data).affectedKeys().hasOnly([');
   const allowlistEndToken = '        ]) &&';
   const allowlistEnd = block.indexOf(allowlistEndToken, allowlistStart);
   if (allowlistStart < 0 || allowlistEnd < 0) {
-    throw new Error('[final-firestore-authority] Tenant direct identity mutation allowlist boundary missing');
+    throw new Error('[final-firestore-authority] reviewed profile mutation allowlist boundary missing');
   }
 
-  const insertionPoint = allowlistEnd + allowlistEndToken.length;
-  const hardenedBlock = `${block.slice(0, insertionPoint)}${tenantIdentityGuard}${block.slice(insertionPoint)}`;
-  return `${rulesText.slice(0, functionStart)}${hardenedBlock}${rulesText.slice(functionEnd)}`;
+  let insertionPoint = allowlistEnd + allowlistEndToken.length;
+  for (const role of Object.keys(reviewedRoleFields)) {
+    const marker = reviewedRoleMarker(role);
+    if (block.includes(marker)) continue;
+    const guard = reviewedRoleGuard(role);
+    block = `${block.slice(0, insertionPoint)}${guard}${block.slice(insertionPoint)}`;
+    insertionPoint += guard.length;
+  }
+  return `${rulesText.slice(0, functionStart)}${block}${rulesText.slice(functionEnd)}`;
 }
 
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
@@ -104,7 +166,7 @@ if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)
   throw new Error('[final-firestore-authority] global update/delete catch-all could not be bounded');
 }
 
-text = hardenTenantSelfUpdate(text);
+text = hardenReviewedRoleSelfUpdates(text);
 writeFileSync(rulesPath, text, 'utf8');
 
 const required = [
@@ -130,7 +192,7 @@ const required = [
   'allow update: if safeTicketUpdateByActor();',
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
-  tenantIdentityMarker,
+  ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
   adminSecurityReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
@@ -151,8 +213,11 @@ if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
 if (text.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) {
   throw new Error('[final-firestore-authority] Admin security session block must exist exactly once');
 }
-if (text.split(tenantIdentityMarker).length - 1 !== 1) {
-  throw new Error('[final-firestore-authority] Tenant reviewed identity guard must exist exactly once');
+for (const role of Object.keys(reviewedRoleFields)) {
+  const marker = reviewedRoleMarker(role);
+  if (text.split(marker).length - 1 !== 1) {
+    throw new Error(`[final-firestore-authority] ${role} reviewed profile guard must exist exactly once`);
+  }
 }
 
 const forbidden = [
@@ -175,4 +240,4 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, Tenant reviewed identity changes, and bounded global fallbacks are canonical');
+console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
