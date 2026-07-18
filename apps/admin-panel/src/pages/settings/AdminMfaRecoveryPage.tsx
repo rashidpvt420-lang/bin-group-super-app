@@ -197,7 +197,7 @@ export default function AdminMfaRecoveryPage() {
                         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
                           <Typography fontWeight={950}>{item.targetDisplayName || item.targetEmailMasked}</Typography>
                           <Chip size="small" label={item.targetRole || 'admin'} />
-                          <Chip size="small" color={statusColor(item.status)} label={item.status.replaceAll('_', ' ')} />
+                          <Chip size="small" color={statusColor(item.status)} label={item.status.replace(/_/g, ' ')} />
                         </Stack>
                         <Typography variant="body2" color="text.secondary" mt={0.5}>{item.targetEmailMasked} · {item.incidentReference}</Typography>
                         <Typography variant="body2" mt={1}>{item.reason}</Typography>
