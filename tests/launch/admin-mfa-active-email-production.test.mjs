@@ -103,6 +103,8 @@ test('production Admin preflight source pins active-email coverage without loggi
   assert.match(source, /activeAdminEmailUnverifiedCount/);
   assert.match(source, /allActiveAdminsEmailVerified/);
   assert.match(source, /activeAdminEmailUnverifiedCount > 0/);
+  assert.match(source, /must explicitly include activeAdminEmailUnverifiedCount/);
+  assert.match(source, /must explicitly include allActiveAdminsEmailVerified/);
   assert.match(source, /requireExact\(evidence\.activeAdminEmailUnverifiedCount, 0/);
   assert.match(source, /requireExact\(evidence\.allActiveAdminsEmailVerified, true/);
   assert.doesNotMatch(source, /console\.log\([^\n]*(?:email|uid|phoneNumber|factorUid|displayName)/i);
