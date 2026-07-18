@@ -26,8 +26,12 @@ function verifiedIdentityValues(profile: FirebaseFirestore.DocumentData) {
     profile.verifiedLegalName,
     profile.legalName,
     profile.kycLegalName,
+    profile.ownerLegalName,
+    profile.verifiedFullName,
     profile.identity?.legalName,
+    profile.identity?.fullName,
     profile.onboarding?.legalName,
+    profile.onboarding?.fullName,
     profile.verifiedCompanyName,
     profile.companyLegalName,
     profile.kycCompanyName,
@@ -88,14 +92,16 @@ export function validateOwnerProfileChange(input: any, profile: FirebaseFirestor
     throw new HttpsError("failed-precondition", "Billing email must match the verified account or verified billing email.");
   }
 
-  const sensitiveIdentityChanged =
-    (companyName && compact(companyName) !== compact(profile.companyName || profile.ownerCompanyName)) ||
-    (billingName && compact(billingName) !== compact(profile.billingContact?.name || profile.billingName));
+  const displayNameChanged = compact(displayName) !== compact(profile.displayName || authRecord.displayName);
+  const companyNameChanged = companyName && compact(companyName) !== compact(profile.companyName || profile.ownerCompanyName);
+  const billingNameChanged = billingName && compact(billingName) !== compact(profile.billingContact?.name || profile.billingName);
+  const sensitiveIdentityChanged = displayNameChanged || companyNameChanged || billingNameChanged;
   if (sensitiveIdentityChanged) {
-    if (!hasVerifiedIdentity(profile)) throw new HttpsError("failed-precondition", "Owner KYC identity must be verified before changing legal or billing identity.");
+    if (!hasVerifiedIdentity(profile)) throw new HttpsError("failed-precondition", "Owner KYC identity must be verified before changing legal, account, or billing identity.");
     const allowed = new Set(verifiedIdentityValues(profile));
-    if (companyName && !allowed.has(compact(companyName))) throw new HttpsError("failed-precondition", "Company name must match the verified Owner KYC identity.");
-    if (billingName && !allowed.has(compact(billingName))) throw new HttpsError("failed-precondition", "Billing name must match the verified Owner KYC identity.");
+    if (displayNameChanged && !allowed.has(compact(displayName))) throw new HttpsError("failed-precondition", "Owner full name must match the verified Owner KYC identity.");
+    if (companyNameChanged && !allowed.has(compact(companyName))) throw new HttpsError("failed-precondition", "Company name must match the verified Owner KYC identity.");
+    if (billingNameChanged && !allowed.has(compact(billingName))) throw new HttpsError("failed-precondition", "Billing name must match the verified Owner KYC identity.");
   }
 
   const resolvedPhone = phone || existingPhone;
