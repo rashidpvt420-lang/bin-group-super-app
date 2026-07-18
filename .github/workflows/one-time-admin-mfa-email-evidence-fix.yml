@@ -1,0 +1,35 @@
+name: One-time Admin MFA Email Evidence Fix
+
+on:
+  push:
+    branches:
+      - fix/admin-mfa-active-email-verification
+    paths:
+      - scripts/one-time-admin-mfa-email-evidence-fix.mjs
+      - .github/workflows/one-time-admin-mfa-email-evidence-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/admin-mfa-active-email-verification
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply exact evidence fix
+        run: node scripts/one-time-admin-mfa-email-evidence-fix.mjs
+      - name: Commit corrected files
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Require explicit Admin MFA email evidence'
+          git push origin HEAD:fix/admin-mfa-active-email-verification
