@@ -30,11 +30,15 @@ test('push token registration is App Check-protected and server-authoritative', 
   assert.doesNotMatch(backend, /collection\("users"\)\.doc\(userId\)\.get\([^)]*fcmTokens/);
 });
 
-test('push delivery reads only hashed token documents and prunes invalid registrations server-side', async () => {
+test('push delivery reads only hashed token documents, chunks multicast and prunes invalid registrations server-side', async () => {
   const backend = await read('functions/notificationDelivery.ts');
   expectAll(backend, [
     /tokenHash\(token\) !== tokenDoc\.id/,
     /registrationsForUser/,
+    /MAX_FCM_MULTICAST_TOKENS = 500/,
+    /offset \+= MAX_FCM_MULTICAST_TOKENS/,
+    /registrations\.slice\(offset, offset \+ MAX_FCM_MULTICAST_TOKENS\)/,
+    /deliveryResponses\.push\(\.\.\.response\.responses\)/,
     /batch\.delete\(registration\.ref\)/,
     /refreshUserPushSummary\(userId\)/,
     /pushPrunedCount: invalidRegistrations\.length/,
