@@ -43,6 +43,7 @@ const Navigation = () => {
 
     const managementMenu = [
         { text: navText('Owners', 'الملاك'), icon: <PeopleIcon />, path: '/owners' },
+        { text: navText('Contract Control', 'التحكم بالعقود'), icon: <FileTextIcon />, path: '/contracts', color: '#f59e0b' },
         { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
         { text: navText('Broker Attribution Queue', 'قائمة إسناد الوسطاء'), icon: <PendingActionsIcon />, path: '/broker-attributions', color: binThemeTokens.gold },
         { text: navText('Broker Commission Hub', 'مركز عمولات الوسطاء'), icon: <AccountBalanceWalletIcon />, path: '/broker-commissions', color: '#10b981' },
@@ -136,7 +137,7 @@ const Navigation = () => {
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
+                        <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
                         <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
                     </ListItem>
                 ))}
