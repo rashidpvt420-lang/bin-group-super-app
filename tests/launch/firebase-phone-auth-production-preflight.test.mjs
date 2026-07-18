@@ -44,7 +44,7 @@ function failures(evidence, now = Date.now()) {
   });
 }
 
-test('Phone Auth production config requires provider, MFA, domains, and UAE allowlist', () => {
+test('Phone Auth production config requires provider, MFA, domains, UAE allowlist, and zero test numbers', () => {
   const result = validateFirebasePhoneAuthConfig(validConfig);
   assert.equal(result.ok, true, result.failures.join('\n'));
   assert.equal(result.summary.phoneProviderEnabled, true);
@@ -52,6 +52,7 @@ test('Phone Auth production config requires provider, MFA, domains, and UAE allo
   assert.equal(result.summary.mfaEnabled, true);
   assert.equal(result.summary.requiredDomainsPresent, true);
   assert.equal(result.summary.requiredSmsRegionAllowed, true);
+  assert.equal(result.summary.testPhoneNumberCount, 0);
 
   const mandatory = validateFirebasePhoneAuthConfig({ ...validConfig, mfa: { state: 'MANDATORY' } });
   assert.equal(mandatory.ok, true);
@@ -71,12 +72,30 @@ test('Phone Auth production config requires provider, MFA, domains, and UAE allo
   assert.match(disabled.failures.join('\n'), /allowlist-only/);
 });
 
-test('Phone Auth evidence is exact-run bound and includes enabled MFA state', () => {
+test('Phone Auth production config rejects every configured static test phone number', () => {
+  const result = validateFirebasePhoneAuthConfig({
+    ...validConfig,
+    signIn: {
+      phoneNumber: {
+        enabled: true,
+        testPhoneNumbers: {
+          '+971500000001': '123456',
+        },
+      },
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.summary.testPhoneNumberCount, 1);
+  assert.match(result.failures.join('\n'), /test phone numbers must be removed before production launch/);
+});
+
+test('Phone Auth evidence is exact-run bound and proves production test numbers are absent', () => {
   const now = new Date('2026-07-17T20:00:00.000Z');
   const evidence = buildValidEvidence(now);
   assert.equal(evidence.schemaVersion, 2);
   assert.equal(evidence.mfaState, 'ENABLED');
   assert.equal(evidence.mfaEnabled, true);
+  assert.equal(evidence.testPhoneNumberCount, 0);
   assert.equal(evidence.commitSha, SHA);
   assert.equal(evidence.sensitiveValuesExcluded, true);
   assert.equal(evidence.hardLaunchClaim, false);
@@ -84,7 +103,7 @@ test('Phone Auth evidence is exact-run bound and includes enabled MFA state', ()
   assert.doesNotMatch(JSON.stringify(evidence), /accessToken|phoneNumber|verificationCode|smsCode/);
 });
 
-test('Phone Auth evidence rejects MFA and provenance tampering', () => {
+test('Phone Auth evidence rejects MFA, test-number, and provenance tampering', () => {
   const now = new Date('2026-07-17T20:00:00.000Z');
   for (const [field, value, pattern] of [
     ['commitSha', 'b'.repeat(40), /commitSha/],
@@ -92,6 +111,7 @@ test('Phone Auth evidence rejects MFA and provenance tampering', () => {
     ['mfaState', 'DISABLED', /mfaState/],
     ['phoneProviderEnabled', false, /provider enabled/],
     ['requiredSmsRegionAllowed', false, /required SMS region allowed/],
+    ['testPhoneNumberCount', 1, /production test phone number count/],
     ['verifiedAt', '2020-01-01T00:00:00.000Z', /stale/],
   ]) {
     const evidence = buildValidEvidence(now);
@@ -121,11 +141,14 @@ test('deployment verifier requires nested Phone Auth evidence', async () => {
   assert.match(verifier, /existing\.firebasePhoneAuth/);
 });
 
-test('Phone Auth verifier uses Identity Toolkit and aggregate evidence only', async () => {
+test('Phone Auth verifier uses Identity Toolkit, rejects test numbers, and emits aggregate evidence only', async () => {
   const verifier = await readFile(new URL('../../scripts/verify-firebase-phone-auth-production.mjs', import.meta.url), 'utf8');
   assert.match(verifier, /identitytoolkit\.googleapis\.com\/admin\/v2\/projects/);
   assert.match(verifier, /config\?\.mfa\?\.state/);
   assert.match(verifier, /smsRegionConfig\?\.allowlistOnly\?\.allowedRegions/);
+  assert.match(verifier, /testPhoneNumberCount !== 0/);
+  assert.match(verifier, /test phone numbers must be removed before production launch/);
+  assert.match(verifier, /requireExact\(evidence\.testPhoneNumberCount, 0/);
   assert.match(verifier, /sensitiveValuesExcluded: true/);
   assert.doesNotMatch(verifier, /console\.log\([^\n]*testPhoneNumbers/);
 });
