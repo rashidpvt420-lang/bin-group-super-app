@@ -26,8 +26,15 @@ test('Technician profile edits are preference-only and App Check protected', asy
   assert.match(backend, /enforceAppCheck: true/);
   assert.match(backend, /TECHNICIAN_PROFILE_PREFERENCES_UPDATED/);
   assert.match(backend, /authoritativeIdentityFieldsExcluded/);
-  assert.doesNotMatch(backend, /transaction\.update\(userRef,[\s\S]{0,600}displayName:/);
-  assert.doesNotMatch(backend, /transaction\.update\(userRef,[\s\S]{0,600}requestedTrade:/);
+  const transactionUpdate = backend.slice(
+    backend.indexOf('transaction.update(userRef'),
+    backend.indexOf('transaction.set(auditRef'),
+  );
+  assert.match(transactionUpdate, /serviceZonePreference/);
+  assert.match(transactionUpdate, /emergencyContact/);
+  assert.doesNotMatch(transactionUpdate, /displayName:/);
+  assert.doesNotMatch(transactionUpdate, /requestedTrade:/);
+  assert.doesNotMatch(transactionUpdate, /serviceZone:/);
 
   assert.match(page, /httpsCallable\(functions, 'updateTechnicianProfilePreferences'\)/);
   assert.match(page, /technician-profile-authority-notice/);
@@ -46,8 +53,8 @@ test('canonical Firestore hardener protects reviewed profile fields for all cust
   const hardener = await read('scripts/harden-final-firestore-authority.mjs');
   for (const role of ['tenant', 'owner', 'technician', 'broker']) {
     assert.match(hardener, new RegExp(`${role}: \\[`));
-    assert.match(hardener, new RegExp(`claimedRole\\(\\) != '\\$\\{role\\}'|claimedRole\\(\\) != '\\$\\{role\\}'`));
   }
+  assert.match(hardener, /claimedRole\(\) != '\$\{role\}'/);
   assert.match(hardener, /hardenReviewedRoleSelfUpdates/);
   assert.match(hardener, /reviewed profile guard must exist exactly once/);
   assert.match(hardener, /reviewed profile authority for all five roles/);
