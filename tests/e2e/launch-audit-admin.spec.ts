@@ -106,9 +106,11 @@ test.describe('Admin launch audit', () => {
     await assertHealthy(page, 'admin/financials');
   });
 
-  test('admin contracts loads', async ({ page }) => {
+  test('admin contract control remains on the real route', async ({ page }) => {
     await page.goto(adminUrl('/contracts'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
+    await expect(page).toHaveURL(adminUrl('/contracts'));
+    await expect(page.getByTestId('admin-contract-control')).toBeVisible({ timeout: 10_000 });
     await assertHealthy(page, 'admin/contracts');
   });
 
