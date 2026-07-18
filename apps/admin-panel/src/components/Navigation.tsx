@@ -43,27 +43,27 @@ const Navigation = () => {
 
     const managementMenu = [
         { text: navText('Owners', 'الملاك'), icon: <PeopleIcon />, path: '/owners' },
-        { text: navText('Contract Control', 'التحكم بالعقود'), icon: <FileTextIcon />, path: '/contracts', color: '#f59e0b' },
+        { text: navText('Contract Control', 'التحكم بالعقود'), icon: <FileTextIcon />, path: '/contracts' },
         { text: tx('nav.brokers', 'Brokers'), icon: <PeopleIcon />, path: '/broker' },
-        { text: navText('Broker Attribution Queue', 'قائمة إسناد الوسطاء'), icon: <PendingActionsIcon />, path: '/broker-attributions', color: binThemeTokens.gold },
-        { text: navText('Broker Commission Hub', 'مركز عمولات الوسطاء'), icon: <AccountBalanceWalletIcon />, path: '/broker-commissions', color: '#10b981' },
+        { text: navText('Broker Attribution Queue', 'قائمة إسناد الوسطاء'), icon: <PendingActionsIcon />, path: '/broker-attributions' },
+        { text: navText('Broker Commission Hub', 'مركز عمولات الوسطاء'), icon: <AccountBalanceWalletIcon />, path: '/broker-commissions' },
         { text: tx('nav.tenants', 'Tenants'), icon: <PeopleIcon />, path: '/tenants' },
-        { text: navText('Tenant Unit Links', 'روابط وحدات المستأجرين'), icon: <PendingActionsIcon />, path: '/unit-links', color: '#f59e0b' },
+        { text: navText('Tenant Unit Links', 'روابط وحدات المستأجرين'), icon: <PendingActionsIcon />, path: '/unit-links' },
         // Legacy verifier marker retained while the scheduled-services contract migrates: text: 'Tenant Services'
-        { text: navText('Tenant Services', 'خدمات المستأجرين'), icon: <ReceiptIcon />, path: '/tenant-services', color: '#38bdf8' },
-        { text: navText('Operations Messages', 'رسائل العمليات'), icon: <ReceiptIcon />, path: '/ops/messages', color: '#8b5cf6' },
-        { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport', color: binThemeTokens.gold },
-        { text: navText('Unit Status Control', 'التحكم في حالة الوحدات'), icon: <DashboardIcon />, path: '/admin/units', color: binThemeTokens.gold },
+        { text: navText('Tenant Services', 'خدمات المستأجرين'), icon: <ReceiptIcon />, path: '/tenant-services' },
+        { text: navText('Operations Messages', 'رسائل العمليات'), icon: <ReceiptIcon />, path: '/ops/messages' },
+        { text: tx('nav.property_passport', 'Property Passports'), icon: <SecurityIcon />, path: '/properties/passport' },
+        { text: navText('Unit Status Control', 'التحكم في حالة الوحدات'), icon: <DashboardIcon />, path: '/admin/units' },
         { text: tx('nav.technicians', 'TECHNICIAN CORPS'), icon: <PeopleIcon />, path: '/technicians' },
-        { text: navText('Duty Command Center', 'مركز قيادة المناوبات'), icon: <PendingActionsIcon />, path: '/ops/technicians', color: binThemeTokens.gold },
-        { text: navText('WhatsApp Triage', 'فرز واتساب'), icon: <ReceiptIcon />, path: '/ops/whatsapp-triage', color: '#10b981' },
-        { text: navText('RFQ Trust Workflow', 'مسار موثوقية طلبات الأسعار'), icon: <PendingActionsIcon />, path: '/ops/rfq', color: binThemeTokens.gold },
-        { text: navText('Vendor Command', 'قيادة الموردين'), icon: <PeopleIcon />, path: '/ops/vendors', color: '#38bdf8' },
-        { text: navText('PDPL Governance', 'حوكمة حماية البيانات الشخصية'), icon: <SecurityIcon />, path: '/ops/data-governance', color: '#c084fc' },
+        { text: navText('Duty Command Center', 'مركز قيادة المناوبات'), icon: <PendingActionsIcon />, path: '/ops/technicians' },
+        { text: navText('WhatsApp Triage', 'فرز واتساب'), icon: <ReceiptIcon />, path: '/ops/whatsapp-triage' },
+        { text: navText('RFQ Trust Workflow', 'مسار موثوقية طلبات الأسعار'), icon: <PendingActionsIcon />, path: '/ops/rfq' },
+        { text: navText('Vendor Command', 'قيادة الموردين'), icon: <PeopleIcon />, path: '/ops/vendors' },
+        { text: navText('PDPL Governance', 'حوكمة حماية البيانات الشخصية'), icon: <SecurityIcon />, path: '/ops/data-governance' },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
-        ...(isHRAuthorized ? [{ text: navText('HR Command', 'قيادة الموارد البشرية'), icon: <Users size={20} />, path: '/hr', color: binThemeTokens.gold }] : []),
+        ...(isHRAuthorized ? [{ text: navText('HR Command', 'قيادة الموارد البشرية'), icon: <Users size={20} />, path: '/hr' }] : []),
     ];
 
     const systemMenu = [
@@ -137,7 +137,7 @@ const Navigation = () => {
                             '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
                         }}
                     >
-                        <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
+                        <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
                         <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
                     </ListItem>
                 ))}
