@@ -15,14 +15,17 @@ const roleCases = [
   {
     role: 'owner',
     allowed: {
-      displayName: 'Updated Owner',
-      phoneNumber: '+971500000101',
-      companyName: 'Updated Portfolio',
-      billingContact: { name: 'Billing Contact', email: 'billing@example.test', phone: '+971500000102' },
-      notificationPreferences: { preferredContact: 'email', language: 'en' },
-      language: 'en',
+      language: 'ar',
     },
-    denied: [],
+    denied: [
+      { displayName: 'Bypassed Owner Name' },
+      { phoneNumber: '+971500000101' },
+      { phone: '+971500000101' },
+      { mobile: '+971500000101' },
+      { companyName: 'Bypassed Portfolio' },
+      { ownerCompanyName: 'Bypassed Portfolio' },
+      { billingContact: { name: 'Bypassed Billing', email: 'billing@example.test', phone: '+971500000102' } },
+    ],
   },
   {
     role: 'tenant',
@@ -40,23 +43,34 @@ const roleCases = [
   {
     role: 'technician',
     allowed: {
-      displayName: 'Updated Technician',
-      phoneNumber: '+971500000301',
-      requestedTrade: 'HVAC',
-      serviceZonePreference: 'Al Ain',
-      emergencyContact: { name: 'Emergency Contact', phone: '+971500000302' },
-      language: 'en',
+      language: 'ar',
     },
-    denied: [],
+    denied: [
+      { displayName: 'Bypassed Technician Name' },
+      { phoneNumber: '+971500000301' },
+      { phone: '+971500000301' },
+      { mobile: '+971500000301' },
+      { requestedTrade: 'Unverified Trade' },
+      { serviceZonePreference: 'Forged Dispatch Zone' },
+      { emergencyContact: { name: 'Bypassed Contact', phone: '+971500000302' } },
+    ],
   },
   {
     role: 'broker',
     allowed: {
-      displayName: 'Updated Broker',
-      phoneNumber: '+971500000401',
       language: 'ar',
     },
-    denied: [],
+    denied: [
+      { displayName: 'Bypassed Broker Name' },
+      { phoneNumber: '+971500000401' },
+      { phone: '+971500000401' },
+      { companyName: 'Bypassed Brokerage' },
+      { primaryRegion: 'Bypassed Region' },
+      { brokerTerritory: 'Bypassed Territory' },
+      { reraLicense: 'FORGED-RERA' },
+      { bankIban: 'AE000000000000000000000' },
+      { commissionAgreementAccepted: true },
+    ],
   },
 ];
 
@@ -96,7 +110,7 @@ describe('Five-profile protected user fields', () => {
   });
 
   for (const roleCase of roleCases) {
-    it(`${roleCase.role} can update its allowed profile data but cannot mutate reviewed or server-owned authority`, async () => {
+    it(`${roleCase.role} keeps language self-service but cannot bypass reviewed profile authority`, async () => {
       const uid = `${roleCase.role}_profile_user`;
       await seed(`users/${uid}`, {
         uid,
