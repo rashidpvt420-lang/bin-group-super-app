@@ -77,6 +77,14 @@ test('disabled and inactive privileged accounts do not block active email covera
 test('Admin MFA evidence is aggregate-only and fails closed on email-coverage tampering', () => {
   const now = new Date('2026-07-19T00:00:00.000Z');
   const summary = summarizeAdminMfaUsers(readyUsers()).summary;
+  assert.throws(
+    () => buildAdminMfaEvidence({ ...summary, activeAdminEmailUnverifiedCount: undefined }, { env: ENV, now }),
+    /explicitly include activeAdminEmailUnverifiedCount/,
+  );
+  assert.throws(
+    () => buildAdminMfaEvidence({ ...summary, allActiveAdminsEmailVerified: undefined }, { env: ENV, now }),
+    /explicitly include allActiveAdminsEmailVerified/,
+  );
   const evidence = buildAdminMfaEvidence(summary, { env: ENV, now });
   assert.equal(evidence.activeAdminEmailUnverifiedCount, 0);
   assert.equal(evidence.allActiveAdminsEmailVerified, true);

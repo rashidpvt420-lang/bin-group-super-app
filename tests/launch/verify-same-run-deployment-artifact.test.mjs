@@ -59,6 +59,7 @@ function adminMfaSummary() {
     disabledAdminCount: 0,
     inactiveProfileAdminCount: 0,
     activeAdminCount: 3,
+    activeAdminEmailUnverifiedCount: 0,
     phoneMfaEnrolledCount: 3,
     missingPhoneFactorCount: 0,
     unsupportedOnlyFactorCount: 0,
@@ -69,6 +70,7 @@ function adminMfaSummary() {
     recoveryCeoCount: 1,
     recoverySuperAdminCount: 1,
     recoveryQuorumReady: true,
+    allActiveAdminsEmailVerified: true,
     allActiveAdminsPhoneMfaReady: true,
   };
 }

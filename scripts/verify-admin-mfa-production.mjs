@@ -193,12 +193,15 @@ export function buildAdminMfaEvidence(summary, {
   env = process.env,
   now = new Date(),
 } = {}) {
+  if (!Number.isInteger(summary?.activeAdminEmailUnverifiedCount)) {
+    throw new Error('Admin MFA summary must explicitly include activeAdminEmailUnverifiedCount.');
+  }
+  if (typeof summary?.allActiveAdminsEmailVerified !== 'boolean') {
+    throw new Error('Admin MFA summary must explicitly include allActiveAdminsEmailVerified.');
+  }
   const activeAdminCount = Number(summary?.activeAdminCount || 0);
-  const activeAdminEmailUnverifiedCount = Number(summary?.activeAdminEmailUnverifiedCount || 0);
-  const allActiveAdminsEmailVerified =
-    activeAdminCount > 0 &&
-    activeAdminEmailUnverifiedCount === 0 &&
-    summary?.allActiveAdminsEmailVerified !== false;
+  const activeAdminEmailUnverifiedCount = summary.activeAdminEmailUnverifiedCount;
+  const allActiveAdminsEmailVerified = summary.allActiveAdminsEmailVerified === true;
 
   return {
     schemaVersion: 2,
