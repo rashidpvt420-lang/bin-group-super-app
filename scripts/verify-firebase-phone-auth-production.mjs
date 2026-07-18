@@ -82,6 +82,9 @@ export function validateFirebasePhoneAuthConfig(
     && typeof config.signIn.phoneNumber.testPhoneNumbers === 'object'
     ? Object.keys(config.signIn.phoneNumber.testPhoneNumbers).length
     : 0;
+  if (testPhoneNumberCount !== 0) {
+    failures.push('Firebase Authentication test phone numbers must be removed before production launch');
+  }
 
   return {
     ok: failures.length === 0,
@@ -167,6 +170,7 @@ export function validateFirebasePhoneAuthEvidence(evidence, {
   requireExact(evidence.smsPolicy, 'allowlist-only', 'Phone Auth SMS policy');
   requireExact(evidence.requiredSmsRegion, DEFAULT_REQUIRED_SMS_REGION, 'Phone Auth required SMS region');
   requireExact(evidence.requiredSmsRegionAllowed, true, 'Phone Auth required SMS region allowed');
+  requireExact(evidence.testPhoneNumberCount, 0, 'Phone Auth production test phone number count');
   requireExact(evidence.sensitiveValuesExcluded, true, 'Phone Auth sensitiveValuesExcluded');
   requireExact(evidence.hardLaunchClaim, false, 'Phone Auth hardLaunchClaim');
 
