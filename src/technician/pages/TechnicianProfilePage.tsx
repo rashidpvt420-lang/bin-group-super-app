@@ -2,12 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Grid, Stack, Avatar, CircularProgress, Chip, TextField, Button, Switch, FormControlLabel, Divider, Alert, alpha } from '@mui/material';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { db, auth, doc, setDoc, getDoc, updateProfile, sendPasswordResetEmail, serverTimestamp } from '../../lib/firebase';
+import { db, auth, doc, getDoc, functions, httpsCallable, sendPasswordResetEmail } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { User, Phone, Mail, Wrench, Star, Clock, Save, KeyRound, MapPin } from 'lucide-react';
+import { User, Phone, Mail, Wrench, Star, Clock, Save, KeyRound, MapPin, ShieldCheck } from 'lucide-react';
 import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
+
+type TechnicianPreferenceResponse = {
+    status?: string;
+    profile?: {
+        serviceZonePreference?: string;
+        emergencyContact?: { name?: string; phone?: string };
+        language?: string;
+    };
+};
 
 const inputSx = {
     '& .MuiOutlinedInput-root': {
@@ -25,6 +34,7 @@ const inputSx = {
     },
     '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.72)', fontWeight: 850 },
     '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.gold },
+    '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,.58)' },
 };
 
 const statusChipSx = (tone: string) => ({
@@ -67,7 +77,7 @@ export default function TechnicianProfilePage() {
                 setDisplayName(data.displayName || user.displayName || '');
                 setPhone(data.phoneNumber || data.phone || user.phoneNumber || '');
                 setTrade(data.requestedTrade || data.trade || data.specialty || data.primaryTrade || label('General Maintenance', 'صيانة عامة'));
-                setServiceZone(data.serviceZonePreference || data.serviceZone || data.zone || data.city || '');
+                setServiceZone(data.serviceZonePreference || '');
                 setEmergencyName(data.emergencyContact?.name || '');
                 setEmergencyPhone(data.emergencyContact?.phone || '');
                 setIsAvailable(data.isAvailable !== false);
@@ -83,31 +93,38 @@ export default function TechnicianProfilePage() {
 
     const handleSave = async () => {
         if (!user?.uid) return;
-        if (!displayName.trim()) {
-            setNotice({ type: 'warning', text: label('Full name is required.', 'الاسم الكامل مطلوب.') });
-            return;
-        }
         setUpdating(true);
         setNotice(null);
         try {
-            if (auth.currentUser) await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-            const normalizedTrade = trade.trim() || label('General Maintenance', 'صيانة عامة');
-            const payload = {
-                displayName: displayName.trim(),
-                phoneNumber: phone.trim(),
-                phone: phone.trim(),
-                requestedTrade: normalizedTrade,
+            const updatePreferences = httpsCallable(functions, 'updateTechnicianProfilePreferences');
+            const result = await updatePreferences({
                 serviceZonePreference: serviceZone.trim(),
-                emergencyContact: { name: emergencyName.trim(), phone: emergencyPhone.trim() },
+                emergencyContact: {
+                    name: emergencyName.trim(),
+                    phone: emergencyPhone.trim(),
+                },
                 language: lang,
-                updatedAt: serverTimestamp(),
+            });
+            const data = result.data as TechnicianPreferenceResponse;
+            const profile = data?.profile || {};
+            const resolvedZone = profile.serviceZonePreference ?? serviceZone.trim();
+            const resolvedEmergency = profile.emergencyContact || {
+                name: emergencyName.trim(),
+                phone: emergencyPhone.trim(),
             };
-            await setDoc(doc(db, 'users', user.uid), payload, { merge: true });
-            setTechData((prev: any) => ({ ...prev, ...payload }));
-            setNotice({ type: 'success', text: label('Technician profile updated successfully.', 'تم تحديث ملف الفني بنجاح.') });
+            setServiceZone(resolvedZone);
+            setEmergencyName(resolvedEmergency.name || '');
+            setEmergencyPhone(resolvedEmergency.phone || '');
+            setTechData((previous: any) => ({
+                ...previous,
+                serviceZonePreference: resolvedZone,
+                emergencyContact: resolvedEmergency,
+                language: profile.language || lang,
+            }));
+            setNotice({ type: 'success', text: label('Technician preferences updated securely.', 'تم تحديث تفضيلات الفني بشكل آمن.') });
         } catch (err: any) {
             console.error('Update failed', err);
-            setNotice({ type: 'error', text: err?.message || label('Failed to update technician profile.', 'فشل تحديث ملف الفني.') });
+            setNotice({ type: 'error', text: err?.message || label('Failed to update technician preferences.', 'فشل تحديث تفضيلات الفني.') });
         } finally {
             setUpdating(false);
         }
@@ -179,19 +196,25 @@ export default function TechnicianProfilePage() {
 
                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.14)', my: 4 }} />
 
-                <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 3, textAlign: isRTL ? 'right' : 'left' }}>{label('Edit Details', 'تعديل البيانات')}</Typography>
+                <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>{label('Verified Identity & Preferences', 'الهوية الموثقة والتفضيلات')}</Typography>
+                <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3 }} data-testid="technician-profile-authority-notice">
+                    {label(
+                        'Verified name, phone, primary trade and dispatch availability are read-only. Admin and operations records control those fields. Only service-zone preference and emergency contact are updated here through a protected server workflow.',
+                        'الاسم ورقم الهاتف والتخصص الرئيسي وحالة الإرسال بيانات موثقة للقراءة فقط. تتحكم سجلات الإدارة والعمليات بهذه الحقول. يتم تحديث تفضيل منطقة الخدمة وجهة اتصال الطوارئ فقط هنا من خلال إجراء خادم محمي.',
+                    )}
+                </Alert>
                 <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={12} md={6}><TextField fullWidth label={label('Full Name', 'الاسم الكامل')} value={displayName} onChange={e => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6}><TextField fullWidth label={label('Phone Number', 'رقم الهاتف')} value={phone} onChange={e => setPhone(e.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6}><TextField fullWidth label={label('Primary Trade', 'التخصص الرئيسي')} value={trade} onChange={e => setTrade(e.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6}><TextField fullWidth label={label('Service Zone', 'منطقة الخدمة')} value={serviceZone} onChange={e => setServiceZone(e.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Name', 'اسم جهة الاتصال للطوارئ')} value={emergencyName} onChange={e => setEmergencyName(e.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Phone', 'هاتف جهة الاتصال للطوارئ')} value={emergencyPhone} onChange={e => setEmergencyPhone(e.target.value)} sx={inputSx} /></Grid>
+                    <Grid item xs={12} md={6}><TextField data-testid="technician-authoritative-name" fullWidth label={label('Verified Full Name', 'الاسم الكامل الموثق')} value={displayName} InputProps={{ readOnly: true }} helperText={label('Managed by the verified staff identity record.', 'تتم إدارته بواسطة سجل هوية الموظف الموثق.')} sx={inputSx} /></Grid>
+                    <Grid item xs={12} md={6}><TextField data-testid="technician-authoritative-phone" fullWidth label={label('Verified Phone Number', 'رقم الهاتف الموثق')} value={phone} InputProps={{ readOnly: true }} helperText={label('Contact HR or Admin to correct this number.', 'تواصل مع الموارد البشرية أو الإدارة لتصحيح هذا الرقم.')} sx={inputSx} /></Grid>
+                    <Grid item xs={12} md={6}><TextField data-testid="technician-authoritative-trade" fullWidth label={label('Approved Primary Trade', 'التخصص الرئيسي المعتمد')} value={trade} InputProps={{ readOnly: true }} helperText={label('Dispatch uses the approved credential and trade record.', 'يستخدم الإرسال سجل المؤهلات والتخصص المعتمد.')} sx={inputSx} /></Grid>
+                    <Grid item xs={12} md={6}><TextField data-testid="technician-service-zone-preference" fullWidth label={label('Preferred Service Zone', 'منطقة الخدمة المفضلة')} value={serviceZone} onChange={event => setServiceZone(event.target.value)} helperText={label('A preference only; Operations retains dispatch authority.', 'تفضيل فقط؛ تحتفظ العمليات بصلاحية الإرسال.')} sx={inputSx} /></Grid>
+                    <Grid item xs={12} md={6}><TextField data-testid="technician-emergency-name" fullWidth label={label('Emergency Contact Name', 'اسم جهة الاتصال للطوارئ')} value={emergencyName} onChange={event => setEmergencyName(event.target.value)} sx={inputSx} /></Grid>
+                    <Grid item xs={12} md={6}><TextField data-testid="technician-emergency-phone" fullWidth label={label('Emergency Contact Phone', 'هاتف جهة الاتصال للطوارئ')} value={emergencyPhone} onChange={event => setEmergencyPhone(event.target.value)} helperText={label('Use international format, for example +9715XXXXXXXX.', 'استخدم الصيغة الدولية، مثل +9715XXXXXXXX.')} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}><FormControlLabel disabled control={<Switch checked={isAvailable} color="primary" />} label={<Typography color="#FFF" fontWeight="900">{label('Availability is controlled by duty status', 'يتم التحكم في التوفر من خلال حالة الدوام')}</Typography>} sx={{ mr: isRTL ? 0 : undefined, ml: isRTL ? 0 : undefined }} /></Grid>
                 </Grid>
-                
+
                 <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
-                    <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 4, py: 1.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{updating ? <CircularProgress size={24} color="inherit" /> : label('SAVE CHANGES', 'حفظ التغييرات')}</Button>
+                    <Button data-testid="technician-save-preferences" variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 4, py: 1.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{updating ? <CircularProgress size={24} color="inherit" /> : label('SAVE PREFERENCES', 'حفظ التفضيلات')}</Button>
                     <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 4, py: 1.5, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{resetting ? label('SENDING...', 'جارٍ الإرسال...') : label('SEND PASSWORD RESET', 'إرسال إعادة تعيين كلمة المرور')}</Button>
                 </Stack>
             </Paper>
