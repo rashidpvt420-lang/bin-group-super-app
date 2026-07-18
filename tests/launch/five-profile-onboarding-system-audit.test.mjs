@@ -33,6 +33,7 @@ test('all five roles expose protected, bilingual personal profile surfaces', asy
   assert.match(adminPage, /registerAdminSecuritySession/);
   assert.match(adminPage, /revokeAdminSessions/);
   assert.match(adminPage, /lockOwnAdminAccount/);
+  assert.match(adminPage, /AdminMfaEnrollmentCard/);
   assert.match(adminPage, /mfa\.enrolled/);
   assert.match(adminPage, ARABIC);
 });
@@ -61,12 +62,82 @@ test('property onboarding preserves account-first, eleven-step, Arabic and recov
   assert.match(asset, /اسم المسجد مطلوب/);
 });
 
-test('profile audit keeps sensitive role-specific gaps visible', async (t) => {
-  await t.test('Owner phone OTP and billing identity matching', { todo: true });
-  await t.test('Tenant multiple active and historical lease records', { todo: true });
-  await t.test('Tenant unit-link correction audit and rejection workflow', { todo: true });
-  await t.test('Technician server-side credential expiry and unified dispatch gate', { todo: true });
-  await t.test('Broker withdrawal MFA and immutable payout history', { todo: true });
-  await t.test('Owner quote expiry and server plan mapping', { todo: true });
-  await t.test('Protected five-role English and Arabic Playwright journeys', { todo: true });
+test('resolved profile-audit gaps remain executable launch contracts', async () => {
+  const [
+    ownerPhone,
+    ownerProfileBackend,
+    tenantPanel,
+    tenantBackend,
+    technicianPage,
+    technicianBackend,
+    brokerProfile,
+    brokerPayout,
+    quoteBackend,
+    adminEnrollment,
+    adminLogin,
+    adminAuth,
+  ] = await Promise.all([
+    read('src/owner/components/OwnerPhoneVerificationCard.tsx'),
+    read('functions/secureOwnerProfileOperations.ts'),
+    read('src/tenant/components/TenantCorrectionPanel.tsx'),
+    read('functions/tenantCorrectionOperations.ts'),
+    read('src/technician/pages/TechnicianProfilePage.tsx'),
+    read('functions/secureTechnicianProfileOperations.ts'),
+    read('src/broker/pages/BrokerProfilePage.tsx'),
+    read('functions/secureBrokerPayoutOperations.ts'),
+    read('functions/ownerPortfolioQuote.ts'),
+    read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx'),
+    read('apps/admin-panel/src/components/UnifiedLogin.tsx'),
+    read('apps/admin-panel/src/context/AuthContext.tsx'),
+  ]);
+
+  assert.match(ownerPhone, /updatePhoneNumber\(currentUser, credential\)/);
+  assert.match(ownerPhone, /syncVerifiedOwnerPhone/);
+  assert.match(ownerProfileBackend, /Owner full name must match the verified Owner KYC identity/);
+  assert.match(ownerProfileBackend, /Billing email must match the verified account or verified billing email/);
+
+  assert.match(tenantPanel, /submitTenantCorrectionRequest/);
+  assert.match(tenantPanel, /item\.events\.map/);
+  assert.match(tenantBackend, /ADMIN_APPROVE_TENANT_CORRECTION/);
+  assert.match(tenantBackend, /ADMIN_REJECT_TENANT_CORRECTION/);
+
+  assert.match(technicianPage, /updateTechnicianProfilePreferences/);
+  assert.match(technicianPage, /technician-authoritative-trade/);
+  assert.doesNotMatch(technicianPage, /\bsetDoc\s*\(/);
+  assert.match(technicianBackend, /TECHNICIAN_PROFILE_PREFERENCES_UPDATED/);
+
+  assert.match(brokerProfile, /requestBrokerPayoutOtp/);
+  assert.match(brokerProfile, /verifyBrokerPayoutOtp/);
+  assert.match(brokerPayout, /kycSubmissionHash/);
+  assert.match(brokerPayout, /status: "CONSUMED"/);
+
+  assert.match(quoteBackend, /QUOTE_TTL_MS/);
+  assert.match(quoteBackend, /assertOwnerPortfolioQuoteRecord/);
+  assert.match(quoteBackend, /pricingEngineVersion/);
+
+  assert.match(adminEnrollment, /multiFactor\(user\)\.enroll/);
+  assert.match(adminLogin, /getMultiFactorResolver/);
+  assert.match(adminAuth, /sign_in_second_factor/);
+});
+
+test('protected same-commit English and Arabic role evidence remains wired', async () => {
+  const [runner, owner, tenant, technician, broker, admin] = await Promise.all([
+    read('scripts/run-critical-evidence.mjs'),
+    read('tests/e2e/launch-audit-owner.spec.ts'),
+    read('tests/e2e/launch-audit-tenant.spec.ts'),
+    read('tests/e2e/launch-audit-technician.spec.ts'),
+    read('tests/e2e/launch-audit-broker.spec.ts'),
+    read('tests/e2e/launch-audit-admin.spec.ts'),
+  ]);
+  assert.match(runner, /launchAuditLive/);
+  for (const [role, source] of Object.entries({ owner, tenant, technician, broker, admin })) {
+    assert.match(source, /AppCheck|App Check|appCheck/i, `${role} audit has no App Check proof`);
+    assert.match(source, /Arabic|AR\/EN|language|RTL|العربية/i, `${role} audit has no bilingual proof`);
+  }
+});
+
+test('remaining profile gaps stay explicit until implemented', async (t) => {
+  await t.test('Tenant multiple active and historical lease timeline with document-level evidence', { todo: true });
+  await t.test('Technician credential expiry, renewal evidence, and dispatch freeze on expired credentials', { todo: true });
+  await t.test('Admin recovery-factor lifecycle and controlled factor replacement after device loss', { todo: true });
 });
