@@ -110,10 +110,10 @@ export const adminCloseContract = onCall(
     ]);
 
     const bulkWriter = db.bulkWriter();
-    let permanentWriteFailure: FirebaseFirestore.BulkWriterError | null = null;
+    let permanentWriteFailureMessage = "";
     bulkWriter.onWriteError((error) => {
       if (error.failedAttempts < 3) return true;
-      permanentWriteFailure = error;
+      permanentWriteFailureMessage = error.message;
       return false;
     });
     const stagedAt = FieldValue.serverTimestamp();
@@ -142,11 +142,11 @@ export const adminCloseContract = onCall(
     try {
       await bulkWriter.close();
     } catch (error) {
-      const message = permanentWriteFailure?.message || (error instanceof Error ? error.message : "dependent write failure");
+      const message = permanentWriteFailureMessage || (error instanceof Error ? error.message : "dependent write failure");
       throw new HttpsError("internal", `Contract dependencies could not be closed safely: ${message}`);
     }
-    if (permanentWriteFailure) {
-      throw new HttpsError("internal", `Contract dependencies could not be closed safely: ${permanentWriteFailure.message}`);
+    if (permanentWriteFailureMessage) {
+      throw new HttpsError("internal", `Contract dependencies could not be closed safely: ${permanentWriteFailureMessage}`);
     }
 
     const auditRef = db.collection("audit_logs").doc();
