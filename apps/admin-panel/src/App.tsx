@@ -28,6 +28,7 @@ import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import AdminSecurityProfilePage from './pages/settings/AdminSecurityProfilePage';
+import AdminMfaRecoveryPage from './pages/settings/AdminMfaRecoveryPage';
 import AdminContractControlPage from './pages/admin/AdminContractControlPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
@@ -102,6 +103,7 @@ function AppContent() {
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                     <Route path="/profile" element={<ProtectedRoute adminOnly><AdminSecurityProfilePage /></ProtectedRoute>} />
+                    <Route path="/mfa-recovery" element={<ProtectedRoute adminOnly><AdminMfaRecoveryPage /></ProtectedRoute>} />
                     <Route path="/contracts" element={<ProtectedRoute adminOnly><AdminContractControlPage /></ProtectedRoute>} />
                     <Route path="/financials" element={<ProtectedRoute adminOnly><ProfitabilityDashboardPage /></ProtectedRoute>} />
                     <Route path="/financials/payroll" element={<ProtectedRoute adminOnly><PayrollManagementPage /></ProtectedRoute>} />
