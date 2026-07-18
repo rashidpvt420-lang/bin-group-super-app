@@ -22,6 +22,7 @@ export * from "./adminUserProvisioning";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
 export * from "./secureAdminContractOperations";
+export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./contractSignatureOtp";
