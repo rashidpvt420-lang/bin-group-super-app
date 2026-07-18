@@ -71,7 +71,7 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
     tenantBackend,
     technicianPage,
     technicianBackend,
-    brokerProfile,
+    brokerCommissions,
     brokerPayout,
     quoteBackend,
     adminEnrollment,
@@ -85,7 +85,7 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
     read('functions/tenantCorrectionOperations.ts'),
     read('src/technician/pages/TechnicianProfilePage.tsx'),
     read('functions/secureTechnicianProfileOperations.ts'),
-    read('src/broker/pages/BrokerProfilePage.tsx'),
+    read('src/broker/pages/BrokerCommissionsPage.tsx'),
     read('functions/secureBrokerPayoutOperations.ts'),
     read('functions/ownerPortfolioQuote.ts'),
     read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx'),
@@ -113,8 +113,10 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
   assert.doesNotMatch(technicianPage, /\bsetDoc\s*\(/);
   assert.match(technicianBackend, /TECHNICIAN_PROFILE_PREFERENCES_UPDATED/);
 
-  assert.match(brokerProfile, /requestBrokerPayoutOtp/);
-  assert.match(brokerProfile, /verifyBrokerPayoutOtp/);
+  assert.match(brokerCommissions, /requestBrokerPayoutOtp/);
+  assert.match(brokerCommissions, /verifyBrokerPayoutOtp/);
+  assert.match(brokerCommissions, /submitBrokerPayoutRequest/);
+  assert.match(brokerCommissions, /broker-payout-otp-dialog/);
   assert.match(brokerPayout, /kycSubmissionHash/);
   assert.match(brokerPayout, /status: "CONSUMED"/);
 
