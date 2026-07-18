@@ -20,7 +20,16 @@ const ADMIN_TARGET_ROLES = new Set([
   "hr_manager",
   "hr_staff",
 ]);
-const PENDING_STATES = new Set(["PENDING_SECOND_APPROVAL", "EXECUTING"]);
+const LIVE_REQUEST_STATES = new Set(["PENDING_SECOND_APPROVAL", "EXECUTING"]);
+
+type Actor = { uid: string; role: string; displayName: string };
+type FactorState = { count: number; hash: string };
+type ClaimedRecovery = {
+  data: FirebaseFirestore.DocumentData;
+  executionId: string;
+  resuming: boolean;
+  completed: boolean;
+};
 
 const text = (value: unknown, max = 1000) => String(value ?? "").trim().slice(0, max);
 const lower = (value: unknown) => text(value, 200).toLowerCase();
@@ -29,14 +38,17 @@ const secondFactorOf = (token: any) => text(token?.firebase?.sign_in_second_fact
 const roleOf = (token: any, profile: FirebaseFirestore.DocumentData = {}) => lower(
   token?.role || token?.userRole || token?.primaryRole || profile.role || profile.userRole || profile.primaryRole,
 );
+
 const toMillis = (value: unknown) => {
   if (value instanceof Timestamp) return value.toMillis();
-  if (value && typeof value === "object" && typeof (value as any).toMillis === "function") return Number((value as any).toMillis());
+  if (value && typeof value === "object" && typeof (value as any).toMillis === "function") {
+    return Number((value as any).toMillis());
+  }
   if (value instanceof Date) return value.getTime();
   return Number(value || 0);
 };
 
-function factorState(user: admin.auth.UserRecord) {
+function factorState(user: admin.auth.UserRecord): FactorState {
   const factors = [...(user.multiFactor?.enrolledFactors || [])]
     .map((factor) => ({
       uid: text(factor.uid, 180),
@@ -44,10 +56,7 @@ function factorState(user: admin.auth.UserRecord) {
       enrollmentTime: text(factor.enrollmentTime, 120),
     }))
     .sort((a, b) => a.uid.localeCompare(b.uid));
-  return {
-    count: factors.length,
-    hash: sha256(JSON.stringify(factors)),
-  };
+  return { count: factors.length, hash: sha256(JSON.stringify(factors)) };
 }
 
 function maskedEmail(value: unknown) {
@@ -57,7 +66,7 @@ function maskedEmail(value: unknown) {
   return `${local.slice(0, 2)}${"•".repeat(Math.max(2, Math.min(8, local.length - 2)))}@${domain}`;
 }
 
-async function requireRecoveryApprover(auth: any) {
+async function requireRecoveryApprover(auth: any): Promise<Actor> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const [userRecord, profileSnap] = await Promise.all([
     admin.auth().getUser(auth.uid),
@@ -88,7 +97,6 @@ async function requireRecoveryApprover(auth: any) {
   return {
     uid: auth.uid,
     role,
-    email: userRecord.email || null,
     displayName: userRecord.displayName || text(profile.displayName, 160) || role,
   };
 }
@@ -172,7 +180,6 @@ export const createAdminMfaRecoveryRequest = onCall(
     const { target, profile, role, state } = await resolveTarget(request.data, actor.uid);
     const targetRef = db.collection("users").doc(target.uid);
     const requestRef = db.collection("admin_mfa_recovery_requests").doc();
-    const auditRef = db.collection("audit_logs").doc();
     const nowMs = Date.now();
     const expiresAt = Timestamp.fromMillis(nowMs + RECOVERY_TTL_MS);
 
@@ -185,8 +192,11 @@ export const createAdminMfaRecoveryRequest = onCall(
         const activeRef = db.collection("admin_mfa_recovery_requests").doc(activeRequestId);
         const activeSnap = await transaction.get(activeRef);
         const active = activeSnap.data() || {};
-        const activeStatus = text(active.status, 80);
-        if (activeSnap.exists && PENDING_STATES.has(activeStatus) && toMillis(active.expiresAt) > nowMs) {
+        if (
+          activeSnap.exists &&
+          LIVE_REQUEST_STATES.has(text(active.status, 80)) &&
+          toMillis(active.expiresAt) > nowMs
+        ) {
           throw new HttpsError("already-exists", "A live MFA recovery request already exists for this Admin.");
         }
       }
@@ -196,7 +206,6 @@ export const createAdminMfaRecoveryRequest = onCall(
         requestId: requestRef.id,
         status: "PENDING_SECOND_APPROVAL",
         targetUid: target.uid,
-        targetEmail: target.email || profile.email || null,
         targetEmailMasked: maskedEmail(target.email || profile.email),
         targetDisplayName: target.displayName || text(profile.displayName, 160) || role,
         targetRole: role,
@@ -221,7 +230,7 @@ export const createAdminMfaRecoveryRequest = onCall(
         adminMfaRecoveryRequestedAt: now,
         updatedAt: now,
       }, { merge: true });
-      transaction.create(auditRef, {
+      transaction.set(db.collection("audit_logs").doc(), {
         action: "ADMIN_MFA_RECOVERY_REQUESTED",
         actorId: actor.uid,
         actorRole: actor.role,
@@ -261,7 +270,7 @@ export const listAdminMfaRecoveryRequests = onCall(
       requests: snapshot.docs.map((doc) => {
         const data = doc.data() || {};
         const storedStatus = text(data.status, 80);
-        const expired = PENDING_STATES.has(storedStatus) && toMillis(data.expiresAt) <= nowMs;
+        const expired = storedStatus === "PENDING_SECOND_APPROVAL" && toMillis(data.expiresAt) <= nowMs;
         return {
           requestId: doc.id,
           status: expired ? "EXPIRED" : storedStatus,
@@ -293,10 +302,10 @@ export const approveAdminMfaRecoveryRequest = onCall(
       throw new HttpsError("invalid-argument", "A valid recovery requestId is required.");
     }
     const requestRef = db.collection("admin_mfa_recovery_requests").doc(requestId);
-    const executionId = `mfa_recovery_${randomUUID().replace(/-/g, "")}`;
+    const proposedExecutionId = `mfa_recovery_${randomUUID().replace(/-/g, "")}`;
     const nowMs = Date.now();
 
-    const claimed = await db.runTransaction(async (transaction) => {
+    const claimed = await db.runTransaction(async (transaction): Promise<ClaimedRecovery> => {
       const snap = await transaction.get(requestRef);
       if (!snap.exists) throw new HttpsError("not-found", "MFA recovery request not found.");
       const data = snap.data() || {};
@@ -307,10 +316,6 @@ export const approveAdminMfaRecoveryRequest = onCall(
       }
       if (text(data.firstApproverUid, 180) === actor.uid) {
         throw new HttpsError("failed-precondition", "The first approver cannot provide the second approval.");
-      }
-      if (toMillis(data.expiresAt) <= nowMs) {
-        transaction.update(requestRef, { status: "EXPIRED", expiredAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-        throw new HttpsError("deadline-exceeded", "The MFA recovery request has expired.");
       }
       if (status === "COMPLETED") {
         return { data, executionId: text(data.executionId, 180), resuming: true, completed: true };
@@ -324,6 +329,10 @@ export const approveAdminMfaRecoveryRequest = onCall(
       if (status !== "PENDING_SECOND_APPROVAL") {
         throw new HttpsError("failed-precondition", `Recovery request is not approvable from status ${status || "UNKNOWN"}.`);
       }
+      if (toMillis(data.expiresAt) <= nowMs) {
+        throw new HttpsError("deadline-exceeded", "The MFA recovery request has expired.");
+      }
+
       const now = FieldValue.serverTimestamp();
       transaction.update(requestRef, {
         status: "EXECUTING",
@@ -331,7 +340,7 @@ export const approveAdminMfaRecoveryRequest = onCall(
         secondApproverRole: actor.role,
         secondApproverDisplayName: actor.displayName,
         secondApprovedAt: now,
-        executionId,
+        executionId: proposedExecutionId,
         executionStartedAt: now,
         updatedAt: now,
       });
@@ -343,12 +352,12 @@ export const approveAdminMfaRecoveryRequest = onCall(
         targetId: requestId,
         targetUid,
         firstApproverUid: text(data.firstApproverUid, 180),
-        executionId,
+        executionId: proposedExecutionId,
         twoDistinctApprovers: true,
         sensitiveValuesExcluded: true,
         createdAt: now,
       });
-      return { data, executionId, resuming: false, completed: false };
+      return { data, executionId: proposedExecutionId, resuming: false, completed: false };
     });
 
     if (claimed.completed) {
@@ -469,8 +478,13 @@ export const finalizeOwnAdminMfaRecovery = onCall(
       throw new HttpsError("failed-precondition", "Enroll a new Firebase MFA factor before finalizing recovery.");
     }
     if (profile.adminMfaRecoveryRequired !== true) {
-      return { status: "SUCCESS", recoveryStatus: text(profile.adminMfaRecoveryState, 80) || "NOT_REQUIRED", idempotent: true };
+      return {
+        status: "SUCCESS",
+        recoveryStatus: text(profile.adminMfaRecoveryState, 80) || "NOT_REQUIRED",
+        idempotent: true,
+      };
     }
+
     const userRef = db.collection("users").doc(uid);
     const now = FieldValue.serverTimestamp();
     await db.runTransaction(async (transaction) => {
