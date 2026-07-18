@@ -1,11 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 
-// Production Imports
-import { 
-    db, auth, doc, getDoc, setDoc, updateDoc, serverTimestamp, 
-    isSupported, getMessaging, getToken, app, 
-    onAuthStateChanged, User, arrayUnion
-} from "../lib/firebase";        
+import {
+    db, auth, doc, getDoc, setDoc, serverTimestamp,
+    isSupported, getMessaging, getToken, app, functions, httpsCallable,
+    onAuthStateChanged, User
+} from "../lib/firebase";
 import LegalModal from "../components/LegalModal";
 
 declare global {
@@ -30,10 +29,6 @@ export interface SovereignUser extends User {
     onDuty?: boolean;
     dutyStatus?: string;
     emirate?: string;
-    fcmTokens?: string[];
-    platform?: string;
-    isStandalone?: boolean;
-    userAgent?: string;
     legalAcceptedAt?: string;
     adminApproved?: boolean;
 }
@@ -52,12 +47,28 @@ interface RoleContextType {
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
-const AUTH_BOOT_TIMEOUT_MS = 8000; // Increased for live sync robustness
+const AUTH_BOOT_TIMEOUT_MS = 8000;
 
 const markGlobalAuthReady = () => {
     window.__BIN_GROUPS_BOOT__ = {
         ...(window.__BIN_GROUPS_BOOT__ || {}),
         authReady: true,
+    };
+};
+
+const readVapidKey = () => {
+    // @ts-ignore Vite runtime environment.
+    return String(import.meta.env?.VITE_FIREBASE_VAPID_KEY || '').trim();
+};
+
+const pushPlatform = () => {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+    return {
+        value: isIOS ? (isStandalone ? 'ios-pwa' : 'ios-browser') : isAndroid ? 'android-web' : 'web',
+        isStandalone,
     };
 };
 
@@ -73,33 +84,32 @@ export function RoleProvider({ children }: { children: any }) {
     const loadingRef = useRef(loading);
 
     const enableNotifications = async (): Promise<boolean> => {
-        if (!user) return false;
+        if (!user?.uid) return false;
         try {
-            const messagingSupported = await isSupported();
-            if (!messagingSupported) return false;
-
+            if (!await isSupported() || !('serviceWorker' in navigator)) return false;
             const permission = await Notification.requestPermission();
-            if (permission === 'granted') {
-                const messaging = getMessaging(app);
-                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-                const readyRegistration = await navigator.serviceWorker.ready;
-                
-                const currentToken = await getToken(messaging, {
-                    vapidKey: 'BAx9XuLUWYy4cmogu_fWTzC7xyCgLfa3asFfGC8PRrM6LqWCtDLihO72oISeOqTxgHtWlI6G4JJE4chfX5m5cOQ',
-                    serviceWorkerRegistration: readyRegistration
-                });
-                
-                if (currentToken) {
-                    await updateDoc(doc(db, 'users', user.uid), {
-                       fcmTokens: arrayUnion(currentToken),
-                       updatedAt: new Date().toISOString()
-                    });
-                    return true;
-                }
-            }
-            return false;
-        } catch (err: any) {
-            console.error("🛡️ [AUTH] Notification enablement failed:", err);
+            if (permission !== 'granted') return false;
+            const key = readVapidKey();
+            if (!key) return false;
+            const device = pushPlatform();
+            if (device.value === 'ios-browser') return false;
+            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+            const readyRegistration = await navigator.serviceWorker.ready;
+            const currentToken = await getToken(getMessaging(app), {
+                vapidKey: key,
+                serviceWorkerRegistration: readyRegistration || registration,
+            });
+            if (!currentToken) return false;
+            const registerToken = httpsCallable(functions, 'registerPushToken');
+            const response = await registerToken({
+                token: currentToken,
+                platform: device.value,
+                permission,
+                isStandalone: device.isStandalone,
+            });
+            return (response.data as { enabled?: boolean }).enabled === true;
+        } catch (err: unknown) {
+            console.error("[AUTH] Notification enablement failed:", err);
             return false;
         }
     };
@@ -107,7 +117,6 @@ export function RoleProvider({ children }: { children: any }) {
     const syncProfile = async (currentUser: User) => {
         console.log("🔍 [AUTH_DIAG] syncProfile started for:", currentUser.uid);
         try {
-            // 1. Force Token Refresh to pick up new Custom Claims
             console.log("🔍 [AUTH_DIAG] Requesting ID Token Result (Force Refresh)...");
             const tokenResult = await currentUser.getIdTokenResult(true);
             const claims = tokenResult.claims;
@@ -121,14 +130,13 @@ export function RoleProvider({ children }: { children: any }) {
                 snap = await getDoc(userDocRef);
             } catch (err: any) {
                 console.error("📜 [ROLE-SYNC] Firestore read permission/error:", err);
-                // If claim exists, we can still proceed
                 if (claims.role) {
                     setRole(String(claims.role));
                     setIsAdmin(!!claims.admin);
                     setLoading(false);
                     return;
                 }
-                setRole('tenant'); // Default fallback
+                setRole('tenant');
                 setLoading(false);
                 return;
             }
@@ -136,10 +144,9 @@ export function RoleProvider({ children }: { children: any }) {
             if (snap && snap.exists()) {
                 const data = snap.data();
                 console.log("🔍 [AUTH_DIAG] Firestore Data Found:", data);
-                
+
                 setUser(prev => ({ ...currentUser, ...data } as any));
 
-                // 2. Resolve Role (Priority: Claims > Firestore > Default)
                 const resolvedRole = String(claims.role || data.role || 'tenant').toLowerCase();
                 const resolvedStatus = (data.status || 'active').toLowerCase();
                 const resolvedIsAdmin = !!(claims.admin || data.isAdmin || data.role === 'admin');
@@ -158,7 +165,6 @@ export function RoleProvider({ children }: { children: any }) {
 
             } else {
                 console.warn("🔍 [AUTH_DIAG] No Firestore document at users/" + currentUser.uid);
-                // Create profile if missing but user is authenticated
                 if (!claims.role) {
                     console.log("🔍 [AUTH_DIAG] Auto-initializing missing Firestore profile...");
                     const newProfile = {
@@ -172,7 +178,7 @@ export function RoleProvider({ children }: { children: any }) {
                     };
                     await setDoc(userDocRef, newProfile);
                 }
-                
+
                 setRole(String(claims.role || 'tenant'));
                 setIsAdmin(!!claims.admin);
                 setStatus('active');
@@ -224,7 +230,6 @@ export function RoleProvider({ children }: { children: any }) {
                     setLoading(false);
                 });
 
-                // Fail-safe timeout to prevent infinite loading
                 setTimeout(() => {
                     if (loadingRef.current) {
                         console.warn("⚠️ [AUTH_DIAG] Auth Sync Timeout. Bypassing blocker.");

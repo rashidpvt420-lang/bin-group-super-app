@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import type { SendResponse } from "firebase-admin/messaging";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -9,6 +10,33 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+const MAX_PUSH_TOKENS_PER_USER = 10;
+const MAX_FCM_MULTICAST_TOKENS = 500;
+const PUSH_TOKEN_MIN_LENGTH = 50;
+const PUSH_TOKEN_MAX_LENGTH = 4096;
+const PUSH_TOKEN_RE = /^[A-Za-z0-9_:\-.]+$/;
+const PUSH_PLATFORMS = new Set(["web", "android-web", "ios-pwa"]);
+const PUSH_ENABLED_ROLES = new Set([
+    "tenant",
+    "technician",
+    "owner",
+    "broker",
+    "admin",
+    "super_admin",
+    "ceo",
+    "manager",
+    "operations_admin",
+    "finance_admin",
+    "hr_admin",
+    "support_admin",
+    "hr_manager",
+    "hr_staff",
+    "finance_staff",
+    "account_manager",
+    "dispatcher",
+    "operations_manager",
+]);
+const INACTIVE_STATUSES = new Set(["suspended", "disabled", "rejected", "inactive"]);
 
 type NotificationPayload = {
     recipientId?: unknown;
@@ -21,6 +49,13 @@ type NotificationPayload = {
     metadata?: unknown;
 };
 
+type PushRegistration = {
+    token: string;
+    tokenHash: string;
+    userId: string;
+    ref: FirebaseFirestore.DocumentReference;
+};
+
 function unique(values: string[]) {
     return Array.from(new Set(values.filter(Boolean)));
 }
@@ -31,6 +66,98 @@ function cleanString(value: unknown, maxLength = 240) {
 
 function cleanRole(value: unknown) {
     return cleanString(value, 40).toLowerCase();
+}
+
+function tokenHash(token: string) {
+    return crypto.createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+function timestampMillis(value: unknown) {
+    if (value && typeof value === "object" && "toMillis" in value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+        return (value as { toMillis: () => number }).toMillis();
+    }
+    const parsed = Date.parse(String(value || ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function assertSafePushToken(value: unknown) {
+    const token = String(value || "").trim();
+    if (token.length < PUSH_TOKEN_MIN_LENGTH || token.length > PUSH_TOKEN_MAX_LENGTH || !PUSH_TOKEN_RE.test(token)) {
+        throw new HttpsError("invalid-argument", "A valid Firebase Cloud Messaging registration token is required.");
+    }
+    return token;
+}
+
+function assertPushPlatform(value: unknown) {
+    const platform = cleanString(value, 40).toLowerCase();
+    if (!PUSH_PLATFORMS.has(platform)) {
+        throw new HttpsError("invalid-argument", "Unsupported push-notification platform.");
+    }
+    return platform;
+}
+
+function resolvedRole(authRecord: admin.auth.UserRecord, profile: FirebaseFirestore.DocumentData) {
+    const claims = authRecord.customClaims || {};
+    return cleanRole(claims.role || claims.userRole || claims.primaryRole || profile.role || profile.userRole || profile.primaryRole);
+}
+
+function profileIsActive(profile: FirebaseFirestore.DocumentData) {
+    return profile.suspended !== true && !INACTIVE_STATUSES.has(cleanRole(profile.status));
+}
+
+async function requirePushAccount(uid: string) {
+    const [authRecord, profileSnap] = await Promise.all([
+        admin.auth().getUser(uid),
+        db.collection("users").doc(uid).get(),
+    ]);
+    if (authRecord.disabled || authRecord.customClaims?.suspended === true) {
+        throw new HttpsError("permission-denied", "The authenticated account is disabled or suspended.");
+    }
+    if (!authRecord.emailVerified) {
+        throw new HttpsError("failed-precondition", "A verified email is required before registering push notifications.");
+    }
+    if (!profileSnap.exists) {
+        throw new HttpsError("failed-precondition", "An active user profile is required before registering push notifications.");
+    }
+    const profile = profileSnap.data() || {};
+    if (!profileIsActive(profile)) {
+        throw new HttpsError("permission-denied", "The user profile is not active.");
+    }
+    const role = resolvedRole(authRecord, profile);
+    if (!PUSH_ENABLED_ROLES.has(role)) {
+        throw new HttpsError("permission-denied", "The authenticated role is not eligible for push notifications.");
+    }
+    return { authRecord, profile, role };
+}
+
+async function refreshUserPushSummary(userId: string, latestPlatform?: string, latestRole?: string) {
+    const tokenSnapshot = await db.collection("users").doc(userId).collection("fcmTokens").get();
+    const count = tokenSnapshot.size;
+    await db.collection("users").doc(userId).set({
+        fcmTokens: FieldValue.delete(),
+        pushEnabled: count > 0,
+        pushTokenCount: count,
+        ...(latestPlatform ? { pushPlatform: latestPlatform } : {}),
+        ...(latestRole ? { pushRole: latestRole } : {}),
+        pushUpdatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return count;
+}
+
+async function pruneUserPushTokens(userId: string) {
+    const snapshot = await db.collection("users").doc(userId).collection("fcmTokens").get();
+    const ordered = [...snapshot.docs].sort((left, right) => {
+        const rightMs = timestampMillis(right.data().lastRegisteredAt || right.data().createdAt);
+        const leftMs = timestampMillis(left.data().lastRegisteredAt || left.data().createdAt);
+        return rightMs - leftMs;
+    });
+    const stale = ordered.slice(MAX_PUSH_TOKENS_PER_USER);
+    if (stale.length) {
+        const batch = db.batch();
+        stale.forEach((docSnap) => batch.delete(docSnap.ref));
+        await batch.commit();
+    }
+    return { retainedCount: Math.min(ordered.length, MAX_PUSH_TOKENS_PER_USER), prunedCount: stale.length };
 }
 
 function assertSafeNotificationPayload(data: NotificationPayload) {
@@ -55,22 +182,15 @@ function assertSafeNotificationPayload(data: NotificationPayload) {
     return { recipientId, recipientRole, type, title, body, ticketId, link, metadata };
 }
 
-async function tokensForUser(userId: string) {
-    const tokenSet: string[] = [];
-    const userSnap = await db.collection("users").doc(userId).get();
-    const userData = userSnap.data() || {};
-
-    if (Array.isArray(userData.fcmTokens)) {
-        tokenSet.push(...userData.fcmTokens.map((value: unknown) => String(value || "").trim()));
-    }
-
+async function registrationsForUser(userId: string): Promise<PushRegistration[]> {
     const tokenDocs = await db.collection("users").doc(userId).collection("fcmTokens").get();
-    tokenDocs.docs.forEach((tokenDoc) => {
-        const data = tokenDoc.data() || {};
-        tokenSet.push(String(data.token || tokenDoc.id || "").trim());
-    });
-
-    return unique(tokenSet);
+    const registrations: PushRegistration[] = [];
+    for (const tokenDoc of tokenDocs.docs) {
+        const token = String(tokenDoc.data()?.token || "").trim();
+        if (!token || tokenHash(token) !== tokenDoc.id) continue;
+        registrations.push({ token, tokenHash: tokenDoc.id, userId, ref: tokenDoc.ref });
+    }
+    return registrations;
 }
 
 async function adminRecipients() {
@@ -167,6 +287,95 @@ async function canCreateNotification(uid: string, token: Record<string, unknown>
     return false;
 }
 
+export const registerPushToken = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+    const uid = request.auth.uid;
+    const token = assertSafePushToken(request.data?.token);
+    const platform = assertPushPlatform(request.data?.platform);
+    if (cleanString(request.data?.permission, 20).toLowerCase() !== "granted") {
+        throw new HttpsError("failed-precondition", "Notification permission must be granted before registration.");
+    }
+    const { role } = await requirePushAccount(uid);
+    const hash = tokenHash(token);
+    const tokenRef = db.collection("users").doc(uid).collection("fcmTokens").doc(hash);
+    const auditRef = db.collection("audit_logs").doc();
+    const now = FieldValue.serverTimestamp();
+    const userAgent = cleanString(request.rawRequest?.headers?.["user-agent"], 800);
+    const userAgentHash = userAgent ? crypto.createHash("sha256").update(userAgent, "utf8").digest("hex") : null;
+
+    await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(tokenRef);
+        transaction.set(tokenRef, {
+            token,
+            tokenHash: hash,
+            userId: uid,
+            role,
+            platform,
+            permission: "granted",
+            isStandalone: request.data?.isStandalone === true,
+            userAgentHash,
+            source: "callable:registerPushToken",
+            active: true,
+            createdAt: existing.exists ? existing.data()?.createdAt || now : now,
+            lastRegisteredAt: now,
+            updatedAt: now,
+        }, { merge: true });
+        transaction.set(auditRef, {
+            action: "PUSH_TOKEN_REGISTERED",
+            actorId: uid,
+            actorRole: role,
+            targetType: "user",
+            targetId: uid,
+            platform,
+            registrationHashPrefix: hash.slice(0, 12),
+            sensitiveValuesExcluded: true,
+            createdAt: now,
+        });
+    });
+
+    const pruning = await pruneUserPushTokens(uid);
+    const count = await refreshUserPushSummary(uid, platform, role);
+    return {
+        enabled: true,
+        registrationId: hash.slice(0, 16),
+        registeredTokenCount: count,
+        prunedTokenCount: pruning.prunedCount,
+        platform,
+    };
+  },
+);
+
+export const unregisterPushToken = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+    const uid = request.auth.uid;
+    const token = assertSafePushToken(request.data?.token);
+    const { role } = await requirePushAccount(uid);
+    const hash = tokenHash(token);
+    const tokenRef = db.collection("users").doc(uid).collection("fcmTokens").doc(hash);
+    const auditRef = db.collection("audit_logs").doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (transaction) => {
+        transaction.delete(tokenRef);
+        transaction.set(auditRef, {
+            action: "PUSH_TOKEN_UNREGISTERED",
+            actorId: uid,
+            actorRole: role,
+            targetType: "user",
+            targetId: uid,
+            registrationHashPrefix: hash.slice(0, 12),
+            sensitiveValuesExcluded: true,
+            createdAt: now,
+        });
+    });
+    const count = await refreshUserPushSummary(uid);
+    return { removed: true, registeredTokenCount: count };
+  },
+);
+
 export const createNotification = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
@@ -255,46 +464,87 @@ export const deliverNotificationPush = onDocumentCreated("notifications/{notific
     const recipientIds = await recipientIdsForNotification(data);
     if (!recipientIds.length) return null;
 
-    const tokens = unique((await Promise.all(recipientIds.map(tokensForUser))).flat());
-    if (!tokens.length) return null;
-
-    const response = await admin.messaging().sendEachForMulticast({
-        tokens,
-        notification: { title, body },
-        data: {
-            title,
-            body,
-            link,
-            notificationId: event.params.notificationId,
-            recipientRole: String(data.recipientRole || "unknown"),
-            type: String(data.type || "STATUS_UPDATE"),
-            ticketId: String(data.ticketId || ""),
-        },
-        webpush: {
-            notification: {
-                icon: "/icons/icon-192x192.png",
-                badge: "/icons/icon-192x192.png",
-            },
-            fcmOptions: { link },
-        },
+    const collected = (await Promise.all(recipientIds.map(registrationsForUser))).flat();
+    const uniqueByToken = new Map<string, PushRegistration>();
+    collected.forEach((registration) => {
+        if (!uniqueByToken.has(registration.token)) uniqueByToken.set(registration.token, registration);
     });
+    const registrations = [...uniqueByToken.values()];
 
-    const invalidTokens = response.responses
-        .map((item, index) => ({ item, token: tokens[index] }))
-        .filter(({ item }) => {
+    if (!registrations.length) {
+        await snap.ref.set({
+            pushAttemptedAt: FieldValue.serverTimestamp(),
+            pushTokenCount: 0,
+            pushSuccessCount: 0,
+            pushFailureCount: 0,
+            pushPrunedCount: 0,
+            pushDeliveryState: "NO_REGISTERED_TOKEN",
+            invalidPushTokens: FieldValue.delete(),
+        }, { merge: true });
+        return null;
+    }
+
+    const deliveryResponses: SendResponse[] = [];
+    let successCount = 0;
+    let failureCount = 0;
+    for (let offset = 0; offset < registrations.length; offset += MAX_FCM_MULTICAST_TOKENS) {
+        const chunk = registrations.slice(offset, offset + MAX_FCM_MULTICAST_TOKENS);
+        const response = await admin.messaging().sendEachForMulticast({
+            tokens: chunk.map((registration) => registration.token),
+            notification: { title, body },
+            data: {
+                title,
+                body,
+                link,
+                notificationId: event.params.notificationId,
+                recipientRole: String(data.recipientRole || "unknown"),
+                type: String(data.type || "STATUS_UPDATE"),
+                ticketId: String(data.ticketId || ""),
+            },
+            webpush: {
+                notification: {
+                    icon: "/icons/icon-192x192.png",
+                    badge: "/icons/icon-192x192.png",
+                },
+                fcmOptions: { link },
+            },
+        });
+        deliveryResponses.push(...response.responses);
+        successCount += response.successCount;
+        failureCount += response.failureCount;
+    }
+
+    const invalidRegistrations = deliveryResponses
+        .map((item, index) => ({ item, registration: registrations[index] }))
+        .filter(({ item, registration }) => {
+            if (!registration) return false;
             const code = item.error?.code || "";
             return code.includes("registration-token-not-registered") || code.includes("invalid-registration-token");
         })
-        .map(({ token }) => token);
+        .map(({ registration }) => registration)
+        .filter((registration): registration is PushRegistration => Boolean(registration));
 
-    if (invalidTokens.length) {
-        await snap.ref.set({ invalidPushTokens: invalidTokens, pushPrunedAt: FieldValue.serverTimestamp() }, { merge: true });
+    if (invalidRegistrations.length) {
+        const batch = db.batch();
+        invalidRegistrations.forEach((registration) => batch.delete(registration.ref));
+        await batch.commit();
+        const affectedUsers = unique(invalidRegistrations.map((registration) => registration.userId));
+        await Promise.all(affectedUsers.map((userId) => refreshUserPushSummary(userId)));
     }
 
+    const deliveryState = failureCount === 0
+        ? "SUCCESS"
+        : successCount > 0
+            ? "PARTIAL"
+            : "FAILED";
     await snap.ref.set({
+        invalidPushTokens: FieldValue.delete(),
         pushAttemptedAt: FieldValue.serverTimestamp(),
-        pushSuccessCount: response.successCount,
-        pushFailureCount: response.failureCount,
+        pushTokenCount: registrations.length,
+        pushSuccessCount: successCount,
+        pushFailureCount: failureCount,
+        pushPrunedCount: invalidRegistrations.length,
+        pushDeliveryState: deliveryState,
     }, { merge: true });
 
     return null;

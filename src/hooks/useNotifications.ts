@@ -1,6 +1,6 @@
 /**
  * Custom Hook: Push Notifications
- * Integrates FCM and local notifications
+ * Integrates foreground messaging without exposing registration tokens.
  */
 
 import { useEffect, useState } from 'react';
@@ -8,7 +8,7 @@ import { notificationService } from '../lib/notificationService';
 
 export function useNotifications() {
   const [initialized, setInitialized] = useState(false);
-  const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [registrationAvailable, setRegistrationAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,36 +16,27 @@ export function useNotifications() {
       try {
         const success = await notificationService.initialize();
         setInitialized(success);
-
-        if (success) {
-          const token = await notificationService.getFCMToken();
-          setFcmToken(token);
-          console.log('[Notifications] FCM Token:', token);
-        }
-      } catch (err: any) {
-        setError(err.message);
+        setRegistrationAvailable(success ? await notificationService.hasRegistrationToken() : false);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Push notification initialization failed.');
       }
     };
 
-    initialize();
+    void initialize();
   }, []);
 
   const sendNotification = async (title: string, body: string, data?: Record<string, string>) => {
     try {
-      await notificationService.sendLocalNotification({
-        title,
-        body,
-        data
-      });
-    } catch (err: any) {
-      setError(err.message);
+      await notificationService.sendLocalNotification({ title, body, data });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Local notification failed.');
     }
   };
 
   return {
     initialized,
-    fcmToken,
+    registrationAvailable,
     error,
-    sendNotification
+    sendNotification,
   };
 }

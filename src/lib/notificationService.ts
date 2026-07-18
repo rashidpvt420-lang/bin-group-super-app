@@ -1,6 +1,6 @@
 /**
  * BIN GROUP Cloud Messaging Service
- * Real-time push notifications & in-app alerts
+ * Foreground notification handling without exposing registration tokens.
  */
 
 import { getSafeMessaging, getToken, onMessage } from './firebase';
@@ -17,7 +17,7 @@ export interface NotificationPayload {
 class BinGroupNotificationService {
   private messaging: any = null;
   private initialized = false;
-  private tokenCache: string | null = null;
+  private registrationTokenAvailable = false;
 
   async initialize(): Promise<boolean> {
     if (this.initialized) return true;
@@ -29,7 +29,6 @@ class BinGroupNotificationService {
         return false;
       }
 
-      // Request notification permission
       if ('Notification' in window && Notification.permission === 'default') {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
@@ -43,14 +42,9 @@ class BinGroupNotificationService {
         throw new Error('VITE_FIREBASE_VAPID_KEY not configured for production');
       }
 
-      // Get FCM token
-      this.tokenCache = await getToken(this.messaging, {
-        vapidKey: vapidKey
-      });
+      const token = await getToken(this.messaging, { vapidKey });
+      this.registrationTokenAvailable = Boolean(token);
 
-      console.log('[Notifications] FCM initialized successfully');
-
-      // Listen for incoming messages
       onMessage(this.messaging, (payload) => {
         this.handleIncomingMessage(payload);
       });
@@ -67,30 +61,28 @@ class BinGroupNotificationService {
     const notification = payload.notification || {};
     const data = payload.data || {};
 
-    // Show in-app notification
     if ('Notification' in window) {
       new Notification(notification.title || 'BIN GROUP', {
         body: notification.body,
         icon: notification.icon || '/bin-group-logo.png',
         badge: '/bin-group-badge.png',
         tag: data.type || 'notification',
-        data: data
+        data,
       });
     }
 
-    // Emit custom event for app handling
     window.dispatchEvent(
       new CustomEvent('bin-notification', {
-        detail: { notification, data }
-      })
+        detail: { notification, data },
+      }),
     );
   }
 
-  async getFCMToken(): Promise<string | null> {
+  async hasRegistrationToken(): Promise<boolean> {
     if (!this.initialized) {
       await this.initialize();
     }
-    return this.tokenCache;
+    return this.registrationTokenAvailable;
   }
 
   async sendLocalNotification(payload: NotificationPayload) {
@@ -100,7 +92,7 @@ class BinGroupNotificationService {
         icon: payload.icon || '/bin-group-logo.png',
         badge: payload.badge || '/bin-group-badge.png',
         tag: payload.tag || 'bin-notification',
-        data: payload.data
+        data: payload.data,
       });
     }
   }
