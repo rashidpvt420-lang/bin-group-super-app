@@ -1,5 +1,6 @@
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 
+// Branch-scoped one-time patch; the script and workflow delete themselves after use.
 const workflowPath = '.github/workflows/firebase-production-deploy.yml';
 const scriptPath = 'scripts/one-time-stripe-secret-manager-workflow-fix.mjs';
 const oneTimeWorkflowPath = '.github/workflows/one-time-stripe-secret-manager-workflow-fix.yml';
