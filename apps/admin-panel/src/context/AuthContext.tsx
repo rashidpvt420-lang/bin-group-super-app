@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { getIdTokenResult, signInWithCustomToken, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getIdTokenResult, multiFactor, signInWithCustomToken, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { addDoc, auth, collection, db, doc, getDoc, onAuthStateChanged, serverTimestamp } from '../lib/firebase';
 
 interface AuthContextType {
@@ -7,6 +7,9 @@ interface AuthContextType {
     loading: boolean;
     error: string | null;
     user: any;
+    mfaEnrollmentRequired: boolean;
+    mfaVerified: boolean;
+    mfaFactorCount: number;
     login: (credentials: { email: string; password: string }) => Promise<void>;
     logout: () => Promise<void>;
 }
@@ -48,6 +51,17 @@ const claimsGrantAdmin = (claims: Record<string, unknown>) => {
     );
 };
 
+const secondFactorFromClaims = (claims: Record<string, unknown>) => {
+    const firebaseClaims = claims.firebase && typeof claims.firebase === 'object'
+        ? claims.firebase as Record<string, unknown>
+        : {};
+    return String(
+        firebaseClaims.sign_in_second_factor ||
+        claims.sign_in_second_factor ||
+        '',
+    ).trim();
+};
+
 const timeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise<T> => Promise.race([
     promise,
     new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error(code)), ms)),
@@ -67,6 +81,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
+    const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
+    const [mfaVerified, setMfaVerified] = useState(false);
+    const [mfaFactorCount, setMfaFactorCount] = useState(0);
 
     useEffect(() => {
         let mounted = true;
@@ -81,6 +98,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...(bootWindow.__BIN_GROUPS_BOOT__ || {}),
                 authReady: true,
             };
+        };
+
+        const resetMfaState = () => {
+            setMfaEnrollmentRequired(false);
+            setMfaVerified(false);
+            setMfaFactorCount(0);
         };
 
         const verifyAdminUser = async (firebaseUser: any) => {
@@ -108,17 +131,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 throw new Error('ADMIN_ACCESS_DENIED');
             }
 
+            const factors = multiFactor(firebaseUser).enrolledFactors;
+            const factorCount = factors.length;
+            const secondFactor = secondFactorFromClaims(claims);
+            const enrollmentRequired = factorCount === 0;
+            const verifiedSecondFactor = factorCount > 0 && Boolean(secondFactor);
+            if (factorCount > 0 && !verifiedSecondFactor) {
+                throw new Error('ADMIN_MFA_REQUIRED');
+            }
+
             await addDoc(collection(db, 'audit_logs'), {
                 actorId: firebaseUser.uid,
                 actorRole: role,
                 targetType: 'system',
                 targetId: 'admin-panel',
-                action: 'login',
+                action: enrollmentRequired ? 'ADMIN_LOGIN_MFA_ENROLLMENT_REQUIRED' : 'ADMIN_LOGIN_MFA_VERIFIED',
+                mfaFactorCount: factorCount,
+                mfaSecondFactorPresent: verifiedSecondFactor,
                 userAgent: navigator.userAgent,
                 createdAt: serverTimestamp(),
             }).catch((auditError) => console.warn('[ADMIN-AUTH] Audit log write skipped:', auditError));
 
-            return { ...firebaseUser, ...profile, role, isAdmin, claims };
+            return {
+                ...firebaseUser,
+                ...profile,
+                role,
+                isAdmin,
+                claims,
+                mfaEnrollmentRequired: enrollmentRequired,
+                mfaVerified: verifiedSecondFactor,
+                mfaFactorCount: factorCount,
+            };
         };
 
         if (typeof window !== 'undefined') {
@@ -131,11 +174,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 void timeout(signInWithCustomToken(auth, bridgeToken), 10000, 'BRIDGE_TOKEN_TIMEOUT')
                     .catch((bridgeError) => {
                         console.warn('[ADMIN-AUTH] Bridge token exchange failed:', bridgeError);
-                        if (mounted) setError('Single sign-on failed. Sign in with a production admin account.');
+                        if (mounted) setError('Single sign-on failed. Use the protected email/password + MFA login.');
                     });
             } else if (ssoFailed) {
                 stripBridgeHash('sso_failed');
-                setError('Single sign-on failed. Sign in with a production admin account.');
+                setError('Single sign-on failed. Use the protected email/password + MFA login.');
             }
         }
 
@@ -143,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (authHandshakeResolved) return;
             setIsAuthenticated(false);
             setUser(null);
+            resetMfaState();
             setError('Firebase Auth did not respond. Manual login remains available; verify authorized domains and network access.');
             markAuthReady();
         }, 12000);
@@ -154,6 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!firebaseUser) {
                 setIsAuthenticated(false);
                 setUser(null);
+                resetMfaState();
                 setError(null);
                 markAuthReady();
                 return;
@@ -164,15 +209,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (!mounted) return;
                 setUser(verifiedUser);
                 setIsAuthenticated(true);
+                setMfaEnrollmentRequired(verifiedUser.mfaEnrollmentRequired === true);
+                setMfaVerified(verifiedUser.mfaVerified === true);
+                setMfaFactorCount(Number(verifiedUser.mfaFactorCount || 0));
                 setError(null);
             } catch (authError: any) {
                 console.error('[ADMIN-AUTH] Verification failed:', authError);
                 if (!mounted) return;
                 setIsAuthenticated(false);
                 setUser(null);
-                setError(authError?.message === 'ADMIN_ACCESS_DENIED'
+                resetMfaState();
+                const authMessage = authError?.message === 'ADMIN_ACCESS_DENIED'
                     ? 'This account does not have an approved admin or staff role.'
-                    : 'Admin verification failed. Confirm production claims and the user profile.');
+                    : authError?.message === 'ADMIN_MFA_REQUIRED'
+                        ? 'Admin MFA verification is required. Sign in again and complete the second-factor challenge.'
+                        : 'Admin verification failed. Confirm production claims, MFA and the user profile.';
+                setError(authMessage);
                 try {
                     await signOut(auth);
                 } catch {
@@ -199,11 +251,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await signOut(auth);
         setIsAuthenticated(false);
         setUser(null);
+        setMfaEnrollmentRequired(false);
+        setMfaVerified(false);
+        setMfaFactorCount(0);
     };
 
     const contextValue = useMemo(
-        () => ({ isAuthenticated, loading, error, user, login, logout }),
-        [isAuthenticated, loading, error, user],
+        () => ({
+            isAuthenticated,
+            loading,
+            error,
+            user,
+            mfaEnrollmentRequired,
+            mfaVerified,
+            mfaFactorCount,
+            login,
+            logout,
+        }),
+        [isAuthenticated, loading, error, user, mfaEnrollmentRequired, mfaVerified, mfaFactorCount],
     );
 
     return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

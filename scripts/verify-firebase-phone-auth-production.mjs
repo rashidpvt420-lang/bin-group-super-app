@@ -12,6 +12,7 @@ const DEFAULT_REQUIRED_DOMAINS = Object.freeze([
   'bin-group-57c60.firebaseapp.com',
 ]);
 const DEFAULT_REQUIRED_SMS_REGION = 'AE';
+const ALLOWED_MFA_STATES = Object.freeze(['ENABLED', 'MANDATORY']);
 const EVIDENCE_MAX_AGE_MS = 1000 * 60 * 60 * 24;
 const MAX_CLOCK_SKEW_MS = 1000 * 60 * 5;
 
@@ -47,6 +48,7 @@ export function validateFirebasePhoneAuthConfig(
   const missingDomains = normalizedList(requiredDomains)
     .map((domain) => domain.toLowerCase())
     .filter((domain) => !domains.has(domain));
+  const mfaState = String(config?.mfa?.state || '').trim().toUpperCase();
 
   if (normalizedProjectId !== EXPECTED_PROJECT_ID) {
     failures.push(`project must be ${EXPECTED_PROJECT_ID}`);
@@ -60,6 +62,9 @@ export function validateFirebasePhoneAuthConfig(
   }
   if (config?.signIn?.phoneNumber?.enabled !== true) {
     failures.push('Firebase Authentication Phone provider is not enabled');
+  }
+  if (!ALLOWED_MFA_STATES.includes(mfaState)) {
+    failures.push('Identity Platform multi-factor authentication must be enabled');
   }
   if (missingDomains.length) {
     failures.push(`missing authorized domain(s): ${missingDomains.join(', ')}`);
@@ -84,6 +89,8 @@ export function validateFirebasePhoneAuthConfig(
     summary: {
       projectId: normalizedProjectId,
       phoneProviderEnabled: config?.signIn?.phoneNumber?.enabled === true,
+      mfaState,
+      mfaEnabled: ALLOWED_MFA_STATES.includes(mfaState),
       requiredDomainsPresent: missingDomains.length === 0,
       authorizedDomainCount: domains.size,
       smsPolicy: config?.smsRegionConfig?.allowlistOnly ? 'allowlist-only' : 'missing-or-not-allowlist',
@@ -100,7 +107,7 @@ export function buildFirebasePhoneAuthEvidence(summary, {
   now = new Date(),
 } = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'passed',
     source: 'identity-toolkit-admin-v2',
     projectId: String(summary?.projectId || '').trim(),
@@ -111,6 +118,8 @@ export function buildFirebasePhoneAuthEvidence(summary, {
     workflowRunAttempt: Number(env.GITHUB_RUN_ATTEMPT || 0) || null,
     verifiedAt: now.toISOString(),
     phoneProviderEnabled: summary?.phoneProviderEnabled === true,
+    mfaState: String(summary?.mfaState || '').toUpperCase(),
+    mfaEnabled: summary?.mfaEnabled === true,
     requiredDomainsPresent: summary?.requiredDomainsPresent === true,
     authorizedDomainCount: Number(summary?.authorizedDomainCount || 0),
     smsPolicy: String(summary?.smsPolicy || ''),
@@ -140,7 +149,7 @@ export function validateFirebasePhoneAuthEvidence(evidence, {
   const requireExact = (actual, expected, label) => {
     if (String(actual ?? '') !== String(expected ?? '')) failures.push(`${label} mismatch.`);
   };
-  requireExact(evidence.schemaVersion, 1, 'Phone Auth evidence schemaVersion');
+  requireExact(evidence.schemaVersion, 2, 'Phone Auth evidence schemaVersion');
   requireExact(evidence.status, 'passed', 'Phone Auth evidence status');
   requireExact(evidence.source, 'identity-toolkit-admin-v2', 'Phone Auth evidence source');
   requireExact(evidence.projectId, EXPECTED_PROJECT_ID, 'Phone Auth evidence projectId');
@@ -150,6 +159,10 @@ export function validateFirebasePhoneAuthEvidence(evidence, {
   requireExact(evidence.workflowRunId, workflowRunId, 'Phone Auth evidence workflowRunId');
   requireExact(evidence.workflowRunAttempt, workflowRunAttempt, 'Phone Auth evidence workflowRunAttempt');
   requireExact(evidence.phoneProviderEnabled, true, 'Phone Auth provider enabled');
+  requireExact(evidence.mfaEnabled, true, 'Identity Platform MFA enabled');
+  if (!ALLOWED_MFA_STATES.includes(String(evidence.mfaState || '').toUpperCase())) {
+    failures.push('Phone Auth evidence mfaState must be ENABLED or MANDATORY.');
+  }
   requireExact(evidence.requiredDomainsPresent, true, 'Phone Auth required domains');
   requireExact(evidence.smsPolicy, 'allowlist-only', 'Phone Auth SMS policy');
   requireExact(evidence.requiredSmsRegion, DEFAULT_REQUIRED_SMS_REGION, 'Phone Auth required SMS region');
@@ -228,6 +241,7 @@ export async function verifyFirebasePhoneAuthProduction({
   console.log(
     '[firebase-phone-auth] production preflight passed '
       + `provider=${summary.phoneProviderEnabled ? 'enabled' : 'disabled'} `
+      + `mfa=${summary.mfaState || 'disabled'} `
       + `domains=${summary.authorizedDomainCount} `
       + `sms_policy=${summary.smsPolicy} `
       + `region_${summary.requiredSmsRegion}=${summary.requiredSmsRegionAllowed ? 'allowed' : 'blocked'} `

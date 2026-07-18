@@ -28,6 +28,8 @@ import {
   HARD_LAUNCH_CLAIM,
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
+import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
+import { validateAdminMfaEvidence } from './verify-admin-mfa-production.mjs';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_REF = 'refs/heads/main';
@@ -193,6 +195,24 @@ export function runSameRunDeploymentArtifactVerification({
       now,
       maxAgeMs: DEPLOYMENT_MAX_AGE_MS,
     }).forEach((failure) => failures.push(failure));
+    failures.push(
+      ...validateFirebasePhoneAuthEvidence(deployment.firebasePhoneAuth, {
+        commitSha: sha,
+        repository,
+        ref,
+        workflowRunId: runId,
+        workflowRunAttempt: runAttempt,
+        now,
+      }),
+      ...validateAdminMfaEvidence(deployment.adminMfa, {
+        commitSha: sha,
+        repository,
+        ref,
+        workflowRunId: runId,
+        workflowRunAttempt: runAttempt,
+        now,
+      }),
+    );
   }
 
   const incidents = readDocument(root, INCIDENTS_PATH, failures, INCIDENTS_PATH);

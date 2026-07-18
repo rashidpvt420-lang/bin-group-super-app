@@ -14,6 +14,7 @@ import {
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
 import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
+import { validateAdminMfaEvidence } from './verify-admin-mfa-production.mjs';
 
 const writeEvidence = process.argv.includes('--write-evidence');
 const commitSha = gitSha();
@@ -107,7 +108,6 @@ let deployedCommitSha = existing?.deployedCommitSha;
 let deployedAt = existing?.deployedAt;
 
 if (!existing) {
-  // Without a deploy metadata file we cannot prove deployed SHA == current SHA.
   fail('production-deployment.json missing — cannot prove deployedCommitSha equals current commit');
   status = 'missing';
 } else {
@@ -139,6 +139,16 @@ if (!existing) {
   })) {
     fail(phoneAuthFailure);
   }
+  for (const adminMfaFailure of validateAdminMfaEvidence(existing.adminMfa, {
+    commitSha,
+    repository: existing.repository,
+    ref: existing.workflowRef,
+    workflowRunId: existing.workflowRunId,
+    workflowRunAttempt: existing.workflowRunAttempt,
+    now: Date.now(),
+  })) {
+    fail(adminMfaFailure);
+  }
 }
 
 const doc = {
@@ -168,7 +178,6 @@ const validationErrors = validateDeploymentDocument(
   commitSha,
 );
 
-// If live checks passed AND metadata matches SHA, allow writing a refreshed verified doc.
 const canPass = failures.length === 0 && httpChecksOk && bundleVerified && deployedCommitSha === commitSha && deployedAt;
 
 if (writeEvidence && canPass) {
