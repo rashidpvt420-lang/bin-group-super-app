@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
 import { verifyFirebaseProductionSecrets } from './verify-firebase-production-secrets.mjs';
 import { verifyFirebasePhoneAuthProduction } from './verify-firebase-phone-auth-production.mjs';
+import { verifyAdminMfaProduction } from './verify-admin-mfa-production.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
@@ -91,6 +92,15 @@ try {
   process.exit(1);
 }
 
+let adminMfaEvidence;
+try {
+  adminMfaEvidence = await verifyAdminMfaProduction({ projectId });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Admin MFA account coverage verification failed';
+  console.error(`[production-deploy] Admin MFA production preflight failed: ${message}`);
+  process.exit(1);
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
@@ -140,11 +150,12 @@ if (metadataStatus !== 0) process.exit(metadataStatus);
 try {
   const deploymentMetadata = JSON.parse(readFileSync(deploymentMetadataPath, 'utf8'));
   deploymentMetadata.firebasePhoneAuth = phoneAuthEvidence;
+  deploymentMetadata.adminMfa = adminMfaEvidence;
   writeFileSync(deploymentMetadataPath, `${JSON.stringify(deploymentMetadata, null, 2)}\n`);
-  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth preflight evidence');
+  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth and Admin MFA evidence');
 } catch (error) {
   const message = error instanceof Error ? error.message : 'metadata embedding failed';
-  console.error(`[production-deploy] Could not bind Firebase Phone Auth evidence to deployment metadata: ${message}`);
+  console.error(`[production-deploy] Could not bind Firebase Phone Auth and Admin MFA evidence to deployment metadata: ${message}`);
   process.exit(1);
 }
 
