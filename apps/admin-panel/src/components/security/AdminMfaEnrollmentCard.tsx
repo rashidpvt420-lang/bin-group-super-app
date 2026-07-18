@@ -19,7 +19,7 @@ import {
   signOut,
 } from 'firebase/auth';
 import { BadgeCheck, KeyRound, MessageSquareText, RefreshCw } from 'lucide-react';
-import { auth } from '../../lib/firebase';
+import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 type Props = {
@@ -162,6 +162,8 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       await multiFactor(user).enroll(assertion, 'BIN GROUP Admin phone');
       await user.reload();
       await user.getIdToken(true);
+      const finalizeRecovery = httpsCallable(functions, 'finalizeOwnAdminMfaRecovery');
+      await finalizeRecovery({});
       setNotice({
         type: 'success',
         text: copy(
