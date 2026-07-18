@@ -37,6 +37,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Normalize Firestore rules before hygiene guard
+        run: npm run normalize:rules
+
       - name: Repository hygiene guard
         run: node scripts/repo-hygiene-guard.mjs
 
