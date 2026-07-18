@@ -23,7 +23,7 @@ export default function AdminContractControlPage() {
 
   React.useEffect(() => {
     const stopContracts = onSnapshot(collection(db, 'contracts'), (snapshot) => {
-      const rows = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
+      const rows: any[] = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
       rows.sort((a, b) => String(a.contractNumber || a.id).localeCompare(String(b.contractNumber || b.id)));
       setContracts(rows);
       setLoading(false);
@@ -32,7 +32,7 @@ export default function AdminContractControlPage() {
       setNotice({ severity: 'error', text: label('Could not load contracts.', 'تعذر تحميل العقود.') });
     });
     const stopRenewals = onSnapshot(collection(db, 'contract_renewal_watch'), (snapshot) => {
-      const rows = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
+      const rows: any[] = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
       rows.sort((a, b) => Number(a.daysRemaining || 0) - Number(b.daysRemaining || 0));
       setRenewals(rows);
     });
