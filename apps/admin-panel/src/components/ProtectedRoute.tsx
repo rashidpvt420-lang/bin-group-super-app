@@ -3,8 +3,27 @@ import { Navigate } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean; extraRoles?: string[] }> = ({ children, adminOnly = false, extraRoles = [] }) => {
-    const { isAuthenticated, user, loading } = useAuth();
+type Props = {
+    children: React.ReactNode;
+    adminOnly?: boolean;
+    extraRoles?: string[];
+    allowMfaEnrollment?: boolean;
+};
+
+const ProtectedRoute: React.FC<Props> = ({
+    children,
+    adminOnly = false,
+    extraRoles = [],
+    allowMfaEnrollment = false,
+}) => {
+    const {
+        isAuthenticated,
+        user,
+        loading,
+        mfaEnrollmentRequired,
+        mfaVerified,
+        mfaFactorCount,
+    } = useAuth();
     const adminRoles = new Set([
         'admin',
         'super_admin',
@@ -19,6 +38,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean;
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}>Loading Auth...</Box>;
     if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+    if (mfaEnrollmentRequired && !allowMfaEnrollment) {
+        return <Navigate to="/profile?mfa=enroll" replace />;
+    }
+    if (mfaFactorCount > 0 && !mfaVerified) {
+        return <Navigate to="/login?mfa=required" replace />;
+    }
 
     const hasAdminAccess = user?.claims?.admin === true || user?.isAdmin === true || adminRoles.has(user?.role);
 
