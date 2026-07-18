@@ -51,31 +51,37 @@ test('Tenant profile supports active and historical residences with reviewed cor
   expectAll(backend, [
     /ADMIN_APPROVE_TENANT_CORRECTION/,
     /ADMIN_REJECT_TENANT_CORRECTION/,
-    /stale/i,
+    /status: "PENDING_ADMIN_REVIEW"/,
+    /"aborted"/,
+    /record changed after this correction was submitted/,
+    /transaction\.create\(eventRef/,
   ], 'Tenant correction authority');
 });
 
 test('Technician readiness binds credential expiry, device, GPS, duty and dispatch eligibility', async () => {
-  const [expiryTest, readinessTest, operations] = await Promise.all([
-    read('tests/launch/technician-expiry-readiness.test.mjs'),
+  const [profileNormalizer, readinessTest, operations] = await Promise.all([
+    read('src/technician/utils/normalizeTechnicianProfile.ts'),
     read('tests/launch/technician-unified-readiness-gate.test.mjs'),
     read('functions/secureTechnicianOperations.ts'),
   ]);
-  expectAll(expiryTest, [
-    /credential expiry/i,
-    /dispatch/i,
-    /duty/i,
-  ], 'Technician expiry audit');
+  expectAll(profileNormalizer, [
+    /expiryMs !== null && expiryMs <= nowMs/,
+    /complianceBlocked = medicalCardStatus !== 'valid'/,
+    /dispatchReadiness: explicitBlocked \|\| complianceBlocked/,
+    /dutyStatus/,
+    /complianceBlockReasons/,
+  ], 'Technician profile readiness');
   expectAll(readinessTest, [
-    /device/i,
-    /GPS/i,
-    /workload/i,
-    /credential/i,
+    /registeredDeviceId/,
+    /lastGpsAt/,
+    /workload capacity/,
+    /Credential expiry enforcement/,
   ], 'Technician unified readiness audit');
   expectAll(operations, [
-    /dispatch/i,
-    /credential/i,
-    /duty/i,
+    /evaluateTechnicianReadiness/,
+    /action !== "RESUME_DUTY" && !onDuty/,
+    /action !== "RESUME_DUTY" && !available/,
+    /action !== "RESUME_DUTY" && !hasCapacity/,
   ], 'Technician server operations');
 });
 
@@ -87,8 +93,10 @@ test('Broker KYC, agreement evidence, payout ownership, MFA and history are serv
   ]);
   expectAll(kyc, [
     /commissionAgreementAccepted/,
-    /termsVersion/,
-    /submissionHash|kycSubmissionHash/,
+    /TERMS_VERSION/,
+    /commissionTermsVersion/,
+    /submissionHash/,
+    /Unsupported Broker KYC fields/,
   ], 'Broker KYC agreement evidence');
   expectAll(payout, [
     /requestBrokerPayoutOtp|verifyBrokerPayoutOtp|submitBrokerPayoutRequest/,
@@ -105,9 +113,9 @@ test('Broker KYC, agreement evidence, payout ownership, MFA and history are serv
 });
 
 test('Owner onboarding quote and contract values remain server-authoritative for multi-property portfolios', async () => {
-  const [quote, contractTest, payment] = await Promise.all([
+  const [quote, contractAuthority, payment] = await Promise.all([
     read('functions/ownerPortfolioQuote.ts'),
-    read('scripts/tests/owner-contract-commercial-authority-launch.test.mjs'),
+    read('functions/secureOwnerRegistrationRequest.ts'),
     read('src/components/onboarding/PaymentSummaryStep.tsx'),
   ]);
   expectAll(quote, [
@@ -116,13 +124,15 @@ test('Owner onboarding quote and contract values remain server-authoritative for
     /pricingEngineVersion/,
     /quoteHash/,
   ], 'Owner quote authority');
-  expectAll(contractTest, [
-    /mixed service/i,
-    /mixed payment/i,
-    /server/i,
-    /property count/i,
-    /unit count/i,
-  ], 'Owner commercial authority regression');
+  expectAll(contractAuthority, [
+    /A single contract cannot mix maintenance, property-management, and hybrid service modes/,
+    /All properties in one contract must use the same payment plan/,
+    /selected contract plan does not match the server-priced property strategy/,
+    /submitted payment cadence does not match the server-priced property cadence/,
+    /properties: properties\.length/,
+    /totalUnits/,
+    /assertCanonicalCommercialTerms/,
+  ], 'Owner commercial authority');
   expectAll(payment, [
     /getOwnerPaymentConfiguration/,
     /Math\.round\(annualTotal \* 0\.15\)/,

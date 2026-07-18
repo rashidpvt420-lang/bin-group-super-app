@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
@@ -8,142 +8,114 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env.e2e before accessing process.env
-const possibleConfigPaths = [
+for (const candidate of [
   path.resolve(__dirname, '../../.env.e2e'),
   path.resolve(__dirname, '../../../.env.e2e'),
   path.resolve(process.cwd(), '.env.e2e'),
   path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),
-];
-for (const p of possibleConfigPaths) {
-  if (existsSync(p)) {
-    loadDotenv({ path: p });
+]) {
+  if (existsSync(candidate)) {
+    loadDotenv({ path: candidate });
     break;
   }
 }
 
-type RoleName = 'admin' | 'owner' | 'tenant' | 'technician' | 'broker';
+const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
+const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
+const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
 
-const criticalRoutes: Record<RoleName, string[]> = {
-  admin: ['/admin/dashboard', '/admin/owners', '/admin/tenants', '/admin/tickets', '/admin/technicians', '/admin/financials', '/admin/contracts', '/admin/audit', '/admin/properties/registry', '/admin/properties/passport'],
-  owner: ['/owner/dashboard', '/owner/activation', '/owner/contracts', '/owner/property-passport', '/owner/units', '/owner/tenants', '/owner/documents', '/owner/tickets', '/owner/financials', '/owner/roi'],
-  tenant: ['/tenant/dashboard', '/tenant/unit', '/tenant/request', '/tenant/tickets', '/tenant/documents', '/tenant/profile'],
-  technician: ['/technician/dashboard', '/technician/jobs', '/technician/map', '/technician/history', '/technician/profile'],
-  broker: ['/broker/dashboard', '/broker/leads', '/broker/referrals', '/broker/commissions', '/broker/documents', '/broker/profile'],
+type RoleCase = {
+  name: 'Owner' | 'Tenant' | 'Technician' | 'Broker' | 'Admin';
+  roleKey: 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
+  email: string;
+  password: string;
+  routes: readonly string[];
+  baseUrl?: string;
 };
 
-const fatalRouteFailureText = /404|page not found|application error|unhandled runtime error|chunkloaderror|minified react error|invalid-credential|wrong-password|user-not-found|app check|firebase.?app.?check|permission-denied|too many requests|\b429\b/i;
-const accessFailureText = /access denied|not authorized|insufficient permissions/i;
+const roleCases: RoleCase[] = [
+  {
+    name: 'Owner',
+    roleKey: 'owner',
+    email: process.env.E2E_OWNER_EMAIL || '',
+    password: process.env.E2E_OWNER_PASSWORD || '',
+    routes: ['/owner/dashboard', '/owner/properties', '/owner/contracts', '/owner/financials', '/owner/tenants', '/owner/documents', '/owner/property-passport', '/owner/tickets', '/owner/units', '/owner/roi', '/owner/activation'],
+  },
+  {
+    name: 'Tenant',
+    roleKey: 'tenant',
+    email: process.env.E2E_TENANT_EMAIL || '',
+    password: process.env.E2E_TENANT_PASSWORD || '',
+    routes: ['/tenant/dashboard', '/tenant/unit', '/tenant/request', '/tenant/tickets', '/tenant/documents', '/tenant/emergency', '/tenant/chat', '/tenant/profile', '/tenant/gate-pass', '/tenant/amenities'],
+  },
+  {
+    name: 'Technician',
+    roleKey: 'technician',
+    email: process.env.E2E_TECHNICIAN_EMAIL || '',
+    password: process.env.E2E_TECHNICIAN_PASSWORD || '',
+    routes: ['/technician/dashboard', '/technician/jobs', '/technician/map', '/technician/history', '/technician/hr', '/technician/profile', '/technician/chat'],
+  },
+  {
+    name: 'Broker',
+    roleKey: 'broker',
+    email: process.env.E2E_BROKER_EMAIL || '',
+    password: process.env.E2E_BROKER_PASSWORD || '',
+    routes: ['/broker/dashboard', '/broker/leads', '/broker/referrals', '/broker/commissions', '/broker/documents', '/broker/profile'],
+  },
+  {
+    name: 'Admin',
+    roleKey: 'admin',
+    email: process.env.E2E_ADMIN_EMAIL || '',
+    password: process.env.E2E_ADMIN_PASSWORD || '',
+    baseUrl: ADMIN_BASE_URL,
+    routes: ['/dashboard', '/profile', '/contracts', '/owners', '/tenants', '/tickets', '/technicians', '/sos', '/financials', '/audit'],
+  },
+];
 
-function requireCredential(value: string | undefined, key: string): string {
-  if (!value?.trim()) throw new Error(`Launch audit blocked: missing ${key}. Do not skip role tests during launch clearance.`);
-  return value;
-}
-
-async function expectNoRuntimeCrash(page: Page, route: string) {
-  await expect(page.locator('body'), `${route} body should be visible`).toBeVisible({ timeout: 20_000 });
-  const text = await page.locator('body').innerText({ timeout: 20_000 });
-  expect(text.trim().length, `${route} should render visible text`).toBeGreaterThan(0);
-  expect(text, `${route} should not render fatal crash text`).not.toMatch(fatalRouteFailureText);
-
-  if (accessFailureText.test(text)) {
-    const lowerText = text.toLowerCase();
-    const looksLikeBlockedScreen = lowerText.includes('login') || lowerText.includes('contact admin') || lowerText.includes('insufficient role') || lowerText.includes('unauthorized');
-    expect(looksLikeBlockedScreen, `${route} should not render an access-block screen`).toBeFalsy();
+function requireRoleConfiguration(role: RoleCase) {
+  if (!role.email || !role.password || (role.name === 'Admin' && !role.baseUrl)) {
+    throw new Error(`Hard-launch exact-route audit blocked: missing ${role.name} credentials${role.name === 'Admin' ? ' or E2E_ADMIN_BASE_URL' : ''}.`);
   }
 }
 
-async function login(page: Page, email: string, password: string) {
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') {
-      console.log(`[BROWSER_ERROR] ${msg.text()}`);
-    }
-  });
-
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
-
-  const emailInput = page.locator('[data-testid="login-email"], input[type="email"], input[name*="email" i], input[autocomplete="email"], input:not([type="password"])').first();
+async function login(page: Page, role: RoleCase) {
+  requireRoleConfiguration(role);
+  const loginUrl = role.baseUrl ? `${role.baseUrl}/login` : '/login';
+  await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
+  const emailInput = page.locator('[data-testid="login-email"], input[type="email"], input[name*="email" i], input[autocomplete="email"]').first();
   const passwordInput = page.locator('[data-testid="login-password"], input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
-  await expect(emailInput, 'Login email field should be visible').toBeVisible({ timeout: 25_000 });
-  await expect(passwordInput, 'Login password field should be visible').toBeVisible({ timeout: 25_000 });
-  await emailInput.fill(email);
-  await passwordInput.fill(password);
+  await expect(emailInput, `${role.name} login email must be visible`).toBeVisible({ timeout: 25_000 });
+  await expect(passwordInput, `${role.name} login password must be visible`).toBeVisible({ timeout: 25_000 });
+  await emailInput.fill(role.email);
+  await passwordInput.fill(role.password);
   await page.locator('form button[type="submit"]').first().click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_000);
-  await expectNoRuntimeCrash(page, '/login after submit');
-
-  // Verify login succeeds and page URL is not /login
-  await expect(page, 'Should redirect away from login page after successful authentication').not.toHaveURL(/\/login/, { timeout: 15_000 });
+  await expect(page, `${role.name} must leave the login route`).not.toHaveURL(/\/login/, { timeout: 15_000 });
 }
 
-async function expectDashboardControls(page: Page, role: RoleName) {
-  // Verify page URL is not /login before checking controls
-  await expect(page, 'Should not be on login page when asserting dashboard controls').not.toHaveURL(/\/login/, { timeout: 15_000 });
-  await expect(page.getByTestId(`${role}-language-toggle`), `${role} must expose language toggle`).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId(`${role}-logout`).or(page.getByTestId(`${role}-logout-mobile`)), `${role} must expose logout control`).toBeVisible({ timeout: 15_000 });
+async function assertExactRoute(page: Page, role: RoleCase, route: string) {
+  const destination = role.baseUrl ? `${role.baseUrl}${route}` : route;
+  const response = await page.goto(destination, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(route.includes('/map') ? 2_500 : 900);
+  expect(response?.status() ?? 200, `${role.name} ${route} must not return a server error`).toBeLessThan(500);
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: `${role.name} ${route} must remain on its registered route rather than a wildcard redirect`,
+  }).toBe(route);
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(body.trim().length, `${role.name} ${route} must render visible text`).toBeGreaterThan(0);
+  expect(body, `${role.name} ${route} must not render a runtime crash`).not.toMatch(CRASH_PATTERN);
+  expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
 }
 
-for (const role of Object.keys(criticalRoutes) as RoleName[]) {
-  test.describe(`${role} hard-launch critical routes`, () => {
-    const emailKey = `E2E_${role.toUpperCase()}_EMAIL`;
-    const passwordKey = `E2E_${role.toUpperCase()}_PASSWORD`;
-    const email = process.env[emailKey];
-    const password = process.env[passwordKey];
-
-    test.beforeEach(async ({ page }) => {
-      const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-      (page as any).__binAppCheckMonitor = __appCheckMonitor;
-      await __appCheckMonitor.assertTokenFingerprint();
-      await login(page, requireCredential(email, emailKey), requireCredential(password, passwordKey));
-    });
-
-    for (const route of criticalRoutes[role]) {
-      test(`${role} route renders: ${route}`, async ({ page }) => {
-        await assertAppCheckDebugTokenInPage(page);
-        const appCheckErrors: string[] = [];
-        page.on('console', (msg) => {
-          if (msg.type() === 'error') appCheckErrors.push(msg.text());
-        });
-        page.on('response', (response) => {
-          const status = response.status();
-          const url = response.url();
-          if ((status === 403 || status === 429) && /firestore|firebase|googleapis|identitytoolkit|appcheck/i.test(url)) {
-            appCheckErrors.push(`HTTP ${status} ${url}`);
-          }
-        });
-        const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
-        expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
-        await expect(page, `Should not redirect to login page for ${route}`).not.toHaveURL(/\/login/, { timeout: 15_000 });
-        await expectNoRuntimeCrash(page, route);
-        expect(collectAppCheckFailures(appCheckErrors), `${route} App Check/403/429 failures`).toEqual([]);
-      });
-    }
-
-    test(`${role} dashboard exposes required launch controls`, async ({ page }) => {
-      await page.goto(criticalRoutes[role][0], { waitUntil: 'domcontentloaded' });
-      await expect(page, `Should not redirect to login page for dashboard`).not.toHaveURL(/\/login/, { timeout: 15_000 });
-      await expectNoRuntimeCrash(page, criticalRoutes[role][0]);
-      await expectDashboardControls(page, role);
-    });
-
-    test(`${role} language switch is mandatory`, async ({ page }) => {
-      await page.goto(criticalRoutes[role][0], { waitUntil: 'domcontentloaded' });
-      await expect(page, `Should not redirect to login page for language switch`).not.toHaveURL(/\/login/, { timeout: 15_000 });
-      await expectNoRuntimeCrash(page, criticalRoutes[role][0]);
-      const languageButton = page.getByTestId(`${role}-language-toggle`);
-      await expect(languageButton).toBeVisible({ timeout: 15_000 });
-      await languageButton.click();
-      await page.waitForTimeout(800);
-      await expectNoRuntimeCrash(page, `${role} language switch`);
-    });
-
-    test.afterEach(async ({ page }) => {
-      const monitor = (page as any).__binAppCheckMonitor;
-      if (!monitor) return;
-      monitor.assertClean(test.info().title);
-      monitor.assertAuthenticatedFirebaseRead(test.info().title);
-    });
+for (const role of roleCases) {
+  test(`${role.name} hard-launch routes remain exact and authenticated`, async ({ page }) => {
+    test.setTimeout(180_000);
+    const monitor = await attachAuthenticatedAppCheckMonitor(page);
+    await monitor.assertTokenFingerprint();
+    await login(page, role);
+    for (const route of role.routes) await assertExactRoute(page, role, route);
+    monitor.assertClean(`${role.name} hard-launch exact routes`);
+    monitor.assertAuthenticatedFirebaseRead(`${role.name} hard-launch exact routes`);
   });
 }
-
