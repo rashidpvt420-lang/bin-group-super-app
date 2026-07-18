@@ -808,48 +808,8 @@ service cloud.firestore {
           'companyName',
           'ownerCompanyName',
           'billingContact',
-          'reraLicense',
-          'reraStatus',
-          'reraVerified',
-          'primaryRegion',
-          'brokerTerritory',
-          'tradeLicenseNumber',
-          'emiratesIdNumber',
-          'passportNumber',
-          'bankName',
-          'bankAccountHolder',
-          'bankIban',
-          'iban',
-          'commissionAgreementAccepted',
-          'commissionAgreementAcceptedAt',
-          'commissionTermsVersion',
-          'brokerKycStatus',
-          'brokerProfileCompletion',
-          'profileCompletionScore',
           'updatedAt'
         ]) &&
-        (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'reraLicense',
-            'tradeLicenseNumber',
-            'emiratesIdNumber',
-            'passportNumber'
-          ]) ||
-          (
-            request.resource.data.get('reraVerified', false) == false &&
-            request.resource.data.get('reraStatus', '') in ['PENDING', 'NOT_SUBMITTED'] &&
-            request.resource.data.get('brokerKycStatus', '') in ['INCOMPLETE', 'PENDING_REVIEW']
-          )
-        ) &&
-        (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'bankName',
-            'bankAccountHolder',
-            'bankIban',
-            'iban'
-          ]) ||
-          resource.data.get('ibanVerified', false) != true
-        ) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.get('role', null)) &&
         (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.get('userRole', null)) &&
         (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.get('primaryRole', null)) &&
@@ -859,9 +819,6 @@ service cloud.firestore {
         (!('super_admin' in request.resource.data) || request.resource.data.super_admin == resource.data.get('super_admin', null)) &&
         (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.get('permissions', null)) &&
         (!('status' in request.resource.data) || request.resource.data.status == resource.data.get('status', null)) &&
-        (!('reraVerified' in request.resource.data) || request.resource.data.reraVerified == false || request.resource.data.reraVerified == resource.data.get('reraVerified', null)) &&
-        (!('reraStatus' in request.resource.data) || request.resource.data.reraStatus in ['PENDING', 'NOT_SUBMITTED'] || request.resource.data.reraStatus == resource.data.get('reraStatus', null)) &&
-        (!('brokerKycStatus' in request.resource.data) || request.resource.data.brokerKycStatus in ['INCOMPLETE', 'PENDING_REVIEW'] || request.resource.data.brokerKycStatus == resource.data.get('brokerKycStatus', null)) &&
         (!('onboardingComplete' in request.resource.data) || request.resource.data.onboardingComplete == resource.data.get('onboardingComplete', null)) &&
         (!('propertyId' in request.resource.data) || request.resource.data.propertyId == resource.data.get('propertyId', null)) &&
         (!('unitId' in request.resource.data) || request.resource.data.unitId == resource.data.get('unitId', null));

@@ -49,7 +49,7 @@ export default function TenantRequestPage() {
 
     const tt = (key: string, fallback: string): string => {
         const value = t(key);
-        return typeof value === 'string' && value.trim() ? value : fallback;
+        return typeof value === 'string' && value.trim() && value.trim() !== key ? value : fallback;
     };
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
