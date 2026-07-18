@@ -76,6 +76,7 @@ export function summarizeAdminMfaUsers(users) {
   let disabledAdminCount = 0;
   let inactiveProfileAdminCount = 0;
   let activeAdminCount = 0;
+  let activeAdminEmailUnverifiedCount = 0;
   let phoneMfaEnrolledCount = 0;
   let missingPhoneFactorCount = 0;
   let unsupportedOnlyFactorCount = 0;
@@ -104,6 +105,8 @@ export function summarizeAdminMfaUsers(users) {
     }
 
     activeAdminCount += 1;
+    if (user?.emailVerified !== true) activeAdminEmailUnverifiedCount += 1;
+
     const factors = enrolledFactors(user);
     const phoneFactors = factors.filter((factor) => lower(factor?.factorId) === 'phone');
     if (phoneFactors.length > 0) {
@@ -129,6 +132,10 @@ export function summarizeAdminMfaUsers(users) {
     recoveryApproverMfaReadyCount >= 2 &&
     recoveryApproverEmailUnverifiedCount === 0 &&
     recoveryApproverMissingPhoneFactorCount === 0;
+  const allActiveAdminsEmailVerified =
+    activeAdminCount > 0 && activeAdminEmailUnverifiedCount === 0;
+  const allActiveAdminsPhoneMfaReady =
+    activeAdminCount > 0 && phoneMfaEnrolledCount === activeAdminCount;
 
   const failures = [];
   if (activeAdminCount === 0) {
@@ -136,6 +143,9 @@ export function summarizeAdminMfaUsers(users) {
   }
   if (missingAdminProfileCount > 0) {
     failures.push(`${missingAdminProfileCount} claimed Admin/staff account(s) have no Firestore user profile.`);
+  }
+  if (activeAdminEmailUnverifiedCount > 0) {
+    failures.push(`${activeAdminEmailUnverifiedCount} active Admin/staff account(s) have unverified email.`);
   }
   if (missingPhoneFactorCount > 0) {
     failures.push(`${missingPhoneFactorCount} active Admin/staff account(s) have no enrolled phone MFA factor.`);
@@ -162,6 +172,7 @@ export function summarizeAdminMfaUsers(users) {
       disabledAdminCount,
       inactiveProfileAdminCount,
       activeAdminCount,
+      activeAdminEmailUnverifiedCount,
       phoneMfaEnrolledCount,
       missingPhoneFactorCount,
       unsupportedOnlyFactorCount,
@@ -172,8 +183,8 @@ export function summarizeAdminMfaUsers(users) {
       recoveryCeoCount: recoveryRoleCounts.ceo,
       recoverySuperAdminCount: recoveryRoleCounts.super_admin,
       recoveryQuorumReady,
-      allActiveAdminsPhoneMfaReady:
-        activeAdminCount > 0 && phoneMfaEnrolledCount === activeAdminCount,
+      allActiveAdminsEmailVerified,
+      allActiveAdminsPhoneMfaReady,
     },
   };
 }
@@ -182,6 +193,16 @@ export function buildAdminMfaEvidence(summary, {
   env = process.env,
   now = new Date(),
 } = {}) {
+  if (!Number.isInteger(summary?.activeAdminEmailUnverifiedCount)) {
+    throw new Error('Admin MFA summary must explicitly include activeAdminEmailUnverifiedCount.');
+  }
+  if (typeof summary?.allActiveAdminsEmailVerified !== 'boolean') {
+    throw new Error('Admin MFA summary must explicitly include allActiveAdminsEmailVerified.');
+  }
+  const activeAdminCount = Number(summary?.activeAdminCount || 0);
+  const activeAdminEmailUnverifiedCount = summary.activeAdminEmailUnverifiedCount;
+  const allActiveAdminsEmailVerified = summary.allActiveAdminsEmailVerified === true;
+
   return {
     schemaVersion: 2,
     status: 'passed',
@@ -197,7 +218,8 @@ export function buildAdminMfaEvidence(summary, {
     missingAdminProfileCount: Number(summary?.missingAdminProfileCount || 0),
     disabledAdminCount: Number(summary?.disabledAdminCount || 0),
     inactiveProfileAdminCount: Number(summary?.inactiveProfileAdminCount || 0),
-    activeAdminCount: Number(summary?.activeAdminCount || 0),
+    activeAdminCount,
+    activeAdminEmailUnverifiedCount,
     phoneMfaEnrolledCount: Number(summary?.phoneMfaEnrolledCount || 0),
     missingPhoneFactorCount: Number(summary?.missingPhoneFactorCount || 0),
     unsupportedOnlyFactorCount: Number(summary?.unsupportedOnlyFactorCount || 0),
@@ -208,6 +230,7 @@ export function buildAdminMfaEvidence(summary, {
     recoveryCeoCount: Number(summary?.recoveryCeoCount || 0),
     recoverySuperAdminCount: Number(summary?.recoverySuperAdminCount || 0),
     recoveryQuorumReady: summary?.recoveryQuorumReady === true,
+    allActiveAdminsEmailVerified,
     allActiveAdminsPhoneMfaReady: summary?.allActiveAdminsPhoneMfaReady === true,
     sensitiveValuesExcluded: true,
     hardLaunchClaim: false,
@@ -239,6 +262,8 @@ export function validateAdminMfaEvidence(evidence, {
   requireExact(evidence.ref, ref, 'Admin MFA evidence ref');
   requireExact(evidence.workflowRunId, workflowRunId, 'Admin MFA evidence workflowRunId');
   requireExact(evidence.workflowRunAttempt, workflowRunAttempt, 'Admin MFA evidence workflowRunAttempt');
+  requireExact(evidence.allActiveAdminsEmailVerified, true, 'Admin MFA all-active email verification');
+  requireExact(evidence.activeAdminEmailUnverifiedCount, 0, 'Admin MFA unverified active Admin emails');
   requireExact(evidence.allActiveAdminsPhoneMfaReady, true, 'Admin MFA all-active coverage');
   requireExact(evidence.missingAdminProfileCount, 0, 'Admin MFA missing profiles');
   requireExact(evidence.missingPhoneFactorCount, 0, 'Admin MFA missing phone factors');
@@ -254,6 +279,7 @@ export function validateAdminMfaEvidence(evidence, {
     'disabledAdminCount',
     'inactiveProfileAdminCount',
     'activeAdminCount',
+    'activeAdminEmailUnverifiedCount',
     'phoneMfaEnrolledCount',
     'missingPhoneFactorCount',
     'unsupportedOnlyFactorCount',
