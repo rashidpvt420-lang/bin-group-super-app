@@ -191,6 +191,39 @@ service cloud.firestore {
       );
     }
 
+    function safeTicketUpdateByActor() {
+      // Resolve authentication and actor claims once. Re-evaluating nested role,
+      // admin and dispatcher helpers in every denied branch can exhaust
+      // Firestore's 1,000-expression budget.
+      let authenticated = signedIn();
+      let role = authenticated
+        ? request.auth.token.get('role', request.auth.token.get('userRole', request.auth.token.get('primaryRole', '')))
+        : '';
+      let admin = authenticated && (
+        (
+          role == '' &&
+          (
+            request.auth.token.get('admin', false) == true ||
+            request.auth.token.get('isAdmin', false) == true
+          )
+        ) ||
+        request.auth.token.get('superAdmin', false) == true ||
+        request.auth.token.get('super_admin', false) == true ||
+        request.auth.token.get('ceo', false) == true ||
+        role in ['admin', 'super_admin', 'ceo']
+      );
+      let dispatcher = authenticated && (
+        ('permissions' in request.auth.token && request.auth.token.permissions.get('canDispatchJobs', false) == true) ||
+        role in ['operations_admin', 'operations_manager', 'dispatcher']
+      );
+      return authenticated && (
+        (admin && isNotSuspended()) ||
+        (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
+        (!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
+        (!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
+      );
+    }
+
     function canDispatchJobs() {
       return hasDispatchAuthorityClaimOnly() && isNotSuspended();
     }
@@ -541,14 +574,13 @@ service cloud.firestore {
 
     function safeTechnicianTicketUpdate() {
       // The outer rule proves the technician claim and current assignment.
-      // Mutation shape is checked before suspension and approval profile reads.
+      // Reject unrelated fields before suspension and the single approval read.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
           'techNotes',
           'workNotes',
           'notes',
-          'beforePhotos',
           'afterPhotos',
           'afterPhotoUrl',
           'proofPhotos',
@@ -564,10 +596,8 @@ service cloud.firestore {
           'technicianLocationUpdatedAt'
         ]) &&
         isNotSuspended() &&
-        isApprovedTechnician() &&
+        hasApprovedTechnicianRecord() &&
         !(resource.data.get('status', '') in ['COMPLETED', 'completed', 'CLOSED', 'closed', 'TENANT_APPROVED']) &&
-        request.resource.data.get('beforePhotos', []).size() >= resource.data.get('beforePhotos', []).size() &&
-        request.resource.data.get('beforePhotos', []).hasAll(resource.data.get('beforePhotos', [])) &&
         request.resource.data.get('afterPhotos', []).size() >= resource.data.get('afterPhotos', []).size() &&
         request.resource.data.get('afterPhotos', []).hasAll(resource.data.get('afterPhotos', [])) &&
         request.resource.data.get('proofPhotos', []).size() >= resource.data.get('proofPhotos', []).size() &&
@@ -754,10 +784,6 @@ service cloud.firestore {
           'createdAt',
           'updatedAt',
           'lastLoginAt',
-          'platform',
-          'isStandalone',
-          'userAgent',
-          'fcmTokens',
           'notificationPreferences',
           'language',
           'preferences'
@@ -787,15 +813,8 @@ service cloud.firestore {
           'termsVersion',
           'privacyAcceptedAt',
           'notificationPreferences',
-          'fcmTokens',
-          'platform',
-          'isStandalone',
-          'userAgent',
           'lastLoginAt',
           'lastSeenAt',
-          'pushEnabled',
-          'pushPermission',
-          'deviceInfo',
           'onboardingLastSeenAt',
           'currentLocation',
           'lastLocation',
@@ -810,6 +829,51 @@ service cloud.firestore {
           'billingContact',
           'updatedAt'
         ]) &&
+        (
+          claimedRole() != 'tenant' ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'displayName',
+            'phone',
+            'phoneNumber',
+            'mobile',
+            'emergencyContact'
+          ])
+        ) &&
+        (
+          claimedRole() != 'owner' ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'displayName',
+            'phone',
+            'phoneNumber',
+            'mobile',
+            'companyName',
+            'ownerCompanyName',
+            'billingContact'
+          ])
+        ) &&
+        (
+          claimedRole() != 'technician' ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'displayName',
+            'phone',
+            'phoneNumber',
+            'mobile',
+            'requestedTrade',
+            'serviceZonePreference',
+            'emergencyContact'
+          ])
+        ) &&
+        (
+          claimedRole() != 'broker' ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'displayName',
+            'phone',
+            'phoneNumber',
+            'mobile',
+            'companyName',
+            'profileCompletionScore'
+          ])
+        ) &&
         (!('role' in request.resource.data) || request.resource.data.role == resource.data.get('role', null)) &&
         (!('userRole' in request.resource.data) || request.resource.data.userRole == resource.data.get('userRole', null)) &&
         (!('primaryRole' in request.resource.data) || request.resource.data.primaryRole == resource.data.get('primaryRole', null)) &&
@@ -913,22 +977,31 @@ service cloud.firestore {
       allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
       allow delete: if isNotSuspended() && isAdmin();
       match /fcmTokens/{tokenId} {
-        allow read: if isNotSuspended() &&
-          (request.auth.uid == userId || isAdmin() || isHr());
-        allow create, update, delete: if isNotSuspended() &&
-          (request.auth.uid == userId || isAdmin());
+        allow read, write: if false;
       }
 
       match /deviceReadiness/{readinessId} {
-        allow read: if isNotSuspended() &&
-          (request.auth.uid == userId || isAdmin() || isHr());
-        allow create, update, delete: if isNotSuspended() &&
-          (request.auth.uid == userId || isAdmin());
+        allow read, write: if false;
       }
 
       match /{subcollection}/{document=**} {
         allow read, write: if false;
       }
+    }
+
+    // Raw Broker identity, licence and payout data is readable by the broker
+    // and authorised staff, but is written only by submitBrokerKycProfile.
+    match /broker_kyc_profiles/{brokerId} {
+      allow read: if isNotSuspended() && (
+        request.auth.uid == brokerId ||
+        isAdmin() ||
+        isFinance()
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /broker_kyc_submission_limits/{brokerId} {
+      allow read, write: if false;
     }
 
     match /owners/{ownerId} {
@@ -1015,20 +1088,14 @@ service cloud.firestore {
     match /tickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() && isNotSuspended();
-      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
-      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
-      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();
+      allow update: if safeTicketUpdateByActor();
       allow delete: if isAdmin();
     }
 
     match /maintenanceTickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if isAdmin() && isNotSuspended();
-      allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();
-      allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();
-      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();
+      allow update: if safeTicketUpdateByActor();
       allow delete: if isAdmin();
       match /messages/{messageId} {
         allow read: if canAccessMaintenanceTicket(ticketId);
@@ -1842,6 +1909,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Firebase Admin SDK only. Browser administrators must use App Check-protected callables.
+    match /admin_security_sessions/{sessionId} {
+      allow read, write: if false;
+    }
+
     // Server-managed cryptographic material. Cloud Functions use the Admin SDK;
     // no browser, tenant, owner, technician, broker, or admin client may access it.
     match /system_secrets/{secretId} {
@@ -1849,14 +1921,13 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets']) && hasAdminClaim();
-      allow create: if !(
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();
+      allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
           'users',
-          'tickets',
-          'maintenanceTickets',
           'audit_logs',
+          'admin_security_sessions',
           'auditLogs',
           'analytics_events',
           'security_audit_logs',
@@ -1874,16 +1945,17 @@ service cloud.firestore {
           'contract_signature_otp_audit',
           'notification_dispatch_claims',
           'public_rate_limits',
+          'broker_kyc_profiles',
+          'broker_kyc_submission_limits',
           'ai_usage'
         ]
       ) && hasAdminClaim();
-      allow update, delete: if !(
+      allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
           'users',
-          'tickets',
-          'maintenanceTickets',
           'audit_logs',
+          'admin_security_sessions',
           'auditLogs',
           'analytics_events',
           'security_audit_logs',
@@ -1901,6 +1973,8 @@ service cloud.firestore {
           'contract_signature_otp_audit',
           'notification_dispatch_claims',
           'public_rate_limits',
+          'broker_kyc_profiles',
+          'broker_kyc_submission_limits',
           'ai_usage'
         ]
       ) && hasAdminClaim();

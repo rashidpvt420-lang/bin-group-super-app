@@ -1,3 +1,6 @@
+import './broker-kyc-security-rules.test.js';
+import './five-profile-protected-fields-rules.test.js';
+import './push-token-security-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
@@ -947,96 +950,45 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(staleTokenDb, 'users/suspended_user')));
   });
 
-  it('user subcollection restrictions: Operations and Finance can read top-level user directories but NOT subcollections', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
-    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'users/some_user'), { displayName: 'John Doe', role: 'tenant' });
-    await setDoc(doc(adminDb, 'users/some_user/fcmTokens/token_123'), { token: 'token_123' });
-
-    // Operations user
-    const opsDb = testEnv.authenticatedContext('ops_user', {
-      role: 'operations_manager'
-    }).firestore();
-
-    // Finance user
-    const financeDb = testEnv.authenticatedContext('finance_user', {
-      role: 'finance_admin'
-    }).firestore();
-
-    // Operations and Finance can read top-level user doc
-    await assertSucceeds(getDoc(doc(opsDb, 'users/some_user')));
-    await assertSucceeds(getDoc(doc(financeDb, 'users/some_user')));
-
-    // Operations and Finance CANNOT read fcmTokens subcollection
-    await assertFails(getDoc(doc(opsDb, 'users/some_user/fcmTokens/token_123')));
-    await assertFails(getDoc(doc(financeDb, 'users/some_user/fcmTokens/token_123')));
-  });
-
-  it('user subcollection restrictions: User, Admin, and HR can read user subcollections', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
-    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'users/some_user'), { displayName: 'John Doe', role: 'tenant' });
-    await setDoc(doc(adminDb, 'users/some_user/fcmTokens/token_123'), { token: 'token_123' });
-
-    // HR user
-    const hrDb = testEnv.authenticatedContext('hr_user', {
-      role: 'hr_admin'
-    }).firestore();
-
-    // Self user
-    const selfDb = testEnv.authenticatedContext('some_user', {
-      role: 'tenant'
-    }).firestore();
-
-    // Admin, HR, and Self can read fcmTokens subcollection
-    await assertSucceeds(getDoc(doc(adminDb, 'users/some_user/fcmTokens/token_123')));
-    await assertSucceeds(getDoc(doc(hrDb, 'users/some_user/fcmTokens/token_123')));
-    await assertSucceeds(getDoc(doc(selfDb, 'users/some_user/fcmTokens/token_123')));
-  });
-
-  it('explicit user subcollection allowlist enforces read/write policy and denies unknown paths', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
-    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'users/user_a'), { role: 'tenant', status: 'active' });
-    await setDoc(doc(adminDb, 'users/user_b'), { role: 'tenant', status: 'active' });
+  it('user push token and readiness subcollections are server-only while unknown paths fail closed', async () => {
+    await seedServerDocument('users/user_a', { role: 'tenant', status: 'active' });
+    await seedServerDocument('users/user_b', { role: 'tenant', status: 'active' });
+    await seedServerDocument('users/user_a/fcmTokens/token_seeded', {
+      token: 'server-managed-token',
+      tokenHash: 'token_seeded',
+      userId: 'user_a',
+      active: true,
+    });
+    await seedServerDocument('users/user_a/deviceReadiness/push', {
+      platform: 'web',
+      supportsMessaging: true,
+      userId: 'user_a',
+    });
 
     const selfDb = testEnv.authenticatedContext('user_a', { role: 'tenant' }).firestore();
     const otherDb = testEnv.authenticatedContext('user_b', { role: 'tenant' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
     const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin' }).firestore();
     const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
     const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
 
-    const selfToken = doc(selfDb, 'users/user_a/fcmTokens/token_self');
-    await assertSucceeds(setDoc(selfToken, { token: 'token_self', platform: 'web' }));
-    await assertSucceeds(getDoc(selfToken));
-    await assertSucceeds(updateDoc(selfToken, { platform: 'android-web' }));
-    await assertSucceeds(getDoc(doc(adminDb, 'users/user_a/fcmTokens/token_self')));
-    await assertSucceeds(getDoc(doc(hrDb, 'users/user_a/fcmTokens/token_self')));
-    await assertFails(getDoc(doc(opsDb, 'users/user_a/fcmTokens/token_self')));
-    await assertFails(getDoc(doc(financeDb, 'users/user_a/fcmTokens/token_self')));
-    await assertFails(getDoc(doc(otherDb, 'users/user_a/fcmTokens/token_self')));
-    await assertFails(updateDoc(doc(hrDb, 'users/user_a/fcmTokens/token_self'), { platform: 'forged' }));
+    await assertSucceeds(getDoc(doc(opsDb, 'users/user_a')));
+    await assertSucceeds(getDoc(doc(financeDb, 'users/user_a')));
 
-    const readiness = doc(selfDb, 'users/user_a/deviceReadiness/push');
-    await assertSucceeds(setDoc(readiness, { platform: 'web', supportsMessaging: true }));
-    await assertSucceeds(getDoc(readiness));
-    await assertSucceeds(getDoc(doc(adminDb, 'users/user_a/deviceReadiness/push')));
-    await assertSucceeds(getDoc(doc(hrDb, 'users/user_a/deviceReadiness/push')));
-    await assertFails(getDoc(doc(opsDb, 'users/user_a/deviceReadiness/push')));
-    await assertFails(getDoc(doc(financeDb, 'users/user_a/deviceReadiness/push')));
-    await assertFails(setDoc(doc(hrDb, 'users/user_a/deviceReadiness/forged'), { platform: 'forged' }));
-
-    for (const database of [selfDb, adminDb, hrDb, opsDb, financeDb]) {
+    for (const database of [selfDb, otherDb, adminDb, hrDb, opsDb, financeDb]) {
+      await assertFails(getDoc(doc(database, 'users/user_a/fcmTokens/token_seeded')));
+      await assertFails(getDoc(doc(database, 'users/user_a/deviceReadiness/push')));
+      await assertFails(setDoc(doc(database, 'users/user_a/fcmTokens/forged'), {
+        token: 'forged-client-token',
+        platform: 'web',
+      }));
+      await assertFails(setDoc(doc(database, 'users/user_a/deviceReadiness/forged'), {
+        platform: 'web',
+        supportsMessaging: true,
+      }));
       await assertFails(setDoc(doc(database, 'users/user_a/permissions/escalated'), { admin: true }));
       await assertFails(setDoc(doc(database, 'users/user_a/security/session'), { bypass: true }));
     }
-
-    await assertSucceeds(setDoc(doc(adminDb, 'users/user_a/fcmTokens/token_admin'), {
-      token: 'token_admin',
-      platform: 'web',
-    }));
-    await assertSucceeds(deleteDoc(doc(adminDb, 'users/user_a/fcmTokens/token_admin')));
-    await assertSucceeds(deleteDoc(selfToken));
   });
 
   it('production-shaped stale-token suspension blocks critical client writes', async () => {
