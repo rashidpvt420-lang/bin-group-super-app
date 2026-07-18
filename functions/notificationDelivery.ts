@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import type { SendResponse } from "firebase-admin/messaging";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -10,6 +11,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const MAX_PUSH_TOKENS_PER_USER = 10;
+const MAX_FCM_MULTICAST_TOKENS = 500;
 const PUSH_TOKEN_MIN_LENGTH = 50;
 const PUSH_TOKEN_MAX_LENGTH = 4096;
 const PUSH_TOKEN_RE = /^[A-Za-z0-9_:\-.]+$/;
@@ -482,28 +484,37 @@ export const deliverNotificationPush = onDocumentCreated("notifications/{notific
         return null;
     }
 
-    const response = await admin.messaging().sendEachForMulticast({
-        tokens: registrations.map((registration) => registration.token),
-        notification: { title, body },
-        data: {
-            title,
-            body,
-            link,
-            notificationId: event.params.notificationId,
-            recipientRole: String(data.recipientRole || "unknown"),
-            type: String(data.type || "STATUS_UPDATE"),
-            ticketId: String(data.ticketId || ""),
-        },
-        webpush: {
-            notification: {
-                icon: "/icons/icon-192x192.png",
-                badge: "/icons/icon-192x192.png",
+    const deliveryResponses: SendResponse[] = [];
+    let successCount = 0;
+    let failureCount = 0;
+    for (let offset = 0; offset < registrations.length; offset += MAX_FCM_MULTICAST_TOKENS) {
+        const chunk = registrations.slice(offset, offset + MAX_FCM_MULTICAST_TOKENS);
+        const response = await admin.messaging().sendEachForMulticast({
+            tokens: chunk.map((registration) => registration.token),
+            notification: { title, body },
+            data: {
+                title,
+                body,
+                link,
+                notificationId: event.params.notificationId,
+                recipientRole: String(data.recipientRole || "unknown"),
+                type: String(data.type || "STATUS_UPDATE"),
+                ticketId: String(data.ticketId || ""),
             },
-            fcmOptions: { link },
-        },
-    });
+            webpush: {
+                notification: {
+                    icon: "/icons/icon-192x192.png",
+                    badge: "/icons/icon-192x192.png",
+                },
+                fcmOptions: { link },
+            },
+        });
+        deliveryResponses.push(...response.responses);
+        successCount += response.successCount;
+        failureCount += response.failureCount;
+    }
 
-    const invalidRegistrations = response.responses
+    const invalidRegistrations = deliveryResponses
         .map((item, index) => ({ item, registration: registrations[index] }))
         .filter(({ item, registration }) => {
             if (!registration) return false;
@@ -521,17 +532,17 @@ export const deliverNotificationPush = onDocumentCreated("notifications/{notific
         await Promise.all(affectedUsers.map((userId) => refreshUserPushSummary(userId)));
     }
 
-    const deliveryState = response.failureCount === 0
+    const deliveryState = failureCount === 0
         ? "SUCCESS"
-        : response.successCount > 0
+        : successCount > 0
             ? "PARTIAL"
             : "FAILED";
     await snap.ref.set({
         invalidPushTokens: FieldValue.delete(),
         pushAttemptedAt: FieldValue.serverTimestamp(),
         pushTokenCount: registrations.length,
-        pushSuccessCount: response.successCount,
-        pushFailureCount: response.failureCount,
+        pushSuccessCount: successCount,
+        pushFailureCount: failureCount,
         pushPrunedCount: invalidRegistrations.length,
         pushDeliveryState: deliveryState,
     }, { merge: true });
