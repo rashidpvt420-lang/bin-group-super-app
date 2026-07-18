@@ -21,6 +21,7 @@ import {
 } from '../../scripts/lib/hard-launch-control.mjs';
 import { buildFirebasePhoneAuthEvidence } from '../../scripts/verify-firebase-phone-auth-production.mjs';
 import { buildAdminMfaEvidence } from '../../scripts/verify-admin-mfa-production.mjs';
+import { buildHostedClientConfigEvidence } from '../../scripts/verify-hosted-client-config.mjs';
 import { runSameRunDeploymentArtifactVerification } from '../../scripts/verify-same-run-deployment-artifact.mjs';
 
 const SHA = 'a'.repeat(40);
@@ -72,6 +73,35 @@ function adminMfaSummary() {
   };
 }
 
+function hostedClientSummaries() {
+  return {
+    main: {
+      assetCount: 8,
+      projectIdMatched: true,
+      authDomainMatched: true,
+      storageBucketMatched: true,
+      firebaseApiKeyMatched: true,
+      firebaseAppIdMatched: true,
+      messagingSenderIdMatched: true,
+      appCheckSiteKeyMatched: true,
+      mapsApiKeyMatched: true,
+      vapidKeyMatched: true,
+      allRequiredMatched: true,
+    },
+    admin: {
+      assetCount: 3,
+      projectIdMatched: true,
+      authDomainMatched: true,
+      storageBucketMatched: true,
+      firebaseApiKeyMatched: true,
+      firebaseAppIdMatched: true,
+      messagingSenderIdMatched: true,
+      appCheckSiteKeyMatched: true,
+      allRequiredMatched: true,
+    },
+  };
+}
+
 function createFixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'same-run-deployment-'));
   const now = Date.now();
@@ -105,6 +135,7 @@ function createFixture() {
     testPhoneNumberCount: 0,
   }, { env, now: new Date(now) });
   const adminMfa = buildAdminMfaEvidence(adminMfaSummary(), { env, now: new Date(now) });
+  const clientRuntimeConfig = buildHostedClientConfigEvidence(hostedClientSummaries(), { env, now: new Date(now) });
 
   writeJson(root, 'production-deployment.json', {
     status: 'passed',
@@ -128,6 +159,7 @@ function createFixture() {
     source: 'firebase-production-deploy-workflow',
     firebasePhoneAuth,
     adminMfa,
+    clientRuntimeConfig,
   });
 
   writeJson(root, 'production-incidents.json', {
@@ -204,7 +236,7 @@ const rejected = (result, pattern) => {
 };
 
 describe('same-run production deployment artifact verifier', () => {
-  it('accepts a complete exact-run artifact with Phone Auth and Admin MFA recovery quorum evidence', () => {
+  it('accepts a complete exact-run artifact with Phone Auth, Admin MFA quorum and hosted client evidence', () => {
     withFixture((fixture) => {
       const result = verify(fixture);
       assert.equal(result.ok, true, result.failures.join('\n'));
@@ -249,10 +281,11 @@ describe('same-run production deployment artifact verifier', () => {
     });
   });
 
-  it('rejects missing or tampered nested Phone Auth and Admin MFA evidence', () => {
+  it('rejects missing or tampered nested production evidence', () => {
     for (const [field, pattern] of [
       ['firebasePhoneAuth', /Phone Auth deployment evidence is missing/i],
       ['adminMfa', /Admin MFA deployment evidence is missing/i],
+      ['clientRuntimeConfig', /Hosted client configuration deployment evidence is missing/i],
     ]) {
       withFixture((fixture) => {
         mutate(fixture.root, 'production-deployment.json', (doc) => { delete doc[field]; });
@@ -273,6 +306,13 @@ describe('same-run production deployment artifact verifier', () => {
         doc.adminMfa.recoveryQuorumReady = false;
       });
       rejected(verify(fixture), /recovery quorum|at least two MFA-ready recovery approvers/i);
+    });
+    withFixture((fixture) => {
+      mutate(fixture.root, 'production-deployment.json', (doc) => {
+        doc.clientRuntimeConfig.main.mapsApiKeyMatched = false;
+        doc.clientRuntimeConfig.main.allRequiredMatched = false;
+      });
+      rejected(verify(fixture), /main mapsApiKeyMatched|main allRequiredMatched/i);
     });
   });
 

@@ -30,6 +30,7 @@ import {
 } from './lib/launch-honesty.mjs';
 import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
 import { validateAdminMfaEvidence } from './verify-admin-mfa-production.mjs';
+import { validateHostedClientConfigEvidence } from './verify-hosted-client-config.mjs';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_REF = 'refs/heads/main';
@@ -205,6 +206,14 @@ export function runSameRunDeploymentArtifactVerification({
         now,
       }),
       ...validateAdminMfaEvidence(deployment.adminMfa, {
+        commitSha: sha,
+        repository,
+        ref,
+        workflowRunId: runId,
+        workflowRunAttempt: runAttempt,
+        now,
+      }),
+      ...validateHostedClientConfigEvidence(deployment.clientRuntimeConfig, {
         commitSha: sha,
         repository,
         ref,
