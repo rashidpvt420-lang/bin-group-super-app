@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   buildAdminMfaEvidence,
   claimsGrantAdminPortal,
+  recoveryApproverRole,
   summarizeAdminMfaUsers,
   validateAdminMfaEvidence,
 } from '../../scripts/verify-admin-mfa-production.mjs';
@@ -19,46 +20,82 @@ const ENV = {
 };
 
 const phoneFactor = { uid: 'factor-1', factorId: 'phone', displayName: 'Admin phone' };
-const user = (claims, factors = [phoneFactor], disabled = false) => ({
+const user = (claims, factors = [phoneFactor], disabled = false, options = {}) => ({
+  uid: options.uid || `user-${Math.random()}`,
   customClaims: claims,
   disabled,
+  emailVerified: options.emailVerified !== false,
+  profileExists: options.profileExists !== false,
+  profile: options.profile || { status: 'active' },
   multiFactor: { enrolledFactors: factors },
 });
 
-test('Admin portal claims and active phone-factor coverage are fail closed', () => {
+const readyAdminUsers = () => [
+  user({ role: 'ceo', ceo: true }, [phoneFactor], false, { uid: 'ceo-1' }),
+  user({ role: 'super_admin', superAdmin: true }, [phoneFactor], false, { uid: 'super-1' }),
+  user({ role: 'finance_admin' }, [phoneFactor], false, { uid: 'finance-1' }),
+  user({ role: 'admin' }, [], true, { uid: 'disabled-admin' }),
+  user({ role: 'tenant' }, [], false, { uid: 'tenant-1' }),
+];
+
+test('Admin portal claims, profile state, phone MFA and recovery quorum are fail closed', () => {
   assert.equal(claimsGrantAdminPortal({ role: 'admin' }), true);
   assert.equal(claimsGrantAdminPortal({ role: 'dispatcher' }), true);
   assert.equal(claimsGrantAdminPortal({ admin: true }), true);
   assert.equal(claimsGrantAdminPortal({ role: 'tenant' }), false);
+  assert.equal(recoveryApproverRole({ role: 'ceo' }), 'ceo');
+  assert.equal(recoveryApproverRole({ superAdmin: true }), 'super_admin');
+  assert.equal(recoveryApproverRole({ role: 'admin' }), '');
 
-  const ready = summarizeAdminMfaUsers([
-    user({ role: 'admin' }),
-    user({ role: 'finance_admin' }),
-    user({ role: 'admin' }, [], true),
-    user({ role: 'tenant' }, []),
-  ]);
+  const ready = summarizeAdminMfaUsers(readyAdminUsers());
   assert.equal(ready.ok, true, ready.failures.join('\n'));
-  assert.equal(ready.summary.activeAdminCount, 2);
-  assert.equal(ready.summary.phoneMfaEnrolledCount, 2);
+  assert.equal(ready.summary.activeAdminCount, 3);
+  assert.equal(ready.summary.phoneMfaEnrolledCount, 3);
   assert.equal(ready.summary.disabledAdminCount, 1);
+  assert.equal(ready.summary.recoveryApproverCandidateCount, 2);
+  assert.equal(ready.summary.recoveryApproverMfaReadyCount, 2);
+  assert.equal(ready.summary.recoveryCeoCount, 1);
+  assert.equal(ready.summary.recoverySuperAdminCount, 1);
+  assert.equal(ready.summary.recoveryQuorumReady, true);
   assert.equal(ready.summary.allActiveAdminsPhoneMfaReady, true);
 
   const missing = summarizeAdminMfaUsers([
-    user({ role: 'admin' }, []),
-    user({ role: 'manager' }, [{ uid: 'totp-1', factorId: 'totp' }]),
+    user({ role: 'ceo' }, [], false, { uid: 'ceo-no-factor' }),
+    user({ role: 'super_admin' }, [phoneFactor], false, { uid: 'super-unverified', emailVerified: false }),
+    user({ role: 'manager' }, [{ uid: 'totp-1', factorId: 'totp' }], false, { uid: 'manager-totp' }),
   ]);
   assert.equal(missing.ok, false);
   assert.equal(missing.summary.missingPhoneFactorCount, 2);
   assert.equal(missing.summary.unsupportedOnlyFactorCount, 1);
+  assert.equal(missing.summary.recoveryApproverMfaReadyCount, 0);
+  assert.equal(missing.summary.recoveryApproverEmailUnverifiedCount, 1);
+  assert.equal(missing.summary.recoveryApproverMissingPhoneFactorCount, 1);
   assert.match(missing.failures.join('\n'), /no enrolled phone MFA factor/);
+  assert.match(missing.failures.join('\n'), /verified email and phone MFA/);
+
+  const profileMissing = summarizeAdminMfaUsers([
+    user({ role: 'ceo' }, [phoneFactor], false, { uid: 'ceo-profile-missing', profileExists: false }),
+    user({ role: 'super_admin' }, [phoneFactor], false, { uid: 'super-ready' }),
+  ]);
+  assert.equal(profileMissing.ok, false);
+  assert.equal(profileMissing.summary.missingAdminProfileCount, 1);
+  assert.match(profileMissing.failures.join('\n'), /no Firestore user profile/);
+
+  const inactive = summarizeAdminMfaUsers([
+    user({ role: 'ceo' }, [phoneFactor], false, { uid: 'ceo-inactive', profile: { status: 'suspended' } }),
+    user({ role: 'super_admin' }, [phoneFactor], false, { uid: 'super-ready' }),
+  ]);
+  assert.equal(inactive.ok, false);
+  assert.equal(inactive.summary.inactiveProfileAdminCount, 1);
+  assert.match(inactive.failures.join('\n'), /At least two distinct active CEO\/Super Admin/);
 
   const none = summarizeAdminMfaUsers([user({ role: 'tenant' }, [])]);
   assert.equal(none.ok, false);
   assert.match(none.failures.join('\n'), /No active Firebase Auth account/);
 });
 
-test('Admin MFA evidence is aggregate-only and exact-run bound', () => {
-  const summary = summarizeAdminMfaUsers([user({ role: 'admin' })]).summary;
+test('Admin MFA evidence is aggregate-only, exact-run bound and requires a recovery quorum', () => {
+  const summary = summarizeAdminMfaUsers(readyAdminUsers()).summary;
   const now = new Date('2026-07-18T12:00:00.000Z');
   const evidence = buildAdminMfaEvidence(summary, { env: ENV, now });
   const failures = validateAdminMfaEvidence(evidence, {
@@ -70,14 +107,18 @@ test('Admin MFA evidence is aggregate-only and exact-run bound', () => {
     now: now.getTime(),
   });
   assert.deepEqual(failures, []);
-  assert.equal(evidence.activeAdminCount, 1);
-  assert.equal(evidence.phoneMfaEnrolledCount, 1);
+  assert.equal(evidence.schemaVersion, 2);
+  assert.equal(evidence.activeAdminCount, 3);
+  assert.equal(evidence.phoneMfaEnrolledCount, 3);
+  assert.equal(evidence.recoveryApproverCandidateCount, 2);
+  assert.equal(evidence.recoveryApproverMfaReadyCount, 2);
+  assert.equal(evidence.recoveryQuorumReady, true);
   assert.equal(evidence.sensitiveValuesExcluded, true);
   assert.equal(evidence.hardLaunchClaim, false);
-  assert.doesNotMatch(JSON.stringify(evidence), /@|phoneNumber|displayName|factorUid/);
+  assert.doesNotMatch(JSON.stringify(evidence), /@|phoneNumber|displayName|factorUid|user-/);
 
-  const tampered = { ...evidence, missingPhoneFactorCount: 1 };
-  assert.match(validateAdminMfaEvidence(tampered, {
+  const tamperedFactor = { ...evidence, missingPhoneFactorCount: 1 };
+  assert.match(validateAdminMfaEvidence(tamperedFactor, {
     commitSha: SHA,
     repository: ENV.GITHUB_REPOSITORY,
     ref: ENV.GITHUB_REF,
@@ -85,6 +126,21 @@ test('Admin MFA evidence is aggregate-only and exact-run bound', () => {
     workflowRunAttempt: 2,
     now: now.getTime(),
   }).join('\n'), /missing phone factors/);
+
+  const tamperedQuorum = {
+    ...evidence,
+    recoveryApproverCandidateCount: 1,
+    recoveryApproverMfaReadyCount: 1,
+    recoveryQuorumReady: false,
+  };
+  assert.match(validateAdminMfaEvidence(tamperedQuorum, {
+    commitSha: SHA,
+    repository: ENV.GITHUB_REPOSITORY,
+    ref: ENV.GITHUB_REF,
+    workflowRunId: ENV.GITHUB_RUN_ID,
+    workflowRunAttempt: 2,
+    now: now.getTime(),
+  }).join('\n'), /recovery quorum|at least two recovery approver/i);
 });
 
 test('Admin profile exposes real Firebase phone MFA enrollment and forces re-login', async () => {
@@ -140,7 +196,7 @@ test('Admin security callables require second-factor claims once enrolled', asyn
   assert.match(backend, /enforceAppCheck: true/g);
 });
 
-test('production deploy requires account coverage before the first Firebase deployment', async () => {
+test('production deploy requires profile-backed recovery quorum before the first Firebase deployment', async () => {
   const deploy = await read('scripts/deploy-firebase-production.mjs');
   const phone = deploy.indexOf('await verifyFirebasePhoneAuthProduction');
   const accounts = deploy.indexOf('await verifyAdminMfaProduction');
@@ -152,6 +208,14 @@ test('production deploy requires account coverage before the first Firebase depl
   assert.ok(metadata > firebaseDeploy);
   assert.ok(verify > metadata);
   assert.match(deploy, /Admin MFA production preflight failed/);
+
+  const preflight = await read('scripts/verify-admin-mfa-production.mjs');
+  assert.match(preflight, /RECOVERY_APPROVER_ROLES/);
+  assert.match(preflight, /recoveryApproverMfaReadyCount < 2/);
+  assert.match(preflight, /recoveryQuorumReady/);
+  assert.match(preflight, /db\.collection\('users'\)\.doc\(user\.uid\)/);
+  assert.match(preflight, /await db\.getAll/);
+  assert.match(preflight, /sensitiveValuesExcluded: true/);
 
   const deploymentVerifier = await read('scripts/verify-production-deployment.mjs');
   assert.match(deploymentVerifier, /validateAdminMfaEvidence/);
