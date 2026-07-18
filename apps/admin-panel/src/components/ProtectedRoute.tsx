@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,15 +7,14 @@ type Props = {
     children: React.ReactNode;
     adminOnly?: boolean;
     extraRoles?: string[];
-    allowMfaEnrollment?: boolean;
 };
 
 const ProtectedRoute: React.FC<Props> = ({
     children,
     adminOnly = false,
     extraRoles = [],
-    allowMfaEnrollment = false,
 }) => {
+    const location = useLocation();
     const {
         isAuthenticated,
         user,
@@ -39,7 +38,8 @@ const ProtectedRoute: React.FC<Props> = ({
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}>Loading Auth...</Box>;
     if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-    if (mfaEnrollmentRequired && !allowMfaEnrollment) {
+    const isMfaEnrollmentRoute = location.pathname === '/profile';
+    if (mfaEnrollmentRequired && !isMfaEnrollmentRoute) {
         return <Navigate to="/profile?mfa=enroll" replace />;
     }
     if (mfaFactorCount > 0 && !mfaVerified) {
