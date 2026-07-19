@@ -21,9 +21,10 @@ test('Technician self-action and Admin assignment share mandatory operational re
 });
 
 test('credential-renewal evidence is server-written and excluded from global browser writes', async () => {
-  const [backend, hardening] = await Promise.all([
+  const [backend, hardening, finalAuthority] = await Promise.all([
     read('functions/secureTechnicianProfileOperations.ts'),
     read('scripts/optimize-current-main-technician-ticket-rule.mjs'),
+    read('scripts/harden-final-firestore-authority.mjs'),
   ]);
   assert.match(backend, /technician_credential_renewals/);
   assert.match(backend, /sha256/);
@@ -32,4 +33,6 @@ test('credential-renewal evidence is server-written and excluded from global bro
   assert.match(hardening, /allow create, update, delete: if false/);
   assert.match(hardening, /technician_credential_renewals/);
   assert.match(hardening, /excluded from global Admin write fallback/);
+  assert.match(hardening, /'technician_credential_renewals',\\n          'broker_kyc_profiles',\\n          'broker_kyc_submission_limits'/);
+  assert.match(finalAuthority, /'broker_kyc_profiles',\\n          'broker_kyc_submission_limits',\\n          'ai_usage'/);
 });
