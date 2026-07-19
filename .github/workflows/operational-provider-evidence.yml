@@ -163,8 +163,9 @@ jobs:
           import { readFileSync, appendFileSync } from 'node:fs';
           const doc = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
           const expected = process.env.TARGET_SHA;
+          const deployedSha = String(doc.deployedCommitSha || doc.commitSha || '');
           const digest = String(doc.validatedArtifactDigest || '').toLowerCase();
-          if (doc.commitSha !== expected) throw new Error('Production deployment commit does not match expected SHA.');
+          if (deployedSha !== expected) throw new Error('Production deployment commit does not match expected SHA.');
           if (doc.projectId !== 'bin-group-57c60') throw new Error('Production deployment project mismatch.');
           if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('Validated artifact digest is missing or invalid.');
           appendFileSync(process.env.GITHUB_ENV, `VALIDATED_ARTIFACT_DIGEST=${digest}\n`);
