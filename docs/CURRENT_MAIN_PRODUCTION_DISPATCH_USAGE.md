@@ -1,0 +1,1 @@
+Run `Start Firebase Production Deploy` instead of manually copying a commit SHA into `Firebase Production Deploy`. Complete the same founder and incident fields. The wrapper supplies the current `main` SHA automatically and the protected production workflow remains authoritative.
