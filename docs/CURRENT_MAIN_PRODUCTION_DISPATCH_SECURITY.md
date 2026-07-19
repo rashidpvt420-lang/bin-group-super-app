@@ -1,1 +1,0 @@
-The current-main dispatcher is intentionally limited to GitHub Actions API access. It has no Google Cloud identity token permission and no Firebase credentials. Its sole responsibility is to resolve the current `main` SHA and invoke the existing protected deployment workflow with that exact value.
