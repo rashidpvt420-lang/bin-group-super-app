@@ -14,7 +14,10 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /^name:\s*Operational Application Evidence/m);
   assert.match(workflow, /^\s{2}verify-and-publish:/m);
   assert.match(workflow, /environment:\s*hard-public-launch/);
-  assert.match(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
+  assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS:\s*\$\{\{ secrets\.AUTHORIZED_FOUNDER_ACTORS \}\}/);
+  assert.match(workflow, /allowed_actors/);
+  assert.match(workflow, /GITHUB_ACTOR.*allowed_actor/s);
+  assert.doesNotMatch(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
   assert.match(workflow, /GITHUB_REF.*refs\/heads\/main/s);
   assert.match(workflow, /PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE/);
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
