@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const PROJECT_ID = 'bin-group-57c60';
+const FIRESTORE_BATCH_GET_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:batchGet`;
 const text = (value) => String(value ?? '').trim();
 const fail = (message) => {
   console.error(`[appcheck-enforcement] FAIL — ${message}`);
@@ -69,13 +70,18 @@ if (!exchangeResponse.ok || !text(exchangePayload?.token)) {
   fail(`registered App Check debug token exchange failed with HTTP ${exchangeResponse.status}`);
 }
 const appCheckToken = text(exchangePayload.token);
-const documentUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${encodeURIComponent(uid)}`;
+const batchGetBody = JSON.stringify({
+  documents: [`projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`],
+});
 
-const invalidResponse = await fetch(documentUrl, {
+const invalidResponse = await fetch(FIRESTORE_BATCH_GET_URL, {
+  method: 'POST',
   headers: {
     Authorization: `Bearer ${idToken}`,
     'X-Firebase-AppCheck': `invalid-${crypto.randomUUID()}`,
+    'content-type': 'application/json',
   },
+  body: batchGetBody,
 });
 await parseJsonResponse(invalidResponse);
 const invalidTokenStatus = invalidResponse.status;
@@ -84,15 +90,18 @@ if (!invalidTokenRejected) {
   fail(`Cloud Firestore accepted an invalid App Check token with HTTP ${invalidTokenStatus}`);
 }
 
-const validResponse = await fetch(documentUrl, {
+const validResponse = await fetch(FIRESTORE_BATCH_GET_URL, {
+  method: 'POST',
   headers: {
     Authorization: `Bearer ${idToken}`,
     'X-Firebase-AppCheck': appCheckToken,
+    'content-type': 'application/json',
   },
+  body: batchGetBody,
 });
 await parseJsonResponse(validResponse);
 const validTokenStatus = validResponse.status;
-const validTokenAccepted = validTokenStatus === 200 || validTokenStatus === 404;
+const validTokenAccepted = validTokenStatus === 200;
 if (!validTokenAccepted) {
   fail(`Cloud Firestore rejected a valid App Check token with HTTP ${validTokenStatus}`);
 }
