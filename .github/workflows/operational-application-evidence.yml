@@ -38,6 +38,7 @@ jobs:
     environment: hard-public-launch
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       OPERATIONAL_GATE: ${{ inputs.gate }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
@@ -53,8 +54,18 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF" != "refs/heads/main" ]] || [[ "$GITHUB_ACTOR" != "rashidpvt420-lang" ]]; then
-            echo "::error::Application evidence requires the authorized founder on refs/heads/main."
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Application evidence requires refs/heads/main."
+            exit 1
+          fi
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$GITHUB_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
