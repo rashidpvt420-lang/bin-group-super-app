@@ -59,7 +59,8 @@ test('property onboarding preserves account-first, eleven-step, Arabic and recov
   assert.match(payment, ARABIC);
   assert.match(asset, /Mosque \/ Masjid/);
   assert.match(asset, /ASSESSMENT_REQUIRED/);
-  assert.match(asset, /اسم المسجد مطلوب/);
+  assert.match(asset, /اسم المسجد/);
+  assert.match(asset, /مساحة المسجد المقاسة/);
 });
 
 test('resolved profile-audit gaps remain executable launch contracts', async () => {
@@ -109,7 +110,10 @@ test('resolved profile-audit gaps remain executable launch contracts', async () 
   assert.match(tenantBackend, /ADMIN_REJECT_TENANT_CORRECTION/);
 
   assert.match(technicianPage, /updateTechnicianProfilePreferences/);
-  assert.match(technicianPage, /technician-authoritative-trade/);
+  assert.match(technicianPage, /Identity, trade and dispatch authority are read-only/);
+  assert.match(technicianPage, /Verified Full Name/);
+  assert.match(technicianPage, /Verified Phone Number/);
+  assert.match(technicianPage, /Approved Primary Trade/);
   assert.doesNotMatch(technicianPage, /\bsetDoc\s*\(/);
   assert.match(technicianBackend, /TECHNICIAN_PROFILE_PREFERENCES_UPDATED/);
 
