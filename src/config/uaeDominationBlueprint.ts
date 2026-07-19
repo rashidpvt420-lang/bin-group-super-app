@@ -221,4 +221,26 @@ export const UAE_DOMINATION_MODULES: Array<{
     buildSpec: ['Repeat issue detection', 'Parts anomaly detection', 'Technician rework rate', 'Vendor quote variance', 'Margin alert'],
     successMetric: 'Reduce repeat jobs by 20% within 90 days.',
   },
+  {
+    id: 'institutional-compliance-pack',
+    role: 'cross-role',
+    status: 'enterprise-phase',
+    title: 'Institutional Compliance Pack',
+    problemSolved: 'Schools, hotels, malls, and government clients need audit-ready reporting beyond normal maintenance tickets.',
+    buildSpec: ['CRI index', 'Asset integrity score', 'DLD/ADM exports', 'Insurer export', 'Certificate verifier', 'Public verification links'],
+    successMetric: 'First institutional pilot accepts generated monthly compliance packet.',
+  },
 ];
+
+export const PILOT_DOMINATION_METRICS = [
+  { id: 'calls_avoided', label: 'Calls Avoided', target: '60% fewer maintenance follow-up calls' },
+  { id: 'ticket_creation_speed', label: 'Ticket Creation Speed', target: 'Under 90 seconds for common tenant issue' },
+  { id: 'first_response_time', label: 'First Response Time', target: 'Emergency under 10 minutes, high under 30 minutes' },
+  { id: 'completion_evidence', label: 'Completion Evidence', target: '95% proof completeness' },
+  { id: 'owner_approval_speed', label: 'Owner Approval Speed', target: 'Under 12 hours average' },
+  { id: 'tenant_satisfaction', label: 'Tenant Satisfaction', target: '4.5/5 or better' },
+  { id: 'repeat_issue_rate', label: 'Repeat Issue Rate', target: '20% reduction by day 90' },
+  { id: 'broker_attribution', label: 'Broker Attribution', target: '100% broker-sourced deals traced' },
+  { id: 'sla_dispute_rate', label: 'SLA Dispute Rate', target: 'Zero disputes from inconsistent policy' },
+  { id: 'owner_retention_signal', label: 'Owner Retention Signal', target: '70%+ pilot owners agree to continue/expand' },
+] as const;
