@@ -1,0 +1,168 @@
+name: Operational Application Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: 'Application gate to verify and publish'
+        required: true
+        type: choice
+        options:
+          - ownerPaymentActivation
+          - paymentUnlockExactlyOnce
+          - tenantNotificationDelivery
+          - brokerCommissionLockExactlyOnce
+          - adminStaffClaims
+          - renewalScheduler
+      expected_commit_sha:
+        description: 'Full lowercase current production main SHA'
+        required: true
+        type: string
+      payment_id:
+        description: 'Payment activation/replay/commission gates: production payment ID'
+        required: false
+        type: string
+      contract_id:
+        description: 'Broker commission gate: production contract ID'
+        required: false
+        type: string
+      notification_id:
+        description: 'Tenant notification gate: delivered notification ID'
+        required: false
+        type: string
+      ticket_id:
+        description: 'Tenant notification gate: maintenance ticket ID'
+        required: false
+        type: string
+      tenant_uid:
+        description: 'Tenant notification gate: Firebase tenant UID'
+        required: false
+        type: string
+      staff_uid:
+        description: 'Staff claims gate: provisioned technician UID'
+        required: false
+        type: string
+      renewal_watch_id:
+        description: 'Renewal scheduler gate: contract_renewal_watch document ID'
+        required: false
+        type: string
+      confirmation:
+        description: 'Enter PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: operational-application-evidence-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: hard-public-launch
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      OPERATIONAL_GATE: ${{ inputs.gate }}
+      PAYMENT_ID: ${{ inputs.payment_id }}
+      CONTRACT_ID: ${{ inputs.contract_id }}
+      NOTIFICATION_ID: ${{ inputs.notification_id }}
+      TICKET_ID: ${{ inputs.ticket_id }}
+      TENANT_UID: ${{ inputs.tenant_uid }}
+      STAFF_UID: ${{ inputs.staff_uid }}
+      RENEWAL_WATCH_ID: ${{ inputs.renewal_watch_id }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+
+    steps:
+      - name: Enforce protected application evidence inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          SELECTED_GATE: ${{ inputs.gate }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PAYMENT_VALUE: ${{ inputs.payment_id }}
+          CONTRACT_VALUE: ${{ inputs.contract_id }}
+          NOTIFICATION_VALUE: ${{ inputs.notification_id }}
+          TICKET_VALUE: ${{ inputs.ticket_id }}
+          TENANT_VALUE: ${{ inputs.tenant_uid }}
+          STAFF_VALUE: ${{ inputs.staff_uid }}
+          RENEWAL_VALUE: ${{ inputs.renewal_watch_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]] || [[ "$GITHUB_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Application evidence requires the authorized founder on refs/heads/main."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::expected_commit_sha must equal the current full main SHA."
+            exit 1
+          fi
+          if [[ "$CONFIRMATION" != "PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE" ]]; then
+            echo "::error::Application evidence confirmation phrase mismatch."
+            exit 1
+          fi
+          valid_id='^[A-Za-z0-9_-]{3,180}$'
+          case "$SELECTED_GATE" in
+            ownerPaymentActivation|paymentUnlockExactlyOnce)
+              [[ "$PAYMENT_VALUE" =~ $valid_id ]] || { echo "::error::A valid payment_id is required."; exit 1; }
+              ;;
+            brokerCommissionLockExactlyOnce)
+              [[ "$PAYMENT_VALUE" =~ $valid_id ]] && [[ "$CONTRACT_VALUE" =~ $valid_id ]] || { echo "::error::Valid payment_id and contract_id are required."; exit 1; }
+              ;;
+            tenantNotificationDelivery)
+              [[ "$NOTIFICATION_VALUE" =~ $valid_id ]] && [[ "$TICKET_VALUE" =~ $valid_id ]] && [[ "$TENANT_VALUE" =~ $valid_id ]] || { echo "::error::Valid notification_id, ticket_id and tenant_uid are required."; exit 1; }
+              ;;
+            adminStaffClaims)
+              [[ "$STAFF_VALUE" =~ $valid_id ]] || { echo "::error::A valid staff_uid is required."; exit 1; }
+              ;;
+            renewalScheduler)
+              [[ "$RENEWAL_VALUE" =~ $valid_id ]] || { echo "::error::A valid renewal_watch_id is required."; exit 1; }
+              ;;
+            *)
+              echo "::error::Unsupported application gate."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify production application transaction
+        run: node scripts/verify-operational-application-evidence.mjs
+
+      - name: Publish canonical application evidence
+        run: node scripts/publish-operational-application-evidence.mjs
+
+      - name: Upload application proof
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-application-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
+          path: launch_package/application-${{ inputs.gate }}.json
+          if-no-files-found: error
+          retention-days: 365
