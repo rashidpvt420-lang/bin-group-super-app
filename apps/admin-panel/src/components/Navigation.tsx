@@ -23,7 +23,9 @@ const Navigation = () => {
     const { user } = useAuth();
     const navText = (en: string, ar: string) => (isRTL ? ar : en);
     
-    const isHRAuthorized = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'hr_manager' || user?.role === 'hr_staff';
+    const privilegedAdminRoles = new Set(['admin', 'super_admin', 'ceo']);
+    const hrRoles = new Set(['hr_admin', 'hr_manager', 'hr_staff']);
+    const isHRAuthorized = Boolean(user?.claims?.admin === true || user?.isAdmin === true || privilegedAdminRoles.has(String(user?.role)) || hrRoles.has(String(user?.role)));
     const isRecoveryApprover = user?.role === 'ceo' || user?.role === 'super_admin';
 
     const primaryMenu = [
