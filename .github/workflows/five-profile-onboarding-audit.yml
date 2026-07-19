@@ -4,23 +4,35 @@ on:
   pull_request:
     paths:
       - '.github/workflows/five-profile-onboarding-audit.yml'
-      - 'apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'apps/admin-panel/src/**'
       - 'functions/**'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
+      - 'src/App.tsx'
+      - 'src/admin/**'
       - 'src/broker/**'
       - 'src/components/onboarding/**'
+      - 'src/context/LanguageContext.tsx'
+      - 'src/context/RoleContext.tsx'
+      - 'src/lib/onboardingStateMachine.ts'
       - 'src/owner/**'
       - 'src/pages/PropertyOnboardingPage.tsx'
+      - 'src/store/onboardingStore.ts'
       - 'src/technician/**'
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
+      - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
       - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
+      - 'tests/launch/tenant-readiness-authority-audit.test.mjs'
   push:
     branches:
+      - main
       - 'agent/five-profile-onboarding-hardening'
+      - 'agent/profile-readiness-authority-hardening'
 
 permissions:
   contents: read
@@ -53,14 +65,32 @@ jobs:
           tests/launch/profile-lifecycle-commercial-audit.test.mjs
           tests/launch/arabic-visible-copy-audit.test.mjs
           tests/launch/technician-dispatch-authority-audit.test.mjs
+          tests/launch/owner-property-proof-authority-audit.test.mjs
+          tests/launch/tenant-readiness-authority-audit.test.mjs
 
       - name: Build main application
         run: npm run build
 
       - name: Build dedicated Admin application
-        run: npm run build:admin
+        id: build_admin
+        shell: bash
         env:
           CI: false
+        run: |
+          set +e
+          npm run build:admin > admin-build-output.txt 2>&1
+          status=$?
+          cat admin-build-output.txt
+          exit $status
+
+      - name: Upload Admin build diagnostics
+        if: failure() && steps.build_admin.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: five-profile-admin-build-diagnostics-${{ github.sha }}
+          path: admin-build-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build Cloud Functions
         run: npm run build:functions
