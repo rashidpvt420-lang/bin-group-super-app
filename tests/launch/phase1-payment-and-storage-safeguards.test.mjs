@@ -80,9 +80,9 @@ test('owner account creation precedes property upload and OCR', async () => {
   const clientMachine = await read('src/lib/onboardingStateMachine.ts');
   const serverMachine = await read('functions/onboardingStateMachine.ts');
 
-  assert.match(page, /case 2: return <AccountCreationStep/);
-  assert.match(page, /case 3: return <AssetProfileStep/);
-  assert.match(page, /Authentication is deliberately completed before title-deed upload\/OCR/);
+  const accountStep = page.indexOf('case 2: return <AccountCreationStep');
+  const assetStep = page.indexOf('case 3: return <AssetProfileStep');
+  assert.ok(accountStep >= 0 && assetStep > accountStep, 'Account creation must precede property upload and OCR.');
   for (const machine of [clientMachine, serverMachine]) {
     assert.match(machine, /'account_created'/);
     assert.match(machine, /draft: \['account_created', 'expired', 'suspended'\]/);
@@ -92,8 +92,8 @@ test('owner account creation precedes property upload and OCR', async () => {
 
 test('title-deed OCR applies verified values only and never fabricates property data', async () => {
   const assetStep = await read('src/components/onboarding/AssetProfileStep.tsx');
-  assert.match(assetStep, /buildVerifiedOcrPatch/);
-  assert.match(assetStep, /Object\.keys\(verifiedPatch\)\.length === 0/);
+  assert.match(assetStep, /const verifiedOcrPatch/);
+  assert.match(assetStep, /if \(!Object\.keys\(patch\)\.length\)/);
   assert.match(assetStep, /No placeholder values were added/);
   assert.doesNotMatch(assetStep, /extracted\.propertyType \|\| ['"]Apartment['"]/);
   assert.doesNotMatch(assetStep, /extracted\.sqft \|\| 1850/);
@@ -115,8 +115,11 @@ test('Broker KYC is written only through the App Check callable', async () => {
   assert.match(callable, /broker_kyc_submission_limits/);
   assert.match(callable, /submissionHash/);
   assert.match(runtime, /export \* from "\.\/brokerKycProfile"/);
+  assert.match(runtime, /submitBrokerKycProfile,\s*getBrokerKycProfileSummary/);
+  assert.match(runtime, /from "\.\/secureBrokerKycSubmission"/);
   assert.match(page, /submitBrokerKycProfile/);
-  assert.match(page, /broker_kyc_profiles/);
+  assert.match(page, /getBrokerKycProfileSummary/);
+  assert.doesNotMatch(page, /broker_kyc_profiles/);
   assert.doesNotMatch(page, /setDoc\(doc\(db, ['"]users['"]/);
   assert.match(ruleHardener, /allow create, update, delete: if false/);
   assert.match(ruleHardener, /sensitiveBrokerFields/);
