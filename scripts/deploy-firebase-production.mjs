@@ -91,6 +91,14 @@ if ((remoteMain.status ?? 1) !== 0 || remoteMainSha !== githubSha) {
   process.exit(1);
 }
 
+try {
+  await verifyFirebaseProductionSecrets({ projectId, launchMode });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'secret metadata verification failed';
+  console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
+  process.exit(1);
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
@@ -122,14 +130,6 @@ function retryFirebase(target, label) {
     }
   }
   console.error(`[production-deploy] ${label} failed after 3 attempts`);
-  process.exit(1);
-}
-
-try {
-  await verifyFirebaseProductionSecrets({ projectId, launchMode });
-} catch (error) {
-  const message = error instanceof Error ? error.message : 'secret metadata verification failed';
-  console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
   process.exit(1);
 }
 
