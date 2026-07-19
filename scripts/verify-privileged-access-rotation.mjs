@@ -10,11 +10,6 @@ const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const OUTPUT_PATH = 'launch_package/operational-proof.json';
-const SECRET_ENDPOINTS = Object.freeze([
-  { name: 'STRIPE_SECRET_KEY', url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/STRIPE_SECRET_KEY/versions?pageSize=100' },
-  { name: 'STRIPE_WEBHOOK_SECRET', url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/STRIPE_WEBHOOK_SECRET/versions?pageSize=100' },
-  { name: 'SMTP_PASS', url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/SMTP_PASS/versions?pageSize=100' },
-]);
 const text = (value) => String(value ?? '').trim();
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (message) => {
@@ -31,6 +26,22 @@ const time = (value) => {
 const recent = (value, now) => {
   const observed = time(value);
   return observed > 0 && observed <= now + 5 * 60 * 1000 && now - observed <= MAX_AGE_MS;
+};
+const verifySecretVersions = (name, payload, now) => {
+  const versions = Array.isArray(payload?.versions) ? payload.versions : [];
+  const sorted = versions
+    .filter((version) => text(version?.name) && time(version?.createTime) > 0)
+    .sort((left, right) => time(right.createTime) - time(left.createTime));
+  const latestEnabled = sorted.find((version) => text(version.state).toUpperCase() === 'ENABLED');
+  if (!latestEnabled || !recent(latestEnabled.createTime, now)) fail(`${name} has no enabled version created within seven days`);
+  const previousRevoked = sorted.filter((version) => version.name !== latestEnabled.name && ['DISABLED', 'DESTROYED'].includes(text(version.state).toUpperCase()));
+  if (!previousRevoked.length) fail(`${name} has no disabled or destroyed previous version`);
+  return {
+    name,
+    latestVersionId: text(latestEnabled.name).split('/').pop(),
+    rotatedAt: new Date(time(latestEnabled.createTime)).toISOString(),
+    previousRevokedCount: previousRevoked.length,
+  };
 };
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('verifier may only run in GitHub Actions');
@@ -51,24 +62,23 @@ const now = Date.now();
 
 const googleAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const googleClient = await googleAuth.getClient();
-const rotatedSecrets = [];
-for (const secret of SECRET_ENDPOINTS) {
-  const response = await googleClient.request({ url: secret.url, method: 'GET' });
-  const versions = Array.isArray(response.data?.versions) ? response.data.versions : [];
-  const sorted = versions
-    .filter((version) => text(version?.name) && time(version?.createTime) > 0)
-    .sort((left, right) => time(right.createTime) - time(left.createTime));
-  const latestEnabled = sorted.find((version) => text(version.state).toUpperCase() === 'ENABLED');
-  if (!latestEnabled || !recent(latestEnabled.createTime, now)) fail(`${secret.name} has no recently created enabled Secret Manager version`);
-  const previousRevoked = sorted.filter((version) => version.name !== latestEnabled.name && ['DISABLED', 'DESTROYED'].includes(text(version.state).toUpperCase()));
-  if (!previousRevoked.length) fail(`${secret.name} has no disabled or destroyed previous version`);
-  rotatedSecrets.push({
-    name: secret.name,
-    latestVersionId: text(latestEnabled.name).split('/').pop(),
-    rotatedAt: new Date(time(latestEnabled.createTime)).toISOString(),
-    previousRevokedCount: previousRevoked.length,
-  });
-}
+const stripeKeyResponse = await googleClient.request({
+  url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/STRIPE_SECRET_KEY/versions?pageSize=100',
+  method: 'GET',
+});
+const stripeWebhookResponse = await googleClient.request({
+  url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/STRIPE_WEBHOOK_SECRET/versions?pageSize=100',
+  method: 'GET',
+});
+const smtpPasswordResponse = await googleClient.request({
+  url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/SMTP_PASS/versions?pageSize=100',
+  method: 'GET',
+});
+const rotatedSecrets = [
+  verifySecretVersions('STRIPE_SECRET_KEY', stripeKeyResponse.data, now),
+  verifySecretVersions('STRIPE_WEBHOOK_SECRET', stripeWebhookResponse.data, now),
+  verifySecretVersions('SMTP_PASS', smtpPasswordResponse.data, now),
+];
 
 const adminUser = await admin.auth().getUserByEmail(adminEmail);
 if (adminUser.disabled) fail('Admin account is disabled');
