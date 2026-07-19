@@ -1,0 +1,35 @@
+name: Diagnose hard-launch validator
+
+on:
+  push:
+    branches:
+      - fix/hard-launch-validator-ci
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run focused validator tests and capture output
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test test/hard-launch-gate.test.mjs test/hard-launch-validator-hardening.test.mjs 2>&1 | tee hard-launch-validator-test.log
+      - name: Upload diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hard-launch-validator-diagnostics
+          path: hard-launch-validator-test.log
+          if-no-files-found: error
+          retention-days: 3
