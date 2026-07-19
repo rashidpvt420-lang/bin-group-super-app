@@ -54,15 +54,15 @@ on:
         default: '0'
         type: string
       incident_reference:
-        description: 'For hard-clearance: incident register or operations log reference'
+        description: 'For hard-clearance: approved HTTPS incident register or operations log URL'
         required: false
         type: string
       rollback_reference:
-        description: 'For hard-clearance: rollback plan or rollback test reference'
+        description: 'For hard-clearance: approved HTTPS rollback plan or rollback test URL'
         required: false
         type: string
       monitoring_reference:
-        description: 'For hard-clearance: monitoring dashboard or pilot report reference'
+        description: 'For hard-clearance: approved HTTPS monitoring dashboard or pilot report URL'
         required: false
         type: string
   schedule:
@@ -91,6 +91,7 @@ env:
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+  AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
 
 jobs:
   scheduled-public-smoke:
@@ -258,8 +259,14 @@ jobs:
             echo "::error::Hard clearance may only run from refs/heads/main."
             exit 1
           fi
-          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
-            echo "::error::Only the authorized founder account may approve hard launch."
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
