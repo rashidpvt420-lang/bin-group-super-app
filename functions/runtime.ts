@@ -42,6 +42,7 @@ export * from "./paymentEvidence";
 export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
+export * from "./ownerProfileReadiness";
 
 export {
   resumeTechnicianDuty,
