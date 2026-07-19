@@ -18,9 +18,17 @@ const adminActions = [
   { id: 'dispatch', label: 'Live Dispatch', route: '/technicians/map', icon: <Map size={22} />, desc: 'Technician coverage, location, and assignment visibility.' },
   { id: 'launch', label: 'Launch Control', route: '/ops/public-launch-command', icon: <ShieldCheck size={22} />, desc: 'Public launch gates, proof checks, and go or no-go signals.' },
   { id: 'owners', label: 'Owner Activation', route: '/owners', icon: <Users size={22} />, desc: 'Owner approvals, property onboarding, documents, and trust gates.' },
-  { id: 'disputes', label: 'Disputes', route: '/disputes', icon: <AlertTriangle size={22} />, desc: 'Resident, owner, or technician disputes and evidence resolution.' },
+  { id: 'tenants', label: 'Tenant Control', route: '/tenants', icon: <Users size={22} />, desc: 'Tenant profiles, unit links, service state, and communication.' },
+  { id: 'technicians', label: 'Technician Corps', route: '/technicians', icon: <Wrench size={22} />, desc: 'Technician profile, readiness, duty, and performance control.' },
+  { id: 'hr', label: 'HR Command', route: '/hr', icon: <Users size={22} />, desc: 'Staff registry, HR access, attendance, leave, and payroll handoff.' },
+  { id: 'contracts', label: 'Contract Control', route: '/contracts', icon: <TicketCheck size={22} />, desc: 'Owner, tenant, broker, and platform contract operations.' },
+  { id: 'documents', label: 'Document Vault', route: '/document-vault', icon: <ShieldCheck size={22} />, desc: 'Institutional files, proof documents, and evidence packages.' },
   { id: 'broker', label: 'Broker Attribution', route: '/broker-attributions', icon: <TicketCheck size={22} />, desc: 'Broker source proof before contract activation.' },
-  { id: 'advanced', label: 'Advanced Dashboard', route: '/dashboard/full', icon: <BarChart3 size={22} />, desc: 'Open the full admin analytics dashboard.' },
+  { id: 'audit', label: 'Audit Log', route: '/audit', icon: <AlertTriangle size={22} />, desc: 'Systemic audit trail and admin evidence review.' },
+  { id: 'units', label: 'Unit Status', route: '/admin/units', icon: <BarChart3 size={22} />, desc: 'Occupied, vacant, rentable, blocked, and service-linked units.' },
+  { id: 'room-rent', label: 'Find Room Rent Ops', route: '/ops/marketplace-approvals', icon: <Users size={22} />, desc: 'BIN-managed vacant room listings and renter contact handling.' },
+  { id: 'messages', label: 'Operations Messages', route: '/ops/messages', icon: <TicketCheck size={22} />, desc: 'Tenant, owner, staff, and operational message center.' },
+  { id: 'control', label: 'Sovereign Control', route: '/control-center', icon: <BarChart3 size={22} />, desc: 'Full production control center instead of a missing dashboard route.' },
 ];
 
 const pilotMetrics = [
@@ -40,23 +48,25 @@ export default function AdminSimpleDashboardPage() {
       <Stack spacing={4}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>
           <Box>
-            <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 3 }}>ADMIN SIMPLE COMMAND</Typography>
-            <Typography variant="h3" sx={{ fontWeight: 950, mt: 1 }}>What needs control today?</Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.62)', mt: 1, maxWidth: 820 }}>Start with SLA, payment approval, dispatch, owner activation, disputes, broker attribution, and launch gates. Full analytics stays available under Advanced Dashboard.</Typography>
+            <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 3 }}>ADMIN COMMAND CENTER</Typography>
+            <Typography variant="h3" sx={{ fontWeight: 950, mt: 1 }}>Everything that needs control today</Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,0.62)', mt: 1, maxWidth: 900 }}>
+              Start from real registered routes only: SLA, payments, owners, tenants, technicians, HR, contracts, documents, launch gates, unit status, room rent operations, messages, and audit.
+            </Typography>
           </Box>
-          <Chip icon={<ShieldCheck size={16} />} label="Simple Mode active" sx={{ bgcolor: alpha(gold, 0.14), color: gold, fontWeight: 950 }} />
+          <Chip icon={<ShieldCheck size={16} />} label="Route-safe command mode" sx={{ bgcolor: alpha(gold, 0.14), color: gold, fontWeight: 950 }} />
         </Stack>
 
         <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(gold, 0.055), border: `1px solid ${alpha(gold, 0.18)}`, borderRadius: 5 }}>
           <Stack spacing={2.5}>
             <Box>
               <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 2 }}>MAIN ADMIN ACTIONS</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>Use this as the daily operations start screen.</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>These cards now point to registered Admin routes. No dead `/disputes` or `/dashboard/full` shortcuts.</Typography>
             </Box>
             <Grid container spacing={2}>
               {adminActions.map((action) => (
                 <Grid item xs={12} sm={6} md={3} key={action.id}>
-                  <Button fullWidth onClick={() => navigate(action.route)} sx={{ minHeight: 128, p: 2, alignItems: 'flex-start', justifyContent: 'flex-start', textAlign: 'left', color: '#fff', bgcolor: 'rgba(15,23,42,0.76)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, '&:hover': { bgcolor: alpha(gold, 0.12), borderColor: alpha(gold, 0.4) } }}>
+                  <Button fullWidth onClick={() => navigate(action.route)} sx={{ minHeight: 142, p: 2, alignItems: 'flex-start', justifyContent: 'flex-start', textAlign: 'left', color: '#fff', bgcolor: 'rgba(15,23,42,0.76)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, '&:hover': { bgcolor: alpha(gold, 0.12), borderColor: alpha(gold, 0.4) } }}>
                     <Stack spacing={1} alignItems="flex-start">
                       <Box sx={{ color: gold }}>{action.icon}</Box>
                       <Typography sx={{ fontWeight: 950 }}>{action.label}</Typography>
@@ -116,12 +126,14 @@ export default function AdminSimpleDashboardPage() {
           </Stack>
         </Paper>
 
-        <Paper sx={{ p: 2.5, bgcolor: alpha('#ef4444', 0.08), border: `1px solid ${alpha('#ef4444', 0.24)}`, borderRadius: 5 }}>
+        <Paper sx={{ p: 2.5, bgcolor: alpha('#f59e0b', 0.08), border: `1px solid ${alpha('#f59e0b', 0.24)}`, borderRadius: 5 }}>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <Wrench size={20} color="#fca5a5" />
+            <Wrench size={20} color="#fbbf24" />
             <Box>
-              <Typography sx={{ fontWeight: 950 }}>Still requires backend wiring</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>This screen is a command entry point. Live metric aggregation and SLA function alignment still need backend commits.</Typography>
+              <Typography sx={{ fontWeight: 950 }}>Hard launch remains evidence-gated</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
+                The Admin surface is being repaired, but hard-launch status must still come from live production evidence, external service proof, and the five-profile smoke workflow.
+              </Typography>
             </Box>
           </Stack>
         </Paper>
