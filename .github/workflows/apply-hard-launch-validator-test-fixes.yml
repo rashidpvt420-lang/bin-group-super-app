@@ -36,7 +36,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run complete launch-honesty suite
-        run: npm run test:launch-honesty
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:launch-honesty 2>&1 | tee validator-fixture-test.log
+      - name: Upload patched-suite diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validator-fixture-test-log
+          path: validator-fixture-test.log
+          if-no-files-found: error
+          retention-days: 3
       - name: Commit clean correction
         run: |
           set -euo pipefail
