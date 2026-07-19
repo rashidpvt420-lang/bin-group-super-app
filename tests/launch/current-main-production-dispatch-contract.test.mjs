@@ -19,6 +19,18 @@ test('production dispatch wrapper atomically binds current main and retries race
   assert.match(source, /ADMIN_MFA_BOOTSTRAP_HOSTING/);
 });
 
+test('production dispatch wrapper validates and resolves incident recovery inputs before dispatch', async () => {
+  const source = await read('.github/workflows/firebase-production-dispatch-current-main.yml');
+  assert.match(source, /default: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'/);
+  assert.match(source, /Validate production dispatch inputs/);
+  assert.match(source, /incident_active_json must be a valid JSON array/);
+  assert.match(source, /CLEAR incident attestation cannot claim that the last deployment failed/);
+  assert.match(source, /status=completed&per_page=50/);
+  assert.match(source, /resolved_failed_at/);
+  assert.match(source, /mandatory 30-minute cooling period/);
+  assert.match(source, /--arg incidentFailedAt "\$resolved_failed_at"/);
+});
+
 test('wrapper remains GitHub-only and does not implement Firebase deployment', async () => {
   const source = await read('.github/workflows/firebase-production-dispatch-current-main.yml');
   assert.match(source, /actions:\s*write/);
