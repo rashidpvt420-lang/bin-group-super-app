@@ -208,6 +208,10 @@ function Layout() {
                         <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
                         <Button
                             href="/profile"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                navigate('/profile');
+                            }}
                             data-testid="admin-profile-link"
                             aria-label={shellText('Open Admin profile and security', 'فتح ملف المسؤول والأمان')}
                             sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, minWidth: 0, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', color: '#FFF', textTransform: 'none', '&:hover': { bgcolor: 'rgba(218,165,32,0.10)', borderColor: 'rgba(218,165,32,0.45)' } }}
