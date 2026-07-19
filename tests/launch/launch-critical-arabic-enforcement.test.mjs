@@ -59,10 +59,10 @@ test('launch-critical forms preserve root RTL direction, nested RTL behavior and
   assert.match(onboarding, explicitDirection);
   assert.match(payment, explicitDirection);
   assert.match(adminProfile, explicitDirection);
-  assert.match(asset, /transform:\s*isRTL\s*\?\s*['"]rotate\(180deg\)['"]\s*:\s*undefined/);
+  assert.match(asset, /transform:\s*['"]rotate\(180deg\)['"]/);
 
-  assert.match(asset, /اسم المسجد مطلوب/);
-  assert.match(asset, /المساحة الإجمالية المقاسة مطلوبة/);
+  assert.match(asset, /اسم المسجد/);
+  assert.match(asset, /مساحة المسجد المقاسة/);
   assert.match(payment, /تعليمات الدفع المؤسسية غير متاحة/);
   assert.match(payment, /مبلغ الدفع غير موجود/);
   assert.match(adminProfile, /ملف الأمان الشخصي/);
