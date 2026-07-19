@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
+    Autocomplete,
     Box,
     Button,
     Chip,
@@ -14,7 +15,6 @@ import {
     TextField,
     Typography,
     alpha,
-    Autocomplete,
 } from '@mui/material';
 import {
     AlertCircle,
@@ -25,8 +25,11 @@ import {
     UploadCloud,
     Wand2,
 } from 'lucide-react';
-import { auth, functions, getDownloadURL, httpsCallable, ref, storage, uploadBytes } from '../../lib/firebase';
+import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
+
+const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const THEMES = [
     'Sovereign Elite (Gold & Graphite)',
@@ -61,10 +64,21 @@ function fileToBase64(file: File): Promise<string> {
         reader.readAsDataURL(file);
         reader.onload = () => {
             const value = String(reader.result || '');
-            resolve(value.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, ''));
+            const encoded = value.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
+            if (!encoded) {
+                reject(new Error('The selected image could not be read.'));
+                return;
+            }
+            resolve(encoded);
         };
-        reader.onerror = reject;
+        reader.onerror = () => reject(reader.error || new Error('The selected image could not be read.'));
     });
+}
+
+function fileExtension(mimeType: string) {
+    if (mimeType === 'image/jpeg') return 'jpg';
+    if (mimeType === 'image/webp') return 'webp';
+    return 'png';
 }
 
 export default function DesignStudioAdminPage() {
@@ -75,22 +89,30 @@ export default function DesignStudioAdminPage() {
     const [prompt, setPrompt] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+    const [generatedMimeType, setGeneratedMimeType] = useState('image/jpeg');
     const [sliderPos, setSliderPos] = useState(50);
     const [error, setError] = useState<string | null>(null);
-    const [status, setStatus] = useState<string>('READY');
-    const [provider, setProvider] = useState<string>('waiting');
+    const [status, setStatus] = useState('READY');
+    const [provider, setProvider] = useState('waiting');
+
+    useEffect(() => () => {
+        if (preview) URL.revokeObjectURL(preview);
+    }, [preview]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const selected = event.target.files?.[0];
         if (!selected) return;
-        if (!selected.type.startsWith('image/')) {
-            setError('Upload an image file only.');
+        if (!ALLOWED_IMAGE_TYPES.has(selected.type)) {
+            setError('Upload a JPEG, PNG, or WebP image.');
+            event.target.value = '';
             return;
         }
-        if (selected.size > 50 * 1024 * 1024) {
-            setError('Image is too large. Maximum supported size is 50MB.');
+        if (selected.size > MAX_REFERENCE_IMAGE_BYTES) {
+            setError('Image is too large. Maximum supported size is 5MB.');
+            event.target.value = '';
             return;
         }
+
         setError(null);
         setFile(selected);
         setPreview(URL.createObjectURL(selected));
@@ -108,48 +130,44 @@ export default function DesignStudioAdminPage() {
         setIsGenerating(true);
         setError(null);
         setStatus('GENERATING');
+        setProvider('openai');
 
         try {
-            let originalImageUrl = '';
-            try {
-                const storageRef = ref(storage, `design_requests/${auth.currentUser?.uid || 'admin'}/${Date.now()}_${file.name}`);
-                await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
-                originalImageUrl = await getDownloadURL(storageRef);
-            } catch (uploadError) {
-                console.warn('[AI Design Studio] Reference upload skipped, continuing with callable payload.', uploadError);
-            }
-
             const imageBase64 = await fileToBase64(file);
-            const generateDesignConcept = httpsCallable(functions, 'generateDesignConcept');
+            const generateDesignConcept = httpsCallable(functions, 'generateDesignConceptCompat');
             const result: any = await generateDesignConcept({
                 requestId: `admin_design_${Date.now()}`,
                 scope: { zoneType: roomType, propertyType: 'Custom' },
                 zoneType: roomType,
                 designStyle: theme,
-                customPrompt: prompt,
-                notes: prompt,
+                customPrompt: prompt.slice(0, 600),
                 imageBase64,
-                imageUrl: originalImageUrl,
-                mimeType: file.type || 'image/jpeg',
+                mimeType: file.type,
             });
 
             const data = result.data || {};
-            if (data.status !== 'SUCCESS' || !data.generatedImage) {
-                throw new Error(data.error || 'AI Design Studio returned no image payload.');
+            if (
+                data.status !== 'SUCCESS' ||
+                data.live !== true ||
+                data.renderStatus !== 'AI_RENDER_COMPLETE' ||
+                !data.generatedImage
+            ) {
+                throw new Error(data.error || 'AI Design Studio returned no completed image payload.');
             }
 
-            const mimeType = data.mimeType || 'image/png';
+            const mimeType = ALLOWED_IMAGE_TYPES.has(String(data.mimeType))
+                ? String(data.mimeType)
+                : 'image/jpeg';
+            setGeneratedMimeType(mimeType);
             setGeneratedImage(`data:${mimeType};base64,${data.generatedImage}`);
-            setProvider(data.live === true ? String(data.provider || 'live-ai') : 'fallback');
-            setStatus(data.renderStatus || (data.live ? 'AI_RENDER_COMPLETE' : 'AI_RENDER_PENDING'));
+            setProvider(String(data.provider || 'openai'));
+            setStatus('AI_RENDER_COMPLETE');
             setSliderPos(50);
-
-            if (data.live !== true) {
-                setError(data.concept?.renderError || 'AI image provider is not configured yet. Showing safe fallback preview.');
-            }
         } catch (caught: any) {
             console.error('[AI Design Studio] generation failed:', caught);
-            setError(caught?.message || 'Failed to generate design. Check Functions secrets, App Check, and deployment status.');
+            setGeneratedImage(null);
+            setProvider('unavailable');
+            setError(caught?.message || 'Failed to generate design. Check App Check, Functions secrets, and deployment status.');
             setStatus('FAILED');
         } finally {
             setIsGenerating(false);
@@ -160,7 +178,7 @@ export default function DesignStudioAdminPage() {
         if (!generatedImage) return;
         const link = document.createElement('a');
         link.href = generatedImage;
-        link.download = `bin-ai-design-${Date.now()}.png`;
+        link.download = `bin-ai-design-${Date.now()}.${fileExtension(generatedMimeType)}`;
         link.click();
     };
 
@@ -173,7 +191,7 @@ export default function DesignStudioAdminPage() {
                             <Sparkles size={28} /> AI DESIGN STUDIO
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
-                            Live Firebase callable render engine for BIN GROUP design concepts
+                            App Check-protected reference-image redesign for BIN GROUP owner approval
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={1} alignItems="center">
@@ -183,7 +201,7 @@ export default function DesignStudioAdminPage() {
                 </Box>
 
                 {error && (
-                    <Alert severity={status === 'AI_RENDER_COMPLETE' ? 'warning' : 'error'} icon={<AlertCircle size={20} />} sx={{ mb: 4, bgcolor: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <Alert severity="error" icon={<AlertCircle size={20} />} sx={{ mb: 4, bgcolor: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.2)' }}>
                         {error}
                     </Alert>
                 )}
@@ -194,12 +212,12 @@ export default function DesignStudioAdminPage() {
                             <Stack spacing={4}>
                                 <Box>
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>REFERENCE IMAGE</Typography>
-                                    <input accept="image/*" style={{ display: 'none' }} id="ai-design-reference-file" type="file" onChange={handleFileChange} />
+                                    <input accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} id="ai-design-reference-file" type="file" onChange={handleFileChange} />
                                     <label htmlFor="ai-design-reference-file">
                                         <Box sx={{ border: '2px dashed rgba(255,255,255,0.1)', borderRadius: 4, p: 4, textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', '&:hover': { bgcolor: 'rgba(255,255,255,0.02)', borderColor: binThemeTokens.gold } }}>
                                             <UploadCloud size={48} color={binThemeTokens.gold} style={{ marginBottom: 16, opacity: 0.8 }} />
                                             <Typography variant="subtitle1" fontWeight="900" color="#fff">{file ? file.name : 'Upload Space Reference'}</Typography>
-                                            <Typography variant="caption" color="rgba(255,255,255,0.5)">JPG/PNG/WebP up to 50MB</Typography>
+                                            <Typography variant="caption" color="rgba(255,255,255,0.5)">JPEG/PNG/WebP up to 5MB</Typography>
                                         </Box>
                                     </label>
                                 </Box>
@@ -209,7 +227,7 @@ export default function DesignStudioAdminPage() {
                                     <Stack spacing={3}>
                                         <Autocomplete freeSolo options={ROOM_TYPES} value={roomType} onChange={(_, newValue) => setRoomType(newValue || '')} onInputChange={(_, newValue) => setRoomType(newValue)} renderInput={(params) => <TextField {...params} label="Space / Property Type" InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold } } }} />} />
                                         <Autocomplete freeSolo options={THEMES} value={theme} onChange={(_, newValue) => setTheme(newValue || '')} onInputChange={(_, newValue) => setTheme(newValue)} renderInput={(params) => <TextField {...params} label="Architectural Theme" InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }} sx={{ '& .MuiOutlinedInput-root': { color: '#fff', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold } } }} />} />
-                                        <TextField label="Custom Directives" multiline rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Example: add chandelier, marble flooring, warm premium lighting..." InputProps={{ sx: { color: '#fff' } }} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold } } }} />
+                                        <TextField label="Custom Directives" multiline rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 600))} placeholder="Example: add chandelier, marble flooring, warm premium lighting..." InputProps={{ sx: { color: '#fff' } }} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold } } }} />
                                     </Stack>
                                 </Box>
 
