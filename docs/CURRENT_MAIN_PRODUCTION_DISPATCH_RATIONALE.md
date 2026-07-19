@@ -1,1 +1,0 @@
-Manual SHA entry repeatedly failed whenever `main` advanced between copying the value and starting the workflow. Resolving the SHA within GitHub Actions removes that stale-input window while keeping exact-SHA enforcement inside the protected production workflow.
