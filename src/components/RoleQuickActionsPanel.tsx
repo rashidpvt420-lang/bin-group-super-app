@@ -6,6 +6,7 @@ import { ROLE_QUICK_ACTIONS, type PortalRole } from '../config/uaeDominationBlue
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 const ICONS: Record<string, JSX.Element> = {
+  rooms: <Building2 size={22} />,
   report_issue: <Wrench size={22} />,
   track_request: <Activity size={22} />,
   emergency: <AlertTriangle size={22} />,
@@ -29,6 +30,7 @@ const ICONS: Record<string, JSX.Element> = {
 };
 
 const ARABIC_ACTION_COPY: Record<string, { label: string; whyItMatters: string }> = {
+  rooms: { label: 'غرفة للإيجار', whyItMatters: 'يعرض الغرف الشاغرة المدارة من BIN مع سجل الصيانة وإدارة العقد.' },
   report_issue: { label: 'الإبلاغ عن مشكلة', whyItMatters: 'أسرع طريقة لإنشاء طلب صيانة مدعوم بالصور.' },
   track_request: { label: 'متابعة الطلب', whyItMatters: 'يعرض الحالة ووقت الوصول والإثبات وخيارات الاعتراض.' },
   emergency: { label: 'حالة طارئة', whyItMatters: 'يفصل حالات الطوارئ الحقيقية عن طلبات الصيانة العادية.' },
