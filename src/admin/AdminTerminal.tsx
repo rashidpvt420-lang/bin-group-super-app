@@ -12,7 +12,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { signOut } from 'firebase/auth';
+import { multiFactor, signOut } from 'firebase/auth';
 import {
   Activity,
   AlertTriangle,
@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   CreditCard,
-  ExternalLink,
   FileCheck2,
   FileText,
   Gauge,
@@ -33,9 +32,11 @@ import {
   RefreshCcw,
   ShieldCheck,
   TicketCheck,
+  UserRound,
   Users,
   Wrench,
 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, collection, db, doc, getCountFromServer, getDoc, getDocs, limit, orderBy, query, where } from '../lib/firebase';
 import { useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
@@ -43,6 +44,15 @@ import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
 
 const ADMIN_OPERATIONS_CONSOLE_URL = 'https://bin-group-admin-panel.web.app';
+
+const commandActions = [
+  { label: 'Owner activation', helper: 'Approve owners, properties and onboarding evidence.', path: '/owners', icon: Building2 },
+  { label: 'Payment approvals', helper: 'Verify payment proof before account activation.', path: '/payments', icon: CreditCard },
+  { label: 'Live dispatch', helper: 'Control technician workload and urgent tickets.', path: '/control-center', icon: Map },
+  { label: 'Tenant operations', helper: 'Review tenants, units, requests and corrections.', path: '/tenants', icon: Users },
+  { label: 'Broker attribution', helper: 'Review leads, source proof and commission state.', path: '/broker', icon: TicketCheck },
+  { label: 'Launch control', helper: 'Review evidence gates and controlled release state.', path: '/ops/public-launch-command', icon: ShieldCheck },
+] as const;
 
 type Metric = {
   key: string;
@@ -137,6 +147,9 @@ export default function AdminTerminal() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = React.useState<string>('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const showingProfile = location.pathname.endsWith('/profile');
 
   const label = (key: string, fallback: string) => tx(key, fallback);
 
@@ -226,6 +239,10 @@ export default function AdminTerminal() {
     window.location.href = '/login?intendedRole=admin&returnTo=%2Fadmin%2Fdashboard';
   };
 
+  const openOperationsTool = (path: string) => {
+    window.location.assign(`${ADMIN_OPERATIONS_CONSOLE_URL}${path}`);
+  };
+
   return (
     <Box
       sx={{
@@ -255,13 +272,67 @@ export default function AdminTerminal() {
           <Button onClick={loadDashboard} disabled={loading} startIcon={renderSafeIcon(RefreshCcw, { size: 16 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 900 }}>
             {loading ? 'Syncing' : 'Refresh'}
           </Button>
+          <Button
+            onClick={() => navigate(showingProfile ? '/admin/dashboard' : '/admin/profile')}
+            startIcon={renderSafeIcon(UserRound, { size: 17 })}
+            aria-label={showingProfile ? 'Return to Admin dashboard' : 'Open Admin profile and security'}
+            sx={{ color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.18)', fontWeight: 900 }}
+          >
+            {showingProfile ? 'Command Center' : (auth.currentUser?.displayName || 'Admin Profile')}
+          </Button>
           <PortalSessionControls role="admin" dark accent="#C9A646" />
         </Stack>
       </Stack>
 
-      <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)', '& .MuiAlert-icon': { color: '#60A5FA' } }}>
-        This in-app route is the read-only status terminal. Owner approvals, payment verification, dispatch, disputes, and staff operations are performed in the protected Admin Operations Console.
-      </Alert>
+      {showingProfile ? (
+        <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.96)', border: '1px solid rgba(201,166,70,0.32)', borderRadius: 4, color: '#fff' }}>
+          <CardContent>
+            <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: '#C9A646', color: '#111827', display: 'grid', placeItems: 'center' }}>
+                  <SafeIcon icon={UserRound} size={30} />
+                </Box>
+                <Box>
+                  <Typography variant="overline" sx={{ color: '#E5C86B', fontWeight: 950, letterSpacing: 2 }}>ADMIN IDENTITY & SECURITY</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 950 }}>{auth.currentUser?.displayName || 'BIN GROUP Administrator'}</Typography>
+                  <Typography sx={{ color: 'rgba(255,255,255,0.66)' }}>{auth.currentUser?.email || 'Authenticated Admin'}</Typography>
+                </Box>
+              </Stack>
+              <Stack spacing={1} alignItems={{ xs: 'stretch', md: 'flex-end' }}>
+                <Chip label={auth.currentUser?.emailVerified ? 'Email verified' : 'Email verification required'} color={auth.currentUser?.emailVerified ? 'success' : 'warning'} sx={{ fontWeight: 900 }} />
+                <Chip label={`${auth.currentUser ? multiFactor(auth.currentUser).enrolledFactors.length : 0} MFA factor(s) enrolled`} color={auth.currentUser && multiFactor(auth.currentUser).enrolledFactors.length > 0 ? 'success' : 'warning'} sx={{ fontWeight: 900 }} />
+              </Stack>
+            </Stack>
+            <Alert severity="info" sx={{ mt: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.28)' }}>
+              Daily command access belongs to this signed-in Admin. Emergency account recovery remains a protected two-person approval process.
+            </Alert>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)', '& .MuiAlert-icon': { color: '#60A5FA' } }}>
+            One Admin command surface for owner activation, payments, tenant service, dispatch, broker attribution, evidence and launch control.
+          </Alert>
+          <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.96)', border: '1px solid rgba(201,166,70,0.30)', borderRadius: 4, color: '#fff' }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ color: '#E5C86B', fontWeight: 950 }}>Main Admin Actions</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>Start and control daily operations here.</Typography>
+              <Grid container spacing={2}>
+                {commandActions.map((action) => (
+                  <Grid item xs={12} sm={6} md={4} key={action.label}>
+                    <Button fullWidth onClick={() => openOperationsTool(action.path)} startIcon={renderSafeIcon(action.icon, { size: 20 })} sx={{ minHeight: 112, p: 2, justifyContent: 'flex-start', textAlign: 'left', alignItems: 'flex-start', color: '#fff', bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(201,166,70,0.20)', borderRadius: 3, '&:hover': { bgcolor: 'rgba(201,166,70,0.10)', borderColor: '#C9A646' } }}>
+                      <Box>
+                        <Typography sx={{ fontWeight: 950 }}>{action.label}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', textTransform: 'none' }}>{action.helper}</Typography>
+                      </Box>
+                    </Button>
+                  </Grid>
+                ))}
+              </Grid>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {!loading && (
         <Alert severity={allLaunchGatesPassed ? 'success' : 'warning'} sx={{ mb: 3, bgcolor: allLaunchGatesPassed ? 'rgba(34,197,94,0.10)' : 'rgba(245,158,11,0.10)', color: allLaunchGatesPassed ? '#BBF7D0' : '#FDE68A', border: `1px solid ${allLaunchGatesPassed ? 'rgba(34,197,94,0.30)' : 'rgba(245,158,11,0.30)'}` }}>
@@ -468,8 +539,8 @@ export default function AdminTerminal() {
         <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>
           Trust & Security
         </Button>
-        <Button href={ADMIN_OPERATIONS_CONSOLE_URL} target="_blank" rel="noreferrer" startIcon={renderSafeIcon(ExternalLink, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#E5C86B' } }}>
-          Open Operations Console
+        <Button onClick={() => navigate('/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#E5C86B' } }}>
+          Admin Profile & Security
         </Button>
         <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>
           Reset session
