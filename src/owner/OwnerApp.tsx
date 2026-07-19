@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Container, IconButton, alpha, Stack, Button } from '@mui/material';
-import { ArrowLeft, Brain, ClipboardCheck, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
+import { ArrowLeft, Brain, LayoutDashboard, MessageSquare, Paintbrush, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { NotificationBell } from '../components/NotificationBell';
@@ -12,6 +12,7 @@ import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
 import PilotCompletionPage from '../components/PilotCompletionPage';
 import BinConnectInboxPage from '../components/BinConnectInboxPage';
+import OwnerProfileReadinessCard from './components/OwnerProfileReadinessCard';
 
 import OwnerSimpleDashboardPage from './pages/OwnerSimpleDashboardPage';
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
@@ -42,6 +43,8 @@ import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
 import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
 import PortfolioRenewalsPage from './pages/PortfolioRenewalsPage';
 
+const OwnerProfileWithReadiness = () => <><OwnerProfileReadinessCard /><OwnerProfilePage /></>;
+
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -55,14 +58,8 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: alpha(binThemeTokens.canvas, 0.94), backdropFilter: 'blur(18px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17,24,39,0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
-                        {!isHome && (
-                            <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}>
-                                <SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
-                            </IconButton>
-                        )}
-                        <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-                            <SafeIcon icon={LayoutDashboard} size={22} />
-                        </IconButton>
+                        {!isHome && <IconButton onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.35) }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
+                        <IconButton onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}><SafeIcon icon={LayoutDashboard} size={22} /></IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{label('portal.owner.title', 'OWNER PORTAL')}</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{label('portal.owner.subtitle', 'NO-CALL PROPERTY OPERATIONS')}</Typography>
@@ -75,20 +72,14 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         <Button onClick={() => navigate('/owner/ai-intelligence')} startIcon={renderSafeIcon(Brain, { size: 17 })} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.ai_intelligence', 'AI Intelligence')}</Button>
                         <Button onClick={() => navigate('/owner/design-studio')} startIcon={renderSafeIcon(Paintbrush, { size: 17 })} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{t('nav.ai_studio') || 'AI Studio'}</Button>
                         <NotificationBell />
-                        <IconButton onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}><SafeIcon icon={UserCircle} size={18} /></IconButton>
+                        <IconButton aria-label={label('nav.owner_profile', 'Owner profile')} onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}><SafeIcon icon={UserCircle} size={18} /></IconButton>
                         <PortalSessionControls role="owner" accent={binThemeTokens.goldHover} />
                     </Stack>
                 </Toolbar>
             </AppBar>
-            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}>
-                <OwnerActivationGuard>
-                    <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box>
-                </OwnerActivationGuard>
-            </Container>
+            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}><OwnerActivationGuard><Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box></OwnerActivationGuard></Container>
             <BinConnectChatBox role="owner" />
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}>
-                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OS</Typography>
-            </Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OS</Typography></Box>
         </Box>
     );
 };
@@ -107,7 +98,7 @@ export default function OwnerApp() {
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
                 <Route path="/payment-proof" element={<OwnerPaymentProofPage />} />
                 <Route path="/iban" element={<OwnerIbanPage />} />
-                <Route path="/profile" element={<OwnerProfilePage />} />
+                <Route path="/profile" element={<OwnerProfileWithReadiness />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
                 <Route path="/units" element={<OwnerUnitRegistryPage />} />
                 <Route path="/legacy-units" element={<OwnerUnitsPage />} />
