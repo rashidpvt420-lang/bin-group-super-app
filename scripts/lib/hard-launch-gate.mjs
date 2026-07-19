@@ -42,6 +42,7 @@ const ALLOWED_OPERATIONAL_EVIDENCE_TYPES = new Set([
   'production-transaction',
   'physical-device-report',
   'secret-rotation-record',
+  'scheduler-run',
 ]);
 
 export function hardLaunchApprovalPath(root = process.cwd()) {

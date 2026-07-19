@@ -506,6 +506,6 @@ const proof = {
   hardLaunchClaim: false,
 };
 mkdirSync('launch_package', { recursive: true });
-writeFileSync(APPLICATION_PROOF_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
+writeFileSync('launch_package/application-proof.json', `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
 console.log(`[operational-application-evidence] PASS gate=${gate}`);
 console.log(`[operational-application-evidence] wrote ${APPLICATION_PROOF_PATH}`);

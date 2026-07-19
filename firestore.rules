@@ -1920,6 +1920,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Credential renewal evidence is written only by App Check-protected Cloud Functions.
+    // Administrators may inspect records but must review them through controlled callables.
+    match /technician_credential_renewals/{requestId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{collection}/{document=**} {
       allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -1945,6 +1952,7 @@ service cloud.firestore {
           'contract_signature_otp_audit',
           'notification_dispatch_claims',
           'public_rate_limits',
+          'technician_credential_renewals',
           'broker_kyc_profiles',
           'broker_kyc_submission_limits',
           'ai_usage'
@@ -1973,6 +1981,7 @@ service cloud.firestore {
           'contract_signature_otp_audit',
           'notification_dispatch_claims',
           'public_rate_limits',
+          'technician_credential_renewals',
           'broker_kyc_profiles',
           'broker_kyc_submission_limits',
           'ai_usage'
