@@ -53,10 +53,13 @@ test('production dispatch wrapper verifies the latest completed deployment befor
 
 test('production dispatch resolves the protected run only for the exact SHA and accepted dispatcher actor', async () => {
   const source = await read('.github/workflows/firebase-production-dispatch-current-main.yml');
+  const resolverSection = source.match(/run_id=''[\s\S]*?if \[\[ "\$run_sha" == "\$main_sha" \]\]/)?.[0] || '';
   const exactSelection = /select\(\(\.actor\.login == \$actor or \.actor\.login == "github-actions\[bot\]"\) and \.head_sha == \$sha and \.created_at >= \$started\)/g;
 
-  assert.equal((source.match(exactSelection) || []).length, 2);
-  assert.equal((source.match(/--arg sha "\$main_sha"/g) || []).length, 2);
+  assert.match(resolverSection, /run_id=.*--arg sha "\$main_sha"/s);
+  assert.match(resolverSection, /run_sha=.*--arg sha "\$main_sha"/s);
+  assert.equal((resolverSection.match(exactSelection) || []).length, 2);
+  assert.equal((resolverSection.match(/--arg sha "\$main_sha"/g) || []).length, 2);
   assert.doesNotMatch(source, /select\(\.actor\.login == \$actor and \.created_at >= \$started\)/);
 });
 
