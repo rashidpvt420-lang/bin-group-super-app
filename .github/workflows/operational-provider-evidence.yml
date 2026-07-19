@@ -1,0 +1,207 @@
+name: Operational Provider Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: 'Provider gate to verify and publish'
+        required: true
+        type: choice
+        options:
+          - brandedEmailDelivery
+          - appCheckEnforcement
+          - stripeLiveBilling
+      expected_commit_sha:
+        description: 'Full lowercase 40-character production main SHA'
+        required: true
+        type: string
+      production_deploy_run_id:
+        description: 'Stripe only: successful production deploy run ID for the same SHA'
+        required: false
+        type: string
+      stripe_checkout_session_id:
+        description: 'Stripe only: paid cs_live_ checkout session ID'
+        required: false
+        type: string
+      stripe_webhook_event_id:
+        description: 'Stripe only: matching evt_ checkout.session.completed event ID'
+        required: false
+        type: string
+      confirmation:
+        description: 'Enter PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: operational-provider-evidence-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: hard-public-launch
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+
+    steps:
+      - name: Enforce protected provider evidence inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          SELECTED_GATE: ${{ inputs.gate }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+          STRIPE_SESSION: ${{ inputs.stripe_checkout_session_id }}
+          STRIPE_EVENT: ${{ inputs.stripe_webhook_event_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Provider evidence may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ "$GITHUB_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Only the authorized founder account may publish operational provider evidence."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::expected_commit_sha must equal the full current main SHA."
+            exit 1
+          fi
+          if [[ "$CONFIRMATION" != "PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE" ]]; then
+            echo "::error::Provider evidence confirmation phrase mismatch."
+            exit 1
+          fi
+          case "$SELECTED_GATE" in
+            brandedEmailDelivery|appCheckEnforcement) ;;
+            stripeLiveBilling)
+              if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+                echo "::error::Stripe proof requires a numeric production_deploy_run_id."
+                exit 1
+              fi
+              if [[ ! "$STRIPE_SESSION" =~ ^cs_live_ ]] || [[ ! "$STRIPE_EVENT" =~ ^evt_ ]]; then
+                echo "::error::Stripe proof requires matching live checkout and event IDs."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported provider gate."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify BIN GROUP branded SMTP delivery
+        if: inputs.gate == 'brandedEmailDelivery'
+        run: node scripts/verify-smtp-live-delivery.mjs
+
+      - name: Verify production App Check enforcement
+        if: inputs.gate == 'appCheckEnforcement'
+        run: node scripts/verify-appcheck-enforcement.mjs
+
+      - name: Download exact production deployment metadata
+        if: inputs.gate == 'stripeLiveBilling'
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore and validate Stripe deployment binding
+        if: inputs.gate == 'stripeLiveBilling'
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const doc = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
+          const expected = process.env.TARGET_SHA;
+          const deployedSha = String(doc.deployedCommitSha || doc.commitSha || '');
+          const digest = String(doc.validatedArtifactDigest || '').toLowerCase();
+          if (deployedSha !== expected) throw new Error('Production deployment commit does not match expected SHA.');
+          if (doc.projectId !== 'bin-group-57c60') throw new Error('Production deployment project mismatch.');
+          if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('Validated artifact digest is missing or invalid.');
+          appendFileSync(process.env.GITHUB_ENV, `VALIDATED_ARTIFACT_DIGEST=${digest}\n`);
+          NODE
+
+      - name: Verify live Stripe payment and exactly-once webhook replay
+        if: inputs.gate == 'stripeLiveBilling'
+        env:
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ inputs.stripe_checkout_session_id }}
+          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ inputs.stripe_webhook_event_id }}
+          STRIPE_REQUIRE_REPLAY_PROOF: 'true'
+        run: |
+          set -euo pipefail
+          stripe_key="$(gcloud secrets versions access latest --secret=STRIPE_SECRET_KEY --project="$GCP_PROJECT_ID")"
+          webhook_secret="$(gcloud secrets versions access latest --secret=STRIPE_WEBHOOK_SECRET --project="$GCP_PROJECT_ID")"
+          if [[ "$stripe_key" != sk_live_* ]]; then
+            echo "::error::STRIPE_SECRET_KEY is not a live key."
+            exit 1
+          fi
+          if [[ "$webhook_secret" != whsec_* ]]; then
+            echo "::error::STRIPE_WEBHOOK_SECRET is invalid."
+            exit 1
+          fi
+          echo "::add-mask::$stripe_key"
+          echo "::add-mask::$webhook_secret"
+          STRIPE_SECRET_KEY="$stripe_key" STRIPE_WEBHOOK_SECRET="$webhook_secret" \
+            node scripts/verify-stripe-live-proof.mjs
+
+      - name: Publish canonical operational provider evidence
+        env:
+          OPERATIONAL_GATE: ${{ inputs.gate }}
+        run: node scripts/publish-operational-provider-evidence.mjs
+
+      - name: Upload provider proof
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-provider-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/smtp-live-proof.json
+            launch_package/appcheck-enforcement-proof.json
+            launch_package/stripe-live-proof.json
+            launch_package/production-deployment.json
+          if-no-files-found: ignore
+          retention-days: 365
