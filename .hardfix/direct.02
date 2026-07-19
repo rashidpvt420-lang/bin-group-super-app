@@ -1,0 +1,52 @@
+e ${PRODUCTION.projectId}`);
+  if (String(doc.sourceRunId || '') !== String(sourceRunId || '')) errors.push('sourceRunId mismatch');
+  requiredString(errors, doc, 'sourceSystem');
+""",
+"""  if (doc.evidenceType !== evidenceType) errors.push('evidenceType mismatch');
+  validateEvidenceType(errors, gateKey, evidenceType);
+  if (doc.commitSha !== commitSha) errors.push('commitSha mismatch');
+  if (doc.projectId !== PRODUCTION.projectId) errors.push(`projectId must be ${PRODUCTION.projectId}`);
+  if (!/^\\d+$/.test(String(sourceRunId || ''))) errors.push('sourceRunId must be numeric');
+  if (String(doc.sourceRunId || '') !== String(sourceRunId || '')) errors.push('sourceRunId mismatch');
+  validateSourceSystem(errors, gateKey, doc.sourceSystem);
+""",
+)
+schema.write_text(source)
+
+# Generic protected proof intake.
+path = root / 'scripts/verify-launch-gate-live.mjs'
+source = path.read_text()
+source = source.replace(
+"import { AUTHORIZED_HARD_LAUNCH_ACTORS, REQUIRED_OPERATIONAL_GATES } from './lib/hard-launch-gate.mjs';\nimport { validateOperationalProofDocument } from './lib/operational-proof-schema.mjs';",
+"import { REQUIRED_OPERATIONAL_GATES } from './lib/hard-launch-gate.mjs';\nimport { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';\nimport { OPERATIONAL_GATE_EVIDENCE_TYPES, validateOperationalProofDocument } from './lib/operational-proof-schema.mjs';",
+)
+start = source.index('const allowedEvidenceTypes = new Set([')
+end = source.index('\n\nfunction fail', start)
+source = source[:start] + source[end+2:]
+source = source.replace("if (!AUTHORIZED_HARD_LAUNCH_ACTORS.includes(String(process.env.GITHUB_ACTOR || ''))) fail('Unauthorized workflow actor.');", "try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }")
+source = source.replace("if (!allowedEvidenceTypes.has(evidenceType)) fail(`Unsupported evidence type: ${evidenceType}`);", "if (!OPERATIONAL_GATE_EVIDENCE_TYPES[gateKey]?.has(evidenceType)) fail(`Unsupported evidence type ${evidenceType} for ${gateKey}.`);")
+source = source.replace(
+"""if (!/^github-actions:\/\/rashidpvt420-lang\/bin-group-super-app\/runs\/\\d+\/artifacts\/[A-Za-z0-9._-]{1,128}$/.test(evidenceReference)) {
+  fail('Evidence reference must identify a verified same-repository GitHub Actions artifact.');
+}
+if (!evidenceReference.includes(`/runs/${sourceRunId}/artifacts/${sourceArtifactName}`)) {
+  fail('Evidence reference does not match the verified source run and artifact.');
+}
+""",
+"""const evidenceUrl = new URL(evidenceReference);
+if (evidenceUrl.protocol !== 'https:' || evidenceUrl.hostname !== 'github.com') {
+  fail('Evidence reference must use HTTPS on github.com.');
+}
+if (evidenceUrl.pathname !== `/rashidpvt420-lang/bin-group-super-app/actions/runs/${sourceRunId}`) {
+  fail('Evidence reference does not match the verified same-repository source run.');
+}
+if (evidenceUrl.hash !== `#artifact-${sourceArtifactName}`) {
+  fail('Evidence reference does not identify the verified source artifact.');
+}
+""",
+)
+source = source.replace("  verifiedBy: 'workflow',", "  githubRepository: process.env.GITHUB_REPOSITORY,\n  verifiedBy: 'workflow',")
+path.write_text(source)
+
+# Preserve repository binding in the readiness snapshot.
+replace('scripts/verify-operational-readiness.mjs', "    workflowRunId: String(gate.workflowRunId || ''),\n    verifiedBy:", "    workflowRunId: String(gate.workflowRunId || ''),\n    githubRepository: String(gate.githubRepository || ''),\n    ve
