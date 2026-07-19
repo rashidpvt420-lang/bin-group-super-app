@@ -1,0 +1,83 @@
+name: Privileged Access Rotation Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Full lowercase current production main SHA'
+        required: true
+        type: string
+      confirmation:
+        description: 'Enter VERIFY_PRIVILEGED_ACCESS_ROTATION'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: privileged-access-rotation-${{ inputs.expected_commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify-rotation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: hard-launch-operations
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+
+    steps:
+      - name: Enforce protected rotation inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]] || [[ "$GITHUB_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Rotation evidence requires the authorized founder on refs/heads/main."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::expected_commit_sha must equal the current full main SHA."
+            exit 1
+          fi
+          if [[ "$CONFIRMATION" != "VERIFY_PRIVILEGED_ACCESS_ROTATION" ]]; then
+            echo "::error::Rotation confirmation phrase mismatch."
+            exit 1
+          fi
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify provider-backed credential rotation
+        run: node scripts/verify-privileged-access-rotation.mjs
+
+      - name: Upload secret-rotation proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: privileged-access-rotation-${{ inputs.expected_commit_sha }}
+          path: launch_package/operational-proof.json
+          if-no-files-found: error
+          retention-days: 365
