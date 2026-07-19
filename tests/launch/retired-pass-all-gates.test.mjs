@@ -23,7 +23,8 @@ test('npm launch commands use guarded evidence and decision workflows, not pass-
   assert.equal(Object.values(scripts).some((command) => String(command).includes('pass-all-gates.mjs')), false);
   assert.match(String(scripts['launch:evidence:run']), /run-critical-evidence\.mjs/);
   assert.match(decisionCommand, /hard-launch-operational-decision-gate\.mjs/);
-  assert.match(operationalDecision, /capture-operational-readiness\.mjs/);
+  assert.match(operationalDecision, /hard_clearance\/operational-readiness\.json/);
+  assert.match(operationalDecision, /validateOperationalReadinessReport/);
   assert.match(operationalDecision, /hard-launch-decision-gate\.mjs/);
   assert.match(String(scripts['hard-launch:predeploy']), /hard-launch-predeploy-gate\.mjs/);
 });
