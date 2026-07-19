@@ -10,12 +10,15 @@ export interface GeoAnchor {
   city: string;
   area: string;
   placeId: string | null;
-  source: "google_maps" | "title_deed" | "admin_manual";
+  source: "google_maps" | "title_deed" | "admin_manual" | "device_gps";
   verified: boolean;
   verifiedBy: string | null;
   verifiedAt: Timestamp | null;
   updatedAt: Timestamp;
   requiresGeoReview?: boolean;
+  dispatchReady?: boolean;
+  accuracyMeters?: number | null;
+  capturedAt?: Timestamp | null;
 }
 
 export function validateGeoAnchor(geo: Partial<GeoAnchor>): string[] {
@@ -29,6 +32,13 @@ export function validateGeoAnchor(geo: Partial<GeoAnchor>): string[] {
   return errors;
 }
 
+const timestampOrNull = (value: unknown): Timestamp | null => {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : Timestamp.fromDate(date);
+};
+
 export function normalizeGeoAnchor(input: any): Partial<GeoAnchor> {
     return {
         lat: input.lat || input.latitude || 0,
@@ -41,11 +51,15 @@ export function normalizeGeoAnchor(input: any): Partial<GeoAnchor> {
         source: input.source || 'google_maps',
         verified: !!input.verified,
         verifiedBy: input.verifiedBy || null,
+        requiresGeoReview: !!input.requiresGeoReview,
+        dispatchReady: input.dispatchReady === true,
+        accuracyMeters: Number.isFinite(Number(input.accuracyMeters)) ? Number(input.accuracyMeters) : null,
+        capturedAt: timestampOrNull(input.capturedAt),
     };
 }
 
 export function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371; // Radius of the earth in km
+    const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lng2 - lng1);
     const a =
@@ -53,8 +67,7 @@ export function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: nu
         Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const d = R * c; // Distance in km
-    return d;
+    return R * c;
 }
 
 function deg2rad(deg: number): number {
@@ -80,9 +93,12 @@ export function buildPersistableGeoAnchor(payload: any): GeoAnchor {
         source: payload.source || 'google_maps',
         verified: !!payload.verified,
         verifiedBy: payload.verifiedBy || null,
-        verifiedAt: payload.verifiedAt || null,
+        verifiedAt: timestampOrNull(payload.verifiedAt),
         updatedAt: Timestamp.now(),
-        requiresGeoReview: !!payload.requiresGeoReview
+        requiresGeoReview: !!payload.requiresGeoReview,
+        dispatchReady: payload.dispatchReady === true,
+        accuracyMeters: Number.isFinite(Number(payload.accuracyMeters)) ? Number(payload.accuracyMeters) : null,
+        capturedAt: timestampOrNull(payload.capturedAt),
     };
 }
 

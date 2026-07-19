@@ -1,31 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Checkbox,
-  Chip,
-  CircularProgress,
-  Divider,
-  FormControlLabel,
-  Grid,
-  LinearProgress,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-  alpha,
+  Alert, Avatar, Box, Button, Checkbox, Chip, CircularProgress, Divider, FormControlLabel,
+  Grid, LinearProgress, Paper, Stack, TextField, Typography, alpha
 } from '@mui/material';
-import { Award, Briefcase, KeyRound, Save, ShieldCheck, User } from 'lucide-react';
+import { Award, Briefcase, KeyRound, RefreshCcw, Save, ShieldCheck, ShieldX, User } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { auth, db, doc, functions, getDoc, sendPasswordResetEmail, updateProfile } from '../../lib/firebase';
+import { auth, functions, sendPasswordResetEmail } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
+type BrokerSummary = {
+  profile: {
+    displayName: string;
+    email: string;
+    phone: string;
+    companyName: string;
+    primaryRegion: string;
+    brokerTerritory: string;
+  };
+  kyc: {
+    submitted: boolean;
+    brokerKycStatus: string;
+    reraStatus: string;
+    reraVerified: boolean;
+    ibanVerified: boolean;
+    profileCompletionScore: number;
+    reraLicenseMasked: string;
+    tradeLicenseMasked: string;
+    emiratesIdMasked: string;
+    passportMasked: string;
+    bankIbanMasked: string;
+    bankNameMasked: string;
+    commissionAgreementAccepted: boolean;
+    commissionTermsVersion: string;
+    approvalBound: boolean;
+    reviewedAtMs: number;
+    reviewReason: string;
+  };
+  payout: { eligible: boolean; blockReasons: string[]; hold: boolean };
+};
 
 type BrokerKycResult = {
   status: 'SUCCESS';
@@ -48,11 +64,11 @@ const inputSx = {
 export default function BrokerProfilePage() {
   const { user } = useRole();
   const { isRTL, lang } = useLanguage();
-  const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
+  const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [brokerData, setBrokerData] = useState<any>(null);
+  const [summary, setSummary] = useState<BrokerSummary | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const [displayName, setDisplayName] = useState('');
@@ -69,51 +85,45 @@ export default function BrokerProfilePage() {
   const [brokerTerritory, setBrokerTerritory] = useState('Dubai');
   const [commissionAgreementAccepted, setCommissionAgreementAccepted] = useState(false);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const [publicSnap, privateResult] = await Promise.all([
-          getDoc(doc(db, 'users', user.uid)),
-          getDoc(doc(db, 'broker_kyc_profiles', user.uid)).catch((error) => {
-            console.info('Private Broker KYC profile is not available yet.', error);
-            return null;
-          }),
-        ]);
-        const publicData = publicSnap.exists() ? publicSnap.data() : {};
-        const privateData = privateResult?.exists() ? privateResult.data() : {};
-        const data = { ...publicData, ...privateData };
-        setBrokerData(data);
-        setDisplayName(data.displayName || user.displayName || '');
-        setPhone(data.phoneNumber || data.phone || '');
-        setCompanyName(data.companyName || '');
-        setReraLicense(data.reraLicense || '');
-        setPrimaryRegion(data.primaryRegion || data.region || 'Dubai, UAE');
-        setTradeLicenseNumber(data.tradeLicenseNumber || '');
-        setEmiratesIdNumber(data.emiratesIdNumber || '');
-        setPassportNumber(data.passportNumber || '');
-        setBankName(data.bankName || '');
-        setBankAccountHolder(data.bankAccountHolder || data.displayName || user.displayName || '');
-        setBankIban(data.bankIban || '');
-        setBrokerTerritory(data.brokerTerritory || data.primaryRegion || data.region || 'Dubai');
-        setCommissionAgreementAccepted(Boolean(data.commissionAgreementAccepted));
-      } catch (error) {
-        console.error('Broker profile fetch failed:', error);
-        setNotice({ type: 'error', text: label('Broker profile could not be loaded.', 'تعذر تحميل ملف الوسيط.') });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProfile();
-  }, [user?.uid, user?.displayName, lang]);
+  const loadSummary = async (silent = false) => {
+    if (!user?.uid) return;
+    if (!silent) setLoading(true);
+    try {
+      const callable = httpsCallable(functions, 'getBrokerKycProfileSummary');
+      const result = await callable({});
+      const next = result.data as BrokerSummary;
+      setSummary(next);
+      setDisplayName(next.profile.displayName || user.displayName || '');
+      setPhone(next.profile.phone || '');
+      setCompanyName(next.profile.companyName || '');
+      setPrimaryRegion(next.profile.primaryRegion || 'Dubai, UAE');
+      setBrokerTerritory(next.profile.brokerTerritory || 'Dubai');
+      setCommissionAgreementAccepted(next.kyc.commissionAgreementAccepted);
+      setBankAccountHolder(next.profile.displayName || user.displayName || '');
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error?.message || label('Broker profile could not be loaded.', 'تعذر تحميل ملف الوسيط.') });
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadSummary(); }, [user?.uid, lang]);
 
   const handleSave = async () => {
     if (!user?.uid) return;
-    if (!displayName.trim()) {
-      setNotice({ type: 'warning', text: label('Full professional name is required.', 'الاسم المهني الكامل مطلوب.') });
+    if (!displayName.trim() || !phone.trim() || !companyName.trim()) {
+      setNotice({ type: 'warning', text: label('Professional name, phone and brokerage company are required.', 'الاسم المهني والهاتف وشركة الوساطة مطلوبة.') });
+      return;
+    }
+    const identityProvided = Boolean(tradeLicenseNumber.trim() || emiratesIdNumber.trim() || passportNumber.trim());
+    if (!reraLicense.trim() || !identityProvided || !bankName.trim() || !bankAccountHolder.trim() || !bankIban.trim()) {
+      setNotice({
+        type: 'warning',
+        text: label(
+          'For a new or updated KYC submission, re-enter the full RERA, identity and bank values. Existing private values are never loaded into this browser.',
+          'لإرسال ملف تحقق جديد أو محدث، أعد إدخال بيانات ريرا والهوية والبنك كاملة. لا يتم تحميل القيم الخاصة الحالية إلى هذا المتصفح.'
+        ),
+      });
       return;
     }
     setUpdating(true);
@@ -137,38 +147,21 @@ export default function BrokerProfilePage() {
         commissionTermsVersion: CURRENT_TERMS_VERSION,
         language: lang,
       });
-
-      if (auth.currentUser && auth.currentUser.displayName !== displayName.trim()) {
-        await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-      }
-
-      setBrokerData((previous: any) => ({
-        ...previous,
-        displayName: displayName.trim(),
-        phone: phone.trim(),
-        phoneNumber: phone.trim(),
-        companyName: companyName.trim(),
-        reraLicense: reraLicense.trim(),
-        primaryRegion: primaryRegion.trim(),
-        tradeLicenseNumber: tradeLicenseNumber.trim(),
-        emiratesIdNumber: emiratesIdNumber.trim(),
-        passportNumber: passportNumber.trim(),
-        bankName: bankName.trim(),
-        bankAccountHolder: bankAccountHolder.trim(),
-        bankIban: bankIban.trim(),
-        brokerTerritory: brokerTerritory.trim(),
-        commissionAgreementAccepted,
-        ...response.data,
-      }));
+      setReraLicense('');
+      setTradeLicenseNumber('');
+      setEmiratesIdNumber('');
+      setPassportNumber('');
+      setBankName('');
+      setBankIban('');
       setNotice({
         type: 'success',
         text: response.data.idempotent
-          ? label('Broker KYC profile was already up to date.', 'ملف التحقق للوسيط محدث بالفعل.')
-          : label('Broker KYC profile submitted securely for review.', 'تم إرسال ملف التحقق للوسيط بأمان للمراجعة.'),
+          ? label('The Broker KYC submission was already current.', 'ملف تحقق الوسيط محدث بالفعل.')
+          : label('Broker KYC was submitted securely. Public identity changes remain pending until Admin approval.', 'تم إرسال تحقق الوسيط بأمان. تبقى تغييرات الهوية العامة معلقة حتى اعتماد الإدارة.'),
       });
+      await loadSummary(true);
     } catch (error: any) {
-      console.error('Broker KYC submission failed:', error);
-      setNotice({ type: 'error', text: error?.message || label('Failed to submit Broker KYC profile.', 'فشل إرسال ملف التحقق للوسيط.') });
+      setNotice({ type: 'error', text: error?.message || label('Failed to submit Broker KYC.', 'فشل إرسال تحقق الوسيط.') });
     } finally {
       setUpdating(false);
     }
@@ -180,14 +173,13 @@ export default function BrokerProfilePage() {
       return;
     }
     setResetting(true);
-    setNotice(null);
     try {
       auth.languageCode = isRTL ? 'ar' : 'en';
       await sendPasswordResetEmail(auth, user.email, {
         url: `${window.location.origin}/login?email=${encodeURIComponent(user.email)}&intendedRole=broker`,
         handleCodeInApp: false,
       });
-      setNotice({ type: 'success', text: label('Password reset email sent. Check inbox or spam folder.', 'تم إرسال رابط إعادة تعيين كلمة المرور. تحقق من البريد الوارد أو الرسائل غير المرغوب فيها.') });
+      setNotice({ type: 'success', text: label('Password reset email sent.', 'تم إرسال بريد إعادة تعيين كلمة المرور.') });
     } catch (error: any) {
       setNotice({ type: 'error', text: error?.message || label('Could not send password reset email.', 'تعذر إرسال بريد إعادة تعيين كلمة المرور.') });
     } finally {
@@ -195,33 +187,48 @@ export default function BrokerProfilePage() {
     }
   };
 
-  const readinessChecks = [
-    { label: label('Professional name', 'الاسم المهني'), complete: Boolean(displayName.trim()) },
-    { label: label('Phone number', 'رقم الهاتف'), complete: Boolean(phone.trim()) },
-    { label: label('Brokerage firm', 'شركة الوساطة'), complete: Boolean(companyName.trim()) },
-    { label: label('RERA license', 'رخصة ريرا'), complete: Boolean(reraLicense.trim()) },
-    { label: label('ID or trade license', 'هوية أو رخصة تجارية'), complete: Boolean(tradeLicenseNumber.trim() || emiratesIdNumber.trim() || passportNumber.trim()) },
-    { label: label('Territory', 'النطاق الجغرافي'), complete: Boolean((brokerTerritory || primaryRegion).trim()) },
-    { label: label('Bank and IBAN', 'البنك والآيبان'), complete: Boolean(bankName.trim() && bankAccountHolder.trim() && bankIban.trim()) },
-    { label: label('Commission agreement', 'اتفاقية العمولة'), complete: commissionAgreementAccepted },
-  ];
-  const readinessScore = Math.round((readinessChecks.filter((item) => item.complete).length / readinessChecks.length) * 100);
-  const reraStatus = String(brokerData?.reraStatus || 'NOT_SUBMITTED');
-  const payoutEligible = Boolean(brokerData?.reraVerified && commissionAgreementAccepted && bankIban.trim());
+  const localizedStatus = (value: string) => {
+    const normalized = String(value || '').toUpperCase();
+    if (lang !== 'ar') return normalized.replaceAll('_', ' ');
+    const map: Record<string, string> = {
+      NOT_SUBMITTED: 'غير مقدم', INCOMPLETE: 'غير مكتمل', PENDING: 'قيد المراجعة', PENDING_REVIEW: 'بانتظار المراجعة',
+      APPROVED: 'معتمد', VERIFIED: 'موثّق', REJECTED: 'مرفوض', SUSPENDED: 'موقوف', EXPIRED: 'منتهي',
+    };
+    return map[normalized] || value;
+  };
+  const payoutReason = (value: string) => {
+    const map: Record<string, [string, string]> = {
+      RERA_NOT_VERIFIED: ['RERA licence not verified', 'رخصة ريرا غير موثقة'],
+      IBAN_NOT_VERIFIED: ['IBAN not verified', 'الآيبان غير موثّق'],
+      COMMISSION_TERMS_NOT_ACCEPTED: ['Commission terms not accepted', 'شروط العمولة غير مقبولة'],
+      KYC_APPROVAL_NOT_BOUND_TO_CURRENT_SUBMISSION: ['Current KYC submission is not approved', 'ملف التحقق الحالي غير معتمد'],
+      KYC_NOT_APPROVED: ['KYC review not approved', 'مراجعة التحقق غير معتمدة'],
+      PAYOUT_HOLD: ['Payout hold applied', 'يوجد حجز على الدفع'],
+    };
+    return label(...(map[value] || [value, value]));
+  };
+
+  const readinessItems = useMemo(() => summary ? [
+    { label: label('RERA licence', 'رخصة ريرا'), complete: summary.kyc.reraVerified, value: summary.kyc.reraLicenseMasked || localizedStatus(summary.kyc.reraStatus) },
+    { label: label('Identity evidence', 'إثبات الهوية'), complete: Boolean(summary.kyc.tradeLicenseMasked || summary.kyc.emiratesIdMasked || summary.kyc.passportMasked), value: summary.kyc.tradeLicenseMasked || summary.kyc.emiratesIdMasked || summary.kyc.passportMasked || '—' },
+    { label: label('Verified IBAN', 'الآيبان الموثّق'), complete: summary.kyc.ibanVerified, value: summary.kyc.bankIbanMasked || '—' },
+    { label: label('Commission agreement', 'اتفاقية العمولة'), complete: summary.kyc.commissionAgreementAccepted, value: summary.kyc.commissionTermsVersion || '—' },
+    { label: label('Approval hash', 'ربط الاعتماد'), complete: summary.kyc.approvalBound, value: summary.kyc.approvalBound ? label('Bound', 'مرتبط') : label('Pending', 'معلق') },
+  ] : [], [summary, lang]);
 
   return (
     <BrokerPageFrame
       title={label('Broker Profile', 'ملف الوسيط')}
-      subtitle={label('Professional profile, private KYC vault, payout readiness, and account security', 'الملف المهني وخزنة التحقق الخاصة وجاهزية المدفوعات وأمان الحساب')}
+      subtitle={label('Masked KYC summary, server-authoritative payout readiness and secure resubmission', 'ملخص تحقق مقنّع وجاهزية دفع معتمدة من الخادم وإعادة إرسال آمنة')}
       loading={loading}
-      actions={null}
+      actions={<Button onClick={() => void loadSummary()} startIcon={<RefreshCcw size={18} />}>{label('Refresh', 'تحديث')}</Button>}
     >
       <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
         {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
         <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, borderRadius: 3 }}>
           {label(
-            'Identity, licence and bank values are stored in a private server-written KYC vault. The public profile receives only masked summaries and review status.',
-            'يتم حفظ بيانات الهوية والترخيص والبنك في خزنة تحقق خاصة يكتبها الخادم فقط. يظهر في الملف العام ملخص مقنع وحالة المراجعة فقط.',
+            'The browser receives masked KYC values only. Full identity, licence and bank data remain in the private server vault.',
+            'يتلقى المتصفح قيماً مقنّعة فقط. تبقى بيانات الهوية والترخيص والبنك الكاملة داخل خزنة الخادم الخاصة.'
           )}
         </Alert>
 
@@ -233,83 +240,53 @@ export default function BrokerProfilePage() {
               </Avatar>
               <Typography variant="h5" fontWeight="950" sx={{ mt: 2 }}>{displayName || label('Broker', 'الوسيط')}</Typography>
               <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{companyName || label('Brokerage partner', 'شريك وساطة')}</Typography>
-              <Stack spacing={2} sx={{ mt: 4 }}>
-                <Box sx={{ p: 2, bgcolor: '#F3F4F6', borderRadius: 3, textAlign: isRTL ? 'right' : 'left' }}>
-                  <Typography variant="caption" fontWeight="900">{label('PARTNER ID', 'رقم الشريك')}</Typography>
-                  <Typography variant="body2" fontFamily="monospace">BIN-{user?.uid?.substring(0, 8).toUpperCase()}</Typography>
-                </Box>
-                <Box sx={{ p: 2, bgcolor: alpha(payoutEligible ? '#10b981' : '#f59e0b', 0.08), borderRadius: 3 }}>
-                  <Typography variant="caption" fontWeight="900">{label('PAYOUT STATUS', 'حالة المدفوعات')}</Typography>
-                  <Typography variant="body2" fontWeight="900" color={payoutEligible ? '#047857' : '#b45309'}>
-                    {payoutEligible ? label('Eligible', 'مؤهل') : label('Verification required', 'التحقق مطلوب')}
-                  </Typography>
-                </Box>
-              </Stack>
+              <Box sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: alpha(summary?.payout.eligible ? '#10b981' : '#f59e0b', 0.1) }}>
+                <Typography variant="caption" fontWeight="950">{label('PAYOUT READINESS', 'جاهزية الدفع')}</Typography>
+                <Typography fontWeight="950" color={summary?.payout.eligible ? '#047857' : '#b45309'}>
+                  {summary?.payout.eligible ? label('ELIGIBLE', 'مؤهل') : label('BLOCKED', 'غير مؤهل')}
+                </Typography>
+              </Box>
+              {!summary?.payout.eligible && <Stack spacing={1} sx={{ mt: 2 }}>{(summary?.payout.blockReasons || []).map((reason) => <Chip key={reason} label={payoutReason(reason)} size="small" color="warning" />)}</Stack>}
             </Paper>
 
             <Paper sx={{ mt: 3, p: 4, borderRadius: 7, border: '1px solid #E5E7EB' }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center">
                 <Typography fontWeight="950">{label('Profile readiness', 'جاهزية الملف')}</Typography>
-                <Chip label={`${readinessScore}%`} color={readinessScore === 100 ? 'success' : 'warning'} />
+                <Typography fontWeight="950" color={binThemeTokens.gold}>{summary?.kyc.profileCompletionScore || 0}%</Typography>
               </Stack>
-              <LinearProgress variant="determinate" value={readinessScore} sx={{ my: 2, height: 8, borderRadius: 99 }} />
-              <Stack spacing={1}>
-                {readinessChecks.map((check) => (
-                  <Stack key={check.label} direction="row" justifyContent="space-between">
-                    <Typography variant="caption">{check.label}</Typography>
-                    <Typography variant="caption" fontWeight="900" color={check.complete ? '#047857' : '#b45309'}>{check.complete ? '✓' : '—'}</Typography>
-                  </Stack>
-                ))}
-              </Stack>
+              <LinearProgress variant="determinate" value={summary?.kyc.profileCompletionScore || 0} sx={{ mt: 2, height: 8, borderRadius: 99 }} />
+              <Stack spacing={1.5} sx={{ mt: 3 }}>{readinessItems.map((item) => <Box key={item.label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" fontWeight="800">{item.label}</Typography><Chip size="small" icon={item.complete ? <ShieldCheck size={14} /> : <ShieldX size={14} />} label={item.value} color={item.complete ? 'success' : 'warning'} /></Box>)}</Stack>
             </Paper>
           </Grid>
 
           <Grid item xs={12} lg={8}>
-            <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 7, border: '1px solid #E5E7EB' }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                <Box>
-                  <Typography variant="h6" fontWeight="950">{label('Professional and KYC details', 'البيانات المهنية وبيانات التحقق')}</Typography>
-                  <Typography variant="caption" color="text.secondary">{label(`Review status: ${reraStatus.replaceAll('_', ' ')}`, `حالة المراجعة: ${reraStatus}`)}</Typography>
-                </Box>
-                <Award color={binThemeTokens.gold} />
-              </Stack>
-
+            <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 7, border: '1px solid #E5E7EB' }}>
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={3}><Briefcase color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950">{label('Professional profile', 'الملف المهني')}</Typography></Stack>
               <Grid container spacing={2.5}>
-                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Professional name', 'الاسم المهني')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Professional legal name', 'الاسم القانوني المهني')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} sx={inputSx} /></Grid>
                 <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Phone', 'الهاتف')} value={phone} onChange={(event) => setPhone(event.target.value)} sx={inputSx} /></Grid>
                 <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Brokerage company', 'شركة الوساطة')} value={companyName} onChange={(event) => setCompanyName(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('RERA licence', 'رخصة ريرا')} value={reraLicense} onChange={(event) => setReraLicense(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Primary region', 'المنطقة الأساسية')} value={primaryRegion} onChange={(event) => setPrimaryRegion(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Broker territory', 'نطاق الوسيط')} value={brokerTerritory} onChange={(event) => setBrokerTerritory(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Trade licence', 'الرخصة التجارية')} value={tradeLicenseNumber} onChange={(event) => setTradeLicenseNumber(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Emirates ID', 'الهوية الإماراتية')} value={emiratesIdNumber} onChange={(event) => setEmiratesIdNumber(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Passport', 'جواز السفر')} value={passportNumber} onChange={(event) => setPassportNumber(event.target.value)} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Primary region', 'المنطقة الرئيسية')} value={primaryRegion} onChange={(event) => setPrimaryRegion(event.target.value)} sx={inputSx} /></Grid>
+                <Grid item xs={12}><TextField fullWidth variant="filled" label={label('Broker territory', 'نطاق الوسيط')} value={brokerTerritory} onChange={(event) => setBrokerTerritory(event.target.value)} sx={inputSx} /></Grid>
               </Grid>
 
               <Divider sx={{ my: 4 }} />
-              <Typography variant="subtitle1" fontWeight="950" sx={{ mb: 2 }}>{label('Private payout details', 'بيانات المدفوعات الخاصة')}</Typography>
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={1}><Award color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950">{label('Submit new or corrected private KYC', 'إرسال تحقق خاص جديد أو مصحح')}</Typography></Stack>
+              <Typography variant="body2" color="text.secondary" mb={3}>{label('Masked existing values are shown above. Re-enter all full sensitive fields only when submitting a correction or renewal.', 'تظهر القيم الحالية مقنّعة أعلاه. أعد إدخال الحقول الحساسة كاملة فقط عند إرسال تصحيح أو تجديد.')}</Typography>
               <Grid container spacing={2.5}>
-                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Bank name', 'اسم البنك')} value={bankName} onChange={(event) => setBankName(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Account holder', 'اسم صاحب الحساب')} value={bankAccountHolder} onChange={(event) => setBankAccountHolder(event.target.value)} sx={inputSx} /></Grid>
-                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('UAE IBAN', 'رقم الآيبان الإماراتي')} value={bankIban} onChange={(event) => setBankIban(event.target.value.toUpperCase())} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Full RERA licence number', 'رقم رخصة ريرا الكامل')} value={reraLicense} onChange={(event) => setReraLicense(event.target.value)} placeholder={summary?.kyc.reraLicenseMasked || ''} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Trade licence number', 'رقم الرخصة التجارية')} value={tradeLicenseNumber} onChange={(event) => setTradeLicenseNumber(event.target.value)} placeholder={summary?.kyc.tradeLicenseMasked || ''} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Emirates ID number', 'رقم الهوية الإماراتية')} value={emiratesIdNumber} onChange={(event) => setEmiratesIdNumber(event.target.value)} placeholder={summary?.kyc.emiratesIdMasked || ''} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={6}><TextField fullWidth variant="filled" label={label('Passport number', 'رقم جواز السفر')} value={passportNumber} onChange={(event) => setPassportNumber(event.target.value)} placeholder={summary?.kyc.passportMasked || ''} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Bank name', 'اسم البنك')} value={bankName} onChange={(event) => setBankName(event.target.value)} placeholder={summary?.kyc.bankNameMasked || ''} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Account holder', 'صاحب الحساب')} value={bankAccountHolder} onChange={(event) => setBankAccountHolder(event.target.value)} sx={inputSx} /></Grid>
+                <Grid item xs={12} md={4}><TextField fullWidth variant="filled" label={label('Full UAE IBAN', 'الآيبان الإماراتي الكامل')} value={bankIban} onChange={(event) => setBankIban(event.target.value)} placeholder={summary?.kyc.bankIbanMasked || ''} sx={inputSx} /></Grid>
               </Grid>
-
-              <FormControlLabel
-                sx={{ mt: 3, alignItems: 'flex-start' }}
-                control={<Checkbox checked={commissionAgreementAccepted} onChange={(event) => setCommissionAgreementAccepted(event.target.checked)} />}
-                label={label(
-                  `I accept BIN GROUP Broker commission terms ${CURRENT_TERMS_VERSION}.`,
-                  `أوافق على شروط عمولة وسيط BIN GROUP بالإصدار ${CURRENT_TERMS_VERSION}.`,
-                )}
-              />
-
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
-                <Button variant="contained" size="large" startIcon={updating ? <CircularProgress size={18} color="inherit" /> : <Save size={18} />} onClick={handleSave} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                  {label('Submit secure KYC profile', 'إرسال ملف التحقق الآمن')}
-                </Button>
-                <Button variant="outlined" size="large" startIcon={resetting ? <CircularProgress size={18} /> : <KeyRound size={18} />} onClick={handlePasswordReset} disabled={resetting}>
-                  {label('Reset password', 'إعادة تعيين كلمة المرور')}
-                </Button>
+              <FormControlLabel sx={{ mt: 3 }} control={<Checkbox checked={commissionAgreementAccepted} onChange={(event) => setCommissionAgreementAccepted(event.target.checked)} />} label={label(`I accept Broker commission terms ${CURRENT_TERMS_VERSION}.`, `أوافق على شروط عمولة الوسيط ${CURRENT_TERMS_VERSION}.`)} />
+              {summary?.kyc.reviewReason && <Alert severity={String(summary.kyc.brokerKycStatus).toUpperCase() === 'REJECTED' ? 'error' : 'info'} sx={{ mt: 2 }}>{summary.kyc.reviewReason}</Alert>}
+              <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 3 }}>
+                <Button variant="contained" startIcon={updating ? <CircularProgress size={18} /> : <Save size={18} />} disabled={updating} onClick={() => void handleSave()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{label('SUBMIT KYC FOR REVIEW', 'إرسال التحقق للمراجعة')}</Button>
+                <Button variant="outlined" startIcon={<KeyRound size={18} />} disabled={resetting} onClick={() => void handlePasswordReset()}>{label('Password reset', 'إعادة تعيين كلمة المرور')}</Button>
               </Stack>
             </Paper>
           </Grid>
