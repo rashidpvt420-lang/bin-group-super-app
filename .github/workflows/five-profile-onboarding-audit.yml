@@ -4,13 +4,21 @@ on:
   pull_request:
     paths:
       - '.github/workflows/five-profile-onboarding-audit.yml'
-      - 'apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'apps/admin-panel/src/**'
       - 'functions/**'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
+      - 'src/App.tsx'
+      - 'src/admin/**'
       - 'src/broker/**'
       - 'src/components/onboarding/**'
+      - 'src/context/LanguageContext.tsx'
+      - 'src/context/RoleContext.tsx'
+      - 'src/lib/onboardingStateMachine.ts'
       - 'src/owner/**'
       - 'src/pages/PropertyOnboardingPage.tsx'
+      - 'src/store/onboardingStore.ts'
       - 'src/technician/**'
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
@@ -20,6 +28,7 @@ on:
       - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
   push:
     branches:
+      - main
       - 'agent/five-profile-onboarding-hardening'
       - 'agent/fix-five-profile-audit-ci'
 
