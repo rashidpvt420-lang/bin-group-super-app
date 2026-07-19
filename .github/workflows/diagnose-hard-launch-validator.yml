@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - fix/hard-launch-validator-ci
+  pull_request:
+    paths:
+      - '.github/workflows/diagnose-hard-launch-validator.yml'
+      - 'scripts/lib/hard-launch-gate.mjs'
+      - 'scripts/lib/authorized-approvers.mjs'
+      - 'scripts/lib/operational-proof-schema.mjs'
+      - 'test/hard-launch-gate.test.mjs'
+      - 'test/hard-launch-validator-hardening.test.mjs'
 
 permissions:
   contents: read
