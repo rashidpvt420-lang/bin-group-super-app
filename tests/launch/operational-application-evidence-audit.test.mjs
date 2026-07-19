@@ -55,7 +55,7 @@ test('payment and commission evidence use the real callable and prove replay inv
   assert.match(verifier, /commissionsAfter\.length !== 1/);
   assert.match(verifier, /beforeHash !== afterHash/);
   assert.match(approval, /approvalWasIdempotent = true/);
-  assert.match(commission, /const commissionId = `commission_\$\{contractId\}`/);
+  assert.match(commission, /\.doc\(`commission_\$\{contractId\}`\)/);
   assert.match(commission, /transaction\.create\(commissionRef/);
 });
 
