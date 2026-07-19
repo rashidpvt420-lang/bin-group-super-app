@@ -35,8 +35,8 @@ const canonicalId = (value, label) => {
 const list = (value) => Array.isArray(value) ? value : [];
 const coordinates = (value) => {
   if (!value || typeof value !== 'object') return null;
-  const lat = Number(value.lat ?? value.latitude?._latitude ?? value.latitude);
-  const lng = Number(value.lng ?? value.longitude?._longitude ?? value.longitude);
+  const lat = Number(value.lat ?? value._latitude ?? value.latitude?._latitude ?? value.latitude);
+  const lng = Number(value.lng ?? value._longitude ?? value.longitude?._longitude ?? value.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat, lng };
 };
@@ -117,6 +117,7 @@ const propertyCoordinates = firstCoordinates(
   property.location,
   property.coordinates,
   property.geo,
+  property.geoPoint,
   property.gps,
   property,
 );
