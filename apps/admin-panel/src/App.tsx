@@ -206,19 +206,11 @@ function Layout() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <LanguageSwitcher />
                         <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                        <Box
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => navigate('/profile')}
-                            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') navigate('/profile'); }}
-                            sx={{ width: '1px', height: 24, display: 'none' }}
-                        />
-                        <Box
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => navigate('/profile')}
-                            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') navigate('/profile'); }}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}
+                        <Button
+                            href="/profile"
+                            data-testid="admin-profile-link"
+                            aria-label={shellText('Open Admin profile and security', 'فتح ملف المسؤول والأمان')}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, minWidth: 0, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', color: '#FFF', textTransform: 'none', '&:hover': { bgcolor: 'rgba(218,165,32,0.10)', borderColor: 'rgba(218,165,32,0.45)' } }}
                         >
                             <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <UserIcon size={14} color="#000" />
@@ -227,7 +219,7 @@ function Layout() {
                                 <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || shellText('ADMIN', 'مسؤول')}</Typography>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || shellText('operator', 'مشغّل')}</Typography>
                             </Box>
-                        </Box>
+                        </Button>
                         <Button onClick={handleLogout} data-testid="admin-logout" startIcon={<LogOut size={16} />} sx={{ color: '#ef4444', fontWeight: 900, fontSize: '0.75rem', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>
                             {t('nav.logout') || shellText('LOGOUT', 'تسجيل الخروج')}
                         </Button>
