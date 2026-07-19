@@ -9,6 +9,12 @@ def patch(path, old, new):
     file.write_text(source.replace(old, new))
 
 patch(
+    'scripts/postdeploy-release-gate.mjs',
+    '      failures.push(...validatePilotIncidentReport(pilotReport, githubSha));',
+    '      failures.push(...validatePilotIncidentReport(pilotReport, githubSha, { now, env }));',
+)
+
+patch(
     'tests/launch/operational-application-evidence-audit.test.mjs',
     "  assert.match(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);",
     "  assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS/);\n  assert.match(workflow, /secrets\\.AUTHORIZED_FOUNDER_ACTORS/);\n  assert.doesNotMatch(workflow, /GITHUB_ACTOR[^\\n]*!=[^\\n]*rashidpvt420-lang/);",
