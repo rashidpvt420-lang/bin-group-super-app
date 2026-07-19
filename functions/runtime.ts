@@ -55,7 +55,7 @@ export {
   listTechnicianCredentialRenewals,
 } from "./secureTechnicianProfileOperations";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
-export { submitBrokerKycProfile } from "./secureBrokerKycSubmission";
+export { submitBrokerKycProfile, getBrokerKycProfileSummary } from "./secureBrokerKycSubmission";
 export { adminReviewBrokerKyc } from "./secureBrokerKycReview";
 export {
   requestBrokerPayoutOtp,
