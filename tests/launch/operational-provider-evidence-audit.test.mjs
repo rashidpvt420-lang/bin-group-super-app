@@ -62,7 +62,9 @@ test('Stripe provider proof signs and replays the same live webhook event exactl
 
   assert.match(workflow, /STRIPE_REQUIRE_REPLAY_PROOF:\s*'true'/);
   assert.match(workflow, /STRIPE_WEBHOOK_SECRET/);
-  assert.match(workflow, /STRIPE_WEBHOOK_URL/);
+  assert.match(workflow, /STRIPE_SECRET_KEY="\$stripe_key" STRIPE_WEBHOOK_SECRET="\$webhook_secret"/);
+  assert.doesNotMatch(workflow, /STRIPE_SECRET_KEY=\$stripe_key[\s\S]*GITHUB_ENV|STRIPE_WEBHOOK_SECRET=\$webhook_secret[\s\S]*GITHUB_ENV/);
+  assert.match(verifier, /europe-west3-bin-group-57c60\.cloudfunctions\.net\/stripeWebhook/);
   assert.match(verifier, /createHmac\('sha256', webhookSecret\)/);
   assert.match(verifier, /stripe-signature/);
   assert.match(verifier, /replayPayload\?\.duplicate === true/);
@@ -83,12 +85,15 @@ test('App Check enforcement proof performs invalid and valid authenticated Fires
   ]);
 
   assert.match(workflow, /Verify production App Check enforcement/);
+  assert.match(workflow, /VITE_FIREBASE_API_KEY:\s*\$\{\{ secrets\.VITE_FIREBASE_API_KEY \}\}/);
+  assert.match(workflow, /VITE_FIREBASE_APP_ID:\s*\$\{\{ secrets\.VITE_FIREBASE_APP_ID \}\}/);
   assert.match(verifier, /accounts:signInWithPassword/);
   assert.match(verifier, /exchangeDebugToken/);
   assert.match(verifier, /X-Firebase-AppCheck/);
   assert.match(verifier, /invalidTokenStatus === 401 \|\| invalidTokenStatus === 403/);
   assert.match(verifier, /validTokenStatus === 200 \|\| validTokenStatus === 404/);
   assert.match(verifier, /appcheck-enforcement-proof\.json/);
+  assert.doesNotMatch(verifier, /AIza[0-9A-Za-z_-]{20,}/);
   assert.match(publisher, /proof\.invalidTokenRejected !== true/);
   assert.match(publisher, /proof\.validTokenAccepted !== true/);
 });
