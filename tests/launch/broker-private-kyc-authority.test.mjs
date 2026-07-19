@@ -18,7 +18,8 @@ test('Broker KYC submission invalidates any previous approval binding', async ()
   assert.match(wrapper, /approvedSubmissionHash:\s*FieldValue\.delete\(\)/);
   assert.match(wrapper, /reraVerified:\s*false/);
   assert.match(wrapper, /ibanVerified:\s*false/);
-  assert.match(wrapper, /admin\.auth\(\)\.updateUser\(uid, \{ displayName \}\)/);
+  assert.match(wrapper, /authDisplayNameChangeDeferredUntilApproval:\s*true/);
+  assert.doesNotMatch(wrapper, /admin\.auth\(\)\.updateUser\(uid/);
 });
 
 test('Admin Broker review validates the private vault and exact submission hash', async () => {
@@ -43,7 +44,7 @@ test('Broker payout authority reads approved bank data only from private KYC', a
 
 test('runtime explicitly overrides legacy Broker KYC and payout callables', async () => {
   const runtime = await read('functions/runtime.ts');
-  assert.match(runtime, /export \{ submitBrokerKycProfile \} from "\.\/secureBrokerKycSubmission";/);
+  assert.match(runtime, /export\s*\{\s*submitBrokerKycProfile,\s*getBrokerKycProfileSummary\s*\}\s*from "\.\/secureBrokerKycSubmission";/);
   assert.match(runtime, /export \{ adminReviewBrokerKyc \} from "\.\/secureBrokerKycReview";/);
   assert.match(runtime, /submitBrokerPayoutRequest/);
   assert.match(runtime, /from "\.\/secureBrokerPayoutOperations";/);
