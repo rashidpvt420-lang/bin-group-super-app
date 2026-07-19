@@ -1,7 +1,7 @@
-# Current-main Firebase production dispatch
+# Atomic Firebase production dispatch
 
-Use the **Start Firebase Production Deploy** workflow for manual production deployments.
+Use **START HERE - Firebase Production Deploy** for manual production deployments. Do not start or re-run the legacy `Firebase Production Deploy` workflow directly.
 
-The wrapper resolves the current `main` commit inside GitHub immediately before dispatching the protected `Firebase Production Deploy` workflow. It forwards that exact commit as `expected_commit_sha`, preventing stale copy-and-paste SHA failures while preserving the canonical workflow's exact-SHA comparison, founder confirmations, protected `production` environment, Workload Identity authentication, Admin MFA/recovery preflight, and post-deployment gates.
+The wrapper waits for a stable `main` SHA, dispatches the protected production workflow, reads the created workflow run back from GitHub, and verifies that GitHub bound it to the same SHA. If `main` advanced during dispatch, the mismatched run is cancelled and the wrapper retries automatically up to five times.
 
-The wrapper never deploys Firebase directly and does not receive Google Cloud credentials. All deployment authority remains in `firebase-production-deploy.yml`.
+The wrapper never deploys Firebase and receives no Google Cloud credentials. The canonical workflow remains responsible for exact-SHA enforcement, founder authorization, incident attestation, protected `production` environment approval, Workload Identity authentication, Admin MFA and recovery verification, artifact binding, and post-deployment gates.
