@@ -1,0 +1,81 @@
+from pathlib import Path
+import json
+
+root = Path('.')
+
+def replace(path, old, new, *, count=-1):
+    file = root / path
+    source = file.read_text()
+    if old not in source:
+        raise SystemExit(f'Missing patch anchor in {path}: {old[:120]!r}')
+    file.write_text(source.replace(old, new, count))
+
+# Gate-specific evidence schema and source-system validation.
+schema = root / 'scripts/lib/operational-proof-schema.mjs'
+source = schema.read_text()
+source = source.replace(
+"const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;\n",
+"""const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const OPERATIONAL_GATE_EVIDENCE_TYPES = Object.freeze({
+  ownerPaymentActivation: new Set(['production-transaction']),
+  paymentUnlockExactlyOnce: new Set(['production-transaction']),
+  tenantNotificationDelivery: new Set(['production-transaction', 'workflow-artifact']),
+  technicianPhysicalGpsEvidence: new Set(['physical-device-report']),
+  brokerCommissionLockExactlyOnce: new Set(['production-transaction']),
+  adminStaffClaims: new Set(['workflow-artifact', 'provider-console-export']),
+  stripeLiveBilling: new Set(['production-transaction', 'provider-console-export']),
+  appCheckEnforcement: new Set(['provider-console-export', 'workflow-artifact']),
+  privilegedAccessRotation: new Set(['secret-rotation-record']),
+  brandedEmailDelivery: new Set(['provider-console-export', 'workflow-artifact']),
+  renewalScheduler: new Set(['scheduler-run']),
+});
+
+const SOURCE_SYSTEM_PATTERNS = Object.freeze({
+  ownerPaymentActivation: [/firebase.*payment.*activation/i],
+  paymentUnlockExactlyOnce: [/firebase.*adminapprovepayment.*replay/i],
+  tenantNotificationDelivery: [/firebase.*notification.*fcm/i, /email.*delivery/i],
+  technicianPhysicalGpsEvidence: [/firebase.*technician.*device.*storage/i, /physical.*device.*gps/i],
+  brokerCommissionLockExactlyOnce: [/firebase.*broker.*commission.*replay/i],
+  adminStaffClaims: [/firebase.*auth.*staff/i],
+  stripeLiveBilling: [/stripe/i],
+  appCheckEnforcement: [/firebase.*app\\s*check/i, /app\\s*check.*firebase/i],
+  privilegedAccessRotation: [/google.*secret.*firebase.*authentication/i, /secret.*rotation/i],
+  brandedEmailDelivery: [/email|mail|postmark|sendgrid|smtp/i],
+  renewalScheduler: [/firebase.*renewal.*watcher/i, /cloud.*scheduler/i],
+});
+""",
+)
+source = source.replace(
+"""function requiredOne(errors, doc, field) {
+  if (Number(doc?.[field]) !== 1) errors.push(`${field} must equal 1`);
+}
+""",
+"""function requiredOne(errors, doc, field) {
+  if (Number(doc?.[field]) !== 1) errors.push(`${field} must equal 1`);
+}
+
+function validateEvidenceType(errors, gateKey, evidenceType) {
+  const allowed = OPERATIONAL_GATE_EVIDENCE_TYPES[gateKey];
+  if (!allowed || !allowed.has(String(evidenceType || ''))) {
+    errors.push(`evidenceType is not accepted for ${gateKey || '(missing gate)'}`);
+  }
+}
+
+function validateSourceSystem(errors, gateKey, sourceSystem) {
+  const value = String(sourceSystem || '').trim();
+  if (!value) {
+    errors.push('sourceSystem is required');
+    return;
+  }
+  const patterns = SOURCE_SYSTEM_PATTERNS[gateKey] || [];
+  if (!patterns.some((pattern) => pattern.test(value))) {
+    errors.push(`sourceSystem is not accepted for ${gateKey || '(missing gate)'}`);
+  }
+}
+""",
+)
+source = source.replace(
+"""  if (doc.evidenceType !== evidenceType) errors.push('evidenceType mismatch');
+  if (doc.commitSha !== commitSha) errors.push('commitSha mismatch');
+  if (doc.projectId !== PRODUCTION.projectId) errors.push(`projectId must b
