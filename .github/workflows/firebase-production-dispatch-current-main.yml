@@ -1,4 +1,5 @@
-name: Start Firebase Production Deploy
+name: START HERE - Firebase Production Deploy
+run-name: Production dispatch - ${{ inputs.launch_mode }}
 
 on:
   workflow_dispatch:
@@ -92,8 +93,9 @@ concurrency:
 
 jobs:
   dispatch-current-main:
-    name: Bind and dispatch current main
+    name: Atomically bind and dispatch current main
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Validate founder confirmations and launch mode
         env:
@@ -111,7 +113,7 @@ jobs:
             [[ "$PUBLIC_GATE" == "false" ]]
           fi
 
-      - name: Dispatch protected workflow against current main SHA
+      - name: Dispatch protected workflow with verified exact SHA
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -133,31 +135,81 @@ jobs:
           STRIPE_EVENT_ID: ${{ inputs.stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
-          main_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
-          jq -n \
-            --arg ref main \
-            --arg confirmation "$CONFIRMATION" \
-            --arg hard "$HARD_CONFIRMATION" \
-            --arg sha "$main_sha" \
-            --arg founderName "$FOUNDER_NAME" \
-            --arg founderEmail "$FOUNDER_EMAIL" \
-            --arg launchMode "$LAUNCH_MODE" \
-            --arg publicGate "$PUBLIC_GATE" \
-            --arg incidentAttestation "$INCIDENT_ATTESTATION" \
-            --arg incidentActive "$INCIDENT_ACTIVE_JSON" \
-            --arg incidentRollback "$INCIDENT_REQUIRES_ROLLBACK" \
-            --arg incidentRollbackReason "$INCIDENT_ROLLBACK_REASON" \
-            --arg incidentFailed "$INCIDENT_LAST_DEPLOYMENT_FAILED" \
-            --arg incidentFailedAt "$INCIDENT_LAST_DEPLOYMENT_FAILED_AT" \
-            --arg evidenceRefs "$INCIDENT_EVIDENCE_REFS" \
-            --arg clearanceRun "$HARD_CLEARANCE_RUN_ID" \
-            --arg stripeSession "$STRIPE_SESSION_ID" \
-            --arg stripeEvent "$STRIPE_EVENT_ID" \
-            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}}' \
-            > dispatch.json
-          gh api --method POST \
-            -H 'Accept: application/vnd.github+json' \
-            "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/dispatches" \
-            --input dispatch.json
-          echo "Protected Firebase Production Deploy dispatched for current main SHA: $main_sha"
+
+          for attempt in 1 2 3 4 5; do
+            main_before="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            [[ "$main_before" =~ ^[0-9a-f]{40}$ ]]
+            sleep 3
+            main_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            if [[ "$main_before" != "$main_sha" ]]; then
+              echo "main advanced during stability check; retrying ($attempt/5)."
+              continue
+            fi
+
+            attempt_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            jq -n \
+              --arg ref main \
+              --arg confirmation "$CONFIRMATION" \
+              --arg hard "$HARD_CONFIRMATION" \
+              --arg sha "$main_sha" \
+              --arg founderName "$FOUNDER_NAME" \
+              --arg founderEmail "$FOUNDER_EMAIL" \
+              --arg launchMode "$LAUNCH_MODE" \
+              --arg publicGate "$PUBLIC_GATE" \
+              --arg incidentAttestation "$INCIDENT_ATTESTATION" \
+              --arg incidentActive "$INCIDENT_ACTIVE_JSON" \
+              --arg incidentRollback "$INCIDENT_REQUIRES_ROLLBACK" \
+              --arg incidentRollbackReason "$INCIDENT_ROLLBACK_REASON" \
+              --arg incidentFailed "$INCIDENT_LAST_DEPLOYMENT_FAILED" \
+              --arg incidentFailedAt "$INCIDENT_LAST_DEPLOYMENT_FAILED_AT" \
+              --arg evidenceRefs "$INCIDENT_EVIDENCE_REFS" \
+              --arg clearanceRun "$HARD_CLEARANCE_RUN_ID" \
+              --arg stripeSession "$STRIPE_SESSION_ID" \
+              --arg stripeEvent "$STRIPE_EVENT_ID" \
+              '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}}' \
+              > dispatch.json
+
+            gh api --method POST \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/dispatches" \
+              --input dispatch.json
+
+            run_id=''
+            run_sha=''
+            for poll in $(seq 1 20); do
+              runs_json="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=20")"
+              run_id="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" '
+                [.workflow_runs[] | select(.actor.login == $actor and .created_at >= $started)]
+                | sort_by(.created_at)
+                | last
+                | .id // empty
+              ' <<<"$runs_json")"
+              run_sha="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" '
+                [.workflow_runs[] | select(.actor.login == $actor and .created_at >= $started)]
+                | sort_by(.created_at)
+                | last
+                | .head_sha // empty
+              ' <<<"$runs_json")"
+              if [[ -n "$run_id" && -n "$run_sha" ]]; then
+                break
+              fi
+              sleep 2
+            done
+
+            if [[ -z "$run_id" || -z "$run_sha" ]]; then
+              echo "Could not resolve the dispatched production run; retrying ($attempt/5)."
+              continue
+            fi
+
+            if [[ "$run_sha" == "$main_sha" ]]; then
+              echo "Protected Firebase Production Deploy run $run_id is bound to exact SHA $main_sha."
+              exit 0
+            fi
+
+            echo "Dispatch race detected: expected $main_sha but GitHub resolved $run_sha. Cancelling run $run_id and retrying."
+            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
+            sleep 3
+          done
+
+          echo "::error::Could not atomically bind Firebase Production Deploy after five attempts. Stop repository merges and run this wrapper again."
+          exit 1
