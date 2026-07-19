@@ -17,6 +17,7 @@ async function ownedDocuments(collectionName: string, uid: string) {
 }
 
 const approvedStatus = (value: unknown) => ["approved", "verified", "active", "completed"].includes(lower(value));
+const reviewApprovedStatus = (value: unknown) => ["approved", "verified", "completed"].includes(lower(value));
 const signedStatus = (value: unknown) => ["signed", "active", "approved", "executed"].includes(lower(value));
 const paymentApproved = (record: FirebaseFirestore.DocumentData) => (
   record.paymentVerified === true ||
@@ -26,6 +27,15 @@ const paymentApproved = (record: FirebaseFirestore.DocumentData) => (
 const intakeProperties = (record: FirebaseFirestore.DocumentData) => Array.isArray(record.properties)
   ? record.properties
   : record.property ? [record.property] : [];
+const propertyProofReviewApproved = (record: FirebaseFirestore.DocumentData) => (
+  record.propertyProofApproved === true ||
+  reviewApprovedStatus(
+    record.propertyProofStatus ||
+    record.documentReviewStatus ||
+    record.documentStatus ||
+    record.verificationStatus,
+  )
+);
 
 export const getOwnerProfileReadiness = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
@@ -44,9 +54,9 @@ export const getOwnerProfileReadiness = onCall(
     ]);
     const profile = userSnap.data() || {};
     const identityStatus = profile.kycStatus || profile.identityStatus || profile.verificationStatus || profile.ownerKycStatus;
-    const identityVerified = profile.kycVerified === true || profile.identityVerified === true || profile.ownerVerified === true || approvedStatus(identityStatus) || intakes.some((item) => approvedStatus(item.kycStatus || item.identityStatus || item.documentStatus));
+    const identityVerified = profile.kycVerified === true || profile.identityVerified === true || profile.ownerVerified === true || reviewApprovedStatus(identityStatus) || intakes.some((item) => reviewApprovedStatus(item.kycStatus || item.identityStatus || item.documentStatus));
     const phoneVerified = Boolean(authRecord.phoneNumber) && (profile.phoneVerified === true || profile.phoneAuthority === "FIREBASE_AUTH_PHONE");
-    const propertyProofApproved = properties.some((item) => approvedStatus(item.titleDeedStatus || item.propertyProofStatus || item.verificationStatus)) || intakes.some((item) => approvedStatus(item.documentStatus || item.kycStatus || item.verificationStatus) || Boolean(item.documentUrls?.propertyProof));
+    const propertyProofApproved = properties.some(propertyProofReviewApproved) || intakes.some(propertyProofReviewApproved);
     const locationApproved = properties.some((item) => item.geo?.verified === true && item.geo?.dispatchReady === true) || intakes.some((item) => intakeProperties(item).length > 0 && intakeProperties(item).every((property: any) => property?.geo?.verified === true && property?.geo?.dispatchReady === true));
     const contractSigned = contracts.some((item) => item.signedAt || signedStatus(item.status || item.contractStatus)) || intakes.some((item) => Boolean(item.signatureName && (item.otpVerificationId || item.contractOtpVerificationId)));
     const depositReceived = payments.some(paymentApproved) || intakes.some(paymentApproved) || profile.paymentVerified === true;
