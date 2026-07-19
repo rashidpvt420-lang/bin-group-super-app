@@ -68,7 +68,7 @@ test('tenant notification proof requires tenant binding, photo evidence and succ
   assert.match(verifier, /pushDeliveryState\) !== 'SUCCESS'/);
   assert.match(verifier, /pushSuccessCount \|\| 0\) < 1/);
   assert.match(verifier, /pushFailureCount \|\| 0\) !== 0/);
-  assert.match(verifier, /photoEvidence\(ticket\.data\)/);
+  assert.match(verifier, /photoEvidence\(ticket\)/);
   assert.match(verifier, /ticket is not bound to the tenant/);
   assert.match(verifier, /property and unit/);
   assert.match(delivery, /pushDeliveryState:\s*deliveryState/);
