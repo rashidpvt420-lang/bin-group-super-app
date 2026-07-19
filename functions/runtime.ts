@@ -25,6 +25,7 @@ export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
+export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtp";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
