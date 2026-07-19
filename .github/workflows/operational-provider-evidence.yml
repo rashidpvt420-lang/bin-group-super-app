@@ -27,10 +27,6 @@ on:
         description: 'Stripe only: matching evt_ checkout.session.completed event ID'
         required: false
         type: string
-      stripe_webhook_url:
-        description: 'Stripe only: deployed HTTPS stripeWebhook function URL'
-        required: false
-        type: string
       confirmation:
         description: 'Enter PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE'
         required: true
@@ -55,6 +51,8 @@ jobs:
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
       E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
 
     steps:
@@ -66,7 +64,6 @@ jobs:
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
           STRIPE_SESSION: ${{ inputs.stripe_checkout_session_id }}
           STRIPE_EVENT: ${{ inputs.stripe_webhook_event_id }}
-          STRIPE_URL: ${{ inputs.stripe_webhook_url }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
@@ -94,10 +91,6 @@ jobs:
               fi
               if [[ ! "$STRIPE_SESSION" =~ ^cs_live_ ]] || [[ ! "$STRIPE_EVENT" =~ ^evt_ ]]; then
                 echo "::error::Stripe proof requires matching live checkout and event IDs."
-                exit 1
-              fi
-              if [[ ! "$STRIPE_URL" =~ ^https:// ]]; then
-                echo "::error::Stripe proof requires the deployed HTTPS webhook URL."
                 exit 1
               fi
               ;;
@@ -171,8 +164,13 @@ jobs:
           appendFileSync(process.env.GITHUB_ENV, `VALIDATED_ARTIFACT_DIGEST=${digest}\n`);
           NODE
 
-      - name: Load protected Stripe secrets
+      - name: Verify live Stripe payment and exactly-once webhook replay
         if: inputs.gate == 'stripeLiveBilling'
+        env:
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ inputs.stripe_checkout_session_id }}
+          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ inputs.stripe_webhook_event_id }}
+          STRIPE_REQUIRE_REPLAY_PROOF: 'true'
         run: |
           set -euo pipefail
           stripe_key="$(gcloud secrets versions access latest --secret=STRIPE_SECRET_KEY --project="$GCP_PROJECT_ID")"
@@ -187,20 +185,8 @@ jobs:
           fi
           echo "::add-mask::$stripe_key"
           echo "::add-mask::$webhook_secret"
-          {
-            echo "STRIPE_SECRET_KEY=$stripe_key"
-            echo "STRIPE_WEBHOOK_SECRET=$webhook_secret"
-          } >> "$GITHUB_ENV"
-
-      - name: Verify live Stripe payment and exactly-once webhook replay
-        if: inputs.gate == 'stripeLiveBilling'
-        env:
-          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ inputs.stripe_checkout_session_id }}
-          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ inputs.stripe_webhook_event_id }}
-          STRIPE_WEBHOOK_URL: ${{ inputs.stripe_webhook_url }}
-          STRIPE_REQUIRE_REPLAY_PROOF: 'true'
-        run: node scripts/verify-stripe-live-proof.mjs
+          STRIPE_SECRET_KEY="$stripe_key" STRIPE_WEBHOOK_SECRET="$webhook_secret" \
+            node scripts/verify-stripe-live-proof.mjs
 
       - name: Publish canonical operational provider evidence
         env:
