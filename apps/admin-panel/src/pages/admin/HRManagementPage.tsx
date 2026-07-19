@@ -25,12 +25,13 @@ export default function HRManagementPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
 
-    const isHRManager = user?.role === 'hr_manager' || user?.role === 'admin' || user?.role === 'ceo';
-    const isHRStaff = user?.role === 'hr_staff' || isHRManager;
+    const privilegedHRRoles = new Set(['super_admin', 'admin', 'ceo', 'hr_admin', 'hr_manager']);
+    const isHRManager = Boolean(user?.claims?.admin === true || user?.isAdmin === true || privilegedHRRoles.has(String(user?.role)));
+    const isHRStaff = Boolean(isHRManager || user?.role === 'hr_staff');
 
     useEffect(() => {
         // Load staff / technician records
-        const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'hr_staff', 'hr_manager']));
+        const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'hr_staff', 'hr_manager', 'hr_admin']));
         const unsub = onSnapshot(q, (snap) => {
             setStaff(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
@@ -46,6 +47,14 @@ export default function HRManagementPage() {
         });
         return () => unsub();
     }, []);
+
+    const filteredStaff = staff.filter((member) => {
+        const haystack = [member.displayName, member.email, member.role, member.specialization, member.emirate]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return haystack.includes(searchTerm.trim().toLowerCase());
+    });
 
     const treasuryLogsByMonth = Object.values(
         payrollRecords.reduce((acc: Record<string, { month: string; total: number; allPaid: boolean }>, rec: any) => {
@@ -84,6 +93,9 @@ export default function HRManagementPage() {
                         </Typography>
                         <Typography variant="h3" fontWeight="950" color="#FFF">
                             HR <Box component="span" sx={{ color: binThemeTokens.gold }}>Command</Box>
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1, color: 'rgba(255,255,255,0.58)', maxWidth: 760 }}>
+                            Staff registry, technician personnel control, attendance, leave, HR documents, and payroll handoff for Admin and Super Admin.
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={2}>
@@ -126,7 +138,7 @@ export default function HRManagementPage() {
                                 }}
                                 sx={{ width: 400 }}
                             />
-                            <Chip label={`${staff.length} TOTAL PERSONNEL`} sx={{ fontWeight: 900 }} />
+                            <Chip label={`${filteredStaff.length} TOTAL PERSONNEL`} sx={{ fontWeight: 900 }} />
                         </Box>
 
                         <TableContainer>
@@ -142,16 +154,22 @@ export default function HRManagementPage() {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {staff.map((s) => (
+                                    {filteredStaff.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} sx={{ color: 'rgba(255,255,255,0.45)', textAlign: 'center', py: 5 }}>
+                                                No HR personnel matched this filter. Register staff or check Firestore users roles.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : filteredStaff.map((s) => (
                                         <TableRow key={s.id} hover>
                                             <TableCell>
                                                 <Stack direction="row" spacing={2} alignItems="center">
                                                     <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.2), color: binThemeTokens.gold, fontWeight: 900 }}>
-                                                        {s.displayName?.charAt(0)}
+                                                        {(s.displayName || s.email || '?').charAt(0).toUpperCase()}
                                                     </Avatar>
                                                     <Box>
-                                                        <Typography variant="body2" fontWeight="900" color="#FFF">{s.displayName}</Typography>
-                                                        <Typography variant="caption" color="textSecondary">{s.email}</Typography>
+                                                        <Typography variant="body2" fontWeight="900" color="#FFF">{s.displayName || 'Unnamed staff'}</Typography>
+                                                        <Typography variant="caption" color="textSecondary">{s.email || 'No email'}</Typography>
                                                     </Box>
                                                 </Stack>
                                             </TableCell>
@@ -207,6 +225,15 @@ export default function HRManagementPage() {
                     </Paper>
                 )}
 
+                {tab === 1 && (
+                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">Attendance & Leave</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
+                            Attendance capture, leave approvals, sick leave, shift exceptions, and duty compliance are reserved here for the HR workflow. Current production source of truth remains staff user records and payroll ledger until attendance collections are activated.
+                        </Typography>
+                    </Paper>
+                )}
+
                 {tab === 2 && (
                     <Box sx={{ py: 4 }}>
                         <Grid container spacing={4}>
@@ -259,6 +286,15 @@ export default function HRManagementPage() {
                             </Grid>
                         </Grid>
                     </Box>
+                )}
+
+                {tab === 3 && (
+                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">HR Documents</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
+                            Staff contracts, Emirates ID/passport copies, certifications, warning letters, leave files, and payroll documents should attach here after Storage rules and HR document collections are hardened.
+                        </Typography>
+                    </Paper>
                 )}
             </Container>
         </Box>
