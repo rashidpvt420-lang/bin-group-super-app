@@ -27,8 +27,9 @@ const requiredHash = (value, label, errors) => {
   if (!/^[a-f0-9]{64}$/i.test(text(value))) errors.push(`${label} must be SHA-256`);
 };
 
-const manifests = {
+const manifests = Object.freeze({
   ownerPaymentActivation: {
+    proofPath: 'launch_package/application-ownerPaymentActivation.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase payment activation transaction',
     reference: (proof) => `firestore://payment_transactions/${proof.evidence.paymentId}#contract=${proof.evidence.contractId}`,
@@ -44,6 +45,7 @@ const manifests = {
     },
   },
   paymentUnlockExactlyOnce: {
+    proofPath: 'launch_package/application-paymentUnlockExactlyOnce.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase adminApprovePayment replay verifier',
     reference: (proof) => `firebase-callable://adminApprovePayment/${proof.evidence.paymentId}#idempotent-replay`,
@@ -59,6 +61,7 @@ const manifests = {
     },
   },
   tenantNotificationDelivery: {
+    proofPath: 'launch_package/application-tenantNotificationDelivery.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase notificationDelivery FCM trigger',
     reference: (proof) => `firestore://notifications/${proof.evidence.notificationId}#ticket=${proof.evidence.ticketId}`,
@@ -75,6 +78,7 @@ const manifests = {
     },
   },
   brokerCommissionLockExactlyOnce: {
+    proofPath: 'launch_package/application-brokerCommissionLockExactlyOnce.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase broker commission transaction and payment replay',
     reference: (proof) => `firestore://broker_commissions/${proof.evidence.commissionId}#contract=${proof.evidence.contractId}`,
@@ -89,6 +93,7 @@ const manifests = {
     },
   },
   adminStaffClaims: {
+    proofPath: 'launch_package/application-adminStaffClaims.json',
     evidenceType: 'workflow-artifact',
     sourceSystem: 'Firebase Auth and staff registries',
     reference: (proof) => `firebase-auth://staff/${proof.evidence.staffUidHash}#least-privilege`,
@@ -101,6 +106,7 @@ const manifests = {
     },
   },
   renewalScheduler: {
+    proofPath: 'launch_package/application-renewalScheduler.json',
     evidenceType: 'scheduler-run',
     sourceSystem: 'Firebase contract renewal watcher',
     reference: (proof) => `firestore://contract_renewal_watch/${proof.evidence.watchId}#source=${proof.evidence.sourceCollection}`,
@@ -116,7 +122,7 @@ const manifests = {
       if (!text(e.schedulerRunIdHash) && !text(e.provenanceHash)) errors.push('scheduler provenance is required');
     },
   },
-};
+});
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('publisher may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== EXPECTED_REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('publisher requires the protected main repository');
@@ -130,7 +136,7 @@ const commitSha = text(process.env.GITHUB_SHA);
 const runId = text(process.env.GITHUB_RUN_ID);
 if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(runId)) fail('exact SHA and numeric workflow run ID are required');
 
-const proofPath = path.resolve(`launch_package/application-${gate}.json`);
+const proofPath = path.resolve(manifest.proofPath);
 let proof;
 try { proof = JSON.parse(readFileSync(proofPath, 'utf8')); }
 catch (error) { fail(`proof file missing or malformed: ${error.message}`); }
