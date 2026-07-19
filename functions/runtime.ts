@@ -47,8 +47,13 @@ export {
   resumeTechnicianDuty,
   acceptTechnicianTicket,
   updateTicketLifecycle,
+  getTechnicianOperationalReadiness,
 } from "./secureTechnicianOperations";
-export { updateTechnicianProfilePreferences } from "./secureTechnicianProfileOperations";
+export {
+  updateTechnicianProfilePreferences,
+  submitTechnicianCredentialRenewal,
+  listTechnicianCredentialRenewals,
+} from "./secureTechnicianProfileOperations";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
 export { submitBrokerKycProfile } from "./secureBrokerKycSubmission";
 export { adminReviewBrokerKyc } from "./secureBrokerKycReview";
