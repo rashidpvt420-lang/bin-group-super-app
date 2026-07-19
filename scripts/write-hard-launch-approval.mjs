@@ -11,7 +11,6 @@ import {
   sha256File,
 } from './lib/launch-honesty.mjs';
 import {
-  AUTHORIZED_HARD_LAUNCH_ACTORS,
   HARD_LAUNCH_CONFIRMATION_PHRASE,
   hardLaunchApprovalPath,
   operationalReadinessPath,
@@ -20,6 +19,7 @@ import {
   validateOperationalReadinessReport,
   validatePilotIncidentReport,
 } from './lib/hard-launch-gate.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 function requireEnv(name) {
   const value = String(process.env[name] || '').trim();
@@ -39,7 +39,9 @@ const githubRunId = requireEnv('GITHUB_RUN_ID');
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Approval may only be generated in GitHub Actions');
 if (githubRef !== 'refs/heads/main') throw new Error('Approval requires refs/heads/main');
 if (githubRepository !== 'rashidpvt420-lang/bin-group-super-app') throw new Error('Unexpected GitHub repository');
-if (!AUTHORIZED_HARD_LAUNCH_ACTORS.includes(actor)) throw new Error(`Unauthorized actor: ${actor}`);
+if (process.env.GITHUB_WORKFLOW !== 'Live Role Smoke Tests' || process.env.GITHUB_JOB !== 'hard-public-launch-clearance') throw new Error('Unexpected protected workflow context');
+if (!/^\d+$/.test(githubRunId)) throw new Error('GITHUB_RUN_ID must be numeric');
+requireAuthorizedApprover(actor);
 if (!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error('Expected SHA must be a full lowercase SHA');
 if (commitSha !== expectedSha) throw new Error('Checked-out commit does not equal expected SHA');
 if (confirmation !== HARD_LAUNCH_CONFIRMATION_PHRASE) throw new Error('Hard launch confirmation mismatch');

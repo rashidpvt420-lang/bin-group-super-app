@@ -33,6 +33,7 @@ on:
           - production-transaction
           - physical-device-report
           - secret-rotation-record
+          - scheduler-run
       source_run_id:
         description: 'Successful GitHub Actions run ID that produced the evidence artifact'
         required: true
@@ -57,6 +58,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: hard-launch-operations
+    env:
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
 
     steps:
       - name: Enforce protected same-commit inputs
@@ -75,8 +78,14 @@ jobs:
             echo "::error::Operational proof intake may only run from refs/heads/main."
             exit 1
           fi
-          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
-            echo "::error::Only the authorized founder account may submit operational launch proof."
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
@@ -96,7 +105,7 @@ jobs:
             *) echo "::error::Unsupported operational gate."; exit 1 ;;
           esac
           case "$EVIDENCE_TYPE" in
-            workflow-artifact|provider-console-export|production-transaction|physical-device-report|secret-rotation-record) ;;
+            workflow-artifact|provider-console-export|production-transaction|physical-device-report|secret-rotation-record|scheduler-run) ;;
             *) echo "::error::Unsupported evidence type."; exit 1 ;;
           esac
 
@@ -228,7 +237,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          evidence_reference="github-actions://${REPOSITORY}/runs/${SOURCE_RUN_ID}/artifacts/${SOURCE_ARTIFACT_NAME}"
+          evidence_reference="https://github.com/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}#artifact-${SOURCE_ARTIFACT_NAME}"
           node scripts/verify-launch-gate-live.mjs \
             "$GATE_KEY" \
             "$EVIDENCE_TYPE" \
