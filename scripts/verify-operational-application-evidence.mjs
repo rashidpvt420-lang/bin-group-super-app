@@ -8,6 +8,7 @@ import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './fireba
 const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const ADMIN_APPROVE_PAYMENT_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminApprovePayment';
+const APPLICATION_PROOF_PATH = 'launch_package/application-proof.json';
 const PRIVILEGED_ROLES = new Set(['admin', 'super_admin', 'ceo', 'operations_admin', 'finance_admin']);
 const ALLOWED_GATES = new Set([
   'ownerPaymentActivation',
@@ -484,26 +485,12 @@ async function renewalSchedulerProof() {
 }
 
 let evidence;
-let outputPath;
-if (gate === 'ownerPaymentActivation') {
-  evidence = await ownerActivationProof();
-  outputPath = 'launch_package/application-ownerPaymentActivation.json';
-} else if (gate === 'paymentUnlockExactlyOnce') {
-  evidence = await paymentUnlockExactlyOnceProof();
-  outputPath = 'launch_package/application-paymentUnlockExactlyOnce.json';
-} else if (gate === 'tenantNotificationDelivery') {
-  evidence = await tenantNotificationProof();
-  outputPath = 'launch_package/application-tenantNotificationDelivery.json';
-} else if (gate === 'brokerCommissionLockExactlyOnce') {
-  evidence = await brokerCommissionProof();
-  outputPath = 'launch_package/application-brokerCommissionLockExactlyOnce.json';
-} else if (gate === 'adminStaffClaims') {
-  evidence = await adminStaffClaimsProof();
-  outputPath = 'launch_package/application-adminStaffClaims.json';
-} else {
-  evidence = await renewalSchedulerProof();
-  outputPath = 'launch_package/application-renewalScheduler.json';
-}
+if (gate === 'ownerPaymentActivation') evidence = await ownerActivationProof();
+else if (gate === 'paymentUnlockExactlyOnce') evidence = await paymentUnlockExactlyOnceProof();
+else if (gate === 'tenantNotificationDelivery') evidence = await tenantNotificationProof();
+else if (gate === 'brokerCommissionLockExactlyOnce') evidence = await brokerCommissionProof();
+else if (gate === 'adminStaffClaims') evidence = await adminStaffClaimsProof();
+else evidence = await renewalSchedulerProof();
 
 const proof = {
   schemaVersion: 1,
@@ -519,6 +506,6 @@ const proof = {
   hardLaunchClaim: false,
 };
 mkdirSync('launch_package', { recursive: true });
-writeFileSync(outputPath, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
+writeFileSync(APPLICATION_PROOF_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
 console.log(`[operational-application-evidence] PASS gate=${gate}`);
-console.log(`[operational-application-evidence] wrote ${outputPath}`);
+console.log(`[operational-application-evidence] wrote ${APPLICATION_PROOF_PATH}`);
