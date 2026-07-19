@@ -46,7 +46,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const { isRTL, tx, lang } = useLanguage();
     const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
     const isSimpleHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
-    const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full' || location.pathname === '/tenant/scheduled-service';
+    const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full' || location.pathname === '/tenant/scheduled-service' || location.pathname === '/tenant/find-room-rent' || location.pathname === '/tenant/marketplace';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
         color: binThemeTokens.textPrimary,
@@ -73,6 +73,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         </Box>
                     </Stack>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                        <Button onClick={() => navigate('/tenant/find-room-rent')} sx={quickButtonSx}>{tx('tenant.quick.findRoomRent', copy('Find Room Rent', 'غرفة للإيجار'))}</Button>
                         <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{tx('tenant.quick.report', copy('Report Issue', 'إبلاغ عن مشكلة'))}</Button>
                         <Button onClick={() => navigate('/tenant/emergency')} sx={{ ...quickButtonSx, color: binThemeTokens.danger, borderColor: alpha(binThemeTokens.danger, 0.35), bgcolor: alpha(binThemeTokens.danger, 0.04), '&:hover': { bgcolor: alpha(binThemeTokens.danger, 0.08), borderColor: binThemeTokens.danger } }}>{tx('tenant.quick.emergency', copy('Emergency', 'طوارئ'))}</Button>
                         <Button onClick={() => navigate('/tenant/payments')} sx={quickButtonSx}>{tx('tenant.quick.payments', copy('Payments', 'المدفوعات'))}</Button>
@@ -118,6 +119,7 @@ export default function TenantApp() {
                 <Route path="/keys" element={<TenantKeysPage />} />
                 <Route path="/parcels" element={<TenantParcelsPage />} />
                 <Route path="/visitor-parking" element={<TenantVisitorParkingPage />} />
+                <Route path="/find-room-rent" element={<TenantMarketplacePage />} />
                 <Route path="/marketplace" element={<TenantMarketplacePage />} />
                 <Route path="/staff-directory" element={<TenantStaffDirectoryPage />} />
                 <Route path="/messages" element={<TenantMessagesPage />} />

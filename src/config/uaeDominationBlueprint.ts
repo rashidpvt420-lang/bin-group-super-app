@@ -84,12 +84,14 @@ export function slaMinutesForPriority(priority: string | undefined | null): numb
 
 export const ROLE_QUICK_ACTIONS: Record<PortalRole, Array<{ id: string; label: string; target: string; whyItMatters: string }>> = {
   tenant: [
+    { id: 'rooms', label: 'Find Room Rent', target: '/tenant/find-room-rent', whyItMatters: 'Shows only BIN-managed vacant rooms with visible repair history and contract handling.' },
     { id: 'report_issue', label: 'Report Issue', target: '/tenant/request', whyItMatters: 'Fastest path to create a photo-backed maintenance ticket.' },
     { id: 'track_request', label: 'Track Request', target: '/tenant/tickets', whyItMatters: 'Shows status, ETA, proof, and dispute options.' },
     { id: 'emergency', label: 'Emergency', target: '/tenant/emergency', whyItMatters: 'Separates true SOS from normal maintenance.' },
     { id: 'documents_payments', label: 'Documents & Payments', target: '/tenant/documents', whyItMatters: 'Reduces WhatsApp/file chasing.' },
   ],
   owner: [
+    { id: 'rooms', label: 'Find Room Rent', target: '/owner/find-room-rent', whyItMatters: 'Starts contract-backed vacant-room publishing and BIN renter-contact handling.' },
     { id: 'health', label: 'Property Health', target: '/owner/dashboard', whyItMatters: 'Single view of risk, SLA, tickets, and cost.' },
     { id: 'approvals', label: 'Pending Approvals', target: '/owner/approvals', whyItMatters: 'Owners should see only decisions that need action.' },
     { id: 'financials', label: 'Financials', target: '/owner/financials', whyItMatters: 'Shows contract value, invoices, payouts, and maintenance spend.' },

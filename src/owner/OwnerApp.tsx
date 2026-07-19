@@ -66,6 +66,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         </Box>
                     </Box>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                        <Button onClick={() => navigate('/owner/find-room-rent')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.find_room_rent', 'Find Room Rent')}</Button>
                         <Button onClick={() => navigate('/owner/bin-connect')} startIcon={renderSafeIcon(MessageSquare, { size: 17 })} sx={{ display: { xs: 'none', sm: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>BIN Connect</Button>
                         <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
                         <Button onClick={() => navigate('/owner/property-passport')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.property_passport', 'Property Passport')}</Button>
@@ -116,6 +117,7 @@ export default function OwnerApp() {
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />
                 <Route path="/damage-estimate" element={<OwnerDamageEstimatePage />} />
                 <Route path="/p-l-report" element={<OwnerPLReportPage />} />
+                <Route path="/find-room-rent" element={<ContractorMarketplacePage />} />
                 <Route path="/contractor-marketplace" element={<ContractorMarketplacePage />} />
                 <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="owner" />} />
