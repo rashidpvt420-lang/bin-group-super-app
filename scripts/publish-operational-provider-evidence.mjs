@@ -109,7 +109,7 @@ const manifests = {
       if (text(proof.workflowRunId) !== context.runId) errors.push('App Check proof workflow run mismatch');
       if (proof.service !== 'cloud-firestore') errors.push('App Check service must be Cloud Firestore');
       if (proof.invalidTokenRejected !== true || ![401, 403].includes(Number(proof.invalidTokenStatus))) errors.push('Invalid App Check token was not rejected');
-      if (proof.validTokenAccepted !== true || ![200, 404].includes(Number(proof.validTokenStatus))) errors.push('Valid App Check token was not accepted');
+      if (proof.validTokenAccepted !== true || Number(proof.validTokenStatus) !== 200) errors.push('Valid App Check token was not accepted');
       if (!/^[a-f0-9]{64}$/.test(text(proof.authenticatedUidHash))) errors.push('Authenticated UID hash invalid');
       if (!validTime(proof.observedAt)) errors.push('App Check observedAt invalid');
       return errors;
