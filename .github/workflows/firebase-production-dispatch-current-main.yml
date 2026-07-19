@@ -282,14 +282,14 @@ jobs:
             run_sha=''
             for poll in $(seq 1 20); do
               runs_json="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=20")"
-              run_id="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" '
-                [.workflow_runs[] | select(.actor.login == $actor and .created_at >= $started)]
+              run_id="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" --arg sha "$main_sha" '
+                [.workflow_runs[] | select((.actor.login == $actor or .actor.login == "github-actions[bot]") and .head_sha == $sha and .created_at >= $started)]
                 | sort_by(.created_at)
                 | last
                 | .id // empty
               ' <<<"$runs_json")"
-              run_sha="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" '
-                [.workflow_runs[] | select(.actor.login == $actor and .created_at >= $started)]
+              run_sha="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" --arg sha "$main_sha" '
+                [.workflow_runs[] | select((.actor.login == $actor or .actor.login == "github-actions[bot]") and .head_sha == $sha and .created_at >= $started)]
                 | sort_by(.created_at)
                 | last
                 | .head_sha // empty
