@@ -1,0 +1,64 @@
+name: Five Profile and Onboarding Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/five-profile-onboarding-audit.yml'
+      - 'apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'
+      - 'functions/**'
+      - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
+      - 'src/broker/**'
+      - 'src/components/onboarding/**'
+      - 'src/owner/**'
+      - 'src/pages/PropertyOnboardingPage.tsx'
+      - 'src/technician/**'
+      - 'src/tenant/**'
+      - 'src/utils/geoAnchor.ts'
+      - 'tests/launch/arabic-visible-copy-audit.test.mjs'
+      - 'tests/launch/five-profile-completeness-audit.test.mjs'
+      - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
+      - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
+  push:
+    branches:
+      - 'agent/five-profile-onboarding-hardening'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: five-profile-onboarding-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused launch audits
+        run: >-
+          node --test
+          tests/launch/five-profile-completeness-audit.test.mjs
+          tests/launch/profile-lifecycle-commercial-audit.test.mjs
+          tests/launch/arabic-visible-copy-audit.test.mjs
+          tests/launch/technician-dispatch-authority-audit.test.mjs
+
+      - name: Build main application
+        run: npm run build
+
+      - name: Build Cloud Functions
+        run: npm run build:functions
+
+      - name: Build Admin application
+        run: npm run build:admin
