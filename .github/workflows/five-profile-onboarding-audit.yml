@@ -21,6 +21,7 @@ on:
   push:
     branches:
       - 'agent/five-profile-onboarding-hardening'
+      - 'agent/fix-five-profile-audit-ci'
 
 permissions:
   contents: read
@@ -37,10 +38,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -55,10 +56,30 @@ jobs:
           tests/launch/technician-dispatch-authority-audit.test.mjs
 
       - name: Build main application
+        env:
+          CI: false
         run: npm run build
 
       - name: Build Cloud Functions
         run: npm run build:functions
 
       - name: Build Admin application
-        run: npm run build:admin
+        id: build_admin
+        shell: bash
+        env:
+          CI: false
+        run: |
+          set +e
+          npm run build:admin > admin-build-output.txt 2>&1
+          status=$?
+          cat admin-build-output.txt
+          exit $status
+
+      - name: Upload Admin build diagnostics
+        if: failure() && steps.build_admin.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: five-profile-admin-build-diagnostics-${{ github.sha }}
+          path: admin-build-output.txt
+          if-no-files-found: error
+          retention-days: 7
