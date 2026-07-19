@@ -9,6 +9,10 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 
 type ReadinessCheck = { key: string; en: string; ar: string; ready: boolean };
 
+const normalizedStatus = (value: unknown) => String(value || '').trim().toUpperCase();
+const approvedStatus = (value: unknown) => ['APPROVED', 'VERIFIED', 'COMPLETED'].includes(normalizedStatus(value));
+const activeResidenceStatus = (value: unknown) => ['ACTIVE', 'OCCUPIED'].includes(normalizedStatus(value));
+
 export default function TenantProfileReadinessCard() {
   const { user } = useRole();
   const { lang, isRTL } = useLanguage();
@@ -33,11 +37,22 @@ export default function TenantProfileReadinessCard() {
       const units = new Map<string, any>();
       for (const snapshot of snapshots) for (const item of snapshot.docs) units.set(item.id, { id: item.id, ...item.data() });
       const residenceRecords = [...units.values()];
-      const active = residenceRecords.filter((item) => !['EXPIRED', 'ENDED', 'TERMINATED', 'CANCELLED', 'CLOSED', 'MOVED_OUT', 'INACTIVE'].includes(String(item.leaseStatus || item.status || 'ACTIVE').toUpperCase()));
-      const leaseVerified = active.some((item) => item.leaseVerified === true || item.contractVerified === true || ['ACTIVE', 'APPROVED', 'VERIFIED'].includes(String(item.leaseStatus || item.contractStatus || item.status || '').toUpperCase()));
-      const unitApproved = active.some((item) => item.tenantId === user.uid || item.tenantUid === user.uid || item.unitLinkVerified === true || item.adminApproved === true);
-      const moveInReady = active.some((item) => item.moveInInspectionCompleted === true || item.moveInStatus === 'COMPLETED' || item.handoverStatus === 'COMPLETED');
-      const identityVerified = profile.identityVerified === true || profile.kycVerified === true || ['VERIFIED', 'APPROVED', 'ACTIVE'].includes(String(profile.identityStatus || profile.kycStatus || profile.verificationStatus || '').toUpperCase());
+      const active = residenceRecords.filter((item) => activeResidenceStatus(item.leaseStatus || item.tenancyStatus || item.status));
+      const leaseVerified = active.some((item) => (
+        item.leaseVerified === true ||
+        item.contractVerified === true ||
+        approvedStatus(item.leaseReviewStatus || item.contractReviewStatus || item.leaseVerificationStatus)
+      ));
+      const unitApproved = active.some((item) => (
+        item.unitLinkVerified === true ||
+        item.adminApproved === true ||
+        approvedStatus(item.unitLinkStatus || item.tenantLinkStatus || item.assignmentStatus)
+      ));
+      const moveInReady = active.some((item) => (
+        item.moveInInspectionCompleted === true ||
+        approvedStatus(item.moveInStatus || item.handoverStatus || item.moveInReviewStatus)
+      ));
+      const identityVerified = profile.identityVerified === true || profile.kycVerified === true || approvedStatus(profile.identityStatus || profile.kycStatus || profile.verificationStatus);
       const nextChecks: ReadinessCheck[] = [
         { key: 'email', en: 'Email verified', ar: 'البريد الإلكتروني موثّق', ready: Boolean(user.emailVerified) },
         { key: 'identity', en: 'Identity verified', ar: 'الهوية موثقة', ready: identityVerified },
