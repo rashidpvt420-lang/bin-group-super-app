@@ -18,6 +18,7 @@ function baseEnv(overrides = {}) {
     GITHUB_SHA: SHA,
     GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
     GITHUB_RUN_ID: '123',
+    AUTHORIZED_FOUNDER_ACTORS: 'rashidpvt420-lang,test-actor',
     VALIDATED_ARTIFACT_DIGEST: DIGEST,
     LAUNCH_MODE: 'bank-pilot',
     POSTDEPLOY_ROUTES_OK: 'true',
@@ -67,14 +68,14 @@ function writeIncidents(root) {
         workflowRunId: '123',
         workflowRunAttempt: 1,
         actor: 'test-actor',
-        evidenceReferences: ['ops://ticket/TEST-1'],
+        evidenceReferences: ['https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/123'],
         activeIncidents: [],
         requiresRollback: false,
         rollbackReason: null,
         lastDeploymentFailed: false,
         lastDeploymentFailedAt: null,
         updatedAt: new Date().toISOString(),
-        updatedBy: 'operations',
+        updatedBy: 'test-actor',
       },
       null,
       2,
@@ -102,9 +103,9 @@ function writePilotIncident(root, overrides = {}) {
         monitoringVerified: true,
         incidentConfirmationVerified: true,
         rollbackConfirmationVerified: true,
-        incidentReference: 'ops://incident/TEST-1',
-        rollbackReference: 'ops://rollback/TEST-1',
-        monitoringReference: 'ops://monitoring/TEST-1',
+        incidentReference: 'https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/456',
+        rollbackReference: 'https://console.firebase.google.com/project/bin-group-57c60/overview',
+        monitoringReference: 'https://console.cloud.google.com/monitoring?project=bin-group-57c60',
         approvedBy: 'rashidpvt420-lang',
         generatedAt: new Date().toISOString(),
         generatedByWorkflow: true,
@@ -144,23 +145,25 @@ function writeDeployment(root, overrides = {}) {
     artifactDigest: DIGEST,
     ...overrides,
   };
-  writeFileSync(path.join(root, 'launch_package/production-deployment.json'), `${JSON.stringify(doc, null, 2)}\n`);
+  writeFileSync(
+    path.join(root, 'launch_package/production-deployment.json'),
+    `${JSON.stringify(doc, null, 2)}\n`,
+  );
   return doc;
 }
 
 function makeReport(specs, passed = 2) {
   return {
     stats: { expected: passed, unexpected: 0, skipped: 0, flaky: 0, interrupted: 0 },
-    suites: specs.map((file, idx) => ({
+    suites: specs.map((file, index) => ({
       file,
-      specs:
-        idx === 0
-          ? Array.from({ length: passed }, (_, i) => ({
-              title: `t${i}`,
-              file,
-              tests: [{ status: 'passed', results: [{ status: 'passed' }] }],
-            }))
-          : [{ title: 'anchor', file, tests: [] }],
+      specs: index === 0
+        ? Array.from({ length: passed }, (_, testIndex) => ({
+            title: `t${testIndex}`,
+            file,
+            tests: [{ status: 'passed', results: [{ status: 'passed' }] }],
+          }))
+        : [{ title: 'anchor', file, tests: [] }],
     })),
   };
 }
@@ -169,7 +172,6 @@ function installPlaywrightRecord(root, key, specs, passed = 2) {
   const report = makeReport(specs, passed);
   const relative = `launch_package/artifacts/${key}.json`;
   writeFileSync(path.join(root, relative), `${JSON.stringify(report)}\n`);
-  const hash = sha256File(path.join(root, relative));
   const now = new Date().toISOString();
   return {
     testName: key,
@@ -186,7 +188,7 @@ function installPlaywrightRecord(root, key, specs, passed = 2) {
     failed: 0,
     skipped: 0,
     artifactPath: relative,
-    artifactHash: hash,
+    artifactHash: sha256File(path.join(root, relative)),
     expectedSpecs: specs,
     appCheckClean: true,
     hardLaunchClaim: false,
@@ -303,177 +305,136 @@ function fullEvidence(root) {
   return { records, deploy };
 }
 
-describe('postdeploy release gate', () => {
-  it('fails when deployment metadata is missing', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
-    writeIncidents(root);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /production-deployment\.json missing/i.test(f)));
-      assert.equal(result.hardLaunchClaim, false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+function withRoot(prefix, callback) {
+  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  try {
+    return callback(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
 
-  it('fails when deployment metadata is not workflow-generated', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+describe('postdeploy release gate', () => {
+  it('fails when deployment metadata is missing', () => withRoot('postdeploy-', (root) => {
+    writeIncidents(root);
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /production-deployment\.json missing/i.test(failure)));
+    assert.equal(result.hardLaunchClaim, false);
+  }));
+
+  it('fails when deployment metadata is not workflow-generated', () => withRoot('postdeploy-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     writeDeployment(root, { source: 'hand-edited' });
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /workflow/i.test(f)));
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /workflow/i.test(failure)));
+  }));
 
-  it('fails failed Gate 11 smoke', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+  it('fails failed Gate 11 smoke', () => withRoot('postdeploy-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
     writePilotIncident(root);
-    const batch = JSON.parse(
-      readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
-    );
-    const gate = batch.records.find((r) => r.testName === 'gate11ProductionSmoke');
+    const batchPath = path.join(root, 'launch_package/launch-evidence-batch.json');
+    const batch = JSON.parse(readFileSync(batchPath, 'utf8'));
+    const gate = batch.records.find((record) => record.testName === 'gate11ProductionSmoke');
     gate.passed = 11;
     gate.failed = 1;
-    writeFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), `${JSON.stringify(batch)}\n`);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /Gate 11/i.test(f)));
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    writeFileSync(batchPath, `${JSON.stringify(batch)}\n`);
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /Gate 11/i.test(failure)));
+  }));
 
-  it('fails on App Check 403 contamination', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+  it('fails on App Check 403 contamination', () => withRoot('postdeploy-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
-    const batch = JSON.parse(
-      readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
-    );
-    const owner = batch.records.find((r) => r.testName === 'businessOwner');
+    const batchPath = path.join(root, 'launch_package/launch-evidence-batch.json');
+    const batch = JSON.parse(readFileSync(batchPath, 'utf8'));
+    const owner = batch.records.find((record) => record.testName === 'businessOwner');
     owner.proof = 'HTTP 403 permission-denied from Firestore';
     delete owner.appCheckClean;
-    writeFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), `${JSON.stringify(batch)}\n`);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /App Check/i.test(f)));
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    writeFileSync(batchPath, `${JSON.stringify(batch)}\n`);
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /App Check/i.test(failure)));
+  }));
 
-  it('fails failed business workflows', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+  it('fails failed business workflows', () => withRoot('postdeploy-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
-    const batch = JSON.parse(
-      readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
-    );
-    const biz = batch.records.find((r) => r.testName === 'businessWorkflows');
-    biz.passed = 4;
-    biz.failed = 5;
-    writeFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), `${JSON.stringify(batch)}\n`);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /Business workflows/i.test(f)));
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    const batchPath = path.join(root, 'launch_package/launch-evidence-batch.json');
+    const batch = JSON.parse(readFileSync(batchPath, 'utf8'));
+    const business = batch.records.find((record) => record.testName === 'businessWorkflows');
+    business.passed = 4;
+    business.failed = 5;
+    writeFileSync(batchPath, `${JSON.stringify(batch)}\n`);
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /Business workflows/i.test(failure)));
+  }));
 
-  it('fails wrong artifact digest on deployment metadata', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+  it('fails wrong artifact digest on deployment metadata', () => withRoot('postdeploy-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
     writeDeployment(root, { artifactDigest: `sha256:${'ff'.repeat(32)}` });
-    // rewrite evidence deploy hash to match new file so only digest mismatch is tested via env compare
     const deployHash = sha256File(path.join(root, 'launch_package/production-deployment.json'));
-    const batch = JSON.parse(
-      readFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), 'utf8'),
-    );
-    for (const r of batch.records) {
-      if (r.testName.startsWith('production')) r.artifactHash = deployHash;
+    const batchPath = path.join(root, 'launch_package/launch-evidence-batch.json');
+    const batch = JSON.parse(readFileSync(batchPath, 'utf8'));
+    for (const record of batch.records) {
+      if (record.testName.startsWith('production')) record.artifactHash = deployHash;
     }
-    writeFileSync(path.join(root, 'launch_package/launch-evidence-batch.json'), `${JSON.stringify(batch)}\n`);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /digest/i.test(f)));
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    writeFileSync(batchPath, `${JSON.stringify(batch)}\n`);
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /digest/i.test(failure)));
+  }));
 
-  it('fails when a postdeploy validation marker is missing or false', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-markers-'));
+  it('fails when a postdeploy validation marker is missing or false', () => withRoot('postdeploy-markers-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
-    try {
-      for (const key of [
-        'POSTDEPLOY_ROUTES_OK',
-        'POSTDEPLOY_SMTP_OK',
-        'POSTDEPLOY_APPCHECK_OK',
-        'POSTDEPLOY_SMOKE_OK',
-        'POSTDEPLOY_BUSINESS_OK',
-        'POSTDEPLOY_AUDIT_OK',
-      ]) {
-        const result = runPostdeployReleaseGate({
-          root,
-          env: baseEnv({ [key]: 'false' }),
-          writeStatus: false,
-        });
-        assert.equal(result.ok, false, key);
-        assert.ok(result.failures.some((f) => f.includes(key)), key);
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
+    for (const key of [
+      'POSTDEPLOY_ROUTES_OK',
+      'POSTDEPLOY_SMTP_OK',
+      'POSTDEPLOY_APPCHECK_OK',
+      'POSTDEPLOY_SMOKE_OK',
+      'POSTDEPLOY_BUSINESS_OK',
+      'POSTDEPLOY_AUDIT_OK',
+    ]) {
+      const result = runPostdeployReleaseGate({
+        root,
+        env: baseEnv({ [key]: 'false' }),
+        writeStatus: false,
+      });
+      assert.equal(result.ok, false, key);
+      assert.ok(result.failures.some((failure) => failure.includes(key)), key);
     }
-  });
+  }));
 
-  it('fails when predeploy approval releaseId binding is missing', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-release-'));
+  it('fails when predeploy approval releaseId binding is missing', () => withRoot('postdeploy-release-', (root) => {
     writeIncidents(root);
     fullEvidence(root);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
-      assert.equal(result.ok, false);
-      assert.ok(result.failures.some((f) => /predeploy-approval/i.test(f)));
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((failure) => /predeploy-approval/i.test(failure)));
+  }));
 
-  it('passes a valid complete release fixture without claiming hard launch', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'postdeploy-'));
+  it('passes a valid complete release fixture without claiming hard launch', () => withRoot('postdeploy-', (root) => {
     writeIncidents(root);
     writeApproval(root);
     fullEvidence(root);
     writePilotIncident(root);
-    try {
-      const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: true });
-      assert.equal(result.ok, true, JSON.stringify(result.failures, null, 2));
-      assert.equal(result.hardLaunchClaim, false);
-      assert.equal(result.status.publicReleaseCleared, true);
-      assert.equal(result.status.hardLaunchClaim, false);
-      assert.equal(result.status.releaseId, 'rel-test-1');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: true });
+    assert.equal(result.ok, true, JSON.stringify(result.failures, null, 2));
+    assert.equal(result.hardLaunchClaim, false);
+    assert.equal(result.status.publicReleaseCleared, true);
+    assert.equal(result.status.hardLaunchClaim, false);
+    assert.equal(result.status.releaseId, 'rel-test-1');
+  }));
 });
