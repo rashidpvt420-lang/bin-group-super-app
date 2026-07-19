@@ -1,0 +1,52 @@
+name: Sync five-profile hardening branch
+
+on:
+  push:
+    branches:
+      - agent/five-profile-onboarding-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  sync-main:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out hardening branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/five-profile-onboarding-hardening
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge latest main and retain audited branch resolutions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "Branch already contains latest main."
+            exit 0
+          fi
+          if ! git merge --no-commit --no-ff origin/main; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            if [ -z "$conflicts" ]; then
+              echo "Merge failed without resolvable file conflicts."
+              exit 1
+            fi
+            echo "$conflicts" | while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              git checkout --ours -- "$file"
+              git add "$file"
+            done
+          fi
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No synchronization commit required."
+            exit 0
+          fi
+          git commit -m "Merge latest main into five-profile hardening"
+          git push origin HEAD:agent/five-profile-onboarding-hardening
