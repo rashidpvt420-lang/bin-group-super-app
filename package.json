@@ -69,7 +69,7 @@
     "hard-launch:authorize": "node scripts/create-hard-launch-authorization.mjs",
     "hard-launch:predeploy": "node scripts/hard-launch-predeploy-gate.mjs",
     "hard-launch:approval-gate": "node scripts/hard-launch-approval-gate.mjs",
-    "hard-launch:decision": "node scripts/hard-launch-decision-gate.mjs",
+    "hard-launch:decision": "node scripts/hard-launch-operational-decision-gate.mjs",
     "hard-launch:status": "node scripts/hard-launch-status.mjs",
     "hard-launch:incidents": "node scripts/create-production-incidents-attestation.mjs",
     "verify:production-deployment": "node scripts/verify-production-deployment.mjs",
