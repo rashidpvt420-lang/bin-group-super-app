@@ -51,7 +51,7 @@ test('payment and commission evidence use the real callable and prove replay inv
   assert.match(verifier, /invoicesAfter\.length !== 1/);
   assert.match(verifier, /approvalAuditsAfter\.length !== 1/);
   assert.match(verifier, /JSON\.stringify\(before\) !== JSON\.stringify\(after\)/);
-  assert.match(verifier, /commission_${contractId}/);
+  assert.match(verifier, /`commission_\$\{contractId\}`/);
   assert.match(verifier, /commissionsAfter\.length !== 1/);
   assert.match(verifier, /beforeHash !== afterHash/);
   assert.match(approval, /approvalWasIdempotent = true/);
