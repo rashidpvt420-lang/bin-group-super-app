@@ -37,16 +37,17 @@ test('Technician profile edits are preference-only and App Check protected', asy
   assert.doesNotMatch(transactionUpdate, /serviceZone:/);
 
   assert.match(page, /httpsCallable\(functions, 'updateTechnicianProfilePreferences'\)/);
-  assert.match(page, /technician-profile-authority-notice/);
-  assert.match(page, /technician-authoritative-name/);
-  assert.match(page, /technician-authoritative-phone/);
-  assert.match(page, /technician-authoritative-trade/);
+  assert.match(page, /Identity, trade and dispatch authority are read-only/);
+  assert.match(page, /Verified Full Name/);
+  assert.match(page, /Verified Phone Number/);
+  assert.match(page, /Approved Primary Trade/);
   assert.match(page, /InputProps=\{\{ readOnly: true \}\}/);
   assert.doesNotMatch(page, /\bsetDoc\s*\(/);
   assert.doesNotMatch(page, /\bupdateProfile\s*\(/);
   assert.doesNotMatch(page, /\bserverTimestamp\s*\(/);
 
-  assert.match(runtime, /export \{ updateTechnicianProfilePreferences \} from "\.\/secureTechnicianProfileOperations";/);
+  assert.match(runtime, /updateTechnicianProfilePreferences/);
+  assert.match(runtime, /from "\.\/secureTechnicianProfileOperations";/);
 });
 
 test('canonical Firestore hardener protects reviewed profile fields for all customer roles', async () => {

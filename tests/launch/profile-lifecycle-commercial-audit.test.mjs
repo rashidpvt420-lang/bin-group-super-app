@@ -49,7 +49,7 @@ test('Broker KYC callable binds current terms, masked summaries and private bank
   ]);
   expectAll(page, [/BIN_BROKER_TERMS_2026_01/, /commissionAgreementAccepted/, /bankAccountHolder/, /bankIban/, /submitBrokerKycProfile/, /getBrokerKycProfileSummary/], 'Broker profile submission');
   assert.doesNotMatch(page, /broker_kyc_profiles/);
-  expectAll(callable, [/BIN_BROKER_TERMS_2026_01/, /bankAccountHolder/, /bankIban/, /AE\d\{21\}/, /submissionHash/, /broker_kyc_profiles/], 'Broker KYC authority');
+  expectAll(callable, [/BIN_BROKER_TERMS_2026_01/, /bankAccountHolder/, /bankIban/, /\^AE\\d\{21\}\$/, /submissionHash/, /broker_kyc_profiles/], 'Broker KYC authority');
   expectAll(secure, [/reraLicenseMasked/, /bankIbanMasked/, /KYC_APPROVAL_NOT_BOUND_TO_CURRENT_SUBMISSION/, /authDisplayNameChangeDeferredUntilApproval/], 'Masked Broker authority');
 });
 
@@ -88,7 +88,7 @@ test('Arabic contracts exist on payment, onboarding and role-profile surfaces', 
 });
 
 test('Admin, Owner, Tenant, Technician and Broker lifecycle blockers have executable authority', async () => {
-  const [admin, ownerPhone, ownerBackend, ownerReady, tenant, tenantBackend, technician, techProfile, brokerPayout, quote] = await Promise.all([
+  const [admin, ownerPhone, ownerBackend, ownerReady, tenant, tenantBackend, technician, techProfile, brokerPayout, quote, pricing] = await Promise.all([
     read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'),
     read('src/owner/components/OwnerPhoneVerificationCard.tsx'),
     read('functions/secureOwnerProfileOperations.ts'),
@@ -99,6 +99,7 @@ test('Admin, Owner, Tenant, Technician and Broker lifecycle blockers have execut
     read('functions/secureTechnicianProfileOperations.ts'),
     read('functions/secureBrokerPayoutOperations.ts'),
     read('functions/ownerPortfolioQuote.ts'),
+    read('functions/pricing/calculateUaeQuote2026.ts'),
   ]);
   expectAll(admin, [/AdminMfaEnrollmentCard/, /admin-mfa-recovery-link/, /Active security sessions/, /permissionDefinitions/], 'Admin security lifecycle');
   expectAll(ownerPhone, [/updatePhoneNumber\(currentUser, credential\)/, /syncVerifiedOwnerPhone/], 'Owner verified phone');
@@ -109,5 +110,6 @@ test('Admin, Owner, Tenant, Technician and Broker lifecycle blockers have execut
   expectAll(technician, [/medical card/, /driving licence/, /required certifications/, /registered device/, /fresh GPS location/, /getTechnicianOperationalReadiness/], 'Technician dispatch gate');
   expectAll(techProfile, [/submitTechnicianCredentialRenewal/, /TECHNICIAN_CREDENTIAL_RENEWAL_SUBMITTED/, /evidenceHash/], 'Technician renewal evidence');
   expectAll(brokerPayout, [/requestBrokerPayoutOtp/, /verifyBrokerPayoutOtp/, /kycSubmissionHash/, /status: "CONSUMED"/], 'Broker payout authority');
-  expectAll(quote, [/QUOTE_TTL_MS/, /issuedAtMs/, /expiresAtMs/, /assertOwnerPortfolioQuoteRecord/, /FM_ONLY/, /PM_ONLY/, /BOTH/], 'Server quote authority');
+  expectAll(quote, [/QUOTE_TTL_MS/, /issuedAtMs/, /expiresAtMs/, /assertOwnerPortfolioQuoteRecord/, /calculateUaeQuote2026/], 'Server quote authority');
+  expectAll(pricing, [/FM_ONLY/, /PM_ONLY/, /BOTH/, /VALID_CONTRACT_TYPES/, /safeContractType/], 'Pricing contract authority');
 });
