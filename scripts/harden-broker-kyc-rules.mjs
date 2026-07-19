@@ -88,12 +88,20 @@ if (rules.includes(legacyAdminRead)) {
 
 const legacyWriteAnchor = "          'public_rate_limits',\n          'ai_usage'";
 const hardenedWriteAnchor = "          'public_rate_limits',\n          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
+const technicianHardenedWriteAnchor = "          'public_rate_limits',\n          'technician_credential_renewals',\n          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
 const legacyWriteCount = rules.split(legacyWriteAnchor).length - 1;
 const hardenedWriteCount = rules.split(hardenedWriteAnchor).length - 1;
-if (legacyWriteCount === 2 && hardenedWriteCount === 0) {
+const technicianHardenedWriteCount = rules.split(technicianHardenedWriteAnchor).length - 1;
+if (legacyWriteCount === 2 && hardenedWriteCount === 0 && technicianHardenedWriteCount === 0) {
   rules = rules.replaceAll(legacyWriteAnchor, hardenedWriteAnchor);
-} else if (!(legacyWriteCount === 0 && hardenedWriteCount === 2)) {
-  throw new Error(`Unexpected generic admin write fallback shape: legacy=${legacyWriteCount}, hardened=${hardenedWriteCount}`);
+} else if (!(
+  legacyWriteCount === 0 &&
+  (
+    (hardenedWriteCount === 2 && technicianHardenedWriteCount === 0) ||
+    (hardenedWriteCount === 0 && technicianHardenedWriteCount === 2)
+  )
+)) {
+  throw new Error(`Unexpected generic admin write fallback shape: legacy=${legacyWriteCount}, hardened=${hardenedWriteCount}, technicianHardened=${technicianHardenedWriteCount}`);
 }
 
 if (rules !== original) {
