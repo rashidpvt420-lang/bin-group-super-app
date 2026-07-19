@@ -7,11 +7,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/diagnose-hard-launch-validator.yml'
-      - 'scripts/lib/hard-launch-gate.mjs'
-      - 'scripts/lib/authorized-approvers.mjs'
-      - 'scripts/lib/operational-proof-schema.mjs'
-      - 'test/hard-launch-gate.test.mjs'
-      - 'test/hard-launch-validator-hardening.test.mjs'
+      - '.github/workflows/live-role-smoke.yml'
+      - '.github/workflows/operational-application-evidence.yml'
+      - '.github/workflows/operational-proof.yml'
+      - 'scripts/**'
+      - 'test/**'
+      - 'tests/launch/**'
 
 permissions:
   contents: read
@@ -19,7 +20,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,11 +29,11 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run focused validator tests and capture output
+      - name: Run complete launch-honesty suite and capture output
         shell: bash
         run: |
           set -o pipefail
-          node --test test/hard-launch-gate.test.mjs test/hard-launch-validator-hardening.test.mjs 2>&1 | tee hard-launch-validator-test.log
+          npm run test:launch-honesty 2>&1 | tee hard-launch-validator-test.log
       - name: Upload diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
