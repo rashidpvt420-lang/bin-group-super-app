@@ -42,6 +42,7 @@ const ALLOWED_OPERATIONAL_EVIDENCE_TYPES = new Set([
   'production-transaction',
   'physical-device-report',
   'secret-rotation-record',
+  'scheduler-run',
 ]);
 
 export function hardLaunchApprovalPath(root = process.cwd()) {
@@ -145,7 +146,7 @@ export function validatePilotIncidentReport(doc, commitSha, { now = Date.now() }
   if (Number(doc.openP1) !== 0) errors.push('openP1 must equal 0');
   if (doc.rollbackPlanVerified !== true) errors.push('rollbackPlanVerified must be true');
   if (doc.monitoringVerified !== true) errors.push('monitoringVerified must be true');
-  if (doc.incidentConfirmationVerified !== true) errors.push('incident confirmation was not verified');
+  if (doc.incidentConfirmationVerified !== true) errors.push('pilot incident confirmation was not verified');
   if (doc.rollbackConfirmationVerified !== true) errors.push('rollback confirmation was not verified');
   if (!hasReference(doc.incidentReference)) errors.push('incidentReference required');
   if (!hasReference(doc.rollbackReference)) errors.push('rollbackReference required');
