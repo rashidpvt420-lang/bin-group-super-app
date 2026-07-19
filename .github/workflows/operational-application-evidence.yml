@@ -18,34 +18,6 @@ on:
         description: 'Full lowercase current production main SHA'
         required: true
         type: string
-      payment_id:
-        description: 'Payment activation/replay/commission gates: production payment ID'
-        required: false
-        type: string
-      contract_id:
-        description: 'Broker commission gate: production contract ID'
-        required: false
-        type: string
-      notification_id:
-        description: 'Tenant notification gate: delivered notification ID'
-        required: false
-        type: string
-      ticket_id:
-        description: 'Tenant notification gate: maintenance ticket ID'
-        required: false
-        type: string
-      tenant_uid:
-        description: 'Tenant notification gate: Firebase tenant UID'
-        required: false
-        type: string
-      staff_uid:
-        description: 'Staff claims gate: provisioned technician UID'
-        required: false
-        type: string
-      renewal_watch_id:
-        description: 'Renewal scheduler gate: contract_renewal_watch document ID'
-        required: false
-        type: string
       confirmation:
         description: 'Enter PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE'
         required: true
@@ -67,13 +39,6 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       OPERATIONAL_GATE: ${{ inputs.gate }}
-      PAYMENT_ID: ${{ inputs.payment_id }}
-      CONTRACT_ID: ${{ inputs.contract_id }}
-      NOTIFICATION_ID: ${{ inputs.notification_id }}
-      TICKET_ID: ${{ inputs.ticket_id }}
-      TENANT_UID: ${{ inputs.tenant_uid }}
-      STAFF_UID: ${{ inputs.staff_uid }}
-      RENEWAL_WATCH_ID: ${{ inputs.renewal_watch_id }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -86,13 +51,6 @@ jobs:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           SELECTED_GATE: ${{ inputs.gate }}
           CONFIRMATION: ${{ inputs.confirmation }}
-          PAYMENT_VALUE: ${{ inputs.payment_id }}
-          CONTRACT_VALUE: ${{ inputs.contract_id }}
-          NOTIFICATION_VALUE: ${{ inputs.notification_id }}
-          TICKET_VALUE: ${{ inputs.ticket_id }}
-          TENANT_VALUE: ${{ inputs.tenant_uid }}
-          STAFF_VALUE: ${{ inputs.staff_uid }}
-          RENEWAL_VALUE: ${{ inputs.renewal_watch_id }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]] || [[ "$GITHUB_ACTOR" != "rashidpvt420-lang" ]]; then
@@ -107,23 +65,8 @@ jobs:
             echo "::error::Application evidence confirmation phrase mismatch."
             exit 1
           fi
-          valid_id='^[A-Za-z0-9_-]{3,180}$'
           case "$SELECTED_GATE" in
-            ownerPaymentActivation|paymentUnlockExactlyOnce)
-              [[ "$PAYMENT_VALUE" =~ $valid_id ]] || { echo "::error::A valid payment_id is required."; exit 1; }
-              ;;
-            brokerCommissionLockExactlyOnce)
-              [[ "$PAYMENT_VALUE" =~ $valid_id ]] && [[ "$CONTRACT_VALUE" =~ $valid_id ]] || { echo "::error::Valid payment_id and contract_id are required."; exit 1; }
-              ;;
-            tenantNotificationDelivery)
-              [[ "$NOTIFICATION_VALUE" =~ $valid_id ]] && [[ "$TICKET_VALUE" =~ $valid_id ]] && [[ "$TENANT_VALUE" =~ $valid_id ]] || { echo "::error::Valid notification_id, ticket_id and tenant_uid are required."; exit 1; }
-              ;;
-            adminStaffClaims)
-              [[ "$STAFF_VALUE" =~ $valid_id ]] || { echo "::error::A valid staff_uid is required."; exit 1; }
-              ;;
-            renewalScheduler)
-              [[ "$RENEWAL_VALUE" =~ $valid_id ]] || { echo "::error::A valid renewal_watch_id is required."; exit 1; }
-              ;;
+            ownerPaymentActivation|paymentUnlockExactlyOnce|tenantNotificationDelivery|brokerCommissionLockExactlyOnce|adminStaffClaims|renewalScheduler) ;;
             *)
               echo "::error::Unsupported application gate."
               exit 1
@@ -152,7 +95,7 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Verify production application transaction
+      - name: Auto-discover and verify production application evidence
         run: node scripts/verify-operational-application-evidence.mjs
 
       - name: Publish canonical application evidence

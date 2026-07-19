@@ -2,7 +2,6 @@
 
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { PRODUCTION, sha256File } from './lib/launch-honesty.mjs';
@@ -29,7 +28,6 @@ const requiredHash = (value, label, errors) => {
 
 const manifests = Object.freeze({
   ownerPaymentActivation: {
-    proofPath: 'launch_package/application-ownerPaymentActivation.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase payment activation transaction',
     reference: (proof) => `firestore://payment_transactions/${proof.evidence.paymentId}#contract=${proof.evidence.contractId}`,
@@ -45,7 +43,6 @@ const manifests = Object.freeze({
     },
   },
   paymentUnlockExactlyOnce: {
-    proofPath: 'launch_package/application-paymentUnlockExactlyOnce.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase adminApprovePayment replay verifier',
     reference: (proof) => `firebase-callable://adminApprovePayment/${proof.evidence.paymentId}#idempotent-replay`,
@@ -61,7 +58,6 @@ const manifests = Object.freeze({
     },
   },
   tenantNotificationDelivery: {
-    proofPath: 'launch_package/application-tenantNotificationDelivery.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase notificationDelivery FCM trigger',
     reference: (proof) => `firestore://notifications/${proof.evidence.notificationId}#ticket=${proof.evidence.ticketId}`,
@@ -78,7 +74,6 @@ const manifests = Object.freeze({
     },
   },
   brokerCommissionLockExactlyOnce: {
-    proofPath: 'launch_package/application-brokerCommissionLockExactlyOnce.json',
     evidenceType: 'production-transaction',
     sourceSystem: 'Firebase broker commission transaction and payment replay',
     reference: (proof) => `firestore://broker_commissions/${proof.evidence.commissionId}#contract=${proof.evidence.contractId}`,
@@ -93,7 +88,6 @@ const manifests = Object.freeze({
     },
   },
   adminStaffClaims: {
-    proofPath: 'launch_package/application-adminStaffClaims.json',
     evidenceType: 'workflow-artifact',
     sourceSystem: 'Firebase Auth and staff registries',
     reference: (proof) => `firebase-auth://staff/${proof.evidence.staffUidHash}#least-privilege`,
@@ -106,7 +100,6 @@ const manifests = Object.freeze({
     },
   },
   renewalScheduler: {
-    proofPath: 'launch_package/application-renewalScheduler.json',
     evidenceType: 'scheduler-run',
     sourceSystem: 'Firebase contract renewal watcher',
     reference: (proof) => `firestore://contract_renewal_watch/${proof.evidence.watchId}#source=${proof.evidence.sourceCollection}`,
@@ -124,6 +117,33 @@ const manifests = Object.freeze({
   },
 });
 
+function loadProof(gate) {
+  let proofPath;
+  let raw;
+  if (gate === 'ownerPaymentActivation') {
+    proofPath = 'launch_package/application-ownerPaymentActivation.json';
+    raw = readFileSync('launch_package/application-ownerPaymentActivation.json', 'utf8');
+  } else if (gate === 'paymentUnlockExactlyOnce') {
+    proofPath = 'launch_package/application-paymentUnlockExactlyOnce.json';
+    raw = readFileSync('launch_package/application-paymentUnlockExactlyOnce.json', 'utf8');
+  } else if (gate === 'tenantNotificationDelivery') {
+    proofPath = 'launch_package/application-tenantNotificationDelivery.json';
+    raw = readFileSync('launch_package/application-tenantNotificationDelivery.json', 'utf8');
+  } else if (gate === 'brokerCommissionLockExactlyOnce') {
+    proofPath = 'launch_package/application-brokerCommissionLockExactlyOnce.json';
+    raw = readFileSync('launch_package/application-brokerCommissionLockExactlyOnce.json', 'utf8');
+  } else if (gate === 'adminStaffClaims') {
+    proofPath = 'launch_package/application-adminStaffClaims.json';
+    raw = readFileSync('launch_package/application-adminStaffClaims.json', 'utf8');
+  } else if (gate === 'renewalScheduler') {
+    proofPath = 'launch_package/application-renewalScheduler.json';
+    raw = readFileSync('launch_package/application-renewalScheduler.json', 'utf8');
+  } else {
+    fail(`unsupported application gate: ${gate || '(missing)'}`);
+  }
+  return { proofPath, proof: JSON.parse(raw) };
+}
+
 if (process.env.GITHUB_ACTIONS !== 'true') fail('publisher may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== EXPECTED_REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('publisher requires the protected main repository');
 if (process.env.GITHUB_WORKFLOW !== EXPECTED_WORKFLOW || process.env.GITHUB_JOB !== EXPECTED_JOB) fail('publisher requires the protected application evidence job');
@@ -136,10 +156,10 @@ const commitSha = text(process.env.GITHUB_SHA);
 const runId = text(process.env.GITHUB_RUN_ID);
 if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(runId)) fail('exact SHA and numeric workflow run ID are required');
 
-const proofPath = path.resolve(manifest.proofPath);
-let proof;
-try { proof = JSON.parse(readFileSync(proofPath, 'utf8')); }
+let loaded;
+try { loaded = loadProof(gate); }
 catch (error) { fail(`proof file missing or malformed: ${error.message}`); }
+const { proofPath, proof } = loaded;
 const errors = [];
 if (proof.schemaVersion !== 1 || proof.status !== 'passed' || proof.source !== 'operational-application-production-verifier') errors.push('proof envelope is invalid');
 if (proof.gate !== gate || proof.commitSha !== commitSha || proof.projectId !== PRODUCTION.projectId || proof.repository !== EXPECTED_REPOSITORY || text(proof.workflowRunId) !== runId) errors.push('proof workflow/commit binding mismatch');
