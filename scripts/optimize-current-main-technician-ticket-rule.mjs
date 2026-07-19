@@ -87,6 +87,31 @@ const optimized = `    function safeTechnicianTicketUpdate() {
 
 rules = replaceFunction(rules, 'safeTechnicianTicketUpdate', optimized);
 
+const credentialRenewalBlock = `    // Credential renewal evidence is written only by App Check-protected Cloud Functions.
+    // Administrators may inspect records but must review them through controlled callables.
+    match /technician_credential_renewals/{requestId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+`;
+if (!rules.includes('match /technician_credential_renewals/{requestId}')) {
+  const catchAll = '    match /{collection}/{document=**} {';
+  const catchAllIndex = rules.indexOf(catchAll);
+  if (catchAllIndex < 0) throw new Error('Global Firestore catch-all block not found.');
+  rules = `${rules.slice(0, catchAllIndex)}${credentialRenewalBlock}${rules.slice(catchAllIndex)}`;
+  console.log('[patched] server-written technician credential-renewal collection');
+}
+
+const protectedCollectionAnchor = "          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',";
+const protectedCollectionReplacement = "          'broker_kyc_profiles',\n          'technician_credential_renewals',\n          'broker_kyc_submission_limits',";
+if (!rules.includes(protectedCollectionReplacement)) {
+  const count = rules.split(protectedCollectionAnchor).length - 1;
+  if (count !== 2) throw new Error(`Expected two global write-deny anchors for protected collections, found ${count}.`);
+  rules = rules.replaceAll(protectedCollectionAnchor, protectedCollectionReplacement);
+  console.log('[patched] credential renewals excluded from global Admin write fallback');
+}
+
 const technicianHelper = readFunction(rules, 'safeTechnicianTicketUpdate').text;
 for (const forbidden of [
   "'beforePhotos',",
@@ -105,9 +130,19 @@ for (const required of [
   "'completionPhotos',",
   "'evidencePhotos',",
   'hasApprovedTechnicianRecord() &&',
+  'match /technician_credential_renewals/{requestId}',
+  'allow create, update, delete: if false;',
+  protectedCollectionReplacement,
 ]) {
   if (!rules.includes(required)) throw new Error(`Required technician rule fragment missing: ${required}`);
 }
 
+if (rules.split('match /technician_credential_renewals/{requestId}').length - 1 !== 1) {
+  throw new Error('Technician credential-renewal rule block must exist exactly once.');
+}
+if (rules.split("'technician_credential_renewals',").length - 1 !== 2) {
+  throw new Error('Technician credential-renewal collection must be denied in both global write fallbacks.');
+}
+
 fs.writeFileSync(rulesPath, rules, 'utf8');
-console.log('[current-main-technician-budget] technician evidence rule bounded');
+console.log('[current-main-technician-budget] technician evidence and credential-renewal rules bounded');
