@@ -106,6 +106,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: operational-application-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
-          path: launch_package/application-${{ inputs.gate }}.json
+          path: launch_package/application-proof.json
           if-no-files-found: error
           retention-days: 365
