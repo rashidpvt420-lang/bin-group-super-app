@@ -2,13 +2,13 @@
 
 import crypto from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const ADMIN_APPROVE_PAYMENT_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminApprovePayment';
+const APPLICATION_PROOF_PATH = 'launch_package/application-proof.json';
 const PRIVILEGED_ROLES = new Set(['admin', 'super_admin', 'ceo', 'operations_admin', 'finance_admin']);
 const ALLOWED_GATES = new Set([
   'ownerPaymentActivation',
@@ -18,14 +18,6 @@ const ALLOWED_GATES = new Set([
   'adminStaffClaims',
   'renewalScheduler',
 ]);
-const PROOF_PATHS = Object.freeze({
-  ownerPaymentActivation: 'launch_package/application-ownerPaymentActivation.json',
-  paymentUnlockExactlyOnce: 'launch_package/application-paymentUnlockExactlyOnce.json',
-  tenantNotificationDelivery: 'launch_package/application-tenantNotificationDelivery.json',
-  brokerCommissionLockExactlyOnce: 'launch_package/application-brokerCommissionLockExactlyOnce.json',
-  adminStaffClaims: 'launch_package/application-adminStaffClaims.json',
-  renewalScheduler: 'launch_package/application-renewalScheduler.json',
-});
 
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
@@ -44,9 +36,9 @@ const toDate = (value) => {
   return Number.isFinite(parsed) ? new Date(parsed) : null;
 };
 const iso = (value) => toDate(value)?.toISOString() || '';
-const millis = (value) => toDate(value)?.getTime() || null;
+const millis = (value) => toDate(value)?.getTime() || 0;
 const statusIn = (value, accepted) => accepted.includes(upper(value));
-const safeId = (value, label) => {
+const canonicalId = (value, label) => {
   const id = text(value);
   if (!/^[A-Za-z0-9_-]{3,180}$/.test(id)) fail(`${label} is missing or invalid`);
   return id;
@@ -56,8 +48,14 @@ const responseJson = async (response) => {
   try { return raw ? JSON.parse(raw) : null; }
   catch { return { raw: raw.slice(0, 500) }; }
 };
-const docResult = (snapshot) => ({ id: snapshot.id, data: snapshot.data() || {} });
-const queryResults = (snapshot) => snapshot.docs.map(docResult);
+const docResult = (snapshot) => ({ id: snapshot.id, ref: snapshot.ref, data: snapshot.data() || {} });
+const sortedResults = (snapshot, fields) => snapshot.docs
+  .map(docResult)
+  .sort((left, right) => {
+    const leftMs = Math.max(...fields.map((field) => millis(left.data[field])));
+    const rightMs = Math.max(...fields.map((field) => millis(right.data[field])));
+    return rightMs - leftMs;
+  });
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('verifier may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY) fail('unexpected repository');
@@ -83,11 +81,51 @@ async function requireSnapshot(reference, label) {
   return docResult(snapshot);
 }
 
-function paymentBindings(paymentId, payment) {
-  const intakeId = text(payment.intakeId);
-  const contractId = text(payment.contractId || intakeId || paymentId);
-  const ownerUid = text(payment.ownerUid || payment.ownerId);
-  if (!intakeId || !contractId || !ownerUid) fail('payment is not bound to canonical intake, contract and owner IDs');
+async function latestApprovedPayment() {
+  const snapshot = await db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(100).get();
+  const candidates = sortedResults(snapshot, ['approvedAt', 'updatedAt', 'createdAt']);
+  const payment = candidates.find(({ data }) => data.paymentVerified === true && data.unlocksDashboard === true);
+  if (!payment) fail('no approved production activation payment was found');
+  return payment;
+}
+
+async function latestDeliveredNotification() {
+  const snapshot = await db.collection('notifications').where('pushDeliveryState', '==', 'SUCCESS').limit(100).get();
+  const candidates = sortedResults(snapshot, ['pushAttemptedAt', 'updatedAt', 'createdAt']);
+  const notification = candidates.find(({ data }) => Number(data.pushSuccessCount || 0) > 0 && Number(data.pushFailureCount || 0) === 0);
+  if (!notification) fail('no successful production tenant notification was found');
+  return notification;
+}
+
+async function latestBrokerCommission() {
+  const snapshot = await db.collection('broker_commissions').limit(100).get();
+  const candidates = sortedResults(snapshot, ['createdAt', 'updatedAt']);
+  const commission = candidates.find(({ data }) => text(data.contractId) && text(data.brokerId || data.brokerUid));
+  if (!commission) fail('no production broker commission lock was found');
+  return commission;
+}
+
+async function latestStaffCreationAudit() {
+  const snapshot = await db.collection('audit_logs').where('action', '==', 'ADMIN_CREATE_STAFF_USER').limit(100).get();
+  const candidates = sortedResults(snapshot, ['createdAt', 'timestamp']);
+  const audit = candidates.find(({ data }) => text(data.targetId));
+  if (!audit) fail('no audited production staff provisioning record was found');
+  return audit;
+}
+
+async function latestRenewalWatch() {
+  const snapshot = await db.collection('contract_renewal_watch').limit(100).get();
+  const candidates = sortedResults(snapshot, ['generatedAt', 'updatedAt', 'createdAt']);
+  const watch = candidates.find(({ data }) => text(data.sourceCollection) && text(data.sourceId) && text(data.pdfUrl));
+  if (!watch) fail('no production renewal watch with PDF evidence was found');
+  return watch;
+}
+
+function paymentBindings(payment) {
+  const paymentId = canonicalId(payment.id, 'payment_id');
+  const intakeId = canonicalId(payment.data.intakeId, 'intake_id');
+  const contractId = canonicalId(payment.data.contractId || intakeId || paymentId, 'contract_id');
+  const ownerUid = canonicalId(payment.data.ownerUid || payment.data.ownerId, 'owner_uid');
   return { paymentId, intakeId, contractId, ownerUid };
 }
 
@@ -171,10 +209,8 @@ function photoEvidence(ticket) {
 }
 
 async function ownerActivationProof() {
-  const paymentId = safeId(process.env.PAYMENT_ID, 'payment_id');
-  const paymentDoc = await requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`);
-  const payment = paymentDoc.data;
-  const bindings = paymentBindings(paymentId, payment);
+  const payment = await latestApprovedPayment();
+  const bindings = paymentBindings(payment);
   const [contractDoc, intakeDoc, userDoc, ownerDoc, propertiesSnapshot] = await Promise.all([
     requireSnapshot(db.collection('contracts').doc(bindings.contractId), `contracts/${bindings.contractId}`),
     requireSnapshot(db.collection('intake_submissions').doc(bindings.intakeId), `intake_submissions/${bindings.intakeId}`),
@@ -186,25 +222,24 @@ async function ownerActivationProof() {
   const intake = intakeDoc.data;
   const user = userDoc.data;
   const owner = ownerDoc.data;
-  const properties = queryResults(propertiesSnapshot);
+  const properties = propertiesSnapshot.docs.map(docResult);
   if (!properties.length) fail('owner activation has no bound property records');
-  const invoiceId = safeId(payment.invoiceId || contract.invoiceId, 'invoice_id');
+  const invoiceId = canonicalId(payment.data.invoiceId || contract.invoiceId, 'invoice_id');
   const invoice = await requireSnapshot(db.collection('invoices').doc(invoiceId), `invoices/${invoiceId}`);
 
-  if (!statusIn(payment.status, ['APPROVED']) || payment.paymentVerified !== true || payment.unlocksDashboard !== true) fail('payment is not approved and dashboard-unlocking');
   if (!statusIn(contract.status || contract.contractStatus, ['ACTIVE']) || contract.adminApproved !== true || contract.dashboardUnlockApproved !== true) fail('contract is not active and Admin-approved');
   if (!statusIn(intake.status || intake.activationState, ['ACTIVE'])) fail('intake is not active');
   if (user.dashboardUnlocked !== true || user.dashboardLocked === true || !statusIn(user.activationStatus, ['ACTIVE'])) fail('users owner dashboard is not unlocked');
   if (owner.dashboardUnlocked !== true || owner.dashboardLocked === true || !statusIn(owner.activationStatus || owner.status, ['ACTIVE'])) fail('owners registry is not unlocked');
   if (properties.some(({ data }) => !statusIn(data.status || data.activationStatus, ['ACTIVE']) || text(data.ownerUid || data.ownerId) !== bindings.ownerUid)) fail('one or more properties are not active or owner-bound');
-  if (!statusIn(invoice.data.status, ['PAID']) || invoice.data.paymentId !== paymentId || invoice.data.contractId !== bindings.contractId) fail('paid mobilization invoice is missing or mismatched');
+  if (!statusIn(invoice.data.status, ['PAID']) || invoice.data.paymentId !== bindings.paymentId || invoice.data.contractId !== bindings.contractId) fail('paid mobilization invoice is missing or mismatched');
 
-  const annual = Number(payment.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);
-  const amount = Number(payment.amountReceived || payment.quoteSnapshot?.activationDeposit || payment.amount || 0);
+  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);
+  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);
   if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');
 
   return {
-    paymentId,
+    paymentId: bindings.paymentId,
     contractId: bindings.contractId,
     intakeId: bindings.intakeId,
     ownerUidHash: sha256(bindings.ownerUid),
@@ -212,7 +247,7 @@ async function ownerActivationProof() {
     propertyCount: properties.length,
     amountMinor: Math.round(amount * 100),
     currency: 'AED',
-    paymentApprovedAt: iso(payment.approvedAt),
+    paymentApprovedAt: iso(payment.data.approvedAt),
     contractApprovedAt: iso(contract.approvedAt),
     ownerApprovedAt: iso(user.approvedAt),
     observedAt: new Date().toISOString(),
@@ -220,17 +255,16 @@ async function ownerActivationProof() {
 }
 
 async function paymentUnlockExactlyOnceProof() {
-  const paymentId = safeId(process.env.PAYMENT_ID, 'payment_id');
-  const paymentBefore = await requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`);
-  const bindings = paymentBindings(paymentId, paymentBefore.data);
+  const paymentBefore = await latestApprovedPayment();
+  const bindings = paymentBindings(paymentBefore);
   const [contractBefore, userBefore, invoicesBeforeSnapshot, auditsBeforeSnapshot] = await Promise.all([
     requireSnapshot(db.collection('contracts').doc(bindings.contractId), `contracts/${bindings.contractId}`),
     requireSnapshot(db.collection('users').doc(bindings.ownerUid), `users/${bindings.ownerUid}`),
-    db.collection('invoices').where('paymentId', '==', paymentId).limit(20).get(),
-    db.collection('audit_logs').where('paymentId', '==', paymentId).limit(100).get(),
+    db.collection('invoices').where('paymentId', '==', bindings.paymentId).limit(20).get(),
+    db.collection('audit_logs').where('paymentId', '==', bindings.paymentId).limit(100).get(),
   ]);
-  const invoicesBefore = queryResults(invoicesBeforeSnapshot);
-  const approvalAuditsBefore = queryResults(auditsBeforeSnapshot).filter(({ data }) => data.action === 'ADMIN_APPROVE_PAYMENT');
+  const invoicesBefore = invoicesBeforeSnapshot.docs.map(docResult);
+  const approvalAuditsBefore = auditsBeforeSnapshot.docs.map(docResult).filter(({ data }) => data.action === 'ADMIN_APPROVE_PAYMENT');
   if (invoicesBefore.length !== 1 || approvalAuditsBefore.length !== 1) fail('pre-replay activation is not exactly-once');
   const before = {
     paymentApprovedAt: millis(paymentBefore.data.approvedAt),
@@ -241,16 +275,16 @@ async function paymentUnlockExactlyOnceProof() {
   };
   if (!before.paymentApprovedAt || !before.contractApprovedAt || !before.ownerApprovedAt || !/^[a-f0-9]{64}$/i.test(before.invoiceProofHash)) fail('pre-replay approval timestamps or invoice proof are missing');
 
-  const replay = await replayPaymentApproval(paymentId);
+  const replay = await replayPaymentApproval(bindings.paymentId);
   const [paymentAfter, contractAfter, userAfter, invoicesAfterSnapshot, auditsAfterSnapshot] = await Promise.all([
-    requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`),
+    requireSnapshot(db.collection('payment_transactions').doc(bindings.paymentId), `payment_transactions/${bindings.paymentId}`),
     requireSnapshot(db.collection('contracts').doc(bindings.contractId), `contracts/${bindings.contractId}`),
     requireSnapshot(db.collection('users').doc(bindings.ownerUid), `users/${bindings.ownerUid}`),
-    db.collection('invoices').where('paymentId', '==', paymentId).limit(20).get(),
-    db.collection('audit_logs').where('paymentId', '==', paymentId).limit(100).get(),
+    db.collection('invoices').where('paymentId', '==', bindings.paymentId).limit(20).get(),
+    db.collection('audit_logs').where('paymentId', '==', bindings.paymentId).limit(100).get(),
   ]);
-  const invoicesAfter = queryResults(invoicesAfterSnapshot);
-  const approvalAuditsAfter = queryResults(auditsAfterSnapshot).filter(({ data }) => data.action === 'ADMIN_APPROVE_PAYMENT');
+  const invoicesAfter = invoicesAfterSnapshot.docs.map(docResult);
+  const approvalAuditsAfter = auditsAfterSnapshot.docs.map(docResult).filter(({ data }) => data.action === 'ADMIN_APPROVE_PAYMENT');
   const after = {
     paymentApprovedAt: millis(paymentAfter.data.approvedAt),
     contractApprovedAt: millis(contractAfter.data.approvedAt),
@@ -263,7 +297,7 @@ async function paymentUnlockExactlyOnceProof() {
   if (paymentAfter.data.unlocksDashboard !== true || userAfter.data.dashboardUnlocked !== true || contractAfter.data.dashboardUnlockApproved !== true) fail('dashboard unlock state is not consistently active');
 
   return {
-    paymentId,
+    paymentId: bindings.paymentId,
     contractId: bindings.contractId,
     ownerUidHash: sha256(bindings.ownerUid),
     invoiceId: after.invoiceId,
@@ -278,28 +312,29 @@ async function paymentUnlockExactlyOnceProof() {
 }
 
 async function brokerCommissionProof() {
-  const paymentId = safeId(process.env.PAYMENT_ID, 'payment_id');
-  const contractId = safeId(process.env.CONTRACT_ID, 'contract_id');
-  const [contractBefore, payment, commissionsBeforeSnapshot] = await Promise.all([
-    requireSnapshot(db.collection('contracts').doc(contractId), `contracts/${contractId}`),
-    requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`),
-    db.collection('broker_commissions').where('contractId', '==', contractId).limit(20).get(),
-  ]);
-  if (text(payment.data.contractId || payment.data.intakeId || paymentId) !== contractId) fail('payment and contract input IDs are not bound');
-  const commissionsBefore = queryResults(commissionsBeforeSnapshot);
-  if (commissionsBefore.length !== 1 || commissionsBefore[0].id !== `commission_${contractId}`) fail('commission is not deterministically locked exactly once');
-  const commissionBefore = commissionsBefore[0].data;
-  const brokerUid = text(commissionBefore.brokerUid || commissionBefore.brokerId || contractBefore.data.referralUid || contractBefore.data.brokerUid);
-  if (!brokerUid || text(contractBefore.data.commissionId) !== commissionsBefore[0].id || contractBefore.data.commissionGenerated !== true) fail('contract commission binding is incomplete');
-  if (text(commissionBefore.contractId) !== contractId) fail('commission contract binding mismatch');
+  const commissionBefore = await latestBrokerCommission();
+  const contractId = canonicalId(commissionBefore.data.contractId, 'contract_id');
+  const contractBefore = await requireSnapshot(db.collection('contracts').doc(contractId), `contracts/${contractId}`);
+  const paymentId = canonicalId(
+    contractBefore.data.approvedPaymentId || contractBefore.data.activationPaymentId || contractBefore.data.paymentId,
+    'payment_id',
+  );
+  const payment = await requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`);
+  if (text(payment.data.contractId || payment.data.intakeId || paymentId) !== contractId) fail('payment and commission contract are not bound');
+  const commissionId = `commission_${contractId}`;
+  if (commissionBefore.id !== commissionId) fail('commission is not deterministically locked');
+  const brokerUid = canonicalId(commissionBefore.data.brokerId || commissionBefore.data.brokerUid, 'broker_uid');
+  if (text(contractBefore.data.commissionId) !== commissionId || contractBefore.data.commissionGenerated !== true) fail('contract commission binding is incomplete');
+  const commissionsBeforeSnapshot = await db.collection('broker_commissions').where('contractId', '==', contractId).limit(20).get();
+  if (commissionsBeforeSnapshot.size !== 1) fail('commission is not locked exactly once before replay');
   const auditBefore = await requireSnapshot(db.collection('auditLogs').doc(`broker_commission_${contractId}`), `auditLogs/broker_commission_${contractId}`);
-  if (auditBefore.data.action !== 'BROKER_COMMISSION_CREATED' || auditBefore.data.commissionId !== commissionsBefore[0].id) fail('deterministic commission audit is missing');
+  if (auditBefore.data.action !== 'BROKER_COMMISSION_CREATED' || auditBefore.data.commissionId !== commissionId) fail('deterministic commission audit is missing');
   const beforeHash = sha256(JSON.stringify({
-    id: commissionsBefore[0].id,
-    amount: commissionBefore.amount,
-    percentage: commissionBefore.percentage,
-    status: commissionBefore.status,
-    createdAt: millis(commissionBefore.createdAt),
+    id: commissionId,
+    amount: commissionBefore.data.amount,
+    percentage: commissionBefore.data.percentage,
+    status: commissionBefore.data.status,
+    createdAt: millis(commissionBefore.data.createdAt),
     auditId: auditBefore.id,
   }));
 
@@ -309,24 +344,24 @@ async function brokerCommissionProof() {
     db.collection('broker_commissions').where('contractId', '==', contractId).limit(20).get(),
     requireSnapshot(db.collection('auditLogs').doc(`broker_commission_${contractId}`), `auditLogs/broker_commission_${contractId}`),
   ]);
-  const commissionsAfter = queryResults(commissionsAfterSnapshot);
-  if (commissionsAfter.length !== 1 || commissionsAfter[0].id !== commissionsBefore[0].id) fail('payment replay created or replaced a commission lock');
+  if (commissionsAfterSnapshot.size !== 1 || commissionsAfterSnapshot.docs[0].id !== commissionId) fail('payment replay created or replaced a commission lock');
+  const commissionAfter = commissionsAfterSnapshot.docs[0].data() || {};
   const afterHash = sha256(JSON.stringify({
-    id: commissionsAfter[0].id,
-    amount: commissionsAfter[0].data.amount,
-    percentage: commissionsAfter[0].data.percentage,
-    status: commissionsAfter[0].data.status,
-    createdAt: millis(commissionsAfter[0].data.createdAt),
+    id: commissionId,
+    amount: commissionAfter.amount,
+    percentage: commissionAfter.percentage,
+    status: commissionAfter.status,
+    createdAt: millis(commissionAfter.createdAt),
     auditId: auditAfter.id,
   }));
-  if (beforeHash !== afterHash || contractAfter.data.commissionId !== commissionsBefore[0].id) fail('commission lock changed during replay');
+  if (beforeHash !== afterHash || contractAfter.data.commissionId !== commissionId) fail('commission lock changed during replay');
 
   return {
     paymentId,
     contractId,
-    commissionId: commissionsBefore[0].id,
+    commissionId,
     brokerUidHash: sha256(brokerUid),
-    commissionCount: commissionsAfter.length,
+    commissionCount: commissionsAfterSnapshot.size,
     commissionStateHash: afterHash,
     replayHttpStatus: replay.responseStatus,
     replayActorUidHash: replay.replayActorUidHash,
@@ -336,13 +371,12 @@ async function brokerCommissionProof() {
 }
 
 async function tenantNotificationProof() {
-  const notificationId = safeId(process.env.NOTIFICATION_ID, 'notification_id');
-  const ticketId = safeId(process.env.TICKET_ID, 'ticket_id');
-  const tenantUid = safeId(process.env.TENANT_UID, 'tenant_uid');
-  const notification = await requireSnapshot(db.collection('notifications').doc(notificationId), `notifications/${notificationId}`);
+  const notification = await latestDeliveredNotification();
+  const notificationId = canonicalId(notification.id, 'notification_id');
+  const tenantUid = canonicalId(notification.data.recipientId, 'tenant_uid');
+  const ticketId = canonicalId(notification.data.ticketId, 'ticket_id');
   const data = notification.data;
-  if (text(data.recipientId) !== tenantUid || text(data.ticketId) !== ticketId) fail('notification recipient/ticket binding mismatch');
-  if (upper(data.pushDeliveryState) !== 'SUCCESS' || Number(data.pushSuccessCount || 0) < 1 || Number(data.pushFailureCount || 0) !== 0 || Number(data.pushTokenCount || 0) < 1 || !data.pushAttemptedAt) fail('tenant push delivery was not successful');
+  if (Number(data.pushTokenCount || 0) < 1 || !data.pushAttemptedAt) fail('tenant notification token evidence is incomplete');
 
   const maintenanceSnapshot = await db.collection('maintenanceTickets').doc(ticketId).get();
   const ticketSnapshot = maintenanceSnapshot.exists ? maintenanceSnapshot : await db.collection('tickets').doc(ticketId).get();
@@ -372,7 +406,8 @@ async function tenantNotificationProof() {
 }
 
 async function adminStaffClaimsProof() {
-  const staffUid = safeId(process.env.STAFF_UID, 'staff_uid');
+  const creationAudit = await latestStaffCreationAudit();
+  const staffUid = canonicalId(creationAudit.data.targetId, 'staff_uid');
   const authRecord = await admin.auth().getUser(staffUid);
   const [userDoc, accessDoc, hrDoc, technicianDoc, auditSnapshot] = await Promise.all([
     requireSnapshot(db.collection('users').doc(staffUid), `users/${staffUid}`),
@@ -383,14 +418,14 @@ async function adminStaffClaimsProof() {
   ]);
   const role = lower(userDoc.data.role || userDoc.data.userRole);
   const claims = authRecord.customClaims || {};
-  if (role !== 'technician') fail('least-privilege launch proof requires a technician staff account');
+  if (role !== 'technician') fail('latest audited staff account is not a technician');
   if (authRecord.disabled || lower(claims.role || claims.userRole) !== role || claims.staff !== true || claims.technician !== true) fail('technician Auth claims do not match the staff profile');
   if (claims.admin === true || claims.super_admin === true || claims.superAdmin === true || claims.ceo === true || PRIVILEGED_ROLES.has(lower(claims.role))) fail('technician account has privileged Admin claims');
   if (lower(accessDoc.data.role) !== role || accessDoc.data.active !== true || lower(hrDoc.data.role || hrDoc.data.employeeType) !== role || lower(technicianDoc.data.role) !== role) fail('staff registries do not agree on technician role');
   const permissions = accessDoc.data.permissions && typeof accessDoc.data.permissions === 'object' ? accessDoc.data.permissions : {};
   const forbidden = ['canManageSecurity', 'canManageUsers', 'canApprovePayments', 'canManageContracts', 'canManageHr'];
   if (forbidden.some((key) => permissions[key] === true || claims.permissions?.[key] === true)) fail('technician account has elevated permissions');
-  const creationAudits = queryResults(auditSnapshot).filter(({ data }) => data.action === 'ADMIN_CREATE_STAFF_USER');
+  const creationAudits = auditSnapshot.docs.map(docResult).filter(({ data }) => data.action === 'ADMIN_CREATE_STAFF_USER');
   if (creationAudits.length !== 1) fail('staff creation audit is missing or duplicated');
 
   return {
@@ -406,19 +441,17 @@ async function adminStaffClaimsProof() {
 }
 
 async function renewalSchedulerProof() {
-  const watchId = safeId(process.env.RENEWAL_WATCH_ID, 'renewal_watch_id');
-  const watch = await requireSnapshot(db.collection('contract_renewal_watch').doc(watchId), `contract_renewal_watch/${watchId}`);
+  const watch = await latestRenewalWatch();
+  const watchId = canonicalId(watch.id, 'renewal_watch_id');
   const data = watch.data;
   const sourceCollection = text(data.sourceCollection);
-  const sourceId = safeId(data.sourceId, 'renewal source_id');
-  const renewalSourceReferences = Object.freeze({
-    contracts: db.collection('contracts').doc(sourceId),
-    leases: db.collection('leases').doc(sourceId),
-    lease_contracts: db.collection('lease_contracts').doc(sourceId),
-    tenancy_contracts: db.collection('tenancy_contracts').doc(sourceId),
-  });
-  const sourceReference = renewalSourceReferences[sourceCollection];
-  if (!sourceReference) fail('renewal sourceCollection is not allow-listed');
+  const sourceId = canonicalId(data.sourceId, 'renewal_source_id');
+  let sourceReference;
+  if (sourceCollection === 'contracts') sourceReference = db.collection('contracts').doc(sourceId);
+  else if (sourceCollection === 'leases') sourceReference = db.collection('leases').doc(sourceId);
+  else if (sourceCollection === 'lease_contracts') sourceReference = db.collection('lease_contracts').doc(sourceId);
+  else if (sourceCollection === 'tenancy_contracts') sourceReference = db.collection('tenancy_contracts').doc(sourceId);
+  else fail('renewal sourceCollection is not allow-listed');
   const source = await requireSnapshot(sourceReference, `${sourceCollection}/${sourceId}`);
   const daysRemaining = Number(data.daysRemaining);
   const expiryAt = toDate(data.expiryAt);
@@ -451,16 +484,14 @@ async function renewalSchedulerProof() {
   };
 }
 
-const handlers = Object.freeze({
-  ownerPaymentActivation: ownerActivationProof,
-  paymentUnlockExactlyOnce: paymentUnlockExactlyOnceProof,
-  tenantNotificationDelivery: tenantNotificationProof,
-  brokerCommissionLockExactlyOnce: brokerCommissionProof,
-  adminStaffClaims: adminStaffClaimsProof,
-  renewalScheduler: renewalSchedulerProof,
-});
+let evidence;
+if (gate === 'ownerPaymentActivation') evidence = await ownerActivationProof();
+else if (gate === 'paymentUnlockExactlyOnce') evidence = await paymentUnlockExactlyOnceProof();
+else if (gate === 'tenantNotificationDelivery') evidence = await tenantNotificationProof();
+else if (gate === 'brokerCommissionLockExactlyOnce') evidence = await brokerCommissionProof();
+else if (gate === 'adminStaffClaims') evidence = await adminStaffClaimsProof();
+else evidence = await renewalSchedulerProof();
 
-const evidence = await handlers[gate]();
 const proof = {
   schemaVersion: 1,
   status: 'passed',
@@ -474,8 +505,7 @@ const proof = {
   observedAt: evidence.observedAt,
   hardLaunchClaim: false,
 };
-const outputPath = path.resolve(PROOF_PATHS[gate]);
-mkdirSync(path.dirname(outputPath), { recursive: true });
-writeFileSync(outputPath, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
+mkdirSync('launch_package', { recursive: true });
+writeFileSync(APPLICATION_PROOF_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
 console.log(`[operational-application-evidence] PASS gate=${gate}`);
-console.log(`[operational-application-evidence] wrote ${outputPath}`);
+console.log(`[operational-application-evidence] wrote ${APPLICATION_PROOF_PATH}`);
