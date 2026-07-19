@@ -10,6 +10,8 @@ const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const OUTPUT_PATH = 'launch_package/operational-proof.json';
 const SHA256_RE = /^[0-9a-f]{64}$/i;
 const COMPLETE_STATUSES = ['COMPLETED_PENDING_APPROVAL', 'COMPLETED', 'CLOSED'];
+const MAX_GPS_ACCURACY_METERS = 100;
+const MAX_PROPERTY_DISTANCE_METERS = 500;
 const text = (value) => String(value ?? '').trim();
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (message) => {
@@ -31,6 +33,24 @@ const canonicalId = (value, label) => {
   return id;
 };
 const list = (value) => Array.isArray(value) ? value : [];
+const coordinates = (value) => {
+  if (!value || typeof value !== 'object') return null;
+  const lat = Number(value.lat ?? value._latitude ?? value.latitude?._latitude ?? value.latitude);
+  const lng = Number(value.lng ?? value._longitude ?? value.longitude?._longitude ?? value.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+};
+const firstCoordinates = (...values) => values.map(coordinates).find(Boolean) || null;
+const radians = (degrees) => degrees * Math.PI / 180;
+const haversineMeters = (left, right) => {
+  const earthRadiusMeters = 6_371_000;
+  const deltaLat = radians(right.lat - left.lat);
+  const deltaLng = radians(right.lng - left.lng);
+  const lat1 = radians(left.lat);
+  const lat2 = radians(right.lat);
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('verifier may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('verifier requires protected main');
@@ -61,11 +81,10 @@ const ticketRecord = candidates.find(({ data }) => {
     && text(data.onSiteVerification).toUpperCase() === 'GPS_VERIFIED'
     && SHA256_RE.test(text(data.arrivalInstallationHash))
     && ['android', 'ios'].includes(text(data.arrivalDevicePlatform).toLowerCase())
-    && Number.isFinite(Number(location.lat ?? location.latitude))
-    && Number.isFinite(Number(location.lng ?? location.longitude))
+    && coordinates(location)
     && Number.isFinite(accuracy)
     && accuracy > 0
-    && accuracy <= 100
+    && accuracy <= MAX_GPS_ACCURACY_METERS
     && millis(data.arrivedAt) > 0
     && millis(data.startedAt) >= millis(data.arrivedAt)
     && millis(data.completedAt) >= millis(data.startedAt);
@@ -75,16 +94,38 @@ if (!ticketRecord) fail('no completed production ticket has physical-device bind
 const ticketId = canonicalId(ticketRecord.id, 'ticket_id');
 const ticket = ticketRecord.data;
 const technicianId = canonicalId(ticket.assignedTechnicianId || ticket.technicianId, 'technician_id');
-const [userSnap, technicianSnap] = await Promise.all([
+const propertyId = canonicalId(ticket.propertyId, 'property_id');
+const [userSnap, technicianSnap, propertySnap] = await Promise.all([
   db.collection('users').doc(technicianId).get(),
   db.collection('technicians').doc(technicianId).get(),
+  db.collection('properties').doc(propertyId).get(),
 ]);
+if (!propertySnap.exists) fail('ticket property record is missing');
 const profile = { ...(userSnap.data() || {}), ...(technicianSnap.data() || {}) };
+const property = propertySnap.data() || {};
 const registeredHash = text(profile.registeredInstallationHash || profile.registeredDeviceIdHash);
 const arrivalHash = text(ticket.arrivalInstallationHash);
 const platform = text(ticket.arrivalDevicePlatform).toLowerCase();
 if (profile.deviceRegistered !== true || !SHA256_RE.test(registeredHash) || registeredHash !== arrivalHash) fail('ticket installation hash does not match the registered technician installation');
 if (text(profile.registeredDevicePlatform).toLowerCase() !== platform) fail('ticket platform does not match the registered technician platform');
+
+const arrivalCoordinates = coordinates(ticket.arrivedLocation || ticket.technicianLocation);
+const propertyCoordinates = firstCoordinates(
+  ticket.jobLocation,
+  ticket.propertyLocation,
+  ticket.serviceLocation,
+  property.location,
+  property.coordinates,
+  property.geo,
+  property.geoPoint,
+  property.gps,
+  property,
+);
+if (!arrivalCoordinates || !propertyCoordinates) fail('arrival or property GPS coordinates are missing');
+const propertyDistanceMeters = haversineMeters(arrivalCoordinates, propertyCoordinates);
+if (!Number.isFinite(propertyDistanceMeters) || propertyDistanceMeters > MAX_PROPERTY_DISTANCE_METERS) {
+  fail(`technician arrival is ${Math.round(propertyDistanceMeters)}m from the property; maximum is ${MAX_PROPERTY_DISTANCE_METERS}m`);
+}
 
 const beforeRefs = [
   ticket.beforePhotoUrl,
@@ -115,21 +156,24 @@ const storagePath = (value) => {
   if (/^(maintenanceTickets|tickets|maintenance-requests)\//.test(value)) return value;
   return '';
 };
-
-const findStoredEvidence = async (references) => {
+const [maintenanceTicketFiles] = await bucket.getFiles({ prefix: 'maintenanceTickets/', autoPaginate: true });
+const [ticketFiles] = await bucket.getFiles({ prefix: 'tickets/', autoPaginate: true });
+const [maintenanceRequestFiles] = await bucket.getFiles({ prefix: 'maintenance-requests/', autoPaginate: true });
+const storedObjectNames = new Set([
+  ...maintenanceTicketFiles.map((file) => file.name),
+  ...ticketFiles.map((file) => file.name),
+  ...maintenanceRequestFiles.map((file) => file.name),
+]);
+const findStoredEvidence = (references) => {
   for (const reference of references) {
     const objectPath = storagePath(reference);
-    if (!objectPath) continue;
-    const [exists] = await bucket.file(objectPath).exists();
-    if (exists) return { objectPath, referenceHash: hash(reference) };
+    if (objectPath && storedObjectNames.has(objectPath)) return { objectPath, referenceHash: hash(reference) };
   }
   return null;
 };
 
-const [beforeStored, afterStored] = await Promise.all([
-  findStoredEvidence(beforeRefs),
-  findStoredEvidence(afterRefs),
-]);
+const beforeStored = findStoredEvidence(beforeRefs);
+const afterStored = findStoredEvidence(afterRefs);
 if (!beforeStored) fail('before-photo evidence does not resolve to an existing production Storage object');
 if (!afterStored) fail('after-photo evidence does not resolve to an existing production Storage object');
 if (text(ticket.technicianNotes || ticket.notes).length < 10) fail('completion notes are missing');
@@ -144,7 +188,7 @@ const proof = {
   commitSha,
   projectId,
   sourceRunId,
-  sourceSystem: 'Firebase technician lifecycle, device binding and Cloud Storage',
+  sourceSystem: 'Firebase technician lifecycle, registered installation, property geofence and Cloud Storage',
   observedAt,
   physicalDevice: true,
   gpsCaptured: true,
@@ -155,6 +199,7 @@ const proof = {
   technicianUidHash: hash(technicianId),
   platform,
   gpsAccuracyMeters: Number((ticket.arrivedLocation || ticket.technicianLocation).accuracy),
+  propertyDistanceMeters: Math.round(propertyDistanceMeters * 100) / 100,
   arrivedAt: toDate(ticket.arrivedAt).toISOString(),
   startedAt: toDate(ticket.startedAt).toISOString(),
   completedAt: toDate(ticket.completedAt).toISOString(),
@@ -162,11 +207,11 @@ const proof = {
   afterObjectHash: hash(afterStored.objectPath),
   checks: [
     { name: 'registered mobile installation matched arrival', status: 'passed', reference: `firestore://maintenanceTickets/${ticketId}#physical-device` },
-    { name: 'GPS accuracy and property geofence verified by lifecycle callable', status: 'passed', reference: `firestore://maintenanceTickets/${ticketId}#gps` },
-    { name: 'before evidence exists in Cloud Storage', status: 'passed', reference: `storage-sha256://${beforeStored.referenceHash}` },
-    { name: 'after evidence exists in Cloud Storage', status: 'passed', reference: `storage-sha256://${afterStored.referenceHash}` },
+    { name: 'arrival GPS accuracy and property distance recomputed', status: 'passed', reference: `firestore://maintenanceTickets/${ticketId}#gps-geofence` },
+    { name: 'before evidence exists in Cloud Storage inventory', status: 'passed', reference: `storage-sha256://${beforeStored.referenceHash}` },
+    { name: 'after evidence exists in Cloud Storage inventory', status: 'passed', reference: `storage-sha256://${afterStored.referenceHash}` },
   ],
 };
 mkdirSync('launch_package', { recursive: true });
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
-console.log(`[technician-physical-evidence] PASS ticket=${ticketId} platform=${platform}`);
+console.log(`[technician-physical-evidence] PASS ticket=${ticketId} platform=${platform} distance=${Math.round(propertyDistanceMeters)}m`);
