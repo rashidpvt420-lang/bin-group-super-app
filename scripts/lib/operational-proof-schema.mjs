@@ -4,6 +4,34 @@ import { PRODUCTION } from './launch-honesty.mjs';
 const SHA256_RE = /^[0-9a-f]{64}$/i;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+export const OPERATIONAL_GATE_EVIDENCE_TYPES = Object.freeze({
+  ownerPaymentActivation: new Set(['production-transaction']),
+  paymentUnlockExactlyOnce: new Set(['production-transaction']),
+  tenantNotificationDelivery: new Set(['production-transaction', 'workflow-artifact']),
+  technicianPhysicalGpsEvidence: new Set(['physical-device-report']),
+  brokerCommissionLockExactlyOnce: new Set(['production-transaction']),
+  adminStaffClaims: new Set(['workflow-artifact', 'provider-console-export']),
+  stripeLiveBilling: new Set(['production-transaction', 'provider-console-export']),
+  appCheckEnforcement: new Set(['provider-console-export', 'workflow-artifact']),
+  privilegedAccessRotation: new Set(['secret-rotation-record']),
+  brandedEmailDelivery: new Set(['provider-console-export', 'workflow-artifact']),
+  renewalScheduler: new Set(['scheduler-run']),
+});
+
+const SOURCE_SYSTEM_PATTERNS = Object.freeze({
+  ownerPaymentActivation: [/firebase.*payment.*activation/i],
+  paymentUnlockExactlyOnce: [/firebase.*adminapprovepayment.*replay/i],
+  tenantNotificationDelivery: [/firebase.*notification.*fcm/i, /email.*delivery/i],
+  technicianPhysicalGpsEvidence: [/firebase.*technician.*device.*storage/i, /physical.*device.*gps/i],
+  brokerCommissionLockExactlyOnce: [/firebase.*broker.*commission.*replay/i],
+  adminStaffClaims: [/firebase.*auth.*staff/i],
+  stripeLiveBilling: [/stripe/i],
+  appCheckEnforcement: [/firebase.*app\s*check/i, /app\s*check.*firebase/i],
+  privilegedAccessRotation: [/google.*secret.*firebase.*authentication/i, /secret.*rotation/i],
+  brandedEmailDelivery: [/email|mail|postmark|sendgrid|smtp/i],
+  renewalScheduler: [/firebase.*renewal.*watcher/i, /cloud.*scheduler/i],
+});
+
 function requiredString(errors, doc, field) {
   if (String(doc?.[field] || '').trim().length < 3) errors.push(`${field} is required`);
 }
@@ -14,6 +42,25 @@ function requiredTrue(errors, doc, field) {
 
 function requiredOne(errors, doc, field) {
   if (Number(doc?.[field]) !== 1) errors.push(`${field} must equal 1`);
+}
+
+function validateEvidenceType(errors, gateKey, evidenceType) {
+  const allowed = OPERATIONAL_GATE_EVIDENCE_TYPES[gateKey];
+  if (!allowed || !allowed.has(String(evidenceType || ''))) {
+    errors.push(`evidenceType is not accepted for ${gateKey || '(missing gate)'}`);
+  }
+}
+
+function validateSourceSystem(errors, gateKey, sourceSystem) {
+  const value = String(sourceSystem || '').trim();
+  if (!value) {
+    errors.push('sourceSystem is required');
+    return;
+  }
+  const patterns = SOURCE_SYSTEM_PATTERNS[gateKey] || [];
+  if (!patterns.some((pattern) => pattern.test(value))) {
+    errors.push(`sourceSystem is not accepted for ${gateKey || '(missing gate)'}`);
+  }
 }
 
 export function validateOperationalProofDocument(
@@ -27,10 +74,12 @@ export function validateOperationalProofDocument(
   if (doc.generatedByWorkflow !== true) errors.push('generatedByWorkflow must be true');
   if (doc.gateKey !== gateKey) errors.push('gateKey mismatch');
   if (doc.evidenceType !== evidenceType) errors.push('evidenceType mismatch');
+  validateEvidenceType(errors, gateKey, evidenceType);
   if (doc.commitSha !== commitSha) errors.push('commitSha mismatch');
   if (doc.projectId !== PRODUCTION.projectId) errors.push(`projectId must be ${PRODUCTION.projectId}`);
+  if (!/^\d+$/.test(String(sourceRunId || ''))) errors.push('sourceRunId must be numeric');
   if (String(doc.sourceRunId || '') !== String(sourceRunId || '')) errors.push('sourceRunId mismatch');
-  requiredString(errors, doc, 'sourceSystem');
+  validateSourceSystem(errors, gateKey, doc.sourceSystem);
 
   const observedAt = Date.parse(String(doc.observedAt || ''));
   if (!Number.isFinite(observedAt)) errors.push('observedAt must be a valid timestamp');

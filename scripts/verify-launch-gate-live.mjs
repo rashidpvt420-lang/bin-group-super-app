@@ -12,8 +12,9 @@ import admin from 'firebase-admin';
 import chalk from 'chalk';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { gitSha, PRODUCTION } from './lib/launch-honesty.mjs';
-import { AUTHORIZED_HARD_LAUNCH_ACTORS, REQUIRED_OPERATIONAL_GATES } from './lib/hard-launch-gate.mjs';
-import { validateOperationalProofDocument } from './lib/operational-proof-schema.mjs';
+import { REQUIRED_OPERATIONAL_GATES } from './lib/hard-launch-gate.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
+import { OPERATIONAL_GATE_EVIDENCE_TYPES, validateOperationalProofDocument } from './lib/operational-proof-schema.mjs';
 
 const gateKey = String(process.argv[2] || '').trim();
 const evidenceType = String(process.argv[3] || '').trim();
@@ -21,14 +22,6 @@ const evidenceReference = String(process.argv[4] || '').trim();
 const artifactHash = String(process.argv[5] || '').trim().toLowerCase();
 const sourceRunId = String(process.env.SOURCE_RUN_ID || '').trim();
 const sourceArtifactName = String(process.env.SOURCE_ARTIFACT_NAME || '').trim();
-const allowedEvidenceTypes = new Set([
-  'workflow-artifact',
-  'provider-console-export',
-  'production-transaction',
-  'physical-device-report',
-  'secret-rotation-record',
-]);
-
 function fail(message) {
   console.error(chalk.red(`❌ ${message}`));
   process.exit(1);
@@ -39,16 +32,20 @@ if (process.env.GITHUB_WORKFLOW !== 'Operational Proof Intake') fail('Unexpected
 if (process.env.GITHUB_JOB !== 'record-operational-proof') fail('Unexpected proof job.');
 if (process.env.GITHUB_REF !== 'refs/heads/main') fail('Operational proof requires refs/heads/main.');
 if (process.env.GITHUB_REPOSITORY !== 'rashidpvt420-lang/bin-group-super-app') fail('Unexpected repository.');
-if (!AUTHORIZED_HARD_LAUNCH_ACTORS.includes(String(process.env.GITHUB_ACTOR || ''))) fail('Unauthorized workflow actor.');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 if (!REQUIRED_OPERATIONAL_GATES.includes(gateKey)) fail(`Unknown operational gate: ${gateKey}`);
-if (!allowedEvidenceTypes.has(evidenceType)) fail(`Unsupported evidence type: ${evidenceType}`);
+if (!OPERATIONAL_GATE_EVIDENCE_TYPES[gateKey]?.has(evidenceType)) fail(`Unsupported evidence type ${evidenceType} for ${gateKey}.`);
 if (!/^\d+$/.test(sourceRunId)) fail('SOURCE_RUN_ID is required and must be numeric.');
 if (!/^[A-Za-z0-9._-]{1,128}$/.test(sourceArtifactName)) fail('SOURCE_ARTIFACT_NAME is invalid.');
-if (!/^github-actions:\/\/rashidpvt420-lang\/bin-group-super-app\/runs\/\d+\/artifacts\/[A-Za-z0-9._-]{1,128}$/.test(evidenceReference)) {
-  fail('Evidence reference must identify a verified same-repository GitHub Actions artifact.');
+const evidenceUrl = new URL(evidenceReference);
+if (evidenceUrl.protocol !== 'https:' || evidenceUrl.hostname !== 'github.com') {
+  fail('Evidence reference must use HTTPS on github.com.');
 }
-if (!evidenceReference.includes(`/runs/${sourceRunId}/artifacts/${sourceArtifactName}`)) {
-  fail('Evidence reference does not match the verified source run and artifact.');
+if (evidenceUrl.pathname !== `/rashidpvt420-lang/bin-group-super-app/actions/runs/${sourceRunId}`) {
+  fail('Evidence reference does not match the verified same-repository source run.');
+}
+if (evidenceUrl.hash !== `#artifact-${sourceArtifactName}`) {
+  fail('Evidence reference does not identify the verified source artifact.');
 }
 if (!/^[0-9a-f]{64}$/.test(artifactHash)) fail('Evidence artifact hash must be a SHA-256 value.');
 if (!process.env.GITHUB_RUN_ID) fail('GITHUB_RUN_ID is required.');
@@ -123,6 +120,7 @@ const proof = {
   workflowRunId: String(process.env.GITHUB_RUN_ID),
   sourceWorkflowRunId: sourceRunId,
   workflowRunAttempt: String(process.env.GITHUB_RUN_ATTEMPT || '1'),
+  githubRepository: process.env.GITHUB_REPOSITORY,
   verifiedBy: 'workflow',
   verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
 };

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { PRODUCTION, sha256File } from './lib/launch-honesty.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_WORKFLOW = 'Operational Application Evidence';
@@ -120,7 +121,7 @@ const manifests = Object.freeze({
 if (process.env.GITHUB_ACTIONS !== 'true') fail('publisher may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== EXPECTED_REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('publisher requires the protected main repository');
 if (process.env.GITHUB_WORKFLOW !== EXPECTED_WORKFLOW || process.env.GITHUB_JOB !== EXPECTED_JOB) fail('publisher requires the protected application evidence job');
-if (process.env.GITHUB_ACTOR !== 'rashidpvt420-lang') fail('only the authorized founder may publish application evidence');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 
 const gate = text(process.env.OPERATIONAL_GATE);
 const manifest = manifests[gate];
@@ -154,13 +155,14 @@ const record = {
   commitSha,
   projectId,
   evidenceType: manifest.evidenceType,
-  evidenceReference: manifest.reference(proof),
+  evidenceReference: `https://github.com/${EXPECTED_REPOSITORY}/actions/runs/${runId}#${gate}` ,
   artifactHash,
   sourceProofHash,
   sourceSystem: manifest.sourceSystem,
   observedAt: admin.firestore.Timestamp.fromDate(observedAt),
   sourceWorkflowRunId: runId,
   workflowRunId: runId,
+  githubRepository: EXPECTED_REPOSITORY,
   verifiedBy: 'workflow',
   verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
 };

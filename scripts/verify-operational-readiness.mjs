@@ -68,6 +68,7 @@ for (const key of REQUIRED_OPERATIONAL_GATES) {
     observedAt: timestampToIso(gate.observedAt),
     sourceWorkflowRunId: String(gate.sourceWorkflowRunId || ''),
     workflowRunId: String(gate.workflowRunId || ''),
+    githubRepository: String(gate.githubRepository || ''),
     verifiedBy: String(gate.verifiedBy || ''),
     verifiedAt: timestampToIso(gate.verifiedAt),
   };
