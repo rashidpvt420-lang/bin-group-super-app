@@ -37,7 +37,8 @@ test('application evidence workflow is protected and auto-discovers fixed produc
     assert.match(publisher, new RegExp(`${gate}:`));
   }
   assert.match(workflow, /path:\s*launch_package\/application-proof\.json/);
-  assert.match(verifier, /writeFileSync\('launch_package\/application-proof\.json'/);
+  assert.match(verifier, /const APPLICATION_PROOF_PATH = 'launch_package\/application-proof\.json';/);
+  assert.match(verifier, /writeFileSync\(APPLICATION_PROOF_PATH,/);
   assert.match(publisher, /readFileSync\('launch_package\/application-proof\.json'/);
   assert.match(publisher, /sha256File\('launch_package\/application-proof\.json'\)/);
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /application-(?:ownerPaymentActivation|paymentUnlockExactlyOnce|tenantNotificationDelivery|brokerCommissionLockExactlyOnce|adminStaffClaims|renewalScheduler)\.json/);
