@@ -1,0 +1,47 @@
+ authorized founder may publish application evidence');", "try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }")
+source = source.replace("  evidenceReference: manifest.reference(proof),", "  evidenceReference: `https://github.com/${EXPECTED_REPOSITORY}/actions/runs/${runId}#${gate}`, ")
+source = source.replace("  verifiedBy: 'workflow',", "  githubRepository: EXPECTED_REPOSITORY,\n  verifiedBy: 'workflow',")
+publisher.write_text(source)
+
+# Workflow patches.
+live = root / '.github/workflows/live-role-smoke.yml'
+source = live.read_text()
+source = source.replace("description: 'For hard-clearance: incident register or operations log reference'", "description: 'For hard-clearance: approved HTTPS incident register or operations log URL'")
+source = source.replace("description: 'For hard-clearance: rollback plan or rollback test reference'", "description: 'For hard-clearance: approved HTTPS rollback plan or rollback test URL'")
+source = source.replace("description: 'For hard-clearance: monitoring dashboard or pilot report reference'", "description: 'For hard-clearance: approved HTTPS monitoring dashboard or pilot report URL'")
+anchor = "  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}\n"
+if 'AUTHORIZED_FOUNDER_ACTORS:' not in source:
+    source = source.replace(anchor, anchor + "  AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}\n")
+source = source.replace('''          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Only the authorized founder account may approve hard launch."
+            exit 1
+          fi''', '''          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
+            exit 1
+          fi''')
+live.write_text(source)
+
+op = root / '.github/workflows/operational-proof.yml'
+source = op.read_text()
+source = source.replace("          - secret-rotation-record\n", "          - secret-rotation-record\n          - scheduler-run\n")
+source = source.replace("    environment: hard-launch-operations\n", "    environment: hard-launch-operations\n    env:\n      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}\n")
+source = source.replace('''          if [[ "$CURRENT_ACTOR" != "rashidpvt420-lang" ]]; then
+            echo "::error::Only the authorized founder account may submit operational launch proof."
+            exit 1
+          fi''', '''          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
+            exit 1
+          fi''')
+source = source.replace("workflow-artifact|provider-console-export|production-transaction|physical-de
