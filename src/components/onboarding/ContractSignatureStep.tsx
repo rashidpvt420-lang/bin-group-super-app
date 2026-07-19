@@ -1,289 +1,184 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert, Box, Typography, Button, Paper, Grid, TextField, Checkbox, FormControlLabel, Stack, Divider, CircularProgress
+  Alert, Box, Button, Checkbox, CircularProgress, Divider, FormControlLabel, Grid,
+  Paper, Stack, TextField, Typography, alpha
 } from '@mui/material';
-import { FileSignature, ShieldCheck, ScrollText } from 'lucide-react';
+import { FileSignature, ScrollText, ShieldCheck } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { functions, httpsCallable } from '../../lib/firebase';
 
-interface ContractSignatureStepProps {
-    onNext: () => void;
-    onBack: () => void;
-}
-
-const readable = (value: string | undefined, fallback: string) => {
-    if (!value || value.includes('.')) return fallback;
-    return value;
-};
+interface ContractSignatureStepProps { onNext: () => void; onBack: () => void }
+type LockedQuote = { quoteHash: string; annualContractValue: number; activationDeposit: number; quotedAtMs?: number; expiresAtMs?: number; version?: string };
 
 const modeLabel = (strategy?: string) => {
-    if (strategy === 'pm' || strategy === 'pm_only' || strategy === 'rent') return 'Property Management Only / إدارة العقار فقط';
-    if (strategy === 'hybrid' || strategy === 'both') return 'Maintenance + Property Management / الصيانة وإدارة العقار معاً';
-    return 'Maintenance Only / الصيانة فقط';
+  if (strategy === 'pm' || strategy === 'pm_only' || strategy === 'rent') return 'Property Management Only / إدارة العقار فقط';
+  if (strategy === 'hybrid' || strategy === 'both') return 'Maintenance + Property Management / الصيانة وإدارة العقار معاً';
+  return 'Maintenance Only / الصيانة فقط';
 };
-
-const AgreementSection = ({ title, ar, children }: { title: string; ar: string; children: React.ReactNode }) => (
-    <Box sx={{ mb: 2.25 }}>
-        <Typography variant="subtitle2" fontWeight="950" sx={{ color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 1 }}>{title}</Typography>
-        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', textAlign: 'right', mb: 0.75 }}>{ar}</Typography>
-        <Divider sx={{ mb: 1, borderColor: 'rgba(0,0,0,0.08)' }} />
-        {children}
-    </Box>
-);
-
-const Clause = ({ en, ar }: { en: string; ar: string }) => (
-    <Box sx={{ mb: 1.25 }}>
-        <Typography variant="caption" sx={{ display: 'block', color: '#111827', lineHeight: 1.7 }}>{en}</Typography>
-        <Typography variant="caption" sx={{ display: 'block', color: '#6B7280', textAlign: 'right', lineHeight: 1.8 }}>{ar}</Typography>
-    </Box>
-);
+const AgreementSection = ({ title, ar, children }: { title: string; ar: string; children: React.ReactNode }) => <Box sx={{ mb: 2.25 }}><Typography variant="subtitle2" fontWeight="950" sx={{ color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 1 }}>{title}</Typography><Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', textAlign: 'right', mb: 0.75 }}>{ar}</Typography><Divider sx={{ mb: 1, borderColor: 'rgba(0,0,0,0.08)' }} />{children}</Box>;
+const Clause = ({ en, ar }: { en: string; ar: string }) => <Box sx={{ mb: 1.25 }}><Typography variant="caption" sx={{ display: 'block', color: '#111827', lineHeight: 1.7 }}>{en}</Typography><Typography variant="caption" sx={{ display: 'block', color: '#6B7280', textAlign: 'right', lineHeight: 1.8 }}>{ar}</Typography></Box>;
 
 export default function ContractSignatureStep({ onNext, onBack }: ContractSignatureStepProps) {
-    const {
-        companyProfile,
-        ownerAccount,
-        properties,
-        selectedAddOns,
-        portfolioSummary,
-        isContractSigned,
-        signatureName,
-        contractOtpVerificationId,
-        setContractSignature,
-        setContractOtpVerificationId,
-        intakeId,
-        onboardingSessionId,
-        calculateSummary
-    } = useOnboardingStore();
-    const { t, isRTL, lang } = useLanguage();
+  const {
+    companyProfile, ownerAccount, properties, selectedAddOns, portfolioSummary, valuationResult,
+    isContractSigned, signatureName, contractOtpVerificationId, setContractSignature,
+    setContractOtpVerificationId, intakeId, onboardingSessionId, calculateSummary,
+  } = useOnboardingStore();
+  const { isRTL, lang } = useLanguage();
+  const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
+  const [typedName, setTypedName] = useState(signatureName || '');
+  const [accepted, setAccepted] = useState(isContractSigned);
+  const [otpRequestId, setOtpRequestId] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [quoteLoading, setQuoteLoading] = useState(true);
+  const [lockedQuote, setLockedQuote] = useState<LockedQuote | null>(null);
 
-    const [typedName, setTypedName] = useState(signatureName || '');
-    const [accepted, setAccepted] = useState(isContractSigned);
-    const [otpRequestId, setOtpRequestId] = useState('');
-    const [otp, setOtp] = useState('');
-    const [otpBusy, setOtpBusy] = useState(false);
-    const [otpError, setOtpError] = useState('');
-    const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
+  const ownerName = ownerAccount?.fullName || companyProfile.contactPerson || copy('Owner', 'المالك');
+  const contractReference = intakeId || onboardingSessionId;
+  const agreementVersion = 'BIN-GROUP-OWNER-AGREEMENT-v1.1-PORTFOLIO';
+  const reviewedQuote = valuationResult?.serverQuote as any;
+  const serviceModes = useMemo(() => [...new Set(properties.map((property) => modeLabel(property.strategy)))], [properties]);
 
-    const primaryProperty = properties[0];
-    const quote = portfolioSummary.quoteResults?.[primaryProperty?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
-    const ownerName = ownerAccount?.fullName || companyProfile.contactPerson || 'Owner';
-    const agreementVersion = 'BIN-GROUP-OWNER-AGREEMENT-v1.0';
+  useEffect(() => { calculateSummary(); }, [calculateSummary, properties]);
+  useEffect(() => { setContractSignature(accepted, typedName); }, [typedName, accepted, setContractSignature]);
 
-    useEffect(() => {
-        calculateSummary();
-    }, [calculateSummary, properties]);
+  const loadLockedQuote = React.useCallback(async () => {
+    if (!ownerAccount?.uid || !properties.length) return;
+    setQuoteLoading(true);
+    setOtpError('');
+    try {
+      const result = await httpsCallable(functions, 'previewOwnerOnboardingQuote')({ properties, selectedAddOns: selectedAddOns || [] });
+      const quote = result.data as LockedQuote;
+      if (!quote?.quoteHash || !/^[a-f0-9]{64}$/.test(quote.quoteHash) || quote.annualContractValue <= 0 || quote.activationDeposit <= 0) {
+        throw new Error(copy('The server did not return a valid portfolio contract quote.', 'لم يُرجع الخادم عرض عقد صالحاً للمحفظة.'));
+      }
+      if (reviewedQuote?.portfolioAnnualTotal && Math.abs(Number(reviewedQuote.portfolioAnnualTotal) - quote.annualContractValue) > 0.01) {
+        throw new Error(copy('The portfolio quote changed after Review. Return to Review and confirm the new amount.', 'تغيّر عرض المحفظة بعد المراجعة. ارجع إلى المراجعة وأكد المبلغ الجديد.'));
+      }
+      if (reviewedQuote?.mobilisationDeposit && Math.abs(Number(reviewedQuote.mobilisationDeposit) - quote.activationDeposit) > 0.01) {
+        throw new Error(copy('The 15% deposit changed after Review. Return to Review and confirm it.', 'تغيّرت دفعة 15٪ بعد المراجعة. ارجع إلى المراجعة وأكدها.'));
+      }
+      setLockedQuote(quote);
+    } catch (error: any) {
+      setLockedQuote(null);
+      setOtpError(error?.message || copy('The protected portfolio quote could not be loaded.', 'تعذر تحميل عرض المحفظة المحمي.'));
+    } finally { setQuoteLoading(false); }
+  }, [ownerAccount?.uid, properties, selectedAddOns, reviewedQuote?.portfolioAnnualTotal, reviewedQuote?.mobilisationDeposit, lang]);
 
-    useEffect(() => {
-        setContractSignature(accepted, typedName);
-    }, [typedName, accepted, setContractSignature]);
+  useEffect(() => { void loadLockedQuote(); }, [loadLockedQuote]);
 
-    const contractReference = intakeId || onboardingSessionId;
-    const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference);
-    const isValid = canRequestOtp && Boolean(contractOtpVerificationId);
+  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && lockedQuote?.quoteHash);
+  const isValid = canRequestOtp && Boolean(contractOtpVerificationId);
 
-    const requestOtp = async () => {
-        if (!canRequestOtp) return;
-        setOtpBusy(true);
-        setOtpError('');
-        try {
-            const previewQuote = httpsCallable(functions, 'previewOwnerOnboardingQuote');
-            const preview = await previewQuote({
-                properties,
-                selectedAddOns: selectedAddOns || [],
-            });
-            const lockedQuote = preview.data as {
-                quoteHash?: string;
-                annualContractValue?: number;
-                activationDeposit?: number;
-            };
-            if (!lockedQuote.quoteHash || !/^[a-f0-9]{64}$/.test(lockedQuote.quoteHash)) {
-                throw new Error('A server-authoritative contract hash was not returned.');
-            }
-            if (
-                Math.abs(Number(lockedQuote.annualContractValue || 0) - Number(quote?.annualTotal || 0)) > 0.01 ||
-                Math.abs(Number(lockedQuote.activationDeposit || 0) - Number(quote?.mobilizationFee || 0)) > 0.01
-            ) {
-                throw new Error(copy(
-                    'The quote changed. Return to pricing and review the current server quote before signing.',
-                    'تغيّر عرض السعر. ارجع إلى التسعير وراجع عرض الخادم الحالي قبل التوقيع.',
-                ));
-            }
-            const callable = httpsCallable(functions, 'requestContractSignatureOtp');
-            const result = await callable({
-                email: ownerAccount?.email,
-                contractId: contractReference,
-                contractHash: lockedQuote.quoteHash,
-                propertyName: primaryProperty?.address || primaryProperty?.emirate || 'BIN GROUP contract',
-            });
-            const data = result.data as { requestId?: string };
-            if (!data.requestId) throw new Error('OTP request reference was not returned.');
-            setOtpRequestId(data.requestId);
-            setContractOtpVerificationId(null);
-        } catch (error: any) {
-            setOtpError(error?.message || copy('OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
-        } finally {
-            setOtpBusy(false);
-        }
-    };
+  const requestOtp = async () => {
+    if (!canRequestOtp || !lockedQuote) return;
+    setOtpBusy(true); setOtpError('');
+    try {
+      const result = await httpsCallable(functions, 'requestContractSignatureOtp')({
+        email: ownerAccount?.email,
+        contractId: contractReference,
+        contractHash: lockedQuote.quoteHash,
+        propertyName: properties.length === 1 ? (properties[0]?.address || properties[0]?.emirate || 'BIN GROUP property') : `BIN GROUP portfolio · ${properties.length} properties`,
+      });
+      const requestId = String((result.data as any)?.requestId || '');
+      if (!requestId) throw new Error(copy('OTP request reference was not returned.', 'لم يتم إرجاع مرجع طلب الرمز.'));
+      setOtpRequestId(requestId);
+      setContractOtpVerificationId(null);
+    } catch (error: any) {
+      setOtpError(error?.message || copy('OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
+    } finally { setOtpBusy(false); }
+  };
 
-    const verifyOtp = async () => {
-        if (!otpRequestId || otp.trim().length !== 6) return;
-        setOtpBusy(true);
-        setOtpError('');
-        try {
-            const callable = httpsCallable(functions, 'verifyContractSignatureOtp');
-            const result = await callable({
-                requestId: otpRequestId,
-                otp: otp.trim(),
-                signature: typedName.trim(),
-            });
-            const data = result.data as { verificationId?: string; contractId?: string };
-            if (!data.verificationId || data.contractId !== contractReference) {
-                throw new Error('OTP verification did not match this contract.');
-            }
-            setContractOtpVerificationId(data.verificationId);
-        } catch (error: any) {
-            setContractOtpVerificationId(null);
-            setOtpError(error?.message || copy('OTP verification failed.', 'فشل التحقق من الرمز.'));
-        } finally {
-            setOtpBusy(false);
-        }
-    };
+  const verifyOtp = async () => {
+    if (!otpRequestId || otp.trim().length !== 6) return;
+    setOtpBusy(true); setOtpError('');
+    try {
+      const result = await httpsCallable(functions, 'verifyContractSignatureOtp')({ requestId: otpRequestId, otp: otp.trim(), signature: typedName.trim() });
+      const data = result.data as { verificationId?: string; contractId?: string };
+      if (!data.verificationId || data.contractId !== contractReference) throw new Error(copy('OTP verification did not match this contract.', 'لم يطابق التحقق بالرمز هذا العقد.'));
+      setContractOtpVerificationId(data.verificationId);
+    } catch (error: any) {
+      setContractOtpVerificationId(null);
+      setOtpError(error?.message || copy('OTP verification failed.', 'فشل التحقق من الرمز.'));
+    } finally { setOtpBusy(false); }
+  };
 
-    return (
-        <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 980, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 } }}>
-            <Box sx={{ textAlign: 'center', mb: 4 }}>
-                <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom>
-                    {lang === 'ar' ? 'اتفاقية خدمات المالك ثنائية اللغة' : readable(t('onboarding.contract_title'), 'Full Bilingual Owner Service Agreement')}
-                </Typography>
-                <Typography variant="body1" color="rgba(255,255,255,0.5)">
-                    {lang === 'ar' ? 'راجع العقد الكامل باللغتين الإنجليزية والعربية ثم أكد توقيعك الرقمي.' : readable(t('onboarding.contract_desc'), 'Review the full English/Arabic contract and provide your digital signature to proceed.')}
-                </Typography>
-            </Box>
+  return (
+    <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 1040, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 } }}>
+      <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Typography variant="h4" fontWeight="950" color="#FFF" gutterBottom>{copy('Full Bilingual Portfolio Service Agreement', 'اتفاقية خدمات المحفظة ثنائية اللغة')}</Typography>
+        <Typography color="rgba(255,255,255,0.58)">{copy('The signed values below are the server-authoritative total for every property in this onboarding portfolio.', 'القيم الموقعة أدناه هي إجمالي الخادم المعتمد لجميع عقارات محفظة التسجيل.')}</Typography>
+      </Box>
+      {otpError && <Alert severity="error" sx={{ mb: 3 }} action={!lockedQuote ? <Button color="inherit" onClick={() => void loadLockedQuote()}>{copy('Retry quote', 'إعادة العرض')}</Button> : undefined}>{otpError}</Alert>}
+      {quoteLoading && <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{copy('Locking the server portfolio quotation…', 'جارٍ قفل عرض المحفظة من الخادم…')}</Alert>}
+      {lockedQuote && <Alert severity="success" icon={<ShieldCheck size={18} />} sx={{ mb: 3 }}>{copy(`Protected portfolio quote locked · ${properties.length} properties · AED ${formatAED(lockedQuote.annualContractValue)} annually · AED ${formatAED(lockedQuote.activationDeposit)} due now.`, `تم قفل عرض المحفظة المحمي · ${properties.length} عقار · ${formatAED(lockedQuote.annualContractValue)} درهم سنوياً · ${formatAED(lockedQuote.activationDeposit)} درهم مستحق الآن.`)}</Alert>}
 
-            <Paper sx={{
-                p: { xs: 2, md: 4 },
-                borderRadius: 4,
-                bgcolor: 'rgba(22, 22, 24, 0.6)',
-                border: '1px solid rgba(255,255,255,0.05)',
-                backdropFilter: 'blur(10px)',
-                mb: 4
-            }}>
-                <Box sx={{ bgcolor: '#FFF', color: '#000', p: { xs: 2.5, md: 4 }, borderRadius: 2, mb: 4, position: 'relative', overflow: 'hidden', maxHeight: 760, overflowY: 'auto' }}>
-                    <Box sx={{ position: 'absolute', top: -20, right: -20, opacity: 0.05, transform: 'rotate(-15deg)' }}>
-                        <ShieldCheck size={220} />
-                    </Box>
-                    <Typography variant="h5" fontWeight="950" align="center" sx={{ color: binThemeTokens.gold, mb: 0.5 }}>BIN GROUP L.L.C - S.P.C</Typography>
-                    <Typography variant="subtitle2" align="center" display="block" fontWeight="950">OWNER SERVICE AGREEMENT</Typography>
-                    <Typography variant="caption" align="center" display="block" color="text.secondary" sx={{ mb: 2 }}>اتفاقية خدمات المالك</Typography>
-                    <Typography variant="caption" align="center" display="block" color="text.secondary" sx={{ mb: 3 }}>Version: {agreementVersion}</Typography>
-                    
-                    <AgreementSection title="1. Contract Cover" ar="غلاف العقد">
-                        <Grid container spacing={1.25}>
-                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Owner / المالك</Typography><Typography variant="body2" fontWeight="800">{ownerName}</Typography></Grid>
-                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Company / الشركة</Typography><Typography variant="body2" fontWeight="800">{companyProfile.name || 'Private / فردي'}</Typography></Grid>
-                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Property / العقار</Typography><Typography variant="body2" fontWeight="800">{primaryProperty?.address || primaryProperty?.emirate || 'UAE'}</Typography></Grid>
-                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Contract Mode / نوع العقد</Typography><Typography variant="body2" fontWeight="800">{modeLabel(primaryProperty?.strategy)}</Typography></Grid>
-                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Annual Value / القيمة السنوية</Typography><Typography variant="body2" fontWeight="800" color="primary.main">AED {formatAED(quote?.annualTotal || 0)}</Typography></Grid>
-                            <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Mobilization / دفعة البدء</Typography><Typography variant="body2" fontWeight="800">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Grid>
-                        </Grid>
-                    </AgreementSection>
+      <Paper sx={{ p: { xs: 2, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.65)', border: '1px solid rgba(255,255,255,0.06)', mb: 4 }}>
+        <Box sx={{ bgcolor: '#FFF', color: '#000', p: { xs: 2.5, md: 4 }, borderRadius: 2, mb: 4, position: 'relative', overflow: 'hidden', maxHeight: 760, overflowY: 'auto' }}>
+          <ShieldCheck size={220} style={{ position: 'absolute', top: -20, right: -20, opacity: 0.05, transform: 'rotate(-15deg)' }} />
+          <Typography variant="h5" fontWeight="950" align="center" sx={{ color: binThemeTokens.gold }}>BIN GROUP L.L.C - S.P.C</Typography>
+          <Typography variant="subtitle2" align="center" fontWeight="950">PORTFOLIO OWNER SERVICE AGREEMENT</Typography>
+          <Typography variant="caption" align="center" display="block" color="text.secondary">اتفاقية خدمات محفظة المالك</Typography>
+          <Typography variant="caption" align="center" display="block" color="text.secondary" sx={{ mb: 3 }}>Version: {agreementVersion}</Typography>
 
-                    <AgreementSection title="2. Contract Mode Matrix" ar="مصفوفة نوع العقد">
-                        <Clause en="Maintenance Only means BIN GROUP handles agreed maintenance services, complaints, technician dispatch, evidence, and reports only. Rent collection, lease management, tenant disputes, eviction, and financial ledgers are excluded unless separately contracted." ar="الصيانة فقط تعني أن مجموعة بن تتولى خدمات الصيانة المتفق عليها والبلاغات وتوجيه الفنيين والإثباتات والتقارير فقط. ولا تشمل تحصيل الإيجارات أو إدارة عقود الإيجار أو نزاعات المستأجرين أو الإخلاء أو الدفاتر المالية إلا باتفاق منفصل." />
-                        <Clause en="Property Management Only means BIN GROUP handles property administration, occupancy visibility, tenant records, document coordination, owner reporting, and rent/ledger visibility where included. Physical repairs and contractor costs are excluded unless separately approved and paid." ar="إدارة العقار فقط تعني أن مجموعة بن تتولى الإدارة العقارية ومتابعة الإشغال وسجلات المستأجرين وتنسيق المستندات وتقارير المالك وعرض الإيجارات والدفعات متى كانت مشمولة. ولا تشمل الإصلاحات الفعلية وتكاليف المقاولين إلا بعد الموافقة والسداد بشكل منفصل." />
-                        <Clause en="Maintenance + Property Management means both operational maintenance and property management are provided according to the approved package, service schedule, SLA tier, exclusions, and payment plan." ar="الصيانة وإدارة العقار معاً تعني تقديم الصيانة التشغيلية وإدارة العقار وفقاً للباقة المعتمدة وجدول الخدمات ومستوى الخدمة والاستثناءات وخطة السداد." />
-                    </AgreementSection>
+          <AgreementSection title="1. Contract Cover" ar="غلاف العقد">
+            <Grid container spacing={1.25}>
+              <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Owner / المالك</Typography><Typography variant="body2" fontWeight="800">{ownerName}</Typography></Grid>
+              <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Company / الشركة</Typography><Typography variant="body2" fontWeight="800">{companyProfile.name || 'Private / فردي'}</Typography></Grid>
+              <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Portfolio / المحفظة</Typography><Typography variant="body2" fontWeight="800">{properties.length} {copy('properties', 'عقار')}</Typography></Grid>
+              <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Contract modes / أنواع العقد</Typography><Typography variant="body2" fontWeight="800">{serviceModes.join(' · ')}</Typography></Grid>
+              <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">Annual portfolio value / القيمة السنوية للمحفظة</Typography><Typography variant="body2" fontWeight="950" color="primary.main">AED {formatAED(lockedQuote?.annualContractValue || portfolioSummary.estimatedACV || 0)}</Typography></Grid>
+              <Grid item xs={12} md={6}><Typography variant="caption" color="text.secondary">15% mobilisation / دفعة التعبئة 15٪</Typography><Typography variant="body2" fontWeight="950">AED {formatAED(lockedQuote?.activationDeposit || Math.round((portfolioSummary.estimatedACV || 0) * 0.15))}</Typography></Grid>
+            </Grid>
+            <Divider sx={{ my: 2 }} />
+            <Stack spacing={1}>{properties.map((property, index) => <Box key={property.id || index} sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.035)', borderRadius: 2 }}><Typography variant="caption" color="text.secondary">{copy('Property', 'العقار')} {index + 1}</Typography><Typography variant="body2" fontWeight="800">{property.address || property.area || property.emirate || 'UAE'} · {property.propertyType} · {modeLabel(property.strategy)}</Typography></Box>)}</Stack>
+          </AgreementSection>
 
-                    <AgreementSection title="3. Institutional / Non-Tenant Properties" ar="العقارات المؤسسية وغير القائمة على المستأجرين">
-                        <Clause en="For Majlis, government buildings, hospitals, schools, universities, malls, hotels, staff accommodation, community facilities, and similar properties, the system may use Authorized Reporters instead of tenant leases. Reporters can submit complaints, photos, incidents, observations, and requests, but they do not receive tenancy, ownership, employment, payment, or agency rights." ar="بالنسبة للمجالس والمباني الحكومية والمستشفيات والمدارس والجامعات والمراكز التجارية والفنادق وسكن الموظفين والمرافق المجتمعية وما يماثلها، يجوز للنظام استخدام مبلغين معتمدين بدلاً من عقود المستأجرين. يمكن للمبلغين تقديم البلاغات والصور والحوادث والملاحظات والطلبات، ولا يكتسبون حقوق إيجار أو ملكية أو عمل أو دفع أو وكالة." />
-                    </AgreementSection>
+          <AgreementSection title="2. Commercial Model" ar="النموذج التجاري">
+            <Clause en="Rent is paid directly to the Owner’s registered bank account. BIN GROUP does not hold Owner rent funds. Property-management fees and approved maintenance charges are invoiced separately according to the selected plan." ar="يُدفع الإيجار مباشرة إلى الحساب البنكي المسجل للمالك. لا تحتفظ BIN GROUP بأموال إيجار المالك. وتُفوتر رسوم إدارة العقار وتكاليف الصيانة المعتمدة بشكل منفصل وفقاً للخطة المختارة." />
+            <Clause en="Maintenance Only, Property Management Only, and Maintenance + Property Management apply separately to each listed property as shown in the locked quotation and property schedule." ar="تطبق الصيانة فقط أو إدارة العقار فقط أو الصيانة مع إدارة العقار بشكل منفصل على كل عقار مدرج وفق عرض السعر المقفل وجدول العقارات." />
+          </AgreementSection>
 
-                    <AgreementSection title="4. Scope, Owner Duties, Payment" ar="النطاق والتزامات المالك والدفع">
-                        <Clause en="BIN GROUP provides only services expressly listed in the selected package, approved quotation, digital contract, service schedule, or written addendum. Additional works, emergency works, materials, parts, government fees, approvals, inspections, legal work, fit-out, design, civil works, MEP upgrades, and out-of-scope requests require prior written approval and additional payment." ar="تقدم مجموعة بن فقط الخدمات المذكورة صراحةً في الباقة المختارة أو عرض السعر المعتمد أو العقد الرقمي أو جدول الخدمات أو الملحق الخطي. وتتطلب الأعمال الإضافية أو الطارئة أو المواد أو قطع الغيار أو الرسوم الحكومية أو الموافقات أو الفحوصات أو الأعمال القانونية أو التشطيب أو التصميم أو الأعمال المدنية أو ترقيات الأعمال الكهروميكانيكية أو الطلبات خارج النطاق موافقة خطية مسبقة وسداداً إضافياً." />
-                        <Clause en="The Owner must provide accurate title deed, property, tenant, occupancy, access, and payment information; provide safe access; pay fees, VAT, third-party costs, emergency costs, and approved variations; obtain required consents; and ensure tenants, residents, guards, delegates, and reporters follow platform rules." ar="يلتزم المالك بتقديم معلومات دقيقة عن سند الملكية والعقار والمستأجرين والإشغال والدخول والدفع؛ وتوفير دخول آمن؛ وسداد الرسوم وضريبة القيمة المضافة وتكاليف الأطراف الثالثة والتكاليف الطارئة والتغييرات المعتمدة؛ والحصول على الموافقات المطلوبة؛ وضمان التزام المستأجرين والمقيمين والحراس والمندوبين والمبلغين بقواعد المنصة." />
-                    </AgreementSection>
+          <AgreementSection title="3. Institutional / Non-Tenant Properties" ar="العقارات المؤسسية وغير القائمة على المستأجرين">
+            <Clause en="For Majlis, government buildings, hospitals, schools, mosques, malls, hotels, staff accommodation and similar properties, Authorized Reporters may submit operational requests without receiving tenancy, ownership, employment, payment or agency rights." ar="بالنسبة للمجالس والمباني الحكومية والمستشفيات والمدارس والمساجد والمراكز التجارية والفنادق وسكن الموظفين وما يماثلها، يجوز للمبلغين المعتمدين تقديم طلبات تشغيلية دون اكتساب حقوق إيجار أو ملكية أو عمل أو دفع أو وكالة." />
+          </AgreementSection>
 
-                    <AgreementSection title="5. Legal Protection Clauses" ar="بنود الحماية القانونية">
-                        <Clause en="BIN GROUP is not responsible for hidden defects, pre-existing defects, structural/design defects, defective materials, illegal modifications, authority violations, tenant/rent disputes, eviction, bounced cheques, loss of rent, loss of profit, business interruption, indirect loss, reputational damage, force majeure, misuse, negligence, unauthorized repairs, or third-party acts unless liability cannot be excluded under UAE law." ar="لا تكون مجموعة بن مسؤولة عن العيوب المخفية أو السابقة أو الإنشائية أو التصميمية أو المواد المعيبة أو التعديلات غير القانونية أو مخالفات الجهات أو نزاعات المستأجرين أو الإيجار أو الإخلاء أو الشيكات المرتجعة أو فقدان الإيجار أو خسارة الأرباح أو توقف الأعمال أو الخسائر غير المباشرة أو ضرر السمعة أو القوة القاهرة أو سوء الاستخدام أو الإهمال أو الإصلاحات غير المصرح بها أو تصرفات الأطراف الثالثة إلا إذا كانت المسؤولية لا يجوز استبعادها بموجب قانون دولة الإمارات." />
-                        <Clause en="To the maximum extent permitted by UAE law, BIN GROUP total liability shall not exceed fees actually paid by the Owner during the preceding twelve months for the specific service giving rise to the claim. The Owner indemnifies BIN GROUP for inaccurate information, lack of authority, unsafe conditions, misuse, unpaid charges, unlawful instructions, third-party acts, or Owner breach." ar="إلى الحد الأقصى المسموح به بموجب قانون دولة الإمارات، لا تتجاوز مسؤولية مجموعة بن الإجمالية الرسوم التي دفعها المالك فعلياً خلال الاثني عشر شهراً السابقة عن الخدمة المحددة التي نشأ عنها الادعاء. ويلتزم المالك بتعويض مجموعة بن عن المعلومات غير الدقيقة أو عدم وجود الصلاحية أو الظروف غير الآمنة أو إساءة الاستخدام أو الرسوم غير المسددة أو التعليمات غير القانونية أو تصرفات الأطراف الثالثة أو إخلال المالك." />
-                    </AgreementSection>
+          <AgreementSection title="4. Scope, Owner Duties, Payment" ar="النطاق والتزامات المالك والدفع">
+            <Clause en="BIN GROUP provides only services expressly listed in the selected package, locked quotation, service schedule or signed addendum. Additional work, materials, authority fees, inspections, fit-out, civil work and MEP upgrades require written approval and additional payment." ar="تقدم BIN GROUP فقط الخدمات المذكورة صراحة في الباقة المختارة وعرض السعر المقفل وجدول الخدمات أو الملحق الموقع. وتتطلب الأعمال الإضافية والمواد ورسوم الجهات والفحوصات والتشطيبات والأعمال المدنية وترقيات الأعمال الكهروميكانيكية موافقة خطية وسداداً إضافياً." />
+            <Clause en="The Owner must provide accurate identity, title deed, property, occupancy, access and payment information and ensure safe authorised access to every property in the portfolio." ar="يلتزم المالك بتقديم معلومات دقيقة عن الهوية وسندات الملكية والعقارات والإشغال والدخول والدفع وضمان الوصول الآمن والمصرح به إلى كل عقار في المحفظة." />
+          </AgreementSection>
 
-                    <AgreementSection title="6. Digital Evidence, AI Disclaimer, Law" ar="الإثبات الرقمي وإخلاء مسؤولية الذكاء الاصطناعي والقانون">
-                        <Clause en="BIN GROUP may generate, store, timestamp, hash, and retain contracts, quotations, invoices, property passports, tickets, photos, approvals, signatures, GPS logs, audit logs, and service evidence in its Document Vault. AI recommendations, pricing suggestions, classifications, risk scores, and dashboard insights are decision-support only and do not replace legal, engineering, tax, accounting, insurance, valuation, or authority advice." ar="يجوز لمجموعة بن إنشاء وتخزين وختم وحفظ العقود وعروض الأسعار والفواتير وجوازات العقار والتذاكر والصور والموافقات والتوقيعات وسجلات الموقع وسجلات التدقيق وإثباتات الخدمة في خزنة المستندات. وتُعد توصيات الذكاء الاصطناعي واقتراحات الأسعار والتصنيفات ودرجات المخاطر ومؤشرات لوحات التحكم أدوات مساعدة لاتخاذ القرار فقط ولا تغني عن الاستشارة القانونية أو الهندسية أو الضريبية أو المحاسبية أو التأمينية أو التقييمية أو موافقات الجهات." />
-                        <Clause en="This Agreement is governed by UAE law as applicable in Abu Dhabi. Abu Dhabi Courts have jurisdiction subject to mandatory law. The Agreement is English/Arabic; in case of conflict before UAE mainland courts, Arabic prevails unless a signed addendum says otherwise." ar="تخضع هذه الاتفاقية لقوانين دولة الإمارات كما هي مطبقة في أبوظبي. وتختص محاكم أبوظبي مع مراعاة القوانين الإلزامية. أُعدت الاتفاقية بالإنجليزية والعربية؛ وفي حال التعارض أمام محاكم دولة الإمارات البرية يسود النص العربي ما لم ينص ملحق موقع على خلاف ذلك." />
-                    </AgreementSection>
-                </Box>
+          <AgreementSection title="5. Legal Protection Clauses" ar="بنود الحماية القانونية">
+            <Clause en="BIN GROUP is not responsible for hidden or pre-existing defects, structural/design defects, unlawful modifications, authority violations, tenant disputes, loss of rent or profit, force majeure, misuse, negligence, unauthorised repairs or third-party acts except where liability cannot be excluded under UAE law." ar="لا تكون BIN GROUP مسؤولة عن العيوب المخفية أو السابقة أو الإنشائية أو التصميمية أو التعديلات غير القانونية أو مخالفات الجهات أو نزاعات المستأجرين أو فقدان الإيجار أو الأرباح أو القوة القاهرة أو سوء الاستخدام أو الإهمال أو الإصلاحات غير المصرح بها أو تصرفات الأطراف الثالثة إلا إذا تعذر استبعاد المسؤولية بموجب قانون دولة الإمارات." />
+          </AgreementSection>
 
-                <Box sx={{ p: 3, bgcolor: 'rgba(198, 167, 94, 0.05)', borderRadius: 2, border: `1px solid rgba(198, 167, 94, 0.2)` }}>
-                    <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-                        <FileSignature size={20} color={binThemeTokens.gold} />
-                        <Typography variant="h6" fontWeight="950" color="#FFF">{copy('Digital Signature', 'التوقيع الرقمي')}</Typography>
-                    </Stack>
-                    
-                    <TextField 
-                        fullWidth
-                        label={copy('Type your full legal name to sign', 'اكتب اسمك القانوني الكامل للتوقيع')}
-                        variant="outlined"
-                        value={typedName}
-                        onChange={(e) => setTypedName(e.target.value)}
-                        sx={{ mb: 2 }}
-                        InputProps={{ sx: { color: '#FFF', fontFamily: 'monospace', fontSize: '1.1rem' } }}
-                    />
-
-                    <FormControlLabel
-                        control={<Checkbox checked={accepted} onChange={(e) => setAccepted(e.target.checked)} sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />}
-                        label={
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                                {copy(
-                                    `I, ${typedName || '___'}, accept the full bilingual Owner Service Agreement, commercial terms, exclusions, limitation of liability, indemnity, digital evidence vault, and UAE governing law clauses, and authorize BIN GROUP to generate the locked signed PDF.`,
-                                    `أنا ${typedName || '___'} أوافق على اتفاقية خدمات المالك ثنائية اللغة وشروطها التجارية والاستثناءات وحدود المسؤولية والتعويض وخزنة الأدلة الرقمية وأحكام القانون الإماراتي، وأفوض بن جروب بإنشاء نسخة PDF موقعة ومقفلة.`
-                                )}
-                            </Typography>
-                        }
-                    />
-                    <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
-                    {otpError && <Alert severity="error" sx={{ mb: 2 }}>{otpError}</Alert>}
-                    {contractOtpVerificationId ? (
-                        <Alert severity="success">
-                            {copy('Email OTP verified for this contract.', 'تم التحقق من رمز البريد الإلكتروني لهذا العقد.')}
-                        </Alert>
-                    ) : (
-                        <Stack spacing={2}>
-                            <Button variant="outlined" disabled={!canRequestOtp || otpBusy} onClick={requestOtp}>
-                                {otpBusy ? <CircularProgress size={20} /> : copy('SEND CONTRACT OTP', 'إرسال رمز توقيع العقد')}
-                            </Button>
-                            {otpRequestId && (
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                    <TextField
-                                        fullWidth
-                                        label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')}
-                                        value={otp}
-                                        onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                                        inputProps={{ inputMode: 'numeric', maxLength: 6 }}
-                                    />
-                                    <Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={verifyOtp}>
-                                        {copy('VERIFY OTP', 'تحقق من الرمز')}
-                                    </Button>
-                                </Stack>
-                            )}
-                        </Stack>
-                    )}
-                </Box>
-            </Paper>
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <Button variant="outlined" onClick={onBack} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, px: 4, borderRadius: 100, fontWeight: 950 }}>
-                    {copy('Back', 'رجوع')}
-                </Button>
-                <Button variant="contained" onClick={onNext} disabled={!isValid} fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, px: 4, borderRadius: 100, '&:hover': { bgcolor: '#FFF' }, '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)' } }}>
-                    <ScrollText size={18} style={{ marginRight: 8 }} />
-                    {copy('Sign Full Agreement & Proceed to Payment', 'توقيع الاتفاقية والمتابعة إلى الدفع')}
-                </Button>
-            </Stack>
+          <AgreementSection title="6. Digital Evidence, AI Disclaimer, Law" ar="الإثبات الرقمي وإخلاء مسؤولية الذكاء الاصطناعي والقانون">
+            <Clause en="BIN GROUP may timestamp, hash and retain contracts, quotations, invoices, property passports, tickets, photos, approvals, signatures, GPS and audit logs. AI outputs are decision-support only and do not replace legal, engineering, tax, accounting, insurance or authority advice." ar="يجوز لـ BIN GROUP ختم العقود وعروض الأسعار والفواتير وجوازات العقار والتذاكر والصور والموافقات والتوقيعات وسجلات GPS والتدقيق زمنياً وتجزئتها وحفظها. مخرجات الذكاء الاصطناعي أدوات مساعدة للقرار ولا تستبدل الاستشارات القانونية أو الهندسية أو الضريبية أو المحاسبية أو التأمينية أو استشارات الجهات." />
+            <Clause en="This Agreement is governed by UAE law as applicable in Abu Dhabi. Abu Dhabi Courts have jurisdiction subject to mandatory law. If the English and Arabic texts conflict before UAE mainland courts, Arabic prevails unless a signed addendum states otherwise." ar="تخضع هذه الاتفاقية لقوانين دولة الإمارات المطبقة في أبوظبي. تختص محاكم أبوظبي مع مراعاة القوانين الإلزامية. وفي حال تعارض النصين الإنجليزي والعربي أمام محاكم الدولة البرية، يسود النص العربي ما لم ينص ملحق موقع على خلاف ذلك." />
+          </AgreementSection>
         </Box>
-    );
+
+        <Box sx={{ p: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), borderRadius: 2, border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
+          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" mb={2}><FileSignature size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight="950" color="#FFF">{copy('Digital Signature', 'التوقيع الرقمي')}</Typography></Stack>
+          <TextField fullWidth label={copy('Type your full legal name to sign', 'اكتب اسمك القانوني الكامل للتوقيع')} value={typedName} onChange={(event) => setTypedName(event.target.value)} sx={{ mb: 2 }} InputProps={{ sx: { color: '#FFF', fontFamily: 'monospace', fontSize: '1.1rem' } }} />
+          <FormControlLabel control={<Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)} sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)' }}>{copy(`I, ${typedName || '___'}, accept the complete bilingual portfolio agreement, the locked server quotation for ${properties.length} properties, the exclusions, liability limits, digital evidence terms and UAE governing law.`, `أنا ${typedName || '___'} أوافق على اتفاقية المحفظة ثنائية اللغة كاملة وعرض الخادم المقفل لعدد ${properties.length} عقار والاستثناءات وحدود المسؤولية وشروط الأدلة الرقمية والقانون الإماراتي.`)}</Typography>} />
+          <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
+          {contractOtpVerificationId ? <Alert severity="success">{copy('Email OTP verified for this portfolio contract.', 'تم التحقق من رمز البريد لعقد المحفظة.')}</Alert> : <Stack spacing={2}>
+            <Button variant="outlined" disabled={!canRequestOtp || otpBusy || quoteLoading} onClick={() => void requestOtp()}>{otpBusy ? <CircularProgress size={20} /> : copy('SEND CONTRACT OTP', 'إرسال رمز توقيع العقد')}</Button>
+            {otpRequestId && <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}><TextField fullWidth label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6 }} /><Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>{copy('VERIFY OTP', 'تحقق من الرمز')}</Button></Stack>}
+          </Stack>}
+        </Box>
+      </Paper>
+
+      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
+        <Button variant="outlined" onClick={onBack} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, borderRadius: 100, fontWeight: 950 }}>{copy('Back', 'رجوع')}</Button>
+        <Button variant="contained" onClick={onNext} disabled={!isValid || !lockedQuote} fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 100 }}><ScrollText size={18} style={{ marginInlineEnd: 8 }} />{copy('Sign Portfolio Agreement & Continue to Payment', 'توقيع اتفاقية المحفظة والمتابعة إلى الدفع')}</Button>
+      </Stack>
+    </Box>
+  );
 }
