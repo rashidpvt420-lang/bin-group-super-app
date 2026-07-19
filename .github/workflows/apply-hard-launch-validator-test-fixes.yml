@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - fix/hard-launch-validator-tests
+  pull_request:
+    paths:
+      - '.github/workflows/apply-hard-launch-validator-test-fixes.yml'
+      - '.ci-fix/patch.py'
 
 permissions:
   contents: write
