@@ -104,12 +104,12 @@ if (!rules.includes('match /technician_credential_renewals/{requestId}')) {
 }
 
 const protectedCollectionAnchor = "          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',";
-const protectedCollectionReplacement = "          'broker_kyc_profiles',\n          'technician_credential_renewals',\n          'broker_kyc_submission_limits',";
+const protectedCollectionReplacement = "          'technician_credential_renewals',\n          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',";
 if (!rules.includes(protectedCollectionReplacement)) {
   const count = rules.split(protectedCollectionAnchor).length - 1;
   if (count !== 2) throw new Error(`Expected two global write-deny anchors for protected collections, found ${count}.`);
   rules = rules.replaceAll(protectedCollectionAnchor, protectedCollectionReplacement);
-  console.log('[patched] credential renewals excluded from global Admin write fallback');
+  console.log('[patched] credential renewals excluded from global Admin write fallback while preserving canonical Broker KYC ordering');
 }
 
 const technicianHelper = readFunction(rules, 'safeTechnicianTicketUpdate').text;

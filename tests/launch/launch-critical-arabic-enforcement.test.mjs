@@ -22,7 +22,7 @@ const surfaces = [
     name: 'Owner payment summary',
     path: 'src/components/onboarding/PaymentSummaryStep.tsx',
     language: /useLanguage\(\)/,
-    branch: /isRTL\s*\?\s*ar\s*:\s*en/,
+    branch: /lang\s*===\s*['"]ar['"]\s*\?\s*ar\s*:\s*en/,
   },
   {
     name: 'Admin security profile',
@@ -64,6 +64,7 @@ test('launch-critical forms preserve root RTL direction, nested RTL behavior and
   assert.match(asset, /اسم المسجد/);
   assert.match(asset, /مساحة المسجد المقاسة/);
   assert.match(payment, /تعليمات الدفع المؤسسية غير متاحة/);
-  assert.match(payment, /مبلغ الدفع غير موجود/);
+  assert.match(payment, /مبلغ المحفظة المحمي غير موجود/);
+  assert.match(payment, /قيمة دفع المحفظة المحمية غير متاحة/);
   assert.match(adminProfile, /ملف الأمان الشخصي/);
 });
