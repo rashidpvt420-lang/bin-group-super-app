@@ -273,7 +273,7 @@ export function runPostdeployReleaseGate({
   } else {
     try {
       const pilotReport = JSON.parse(readFileSync(pilotPath, 'utf8'));
-      failures.push(...validatePilotIncidentReport(pilotReport, githubSha));
+      failures.push(...validatePilotIncidentReport(pilotReport, githubSha, { now, env }));
     } catch (error) {
       failures.push(`pilot-incident-report.json is malformed: ${error.message}`);
     }
