@@ -37,10 +37,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -57,8 +57,10 @@ jobs:
       - name: Build main application
         run: npm run build
 
+      - name: Build dedicated Admin application
+        run: npm run build:admin
+        env:
+          CI: false
+
       - name: Build Cloud Functions
         run: npm run build:functions
-
-      - name: Build Admin application
-        run: npm run build:admin
