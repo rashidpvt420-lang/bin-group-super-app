@@ -20,19 +20,25 @@ test('Technician self-action and Admin assignment share mandatory operational re
   assert.match(runtime, /adminAssignTechnician.*secureAdminTechnicianAssignment/);
 });
 
-test('credential-renewal evidence is server-written and excluded from global browser writes', async () => {
-  const [backend, hardening, finalAuthority] = await Promise.all([
+test('renewal evidence collection is server-written and excluded from global browser writes', async () => {
+  const [backend, hardening, finalAuthority, rules] = await Promise.all([
     read('functions/secureTechnicianProfileOperations.ts'),
     read('scripts/optimize-current-main-technician-ticket-rule.mjs'),
     read('scripts/harden-final-firestore-authority.mjs'),
+    read('firestore.rules'),
   ]);
   assert.match(backend, /technician_credential_renewals/);
   assert.match(backend, /sha256/);
   assert.match(backend, /PENDING_ADMIN_REVIEW/);
   assert.match(hardening, /match \/technician_credential_renewals\/\{requestId\}/);
   assert.match(hardening, /allow create, update, delete: if false/);
-  assert.match(hardening, /technician_credential_renewals/);
   assert.match(hardening, /excluded from global Admin write fallback/);
   assert.match(hardening, /'technician_credential_renewals',\\n          'broker_kyc_profiles',\\n          'broker_kyc_submission_limits'/);
   assert.match(finalAuthority, /'broker_kyc_profiles',\\n          'broker_kyc_submission_limits',\\n          'ai_usage'/);
+
+  const renewalBlocks = rules.match(/match \/technician_credential_renewals\/\{requestId\} \{[\s\S]*?\n    \}/g) || [];
+  assert.equal(renewalBlocks.length, 1);
+  assert.match(renewalBlocks[0], /allow read: if isAdmin\(\);/);
+  assert.match(renewalBlocks[0], /allow create, update, delete: if false;/);
+  assert.equal((rules.match(/'technician_credential_renewals',/g) || []).length, 2);
 });
