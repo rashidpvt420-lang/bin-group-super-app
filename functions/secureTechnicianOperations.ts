@@ -40,7 +40,7 @@ export function technicianCredentialMillis(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function credentialState(statusValue: unknown, expiryValue: unknown, nowMs: number) {
+export function technicianCredentialState(statusValue: unknown, expiryValue: unknown, nowMs: number) {
   const expiryMs = technicianCredentialMillis(expiryValue);
   if (expiryMs !== null && expiryMs <= nowMs) return "expired";
   const status = normalize(statusValue ?? expiryValue);
@@ -60,14 +60,14 @@ export function evaluateTechnicianReadiness(
 ) {
   const medicalExpiry = firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry);
   const licenceExpiry = firstPresent(merged.drivingLicenseExpiry, merged.licenseExpiry);
-  const medicalState = credentialState(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus), medicalExpiry, nowMs);
-  const licenceState = credentialState(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus), licenceExpiry, nowMs);
+  const medicalState = technicianCredentialState(firstPresent(merged.medicalCardStatus, merged.medicalStatus, merged.healthCardStatus), medicalExpiry, nowMs);
+  const licenceState = technicianCredentialState(firstPresent(merged.drivingLicenseStatus, merged.licenseStatus), licenceExpiry, nowMs);
   const certifications = Array.isArray(merged.certifications) ? merged.certifications : [];
   const certificationState = certifications.length > 0
-    ? certifications.every((item) => credentialState(firstPresent(item?.status, item?.verificationStatus, item?.approvalStatus), certificationExpiry(item), nowMs) === "valid")
+    ? certifications.every((item) => technicianCredentialState(firstPresent(item?.status, item?.verificationStatus, item?.approvalStatus), certificationExpiry(item), nowMs) === "valid")
       ? "valid"
       : "invalid"
-    : credentialState(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus), null, nowMs);
+    : technicianCredentialState(firstPresent(merged.certificationsStatus, merged.certificationStatus, merged.certificateStatus), null, nowMs);
 
   const currentShiftId = String(firstPresent(merged.currentShiftId, merged.activeShiftId) || "").trim();
   const shiftStatus = normalize(firstPresent(merged.shiftStatus, merged.currentShiftStatus, merged.dutyStatus));
@@ -116,6 +116,22 @@ export function evaluateTechnicianReadiness(
   };
 }
 
+async function loadTechnicianReadiness(uid: string, action: TechnicianAction, nowMs = Date.now()) {
+  const [userSnap, technicianSnap] = await Promise.all([
+    db.collection("users").doc(uid).get(),
+    db.collection("technicians").doc(uid).get(),
+  ]);
+  if (!userSnap.exists && !technicianSnap.exists) throw new HttpsError("not-found", "Technician profile not found.");
+  const user = userSnap.data() || {};
+  const technician = technicianSnap.data() || {};
+  const certifications = [
+    ...(Array.isArray(user.certifications) ? user.certifications : []),
+    ...(Array.isArray(technician.certifications) ? technician.certifications : []),
+  ];
+  const merged = { ...user, ...technician, certifications } as Record<string, any>;
+  return { user, technician, merged, readiness: evaluateTechnicianReadiness(merged, action, nowMs) };
+}
+
 async function assertTechnicianReadiness(auth: any, action: TechnicianAction, nowMs = Date.now()) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
   if (isAdmin(auth)) return;
@@ -125,22 +141,7 @@ async function assertTechnicianReadiness(auth: any, action: TechnicianAction, no
     throw new HttpsError("permission-denied", "This technician account is disabled or suspended.");
   }
 
-  const [userSnap, technicianSnap] = await Promise.all([
-    db.collection("users").doc(auth.uid).get(),
-    db.collection("technicians").doc(auth.uid).get(),
-  ]);
-  const user = userSnap.data() || {};
-  const technician = technicianSnap.data() || {};
-  const merged = {
-    ...user,
-    ...technician,
-    certifications: [
-      ...(Array.isArray(user.certifications) ? user.certifications : []),
-      ...(Array.isArray(technician.certifications) ? technician.certifications : []),
-    ],
-  } as Record<string, any>;
-
-  const readiness = evaluateTechnicianReadiness(merged, action, nowMs);
+  const { readiness } = await loadTechnicianReadiness(auth.uid, action, nowMs);
   if (!readiness.ready) {
     throw new HttpsError(
       "failed-precondition",
@@ -150,11 +151,45 @@ async function assertTechnicianReadiness(auth: any, action: TechnicianAction, no
   }
 }
 
+export const getTechnicianOperationalReadiness = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Technician login required.");
+    const targetUid = isAdmin(request.auth) && String(request.data?.technicianId || "").trim()
+      ? String(request.data.technicianId).trim()
+      : request.auth.uid;
+    if (targetUid !== request.auth.uid && !isAdmin(request.auth)) throw new HttpsError("permission-denied", "You can only read your own readiness.");
+    const liveUser = await admin.auth().getUser(targetUid);
+    const { merged, readiness } = await loadTechnicianReadiness(targetUid, "ACCEPT_TICKET");
+    const medicalExpiryMs = technicianCredentialMillis(firstPresent(merged.medicalCardExpiry, merged.medicalExpiry, merged.healthCardExpiry));
+    const licenceExpiryMs = technicianCredentialMillis(firstPresent(merged.drivingLicenseExpiry, merged.licenseExpiry));
+    const credentialFailures = readiness.failures.filter((failure) => ["medical card", "driving licence", "required certifications"].includes(failure));
+    return {
+      status: "SUCCESS",
+      technicianId: targetUid,
+      disabled: liveUser.disabled,
+      dispatchFrozen: liveUser.disabled || credentialFailures.length > 0 || !readiness.ready,
+      credentialDispatchFrozen: credentialFailures.length > 0,
+      credentialFailures,
+      readiness,
+      credentials: {
+        medicalCard: { state: readiness.medicalState, expiresAtMs: medicalExpiryMs },
+        drivingLicence: { state: readiness.licenceState, expiresAtMs: licenceExpiryMs },
+        certifications: { state: readiness.certificationState, count: Array.isArray(merged.certifications) ? merged.certifications.length : 0 },
+      },
+      renewal: {
+        pending: merged.credentialRenewalPending === true,
+        status: String(merged.credentialRenewalStatus || merged.credentialReviewStatus || "NOT_SUBMITTED"),
+        requestId: String(merged.latestCredentialRenewalRequestId || ""),
+      },
+      checkedAtMs: Date.now(),
+    };
+  },
+);
+
 async function runSecured(legacyCallable: any, request: any, action: TechnicianAction) {
   await assertTechnicianReadiness(request.auth, action);
-  if (typeof legacyCallable?.run !== "function") {
-    throw new HttpsError("internal", "Operational callable handler is unavailable.");
-  }
+  if (typeof legacyCallable?.run !== "function") throw new HttpsError("internal", "Operational callable handler is unavailable.");
   return legacyCallable.run(request);
 }
 
