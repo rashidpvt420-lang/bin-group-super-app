@@ -89,9 +89,10 @@ test('App Check enforcement proof performs invalid and valid authenticated Fires
   assert.match(workflow, /VITE_FIREBASE_APP_ID:\s*\$\{\{ secrets\.VITE_FIREBASE_APP_ID \}\}/);
   assert.match(verifier, /accounts:signInWithPassword/);
   assert.match(verifier, /exchangeDebugToken/);
+  assert.match(verifier, /documents:batchGet/);
   assert.match(verifier, /X-Firebase-AppCheck/);
   assert.match(verifier, /invalidTokenStatus === 401 \|\| invalidTokenStatus === 403/);
-  assert.match(verifier, /validTokenStatus === 200 \|\| validTokenStatus === 404/);
+  assert.match(verifier, /validTokenStatus === 200/);
   assert.match(verifier, /appcheck-enforcement-proof\.json/);
   assert.doesNotMatch(verifier, /AIza[0-9A-Za-z_-]{20,}/);
   assert.match(publisher, /proof\.invalidTokenRejected !== true/);
