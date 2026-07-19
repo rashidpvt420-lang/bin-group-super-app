@@ -16,6 +16,7 @@ const publicRoutes = ['/', '/login', '/owners', '/tenants', '/technicians', '/br
 const criticalRuntimeFailureText = /application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|cannot read properties of undefined|null is not an object/i;
 const serverErrorText = /bad gateway|service unavailable|internal server error|gateway timeout/i;
 const visibleAccessFailureText = /permission-denied|unauthenticated|access denied|not authorized/i;
+const transientLoadingText = /^loading(?:\s+bin\s+group\s+module)?[.!…]*$/i;
 
 async function collectPageDiagnostics(page: Page, route: string) {
   return page.evaluate((targetRoute) => {
@@ -24,6 +25,7 @@ async function collectPageDiagnostics(page: Page, route: string) {
       targetRoute,
       href: window.location.href,
       pathname: window.location.pathname,
+      hash: window.location.hash,
       title: document.title,
       readyState: document.readyState,
       bodyLength: body.length,
@@ -37,24 +39,49 @@ async function collectPageDiagnostics(page: Page, route: string) {
   }));
 }
 
+async function waitForSettledBodyText(page: Page, route: string) {
+  const body = page.locator('body');
+  const deadline = Date.now() + 30_000;
+  let previous = '';
+  let stableSamples = 0;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      const current = (await body.innerText({ timeout: 5_000 })).trim();
+      const isRenderable = current.length > 0 && !transientLoadingText.test(current);
+      if (isRenderable) {
+        stableSamples = current === previous ? stableSamples + 1 : 1;
+        previous = current;
+        if (stableSamples >= 2) return current;
+      } else {
+        previous = current;
+        stableSamples = 0;
+      }
+    } catch (error) {
+      lastError = error;
+      stableSamples = 0;
+    }
+    await page.waitForTimeout(250);
+  }
+
+  const diagnostics = await collectPageDiagnostics(page, route);
+  throw new Error(`Route ${route} did not settle on visible DOM content. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${lastError instanceof Error ? lastError.message : String(lastError || 'transient loading content never settled')}`);
+}
+
 async function waitForRenderableBody(page: Page, route: string) {
   await page.waitForLoadState('domcontentloaded', { timeout: 20_000 }).catch(() => undefined);
   await page.waitForFunction(() => Boolean(document.body), null, { timeout: 20_000 });
-
   await page.waitForFunction(
-    () => {
-      const bodyText = document.body?.innerText?.trim() || '';
-      const rootHtml = document.getElementById('root')?.innerHTML || '';
-      return bodyText.length > 0 || rootHtml.length > 0;
-    },
+    () => (document.getElementById('root')?.innerHTML?.length || 0) > 0,
     null,
     { timeout: 25_000 },
   ).catch(async (error) => {
     const diagnostics = await collectPageDiagnostics(page, route);
-    throw new Error(`Route ${route} did not render visible DOM content. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Route ${route} did not mount the application root. Diagnostics: ${JSON.stringify(diagnostics)}. Cause: ${error instanceof Error ? error.message : String(error)}`);
   });
 
-  return page.locator('body').innerText({ timeout: 20_000 });
+  return waitForSettledBodyText(page, route);
 }
 
 async function expectNoCriticalRuntimeCrash(page: Page, route = page.url()) {
