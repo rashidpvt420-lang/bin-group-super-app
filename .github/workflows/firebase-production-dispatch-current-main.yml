@@ -1,0 +1,163 @@
+name: Start Firebase Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type exactly DEPLOY_PRODUCTION_BIN_GROUP_57C60'
+        required: true
+        type: string
+      hard_launch_confirmation:
+        description: 'Type exactly AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
+        required: true
+        type: string
+      founder_name:
+        description: 'Founder/CEO legal name'
+        required: true
+        type: string
+      founder_email:
+        description: 'Founder/CEO authorized email'
+        required: true
+        type: string
+      launch_mode:
+        description: 'bank-pilot or public'
+        required: true
+        type: choice
+        options:
+          - bank-pilot
+          - public
+        default: bank-pilot
+      run_public_release_gate:
+        description: 'Enable only for public launch mode'
+        required: true
+        type: boolean
+        default: false
+      incident_attestation:
+        description: 'Production incident attestation phrase'
+        required: true
+        type: string
+      incident_active_json:
+        description: 'JSON array of active incidents'
+        required: true
+        type: string
+        default: '[]'
+      incident_requires_rollback:
+        description: 'Whether a production rollback hold is active'
+        required: true
+        type: boolean
+        default: false
+      incident_rollback_reason:
+        description: 'Required when rollback is active'
+        required: false
+        type: string
+        default: ''
+      incident_last_deployment_failed:
+        description: 'Whether the last production deployment failed'
+        required: true
+        type: boolean
+        default: true
+      incident_last_deployment_failed_at:
+        description: 'ISO-8601 timestamp for the failed deployment'
+        required: false
+        type: string
+        default: ''
+      incident_evidence_refs:
+        description: 'Comma-separated evidence references'
+        required: true
+        type: string
+        default: 'ADMIN_MFA_BOOTSTRAP_HOSTING'
+      hard_clearance_run_id:
+        description: 'Required only for public mode'
+        required: false
+        type: string
+        default: ''
+      stripe_live_checkout_session_id:
+        description: 'Required only for public mode'
+        required: false
+        type: string
+        default: ''
+      stripe_live_webhook_event_id:
+        description: 'Required only for public mode'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: firebase-production-current-main-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch-current-main:
+    name: Bind and dispatch current main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate founder confirmations and launch mode
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PUBLIC_GATE: ${{ inputs.run_public_release_gate }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == "DEPLOY_PRODUCTION_BIN_GROUP_57C60" ]]
+          [[ "$HARD_CONFIRMATION" == "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]]
+          if [[ "$LAUNCH_MODE" == "public" ]]; then
+            [[ "$PUBLIC_GATE" == "true" ]]
+          else
+            [[ "$PUBLIC_GATE" == "false" ]]
+          fi
+
+      - name: Dispatch protected workflow against current main SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
+          FOUNDER_NAME: ${{ inputs.founder_name }}
+          FOUNDER_EMAIL: ${{ inputs.founder_email }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PUBLIC_GATE: ${{ inputs.run_public_release_gate }}
+          INCIDENT_ATTESTATION: ${{ inputs.incident_attestation }}
+          INCIDENT_ACTIVE_JSON: ${{ inputs.incident_active_json }}
+          INCIDENT_REQUIRES_ROLLBACK: ${{ inputs.incident_requires_rollback }}
+          INCIDENT_ROLLBACK_REASON: ${{ inputs.incident_rollback_reason }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ inputs.incident_last_deployment_failed }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ inputs.incident_last_deployment_failed_at }}
+          INCIDENT_EVIDENCE_REFS: ${{ inputs.incident_evidence_refs }}
+          HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+          STRIPE_SESSION_ID: ${{ inputs.stripe_live_checkout_session_id }}
+          STRIPE_EVENT_ID: ${{ inputs.stripe_live_webhook_event_id }}
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          jq -n \
+            --arg ref main \
+            --arg confirmation "$CONFIRMATION" \
+            --arg hard "$HARD_CONFIRMATION" \
+            --arg sha "$main_sha" \
+            --arg founderName "$FOUNDER_NAME" \
+            --arg founderEmail "$FOUNDER_EMAIL" \
+            --arg launchMode "$LAUNCH_MODE" \
+            --arg publicGate "$PUBLIC_GATE" \
+            --arg incidentAttestation "$INCIDENT_ATTESTATION" \
+            --arg incidentActive "$INCIDENT_ACTIVE_JSON" \
+            --arg incidentRollback "$INCIDENT_REQUIRES_ROLLBACK" \
+            --arg incidentRollbackReason "$INCIDENT_ROLLBACK_REASON" \
+            --arg incidentFailed "$INCIDENT_LAST_DEPLOYMENT_FAILED" \
+            --arg incidentFailedAt "$INCIDENT_LAST_DEPLOYMENT_FAILED_AT" \
+            --arg evidenceRefs "$INCIDENT_EVIDENCE_REFS" \
+            --arg clearanceRun "$HARD_CLEARANCE_RUN_ID" \
+            --arg stripeSession "$STRIPE_SESSION_ID" \
+            --arg stripeEvent "$STRIPE_EVENT_ID" \
+            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}}' \
+            > dispatch.json
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/dispatches" \
+            --input dispatch.json
+          echo "Protected Firebase Production Deploy dispatched for current main SHA: $main_sha"
