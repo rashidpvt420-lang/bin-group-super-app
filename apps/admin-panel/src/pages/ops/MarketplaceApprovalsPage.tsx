@@ -30,6 +30,7 @@ type RoomOpsRecord = {
   monthlyRent?: number;
   bedrooms?: string;
   repairHistory?: any[];
+  repairHistorySummary?: string;
   createdAt?: any;
 };
 
@@ -275,32 +276,28 @@ export default function MarketplaceApprovalsPage() {
           <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 2 }}>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
               <Typography variant="h6" color="#FFF" sx={{ fontWeight: 'bold' }}>Published Room Listings</Typography>
-              <Typography variant="body2" color="text.secondary">These records appear in the tenant Find a Room Rent screen with repair history.</Typography>
+              <Typography variant="caption" color="text.secondary">Only rooms with BIN owner contract handling, visible repair history, and not-rented status should stay active.</Typography>
             </Box>
-            <Chip icon={<Wrench size={14} />} label="Repair history required" sx={{ bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 900 }} />
           </Stack>
-          <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 2 }} />
-          <Grid container spacing={2.5}>
-            {listings.length === 0 ? (
-              <Grid item xs={12}><Typography color="text.secondary">No room listings published yet.</Typography></Grid>
-            ) : listings.map((listing) => (
-              <Grid item xs={12} md={6} xl={4} key={listing.id}>
+          <Grid container spacing={2}>
+            {availableListings.length === 0 ? (
+              <Grid item xs={12}><Typography color="text.secondary">No active room listings published yet.</Typography></Grid>
+            ) : availableListings.map((listing) => (
+              <Grid item xs={12} md={6} lg={4} key={listing.id}>
                 <Card sx={{ bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3, height: '100%' }}>
                   <CardContent>
-                    <Stack spacing={1.3} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={1}>
-                        <Box>
-                          <Typography color="#FFF" fontWeight="bold">{listing.unitTitle || listing.title || listing.propertyName}</Typography>
-                          <Typography variant="caption" color="text.secondary">{listing.propertyAddress}</Typography>
-                        </Box>
-                        <Chip size="small" icon={<Home size={13} />} label={listing.active === false ? 'INACTIVE' : listing.notRented === false ? 'RENTED' : 'AVAILABLE'} color={listing.active === false ? 'default' : 'success'} />
+                    <Stack spacing={1.5}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Home size={18} color={gold} />
+                        <Typography color="#FFF" fontWeight="bold">{listing.unitTitle || listing.title || 'Room listing'}</Typography>
                       </Stack>
-                      <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent={isRTL ? 'flex-end' : 'flex-start'}>
+                      <Typography variant="caption" color="text.secondary">{listing.propertyName || 'Property'} · {listing.propertyAddress}</Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
                         <Chip size="small" label={money(listing.annualRent || listing.monthlyRent)} sx={{ bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 900 }} />
-                        <Chip size="small" label={`Owner: ${listing.ownerEmail || 'missing'}`} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.70)', fontWeight: 800 }} />
+                        <Chip size="small" icon={<Wrench size={13} />} label={`${listing.repairHistory?.length || 0} repair history rows`} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.72)', fontWeight: 800 }} />
                       </Stack>
-                      <Button size="small" onClick={() => toggleListing(listing.id, listing.active === false)} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: listing.active === false ? '#22C55E' : '#ef4444', fontWeight: 950 }}>
-                        {listing.active === false ? 'Reactivate' : 'Deactivate'}
+                      <Button onClick={() => toggleListing(listing.id, false)} color="error" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', border: `1px solid ${alpha('#EF4444', 0.35)}`, borderRadius: 3, fontWeight: 950 }}>
+                        Mark inactive
                       </Button>
                     </Stack>
                   </CardContent>
@@ -315,23 +312,21 @@ export default function MarketplaceApprovalsPage() {
         <form onSubmit={publishListing}>
           <DialogTitle sx={{ fontWeight: 'bold' }}>Publish BIN-Managed Room Listing</DialogTitle>
           <DialogContent>
-            <Stack spacing={2.3} sx={{ mt: 1 }}>
-              <TextField fullWidth required label="Owner email" value={form.ownerEmail} onChange={(event) => setField('ownerEmail', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
-              <TextField fullWidth label="Owner UID" value={form.ownerId} onChange={(event) => setField('ownerId', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
-              <TextField fullWidth required label="Room / unit title" value={form.unitTitle} onChange={(event) => setField('unitTitle', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
-              <TextField fullWidth label="Property name" value={form.propertyName} onChange={(event) => setField('propertyName', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
-              <TextField fullWidth required label="Property address" value={form.propertyAddress} onChange={(event) => setField('propertyAddress', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
-              <Grid container spacing={2}>
-                <Grid item xs={6}><TextField fullWidth label="Annual rent AED" type="number" value={form.annualRent} onChange={(event) => setField('annualRent', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} /></Grid>
-                <Grid item xs={6}><TextField fullWidth label="Bedrooms" value={form.bedrooms} onChange={(event) => setField('bedrooms', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} /></Grid>
-              </Grid>
-              <TextField fullWidth multiline minRows={4} label="Repair history — one completed item per line" value={form.repairHistoryText} onChange={(event) => setField('repairHistoryText', event.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
+            <Stack spacing={2.2} sx={{ mt: 1 }}>
+              <TextField label="Owner Email" required value={form.ownerEmail} onChange={(e) => setField('ownerEmail', e.target.value)} variant="filled" />
+              <TextField label="Owner ID / UID" value={form.ownerId} onChange={(e) => setField('ownerId', e.target.value)} variant="filled" />
+              <TextField label="Room / Unit Title" required value={form.unitTitle} onChange={(e) => setField('unitTitle', e.target.value)} variant="filled" />
+              <TextField label="Property Name" value={form.propertyName} onChange={(e) => setField('propertyName', e.target.value)} variant="filled" />
+              <TextField label="Property Address" required value={form.propertyAddress} onChange={(e) => setField('propertyAddress', e.target.value)} variant="filled" />
+              <TextField label="Annual Rent AED" type="number" value={form.annualRent} onChange={(e) => setField('annualRent', e.target.value)} variant="filled" />
+              <TextField label="Bedrooms / Room Type" value={form.bedrooms} onChange={(e) => setField('bedrooms', e.target.value)} variant="filled" />
+              <TextField label="Repair History Visible to Renter" multiline rows={4} value={form.repairHistoryText} onChange={(e) => setField('repairHistoryText', e.target.value)} variant="filled" helperText="One repair item per line. This is shown so renters understand the unit history before move-in." />
             </Stack>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenPublish(false)} sx={{ color: 'rgba(255,255,255,0.55)' }}>CANCEL</Button>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={() => setOpenPublish(false)} sx={{ color: 'rgba(255,255,255,0.6)' }}>Cancel</Button>
             <Button type="submit" variant="contained" disabled={submitting || !form.ownerEmail || !form.unitTitle || !form.propertyAddress} sx={{ bgcolor: gold, color: '#000', fontWeight: 'bold' }}>
-              {submitting ? <CircularProgress size={20} color="inherit" /> : 'PUBLISH LISTING'}
+              {submitting ? <CircularProgress size={20} color="inherit" /> : 'Publish listing'}
             </Button>
           </DialogActions>
         </form>
