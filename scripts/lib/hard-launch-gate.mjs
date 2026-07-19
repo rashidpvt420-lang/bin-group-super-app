@@ -288,7 +288,7 @@ export function validatePilotIncidentReport(doc, commitSha, { now = Date.now(), 
   if (Number(doc.openP1) !== 0) errors.push('openP1 must equal 0');
   if (doc.rollbackPlanVerified !== true) errors.push('rollbackPlanVerified must be true');
   if (doc.monitoringVerified !== true) errors.push('monitoringVerified must be true');
-  if (doc.incidentConfirmationVerified !== true) errors.push('incident confirmation was not verified');
+  if (doc.incidentConfirmationVerified !== true) errors.push('pilot incident confirmation was not verified');
   if (doc.rollbackConfirmationVerified !== true) errors.push('rollback confirmation was not verified');
   if (!parseApprovedEvidenceUrl(doc.incidentReference, { env })) errors.push('incidentReference must be an approved HTTPS URL');
   if (!parseApprovedEvidenceUrl(doc.rollbackReference, { env })) errors.push('rollbackReference must be an approved HTTPS URL');
