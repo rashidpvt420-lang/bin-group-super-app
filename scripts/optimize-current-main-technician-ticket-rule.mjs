@@ -103,9 +103,15 @@ if (!rules.includes('match /technician_credential_renewals/{requestId}')) {
   console.log('[patched] server-written technician credential-renewal collection');
 }
 
-const protectedCollectionAnchor = "          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',";
-const protectedCollectionReplacement = "          'broker_kyc_profiles',\n          'technician_credential_renewals',\n          'broker_kyc_submission_limits',";
-if (!rules.includes(protectedCollectionReplacement)) {
+const legacyProtectedCollectionReplacement = "          'broker_kyc_profiles',\n          'technician_credential_renewals',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
+const protectedCollectionAnchor = "          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
+const protectedCollectionReplacement = "          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage',\n          'technician_credential_renewals'";
+if (rules.includes(legacyProtectedCollectionReplacement)) {
+  const count = rules.split(legacyProtectedCollectionReplacement).length - 1;
+  if (count !== 2) throw new Error(`Expected two legacy protected collection orders, found ${count}.`);
+  rules = rules.replaceAll(legacyProtectedCollectionReplacement, protectedCollectionReplacement);
+  console.log('[patched] normalized credential-renewal protected collection order');
+} else if (!rules.includes(protectedCollectionReplacement)) {
   const count = rules.split(protectedCollectionAnchor).length - 1;
   if (count !== 2) throw new Error(`Expected two global write-deny anchors for protected collections, found ${count}.`);
   rules = rules.replaceAll(protectedCollectionAnchor, protectedCollectionReplacement);
