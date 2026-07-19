@@ -27,6 +27,7 @@ on:
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
       - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
+      - 'tests/launch/tenant-readiness-authority-audit.test.mjs'
   push:
     branches:
       - main
@@ -65,6 +66,7 @@ jobs:
           tests/launch/arabic-visible-copy-audit.test.mjs
           tests/launch/technician-dispatch-authority-audit.test.mjs
           tests/launch/owner-property-proof-authority-audit.test.mjs
+          tests/launch/tenant-readiness-authority-audit.test.mjs
 
       - name: Build main application
         env:
