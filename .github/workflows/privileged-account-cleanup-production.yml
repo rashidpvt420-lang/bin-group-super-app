@@ -1,0 +1,131 @@
+name: Privileged Account Cleanup - Production
+run-name: Privileged cleanup - ${{ inputs.execute_cleanup && 'EXECUTE' || 'DRY RUN' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type exactly REVIEW_SINGLE_FOUNDER_PRIVILEGED_ACCOUNTS'
+        required: true
+        type: string
+      canonical_founder_email:
+        description: 'Canonical founder Firebase email'
+        required: true
+        type: string
+        default: 'ceo@bin-groups.com'
+      execute_cleanup:
+        description: 'Delete every other privileged Firebase account after the dry run passes'
+        required: true
+        type: boolean
+        default: false
+      destructive_confirmation:
+        description: 'Required only for execution: DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: privileged-account-cleanup-production
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Review and optionally delete obsolete privileged accounts
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      DEPLOYMENT_ENVIRONMENT: production
+      CANONICAL_FOUNDER_EMAIL_CONFIRMATION: ${{ inputs.canonical_founder_email }}
+      PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION: ${{ inputs.destructive_confirmation }}
+
+    steps:
+      - name: Enforce protected exact-main inputs
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EXECUTE_CLEANUP: ${{ inputs.execute_cleanup }}
+          DESTRUCTIVE_CONFIRMATION: ${{ inputs.destructive_confirmation }}
+          FOUNDER_EMAIL: ${{ inputs.canonical_founder_email }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == "REVIEW_SINGLE_FOUNDER_PRIVILEGED_ACCOUNTS" ]]
+          [[ "$FOUNDER_EMAIL" == "ceo@bin-groups.com" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$EXECUTE_CLEANUP" == "true" ]]; then
+            [[ "$DESTRUCTIVE_CONFIRMATION" == "DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP" ]]
+          else
+            [[ -z "$DESTRUCTIVE_CONFIRMATION" ]]
+          fi
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify protected cloud-authentication inputs
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIF_PROVIDER" ]]
+          [[ -n "$GCP_SERVICE_ACCOUNT" ]]
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Produce non-destructive privileged-account inventory
+        run: node scripts/delete-obsolete-privileged-accounts-production.mjs
+
+      - name: Execute protected privileged-account cleanup
+        if: ${{ inputs.execute_cleanup }}
+        run: node scripts/delete-obsolete-privileged-accounts-production.mjs --execute
+
+      - name: Verify canonical founder production authority
+        if: ${{ inputs.execute_cleanup }}
+        run: node scripts/verify-admin-mfa-production.mjs
+
+      - name: Upload cleanup evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: privileged-account-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: launch_package/privileged-account-cleanup.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish protected cleanup summary
+        if: ${{ always() }}
+        env:
+          EXECUTE_CLEANUP: ${{ inputs.execute_cleanup }}
+        run: |
+          {
+            echo '## BIN GROUP privileged-account cleanup'
+            echo
+            echo "- Repository: \`$GITHUB_REPOSITORY\`"
+            echo "- Exact main SHA: \`$GITHUB_SHA\`"
+            echo "- Canonical founder: \`ceo@bin-groups.com\`"
+            echo "- Execution requested: \`$EXECUTE_CLEANUP\`"
+            echo '- Audit logs preserved: required'
+            echo '- Non-privileged Owner, Tenant, Technician and Broker accounts: excluded'
+            echo '- Hard-launch claim: false'
+          } >> "$GITHUB_STEP_SUMMARY"
