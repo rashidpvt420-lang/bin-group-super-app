@@ -15,6 +15,17 @@ test('production readiness preflight is protected, exact-main and read-only', as
   assert.match(workflow, /\[\[ "\$GITHUB_REF" == "refs\/heads\/main" \]\]/);
   assert.match(workflow, /check-firebase-production-secret-metadata\.mjs/);
   assert.match(workflow, /verify-firebase-phone-auth-production\.mjs/);
+  assert.match(workflow, /verify-admin-mfa-production\.mjs/);
+  assert.match(workflow, /FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION: AE/);
+  for (const domain of [
+    'bin-group-57c60.web.app',
+    'bin-group-57c60.firebaseapp.com',
+    'bin-group-admin-panel.web.app',
+    'bin-group-admin-panel.firebaseapp.com',
+  ]) {
+    assert.match(workflow, new RegExp(domain.replaceAll('.', '\\.')));
+  }
+  assert.match(workflow, /Active Admin MFA and recovery quorum: passed/);
   assert.match(workflow, /Deployment performed: no/);
   assert.match(workflow, /Hard-launch claim: false/);
   assert.doesNotMatch(workflow, /firebase\s+deploy|deploy-firebase-production\.mjs|hosting:admin|functions:/i);
