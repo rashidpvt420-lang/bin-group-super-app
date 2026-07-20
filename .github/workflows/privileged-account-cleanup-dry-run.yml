@@ -52,8 +52,8 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Build aggregate cleanup report
-        run: node scripts/delete-obsolete-privileged-accounts-production.mjs
+      - name: Build read-only privileged-account inventory
+        run: node scripts/review-privileged-accounts-production.mjs
 
       - name: Upload aggregate report
         uses: actions/upload-artifact@v4
@@ -73,10 +73,15 @@ jobs:
             '',
             `- Exact SHA: \`${process.env.GITHUB_SHA}\``,
             `- Canonical founder ready: \`${report.canonicalFounderReady}\``,
+            `- Founder email verified: \`${report.founderEmailVerified}\``,
+            `- Founder phone MFA ready: \`${report.founderPhoneMfaReady}\``,
             `- Privileged accounts found: \`${report.privilegedAccountCountBefore}\``,
             `- Obsolete privileged accounts: \`${report.deletionTargetCount}\``,
+            `- Cleanup execution eligible: \`${report.executionEligible}\``,
+            `- Execution blockers: \`${report.executionBlockers.join('; ') || 'none'}\``,
             `- Audit logs preserved: \`${report.auditLogsPreserved}\``,
             `- Non-privileged accounts untouched: \`${report.nonPrivilegedAccountsUntouched}\``,
+            '- Mutation performed: `false`',
             '- Deletion performed: `false`',
             '- Hard-launch claim: `false`',
           ];
