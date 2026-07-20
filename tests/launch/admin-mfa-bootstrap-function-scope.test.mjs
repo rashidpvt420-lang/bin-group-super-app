@@ -9,6 +9,7 @@ const allowlistMatch = source.match(/const adminBootstrapFunctions = Object\.fre
 const expected = [
   'registerAdminSecuritySession',
   'getAdminSecurityProfile',
+  'getAdminMfaReadinessOverview',
   'revokeAdminSessions',
   'lockOwnAdminAccount',
   'finalizeOwnAdminMfaRecovery',
@@ -20,5 +21,8 @@ test('Admin MFA bootstrap function allowlist is exact and does not expand to the
   assert.deepEqual(actual, expected);
   assert.match(source, /adminBootstrapDeployComponents = Object\.freeze\(\[/);
   assert.match(source, /\.\.\.adminBootstrapFunctions\.map\(\(functionName\) => `functions:\$\{functionName\}`\)/);
+  assert.match(source, /\['getAdminMfaReadinessOverview', adminReadinessSource\]/);
+  assert.match(source, /sendEmailVerification/);
+  assert.match(source, /admin-mfa-readiness-overview/);
   assert.doesNotMatch(allowlistMatch[1], /createAdminMfaRecoveryRequest|approveAdminMfaRecoveryRequest|listAdminMfaRecoveryRequests/);
 });
