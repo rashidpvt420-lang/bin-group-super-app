@@ -44,6 +44,7 @@ test('canonical readiness documents remain honest about production evidence', as
 test('operator guidance never directs users to obsolete feature branches', async () => {
   const testing = await read('TESTING.md');
   const historicalAudit = await read('LAUNCH_READINESS_AUDIT.md');
+  const historicalProfileAudit = await read('FIVE_PROFILE_ONBOARDING_AUDIT.md');
 
   assert.doesNotMatch(testing, /git\s+checkout\s+cursor\//i);
   assert.doesNotMatch(testing, /scripts live on branch\s+`cursor\//i);
@@ -54,4 +55,10 @@ test('operator guidance never directs users to obsolete feature branches', async
   assert.match(historicalAudit, /not authoritative/i);
   assert.doesNotMatch(historicalAudit, /cursor\//i);
   assert.match(historicalAudit, /HARD PUBLIC LAUNCH remains `NO-GO`/i);
+
+  assert.match(historicalProfileAudit, /Historical Index/i);
+  assert.match(historicalProfileAudit, /Superseded report/i);
+  assert.match(historicalProfileAudit, /docs\/FULL_FIVE_PROFILE_AUDIT\.md/i);
+  assert.doesNotMatch(historicalProfileAudit, /Audit baseline:\s*`main` after PR/i);
+  assert.match(historicalProfileAudit, /HARD PUBLIC LAUNCH remains `NO-GO`/i);
 });
