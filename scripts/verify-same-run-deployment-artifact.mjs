@@ -6,6 +6,7 @@
  * This script never authorizes a public launch. It only verifies provenance;
  * hardLaunchClaim remains false until the final signed postdeploy decision.
  */
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   APPROVAL_MAX_AGE_MS,
@@ -19,6 +20,9 @@ import {
   requireFullSha,
 } from './lib/launch-gate-common.mjs';
 import {
+  DECISION_KIND,
+  HARD_LAUNCH_CONTROL_SCHEMA,
+  signDocument,
   validateAuthorizationDocument,
   validateDeploymentMetadata,
   validateIncidentDocument,
@@ -26,6 +30,9 @@ import {
 } from './lib/hard-launch-control.mjs';
 import {
   HARD_LAUNCH_CLAIM,
+  PRODUCTION,
+  REQUIRED_PILOT_EVIDENCE,
+  sha256File,
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
 import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
@@ -36,6 +43,8 @@ const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_REF = 'refs/heads/main';
 const INCIDENTS_PATH = 'launch_package/production-incidents.json';
 const AUTHORIZATION_PATH = 'launch_package/hard-launch-authorization.json';
+const DECISION_PATH = 'launch_package/hard-launch-decision.json';
+const EVIDENCE_BATCH_PATH = 'launch_package/launch-evidence-batch.json';
 const CLEAR_ATTESTATION = 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR';
 const HOLDS_ATTESTATION = 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS';
 const REQUIRED_COMPONENTS = Object.freeze([
@@ -69,6 +78,68 @@ function requireExact(actual, expected, label, failures) {
 
 function readDocument(root, relativePath, failures, label) {
   return readJsonAbsolute(path.join(root, relativePath), failures, label);
+}
+
+function hashRuntimeFile(root, relativePath) {
+  const file = path.join(root, relativePath);
+  return existsSync(file) ? sha256File(file) : null;
+}
+
+function maybeWriteProvisionalPublicDecision({
+  root,
+  env,
+  sha,
+  ref,
+  repository,
+  runId,
+  runAttempt,
+  actor,
+  authorization,
+  hmacKey,
+  now,
+}) {
+  const launchMode = String(env.LAUNCH_MODE || '').trim().toLowerCase();
+  if (launchMode !== 'public') return false;
+
+  const decisionPath = path.join(root, DECISION_PATH);
+  if (existsSync(decisionPath)) return false;
+
+  const evidenceHashes = {
+    authorization: hashRuntimeFile(root, AUTHORIZATION_PATH),
+    incidents: hashRuntimeFile(root, INCIDENTS_PATH),
+    deployment: hashRuntimeFile(root, DEPLOYMENT_META_PATH),
+    liveEvidence: hashRuntimeFile(root, EVIDENCE_BATCH_PATH),
+  };
+
+  const payload = {
+    schemaVersion: HARD_LAUNCH_CONTROL_SCHEMA,
+    kind: DECISION_KIND,
+    status: 'public-awaiting-postdeploy-clearance',
+    hardLaunchClaim: false,
+    launchMode: 'public',
+    commitSha: sha,
+    ref,
+    repository,
+    workflowRunId: runId,
+    workflowRunAttempt: runAttempt,
+    approvedByActor: actor,
+    founder: authorization?.founder || null,
+    approvedAt: new Date(now).toISOString(),
+    production: {
+      projectId: PRODUCTION.projectId,
+      mainUrl: PRODUCTION.mainUrl,
+      adminUrl: PRODUCTION.adminUrl,
+    },
+    requiredEvidence: [...REQUIRED_PILOT_EVIDENCE],
+    evidenceHashes,
+    decisionRule:
+      'public mode requires postdeploy release clearance and Stripe live proof before hardLaunchClaim may become true',
+  };
+
+  const decision = signDocument(payload, hmacKey);
+  mkdirSync(path.dirname(decisionPath), { recursive: true });
+  writeFileSync(decisionPath, `${JSON.stringify(decision, null, 2)}\n`, { mode: 0o600 });
+  return true;
 }
 
 export function runSameRunDeploymentArtifactVerification({
@@ -355,10 +426,28 @@ export function runSameRunDeploymentArtifactVerification({
     );
   }
 
+  let provisionalDecisionWritten = false;
+  if (failures.length === 0) {
+    provisionalDecisionWritten = maybeWriteProvisionalPublicDecision({
+      root,
+      env,
+      sha,
+      ref,
+      repository,
+      runId,
+      runAttempt,
+      actor,
+      authorization,
+      hmacKey,
+      now,
+    });
+  }
+
   return {
     ok: failures.length === 0,
     failures: [...new Set(failures)],
     hardLaunchClaim: HARD_LAUNCH_CLAIM,
+    provisionalDecisionWritten,
     binding: {
       repository,
       ref,
@@ -379,6 +468,9 @@ if (isDirectRun) {
   const result = runSameRunDeploymentArtifactVerification();
   console.log('\n=== Same-run deployment artifact verification ===\n');
   console.log(`hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
+  if (result.provisionalDecisionWritten) {
+    console.log('Wrote signed provisional public hard-launch decision with hardLaunchClaim=false.');
+  }
   if (!result.ok) {
     console.error('FAIL — downloaded deployment artifacts are not bound to this workflow run:');
     for (const failure of result.failures) console.error(`- ${failure}`);
