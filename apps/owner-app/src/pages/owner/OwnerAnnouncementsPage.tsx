@@ -37,7 +37,7 @@ export default function OwnerAnnouncementsPage() {
                     setTargetProperty(props[0].id);
                 }
             } catch (err) {
-                console.error("Error fetching properties:", err);
+                console.error('Error fetching properties:', err);
             }
         };
 
@@ -54,7 +54,7 @@ export default function OwnerAnnouncementsPage() {
             setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setLoading(false);
         }, (err) => {
-            console.error("Announcements subscription error:", err);
+            console.error('Announcements subscription error:', err);
             setLoading(false);
         });
 
@@ -66,8 +66,10 @@ export default function OwnerAnnouncementsPage() {
         if (!targetProperty || !title || !body) return;
         setSubmitting(true);
         try {
-            // Write announcement
-            const docRef = await addDoc(collection(db, 'announcements'), {
+            // Write property-scoped announcement. Tenant notice pages subscribe to
+            // announcements by verified propertyId, so no unsafe all_tenants
+            // notification fanout document is required here.
+            await addDoc(collection(db, 'announcements'), {
                 propertyId: targetProperty,
                 title,
                 body,
@@ -77,27 +79,16 @@ export default function OwnerAnnouncementsPage() {
                 published: true,
                 publishedAt: serverTimestamp(),
                 createdBy: user?.uid,
-                readBy: {}
-            });
-
-            // Write matching notification to notify tenants
-            await addDoc(collection(db, 'notifications'), {
-                propertyId: targetProperty,
-                title: `${category.toUpperCase()}: ${title}`,
-                message: body,
-                category,
-                priority,
-                userId: 'all_tenants', // read by rule or handled in client notices page
-                read: false,
-                createdAt: serverTimestamp()
+                readBy: {},
+                deliverySource: 'OWNER_PROPERTY_ANNOUNCEMENT',
             });
 
             setOpenAdd(false);
             setTitle('');
             setBody('');
         } catch (err) {
-            console.error("Failed to broadcast announcement:", err);
-            alert("Error broadcasting update.");
+            console.error('Failed to broadcast announcement:', err);
+            alert('Error broadcasting update.');
         } finally {
             setSubmitting(false);
         }
@@ -218,40 +209,36 @@ export default function OwnerAnnouncementsPage() {
                                     ))}
                                 </Select>
                             </FormControl>
-                            <TextField fullWidth label="Title" required value={title} onChange={e => setTitle(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
-                            <TextField fullWidth label="Message Details" required multiline rows={4} value={body} onChange={e => setBody(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' } }} />
+                            <TextField label="Title" value={title} onChange={e => setTitle(e.target.value)} fullWidth required variant="filled" InputProps={{ sx: { color: '#FFF' } }} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }} />
+                            <TextField label="Message" value={body} onChange={e => setBody(e.target.value)} fullWidth required multiline rows={4} variant="filled" InputProps={{ sx: { color: '#FFF' } }} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.5)' } }} />
                             <Grid container spacing={2}>
                                 <Grid item xs={6}>
-                                    <FormControl fullWidth variant="filled">
-                                        <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Category</InputLabel>
-                                        <Select value={category} onChange={e => setCategory(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' }}>
-                                            <MenuItem value="maintenance">Maintenance</MenuItem>
-                                            <MenuItem value="safety">Safety</MenuItem>
-                                            <MenuItem value="community">Community</MenuItem>
-                                            <MenuItem value="policy">Policy</MenuItem>
-                                            <MenuItem value="emergency">Emergency</MenuItem>
-                                            <MenuItem value="general">General</MenuItem>
-                                        </Select>
-                                    </FormControl>
+                                    <TextField select fullWidth label="Category" value={category} onChange={e => setCategory(e.target.value)} variant="filled" InputProps={{ sx: { color: '#FFF' } }}>
+                                        <MenuItem value="general">General</MenuItem>
+                                        <MenuItem value="maintenance">Maintenance</MenuItem>
+                                        <MenuItem value="safety">Safety</MenuItem>
+                                        <MenuItem value="community">Community</MenuItem>
+                                        <MenuItem value="emergency">Emergency</MenuItem>
+                                    </TextField>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <FormControl fullWidth variant="filled">
-                                        <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Priority</InputLabel>
-                                        <Select value={priority} onChange={e => setPriority(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF' }}>
-                                            <MenuItem value="low">Low</MenuItem>
-                                            <MenuItem value="normal">Normal</MenuItem>
-                                            <MenuItem value="high">High</MenuItem>
-                                            <MenuItem value="urgent">Urgent</MenuItem>
-                                        </Select>
-                                    </FormControl>
+                                    <TextField select fullWidth label="Priority" value={priority} onChange={e => setPriority(e.target.value)} variant="filled" InputProps={{ sx: { color: '#FFF' } }}>
+                                        <MenuItem value="normal">Normal</MenuItem>
+                                        <MenuItem value="high">High</MenuItem>
+                                        <MenuItem value="urgent">Urgent</MenuItem>
+                                    </TextField>
                                 </Grid>
                             </Grid>
+                            <TextField select fullWidth label="Audience" value={audience} onChange={e => setAudience(e.target.value)} variant="filled" InputProps={{ sx: { color: '#FFF' } }}>
+                                <MenuItem value="all">All tenants</MenuItem>
+                                <MenuItem value="tenants">Current tenants only</MenuItem>
+                            </TextField>
                         </Stack>
                     </DialogContent>
-                    <DialogActions>
-                        <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
-                        <Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 'bold' }}>
-                            {submitting ? <CircularProgress size={20} color="inherit" /> : 'BROADCAST'}
+                    <DialogActions sx={{ p: 3 }}>
+                        <Button onClick={() => setOpenAdd(false)} sx={{ color: '#FFF' }}>Cancel</Button>
+                        <Button type="submit" variant="contained" disabled={submitting} sx={{ background: binThemeTokens.goldGradient, color: '#000', fontWeight: 'bold' }}>
+                            {submitting ? <CircularProgress size={20} /> : 'Broadcast'}
                         </Button>
                     </DialogActions>
                 </form>
