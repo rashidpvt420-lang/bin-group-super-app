@@ -7,6 +7,7 @@ const CANONICAL_DOCUMENTS = [
   'docs/RELEASE_BLOCKERS.md',
   'docs/FULL_FIVE_PROFILE_AUDIT.md',
   'docs/PROPERTY_ONBOARDING_AUDIT.md',
+  'OPERATIONS_ONLY_CHECKLIST.md',
 ];
 
 const read = (path) => readFile(new URL(path, ROOT), 'utf8');
@@ -34,11 +35,16 @@ test('canonical readiness documents use runtime exact-SHA binding', async () => 
 test('canonical readiness documents remain honest about production evidence', async () => {
   const release = await read('docs/RELEASE_BLOCKERS.md');
   const onboarding = await read('docs/PROPERTY_ONBOARDING_AUDIT.md');
+  const operations = await read('OPERATIONS_ONLY_CHECKLIST.md');
 
   assert.match(release, /HARD PUBLIC LAUNCH:\*\* `NO-GO`/i);
   assert.match(release, /Production deployment claim:\*\* Not asserted by source documentation/i);
   assert.match(release, /source document is not/i);
   assert.match(onboarding, /Source documentation cannot assert that they have passed/i);
+  assert.match(operations, /does not assert production deployment, pilot eligibility, hard clearance, or public launch/i);
+  assert.match(operations, /Only the protected GitHub production workflows may deploy/i);
+  assert.match(operations, /No local Firebase deployment command is an approved substitute/i);
+  assert.doesNotMatch(operations, /^\s*firebase\s+deploy\b/im);
 });
 
 test('operator guidance never directs users to obsolete feature branches', async () => {
