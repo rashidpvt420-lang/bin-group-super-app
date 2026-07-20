@@ -6,8 +6,16 @@ import {
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getAuth, signInWithRedirect, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getFunctions, httpsCallable as firebaseHttpsCallable } from 'firebase/functions';
+import {
+    getAuth,
+    signInWithRedirect,
+    signInWithEmailAndPassword,
+    onAuthStateChanged,
+    setPersistence,
+    browserLocalPersistence,
+    signOut,
+} from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
@@ -95,6 +103,45 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 const functions = getFunctions(app, 'europe-west3');
+
+let sessionExpiryRedirectStarted = false;
+
+const isUnauthenticatedCallableError = (error: unknown) => {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code || '').toLowerCase()
+        : '';
+    const message = error instanceof Error ? error.message.trim().toLowerCase() : '';
+    return code === 'functions/unauthenticated' || code === 'unauthenticated' || message === 'unauthenticated';
+};
+
+const expireStaleAdminSession = () => {
+    if (typeof window === 'undefined' || sessionExpiryRedirectStarted) return;
+    sessionExpiryRedirectStarted = true;
+    sessionStorage.removeItem('bin-admin-security-session');
+    void signOut(auth).catch(() => undefined).finally(() => {
+        if (window.location.pathname !== '/login') {
+            window.location.replace('/login?session=expired');
+        } else {
+            sessionExpiryRedirectStarted = false;
+        }
+    });
+};
+
+const httpsCallable: typeof firebaseHttpsCallable = ((functionsInstance: any, name: string, options?: any) => {
+    const callable: any = firebaseHttpsCallable(functionsInstance, name, options);
+    const wrapped: any = async (data?: unknown) => {
+        try {
+            return await callable(data);
+        } catch (error) {
+            if (isUnauthenticatedCallableError(error)) expireStaleAdminSession();
+            throw error;
+        }
+    };
+    if (typeof callable.stream === 'function') {
+        wrapped.stream = callable.stream.bind(callable);
+    }
+    return wrapped;
+}) as typeof firebaseHttpsCallable;
 
 const pendingAuditWrites = new Map<string, Promise<void>>();
 
