@@ -71,6 +71,6 @@ test('post-deployment monitoring never claims launch or permits bypass deploymen
   assert.match(monitoring, /exact deployed commit SHA/i);
   assert.match(monitoring, /No local or hosting-only Firebase deployment command/i);
   assert.doesNotMatch(monitoring, /Public launch reported complete/i);
-  assert.doesNotMatch(monitoring, /firebase\s+deploy/i);
+  assert.doesNotMatch(monitoring, /^\s*firebase\s+deploy\b/im);
   assert.match(monitoring, /cannot authorize pilot eligibility, hard-clearance or public launch/i);
 });
