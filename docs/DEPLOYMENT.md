@@ -1,6 +1,6 @@
 # BIN GROUP Protected Deployment Checklist
 
-This is the current production deployment guide for the BIN GROUP Super App. It replaces the obsolete HOME OS deployment plan and all local or partial Firebase deployment instructions.
+This is the current production deployment guide for the BIN GROUP Super App. It replaces obsolete deployment plans and all local or partial Firebase production instructions.
 
 ## Production scope
 
