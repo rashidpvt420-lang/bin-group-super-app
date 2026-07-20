@@ -1,5 +1,4 @@
-import { db, messaging, functions } from './firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { messaging, functions } from './firebase';
 import { getToken } from 'firebase/messaging';
 import { httpsCallable } from 'firebase/functions';
 
@@ -16,22 +15,29 @@ export interface RoleNotification {
 
 /**
  * [SOVEREIGN NOTIFICATION ENGINE]
- * Dispatches a notification record to Firestore.
- * A background Cloud Function will route this to the user's active FCM tokens.
- * Multi-device and language-aware.
+ * Dispatches notification records through the createNotification callable.
+ * Client-side writes to notifications are not trusted in production because
+ * Firestore rules restrict privileged cross-user notification creation.
  */
 export async function sendRoleNotification(params: RoleNotification) {
     try {
-        await addDoc(collection(db, 'notifications'), {
-            ...params,
-            status: 'PENDING',
-            read: false,
-            createdAt: serverTimestamp(),
-            source: 'SYSTEM_PROTOCOL_V7_MULTI_DEVICE'
+        const createNotification = httpsCallable(functions, 'createNotification');
+        await createNotification({
+            recipientId: params.userId,
+            recipientRole: params.role,
+            type: params.type,
+            title: params.title,
+            body: params.body,
+            link: params.link || '/notifications',
+            metadata: {
+                ...(params.data || {}),
+                language: params.language || 'en',
+                source: 'SYSTEM_PROTOCOL_V7_MULTI_DEVICE',
+            },
         });
-        console.log(`[NOTIFY] Payload anchored for UID: ${params.userId} (${params.type}) -> Route: ${params.link || 'none'}`);
+        console.log(`[NOTIFY] Callable anchored payload for UID: ${params.userId} (${params.type}) -> Route: ${params.link || 'none'}`);
     } catch (err) {
-        console.error("🚨 [NOTIFY] Critical Handshake Failure:", err);
+        console.error('🚨 [NOTIFY] Critical Handshake Failure:', err);
     }
 }
 
@@ -40,11 +46,11 @@ export async function sendRoleNotification(params: RoleNotification) {
  */
 export const NotificationEvents = {
     OWNER: {
-        ONBOARDING_APPROVED: (userId: string, propertyName: string) => 
+        ONBOARDING_APPROVED: (userId: string, propertyName: string) =>
             sendRoleNotification({ userId, role: 'owner', title: 'ONBOARDING APPROVED', body: `Asset ${propertyName} is now fully active in your portfolio.`, type: 'ONBOARDING_VERIFIED', link: '/dashboard' }),
         PAYMENT_VERIFIED: (userId: string, amount: number) =>
             sendRoleNotification({ userId, role: 'owner', title: 'PAYMENT SECURED', body: `Mobilization deposit (AED ${amount}) verified. Operations commencing.`, type: 'PAYMENT_VERIFIED', link: '/financials' }),
-        QUOTE_READY: (userId: string, propertyName: string, ticketId: string) => 
+        QUOTE_READY: (userId: string, propertyName: string, ticketId: string) =>
             sendRoleNotification({ userId, role: 'owner', title: 'QUOTE AWAITING APPROVAL', body: `A new maintenance quote for ${propertyName} requires your authorization.`, type: 'QUOTE_APPROVAL', link: `/dashboard`, data: { ticketId } }),
         REVISED_QUOTE_SENT: (userId: string, propertyName: string) =>
             sendRoleNotification({ userId, role: 'owner', title: 'QUOTE REVISED', body: `A revised quote for ${propertyName} has been submitted.`, type: 'QUOTE_REVISED', link: `/dashboard` }),
@@ -82,4 +88,4 @@ export async function requestNotificationPermission(vapidKey?: string) {
     return getToken(messaging, vapidKey ? { vapidKey } : undefined);
 }
 
-export const notifyRole = httpsCallable(functions, 'notifyRole');
+export const notifyRole = httpsCallable(functions, 'createNotification');
