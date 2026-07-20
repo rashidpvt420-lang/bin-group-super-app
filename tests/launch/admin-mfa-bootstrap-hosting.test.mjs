@@ -7,6 +7,7 @@ const source = await readFile(new URL('../../scripts/deploy-firebase-production.
 const requiredBootstrapFunctions = [
   'registerAdminSecuritySession',
   'getAdminSecurityProfile',
+  'getAdminMfaReadinessOverview',
   'revokeAdminSessions',
   'lockOwnAdminAccount',
   'finalizeOwnAdminMfaRecovery',
@@ -22,9 +23,9 @@ test('Admin MFA bootstrap requires the protected exact marker and bank-pilot sco
   assert.match(source, /approval\.launchMode !== 'bank-pilot'/);
 });
 
-test('Admin MFA bootstrap deploys Admin Hosting and only the required security callables before MFA coverage enforcement', () => {
+test('Admin MFA bootstrap deploys Admin Hosting and only the required remediation callables before MFA coverage enforcement', () => {
   const targetDefinition = source.indexOf('const adminBootstrapDeployTarget');
-  const bootstrapDeploy = source.indexOf("retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and security callables')");
+  const bootstrapDeploy = source.indexOf("retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and remediation callables')");
   const mfaPreflight = source.indexOf('adminMfaEvidence = await verifyAdminMfaProduction');
   const fullDeploy = source.indexOf("'functions,hosting,firestore:rules,firestore:indexes,storage'");
 
@@ -40,6 +41,8 @@ test('Admin MFA bootstrap deploys Admin Hosting and only the required security c
   assert.match(source, /Admin MFA bootstrap function exports are missing/);
   assert.match(source, /Admin MFA bootstrap callable modules are not exported/);
   assert.match(source, /apps\/admin-panel\/build\/index\.html/);
+  assert.match(source, /sendEmailVerification/);
+  assert.match(source, /getAdminMfaReadinessOverview/);
 });
 
 test('Admin MFA bootstrap metadata records the exact minimal deployment scope', () => {
