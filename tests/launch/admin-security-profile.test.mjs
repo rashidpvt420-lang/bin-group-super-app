@@ -48,6 +48,16 @@ test('Admin security sessions are ephemeral and never stored in localStorage', a
   assert.match(app, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
 });
 
+test('Admin security profile fails closed instead of inventing MFA and permission status', async () => {
+  const page = await read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx');
+  assert.match(page, /setProfile\(null\)/);
+  assert.match(page, /admin-security-profile-unavailable/);
+  assert.match(page, /No MFA, email-verification, session or permission status is displayed/);
+  assert.match(page, /\{profile && \(/);
+  assert.match(page, /\{\(profile \|\| mfaEnrollmentRequired\) && \(/);
+  assert.doesNotMatch(page, /<AdminMfaEnrollmentCard enrolled=\{profile\?\.mfa\.enrolled === true\}[^\n]*\/>\s*\n\s*<Grid/);
+});
+
 test('runtime exports Admin security authority', async () => {
   const runtime = await read('functions/runtime.ts');
   assert.match(runtime, /export \* from "\.\/adminSecurityProfile";/);
