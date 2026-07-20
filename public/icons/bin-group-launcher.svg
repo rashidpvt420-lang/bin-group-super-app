@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">BIN GROUP launcher icon</title>
+  <desc id="description">Gold sovereign shield on a midnight navy field.</desc>
+  <defs>
+    <radialGradient id="field" cx="50%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#16213B"/>
+      <stop offset="0.58" stop-color="#091126"/>
+      <stop offset="1" stop-color="#030611"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0D98A"/>
+      <stop offset="0.48" stop-color="#D2B45F"/>
+      <stop offset="1" stop-color="#A98531"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#field)"/>
+  <circle cx="256" cy="250" r="166" fill="none" stroke="#D2B45F" stroke-opacity="0.12" stroke-width="2"/>
+  <path d="M256 112 354 151v96c0 74-40 127-98 163-58-36-98-89-98-163v-96l98-39Z" fill="#081024" stroke="url(#gold)" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M256 159 312 181v62c0 43-21 76-56 101-35-25-56-58-56-101v-62l56-22Z" fill="none" stroke="#F0D98A" stroke-opacity="0.42" stroke-width="5" stroke-linejoin="round"/>
+  <path d="m256 211 13 27 30 4-22 21 6 30-27-14-27 14 6-30-22-21 30-4 13-27Z" fill="url(#gold)"/>
+</svg>
