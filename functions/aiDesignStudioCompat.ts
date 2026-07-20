@@ -105,7 +105,7 @@ async function editImageWithOpenAI(
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey, timeout: 150_000 });
   const response: any = await client.responses.create({
-    model: process.env.OPENAI_IMAGE_ORCHESTRATOR_MODEL || "gpt-5-mini",
+    model: process.env.OPENAI_IMAGE_ORCHESTRATOR_MODEL || "gpt-5",
     input: [{
       role: "user",
       content: [
@@ -230,6 +230,9 @@ export const generateDesignConceptCompat = onCall({
       uid: request.auth.uid,
       message,
     });
-    throw new HttpsError("unavailable", message);
+    throw new HttpsError(
+      "unavailable",
+      "AI image rendering is temporarily unavailable. Retry after checking the Functions secret and provider status.",
+    );
   }
 });
