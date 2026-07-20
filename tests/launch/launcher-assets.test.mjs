@@ -1,10 +1,29 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const fileUrl = (path) => new URL(`../../${path}`, import.meta.url);
+const read = (path) => readFile(fileUrl(path), 'utf8');
+const readBinary = (path) => readFile(fileUrl(path));
 
-test('PWA launcher uses dedicated vector assets and store-compatible sizes', async () => {
+function generateLauncherAssets() {
+  execFileSync(process.execPath, ['scripts/generate-launcher-assets.mjs'], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+  });
+}
+
+async function assertPng(path, width, height) {
+  const asset = await readBinary(path);
+  assert.deepEqual([...asset.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${path} must be a PNG`);
+  assert.equal(asset.readUInt32BE(16), width, `${path} width`);
+  assert.equal(asset.readUInt32BE(20), height, `${path} height`);
+}
+
+test('PWA launcher uses generated raster assets with vector and monochrome fallbacks', async () => {
+  generateLauncherAssets();
+
   const manifest = JSON.parse(await read('public/manifest.json'));
   const index = await read('index.html');
 
@@ -13,30 +32,45 @@ test('PWA launcher uses dedicated vector assets and store-compatible sizes', asy
   assert.ok(Array.isArray(manifest.icons));
   assert.ok(manifest.icons.length >= 5);
 
-  const purposes = new Set(manifest.icons.map((icon) => icon.purpose));
-  const sizes = new Set(manifest.icons.map((icon) => icon.sizes));
-  assert.ok(purposes.has('any'));
-  assert.ok(purposes.has('maskable'));
-  assert.ok(purposes.has('monochrome'));
-  assert.ok(sizes.has('192x192'));
-  assert.ok(sizes.has('512x512'));
-  assert.ok(sizes.has('any'));
+  const findIcon = (src) => manifest.icons.find((icon) => icon.src === src);
+  assert.deepEqual(findIcon('/icons/bin-group-launcher-192.png'), {
+    src: '/icons/bin-group-launcher-192.png', type: 'image/png', sizes: '192x192', purpose: 'any',
+  });
+  assert.deepEqual(findIcon('/icons/bin-group-launcher-512.png'), {
+    src: '/icons/bin-group-launcher-512.png', type: 'image/png', sizes: '512x512', purpose: 'any',
+  });
+  assert.deepEqual(findIcon('/icons/bin-group-launcher-maskable-512.png'), {
+    src: '/icons/bin-group-launcher-maskable-512.png', type: 'image/png', sizes: '512x512', purpose: 'maskable',
+  });
+  assert.ok(findIcon('/icons/bin-group-launcher.svg'));
+  assert.ok(findIcon('/icons/bin-group-launcher-monochrome.svg'));
 
   for (const icon of manifest.icons) {
-    assert.equal(icon.type, 'image/svg+xml');
     assert.doesNotMatch(icon.src, /logo\.png/);
-    const asset = await read(`public${icon.src}`);
-    assert.match(asset, /^<svg\b/);
-    assert.match(asset, /viewBox="0 0 512 512"/);
+    if (icon.type === 'image/png') {
+      const [width, height] = icon.sizes.split('x').map(Number);
+      await assertPng(`public${icon.src}`, width, height);
+    } else {
+      assert.equal(icon.type, 'image/svg+xml');
+      const asset = await read(`public${icon.src}`);
+      assert.match(asset, /^<svg\b/);
+      assert.match(asset, /viewBox="0 0 512 512"/);
+    }
   }
 
+  await assertPng('public/icons/favicon-32.png', 32, 32);
+  await assertPng('public/icons/apple-touch-icon.png', 180, 180);
+  assert.match(index, /rel="icon" type="image\/png" sizes="32x32" href="\/icons\/favicon-32\.png"/);
   assert.match(index, /rel="icon" type="image\/svg\+xml" href="\/icons\/bin-group-launcher\.svg"/);
+  assert.match(index, /rel="apple-touch-icon" sizes="180x180" href="\/icons\/apple-touch-icon\.png"/);
   assert.match(index, /rel="mask-icon" href="\/icons\/bin-group-launcher-monochrome\.svg"/);
   assert.match(index, /name="theme-color" content="#050816"/);
   assert.doesNotMatch(index, /rel="icon"[^>]+logo\.png/);
 });
 
 test('Android launcher uses adaptive vector, themed icon, and a valid splash transition', async () => {
+  generateLauncherAssets();
+
   const manifest = await read('android/app/src/main/AndroidManifest.xml');
   const adaptive = await read('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml');
   const adaptiveRound = await read('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml');
