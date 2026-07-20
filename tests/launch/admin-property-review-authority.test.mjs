@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import ts from 'typescript';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -25,6 +26,30 @@ test('Owner property approval and rejection are server-authoritative', async () 
   assert.match(backend, /collection\("notifications"\)/);
   assert.match(backend, /SERVER_AUTHORITATIVE/);
   assert.match(runtime, /export \* from "\.\/adminPropertyReview"/);
+});
+
+test('Owner management page remains syntactically valid and has one property subscription', async () => {
+  const source = await read('apps/admin-panel/src/pages/owners/OwnerManagementPage.tsx');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: 'OwnerManagementPage.tsx',
+    reportDiagnostics: true,
+  });
+  const errors = (transpiled.diagnostics || []).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
+
+  assert.deepEqual(
+    errors.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+    [],
+    'OwnerManagementPage.tsx must parse as valid TSX',
+  );
+  assert.equal((source.match(/onSnapshot\s*\(/g) || []).length, 1, 'property updates must have one realtime subscription');
+  assert.equal((source.match(/const \[properties, setProperties\]/g) || []).length, 1, 'property state must be declared once');
+  assert.doesNotMatch(source, /loadingProps/);
+  assert.doesNotMatch(source, /useState<any\[\]>/);
 });
 
 test('shared client audit helper uses the protected callable', async () => {
