@@ -41,6 +41,35 @@ function profileActive(user) {
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status));
 }
 
+export function canonicalFounderExecutionReadiness(canonicalUsers) {
+  const canonical = Array.isArray(canonicalUsers) ? canonicalUsers : [];
+  const founder = canonical.length === 1 ? canonical[0] : null;
+  const founderAccountEnabled = Boolean(founder && founder.disabled !== true);
+  const founderProfileActive = Boolean(founder && profileActive(founder));
+  const founderEmailVerified = Boolean(founder && founder.emailVerified === true);
+  const founderPhoneMfaReady = Boolean(founder && phoneMfaReady(founder));
+  const blockers = [];
+
+  if (canonical.length !== 1) {
+    blockers.push(`exactly one ${CANONICAL_FOUNDER_EMAIL} CEO/Super Admin account is required; found ${canonical.length}`);
+  }
+  if (founder && !founderAccountEnabled) blockers.push('canonical founder Firebase Auth account is disabled');
+  if (founder && !founderProfileActive) blockers.push('canonical founder Firestore profile is missing or inactive');
+  if (founder && !founderEmailVerified) blockers.push('canonical founder email is not verified');
+  if (founder && !founderPhoneMfaReady) blockers.push('canonical founder phone MFA factor is not enrolled');
+
+  return {
+    founder,
+    canonicalFounderCount: canonical.length,
+    canonicalFounderReady: blockers.length === 0,
+    founderAccountEnabled,
+    founderProfileActive,
+    founderEmailVerified,
+    founderPhoneMfaReady,
+    blockers,
+  };
+}
+
 function requireProtectedExecutionContext({ execute, projectId, env = process.env }) {
   if (projectId !== EXPECTED_PROJECT_ID) {
     throw new Error(`GCP_PROJECT_ID must equal ${EXPECTED_PROJECT_ID}.`);
@@ -128,23 +157,10 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   const privileged = enriched.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
   const targets = privileged.filter((user) => !isCanonicalFounderAccount(user));
-
-  if (canonical.length !== 1) {
-    throw new Error(`Cleanup refused: exactly one ${CANONICAL_FOUNDER_EMAIL} CEO/Super Admin account is required; found ${canonical.length}.`);
-  }
-  const founder = canonical[0];
-  if (founder.disabled === true || !profileActive(founder)) {
-    throw new Error('Cleanup refused: the canonical founder account must be active with an active Firestore profile.');
-  }
-  if (founder.emailVerified !== true) {
-    throw new Error('Cleanup refused: the canonical founder email is not verified.');
-  }
-  if (!phoneMfaReady(founder)) {
-    throw new Error('Cleanup refused: the canonical founder phone MFA factor is not enrolled.');
-  }
+  const readiness = canonicalFounderExecutionReadiness(canonical);
 
   const result = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: execute ? 'executed' : 'dry-run',
     projectId,
     repository: text(env.GITHUB_REPOSITORY) || null,
@@ -153,8 +169,14 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     workflowRunId: text(env.GITHUB_RUN_ID) || null,
     workflowRunAttempt: Number(env.GITHUB_RUN_ATTEMPT || 0) || null,
     verifiedAt: now.toISOString(),
-    canonicalFounderCount: canonical.length,
-    canonicalFounderReady: true,
+    canonicalFounderCount: readiness.canonicalFounderCount,
+    canonicalFounderReady: readiness.canonicalFounderReady,
+    founderAccountEnabled: readiness.founderAccountEnabled,
+    founderProfileActive: readiness.founderProfileActive,
+    founderEmailVerified: readiness.founderEmailVerified,
+    founderPhoneMfaReady: readiness.founderPhoneMfaReady,
+    executionEligible: readiness.canonicalFounderReady,
+    executionBlockers: readiness.blockers,
     privilegedAccountCountBefore: privileged.length,
     deletionTargetCount: targets.length,
     deletedAccountCount: 0,
@@ -165,6 +187,12 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     nonPrivilegedAccountsUntouched: true,
     hardLaunchClaim: false,
   };
+
+  if (execute && !readiness.canonicalFounderReady) {
+    mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
+    writeFileSync(EVIDENCE_PATH, `${JSON.stringify(result, null, 2)}\n`);
+    throw new Error(`Cleanup refused: ${readiness.blockers.join('; ')}.`);
+  }
 
   if (execute) {
     for (const target of targets) {
@@ -188,7 +216,7 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
   writeFileSync(EVIDENCE_PATH, `${JSON.stringify(result, null, 2)}\n`);
   console.log(
-    `[privileged-cleanup] ${result.status} targets=${result.deletionTargetCount} deleted=${result.deletedAccountCount} canonical_founder_ready=true`,
+    `[privileged-cleanup] ${result.status} targets=${result.deletionTargetCount} deleted=${result.deletedAccountCount} canonical_founder_ready=${result.canonicalFounderReady}`,
   );
   return result;
 }
