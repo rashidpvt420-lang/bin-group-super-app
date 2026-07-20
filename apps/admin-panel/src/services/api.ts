@@ -1,108 +1,42 @@
 // admin-panel/src/services/api.ts
-import axios, { AxiosInstance } from 'axios';
+// Fail-closed: production Admin must not call localhost or an undeployed REST API.
+// Admin operations must use Firebase Auth, Firestore, Storage, and HTTPS callables.
 
-interface ApiConfig {
-  baseURL: string;
-  timeout?: number;
-}
+type RefusedMethod = (...args: any[]) => never;
 
-class AdminApiClient {
-  private client: AxiosInstance;
+const REFUSED: RefusedMethod = () => {
+  throw new Error(
+    'Admin REST apiClient is disabled. Use Firebase Auth, Firestore, and Cloud Functions callables; localStorage adminToken is not an authorization source.',
+  );
+};
 
-  constructor(config: ApiConfig) {
-    this.client = axios.create({
-      baseURL: config.baseURL,
-      timeout: config.timeout || 30000,
-    });
-
-    // Add JWT to requests
-    this.client.interceptors.request.use((config) => {
-      const token = localStorage.getItem('adminToken');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    });
-
-    this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        console.error('API Error:', error.response?.data || error.message);
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  // Auth
-  async login(email: string, password: string) {
-    const response = await this.client.post('/auth/login', { email, password });
-    if (response.data.token) {
-      localStorage.setItem('adminToken', response.data.token);
+export const apiClient = {
+  login: REFUSED,
+  logout: () => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('adminToken');
     }
-    return response.data;
-  }
+  },
+  getLiveMap: REFUSED,
+  getFinancialTicker: REFUSED,
+  getSOSFeed: REFUSED,
+  getAllOwners: REFUSED,
+  getOwnerDetails: REFUSED,
+  suspendOwner: REFUSED,
+  getTickets: REFUSED,
+  getTechnicians: REFUSED,
+  createTechnician: REFUSED,
+  healthCheck: REFUSED,
+  get: REFUSED,
+  post: REFUSED,
+  put: REFUSED,
+  patch: REFUSED,
+  delete: REFUSED,
+  request: REFUSED,
+  interceptors: {
+    request: { use: () => undefined },
+    response: { use: () => undefined },
+  },
+};
 
-  async logout() {
-    localStorage.removeItem('adminToken');
-  }
-
-  // Admin endpoints
-  async getLiveMap() {
-    return this.client.get('/api/admin/technicians/live-map');
-  }
-
-  async getFinancialTicker() {
-    return this.client.get('/api/admin/financials/daily');
-  }
-
-  async getSOSFeed() {
-    return this.client.get('/api/admin/sos-tickets/live');
-  }
-
-  async getAllOwners() {
-    return this.client.get('/api/admin/owners');
-  }
-
-  async getOwnerDetails(ownerId: string) {
-    return this.client.get(`/api/admin/owners/${ownerId}`);
-  }
-
-  async suspendOwner(ownerId: string, reason: string) {
-    return this.client.post(`/api/admin/owners/${ownerId}/suspend`, { reason });
-  }
-
-  async getTickets(filters?: Record<string, any>) {
-    return this.client.get('/api/admin/tickets', { params: filters });
-  }
-
-  async getTechnicians() {
-    return this.client.get('/api/admin/technicians');
-  }
-
-  async createTechnician(data: any) {
-    return this.client.post('/api/admin/technicians', data);
-  }
-
-  async healthCheck() {
-    return this.client.get('/health');
-  }
-
-  // Generic methods
-  async get(url: string, config?: any) {
-    return this.client.get(url, config);
-  }
-
-  async post(url: string, data?: any, config?: any) {
-    return this.client.post(url, data, config);
-  }
-}
-
-const adminApiClient = new AdminApiClient({
-  // Legacy REST client. Reports now use the secure getAdminReports Firebase callable.
-  // Remaining /api/* calls are audited separately before they are migrated off REST.
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
-  timeout: 30000,
-});
-
-export const apiClient = adminApiClient;
-export default adminApiClient;
+export default apiClient;
