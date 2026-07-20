@@ -1,0 +1,209 @@
+name: FIREBASE - Extensions Decommission
+run-name: Firebase Extensions ${{ inputs.mode }} - ${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit installed instances or uninstall instances whose self-managed replacements are verified'
+        required: true
+        type: choice
+        options:
+          - audit
+          - uninstall
+        default: audit
+      confirmation:
+        description: 'Audit: AUDIT_FIREBASE_EXTENSIONS_BIN_GROUP. Uninstall: UNINSTALL_MIGRATED_FIREBASE_EXTENSIONS_BIN_GROUP'
+        required: true
+        type: string
+      canonical_founder_email:
+        description: 'Type exactly ceo@bin-groups.com'
+        required: true
+        type: string
+      instance_ids:
+        description: 'Uninstall only: comma-separated installed extension instance IDs'
+        required: false
+        type: string
+        default: ''
+      replacement_confirmation:
+        description: 'Uninstall only: CONFIRM_SELF_MANAGED_REPLACEMENTS_VERIFIED'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firebase-extensions-decommission-production
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: bin-group-57c60
+
+jobs:
+  extension-decommission:
+    name: Audit or remove migrated extension instances
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Enforce protected founder request
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          FOUNDER_EMAIL: ${{ inputs.canonical_founder_email }}
+          INSTANCE_IDS: ${{ inputs.instance_ids }}
+          REPLACEMENT_CONFIRMATION: ${{ inputs.replacement_confirmation }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || fail "Firebase Extensions management may run only from main."
+          [[ "$GITHUB_ACTOR" == "rashidpvt420-lang" ]] || fail "Only the authorized founder GitHub actor may run this workflow."
+          [[ "$FOUNDER_EMAIL" == "ceo@bin-groups.com" ]] || fail "Canonical founder email does not match."
+          if [[ "$MODE" == "audit" ]]; then
+            [[ "$CONFIRMATION" == "AUDIT_FIREBASE_EXTENSIONS_BIN_GROUP" ]] || fail "Audit confirmation phrase does not match."
+            [[ -z "$INSTANCE_IDS" ]] || fail "Audit mode must not include instance IDs."
+            [[ -z "$REPLACEMENT_CONFIRMATION" ]] || fail "Audit mode must not include replacement confirmation."
+          elif [[ "$MODE" == "uninstall" ]]; then
+            [[ "$CONFIRMATION" == "UNINSTALL_MIGRATED_FIREBASE_EXTENSIONS_BIN_GROUP" ]] || fail "Uninstall confirmation phrase does not match."
+            [[ "$REPLACEMENT_CONFIRMATION" == "CONFIRM_SELF_MANAGED_REPLACEMENTS_VERIFIED" ]] || fail "Verified replacement confirmation is required."
+            [[ -n "$INSTANCE_IDS" ]] || fail "At least one installed extension instance ID is required."
+          else
+            fail "Unsupported mode."
+          fi
+
+      - name: Checkout exact main SHA
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Verify repository has no Extension manifest coupling
+        run: node scripts/verify-no-firebase-extension-manifest.mjs
+
+      - name: Inventory installed Firebase Extensions
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package
+          npx --yes firebase-tools@15.19.1 ext:list \
+            --project "$GCP_PROJECT_ID" \
+            --json \
+            > launch_package/firebase-extensions-before.raw.json
+          node scripts/audit-firebase-extensions-decommission.mjs \
+            --input launch_package/firebase-extensions-before.raw.json \
+            --output launch_package/firebase-extensions-before.json
+
+      - name: Validate requested uninstall targets
+        if: ${{ inputs.mode == 'uninstall' }}
+        env:
+          INSTANCE_IDS: ${{ inputs.instance_ids }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('launch_package/firebase-extensions-before.json', 'utf8'));
+          const installed = new Set(report.instances.map((item) => item.instanceId));
+          const requested = process.env.INSTANCE_IDS.split(',').map((value) => value.trim()).filter(Boolean);
+          if (requested.length === 0) throw new Error('No extension instance IDs were supplied.');
+          if (new Set(requested).size !== requested.length) throw new Error('Duplicate extension instance ID supplied.');
+          for (const id of requested) {
+            if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(id)) throw new Error(`Invalid extension instance ID: ${id}`);
+            if (!installed.has(id)) throw new Error(`Requested extension instance is not installed: ${id}`);
+          }
+          fs.writeFileSync('launch_package/firebase-extensions-uninstall-targets.txt', `${requested.join('\n')}\n`);
+          NODE
+
+      - name: Uninstall verified migrated instances
+        if: ${{ inputs.mode == 'uninstall' }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r instance_id; do
+            [[ -n "$instance_id" ]] || continue
+            echo "Uninstalling migrated Firebase Extension instance: $instance_id"
+            npx --yes firebase-tools@15.19.1 ext:uninstall "$instance_id" \
+              --project "$GCP_PROJECT_ID" \
+              --force \
+              --non-interactive
+          done < launch_package/firebase-extensions-uninstall-targets.txt
+
+      - name: Verify final Firebase Extensions inventory
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@15.19.1 ext:list \
+            --project "$GCP_PROJECT_ID" \
+            --json \
+            > launch_package/firebase-extensions-after.raw.json
+          node scripts/audit-firebase-extensions-decommission.mjs \
+            --input launch_package/firebase-extensions-after.raw.json \
+            --output launch_package/firebase-extensions-after.json
+
+      - name: Verify requested instances were removed
+        if: ${{ inputs.mode == 'uninstall' }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('launch_package/firebase-extensions-after.json', 'utf8'));
+          const installed = new Set(report.instances.map((item) => item.instanceId));
+          const requested = fs.readFileSync('launch_package/firebase-extensions-uninstall-targets.txt', 'utf8').split(/\r?\n/).filter(Boolean);
+          const remaining = requested.filter((id) => installed.has(id));
+          if (remaining.length > 0) throw new Error(`Extension uninstall verification failed: ${remaining.join(', ')}`);
+          NODE
+
+      - name: Remove raw provider output
+        if: ${{ always() }}
+        run: rm -f launch_package/firebase-extensions-*.raw.json
+
+      - name: Upload decommission evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-extensions-${{ inputs.mode }}-${{ github.sha }}
+          path: |
+            launch_package/firebase-extensions-before.json
+            launch_package/firebase-extensions-after.json
+            launch_package/firebase-extensions-uninstall-targets.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Publish result
+        if: ${{ always() }}
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          before_count="unknown"
+          after_count="unknown"
+          before_status="unknown"
+          after_status="unknown"
+          if [[ -f launch_package/firebase-extensions-before.json ]]; then
+            before_count="$(node -p "require('./launch_package/firebase-extensions-before.json').activeExtensionCount")"
+            before_status="$(node -p "require('./launch_package/firebase-extensions-before.json').status")"
+          fi
+          if [[ -f launch_package/firebase-extensions-after.json ]]; then
+            after_count="$(node -p "require('./launch_package/firebase-extensions-after.json').activeExtensionCount")"
+            after_status="$(node -p "require('./launch_package/firebase-extensions-after.json').status")"
+          fi
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Firebase Extensions decommission control
+
+          - Project: \`$GCP_PROJECT_ID\`
+          - Mode: \`$MODE\`
+          - Before: \`$before_status\` / \`$before_count\` installed instance(s)
+          - After: \`$after_status\` / \`$after_count\` installed instance(s)
+          - Firebase Extensions decommission date: **March 31, 2027**
+          - New Extension installation/update commands in repository: **blocked**
+          - Raw provider configuration uploaded: **no**
+          - Public-launch claim: **false**
+          EOF
