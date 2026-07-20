@@ -62,3 +62,15 @@ test('operator guidance never directs users to obsolete feature branches', async
   assert.doesNotMatch(historicalProfileAudit, /Audit baseline:\s*`main` after PR/i);
   assert.match(historicalProfileAudit, /HARD PUBLIC LAUNCH remains `NO-GO`/i);
 });
+
+test('post-deployment monitoring never claims launch or permits bypass deployment', async () => {
+  const monitoring = await read('docs/POST_LAUNCH_MONITORING.md');
+
+  assert.match(monitoring, /Status claim:\*\* This document does not assert/i);
+  assert.match(monitoring, /protected deployment workflow/i);
+  assert.match(monitoring, /exact deployed commit SHA/i);
+  assert.match(monitoring, /No local or hosting-only Firebase deployment command/i);
+  assert.doesNotMatch(monitoring, /Public launch reported complete/i);
+  assert.doesNotMatch(monitoring, /firebase\s+deploy/i);
+  assert.match(monitoring, /cannot authorize pilot eligibility, hard-clearance or public launch/i);
+});
