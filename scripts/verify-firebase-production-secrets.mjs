@@ -5,9 +5,16 @@ import { ensureAdminMfaAuthorizedDomains } from './ensure-admin-mfa-authorized-d
 const expectedProjectId = 'bin-group-57c60';
 const adminMfaBootstrapMarker = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
 
+export const requiredFirebaseAiSecrets = Object.freeze([
+  'OPENAI_API_KEY',
+  'IMAGE_GENERATION_API_KEY',
+  'GEMINI_API_KEY',
+]);
+
 export const requiredFirebaseBankPilotSecrets = Object.freeze([
   'SMTP_USER',
   'SMTP_PASS',
+  ...requiredFirebaseAiSecrets,
 ]);
 
 export const requiredFirebasePublicSecrets = Object.freeze([
