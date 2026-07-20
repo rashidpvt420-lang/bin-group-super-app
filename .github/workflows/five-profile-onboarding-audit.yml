@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/five-profile-onboarding-audit.yml'
+      - '.github/workflows/admin-mfa-recovery-deploy.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'TESTING.md'
@@ -18,10 +19,13 @@ on:
       - 'docs/POST_LAUNCH_MONITORING.md'
       - 'apps/admin-panel/src/**'
       - 'functions/**'
+      - 'scripts/deploy-firebase-production.mjs'
+      - 'scripts/ensure-admin-mfa-authorized-domains.mjs'
       - 'scripts/grant-admin.mjs'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
       - 'scripts/setup-ai-secrets.ps1'
       - 'scripts/verify-admin-access.mjs'
+      - 'scripts/verify-firebase-production-secrets.mjs'
       - 'scripts/windows-ai-live-recovery.ps1'
       - 'src/App.tsx'
       - 'src/admin/**'
@@ -36,6 +40,7 @@ on:
       - 'src/technician/**'
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
+      - 'tests/launch/admin-mfa-recovery-deployment.test.mjs'
       - 'tests/launch/ai-secret-setup-deploy-guard.test.mjs'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
       - 'tests/launch/canonical-readiness-docs.test.mjs'
@@ -83,6 +88,7 @@ jobs:
           tests/launch/profile-lifecycle-commercial-audit.test.mjs
           tests/launch/arabic-visible-copy-audit.test.mjs
           tests/launch/canonical-readiness-docs.test.mjs
+          tests/launch/admin-mfa-recovery-deployment.test.mjs
           tests/launch/ai-secret-setup-deploy-guard.test.mjs
           tests/launch/windows-ai-recovery-deploy-guard.test.mjs
           tests/launch/protected-admin-deployment-docs.test.mjs
