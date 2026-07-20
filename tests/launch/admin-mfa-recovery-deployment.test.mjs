@@ -7,31 +7,43 @@ import {
 } from '../../scripts/ensure-admin-mfa-authorized-domains.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const guardPath = 'tests/launch/admin-mfa-recovery-deployment.test.mjs';
 
-test('Admin MFA recovery workflow is protected and does not deploy the full production stack', async () => {
+test('parallel Admin MFA recovery deployment is retired fail closed', async () => {
   const workflow = await read('.github/workflows/admin-mfa-recovery-deploy.yml');
-  assert.match(workflow, /name: RECOVERY - Deploy Admin MFA Enrollment/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /DEPLOY_ADMIN_MFA_RECOVERY/);
-  assert.match(workflow, /RESTORE_ADMIN_MFA_ENROLLMENT_UI/);
-  assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS/);
-  assert.match(workflow, /AUTHORIZED_FOUNDER_EMAILS/);
-  assert.match(workflow, /google-github-actions\/auth@v2/);
-  assert.match(workflow, /hosting:admin,functions:registerAdminSecuritySession,functions:getAdminSecurityProfile,functions:revokeAdminSessions,functions:lockOwnAdminAccount,functions:finalizeOwnAdminMfaRecovery/);
-  assert.doesNotMatch(workflow, /--only ['"]functions,hosting,firestore/);
-  assert.doesNotMatch(workflow, /firestore:rules|firestore:indexes|storage:rules|hosting:app/);
-  assert.match(workflow, /mfaGateBypassed: false/);
-  assert.match(workflow, /hardLaunchClaim: false/);
+  assert.match(workflow, /Admin MFA Enrollment \(Retired\)/i);
+  assert.match(workflow, /Refuse parallel production deployment/i);
+  assert.match(workflow, /ADMIN_MFA_BOOTSTRAP_HOSTING/i);
+  assert.match(workflow, /exit 1/);
+  assert.doesNotMatch(workflow, /id-token:\s*write/i);
+  assert.doesNotMatch(workflow, /environment:\s*production/i);
+  assert.doesNotMatch(workflow, /google-github-actions\/auth/i);
+  assert.doesNotMatch(workflow, /firebase(?:-tools[^\n]*)?\s+deploy/i);
+  assert.doesNotMatch(workflow, /--only/i);
 });
 
-test('Admin MFA recovery verifies the profile route, enrollment card, Phone Auth and live entrypoint', async () => {
-  const workflow = await read('.github/workflows/admin-mfa-recovery-deploy.yml');
-  assert.match(workflow, /path=\"\/profile\"/);
-  assert.match(workflow, /AdminMfaEnrollmentCard/);
-  assert.match(workflow, /ensure-admin-mfa-authorized-domains\.mjs/);
-  assert.match(workflow, /verify-firebase-phone-auth-production\.mjs/);
-  assert.match(workflow, /bin-group-admin-panel\.web\.app\/profile\?mfa=enroll/);
-  assert.match(workflow, /cache-control:.*no-store/);
+test('authorized-domain repair is bound to canonical exact-SHA approval context', async () => {
+  const secretPreflight = await read('scripts/verify-firebase-production-secrets.mjs');
+  const canonicalDeploy = await read('scripts/deploy-firebase-production.mjs');
+
+  assert.match(secretPreflight, /ensureAdminMfaAuthorizedDomains/i);
+  assert.match(secretPreflight, /ADMIN_MFA_BOOTSTRAP_HOSTING/i);
+  assert.match(secretPreflight, /GITHUB_ACTIONS[^\n]*true/i);
+  assert.match(secretPreflight, /refs\/heads\/main/i);
+  assert.match(secretPreflight, /workflow_dispatch/i);
+  assert.match(secretPreflight, /DEPLOYMENT_ENVIRONMENT[^\n]*production/i);
+  assert.match(secretPreflight, /VALIDATED_ARTIFACT_DIGEST/i);
+  assert.match(secretPreflight, /predeploy-approval\.json/i);
+  assert.match(secretPreflight, /github-environment-protection/i);
+  assert.match(secretPreflight, /bank-pilot/i);
+  assert.match(secretPreflight, /public release gate must be disabled/i);
+  assert.match(secretPreflight, /await domainRepair\(\{ projectId: expectedProjectId \}\)/i);
+
+  const secretsIndex = canonicalDeploy.indexOf('verifyFirebaseProductionSecrets');
+  const phoneIndex = canonicalDeploy.indexOf('verifyFirebasePhoneAuthProduction');
+  assert.ok(secretsIndex >= 0 && phoneIndex > secretsIndex, 'canonical secret/domain preflight must occur before Phone Auth verification');
+  assert.match(canonicalDeploy, /ADMIN_MFA_BOOTSTRAP_HOSTING/);
+  assert.match(canonicalDeploy, /complete Firebase production stack/);
 });
 
 test('authorized-domain repair preserves existing domains and adds both Admin Hosting domains', () => {
@@ -62,4 +74,17 @@ test('authorized-domain repair changes only the Identity Toolkit authorizedDomai
   assert.doesNotMatch(source, /updateMask=.*(?:mfa|signIn|smsRegionConfig)/);
   assert.match(source, /hardLaunchClaim: false/);
   assert.match(source, /sensitiveValuesExcluded: true/);
+});
+
+test('focused launch audit cannot silently restore the parallel recovery deploy', async () => {
+  const focusedWorkflow = await read('.github/workflows/five-profile-onboarding-audit.yml');
+  assert.equal(focusedWorkflow.split(guardPath).length - 1, 2);
+  for (const path of [
+    '.github/workflows/admin-mfa-recovery-deploy.yml',
+    'scripts/deploy-firebase-production.mjs',
+    'scripts/ensure-admin-mfa-authorized-domains.mjs',
+    'scripts/verify-firebase-production-secrets.mjs',
+  ]) {
+    assert.match(focusedWorkflow, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
 });
