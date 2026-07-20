@@ -1,68 +1,62 @@
 # Full Five-Profile Audit
 
-**Audit date:** 15 July 2026
-**BASE_SHA (`origin/main`):** `2bbb9869804064e56046f0f795fcc59ff7cea7f6`
-**Branch:** `cursor/full-system-audit-fix-v4-30e9`
-**Decision:** **HARD PUBLIC LAUNCH = NO-GO** until the operations evidence in `OPERATIONS_ONLY_CHECKLIST.md` is produced by protected workflows.
+**Original audit date:** 15 July 2026
+**Source branch:** `main`
+**Source binding:** The exact commit is supplied by the protected CI or deployment workflow. This document intentionally contains no fixed commit SHA.
+**Decision:** **HARD PUBLIC LAUNCH = NO-GO** until protected operational evidence is produced for one exact SHA.
 
 ## Audited surfaces
 
 | Surface | Entry | Authority boundary |
 |---|---|---|
-| Owner onboarding | `/onboarding/*` | Locked server quote, OTP-bound contract hash, callable payment package |
-| Owner portal | `/owner/*` | Complete activation policy plus owner/property binding |
-| Tenant portal | `/tenant/*` | Tenant UID or verified-email residence binding |
+| Owner onboarding | `/onboarding/*` | Server quote, signature evidence and callable payment package |
+| Owner portal | `/owner/*` | Complete activation policy plus owner and property binding |
+| Tenant portal | `/tenant/*` | Tenant identity or verified residence binding |
 | Technician portal | `/technician/*` | Approved technician claims and server lifecycle transactions |
-| Broker portal | `/broker/*` | Broker identity binding and server-authored commissions/payouts |
+| Broker portal | `/broker/*` | Broker identity binding and server-authored commission state |
 | Admin status bridge | `/admin/*` | Read-only status surface |
-| Admin operations console | `apps/admin-panel` | Privileged custom claims, App Check, callable mutations |
-| Firebase backend | `functions/`, rules, Storage | Admin SDK authority for money, access passes, dispatch and audit evidence |
+| Admin operations console | `apps/admin-panel` | Privileged claims, App Check and callable mutations |
+| Firebase backend | `functions/`, rules, Storage | Server authority for payments, access, dispatch and audit evidence |
 
-## P0/P1 repairs in this audit
+## P0/P1 repairs covered by the audit
 
-- Closed direct client writes to financial ledgers, activation state, gate passes, parking passes, commissions, payouts and audit logs.
-- Removed direct technician mission claiming. Assignment is dispatcher/callable-authoritative and capacity changes are transactional.
-- Added server-authoritative tenant emergency, scheduled-service and AI-concierge ticket creation with residence validation and idempotent request IDs.
-- Bound QR passes to tenant residence, signed server payloads, immutable server records and callable cancellation.
-- Bound owner signing OTP evidence to the locked contract hash and consume it transactionally.
-- Bound manual payment/rent receipts to immutable Storage generation, content metadata and SHA-256 evidence.
-- Required complete owner activation evidence: active status, admin approval, verified payment, explicit dashboard unlock and active contract ID.
-- Hardened Stripe webhook session/amount/owner checks and durable reconciliation markers for captured-but-mismatched payments.
-- Enforced suspended/disabled account revocation in rules, Auth and privileged callables.
-- Moved admin payroll, disputes, broker attribution and payment approval to callables.
-- Added AI role/quota enforcement and server-only quota records.
-- Retired legacy client-calculated owner onboarding writes and the second WhatsApp inbound deploy entry.
-- Made production deployment exact-SHA, protected-workflow-only, full-stack and artifact-digest-bound.
-- Added predeploy verification of exact-SHA hard-clearance provenance for public mode.
+- Privileged and financial browser-write paths are closed.
+- Owner activation, signature and payment evidence are server-authoritative.
+- Tenant service and physical-access flows use validated server operations.
+- Technician assignment and lifecycle changes are transactional.
+- Suspended or disabled accounts are revoked across Auth, rules and privileged functions.
+- Payment mismatch reconciliation and idempotency are fail-closed.
+- Production deployment is protected, exact-SHA and artifact-digest-bound.
+- AI role, quota and private-context boundaries are server-authoritative.
 
 ## Journey results
 
 ### Owner
 
-The canonical path is property intake → server quote → OTP-bound signature → Stripe/manual evidence → admin payment approval → active contract → dashboard. The client cannot set activation, payment verification or unlock fields. Recovery routes remain available while locked.
+The canonical path is property intake, server quote, signature verification, payment evidence, Admin approval, active contract and dashboard access. The client cannot set activation, payment verification or unlock fields.
 
 ### Tenant
 
-Regular evidence-first tickets remain rule-scoped. Emergency, scheduled services and AI concierge use `createTenantServiceTicket`. Gate and parking records use signed callables. Unit lookup supports `tenantId`, `tenantUid`, or a verified matching tenant email.
+Regular service requests remain identity-scoped. Emergency, scheduled and AI-assisted service flows use validated server operations. Physical-access records are signed and server-authored.
 
 ### Technician
 
-Only assigned, approved technicians can advance lifecycle state. Arrival requires accurate in-geofence GPS. Completion requires before/after proof and notes. Offline completion mutation is disabled.
+Only assigned and approved technicians can advance lifecycle state. Arrival requires valid location evidence. Completion requires before-and-after proof and notes.
 
 ### Admin
 
-The in-app route is explicitly read-only. Privileged operations use the dedicated admin console and callables. Financial browser writes are denied even for admin clients.
+The in-app status bridge is read-only. Privileged operations use the dedicated Admin console and server operations. Financial browser writes remain denied.
 
 ### Broker
 
-Lead/referral self-service is identity-scoped. Commission and payout state is server-authored; payout approval validates IBAN, commission bindings and payment reference transactionally.
+Lead and referral self-service is identity-scoped. Commission and payout state is server-authored and validated before approval.
 
 ## Remaining architectural constraints
 
-- `tickets` and `maintenanceTickets` remain dual collections. New service flows use `maintenanceTickets`; mutations must stay behind canonical callables/rules until a migration is executed.
-- Authenticated production E2E cannot be proved without seeded credentials and registered App Check evidence.
-- Stripe, SMTP, App Check and production deployment truth cannot be inferred from source code.
+- `tickets` and `maintenanceTickets` remain dual collections. New service flows use `maintenanceTickets`; mutations must remain behind canonical server authority until migration is complete.
+- Authenticated hosted E2E requires seeded credentials and registered App Check evidence.
+- Payment provider, email delivery, App Check and production deployment truth cannot be inferred from source code.
 
 ## Code validation
 
-The authoritative commands are in `TESTING.md`. This branch must pass Functions/root/admin builds, typecheck, lint, rules emulators, launch-honesty tests, stability tests and mobile readiness before merge. Live production checks remain operations-only and must not be represented as local passes.
+The authoritative commands are in `TESTING.md`. Every proposed change must pass root, Admin and Functions builds, typecheck, lint, rules emulators, launch-honesty tests, stability tests and mobile readiness before merge. The protected workflow context supplies the exact commit under review. Live production checks remain operations-only and must never be represented as local passes.
