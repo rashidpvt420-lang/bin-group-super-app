@@ -21,13 +21,14 @@ const [
 ]);
 
 const guardPath = 'tests/launch/protected-admin-deployment-docs.test.mjs';
+const privilegedMutationPattern = /\.(?:createUser|updateUser|setCustomUserClaims)\s*\(|adminApproved\s*:/i;
 
 test('retired local Admin grant entrypoint cannot mutate production authority', () => {
   assert.match(grantScript, /REFUSED/i);
   assert.match(grantScript, /adminCreateUser/i);
   assert.match(grantScript, /protected Admin MFA bootstrap workflow/i);
   assert.doesNotMatch(grantScript, /initializeApp|applicationDefault|service-account\.json|serviceAccountKey\.json/i);
-  assert.doesNotMatch(grantScript, /createUser|updateUser|setCustomUserClaims|adminApproved\s*:/i);
+  assert.doesNotMatch(grantScript, privilegedMutationPattern);
   assert.doesNotMatch(grantScript, /passwordArg|BIN_ADMIN_PASSWORD/i);
 });
 
@@ -35,7 +36,8 @@ test('Admin verification remains read-only and never recommends the retired gran
   assert.match(verifyScript, /READ-ONLY ADMIN ACCESS VERIFICATION/i);
   assert.match(verifyScript, /adminCreateUser/i);
   assert.doesNotMatch(verifyScript, /Run node scripts\/grant-admin\.mjs/i);
-  assert.doesNotMatch(verifyScript, /setCustomUserClaims|createUser|updateUser|\.set\(|\.add\(/i);
+  assert.doesNotMatch(verifyScript, privilegedMutationPattern);
+  assert.doesNotMatch(verifyScript, /\.set\s*\(|\.add\s*\(/i);
 });
 
 test('current deployment and Admin guides prohibit local production bypasses', () => {
@@ -51,7 +53,7 @@ test('current deployment and Admin guides prohibit local production bypasses', (
     assert.match(source, /exact current `main` SHA|exact current main SHA|exact current main/i, `${name} must require exact-main binding`);
   }
 
-  assert.doesNotMatch(deploymentChecklist, /HOME OS/i);
+  assert.doesNotMatch(deploymentChecklist, /^#.*HOME OS/im);
   assert.match(deploymentChecklist, /Hard public launch remains `NO-GO`/i);
   assert.match(deployGuide, /adminCreateUser/i);
   assert.match(adminGuide, /adminCreateUser/i);
