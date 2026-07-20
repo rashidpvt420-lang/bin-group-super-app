@@ -33,6 +33,8 @@ jobs:
     env:
       GCP_PROJECT_ID: bin-group-57c60
       LAUNCH_MODE: ${{ inputs.launch_mode }}
+      FIREBASE_PHONE_AUTH_REQUIRED_DOMAINS: bin-group-57c60.web.app,bin-group-57c60.firebaseapp.com,bin-group-admin-panel.web.app,bin-group-admin-panel.firebaseapp.com
+      FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION: AE
 
     steps:
       - name: Enforce exact protected preflight context
@@ -75,8 +77,11 @@ jobs:
       - name: Verify Firebase production secret metadata
         run: node scripts/check-firebase-production-secret-metadata.mjs
 
-      - name: Verify Firebase Phone Auth and Admin MFA configuration
+      - name: Verify Firebase Phone Auth, Admin domains and SMS MFA configuration
         run: node scripts/verify-firebase-phone-auth-production.mjs
+
+      - name: Verify active Admin MFA and recovery quorum coverage
+        run: node scripts/verify-admin-mfa-production.mjs
 
       - name: Publish read-only readiness summary
         run: |
@@ -88,7 +93,9 @@ jobs:
           - Exact SHA: \`$GITHUB_SHA\`
           - Launch mode: \`$LAUNCH_MODE\`
           - Firebase secret metadata: passed
-          - Phone Auth / SMS MFA configuration: passed
+          - Phone Auth / UAE SMS MFA configuration: passed
+          - Main and Admin Authentication domains: passed
+          - Active Admin MFA and recovery quorum: passed
           - Deployment performed: no
           - Hard-launch claim: false
 
