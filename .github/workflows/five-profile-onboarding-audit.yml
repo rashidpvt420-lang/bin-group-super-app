@@ -8,6 +8,7 @@ on:
       - 'package-lock.json'
       - 'TESTING.md'
       - 'LAUNCH_READINESS_AUDIT.md'
+      - 'FIVE_PROFILE_ONBOARDING_AUDIT.md'
       - 'docs/RELEASE_BLOCKERS.md'
       - 'docs/FULL_FIVE_PROFILE_AUDIT.md'
       - 'docs/PROPERTY_ONBOARDING_AUDIT.md'
