@@ -1,30 +1,35 @@
-// admin-panel/src/pages/owners/OwnerManagementPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Box,
+  Button,
+  Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
-  Chip,
-  Grid,
   Typography,
-  Box,
-  Stack,
-  Divider,
 } from '@mui/material';
-import { db, functions, httpsCallable, collection, getDocs, doc, updateDoc, onSnapshot, query, addDoc, serverTimestamp } from '../../lib/firebase';
+import {
+  collection,
+  db,
+  functions,
+  getDocs,
+  httpsCallable,
+  onSnapshot,
+  query,
+} from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
-import { useAuth } from '../../context/AuthContext';
 
 interface Owner {
   ownerId: string;
@@ -38,84 +43,110 @@ interface Owner {
   joinedDate: string;
 }
 
+interface PropertyRecord {
+  id: string;
+  name?: string;
+  propertyName?: string;
+  emirate?: string;
+  serviceZone?: string;
+  address?: string;
+  status?: string;
+  ownerId?: string;
+  ownerUid?: string;
+  [key: string]: unknown;
+}
+
+const PENDING_PROPERTY_STATUSES = new Set([
+  'pending',
+  'pending_approval',
+  'onboarding',
+]);
+
+function propertyName(property: PropertyRecord | null) {
+  return property?.name || property?.propertyName || 'Property';
+}
+
 export default function OwnerManagementPage() {
   const { t, isRTL } = useLanguage();
-  const { user } = useAuth();
   const [owners, setOwners] = useState<Owner[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState('');
-
-  // Property approval state
-  const [properties, setProperties] = useState<any[]>([]);
-  const [loadingProps, setLoadingProps] = useState(true);
-  const [rejectProperty, setRejectProperty] = useState<any | null>(null);
+  const [properties, setProperties] = useState<PropertyRecord[]>([]);
+  const [loadingProperties, setLoadingProperties] = useState(true);
+  const [reviewingPropertyId, setReviewingPropertyId] = useState<string | null>(null);
+  const [rejectProperty, setRejectProperty] = useState<PropertyRecord | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-
-  useEffect(() => {
-    fetchOwners();
-
-    const qProps = query(collection(db, 'properties'));
-    const unsubscribeProps = onSnapshot(qProps, (snapshot) => {
-      const list = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setProperties(list);
-      setLoadingProps(false);
-    }, (err) => {
-      console.error("Failed to fetch properties:", err);
-      setLoadingProps(false);
-    });
-
-    return () => {
-      unsubscribeProps();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const fetchOwners = async () => {
     try {
       setLoading(true);
-      const snap = await getDocs(collection(db, 'owners'));
-      const ownersList = snap.docs.map(doc => {
-        const data = doc.data();
+      const snapshot = await getDocs(collection(db, 'owners'));
+      const ownerRows = snapshot.docs.map((ownerDocument) => {
+        const data = ownerDocument.data();
         return {
-          ownerId: doc.id,
+          ownerId: ownerDocument.id,
           name: data.name || data.displayName || data.fullName || 'Owner',
           email: data.email || '',
           totalBuildings: data.totalBuildings || 0,
           totalUnits: data.totalUnits || 0,
           monthlyRentCollected: data.monthlyRentCollected || 0,
           unpaidInvoiceCount: data.unpaidInvoiceCount || 0,
-          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
-          joinedDate: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ''),
-        };
-      }) as Owner[];
-      setOwners(ownersList);
+          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended'
+            ? 'SUSPENDED'
+            : 'ACTIVE',
+          joinedDate: data.createdAt?.toDate
+            ? data.createdAt.toDate().toISOString()
+            : data.createdAt || '',
+        } as Owner;
+      });
+      setOwners(ownerRows);
     } catch (error) {
       console.error('Failed to fetch owners:', error);
-      alert(t('admin.load_owners_failed'));
+      window.alert(t('admin.load_owners_failed'));
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    void fetchOwners();
+    const propertiesQuery = query(collection(db, 'properties'));
+    const unsubscribe = onSnapshot(
+      propertiesQuery,
+      (snapshot) => {
+        setProperties(snapshot.docs.map((propertyDocument) => ({
+          id: propertyDocument.id,
+          ...propertyDocument.data(),
+        })) as PropertyRecord[]);
+        setLoadingProperties(false);
+      },
+      (error) => {
+        console.error('Failed to fetch properties:', error);
+        setLoadingProperties(false);
+      },
+    );
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSuspend = async () => {
     if (!selectedOwner) return;
-
     try {
       const suspendOwner = httpsCallable(functions, 'adminSuspendOwner');
-      await suspendOwner({ ownerId: selectedOwner.ownerId, reason: suspensionReason });
-
-      alert(t('admin.owner_suspended', { name: selectedOwner.name }));
+      await suspendOwner({
+        ownerId: selectedOwner.ownerId,
+        reason: suspensionReason.trim(),
+      });
+      window.alert(t('admin.owner_suspended', { name: selectedOwner.name }));
       setSuspendDialogOpen(false);
-      fetchOwners();
+      setSuspensionReason('');
+      await fetchOwners();
     } catch (error) {
       console.error('Failed to suspend owner:', error);
-      alert(t('admin.suspend_owner_failed'));
+      window.alert(t('admin.suspend_owner_failed'));
     }
   };
 
@@ -123,105 +154,50 @@ export default function OwnerManagementPage() {
     try {
       const resumeOwner = httpsCallable(functions, 'adminResumeOwner');
       await resumeOwner({ ownerId });
-
-      alert(t('admin.owner_resumed'));
-      fetchOwners();
+      window.alert(t('admin.owner_resumed'));
+      await fetchOwners();
     } catch (error) {
       console.error('Failed to resume owner:', error);
-      alert(t('admin.resume_owner_failed'));
+      window.alert(t('admin.resume_owner_failed'));
     }
   };
 
-  const handleApproveProperty = async (property: any) => {
+  const reviewProperty = async (
+    property: PropertyRecord,
+    decision: 'APPROVE' | 'REJECT',
+    reason = '',
+  ) => {
+    setReviewingPropertyId(property.id);
     try {
-      const propRef = doc(db, 'properties', property.id);
-      await updateDoc(propRef, {
-        status: 'APPROVED',
-        approvedAt: serverTimestamp()
+      const review = httpsCallable(functions, 'adminReviewProperty');
+      await review({
+        propertyId: property.id,
+        decision,
+        reason: reason.trim(),
       });
-
-      // Write to audit logs
-      await addDoc(collection(db, 'audit_logs'), {
-        actorId: user?.uid || 'admin',
-        actorRole: 'admin',
-        action: 'APPROVE_PROPERTY',
-        targetType: 'PROPERTY',
-        targetId: property.id,
-        before: { status: property.status || 'pending' },
-        after: { status: 'APPROVED' },
-        metadata: { propertyName: property.name || property.propertyName || '' },
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'SYSTEM',
-        createdAt: serverTimestamp()
-      });
-
-      // Notify owner
-      const recipientId = property.ownerId || property.ownerUid;
-      if (recipientId) {
-        await addDoc(collection(db, 'notifications'), {
-          recipientId,
-          recipientRole: 'owner',
-          title: 'PROPERTY APPROVED',
-          body: `Your property "${property.name || property.propertyName || 'Property'}" has been approved by the admin.`,
-          read: false,
-          createdAt: serverTimestamp(),
-          type: 'PROPERTY_APPROVAL',
-          link: '/owner/properties'
-        });
-      }
-
-      alert(`Property "${property.name || property.propertyName}" approved successfully.`);
-    } catch (err: any) {
-      console.error("Failed to approve property:", err);
-      alert("Error approving property: " + err.message);
+      window.alert(
+        decision === 'APPROVE'
+          ? `Property "${propertyName(property)}" approved successfully.`
+          : `Property "${propertyName(property)}" rejected.`,
+      );
+    } catch (error: any) {
+      console.error('Failed to review property:', error);
+      window.alert(error?.message || 'The property review could not be completed.');
+      throw error;
+    } finally {
+      setReviewingPropertyId(null);
     }
   };
 
   const handleRejectProperty = async () => {
-    if (!rejectProperty) return;
+    if (!rejectProperty || !rejectReason.trim()) return;
     try {
-      const propRef = doc(db, 'properties', rejectProperty.id);
-      await updateDoc(propRef, {
-        status: 'REJECTED',
-        rejectionReason: rejectReason,
-        rejectedAt: serverTimestamp()
-      });
-
-      // Write to audit logs
-      await addDoc(collection(db, 'audit_logs'), {
-        actorId: user?.uid || 'admin',
-        actorRole: 'admin',
-        action: 'REJECT_PROPERTY',
-        targetType: 'PROPERTY',
-        targetId: rejectProperty.id,
-        before: { status: rejectProperty.status || 'pending' },
-        after: { status: 'REJECTED', reason: rejectReason },
-        metadata: { propertyName: rejectProperty.name || rejectProperty.propertyName || '' },
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'SYSTEM',
-        createdAt: serverTimestamp()
-      });
-
-      // Notify owner
-      const recipientId = rejectProperty.ownerId || rejectProperty.ownerUid;
-      if (recipientId) {
-        await addDoc(collection(db, 'notifications'), {
-          recipientId,
-          recipientRole: 'owner',
-          title: 'PROPERTY REJECTED',
-          body: `Your property "${rejectProperty.name || rejectProperty.propertyName || 'Property'}" was rejected. Reason: ${rejectReason}`,
-          read: false,
-          createdAt: serverTimestamp(),
-          type: 'PROPERTY_REJECTION',
-          link: '/owner/properties'
-        });
-      }
-
-      alert(`Property "${rejectProperty.name || rejectProperty.propertyName}" rejected.`);
+      await reviewProperty(rejectProperty, 'REJECT', rejectReason);
       setRejectDialogOpen(false);
       setRejectProperty(null);
       setRejectReason('');
-    } catch (err: any) {
-      console.error("Failed to reject property:", err);
-      alert("Error rejecting property: " + err.message);
+    } catch {
+      // The review helper already displays a precise error and keeps the dialog open for correction.
     }
   };
 
@@ -229,10 +205,9 @@ export default function OwnerManagementPage() {
     return <Typography sx={{ p: 4 }}>{t('onboarding.payment.verifying')}</Typography>;
   }
 
-  // Filter pending properties
-  const pendingProperties = properties.filter(p => 
-    p.status === 'pending' || p.status === 'PENDING_APPROVAL' || p.status === 'ONBOARDING' || p.status === 'pending_approval'
-  );
+  const pendingProperties = properties.filter((property) => (
+    PENDING_PROPERTY_STATUSES.has(String(property.status || '').toLowerCase())
+  ));
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -255,13 +230,15 @@ export default function OwnerManagementPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {(owners || []).map((owner) => (
+            {owners.map((owner) => (
               <TableRow key={owner.ownerId} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{owner.name}</TableCell>
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{owner.email}</TableCell>
                 <TableCell align="center">{owner.totalBuildings}</TableCell>
                 <TableCell align="center">{owner.totalUnits}</TableCell>
-                <TableCell align="right">{t('common.currency_aed')} {(owner.monthlyRentCollected || 0).toLocaleString()}</TableCell>
+                <TableCell align="right">
+                  {t('common.currency_aed')} {owner.monthlyRentCollected.toLocaleString()}
+                </TableCell>
                 <TableCell align="center">
                   <Chip
                     label={owner.unpaidInvoiceCount}
@@ -276,32 +253,32 @@ export default function OwnerManagementPage() {
                   />
                 </TableCell>
                 <TableCell align="center">
-                  <Grid container spacing={1}>
+                  <Grid container spacing={1} justifyContent="center">
                     <Grid item>
                       <Button
                         size="small"
                         variant="outlined"
+                        disabled={owner.suspensionStatus === 'SUSPENDED'}
                         onClick={() => {
                           setSelectedOwner(owner);
                           setSuspendDialogOpen(true);
                         }}
-                        disabled={owner.suspensionStatus === 'SUSPENDED'}
                       >
                         {t('admin.suspend_owner')}
                       </Button>
                     </Grid>
-                    <Grid item>
-                      {owner.suspensionStatus === 'SUSPENDED' && (
+                    {owner.suspensionStatus === 'SUSPENDED' && (
+                      <Grid item>
                         <Button
                           size="small"
                           variant="contained"
                           color="success"
-                          onClick={() => handleResume(owner.ownerId)}
+                          onClick={() => void handleResume(owner.ownerId)}
                         >
                           {t('admin.resume_owner')}
                         </Button>
-                      )}
-                    </Grid>
+                      </Grid>
+                    )}
                   </Grid>
                 </TableCell>
               </TableRow>
@@ -310,17 +287,16 @@ export default function OwnerManagementPage() {
         </Table>
       </TableContainer>
 
-      {/* Property Approval Section */}
       <Box sx={{ mb: 6 }}>
         <Typography variant="h5" sx={{ mb: 3, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           🏠 PENDING PROPERTY APPROVAL QUEUE
         </Typography>
 
-        {loadingProps ? (
+        {loadingProperties ? (
           <Typography sx={{ p: 2 }}>Loading pending approvals...</Typography>
         ) : pendingProperties.length === 0 ? (
           <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa' }}>
-            <Typography variant="body1" color="textSecondary" sx={{ fontWeight: 'bold' }}>
+            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 'bold' }}>
               No properties currently pending approval.
             </Typography>
           </Paper>
@@ -329,63 +305,71 @@ export default function OwnerManagementPage() {
             <Table>
               <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
                 <TableRow>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Property Name</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Emirate</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Service Zone</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Address</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Property Name</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Emirate</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Service Zone</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Address</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {pendingProperties.map((prop) => (
-                  <TableRow key={prop.id}>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>{prop.name || prop.propertyName}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{prop.emirate}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{prop.serviceZone || '—'}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{prop.address || '—'}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                      <Chip label={prop.status} color="warning" size="small" />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Stack direction="row" spacing={1} justifyContent="center">
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          onClick={() => handleApproveProperty(prop)}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={() => {
-                            setRejectProperty(prop);
-                            setRejectDialogOpen(true);
-                          }}
-                        >
-                          Reject
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {pendingProperties.map((property) => {
+                  const reviewing = reviewingPropertyId === property.id;
+                  return (
+                    <TableRow key={property.id}>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{propertyName(property)}</TableCell>
+                      <TableCell>{property.emirate || '—'}</TableCell>
+                      <TableCell>{property.serviceZone || '—'}</TableCell>
+                      <TableCell>{property.address || '—'}</TableCell>
+                      <TableCell><Chip label={property.status || 'pending'} color="warning" size="small" /></TableCell>
+                      <TableCell align="center">
+                        <Stack direction="row" spacing={1} justifyContent="center">
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            disabled={reviewing}
+                            onClick={() => void reviewProperty(property, 'APPROVE')}
+                          >
+                            {reviewing ? 'Working…' : 'Approve'}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            disabled={reviewing}
+                            onClick={() => {
+                              setRejectProperty(property);
+                              setRejectDialogOpen(true);
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
         )}
       </Box>
 
-      {/* Owner Suspension Dialog */}
-      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
-        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.suspend_owner')}</DialogTitle>
+      <Dialog
+        open={suspendDialogOpen}
+        onClose={() => setSuspendDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        dir={isRTL ? 'rtl' : 'ltr'}
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>{t('admin.suspend_owner')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Typography sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+          <Typography sx={{ mb: 2 }}>
             {t('admin.suspend_confirm', { name: selectedOwner?.name })}
           </Typography>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {t('admin.suspend_desc')}
           </Typography>
           <TextField
@@ -394,24 +378,32 @@ export default function OwnerManagementPage() {
             multiline
             rows={4}
             value={suspensionReason}
-            onChange={(e) => setSuspensionReason(e.target.value)}
-            placeholder={t('admin.suspend_reason')}
+            onChange={(event) => setSuspensionReason(event.target.value.slice(0, 500))}
           />
         </DialogContent>
-        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setSuspendDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSuspend} variant="contained" color="error" sx={{ borderRadius: 100 }}>
+          <Button onClick={() => void handleSuspend()} variant="contained" color="error">
             {t('admin.suspend_owner')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Property Rejection Dialog */}
-      <Dialog open={rejectDialogOpen} onClose={() => { setRejectDialogOpen(false); setRejectProperty(null); setRejectReason(''); }} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
-        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>Reject Property Submission</DialogTitle>
+      <Dialog
+        open={rejectDialogOpen}
+        onClose={() => {
+          setRejectDialogOpen(false);
+          setRejectProperty(null);
+          setRejectReason('');
+        }}
+        maxWidth="sm"
+        fullWidth
+        dir={isRTL ? 'rtl' : 'ltr'}
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>Reject Property Submission</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Typography sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
-            Are you sure you want to reject property "{rejectProperty?.name || rejectProperty?.propertyName}"?
+          <Typography sx={{ mb: 2 }}>
+            Are you sure you want to reject property "{propertyName(rejectProperty)}"?
           </Typography>
           <TextField
             fullWidth
@@ -420,14 +412,25 @@ export default function OwnerManagementPage() {
             multiline
             rows={4}
             value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Please enter why this property is rejected (e.g., missing proof of ownership, incorrect location)"
+            onChange={(event) => setRejectReason(event.target.value.slice(0, 500))}
+            placeholder="Explain the missing or invalid ownership, location, or onboarding evidence."
           />
         </DialogContent>
-        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-          <Button onClick={() => { setRejectDialogOpen(false); setRejectProperty(null); setRejectReason(''); }}>Cancel</Button>
-          <Button onClick={handleRejectProperty} variant="contained" color="error" disabled={!rejectReason.trim()} sx={{ borderRadius: 100 }}>
-            Reject Property
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => {
+            setRejectDialogOpen(false);
+            setRejectProperty(null);
+            setRejectReason('');
+          }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => void handleRejectProperty()}
+            variant="contained"
+            color="error"
+            disabled={!rejectReason.trim() || Boolean(reviewingPropertyId)}
+          >
+            {reviewingPropertyId ? 'Working…' : 'Reject Property'}
           </Button>
         </DialogActions>
       </Dialog>
