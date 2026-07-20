@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -19,10 +19,16 @@ import {
   TableRow,
   TextField,
   Typography,
-  Box,
-  Stack,
 } from '@mui/material';
-import { db, functions, httpsCallable, collection, getDocs, onSnapshot, query } from '../../lib/firebase';
+import {
+  collection,
+  db,
+  functions,
+  getDocs,
+  httpsCallable,
+  onSnapshot,
+  query,
+} from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 interface Owner {
@@ -53,56 +59,42 @@ interface PropertyRecord {
 const PENDING_PROPERTY_STATUSES = new Set([
   'pending',
   'pending_approval',
+  'pending-review',
+  'pending_review',
   'onboarding',
 ]);
 
-function propertyName(property: PropertyRecord | null) {
-  return property?.name || property?.propertyName || 'Property';
-}
+const propertyName = (property: PropertyRecord | null) => (
+  property?.name || property?.propertyName || 'Property'
+);
+
+const errorMessage = (error: unknown, fallback: string) => (
+  error instanceof Error && error.message ? error.message : fallback
+);
 
 export default function OwnerManagementPage() {
   const { t, isRTL } = useLanguage();
+  const copy = useCallback((english: string, arabic: string) => (isRTL ? arabic : english), [isRTL]);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [suspensionReason, setSuspensionReason] = useState('');
-
-  const [properties, setProperties] = useState<any[]>([]);
-  const [loadingProps, setLoadingProps] = useState(true);
-  const [rejectProperty, setRejectProperty] = useState<any | null>(null);
+  const [properties, setProperties] = useState<PropertyRecord[]>([]);
+  const [loadingProperties, setLoadingProperties] = useState(true);
+  const [reviewingPropertyId, setReviewingPropertyId] = useState<string | null>(null);
+  const [rejectProperty, setRejectProperty] = useState<PropertyRecord | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [reviewingPropertyId, setReviewingPropertyId] = useState('');
 
-  useEffect(() => {
-    void fetchOwners();
-
-    const qProps = query(collection(db, 'properties'));
-    const unsubscribeProps = onSnapshot(qProps, (snapshot) => {
-      const list = snapshot.docs.map((snapshotDoc) => ({
-        id: snapshotDoc.id,
-        ...snapshotDoc.data(),
-      }));
-      setProperties(list);
-      setLoadingProps(false);
-    }, (error) => {
-      console.error('Failed to fetch properties:', error);
-      setLoadingProps(false);
-    });
-
-    return () => unsubscribeProps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchOwners = async () => {
+  const fetchOwners = useCallback(async () => {
     try {
       setLoading(true);
-      const snap = await getDocs(collection(db, 'owners'));
-      const ownersList = snap.docs.map((ownerDoc) => {
-        const data = ownerDoc.data();
+      const snapshot = await getDocs(collection(db, 'owners'));
+      const ownerRows = snapshot.docs.map((ownerDocument) => {
+        const data = ownerDocument.data();
         return {
-          ownerId: ownerDoc.id,
+          ownerId: ownerDocument.id,
           name: data.name || data.displayName || data.fullName || 'Owner',
           email: data.email || '',
           totalBuildings: data.totalBuildings || 0,
@@ -124,10 +116,11 @@ export default function OwnerManagementPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void fetchOwners();
+
     const propertiesQuery = query(collection(db, 'properties'));
     const unsubscribe = onSnapshot(
       propertiesQuery,
@@ -143,17 +136,25 @@ export default function OwnerManagementPage() {
         setLoadingProperties(false);
       },
     );
+
     return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchOwners]);
 
   const handleSuspend = async () => {
     if (!selectedOwner) return;
+    const reason = suspensionReason.trim();
+    if (reason.length < 8) {
+      window.alert(copy('Enter a suspension reason of at least 8 characters.', 'أدخل سبب إيقاف لا يقل عن 8 أحرف.'));
+      return;
+    }
+
     try {
       const suspendOwner = httpsCallable(functions, 'adminSuspendOwner');
-      await suspendOwner({ ownerId: selectedOwner.ownerId, reason: suspensionReason });
-      alert(t('admin.owner_suspended', { name: selectedOwner.name }));
+      await suspendOwner({ ownerId: selectedOwner.ownerId, reason });
+      window.alert(t('admin.owner_suspended', { name: selectedOwner.name }));
       setSuspendDialogOpen(false);
+      setSelectedOwner(null);
+      setSuspensionReason('');
       await fetchOwners();
     } catch (error) {
       console.error('Failed to suspend owner:', error);
@@ -165,7 +166,7 @@ export default function OwnerManagementPage() {
     try {
       const resumeOwner = httpsCallable(functions, 'adminResumeOwner');
       await resumeOwner({ ownerId });
-      alert(t('admin.owner_resumed'));
+      window.alert(t('admin.owner_resumed'));
       await fetchOwners();
     } catch (error) {
       console.error('Failed to resume owner:', error);
@@ -173,50 +174,73 @@ export default function OwnerManagementPage() {
     }
   };
 
-  const handleApproveProperty = async (property: any) => {
+  const reviewProperty = async (
+    property: PropertyRecord,
+    decision: 'APPROVE' | 'REJECT',
+    reason = '',
+  ) => {
     setReviewingPropertyId(property.id);
     try {
       const reviewOwnerProperty = httpsCallable(functions, 'adminReviewOwnerProperty');
-      await reviewOwnerProperty({ propertyId: property.id, decision: 'APPROVE' });
-      alert(`Property "${property.name || property.propertyName || 'Property'}" approved successfully.`);
-    } catch (error: any) {
-      console.error('Failed to approve property:', error);
-      alert(`Error approving property: ${error?.message || 'Unknown error'}`);
+      await reviewOwnerProperty({
+        propertyId: property.id,
+        decision,
+        reason: reason.trim(),
+      });
+      window.alert(
+        decision === 'APPROVE'
+          ? copy(
+            `Property "${propertyName(property)}" approved successfully.`,
+            `تمت الموافقة على العقار "${propertyName(property)}" بنجاح.`,
+          )
+          : copy(
+            `Property "${propertyName(property)}" rejected.`,
+            `تم رفض العقار "${propertyName(property)}".`,
+          ),
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to review property:', error);
+      window.alert(errorMessage(error, copy(
+        'The property review could not be completed.',
+        'تعذر إكمال مراجعة العقار.',
+      )));
+      return false;
     } finally {
-      setReviewingPropertyId('');
+      setReviewingPropertyId(null);
     }
   };
 
   const handleRejectProperty = async () => {
     if (!rejectProperty || rejectReason.trim().length < 8) return;
-    setReviewingPropertyId(rejectProperty.id);
-    try {
-      const reviewOwnerProperty = httpsCallable(functions, 'adminReviewOwnerProperty');
-      await reviewOwnerProperty({
-        propertyId: rejectProperty.id,
-        decision: 'REJECT',
-        reason: rejectReason.trim(),
-      });
-      alert(`Property "${rejectProperty.name || rejectProperty.propertyName || 'Property'}" rejected.`);
-      setRejectDialogOpen(false);
-      setRejectProperty(null);
-      setRejectReason('');
-    } catch (error: any) {
-      console.error('Failed to reject property:', error);
-      alert(`Error rejecting property: ${error?.message || 'Unknown error'}`);
-    } finally {
-      setReviewingPropertyId('');
-    }
+    const completed = await reviewProperty(rejectProperty, 'REJECT', rejectReason);
+    if (!completed) return;
+
+    setRejectDialogOpen(false);
+    setRejectProperty(null);
+    setRejectReason('');
+  };
+
+  const closeSuspendDialog = () => {
+    setSuspendDialogOpen(false);
+    setSelectedOwner(null);
+    setSuspensionReason('');
+  };
+
+  const closeRejectDialog = () => {
+    if (reviewingPropertyId) return;
+    setRejectDialogOpen(false);
+    setRejectProperty(null);
+    setRejectReason('');
   };
 
   if (loading) {
     return <Typography sx={{ p: 4 }}>{t('onboarding.payment.verifying')}</Typography>;
   }
 
-  const pendingProperties = properties.filter((property) => {
-    const status = String(property.status || '').toLowerCase();
-    return ['pending', 'pending_approval', 'pending-review', 'pending_review', 'onboarding'].includes(status);
-  });
+  const pendingProperties = properties.filter((property) => (
+    PENDING_PROPERTY_STATUSES.has(String(property.status || '').toLowerCase())
+  ));
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -245,14 +269,21 @@ export default function OwnerManagementPage() {
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{owner.email}</TableCell>
                 <TableCell align="center">{owner.totalBuildings}</TableCell>
                 <TableCell align="center">{owner.totalUnits}</TableCell>
-                <TableCell align="right">
+                <TableCell align={isRTL ? 'left' : 'right'}>
                   {t('common.currency_aed')} {owner.monthlyRentCollected.toLocaleString()}
                 </TableCell>
                 <TableCell align="center">
-                  <Chip label={owner.unpaidInvoiceCount} color={owner.unpaidInvoiceCount >= 2 ? 'error' : 'default'} variant="outlined" />
+                  <Chip
+                    label={owner.unpaidInvoiceCount}
+                    color={owner.unpaidInvoiceCount >= 2 ? 'error' : 'default'}
+                    variant="outlined"
+                  />
                 </TableCell>
                 <TableCell align="center">
-                  <Chip label={owner.suspensionStatus} color={owner.suspensionStatus === 'SUSPENDED' ? 'error' : 'success'} />
+                  <Chip
+                    label={owner.suspensionStatus}
+                    color={owner.suspensionStatus === 'SUSPENDED' ? 'error' : 'success'}
+                  />
                 </TableCell>
                 <TableCell align="center">
                   <Grid container spacing={1} justifyContent="center">
@@ -269,9 +300,14 @@ export default function OwnerManagementPage() {
                         {t('admin.suspend_owner')}
                       </Button>
                     </Grid>
-                    <Grid item>
-                      {owner.suspensionStatus === 'SUSPENDED' && (
-                        <Button size="small" variant="contained" color="success" onClick={() => void handleResume(owner.ownerId)}>
+                    {owner.suspensionStatus === 'SUSPENDED' && (
+                      <Grid item>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="success"
+                          onClick={() => void handleResume(owner.ownerId)}
+                        >
                           {t('admin.resume_owner')}
                         </Button>
                       </Grid>
@@ -286,15 +322,15 @@ export default function OwnerManagementPage() {
 
       <Box sx={{ mb: 6 }}>
         <Typography variant="h5" sx={{ mb: 3, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
-          🏠 PENDING PROPERTY APPROVAL QUEUE
+          {copy('🏠 Pending property approval queue', '🏠 قائمة العقارات بانتظار الموافقة')}
         </Typography>
 
         {loadingProperties ? (
-          <Typography sx={{ p: 2 }}>Loading pending approvals...</Typography>
+          <Typography sx={{ p: 2 }}>{copy('Loading pending approvals...', 'جارٍ تحميل طلبات الموافقة...')}</Typography>
         ) : pendingProperties.length === 0 ? (
           <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa' }}>
             <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-              No properties currently pending approval.
+              {copy('No properties currently pending approval.', 'لا توجد عقارات بانتظار الموافقة حالياً.')}
             </Typography>
           </Paper>
         ) : (
@@ -302,59 +338,70 @@ export default function OwnerManagementPage() {
             <Table>
               <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Property Name</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Emirate</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Service Zone</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Address</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{copy('Property name', 'اسم العقار')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{copy('Emirate', 'الإمارة')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{copy('Service zone', 'منطقة الخدمة')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{copy('Address', 'العنوان')}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>{copy('Status', 'الحالة')}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 'bold' }}>{copy('Actions', 'الإجراءات')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {pendingProperties.map((property) => (
-                  <TableRow key={property.id}>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>{property.name || property.propertyName}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{property.emirate}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{property.serviceZone || '—'}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{property.address || '—'}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                      <Chip label={property.status} color="warning" size="small" />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Stack direction="row" spacing={1} justifyContent="center">
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          disabled={reviewingPropertyId === property.id}
-                          onClick={() => void handleApproveProperty(property)}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          disabled={reviewingPropertyId === property.id}
-                          onClick={() => {
-                            setRejectProperty(property);
-                            setRejectDialogOpen(true);
-                          }}
-                        >
-                          Reject
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {pendingProperties.map((property) => {
+                  const reviewing = reviewingPropertyId === property.id;
+                  return (
+                    <TableRow key={property.id}>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{propertyName(property)}</TableCell>
+                      <TableCell>{property.emirate || '—'}</TableCell>
+                      <TableCell>{property.serviceZone || '—'}</TableCell>
+                      <TableCell>{property.address || '—'}</TableCell>
+                      <TableCell>
+                        <Chip label={property.status || 'pending'} color="warning" size="small" />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} justifyContent="center">
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            disabled={reviewing}
+                            onClick={() => void reviewProperty(property, 'APPROVE')}
+                          >
+                            {reviewing ? copy('Working…', 'جارٍ التنفيذ…') : copy('Approve', 'موافقة')}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            disabled={reviewing}
+                            onClick={() => {
+                              setRejectProperty(property);
+                              setRejectDialogOpen(true);
+                            }}
+                          >
+                            {copy('Reject', 'رفض')}
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
         )}
       </Box>
 
-      <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
-        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.suspend_owner')}</DialogTitle>
+      <Dialog
+        open={suspendDialogOpen}
+        onClose={closeSuspendDialog}
+        maxWidth="sm"
+        fullWidth
+        dir={isRTL ? 'rtl' : 'ltr'}
+      >
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+          {t('admin.suspend_owner')}
+        </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography sx={{ mb: 2 }}>
             {t('admin.suspend_confirm', { name: selectedOwner?.name })}
@@ -364,17 +411,28 @@ export default function OwnerManagementPage() {
           </Typography>
           <TextField
             fullWidth
+            required
             label={t('admin.suspend_reason')}
             multiline
             rows={4}
             value={suspensionReason}
             onChange={(event) => setSuspensionReason(event.target.value)}
             placeholder={t('admin.suspend_reason')}
+            error={Boolean(suspensionReason) && suspensionReason.trim().length < 8}
+            helperText={suspensionReason && suspensionReason.trim().length < 8
+              ? copy('Enter at least 8 characters.', 'أدخل 8 أحرف على الأقل.')
+              : ' '}
           />
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setSuspendDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void handleSuspend()} variant="contained" color="error" sx={{ borderRadius: 100 }}>
+        <DialogActions sx={{ p: 3, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+          <Button onClick={closeSuspendDialog}>{t('common.cancel')}</Button>
+          <Button
+            onClick={() => void handleSuspend()}
+            variant="contained"
+            color="error"
+            disabled={suspensionReason.trim().length < 8}
+            sx={{ borderRadius: 100 }}
+          >
             {t('admin.suspend_owner')}
           </Button>
         </DialogActions>
@@ -382,44 +440,42 @@ export default function OwnerManagementPage() {
 
       <Dialog
         open={rejectDialogOpen}
-        onClose={() => {
-          if (reviewingPropertyId) return;
-          setRejectDialogOpen(false);
-          setRejectProperty(null);
-          setRejectReason('');
-        }}
+        onClose={closeRejectDialog}
         maxWidth="sm"
         fullWidth
         dir={isRTL ? 'rtl' : 'ltr'}
       >
-        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>Reject Property Submission</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+          {copy('Reject property submission', 'رفض طلب العقار')}
+        </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography sx={{ mb: 2 }}>
-            Are you sure you want to reject property "{propertyName(rejectProperty)}"?
+            {copy(
+              `Are you sure you want to reject property "${propertyName(rejectProperty)}"?`,
+              `هل تريد رفض العقار "${propertyName(rejectProperty)}"؟`,
+            )}
           </Typography>
           <TextField
             fullWidth
             required
-            label="Rejection Reason"
+            label={copy('Rejection reason', 'سبب الرفض')}
             multiline
             rows={4}
             value={rejectReason}
             onChange={(event) => setRejectReason(event.target.value)}
-            placeholder="Enter at least 8 characters explaining the rejection."
+            placeholder={copy(
+              'Enter at least 8 characters explaining the rejection.',
+              'أدخل سبباً واضحاً للرفض لا يقل عن 8 أحرف.',
+            )}
             error={Boolean(rejectReason) && rejectReason.trim().length < 8}
-            helperText={rejectReason && rejectReason.trim().length < 8 ? 'A clear reason of at least 8 characters is required.' : ' '}
+            helperText={rejectReason && rejectReason.trim().length < 8
+              ? copy('A clear reason of at least 8 characters is required.', 'يجب إدخال سبب واضح لا يقل عن 8 أحرف.')
+              : ' '}
           />
         </DialogContent>
         <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-          <Button
-            disabled={Boolean(reviewingPropertyId)}
-            onClick={() => {
-              setRejectDialogOpen(false);
-              setRejectProperty(null);
-              setRejectReason('');
-            }}
-          >
-            Cancel
+          <Button disabled={Boolean(reviewingPropertyId)} onClick={closeRejectDialog}>
+            {copy('Cancel', 'إلغاء')}
           </Button>
           <Button
             onClick={() => void handleRejectProperty()}
@@ -428,7 +484,7 @@ export default function OwnerManagementPage() {
             disabled={Boolean(reviewingPropertyId) || rejectReason.trim().length < 8}
             sx={{ borderRadius: 100 }}
           >
-            Reject Property
+            {copy('Reject property', 'رفض العقار')}
           </Button>
         </DialogActions>
       </Dialog>
