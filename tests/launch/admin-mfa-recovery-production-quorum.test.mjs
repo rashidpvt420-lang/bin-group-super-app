@@ -44,7 +44,7 @@ test('operator guidance states the canonical one-founder authority model', async
   expectAll(source, [
     /exactly one privileged Firebase Authentication account/i,
     /`ceo@bin-groups\.com`/,
-    /verified email/i,
+    /email is verified/i,
     /phone MFA/i,
     /all other privileged accounts must be deleted/i,
     /never records UIDs, email addresses, phone numbers, factor identifiers, display names, or SMS codes/i,
