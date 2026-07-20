@@ -12,6 +12,7 @@ on:
       - 'docs/RELEASE_BLOCKERS.md'
       - 'docs/FULL_FIVE_PROFILE_AUDIT.md'
       - 'docs/PROPERTY_ONBOARDING_AUDIT.md'
+      - 'docs/POST_LAUNCH_MONITORING.md'
       - 'apps/admin-panel/src/**'
       - 'functions/**'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
