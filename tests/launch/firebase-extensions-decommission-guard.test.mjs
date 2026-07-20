@@ -63,7 +63,7 @@ test('protected workflow audits before any uninstall and requires replacement pr
   assert.match(workflow, /firebase-tools@15\.19\.1 ext:uninstall/);
   assert.match(workflow, /--force/);
   assert.match(workflow, /Remove raw provider output/);
-  assert.match(workflow, /rawExtensionConfigurationExported/);
+  assert.match(workflow, /rm -f launch_package\/firebase-extensions-\*\.raw\.json/);
   assert.ok(workflow.indexOf('Inventory installed Firebase Extensions') < workflow.indexOf('Uninstall verified migrated instances'));
 });
 
