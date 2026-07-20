@@ -1,0 +1,37 @@
+name: Firebase Extension Manifest Guard
+
+on:
+  pull_request:
+    paths:
+      - 'firebase.json'
+      - 'extensions/**'
+      - 'package.json'
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - 'tests/launch/firebase-extensions-decommission-guard.test.mjs'
+  push:
+    branches:
+      - main
+    paths:
+      - 'firebase.json'
+      - 'extensions/**'
+      - 'package.json'
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - 'tests/launch/firebase-extensions-decommission-guard.test.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  extension-manifest-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refuse Firebase Extension repository coupling
+        run: node scripts/verify-no-firebase-extension-manifest.mjs
+      - name: Verify decommission control contract
+        run: node --test tests/launch/firebase-extensions-decommission-guard.test.mjs
