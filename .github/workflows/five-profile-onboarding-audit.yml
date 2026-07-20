@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/five-profile-onboarding-audit.yml'
       - '.github/workflows/admin-mfa-recovery-deploy.yml'
+      - '.github/workflows/privileged-account-cleanup-dry-run.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'TESTING.md'
@@ -20,6 +21,7 @@ on:
       - 'apps/admin-panel/src/**'
       - 'functions/**'
       - 'scripts/deploy-firebase-production.mjs'
+      - 'scripts/delete-obsolete-privileged-accounts-production.mjs'
       - 'scripts/ensure-admin-mfa-authorized-domains.mjs'
       - 'scripts/grant-admin.mjs'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
@@ -46,6 +48,7 @@ on:
       - 'tests/launch/canonical-readiness-docs.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
+      - 'tests/launch/privileged-account-cleanup-dry-run.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
       - 'tests/launch/protected-admin-deployment-docs.test.mjs'
       - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
@@ -92,6 +95,7 @@ jobs:
           tests/launch/ai-secret-setup-deploy-guard.test.mjs
           tests/launch/windows-ai-recovery-deploy-guard.test.mjs
           tests/launch/protected-admin-deployment-docs.test.mjs
+          tests/launch/privileged-account-cleanup-dry-run.test.mjs
           tests/launch/technician-dispatch-authority-audit.test.mjs
           tests/launch/owner-property-proof-authority-audit.test.mjs
           tests/launch/tenant-readiness-authority-audit.test.mjs
@@ -118,7 +122,6 @@ jobs:
           name: five-profile-admin-build-diagnostics-${{ github.sha }}
           path: admin-build-output.txt
           if-no-files-found: error
-          retention-days: 7
 
       - name: Build Cloud Functions
         run: npm run build:functions
