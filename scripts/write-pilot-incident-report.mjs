@@ -43,13 +43,31 @@ requireExact('HARD_LAUNCH_CONFIRMATION', HARD_LAUNCH_CONFIRMATION_PHRASE);
 requireExact('INCIDENT_CONFIRMATION', INCIDENT_CONFIRMATION_PHRASE);
 requireExact('ROLLBACK_CONFIRMATION', ROLLBACK_CONFIRMATION_PHRASE);
 
+const pilotStartedAt = requireEnv('PILOT_STARTED_AT');
+const pilotCompletedAt = requireEnv('PILOT_COMPLETED_AT');
+const liveEvidenceRunId = requireEnv('LIVE_EVIDENCE_RUN_ID');
+const liveEvidenceRunUrl = requireEnv('LIVE_EVIDENCE_RUN_URL');
+const liveEvidenceCompletedAt = requireEnv('LIVE_EVIDENCE_COMPLETED_AT');
+const liveEvidenceCommitSha = requireEnv('LIVE_EVIDENCE_COMMIT_SHA');
+
+if (!/^\d+$/.test(liveEvidenceRunId)) throw new Error('LIVE_EVIDENCE_RUN_ID must be numeric');
+if (liveEvidenceCommitSha !== commitSha) throw new Error('LIVE_EVIDENCE_COMMIT_SHA must equal the exact release SHA');
+if (liveEvidenceCompletedAt !== pilotStartedAt) throw new Error('Pilot start must equal the verified live-evidence completion timestamp');
+if (liveEvidenceRunUrl !== `https://github.com/${githubRepository}/actions/runs/${liveEvidenceRunId}`) {
+  throw new Error('LIVE_EVIDENCE_RUN_URL must target the exact protected workflow run');
+}
+
 const report = {
   schemaVersion: 1,
   status: 'passed',
   commitSha,
   projectId: PRODUCTION.projectId,
-  pilotStartedAt: requireEnv('PILOT_STARTED_AT'),
-  pilotCompletedAt: requireEnv('PILOT_COMPLETED_AT'),
+  pilotStartedAt,
+  pilotCompletedAt,
+  liveEvidenceRunId,
+  liveEvidenceRunUrl,
+  liveEvidenceCompletedAt,
+  liveEvidenceCommitSha,
   openP0: Number(requireEnv('OPEN_P0')),
   openP1: Number(requireEnv('OPEN_P1')),
   rollbackPlanVerified: true,

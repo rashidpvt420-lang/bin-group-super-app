@@ -36,11 +36,11 @@ on:
         required: false
         type: string
       pilot_started_at:
-        description: 'For hard-clearance: controlled pilot start ISO-8601 UTC'
+        description: 'Deprecated: pilot start is derived from the successful live-evidence workflow run'
         required: false
         type: string
       pilot_completed_at:
-        description: 'For hard-clearance: completion ISO-8601 UTC, at least 24 hours later'
+        description: 'Deprecated: pilot completion is derived by the protected hard-clearance workflow'
         required: false
         type: string
       open_p0:
@@ -315,6 +315,13 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
+      - name: Verify live-evidence run provenance and enforce a real 24-hour pilot
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/resolve-live-pilot-window.mjs
+
       - name: Download exact live launch evidence
         uses: actions/download-artifact@v4
         with:
@@ -354,8 +361,6 @@ jobs:
           HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
           INCIDENT_CONFIRMATION: ${{ inputs.incident_confirmation }}
           ROLLBACK_CONFIRMATION: ${{ inputs.rollback_confirmation }}
-          PILOT_STARTED_AT: ${{ inputs.pilot_started_at }}
-          PILOT_COMPLETED_AT: ${{ inputs.pilot_completed_at }}
           OPEN_P0: ${{ inputs.open_p0 }}
           OPEN_P1: ${{ inputs.open_p1 }}
           INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
@@ -383,6 +388,7 @@ jobs:
             launch_package/production-deployment.json
             launch_package/launch-evidence-batch.json
             launch_package/artifacts
+            launch_package/live-evidence-provenance.json
             launch_package/operational-readiness.json
             launch_package/pilot-incident-report.json
             launch_package/hard-launch-approval.json
