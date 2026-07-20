@@ -9,13 +9,19 @@ on:
       - 'TESTING.md'
       - 'LAUNCH_READINESS_AUDIT.md'
       - 'FIVE_PROFILE_ONBOARDING_AUDIT.md'
+      - 'ADMIN_COMMAND_CENTER.md'
+      - 'DEPLOY.md'
+      - 'docs/DEPLOYMENT.md'
       - 'docs/RELEASE_BLOCKERS.md'
       - 'docs/FULL_FIVE_PROFILE_AUDIT.md'
       - 'docs/PROPERTY_ONBOARDING_AUDIT.md'
       - 'docs/POST_LAUNCH_MONITORING.md'
       - 'apps/admin-panel/src/**'
       - 'functions/**'
+      - 'scripts/grant-admin.mjs'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
+      - 'scripts/setup-ai-secrets.ps1'
+      - 'scripts/verify-admin-access.mjs'
       - 'scripts/windows-ai-live-recovery.ps1'
       - 'src/App.tsx'
       - 'src/admin/**'
@@ -30,11 +36,13 @@ on:
       - 'src/technician/**'
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
+      - 'tests/launch/ai-secret-setup-deploy-guard.test.mjs'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
       - 'tests/launch/canonical-readiness-docs.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
+      - 'tests/launch/protected-admin-deployment-docs.test.mjs'
       - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
       - 'tests/launch/tenant-readiness-authority-audit.test.mjs'
       - 'tests/launch/windows-ai-recovery-deploy-guard.test.mjs'
@@ -75,6 +83,9 @@ jobs:
           tests/launch/profile-lifecycle-commercial-audit.test.mjs
           tests/launch/arabic-visible-copy-audit.test.mjs
           tests/launch/canonical-readiness-docs.test.mjs
+          tests/launch/ai-secret-setup-deploy-guard.test.mjs
+          tests/launch/windows-ai-recovery-deploy-guard.test.mjs
+          tests/launch/protected-admin-deployment-docs.test.mjs
           tests/launch/technician-dispatch-authority-audit.test.mjs
           tests/launch/owner-property-proof-authority-audit.test.mjs
           tests/launch/tenant-readiness-authority-audit.test.mjs

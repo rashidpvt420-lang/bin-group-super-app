@@ -6,6 +6,12 @@ const source = await readFile(
   new URL('../../scripts/windows-ai-live-recovery.ps1', import.meta.url),
   'utf8',
 );
+const focusedWorkflow = await readFile(
+  new URL('../../.github/workflows/five-profile-onboarding-audit.yml', import.meta.url),
+  'utf8',
+);
+
+const guardPath = 'tests/launch/windows-ai-recovery-deploy-guard.test.mjs';
 
 test('Windows AI recovery script cannot bypass protected production deployment', () => {
   assert.doesNotMatch(source, /^\s*firebase\s+deploy\b/im);
@@ -31,4 +37,14 @@ test('secret mutation is explicit and does not imply deployment', () => {
   assert.match(source, /functions:secrets:set OPENAI_API_KEY/i);
   assert.match(source, /functions:secrets:set IMAGE_GENERATION_API_KEY/i);
   assert.match(source, /functions:secrets:set GEMINI_API_KEY/i);
+});
+
+test('focused launch audit cannot silently drop the Windows AI deployment guard', () => {
+  const occurrences = focusedWorkflow.split(guardPath).length - 1;
+  assert.equal(
+    occurrences,
+    2,
+    'focused audit must include the guard in both pull-request path filters and the node --test command',
+  );
+  assert.match(focusedWorkflow, /scripts\/windows-ai-live-recovery\.ps1/i);
 });
