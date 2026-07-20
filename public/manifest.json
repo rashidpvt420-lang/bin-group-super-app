@@ -4,26 +4,33 @@
   "name": "BIN GROUP | UAE Property Asset Reliability OS",
   "description": "UAE property maintenance, asset reliability, owner dashboards, tenant requests, technician workflows, broker referrals, contracts, payments, and verified service evidence.",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "portrait-primary",
   "start_url": "/?source=pwa",
   "scope": "/",
   "lang": "en-AE",
   "dir": "ltr",
-  "theme_color": "#FFFFFF",
-  "background_color": "#FFFFFF",
+  "theme_color": "#050816",
+  "background_color": "#050816",
   "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
-      "src": "/logo.png",
-      "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any maskable"
+      "src": "/icons/bin-group-launcher.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
     },
     {
-      "src": "/logo.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "src": "/icons/bin-group-launcher-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/bin-group-launcher-monochrome.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "monochrome"
     }
   ]
 }
