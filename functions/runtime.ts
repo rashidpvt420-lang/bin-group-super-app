@@ -12,6 +12,7 @@ export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
 export * from "./stripePayment";
 export * from "./adminOwnerOperations";
+export * from "./adminPropertyReview";
 export * from "./securePaymentApproval";
 export * from "./paymentConfiguration";
 export * from "./mailDelivery";
