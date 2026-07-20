@@ -1,22 +1,23 @@
-// admin-panel/src/pages/owners/OwnerManagementPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Box,
+  Button,
+  Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
-  Chip,
-  Grid,
   Typography,
   Box,
   Stack,
@@ -34,6 +35,29 @@ interface Owner {
   unpaidInvoiceCount: number;
   suspensionStatus: 'ACTIVE' | 'SUSPENDED';
   joinedDate: string;
+}
+
+interface PropertyRecord {
+  id: string;
+  name?: string;
+  propertyName?: string;
+  emirate?: string;
+  serviceZone?: string;
+  address?: string;
+  status?: string;
+  ownerId?: string;
+  ownerUid?: string;
+  [key: string]: unknown;
+}
+
+const PENDING_PROPERTY_STATUSES = new Set([
+  'pending',
+  'pending_approval',
+  'onboarding',
+]);
+
+function propertyName(property: PropertyRecord | null) {
+  return property?.name || property?.propertyName || 'Property';
 }
 
 export default function OwnerManagementPage() {
@@ -85,22 +109,46 @@ export default function OwnerManagementPage() {
           totalUnits: data.totalUnits || 0,
           monthlyRentCollected: data.monthlyRentCollected || 0,
           unpaidInvoiceCount: data.unpaidInvoiceCount || 0,
-          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
-          joinedDate: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ''),
-        };
-      }) as Owner[];
-      setOwners(ownersList);
+          suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended'
+            ? 'SUSPENDED'
+            : 'ACTIVE',
+          joinedDate: data.createdAt?.toDate
+            ? data.createdAt.toDate().toISOString()
+            : data.createdAt || '',
+        } as Owner;
+      });
+      setOwners(ownerRows);
     } catch (error) {
       console.error('Failed to fetch owners:', error);
-      alert(t('admin.load_owners_failed'));
+      window.alert(t('admin.load_owners_failed'));
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    void fetchOwners();
+    const propertiesQuery = query(collection(db, 'properties'));
+    const unsubscribe = onSnapshot(
+      propertiesQuery,
+      (snapshot) => {
+        setProperties(snapshot.docs.map((propertyDocument) => ({
+          id: propertyDocument.id,
+          ...propertyDocument.data(),
+        })) as PropertyRecord[]);
+        setLoadingProperties(false);
+      },
+      (error) => {
+        console.error('Failed to fetch properties:', error);
+        setLoadingProperties(false);
+      },
+    );
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSuspend = async () => {
     if (!selectedOwner) return;
-
     try {
       const suspendOwner = httpsCallable(functions, 'adminSuspendOwner');
       await suspendOwner({ ownerId: selectedOwner.ownerId, reason: suspensionReason });
@@ -109,7 +157,7 @@ export default function OwnerManagementPage() {
       await fetchOwners();
     } catch (error) {
       console.error('Failed to suspend owner:', error);
-      alert(t('admin.suspend_owner_failed'));
+      window.alert(t('admin.suspend_owner_failed'));
     }
   };
 
@@ -121,7 +169,7 @@ export default function OwnerManagementPage() {
       await fetchOwners();
     } catch (error) {
       console.error('Failed to resume owner:', error);
-      alert(t('admin.resume_owner_failed'));
+      window.alert(t('admin.resume_owner_failed'));
     }
   };
 
@@ -197,7 +245,9 @@ export default function OwnerManagementPage() {
                 <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{owner.email}</TableCell>
                 <TableCell align="center">{owner.totalBuildings}</TableCell>
                 <TableCell align="center">{owner.totalUnits}</TableCell>
-                <TableCell align="right">{t('common.currency_aed')} {(owner.monthlyRentCollected || 0).toLocaleString()}</TableCell>
+                <TableCell align="right">
+                  {t('common.currency_aed')} {owner.monthlyRentCollected.toLocaleString()}
+                </TableCell>
                 <TableCell align="center">
                   <Chip label={owner.unpaidInvoiceCount} color={owner.unpaidInvoiceCount >= 2 ? 'error' : 'default'} variant="outlined" />
                 </TableCell>
@@ -205,16 +255,16 @@ export default function OwnerManagementPage() {
                   <Chip label={owner.suspensionStatus} color={owner.suspensionStatus === 'SUSPENDED' ? 'error' : 'success'} />
                 </TableCell>
                 <TableCell align="center">
-                  <Grid container spacing={1}>
+                  <Grid container spacing={1} justifyContent="center">
                     <Grid item>
                       <Button
                         size="small"
                         variant="outlined"
+                        disabled={owner.suspensionStatus === 'SUSPENDED'}
                         onClick={() => {
                           setSelectedOwner(owner);
                           setSuspendDialogOpen(true);
                         }}
-                        disabled={owner.suspensionStatus === 'SUSPENDED'}
                       >
                         {t('admin.suspend_owner')}
                       </Button>
@@ -224,8 +274,8 @@ export default function OwnerManagementPage() {
                         <Button size="small" variant="contained" color="success" onClick={() => void handleResume(owner.ownerId)}>
                           {t('admin.resume_owner')}
                         </Button>
-                      )}
-                    </Grid>
+                      </Grid>
+                    )}
                   </Grid>
                 </TableCell>
               </TableRow>
@@ -239,11 +289,11 @@ export default function OwnerManagementPage() {
           🏠 PENDING PROPERTY APPROVAL QUEUE
         </Typography>
 
-        {loadingProps ? (
+        {loadingProperties ? (
           <Typography sx={{ p: 2 }}>Loading pending approvals...</Typography>
         ) : pendingProperties.length === 0 ? (
           <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa' }}>
-            <Typography variant="body1" color="textSecondary" sx={{ fontWeight: 'bold' }}>
+            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 'bold' }}>
               No properties currently pending approval.
             </Typography>
           </Paper>
@@ -252,11 +302,11 @@ export default function OwnerManagementPage() {
             <Table>
               <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
                 <TableRow>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Property Name</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Emirate</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Service Zone</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Address</TableCell>
-                  <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 'bold' }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Property Name</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Emirate</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Service Zone</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Address</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -306,10 +356,10 @@ export default function OwnerManagementPage() {
       <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{t('admin.suspend_owner')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Typography sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+          <Typography sx={{ mb: 2 }}>
             {t('admin.suspend_confirm', { name: selectedOwner?.name })}
           </Typography>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {t('admin.suspend_desc')}
           </Typography>
           <TextField
@@ -322,7 +372,7 @@ export default function OwnerManagementPage() {
             placeholder={t('admin.suspend_reason')}
           />
         </DialogContent>
-        <DialogActions sx={{ p: 3, justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
+        <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setSuspendDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={() => void handleSuspend()} variant="contained" color="error" sx={{ borderRadius: 100 }}>
             {t('admin.suspend_owner')}
@@ -344,8 +394,8 @@ export default function OwnerManagementPage() {
       >
         <DialogTitle sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>Reject Property Submission</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Typography sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
-            Are you sure you want to reject property "{rejectProperty?.name || rejectProperty?.propertyName}"?
+          <Typography sx={{ mb: 2 }}>
+            Are you sure you want to reject property "{propertyName(rejectProperty)}"?
           </Typography>
           <TextField
             fullWidth
