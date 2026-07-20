@@ -16,6 +16,7 @@ on:
       - 'apps/admin-panel/src/**'
       - 'functions/**'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
+      - 'scripts/windows-ai-live-recovery.ps1'
       - 'src/App.tsx'
       - 'src/admin/**'
       - 'src/broker/**'
@@ -36,6 +37,7 @@ on:
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
       - 'tests/launch/technician-dispatch-authority-audit.test.mjs'
       - 'tests/launch/tenant-readiness-authority-audit.test.mjs'
+      - 'tests/launch/windows-ai-recovery-deploy-guard.test.mjs'
   push:
     branches:
       - main
