@@ -20,6 +20,7 @@ on:
       - 'docs/POST_LAUNCH_MONITORING.md'
       - 'apps/admin-panel/src/**'
       - 'functions/**'
+      - 'packages/shared/src/**'
       - 'scripts/deploy-firebase-production.mjs'
       - 'scripts/delete-obsolete-privileged-accounts-production.mjs'
       - 'scripts/ensure-admin-mfa-authorized-domains.mjs'
@@ -43,6 +44,7 @@ on:
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
       - 'tests/launch/admin-mfa-recovery-deployment.test.mjs'
+      - 'tests/launch/admin-property-review-authority.test.mjs'
       - 'tests/launch/ai-secret-setup-deploy-guard.test.mjs'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
       - 'tests/launch/canonical-readiness-docs.test.mjs'
@@ -92,6 +94,7 @@ jobs:
           tests/launch/arabic-visible-copy-audit.test.mjs
           tests/launch/canonical-readiness-docs.test.mjs
           tests/launch/admin-mfa-recovery-deployment.test.mjs
+          tests/launch/admin-property-review-authority.test.mjs
           tests/launch/ai-secret-setup-deploy-guard.test.mjs
           tests/launch/windows-ai-recovery-deploy-guard.test.mjs
           tests/launch/protected-admin-deployment-docs.test.mjs
