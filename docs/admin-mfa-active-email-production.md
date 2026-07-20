@@ -1,30 +1,33 @@
-# Active Admin Email Verification — Production Gate
+# Canonical Founder Email Verification — Production Gate
 
-Every active Firebase Authentication account that can enter the BIN GROUP Admin portal must have both:
+BIN GROUP production permits exactly one privileged Firebase Authentication account:
+
+- `ceo@bin-groups.com`
+
+That account must have both:
 
 - a verified Firebase Auth email; and
 - an enrolled Firebase phone MFA factor.
 
-This requirement applies to all active privileged roles, including Admin, CEO, Super Admin, management, Operations, Finance, HR, Support, Dispatch, and account-management roles. It is not limited to the two CEO/Super Admin recovery approvers.
+The protected production deployment calls `verifyAdminMfaProduction()` before the first Firebase deploy command. Deployment fails when the canonical founder account is missing, duplicated, disabled, inactive, unverified, missing phone MFA, or when any other Firebase account still has Admin/staff portal authority.
 
-The protected production deployment calls `verifyAdminMfaProduction()` before the first Firebase deploy command. Deployment fails when any active privileged account has `emailVerified !== true`, even when that account already has phone MFA.
+Disabled or inactive privileged accounts are not accepted as harmless leftovers. They must be deleted because they could otherwise be re-enabled or recovered later.
 
-Disabled accounts and Firestore profiles marked suspended, disabled, rejected, or inactive are excluded from active coverage but remain counted in aggregate operational evidence.
+The deployment artifact records only aggregate counts, including:
 
-The deployment artifact records only:
-
+- the total number of privileged accounts;
 - the number of active privileged accounts;
-- the number with unverified email;
-- whether all active privileged emails are verified;
-- aggregate MFA and recovery-quorum counts.
+- whether exactly one canonical founder exists;
+- whether the canonical founder is email-verified and phone-MFA enrolled; and
+- the number of unexpected privileged accounts.
 
 It never records UIDs, email addresses, phone numbers, factor identifiers, display names, or SMS codes.
 
 Before production dispatch:
 
-1. Review Firebase Authentication users with privileged claims.
-2. Verify the email address for every active privileged account.
-3. Disable or remove privileged claims from obsolete accounts.
-4. Confirm every active privileged account has enrolled phone MFA.
-5. Preserve at least two distinct verified CEO/Super Admin recovery approvers.
-6. Run the protected Firebase Production Deploy workflow; do not bypass the Admin MFA preflight.
+1. Confirm `ceo@bin-groups.com` is active and has a matching active `users/{uid}` profile.
+2. Confirm its Firebase email is verified.
+3. Confirm its Firebase phone MFA factor is enrolled and a fresh second-factor sign-in succeeds.
+4. Delete every other Firebase Auth account with Admin/staff portal claims.
+5. Preserve security audit logs while removing obsolete profiles, access records, sessions, and notifications.
+6. Run the protected Firebase Production Deploy workflow; do not bypass the single-founder Admin MFA preflight.

@@ -5,6 +5,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
+const CANONICAL_FOUNDER_EMAIL = "ceo@bin-groups.com";
 const ADMIN_ROLES = new Set([
   "admin",
   "super_admin",
@@ -21,8 +22,7 @@ const ADMIN_ROLES = new Set([
   "dispatcher",
   "operations_manager",
 ]);
-const READINESS_VIEWER_ROLES = new Set(["ceo", "super_admin"]);
-const RECOVERY_APPROVER_ROLES = new Set(["ceo", "super_admin"]);
+const FOUNDER_ROLES = new Set(["ceo", "super_admin"]);
 const INACTIVE_PROFILE_STATUSES = new Set(["suspended", "disabled", "rejected", "inactive"]);
 
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
@@ -57,6 +57,10 @@ function profileIsActive(profile: FirebaseFirestore.DocumentData = {}) {
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status, 80));
 }
 
+function isCanonicalFounder(user: admin.auth.UserRecord, role: string) {
+  return FOUNDER_ROLES.has(role) && lower(user.email, 320) === CANONICAL_FOUNDER_EMAIL;
+}
+
 function maskedEmail(value: unknown) {
   const email = lower(value, 320);
   const [local = "", domain = ""] = email.split("@");
@@ -72,14 +76,14 @@ async function requireReadinessViewer(auth: any) {
     admin.auth().getUser(auth.uid),
     db.collection("users").doc(auth.uid).get(),
   ]);
-  if (!profileSnap.exists) throw new HttpsError("permission-denied", "Active Admin profile required.");
+  if (!profileSnap.exists) throw new HttpsError("permission-denied", "Active founder profile required.");
   const profile = profileSnap.data() || {};
   const role = roleOf(auth.token || {}, profile);
-  if (!READINESS_VIEWER_ROLES.has(role)) {
-    throw new HttpsError("permission-denied", "CEO or Super Admin authority is required.");
+  if (!FOUNDER_ROLES.has(role) || lower(userRecord.email, 320) !== CANONICAL_FOUNDER_EMAIL) {
+    throw new HttpsError("permission-denied", "The canonical BIN GROUP founder account is required.");
   }
   if (userRecord.disabled || !profileIsActive(profile) || auth.token?.suspended === true) {
-    throw new HttpsError("permission-denied", "This Admin account is not active.");
+    throw new HttpsError("permission-denied", "The canonical founder account is not active.");
   }
   return { uid: auth.uid, role };
 }
@@ -115,8 +119,9 @@ export function buildAdminMfaReadinessOverview(
   let activeAdminCount = 0;
   let emailVerifiedCount = 0;
   let phoneMfaEnrolledCount = 0;
-  let recoveryApproverCount = 0;
-  let recoveryApproverReadyCount = 0;
+  let canonicalFounderCount = 0;
+  let canonicalFounderReadyCount = 0;
+  let unexpectedPrivilegedAccountCount = 0;
   const blockers: AdminMfaReadinessTarget[] = [];
 
   for (const record of records) {
@@ -124,33 +129,43 @@ export function buildAdminMfaReadinessOverview(
     const claims = (user.customClaims || {}) as Record<string, unknown>;
     if (!claimsGrantAdminPortal(claims)) continue;
     claimedAdminCount += 1;
+
     const role = roleOf(claims, record.profile);
+    const canonicalFounder = isCanonicalFounder(user, role);
+    if (canonicalFounder) canonicalFounderCount += 1;
+    else unexpectedPrivilegedAccountCount += 1;
+
+    const targetBlockers: string[] = [];
+    if (!canonicalFounder) targetBlockers.push("DELETE_REQUIRED");
     if (!record.profileExists) {
       missingProfileCount += 1;
-      continue;
+      targetBlockers.push("PROFILE_MISSING");
     }
     if (user.disabled) {
       disabledAdminCount += 1;
-      continue;
+      targetBlockers.push("DELETE_REQUIRED");
     }
-    if (!profileIsActive(record.profile)) {
+    if (record.profileExists && !profileIsActive(record.profile)) {
       inactiveProfileCount += 1;
-      continue;
+      targetBlockers.push("DELETE_REQUIRED");
     }
 
-    activeAdminCount += 1;
+    const active = record.profileExists && !user.disabled && profileIsActive(record.profile);
     const emailVerified = user.emailVerified === true;
     const phoneMfaEnrolled = (user.multiFactor?.enrolledFactors || [])
       .some((factor) => lower(factor.factorId, 80) === "phone");
-    const recoveryApprover = RECOVERY_APPROVER_ROLES.has(role);
-    if (emailVerified) emailVerifiedCount += 1;
-    if (phoneMfaEnrolled) phoneMfaEnrolledCount += 1;
-    if (recoveryApprover) recoveryApproverCount += 1;
-    if (recoveryApprover && emailVerified && phoneMfaEnrolled) recoveryApproverReadyCount += 1;
 
-    const targetBlockers: string[] = [];
-    if (!emailVerified) targetBlockers.push("EMAIL_UNVERIFIED");
-    if (!phoneMfaEnrolled) targetBlockers.push("PHONE_MFA_MISSING");
+    if (active) {
+      activeAdminCount += 1;
+      if (emailVerified) emailVerifiedCount += 1;
+      else targetBlockers.push("EMAIL_UNVERIFIED");
+      if (phoneMfaEnrolled) phoneMfaEnrolledCount += 1;
+      else targetBlockers.push("PHONE_MFA_MISSING");
+    }
+    if (canonicalFounder && active && emailVerified && phoneMfaEnrolled) {
+      canonicalFounderReadyCount += 1;
+    }
+
     if (targetBlockers.length > 0) {
       blockers.push({
         displayName: user.displayName || text(record.profile.displayName || record.profile.fullName, 160) || role || "Admin",
@@ -158,8 +173,8 @@ export function buildAdminMfaReadinessOverview(
         role,
         emailVerified,
         phoneMfaEnrolled,
-        recoveryApprover,
-        blockers: targetBlockers,
+        recoveryApprover: canonicalFounder,
+        blockers: [...new Set(targetBlockers)],
       });
     }
   }
@@ -169,20 +184,19 @@ export function buildAdminMfaReadinessOverview(
     return `${left.role}|${left.emailMasked}`.localeCompare(`${right.role}|${right.emailMasked}`);
   });
 
-  const recoveryQuorumReady =
-    recoveryApproverCount >= 2 &&
-    recoveryApproverReadyCount >= 2 &&
-    recoveryApproverReadyCount === recoveryApproverCount;
-  const launchReady =
-    activeAdminCount > 0 &&
+  const founderSingletonReady =
+    claimedAdminCount === 1 &&
+    canonicalFounderCount === 1 &&
+    canonicalFounderReadyCount === 1 &&
+    unexpectedPrivilegedAccountCount === 0 &&
     missingProfileCount === 0 &&
-    emailVerifiedCount === activeAdminCount &&
-    phoneMfaEnrolledCount === activeAdminCount &&
-    recoveryQuorumReady;
+    disabledAdminCount === 0 &&
+    inactiveProfileCount === 0 &&
+    activeAdminCount === 1;
 
   return {
-    status: launchReady ? "READY" : "BLOCKED",
-    launchReady,
+    status: founderSingletonReady ? "READY" : "BLOCKED",
+    launchReady: founderSingletonReady,
     summary: {
       claimedAdminCount,
       missingProfileCount,
@@ -191,10 +205,15 @@ export function buildAdminMfaReadinessOverview(
       activeAdminCount,
       emailVerifiedCount,
       phoneMfaEnrolledCount,
-      recoveryApproverCount,
-      recoveryApproverReadyCount,
-      recoveryQuorumReady,
+      canonicalFounderCount,
+      canonicalFounderReadyCount,
+      unexpectedPrivilegedAccountCount,
+      founderSingletonReady,
       blockingAccountCount: blockers.length,
+      // Compatibility values for the current Admin card.
+      recoveryApproverCount: canonicalFounderCount,
+      recoveryApproverReadyCount: canonicalFounderReadyCount,
+      recoveryQuorumReady: founderSingletonReady,
     },
     blockers,
     sensitiveValuesExcluded: true,
@@ -224,14 +243,15 @@ export const getAdminMfaReadinessOverview = onCall(
       ...(profiles.get(user.uid) || { profileExists: false, profile: {} }),
     })));
     await db.collection("audit_logs").add({
-      action: "ADMIN_MFA_READINESS_VIEWED",
+      action: "ADMIN_SINGLE_FOUNDER_READINESS_VIEWED",
       actorId: viewer.uid,
       actorRole: viewer.role,
       targetType: "system",
-      targetId: "admin-mfa-production-readiness",
+      targetId: "admin-single-founder-production-readiness",
+      claimedAdminCount: overview.summary.claimedAdminCount,
       activeAdminCount: overview.summary.activeAdminCount,
-      blockingAccountCount: overview.summary.blockingAccountCount,
-      recoveryQuorumReady: overview.summary.recoveryQuorumReady,
+      unexpectedPrivilegedAccountCount: overview.summary.unexpectedPrivilegedAccountCount,
+      founderSingletonReady: overview.summary.founderSingletonReady,
       sensitiveValuesExcluded: true,
       createdAt: FieldValue.serverTimestamp(),
     });
