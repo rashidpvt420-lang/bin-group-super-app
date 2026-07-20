@@ -34,10 +34,13 @@ for (const directory of ['.github/workflows', 'scripts']) {
   visit(absolute);
 }
 
-const managementWorkflow = path.normalize('.github/workflows/firebase-extensions-decommission.yml');
+const allowedManagementFiles = new Set([
+  path.normalize('.github/workflows/firebase-extensions-decommission.yml'),
+  path.normalize('scripts/verify-no-firebase-extension-manifest.mjs'),
+]);
 const forbidden = ['ext:install', 'ext:configure', 'ext:update', '--only extensions'];
 for (const file of [...new Set(filesToCheck)]) {
-  if (!fs.existsSync(resolve(file)) || path.normalize(file) === managementWorkflow) continue;
+  if (!fs.existsSync(resolve(file)) || allowedManagementFiles.has(path.normalize(file))) continue;
   const source = fs.readFileSync(resolve(file), 'utf8').toLowerCase();
   for (const token of forbidden) {
     if (source.includes(token)) violations.push(`${file} contains forbidden Firebase Extensions command: ${token}`);
