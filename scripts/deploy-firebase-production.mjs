@@ -16,6 +16,18 @@ const approvalPath = 'launch_package/predeploy-approval.json';
 const deploymentMetadataPath = 'launch_package/production-deployment.json';
 const adminBootstrapMetadataPath = 'launch_package/admin-mfa-bootstrap-hosting.json';
 const adminBootstrapMarker = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
+const adminBootstrapFunctions = Object.freeze([
+  'registerAdminSecuritySession',
+  'getAdminSecurityProfile',
+  'revokeAdminSessions',
+  'lockOwnAdminAccount',
+  'finalizeOwnAdminMfaRecovery',
+]);
+const adminBootstrapDeployComponents = Object.freeze([
+  'hosting:admin',
+  ...adminBootstrapFunctions.map((functionName) => `functions:${functionName}`),
+]);
+const adminBootstrapDeployTarget = adminBootstrapDeployComponents.join(',');
 const digestFailures = [];
 const validatedArtifactDigest = requireArtifactDigest(
   artifactDigest,
@@ -151,6 +163,15 @@ if (adminBootstrapRequested) {
   const adminProfileSource = existsSync('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx')
     ? readFileSync('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx', 'utf8')
     : '';
+  const adminSecuritySource = existsSync('functions/adminSecurityProfile.ts')
+    ? readFileSync('functions/adminSecurityProfile.ts', 'utf8')
+    : '';
+  const adminRecoverySource = existsSync('functions/adminMfaRecovery.ts')
+    ? readFileSync('functions/adminMfaRecovery.ts', 'utf8')
+    : '';
+  const functionsRuntimeSource = existsSync('functions/runtime.ts')
+    ? readFileSync('functions/runtime.ts', 'utf8')
+    : '';
 
   if (
     process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' ||
@@ -170,23 +191,41 @@ if (adminBootstrapRequested) {
     console.error('[production-deploy] Admin MFA enrollment route/card is not present in the exact-SHA source');
     process.exit(1);
   }
+  if (
+    !functionsRuntimeSource.includes('export * from "./adminSecurityProfile"') ||
+    !functionsRuntimeSource.includes('export * from "./adminMfaRecovery"')
+  ) {
+    console.error('[production-deploy] Admin MFA bootstrap callable modules are not exported by the exact-SHA Functions runtime');
+    process.exit(1);
+  }
 
-  console.log('[production-deploy] Protected Admin MFA bootstrap requested; deploying hosting:admin only before account-coverage enforcement');
-  retryFirebase('hosting:admin', 'Admin MFA bootstrap hosting');
+  const missingBootstrapFunctions = adminBootstrapFunctions.filter((functionName) => {
+    const source = functionName === 'finalizeOwnAdminMfaRecovery' ? adminRecoverySource : adminSecuritySource;
+    return !source.includes(`export const ${functionName}`);
+  });
+  if (missingBootstrapFunctions.length > 0) {
+    console.error(`[production-deploy] Admin MFA bootstrap function exports are missing: ${missingBootstrapFunctions.join(', ')}`);
+    process.exit(1);
+  }
+
+  console.log(`[production-deploy] Protected Admin MFA bootstrap requested; deploying ${adminBootstrapDeployTarget} before account-coverage enforcement`);
+  retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and security callables');
   writeFileSync(adminBootstrapMetadataPath, `${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'deployed',
     commitSha: githubSha,
     repository: process.env.GITHUB_REPOSITORY || '',
     workflowRunId: process.env.GITHUB_RUN_ID || '',
     workflowRunAttempt: process.env.GITHUB_RUN_ATTEMPT || '',
-    deploymentScope: 'hosting:admin',
+    deploymentScope: adminBootstrapDeployTarget,
+    deploymentComponents: adminBootstrapDeployComponents,
+    bootstrapFunctions: adminBootstrapFunctions,
     requestedBy: process.env.GITHUB_ACTOR || '',
     deployedAt: new Date().toISOString(),
     mfaGateBypassed: false,
     hardLaunchClaim: false,
   }, null, 2)}\n`);
-  console.log('[production-deploy] Admin MFA enrollment UI is now hosted. The full production stack remains blocked until real Admin MFA coverage passes.');
+  console.log('[production-deploy] Admin MFA enrollment UI and minimal security callables are now deployed. The full production stack remains blocked until real Admin MFA coverage passes.');
 }
 
 let adminMfaEvidence;
@@ -195,7 +234,7 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Admin MFA account coverage verification failed';
   const bootstrapNote = adminBootstrapRequested
-    ? ' Admin MFA bootstrap hosting completed successfully; enroll the real accounts, then rerun without the bootstrap marker.'
+    ? ' Admin MFA bootstrap UI and security callables completed successfully; enroll the real accounts, then rerun without the bootstrap marker.'
     : '';
   console.error(`[production-deploy] Admin MFA production preflight failed: ${message}${bootstrapNote}`);
   process.exit(1);
