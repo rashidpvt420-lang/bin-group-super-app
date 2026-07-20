@@ -34,8 +34,8 @@ test('AI Design Studio compatibility callable is fail-closed and reference-image
   assert.doesNotMatch(source, /generatedImage = imageBase64/);
   assert.doesNotMatch(source, /provider = "fallback"/);
   assert.doesNotMatch(source, /\.slice\(0, 8_000_000\)/);
-  assert.match(source, /throw new HttpsError\("failed-precondition"/);
-  assert.match(source, /throw new HttpsError\("unavailable"/);
+  assert.match(source, /throw new HttpsError\(\s*"failed-precondition"/s);
+  assert.match(source, /throw new HttpsError\(\s*"unavailable"/s);
 });
 
 test('Admin AI Design Studio uses the hardened callable without client-side reference upload', async () => {
