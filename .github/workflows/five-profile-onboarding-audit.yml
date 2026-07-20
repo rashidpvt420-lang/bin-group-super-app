@@ -6,6 +6,11 @@ on:
       - '.github/workflows/five-profile-onboarding-audit.yml'
       - 'package.json'
       - 'package-lock.json'
+      - 'TESTING.md'
+      - 'LAUNCH_READINESS_AUDIT.md'
+      - 'docs/RELEASE_BLOCKERS.md'
+      - 'docs/FULL_FIVE_PROFILE_AUDIT.md'
+      - 'docs/PROPERTY_ONBOARDING_AUDIT.md'
       - 'apps/admin-panel/src/**'
       - 'functions/**'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
@@ -23,6 +28,7 @@ on:
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
+      - 'tests/launch/canonical-readiness-docs.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
@@ -64,6 +70,7 @@ jobs:
           tests/launch/five-profile-completeness-audit.test.mjs
           tests/launch/profile-lifecycle-commercial-audit.test.mjs
           tests/launch/arabic-visible-copy-audit.test.mjs
+          tests/launch/canonical-readiness-docs.test.mjs
           tests/launch/technician-dispatch-authority-audit.test.mjs
           tests/launch/owner-property-proof-authority-audit.test.mjs
           tests/launch/tenant-readiness-authority-audit.test.mjs
