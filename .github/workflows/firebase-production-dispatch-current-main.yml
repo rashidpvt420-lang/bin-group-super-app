@@ -21,7 +21,7 @@ on:
         required: true
         type: string
       launch_mode:
-        description: 'bank-pilot or public'
+        description: 'Deployment mode'
         required: true
         type: choice
         options:
@@ -33,37 +33,23 @@ on:
         required: true
         type: boolean
         default: false
-      incident_attestation:
-        description: 'Type exactly ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR or ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'
-        required: true
-        type: string
       incident_active_json:
-        description: 'JSON array of active incidents'
+        description: 'JSON array of active incidents; use [] when none exist'
         required: true
         type: string
         default: '[]'
       incident_requires_rollback:
-        description: 'Whether a production rollback hold is active'
+        description: 'Whether an explicit production rollback hold is active'
         required: true
         type: boolean
         default: false
       incident_rollback_reason:
-        description: 'Required when rollback is active'
-        required: false
-        type: string
-        default: ''
-      incident_last_deployment_failed:
-        description: 'Whether the latest completed Firebase Production Deploy failed'
-        required: true
-        type: boolean
-        default: false
-      incident_last_deployment_failed_at:
-        description: 'ISO-8601 failed time; leave blank to resolve the latest failed production run automatically'
+        description: 'Required only when a rollback hold is active'
         required: false
         type: string
         default: ''
       incident_evidence_refs:
-        description: 'Comma-separated evidence references; ADMIN_MFA_BOOTSTRAP_HOSTING is bank-pilot only'
+        description: 'Comma-separated incident evidence references'
         required: true
         type: string
         default: 'ADMIN_MFA_BOOTSTRAP_HOSTING'
@@ -105,12 +91,9 @@ jobs:
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           PUBLIC_GATE: ${{ inputs.run_public_release_gate }}
-          INCIDENT_ATTESTATION: ${{ inputs.incident_attestation }}
           INCIDENT_ACTIVE_JSON: ${{ inputs.incident_active_json }}
           INCIDENT_REQUIRES_ROLLBACK: ${{ inputs.incident_requires_rollback }}
           INCIDENT_ROLLBACK_REASON: ${{ inputs.incident_rollback_reason }}
-          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ inputs.incident_last_deployment_failed }}
-          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ inputs.incident_last_deployment_failed_at }}
           INCIDENT_EVIDENCE_REFS: ${{ inputs.incident_evidence_refs }}
           HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
           STRIPE_SESSION_ID: ${{ inputs.stripe_live_checkout_session_id }}
@@ -128,31 +111,12 @@ jobs:
           [[ "$FOUNDER_EMAIL" == *@*.* ]] || fail "Founder email must be a valid authorized email address."
           [[ -n "${INCIDENT_EVIDENCE_REFS// }" ]] || fail "At least one incident evidence reference is required."
 
-          active_count="$(jq -er 'if type == "array" then length else error("not-array") end' <<<"$INCIDENT_ACTIVE_JSON")" \
+          jq -er 'if type == "array" then . else error("not-array") end' <<<"$INCIDENT_ACTIVE_JSON" >/dev/null \
             || fail "incident_active_json must be a valid JSON array."
 
           if [[ "$INCIDENT_REQUIRES_ROLLBACK" == "true" && -z "${INCIDENT_ROLLBACK_REASON// }" ]]; then
             fail "A rollback reason is required when the rollback hold is enabled."
           fi
-          if [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED" == "false" && -n "${INCIDENT_LAST_DEPLOYMENT_FAILED_AT// }" ]]; then
-            fail "Clear incident_last_deployment_failed_at when the latest deployment is not marked failed."
-          fi
-
-          case "$INCIDENT_ATTESTATION" in
-            ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR)
-              [[ "$active_count" == "0" ]] || fail "CLEAR incident attestation requires an empty incident array."
-              [[ "$INCIDENT_REQUIRES_ROLLBACK" == "false" ]] || fail "CLEAR incident attestation cannot include a rollback hold."
-              [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED" == "false" ]] || fail "CLEAR incident attestation cannot claim that the last deployment failed."
-              ;;
-            ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS)
-              if [[ "$active_count" == "0" && "$INCIDENT_REQUIRES_ROLLBACK" == "false" && "$INCIDENT_LAST_DEPLOYMENT_FAILED" == "false" ]]; then
-                fail "WITH_HOLDS incident attestation requires an incident, rollback hold, or failed deployment."
-              fi
-              ;;
-            *)
-              fail "Use exactly ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR or ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS."
-              ;;
-          esac
 
           if [[ "$LAUNCH_MODE" == "public" ]]; then
             [[ "$PUBLIC_GATE" == "true" ]] || fail "Public mode requires the public-release gate."
@@ -165,7 +129,7 @@ jobs:
             [[ -z "${HARD_CLEARANCE_RUN_ID}${STRIPE_SESSION_ID}${STRIPE_EVENT_ID}" ]] || fail "Bank-pilot mode requires all public-only evidence fields to remain blank."
           fi
 
-      - name: Dispatch protected workflow with verified exact SHA
+      - name: Derive incident state and dispatch protected workflow
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -175,12 +139,9 @@ jobs:
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           PUBLIC_GATE: ${{ inputs.run_public_release_gate }}
-          INCIDENT_ATTESTATION: ${{ inputs.incident_attestation }}
           INCIDENT_ACTIVE_JSON: ${{ inputs.incident_active_json }}
           INCIDENT_REQUIRES_ROLLBACK: ${{ inputs.incident_requires_rollback }}
           INCIDENT_ROLLBACK_REASON: ${{ inputs.incident_rollback_reason }}
-          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ inputs.incident_last_deployment_failed }}
-          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ inputs.incident_last_deployment_failed_at }}
           INCIDENT_EVIDENCE_REFS: ${{ inputs.incident_evidence_refs }}
           HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
           STRIPE_SESSION_ID: ${{ inputs.stripe_live_checkout_session_id }}
@@ -188,56 +149,62 @@ jobs:
         run: |
           set -euo pipefail
 
-          resolved_failed_at="$INCIDENT_LAST_DEPLOYMENT_FAILED_AT"
-          if [[ "$INCIDENT_LAST_DEPLOYMENT_FAILED" == "true" ]]; then
-            completed_runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=50")"
-            latest_run="$(jq -c '[.workflow_runs[]] | sort_by(.created_at) | last // empty' <<<"$completed_runs")"
-            if [[ -z "$latest_run" ]]; then
-              echo "::error::The form says the latest deployment failed, but no completed Firebase Production Deploy run could be resolved."
-              exit 1
-            fi
+          active_count="$(jq -er 'length' <<<"$INCIDENT_ACTIVE_JSON")"
+          incident_failed='false'
+          resolved_failed_at=''
+          latest_run_id=''
 
+          completed_runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=50")"
+          latest_run="$(jq -c '[.workflow_runs[]] | sort_by(.created_at) | last // empty' <<<"$completed_runs")"
+
+          if [[ -n "$latest_run" ]]; then
             latest_run_id="$(jq -r '.id // empty' <<<"$latest_run")"
             latest_conclusion="$(jq -r '.conclusion // empty' <<<"$latest_run")"
             latest_created_at="$(jq -r '.created_at // empty' <<<"$latest_run")"
             latest_updated_at="$(jq -r '.updated_at // empty' <<<"$latest_run")"
-            latest_failed_at="${latest_updated_at:-$latest_created_at}"
 
-            if [[ "$latest_conclusion" != "failure" ]]; then
-              echo "::error::incident_last_deployment_failed=true is not truthful: latest completed Firebase Production Deploy run $latest_run_id concluded '$latest_conclusion'."
-              exit 1
-            fi
-            if [[ -z "$latest_failed_at" ]]; then
-              echo "::error::The latest failed production run has no usable timestamp."
-              exit 1
-            fi
+            if [[ "$latest_conclusion" == "failure" ]]; then
+              incident_failed='true'
+              resolved_failed_at="${latest_updated_at:-$latest_created_at}"
+              [[ -n "$resolved_failed_at" ]] || {
+                echo "::error::The latest failed Firebase Production Deploy run has no usable timestamp."
+                exit 1
+              }
 
-            if [[ -z "$resolved_failed_at" ]]; then
-              resolved_failed_at="$latest_failed_at"
-              echo "Resolved latest failed Firebase Production Deploy run $latest_run_id timestamp: $resolved_failed_at"
-            elif [[ "$resolved_failed_at" != "$latest_updated_at" && "$resolved_failed_at" != "$latest_created_at" ]]; then
-              echo "::error::The supplied failure timestamp does not match the latest completed failed Firebase Production Deploy run $latest_run_id. Leave it blank to resolve automatically."
-              exit 1
-            fi
-
-            failed_epoch="$(date -d "$resolved_failed_at" +%s 2>/dev/null || true)"
-            if [[ -z "$failed_epoch" ]]; then
-              echo "::error::incident_last_deployment_failed_at must be a valid ISO-8601 timestamp."
-              exit 1
-            fi
-            now_epoch="$(date -u +%s)"
-            failure_age=$((now_epoch - failed_epoch))
-            if (( failure_age < 0 )); then
-              echo "::error::incident_last_deployment_failed_at cannot be in the future."
-              exit 1
-            fi
-            if (( failure_age < 1800 )); then
-              remaining=$((1800 - failure_age))
-              echo "::error::The failed deployment is still inside the mandatory 30-minute cooling period. Retry after approximately $(((remaining + 59) / 60)) minute(s)."
-              exit 1
+              failed_epoch="$(date -d "$resolved_failed_at" +%s 2>/dev/null || true)"
+              [[ -n "$failed_epoch" ]] || {
+                echo "::error::The latest failed deployment timestamp is not valid ISO-8601."
+                exit 1
+              }
+              now_epoch="$(date -u +%s)"
+              failure_age=$((now_epoch - failed_epoch))
+              if (( failure_age < 0 )); then
+                echo "::error::The latest failed deployment timestamp cannot be in the future."
+                exit 1
+              fi
+              if (( failure_age < 1800 )); then
+                remaining=$((1800 - failure_age))
+                echo "::error::The failed deployment is still inside the mandatory 30-minute cooling period. Retry after approximately $(((remaining + 59) / 60)) minute(s)."
+                exit 1
+              fi
+              echo "Automatically detected failed Firebase Production Deploy run $latest_run_id at $resolved_failed_at."
+            else
+              echo "Latest completed Firebase Production Deploy run $latest_run_id concluded '$latest_conclusion'; failed-state recovery is not required."
             fi
           else
-            resolved_failed_at=''
+            echo "No completed Firebase Production Deploy run exists; treating this as the first protected deployment."
+          fi
+
+          if [[ "$active_count" == "0" && "$INCIDENT_REQUIRES_ROLLBACK" == "false" && "$incident_failed" == "false" ]]; then
+            incident_attestation='ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR'
+          else
+            incident_attestation='ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'
+          fi
+          echo "Derived incident attestation: $incident_attestation"
+
+          resolved_evidence_refs="$INCIDENT_EVIDENCE_REFS"
+          if [[ "$incident_failed" == "true" && -n "$latest_run_id" ]]; then
+            resolved_evidence_refs="$resolved_evidence_refs,GITHUB_PRODUCTION_RUN_$latest_run_id"
           fi
 
           for attempt in 1 2 3 4 5; do
@@ -260,13 +227,13 @@ jobs:
               --arg founderEmail "$FOUNDER_EMAIL" \
               --arg launchMode "$LAUNCH_MODE" \
               --arg publicGate "$PUBLIC_GATE" \
-              --arg incidentAttestation "$INCIDENT_ATTESTATION" \
+              --arg incidentAttestation "$incident_attestation" \
               --arg incidentActive "$INCIDENT_ACTIVE_JSON" \
               --arg incidentRollback "$INCIDENT_REQUIRES_ROLLBACK" \
               --arg incidentRollbackReason "$INCIDENT_ROLLBACK_REASON" \
-              --arg incidentFailed "$INCIDENT_LAST_DEPLOYMENT_FAILED" \
+              --arg incidentFailed "$incident_failed" \
               --arg incidentFailedAt "$resolved_failed_at" \
-              --arg evidenceRefs "$INCIDENT_EVIDENCE_REFS" \
+              --arg evidenceRefs "$resolved_evidence_refs" \
               --arg clearanceRun "$HARD_CLEARANCE_RUN_ID" \
               --arg stripeSession "$STRIPE_SESSION_ID" \
               --arg stripeEvent "$STRIPE_EVENT_ID" \
@@ -310,10 +277,9 @@ jobs:
               exit 0
             fi
 
-            echo "Dispatch race detected: expected $main_sha but GitHub resolved $run_sha. Cancelling run $run_id and retrying."
-            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
-            sleep 3
+            echo "Dispatch race detected: expected $main_sha but GitHub resolved $run_sha. Cancelling run $run_id."
+            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
           done
 
-          echo "::error::Could not atomically bind Firebase Production Deploy after five attempts. Stop repository merges and run this wrapper again."
+          echo "::error::Unable to dispatch a protected production run bound to a stable current main SHA after five attempts."
           exit 1
