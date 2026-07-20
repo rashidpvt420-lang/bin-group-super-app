@@ -7,6 +7,7 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8
 test('privileged cleanup review is protected, exact-main and non-destructive', async () => {
   const workflow = await read('.github/workflows/privileged-account-cleanup-dry-run.yml');
   const cleanup = await read('scripts/delete-obsolete-privileged-accounts-production.mjs');
+  const authority = await read('scripts/verify-admin-mfa-production.mjs');
 
   assert.match(workflow, /name: Privileged Account Cleanup Dry Run/);
   assert.match(workflow, /environment: production/);
@@ -19,7 +20,8 @@ test('privileged cleanup review is protected, exact-main and non-destructive', a
   assert.match(workflow, /Non-privileged accounts untouched/);
 
   assert.match(cleanup, /CANONICAL_FOUNDER_EMAIL/);
-  assert.match(cleanup, /ceo@bin-groups\.com/);
+  assert.match(cleanup, /from '\.\/verify-admin-mfa-production\.mjs'/);
+  assert.match(authority, /CANONICAL_FOUNDER_EMAIL\s*=\s*["']ceo@bin-groups\.com["']/);
   assert.match(cleanup, /nonPrivilegedAccountsUntouched: true/);
   assert.match(cleanup, /auditLogsPreserved: true/);
 });
