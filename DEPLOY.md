@@ -1,45 +1,50 @@
-# BIN GROUP Super App: Deployment & Operations Guide
+# BIN GROUP Super App — Deployment and Operations Guide
 
-## 🚀 Production Infrastructure
-- **Firebase Project**: `bin-group-57c60`
-- **Primary Domain**: [https://bin-groups.com](https://bin-groups.com)
-- **Secondary Domain**: [https://www.bin-groups.com](https://www.bin-groups.com)
-- **Firebase Project ID**: `bin-group-57c60`
+## Production infrastructure
 
----
+- Firebase project: `bin-group-57c60`
+- Primary domain: `https://bin-groups.com`
+- Firebase Hosting fallback: `https://bin-group-57c60.web.app`
+- Dedicated Admin Hosting target: `https://bin-group-admin-panel.web.app`
 
-## 🛠️ Local Development and Protected Deployment
+## Deterministic local validation
 
-### 1. Build Pipeline
-To generate the production bundle:
+Local commands may build and test the repository, but they may not deploy production resources.
+
 ```powershell
-npm install
+npm ci --include=optional --legacy-peer-deps
+npm run test:launch-honesty
+npm run typecheck
+npm run lint
 npm run build
+npm run build:admin
+npm run build:functions
+npm run test:rules
 ```
 
-### 2. Production deployment
+## Protected production deployment
 
-Local production deployment is disabled. Hosting, Functions, Firestore rules,
-indexes, and Storage rules must be deployed together through
-`.github/workflows/firebase-production-deploy.yml` from the exact current
-`main` SHA after protected-environment approval. The retired PowerShell files
-fail closed and must not be used as operational instructions.
+All production Hosting, Functions, Firestore rules, indexes, and Storage rules must be deployed together through:
 
----
+```text
+.github/workflows/firebase-production-deploy.yml
+```
 
-## 🔒 Security & Roles
+The workflow must run from the exact current `main` SHA with founder authorization, protected-environment approval, incident attestation, deterministic build artifacts, and post-deployment verification. Local Firebase deployment commands and partial production deploys are prohibited.
 
-### Emergency Admin Grant
-If an administrator is locked out or needs escalation, use `scripts/grant-admin.mjs` (see [ADMIN_COMMAND_CENTER.md](./ADMIN_COMMAND_CENTER.md) section 5 for full details):
-1. Run: `node scripts/grant-admin.mjs <email> <password>` from a machine with Firebase/gcloud credentials.
-2. User logs out, hard-refreshes, and logs back in to receive the new claims/role.
+## Admin access and recovery
 
----
+Normal Admin and staff provisioning must use the dedicated Admin panel Staff Access surface backed by the server-authoritative `adminCreateUser` callable. The callable enforces authenticated Admin/founder authority and writes the required server-side records.
 
-## 📋 Mission Logs & Audits
-- **Admin Command Center**: [ADMIN_COMMAND_CENTER.md](./ADMIN_COMMAND_CENTER.md)
-- **Infrastructure Status**: [API_INFRASTRUCTURE_READINESS_REPORT.md](./API_INFRASTRUCTURE_READINESS_REPORT.md)
-- **Archival Plan**: Legacy folders (e.g., `studio-5724711541`) are staged for deletion once production stability is confirmed.
+The retired `scripts/grant-admin.mjs` entrypoint fails closed and must not be used to create users, set passwords, grant claims, or activate profiles. Initial founder recovery must follow the protected Admin MFA bootstrap runbook under `docs/launch/`.
 
----
-© 2026 BIN GROUP UAE. Sovereign Property Operations OS.
+## Evidence sequence
+
+1. Validate the exact PR head with the required CI matrix.
+2. Merge without changing the validated head.
+3. Dispatch a protected bank-pilot deployment for the exact current `main` SHA.
+4. Run same-SHA live role smoke and hosted App Check verification.
+5. Complete the controlled pilot with zero open P0/P1 incidents.
+6. Produce hard-clearance and public-release evidence before public mode.
+
+Source documentation cannot assert that those operational gates have passed.
