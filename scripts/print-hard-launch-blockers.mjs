@@ -50,6 +50,7 @@ function printArtifactMatrix(sha) {
     'launch_package/production-deployment.json',
     'launch_package/launch-evidence-batch.json',
     'launch_package/launch-status.json',
+    'launch_package/live-evidence-provenance.json',
     'launch_package/operational-readiness.json',
     'launch_package/pilot-incident-report.json',
     'launch_package/hard-launch-approval.json',
@@ -66,7 +67,7 @@ function printArtifactMatrix(sha) {
 function printWorkflowSequence(sha) {
   console.log('\nExecutable clearance sequence for hardLaunchClaim=true:');
   console.log('\n1) Deploy the exact SHA as bank-pilot first. This creates production-deployment-${SHA}.');
-  console.log(`   Workflow: Firebase Production Deploy`);
+  console.log('   Workflow: Firebase Production Deploy');
   console.log(`   expected_commit_sha: ${sha}`);
   console.log('   launch_mode: bank-pilot');
   console.log('   run_public_release_gate: false');
@@ -82,7 +83,7 @@ function printWorkflowSequence(sha) {
   console.log(`   expected_commit_sha: ${sha}`);
   console.log('   production_deploy_run_id: <BANK_PILOT_DEPLOY_RUN_ID>');
 
-  console.log('\n3) After a real 24h controlled pilot, create protected hard-clearance evidence.');
+  console.log('\n3) After the live-evidence run has remained in controlled pilot for a real 24h, create protected hard-clearance evidence.');
   console.log('   Workflow: Live Role Smoke Tests');
   console.log('   mode: hard-clearance');
   console.log(`   expected_commit_sha: ${sha}`);
@@ -90,8 +91,8 @@ function printWorkflowSequence(sha) {
   console.log('   confirmation: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP');
   console.log('   incident_confirmation: NO_OPEN_P0_P1');
   console.log('   rollback_confirmation: ROLLBACK_PLAN_VERIFIED');
-  console.log('   pilot_started_at: <ISO timestamp at least 24h before completion>');
-  console.log('   pilot_completed_at: <ISO timestamp after pilot_started_at + 24h>');
+  console.log('   pilot_started_at: derived from the verified live-evidence run completion; deprecated input may remain blank');
+  console.log('   pilot_completed_at: derived by the protected hard-clearance workflow; deprecated input may remain blank');
   console.log('   open_p0: 0');
   console.log('   open_p1: 0');
   console.log('   incident_reference: https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/<LIVE_EVIDENCE_RUN_ID>');
@@ -194,6 +195,7 @@ printWorkflowSequence(sha);
 
 console.log('\nWhat changes hardLaunchClaim to true:');
 console.log('- The final Firebase Production Deploy must run in launch_mode=public.');
+console.log('- resolve-live-pilot-window.mjs must verify the exact successful live-evidence workflow run and derive a real 24-hour pilot window.');
 console.log('- Its postdeploy gate must write public-release-status.json with publicReleaseCleared=true.');
 console.log('- verify-stripe-live-proof.mjs must write stripe-live-proof.json from a real cs_live_ session and evt_ webhook.');
 console.log('- hard-launch-operational-decision-gate.mjs must validate operational-readiness, pilot incident, Stripe proof, and same-run artifact binding.');
