@@ -1,0 +1,84 @@
+name: Privileged Account Cleanup Dry Run
+run-name: Privileged cleanup review
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: privileged-account-cleanup-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Review obsolete privileged identities without deletion
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+
+    steps:
+      - name: Enforce protected exact-main context
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.confirmation }}" == "REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Build aggregate cleanup report
+        run: node scripts/delete-obsolete-privileged-accounts-production.mjs
+
+      - name: Upload aggregate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: privileged-account-cleanup-review
+          path: launch_package/privileged-account-cleanup.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish summary
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('launch_package/privileged-account-cleanup.json', 'utf8'));
+          const lines = [
+            '## Privileged account cleanup review',
+            '',
+            `- Exact SHA: \`${process.env.GITHUB_SHA}\``,
+            `- Canonical founder ready: \`${report.canonicalFounderReady}\``,
+            `- Privileged accounts found: \`${report.privilegedAccountCountBefore}\``,
+            `- Obsolete privileged accounts: \`${report.deletionTargetCount}\``,
+            `- Audit logs preserved: \`${report.auditLogsPreserved}\``,
+            `- Non-privileged accounts untouched: \`${report.nonPrivilegedAccountsUntouched}\``,
+            '- Deletion performed: `false`',
+            '- Hard-launch claim: `false`',
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+          NODE
