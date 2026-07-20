@@ -18,13 +18,23 @@ import {
   useTheme,
 } from '@mui/material';
 import { Bot, Send, ShieldCheck, Sparkles, User, X } from 'lucide-react';
+import type { Functions } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useAI } from '../context/AIContext';
-import { functions, httpsCallable } from '../lib/firebase';
+import { functions as defaultFunctions } from '../lib/firebase';
 
 export interface SovereignAIChatProps {
   role: 'owner' | 'tenant' | 'technician' | 'broker' | 'admin' | 'unknown';
   onNavigate?: (path: string) => void;
+  /**
+   * Host applications with their own Firebase Auth boundary must pass their
+   * Functions instance here. Otherwise the shared package can initialize a
+   * second Firebase app, which makes callable requests arrive unauthenticated.
+   */
+  functionsOverride?: Functions;
+  isAuthenticated?: boolean;
+  authUserId?: string | null;
 }
 
 interface Message {
@@ -46,7 +56,7 @@ type Prompt = {
 
 const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts: Prompt[] }> = {
   owner: {
-    greeting: 'Owner AI is live. Ask about portfolio risk, contract status, payment approval, property health, or maintenance proof.',
+    greeting: 'Owner AI is ready. Ask about portfolio risk, contract status, payment approval, property health, or maintenance proof.',
     prompts: [
       { label: 'Summarize Page', action: 'SUMMARIZE', payload: 'Summarize my current owner dashboard and identify missing actions.' },
       { label: 'Pending Approvals', action: 'NAVIGATE', payload: '/dashboard' },
@@ -54,7 +64,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   tenant: {
-    greeting: 'Tenant AI is live. Ask about repair status, room-rent onboarding, move-in readiness, or maintenance history.',
+    greeting: 'Tenant AI is ready. Ask about repair status, room-rent onboarding, move-in readiness, or maintenance history.',
     prompts: [
       { label: 'Summarize Page', action: 'SUMMARIZE', payload: 'Summarize my tenant services and active requests.' },
       { label: 'Report Issue', action: 'NAVIGATE', payload: '/tenant' },
@@ -62,7 +72,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   technician: {
-    greeting: 'Technician AI is live. Ask for mission briefing, SLA priority, proof requirements, or troubleshooting guidance.',
+    greeting: 'Technician AI is ready. Ask for mission briefing, SLA priority, proof requirements, or troubleshooting guidance.',
     prompts: [
       { label: 'Mission Summary', action: 'SUMMARIZE', payload: 'Summarize my current technician assignment and proof requirements.' },
       { label: 'View Missions', action: 'NAVIGATE', payload: '/tech' },
@@ -70,7 +80,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   broker: {
-    greeting: 'Broker AI is live. Ask about referral status, KYC, attribution, commission lock, or payout flow.',
+    greeting: 'Broker AI is ready. Ask about referral status, KYC, attribution, commission lock, or payout flow.',
     prompts: [
       { label: 'Pipeline Summary', action: 'SUMMARIZE', payload: 'Summarize my broker pipeline and commission status.' },
       { label: 'Submit Lead', action: 'NAVIGATE', payload: '/broker' },
@@ -78,7 +88,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   admin: {
-    greeting: 'Admin AI is live. Ask about launch gates, HR, owners, tenants, technicians, payments, room-rent ops, or audit gaps.',
+    greeting: 'Admin AI is ready. Ask about launch gates, HR, owners, tenants, technicians, payments, room-rent ops, or audit gaps.',
     prompts: [
       { label: 'War Room Summary', action: 'SUMMARIZE', payload: 'Summarize current admin bottlenecks and launch blockers.' },
       { label: 'Launch Gates', action: 'NAVIGATE', payload: '/ops/public-launch-command' },
@@ -86,7 +96,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   unknown: {
-    greeting: 'BIN GROUP AI is live. Ask about the platform, maintenance, property management, or onboarding.',
+    greeting: 'BIN GROUP AI is ready. Ask about the platform, maintenance, property management, or onboarding.',
     prompts: [
       { label: 'Platform Overview', action: 'MESSAGE', payload: 'Tell me what BIN GROUP does.' },
     ],
@@ -135,7 +145,28 @@ function deterministicSummary(role: SovereignAIChatProps['role'], pageContext: a
   return 'Context registered, but this role does not have a mapped deterministic summary yet.';
 }
 
-export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNavigate }) => {
+function explainCallableError(error: any) {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').trim();
+  if (code.includes('unauthenticated') || /unauthenticated/i.test(message)) {
+    return 'Firebase Auth session is not attached to the AI callable. Refresh the Admin panel after the latest deployment, then sign in again if the session is stale.';
+  }
+  if (code.includes('failed-precondition') || /secret|configured|precondition/i.test(message)) {
+    return 'AI provider secrets are not active on the deployed Firebase Function. Confirm OPENAI_API_KEY, IMAGE_GENERATION_API_KEY, and GEMINI_API_KEY secret versions, then redeploy through the protected production workflow.';
+  }
+  if (code.includes('permission-denied') || /permission|app check/i.test(message)) {
+    return 'AI callable was denied by App Check, role, or quota policy. Confirm Admin App Check and role claims are deployed for this session.';
+  }
+  return message || 'Live AI callable failed.';
+}
+
+export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
+  role,
+  onNavigate,
+  functionsOverride,
+  isAuthenticated,
+  authUserId,
+}) => {
   const { pageContext } = useAI();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -146,6 +177,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const activeRole = roleData[role] || roleData.unknown;
+  const callableFunctions = functionsOverride || defaultFunctions;
+  const sessionBound = isAuthenticated !== false && (role !== 'admin' || Boolean(authUserId));
 
   useEffect(() => {
     setMessages(reviveMessages(sessionStorage.getItem(`bin_chat_history_${role}`)));
@@ -159,9 +192,9 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
 
   useEffect(() => {
     if (messages.length === 0 && open) {
-      setMessages([{ id: 'initial', type: 'ai', text: activeRole.greeting, timestamp: new Date(), live: true, provider: 'system' }]);
+      setMessages([{ id: 'initial', type: 'ai', text: activeRole.greeting, timestamp: new Date(), live: false, provider: sessionBound ? 'ready' : 'auth-wait' }]);
     }
-  }, [open, messages.length, activeRole.greeting]);
+  }, [open, messages.length, activeRole.greeting, sessionBound]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -184,12 +217,16 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
     setLoading(true);
 
     try {
-      const runSovereignAI = httpsCallable(functions, 'runSovereignAI');
+      if (!sessionBound) {
+        throw new Error('Admin Firebase Auth session is not ready for the AI launcher. Refresh or sign in again.');
+      }
+      const runSovereignAI = httpsCallable(callableFunctions, 'runSovereignAI');
       const result: any = await runSovereignAI({
         role,
         text: isAutoSummary ? fallbackSummary || cleanText : cleanText,
         pageContext,
         fallbackSummary,
+        clientAuthBound: true,
       });
       const data = result.data || {};
       const aiText = String(data.text || '').trim() || fallbackSummary || 'AI returned an empty response.';
@@ -202,7 +239,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
         provider: data.provider || 'unknown',
       }]);
     } catch (error: any) {
-      const message = error?.message || 'Live AI callable failed.';
+      const message = explainCallableError(error);
       setMessages((previous) => [...previous, {
         id: `ai_${Date.now()}`,
         type: 'ai',
@@ -255,7 +292,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
               </Avatar>
               <Paper sx={{ p: 2, bgcolor: message.type === 'user' ? 'rgba(255,255,255,0.05)' : 'rgba(198,167,94,0.05)', border: `1px solid ${message.type === 'user' ? 'rgba(255,255,255,0.1)' : 'rgba(198,167,94,0.2)'}`, borderRadius: message.type === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px' }}>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#FFF' }}>{message.text}</Typography>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, opacity: 0.45 }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, opacity: 0.55 }}>
                   <Typography variant="caption">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Typography>
                   {message.provider && <Chip size="small" label={message.live ? `LIVE ${message.provider}` : message.provider.toUpperCase()} sx={{ height: 18, fontSize: 9, color: message.live ? '#10b981' : '#f59e0b', bgcolor: 'rgba(255,255,255,0.04)' }} />}
                 </Stack>
@@ -285,7 +322,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
 
         <TextField
           fullWidth
-          placeholder="Send a secure message..."
+          placeholder={sessionBound ? 'Send a secure message...' : 'Admin session is loading. Refresh if this does not clear.'}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -295,7 +332,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
             }
           }}
           autoComplete="off"
-          sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
+          sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: sessionBound ? 'rgba(255,255,255,0.1)' : 'rgba(245,158,11,0.5)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
@@ -306,9 +343,9 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({ role, onNaviga
             ),
           }}
         />
-        <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontWeight: 900 }}>
+        <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: sessionBound ? 'rgba(255,255,255,0.25)' : '#f59e0b', fontWeight: 900 }}>
           <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} />
-          FIREBASE CALLABLE AI SESSION
+          {sessionBound ? 'FIREBASE CALLABLE AI SESSION' : 'ADMIN AUTH SESSION NOT YET BOUND'}
         </Typography>
       </Box>
     </Box>
