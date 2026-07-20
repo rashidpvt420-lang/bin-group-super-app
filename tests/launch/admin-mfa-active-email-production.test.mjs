@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   buildAdminMfaEvidence,
+  CANONICAL_FOUNDER_EMAIL,
   summarizeAdminMfaUsers,
   validateAdminMfaEvidence,
 } from '../../scripts/verify-admin-mfa-production.mjs';
@@ -16,21 +17,24 @@ const ENV = {
   GITHUB_RUN_ATTEMPT: '3',
 };
 const phoneFactor = { uid: 'factor', factorId: 'phone', displayName: 'Phone' };
-const user = (uid, role, { emailVerified = true, disabled = false, status = 'active' } = {}) => ({
+const user = (uid, role, {
+  email = CANONICAL_FOUNDER_EMAIL,
+  emailVerified = true,
+  disabled = false,
+  status = 'active',
+  factors = [phoneFactor],
+} = {}) => ({
   uid,
+  email,
   customClaims: { role },
   disabled,
   emailVerified,
   profileExists: true,
   profile: { status },
-  multiFactor: { enrolledFactors: [phoneFactor] },
+  multiFactor: { enrolledFactors: factors },
 });
 
-const readyUsers = () => [
-  user('ceo-ready', 'ceo'),
-  user('super-ready', 'super_admin'),
-  user('finance-ready', 'finance_admin'),
-];
+const readyUsers = () => [user('founder-ready', 'ceo')];
 
 const evidenceFailures = (evidence, now) => validateAdminMfaEvidence(evidence, {
   commitSha: SHA,
@@ -41,55 +45,64 @@ const evidenceFailures = (evidence, now) => validateAdminMfaEvidence(evidence, {
   now,
 });
 
-test('every active privileged account requires a verified Firebase Auth email', () => {
+test('the canonical founder requires a verified Firebase Auth email', () => {
   const ready = summarizeAdminMfaUsers(readyUsers());
   assert.equal(ready.ok, true, ready.failures.join('\n'));
   assert.equal(ready.summary.activeAdminEmailUnverifiedCount, 0);
   assert.equal(ready.summary.allActiveAdminsEmailVerified, true);
 
-  const unverifiedFinance = summarizeAdminMfaUsers([
-    user('ceo-ready', 'ceo'),
-    user('super-ready', 'super_admin'),
-    user('finance-unverified', 'finance_admin', { emailVerified: false }),
+  const unverified = summarizeAdminMfaUsers([
+    user('founder-unverified', 'ceo', { emailVerified: false }),
   ]);
-  assert.equal(unverifiedFinance.ok, false);
-  assert.equal(unverifiedFinance.summary.activeAdminCount, 3);
-  assert.equal(unverifiedFinance.summary.phoneMfaEnrolledCount, 3);
-  assert.equal(unverifiedFinance.summary.activeAdminEmailUnverifiedCount, 1);
-  assert.equal(unverifiedFinance.summary.allActiveAdminsEmailVerified, false);
-  assert.match(unverifiedFinance.failures.join('\n'), /active Admin\/staff account\(s\) have unverified email/);
+  assert.equal(unverified.ok, false);
+  assert.equal(unverified.summary.activeAdminCount, 1);
+  assert.equal(unverified.summary.activeAdminEmailUnverifiedCount, 1);
+  assert.equal(unverified.summary.allActiveAdminsEmailVerified, false);
+  assert.match(unverified.failures.join('\n'), /unverified email/);
 });
 
-test('disabled and inactive privileged accounts do not block active email coverage', () => {
-  const result = summarizeAdminMfaUsers([
+test('disabled, inactive and additional privileged accounts block until deleted', () => {
+  const disabled = summarizeAdminMfaUsers([
     ...readyUsers(),
-    user('disabled-unverified', 'admin', { emailVerified: false, disabled: true }),
-    user('inactive-unverified', 'operations_manager', { emailVerified: false, status: 'suspended' }),
+    user('disabled-old-admin', 'admin', {
+      email: 'old-admin@bin-groups.com',
+      disabled: true,
+    }),
   ]);
-  assert.equal(result.ok, true, result.failures.join('\n'));
-  assert.equal(result.summary.activeAdminCount, 3);
-  assert.equal(result.summary.disabledAdminCount, 1);
-  assert.equal(result.summary.inactiveProfileAdminCount, 1);
-  assert.equal(result.summary.activeAdminEmailUnverifiedCount, 0);
-  assert.equal(result.summary.allActiveAdminsEmailVerified, true);
+  assert.equal(disabled.ok, false);
+  assert.equal(disabled.summary.unexpectedPrivilegedAccountCount, 1);
+  assert.equal(disabled.summary.disabledAdminCount, 1);
+  assert.match(disabled.failures.join('\n'), /must be deleted|disabled instead of being deleted/);
+
+  const inactive = summarizeAdminMfaUsers([
+    ...readyUsers(),
+    user('inactive-old-admin', 'operations_manager', {
+      email: 'old-operations@bin-groups.com',
+      status: 'suspended',
+    }),
+  ]);
+  assert.equal(inactive.ok, false);
+  assert.equal(inactive.summary.inactiveProfileAdminCount, 1);
+  assert.match(inactive.failures.join('\n'), /inactive instead of being deleted/);
 });
 
-test('Admin MFA evidence is aggregate-only and fails closed on email-coverage tampering', () => {
-  const now = new Date('2026-07-19T00:00:00.000Z');
+test('Admin MFA evidence is aggregate-only and fails closed on founder-email tampering', () => {
+  const now = new Date('2026-07-20T00:00:00.000Z');
   const summary = summarizeAdminMfaUsers(readyUsers()).summary;
   assert.throws(
     () => buildAdminMfaEvidence({ ...summary, activeAdminEmailUnverifiedCount: undefined }, { env: ENV, now }),
     /explicitly include activeAdminEmailUnverifiedCount/,
   );
   assert.throws(
-    () => buildAdminMfaEvidence({ ...summary, allActiveAdminsEmailVerified: undefined }, { env: ENV, now }),
-    /explicitly include allActiveAdminsEmailVerified/,
+    () => buildAdminMfaEvidence({ ...summary, founderSingletonReady: undefined }, { env: ENV, now }),
+    /explicitly include founderSingletonReady/,
   );
   const evidence = buildAdminMfaEvidence(summary, { env: ENV, now });
   assert.equal(evidence.activeAdminEmailUnverifiedCount, 0);
   assert.equal(evidence.allActiveAdminsEmailVerified, true);
+  assert.equal(evidence.founderSingletonReady, true);
   assert.deepEqual(evidenceFailures(evidence, now.getTime()), []);
-  assert.doesNotMatch(JSON.stringify(evidence), /@|ceo-ready|super-ready|finance-ready|phoneNumber|factorUid/);
+  assert.doesNotMatch(JSON.stringify(evidence), /@|founder-ready|phoneNumber|factorUid/);
 
   const tamperedCount = { ...evidence, activeAdminEmailUnverifiedCount: 1 };
   assert.match(evidenceFailures(tamperedCount, now.getTime()).join('\n'), /unverified active Admin emails/);
@@ -98,13 +111,13 @@ test('Admin MFA evidence is aggregate-only and fails closed on email-coverage ta
   assert.match(evidenceFailures(tamperedBoolean, now.getTime()).join('\n'), /all-active email verification/);
 });
 
-test('production Admin preflight source pins active-email coverage without logging identities', async () => {
+test('production Admin preflight pins canonical founder email coverage without logging identities', async () => {
   const source = await readFile(new URL('../../scripts/verify-admin-mfa-production.mjs', import.meta.url), 'utf8');
+  assert.match(source, /CANONICAL_FOUNDER_EMAIL/);
   assert.match(source, /activeAdminEmailUnverifiedCount/);
   assert.match(source, /allActiveAdminsEmailVerified/);
-  assert.match(source, /activeAdminEmailUnverifiedCount > 0/);
-  assert.match(source, /must explicitly include activeAdminEmailUnverifiedCount/);
-  assert.match(source, /must explicitly include allActiveAdminsEmailVerified/);
+  assert.match(source, /founderSingletonReady/);
+  assert.match(source, /unexpectedPrivilegedAccountCount/);
   assert.match(source, /requireExact\(evidence\.activeAdminEmailUnverifiedCount, 0/);
   assert.match(source, /requireExact\(evidence\.allActiveAdminsEmailVerified, true/);
   assert.doesNotMatch(source, /console\.log\([^\n]*(?:email|uid|phoneNumber|factorUid|displayName)/i);
