@@ -1,78 +1,28 @@
 // admin-panel/src/__tests__/services/api.test.ts
 import { apiClient } from '../../services/api';
 
-describe('Admin Panel API Client', () => {
+describe('Admin Panel legacy REST API Client', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Clear localStorage mock
-    Storage.prototype.setItem = jest.fn();
-    Storage.prototype.getItem = jest.fn();
+    Storage.prototype.removeItem = jest.fn();
   });
 
-  describe('Authentication', () => {
-    test('should have login method', () => {
-      expect(apiClient.post).toBeDefined();
-    });
-
-    test('should have logout method', () => {
-      expect(apiClient.post).toBeDefined();
-    });
-
-    test('should handle token storage', () => {
-      const setSpy = jest.spyOn(Storage.prototype, 'setItem');
-      localStorage.setItem('adminToken', 'test-token');
-      expect(setSpy).toHaveBeenCalledWith('adminToken', 'test-token');
-    });
+  test('exposes compatibility methods for legacy imports', () => {
+    expect(apiClient.get).toBeDefined();
+    expect(apiClient.post).toBeDefined();
+    expect(apiClient.getLiveMap).toBeDefined();
+    expect(apiClient.getAllOwners).toBeDefined();
+    expect(apiClient.suspendOwner).toBeDefined();
   });
 
-  describe('Live Map', () => {
-    test('should fetch live technician data', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-
-    test('should return technician locations', () => {
-      // API client is defined and ready to make requests
-      expect(apiClient.get).toBeDefined();
-    });
+  test('fails closed instead of calling localhost REST APIs', () => {
+    expect(() => apiClient.get('/api/admin/reports')).toThrow(/REST apiClient is disabled/i);
+    expect(() => apiClient.post('/auth/login', {})).toThrow(/REST apiClient is disabled/i);
   });
 
-  describe('Financial Dashboard', () => {
-    test('should fetch financial ticker', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-
-    test('should get cash collected', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-
-    test('should get pending/overdue amounts', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-  });
-
-  describe('Owner Management', () => {
-    test('should fetch all owners', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-
-    test('should suspend owner', () => {
-      expect(apiClient.post).toBeDefined();
-    });
-  });
-
-  describe('Tickets', () => {
-    test('should fetch all tickets', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-
-    test('should filter by status', () => {
-      expect(apiClient.get).toBeDefined();
-    });
-  });
-
-  describe('SOS Feed', () => {
-    test('should fetch active emergencies', () => {
-      expect(apiClient.get).toBeDefined();
-    });
+  test('logout only clears the legacy token cache', () => {
+    const removeSpy = jest.spyOn(Storage.prototype, 'removeItem');
+    apiClient.logout();
+    expect(removeSpy).toHaveBeenCalledWith('adminToken');
   });
 });
