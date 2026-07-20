@@ -4,22 +4,26 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('PWA launcher uses dedicated valid vector assets instead of the legacy logo file', async () => {
+test('PWA launcher uses dedicated vector assets and store-compatible sizes', async () => {
   const manifest = JSON.parse(await read('public/manifest.json'));
   const index = await read('index.html');
 
   assert.equal(manifest.theme_color, '#050816');
   assert.equal(manifest.background_color, '#050816');
   assert.ok(Array.isArray(manifest.icons));
-  assert.equal(manifest.icons.length, 3);
-  assert.deepEqual(
-    manifest.icons.map((icon) => icon.purpose).sort(),
-    ['any', 'maskable', 'monochrome'],
-  );
+  assert.ok(manifest.icons.length >= 5);
+
+  const purposes = new Set(manifest.icons.map((icon) => icon.purpose));
+  const sizes = new Set(manifest.icons.map((icon) => icon.sizes));
+  assert.ok(purposes.has('any'));
+  assert.ok(purposes.has('maskable'));
+  assert.ok(purposes.has('monochrome'));
+  assert.ok(sizes.has('192x192'));
+  assert.ok(sizes.has('512x512'));
+  assert.ok(sizes.has('any'));
 
   for (const icon of manifest.icons) {
     assert.equal(icon.type, 'image/svg+xml');
-    assert.equal(icon.sizes, 'any');
     assert.doesNotMatch(icon.src, /logo\.png/);
     const asset = await read(`public${icon.src}`);
     assert.match(asset, /^<svg\b/);
