@@ -1,31 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  requiredFirebaseAiSecrets,
+  requiredFirebaseBankPilotSecrets,
+  requiredFirebasePublicSecrets,
+  requiredFirebaseProductionSecretsForMode,
+} from '../../scripts/verify-firebase-production-secrets.mjs';
 
 const script = readFileSync('scripts/verify-firebase-production-secrets.mjs', 'utf8');
 const deploy = readFileSync('scripts/deploy-firebase-production.mjs', 'utf8').replace(/\r\n?/g, '\n');
 const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
 
-const allProviderSecrets = [
-  'SMTP_USER',
-  'SMTP_PASS',
+const expectedAiSecrets = [
   'OPENAI_API_KEY',
   'IMAGE_GENERATION_API_KEY',
   'GEMINI_API_KEY',
+];
+
+const expectedBankPilotSecrets = [
+  'SMTP_USER',
+  'SMTP_PASS',
+  ...expectedAiSecrets,
+];
+
+const expectedPublicSecrets = [
+  ...expectedBankPilotSecrets,
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
 ];
 
-const bankPilotProviderSecrets = [
-  'SMTP_USER',
-  'SMTP_PASS',
-  'OPENAI_API_KEY',
-  'IMAGE_GENERATION_API_KEY',
-  'GEMINI_API_KEY',
-];
-
 test('production secret preflight uses Firebase metadata API without child processes or secret access', () => {
-  for (const secretName of allProviderSecrets) {
+  for (const secretName of expectedPublicSecrets) {
     assert.match(script, new RegExp(`['"]${secretName}['"]`));
   }
   assert.match(script, /import firebaseTools from ['"]firebase-tools['"]/);
@@ -40,13 +46,15 @@ test('production secret preflight uses Firebase metadata API without child proce
 });
 
 test('bank-pilot requires SMTP and AI while public mode additionally requires Stripe', () => {
-  for (const secretName of bankPilotProviderSecrets) {
-    assert.match(script, new RegExp(`requiredFirebaseBankPilotSecrets[\\s\\S]*['"]${secretName}['"]`));
-  }
-  assert.match(script, /requiredFirebaseAiSecrets[\s\S]*OPENAI_API_KEY[\s\S]*IMAGE_GENERATION_API_KEY[\s\S]*GEMINI_API_KEY/);
-  assert.match(script, /requiredFirebasePublicSecrets[\s\S]*STRIPE_SECRET_KEY[\s\S]*STRIPE_WEBHOOK_SECRET/);
-  assert.match(script, /normalizedMode === ['"]public['"]/);
-  assert.match(script, /LAUNCH_MODE must be bank-pilot or public/);
+  assert.deepEqual(requiredFirebaseAiSecrets, expectedAiSecrets);
+  assert.deepEqual(requiredFirebaseBankPilotSecrets, expectedBankPilotSecrets);
+  assert.deepEqual(requiredFirebasePublicSecrets, expectedPublicSecrets);
+  assert.deepEqual(requiredFirebaseProductionSecretsForMode('bank-pilot'), expectedBankPilotSecrets);
+  assert.deepEqual(requiredFirebaseProductionSecretsForMode('public'), expectedPublicSecrets);
+  assert.throws(
+    () => requiredFirebaseProductionSecretsForMode('staging'),
+    /LAUNCH_MODE must be bank-pilot or public/,
+  );
 });
 
 test('protected production deploy imports mode-aware secret preflight before Firebase deployment', () => {
