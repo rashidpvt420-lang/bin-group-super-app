@@ -16,8 +16,8 @@ test('shared SovereignAIChat supports host auth-bound Functions override', () =>
   assert.match(chat, /httpsCallable\(callableFunctions, ['"]runSovereignAI['"]\)/);
 });
 
-test('admin AI launcher no longer hides unauthenticated callable root causes', () => {
+test('admin AI launcher exposes actionable auth and provider failures', () => {
   assert.match(chat, /Firebase Auth session is not attached to the AI callable/);
+  assert.match(chat, /AI provider secrets are not active/);
   assert.match(chat, /ADMIN AUTH SESSION NOT YET BOUND/);
-  assert.doesNotMatch(chat, /Live AI status: \$\{message\}/);
 });
