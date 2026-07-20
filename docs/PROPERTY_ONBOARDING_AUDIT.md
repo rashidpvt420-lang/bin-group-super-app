@@ -1,23 +1,23 @@
 # Property Onboarding Audit
 
-**BASE_SHA:** `2bbb9869804064e56046f0f795fcc59ff7cea7f6`
-**Branch:** `cursor/full-system-audit-fix-v4-30e9`
-**Decision:** Code paths are fail-closed; public launch remains **NO-GO** without protected live evidence.
+**Source branch:** `main`
+**Source binding:** The exact commit is supplied by the protected CI or deployment workflow. This document intentionally contains no fixed commit SHA.
+**Decision:** Code paths are fail-closed; public launch remains **NO-GO** without protected live evidence for one exact SHA.
 
 ## Canonical journey
 
 1. Public property and ownership intake.
-2. Owner Auth account creation and verified email.
+2. Owner account creation and verified email.
 3. Proof upload to owner-scoped Storage.
-4. Server-authoritative quote preview and locked `quoteHash`.
-5. Contract selection and OTP signature bound to the contract hash.
-6. Payment package creation before Stripe checkout, or immutable manual receipt upload.
-7. Stripe webhook/manual evidence validation.
-8. Admin approval through `adminApprovePayment`.
-9. Atomic contract, owner, user, intake, property and invoice activation.
-10. Dashboard unlock only when the complete activation policy passes.
+4. Server-authoritative quote preview and locked quote hash.
+5. Contract selection and signature verification bound to the contract hash.
+6. Payment package creation before online checkout, or immutable manual receipt upload.
+7. Provider webhook or manual evidence validation.
+8. Admin approval through the protected payment-approval operation.
+9. Atomic activation of contract, owner, user, intake, property and invoice records.
+10. Dashboard access only when the complete activation policy passes.
 
-The disabled `submitOwnerOnboarding` callable is a minimal fail-closed compatibility stub. The live path is `submitOwnerOnboardingPaymentPackage`; it does not accept client-calculated activation authority.
+The disabled legacy owner-onboarding callable remains a fail-closed compatibility stub. The live path uses the protected payment-package operation and does not accept client-calculated activation authority.
 
 ## Canonical lifecycle vocabulary
 
@@ -25,29 +25,31 @@ The disabled `submitOwnerOnboarding` callable is a minimal fail-closed compatibi
 
 Control states: `changes_requested`, `rejected`, `expired`, `suspended`.
 
-Legacy live values including `payment_pending_approval`, `pending_admin_payment_verification` and `payment_verified_pending_admin_approval` normalize to the canonical machine. State normalization is display/recovery logic; authorization always checks explicit server fields.
+Legacy live values normalize to the canonical state machine for display and recovery. Authorization always checks explicit server fields.
 
 ## Integrity invariants
 
-- Quote and contract hashes are 64-character SHA-256 values generated/locked server-side.
-- OTP evidence must match owner UID, contract ID, signature and contract hash and may be consumed only once.
-- Canonical activation uses the same intake, contract, payment and receipt-path ID. Divergent legacy records require migration.
-- Receipt metadata binds owner UID, payment ID, evidence type, hash, content type, size and immutable Storage generation.
-- Stripe completion must match the persisted session, amount, currency and payer. A paid mismatch creates durable manual-reconciliation evidence and never unlocks.
-- Owner activation requires `status=active`, `adminApproved=true`, `paymentVerified=true`, `dashboardUnlocked=true`, `dashboardLocked!=true` and a non-empty `activeContractId`.
-- Owners cannot client-write activation-adjacent fields in `users`, `owners`, `properties`, contracts or payment ledgers.
+- Quote and contract hashes are generated and locked server-side.
+- Signature evidence must match the owner, contract and locked contract hash and may be consumed only once.
+- Canonical activation uses the same intake, contract, payment and receipt-path identity. Divergent legacy records require migration.
+- Receipt metadata binds the owner, payment, evidence type, hash, content type, size and immutable Storage generation.
+- Provider completion must match the persisted session, amount, currency and payer. A paid mismatch creates durable reconciliation evidence and never unlocks access.
+- Owner activation requires active status, Admin approval, verified payment, explicit dashboard unlock and a non-empty active contract identity.
+- Owners cannot browser-write activation-adjacent fields in user, owner, property, contract or payment records.
 
 ## Recovery and idempotency
 
-- Payment package and Stripe session creation use stable IDs and validate existing bindings.
-- Expired/closed Stripe sessions rotate checkout attempts.
-- Webhook event records and deterministic invoice/commission IDs prevent duplicate side effects.
+- Payment-package and provider-session creation use stable identities and validate existing bindings.
+- Expired or closed provider sessions rotate checkout attempts.
+- Webhook event records and deterministic invoice and commission identities prevent duplicate side effects.
 - Rejected manual evidence can be resubmitted only with newly validated immutable Storage evidence.
 - Suspended owners are disabled in Auth, receive a suspension claim and have refresh tokens revoked; resume reverses all three controls.
 
 ## Operations still required
 
-- Real AED live Checkout and matching processed webhook evidence.
-- SMTP secret and provider-delivery evidence.
+- Real AED live checkout and matching processed webhook evidence.
+- Production email-delivery secret and provider message evidence.
 - Exact-SHA App Check and five-profile hosted walkthrough.
 - Protected production deployment and signed same-run final decision.
+
+These operations must be proved by protected runtime artifacts. Source documentation cannot assert that they have passed.
