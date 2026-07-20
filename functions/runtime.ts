@@ -21,6 +21,7 @@ export * from "./hrAutomation";
 export * from "./adminUserProvisioning";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
+export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
