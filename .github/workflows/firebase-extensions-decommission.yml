@@ -41,6 +41,7 @@ concurrency:
 
 env:
   GCP_PROJECT_ID: bin-group-57c60
+  DEPLOYMENT_ENVIRONMENT: production
 
 jobs:
   extension-decommission:
@@ -90,6 +91,9 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
       - name: Verify repository has no Extension manifest coupling
         run: node scripts/verify-no-firebase-extension-manifest.mjs
 
@@ -105,7 +109,14 @@ jobs:
             --input launch_package/firebase-extensions-before.raw.json \
             --output launch_package/firebase-extensions-before.json
 
-      - name: Validate requested uninstall targets
+      - name: Verify live Extension retirement readiness
+        run: |
+          set -euo pipefail
+          node scripts/verify-firebase-extension-retirement-readiness.mjs \
+            --inventory launch_package/firebase-extensions-before.json \
+            --output launch_package/firebase-extension-retirement-readiness-before.json
+
+      - name: Validate requested uninstall targets and readiness
         if: ${{ inputs.mode == 'uninstall' }}
         env:
           INSTANCE_IDS: ${{ inputs.instance_ids }}
@@ -113,14 +124,20 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const fs = require('fs');
-          const report = JSON.parse(fs.readFileSync('launch_package/firebase-extensions-before.json', 'utf8'));
-          const installed = new Set(report.instances.map((item) => item.instanceId));
+          const inventory = JSON.parse(fs.readFileSync('launch_package/firebase-extensions-before.json', 'utf8'));
+          const readiness = JSON.parse(fs.readFileSync('launch_package/firebase-extension-retirement-readiness-before.json', 'utf8'));
+          const installed = new Set(inventory.instances.map((item) => item.instanceId));
+          const safe = new Set(readiness.instances.filter((item) => item.installed && item.safeToRetire === true).map((item) => item.instanceId));
           const requested = process.env.INSTANCE_IDS.split(',').map((value) => value.trim()).filter(Boolean);
           if (requested.length === 0) throw new Error('No extension instance IDs were supplied.');
           if (new Set(requested).size !== requested.length) throw new Error('Duplicate extension instance ID supplied.');
           for (const id of requested) {
             if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(id)) throw new Error(`Invalid extension instance ID: ${id}`);
             if (!installed.has(id)) throw new Error(`Requested extension instance is not installed: ${id}`);
+            if (!safe.has(id)) {
+              const target = readiness.instances.find((item) => item.instanceId === id);
+              throw new Error(`Extension instance is not safe to retire: ${id} (${(target?.blockers || ['READINESS_NOT_PROVEN']).join(', ')})`);
+            }
           }
           fs.writeFileSync('launch_package/firebase-extensions-uninstall-targets.txt', `${requested.join('\n')}\n`);
           NODE
@@ -149,6 +166,13 @@ jobs:
             --input launch_package/firebase-extensions-after.raw.json \
             --output launch_package/firebase-extensions-after.json
 
+      - name: Verify final retirement readiness
+        run: |
+          set -euo pipefail
+          node scripts/verify-firebase-extension-retirement-readiness.mjs \
+            --inventory launch_package/firebase-extensions-after.json \
+            --output launch_package/firebase-extension-retirement-readiness-after.json
+
       - name: Verify requested instances were removed
         if: ${{ inputs.mode == 'uninstall' }}
         run: |
@@ -174,6 +198,8 @@ jobs:
           path: |
             launch_package/firebase-extensions-before.json
             launch_package/firebase-extensions-after.json
+            launch_package/firebase-extension-retirement-readiness-before.json
+            launch_package/firebase-extension-retirement-readiness-after.json
             launch_package/firebase-extensions-uninstall-targets.txt
           if-no-files-found: warn
           retention-days: 90
@@ -187,6 +213,9 @@ jobs:
           after_count="unknown"
           before_status="unknown"
           after_status="unknown"
+          readiness_status="unknown"
+          ready_count="unknown"
+          blocked_ids="unknown"
           if [[ -f launch_package/firebase-extensions-before.json ]]; then
             before_count="$(node -p "require('./launch_package/firebase-extensions-before.json').activeExtensionCount")"
             before_status="$(node -p "require('./launch_package/firebase-extensions-before.json').status")"
@@ -195,6 +224,11 @@ jobs:
             after_count="$(node -p "require('./launch_package/firebase-extensions-after.json').activeExtensionCount")"
             after_status="$(node -p "require('./launch_package/firebase-extensions-after.json').status")"
           fi
+          if [[ -f launch_package/firebase-extension-retirement-readiness-before.json ]]; then
+            readiness_status="$(node -p "require('./launch_package/firebase-extension-retirement-readiness-before.json').status")"
+            ready_count="$(node -p "require('./launch_package/firebase-extension-retirement-readiness-before.json').safeToRetireCount")"
+            blocked_ids="$(node -p "require('./launch_package/firebase-extension-retirement-readiness-before.json').blockedInstanceIds.join(', ') || 'none'")"
+          fi
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           ## Firebase Extensions decommission control
 
@@ -202,8 +236,12 @@ jobs:
           - Mode: \`$MODE\`
           - Before: \`$before_status\` / \`$before_count\` installed instance(s)
           - After: \`$after_status\` / \`$after_count\` installed instance(s)
+          - Live retirement readiness: \`$readiness_status\`
+          - Installed instances safe to retire: \`$ready_count\`
+          - Blocked instance IDs: \`$blocked_ids\`
           - Firebase Extensions decommission date: **March 31, 2027**
           - New Extension installation/update commands in repository: **blocked**
+          - Runtime Firestore and BigQuery data checked before removal: **yes**
           - Raw provider configuration uploaded: **no**
           - Public-launch claim: **false**
           EOF
