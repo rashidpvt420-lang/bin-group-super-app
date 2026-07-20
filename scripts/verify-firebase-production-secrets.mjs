@@ -89,25 +89,19 @@ export function requireAdminMfaDomainRepairContext({
   return true;
 }
 
-export async function verifyFirebaseProductionSecrets({
+export async function verifyFirebaseSecretMetadata({
   projectId = String(process.env.GCP_PROJECT_ID || '').trim(),
   launchMode = String(process.env.LAUNCH_MODE || '').trim(),
   firebaseClient = firebaseTools,
-  env = process.env,
-  approvalPath = 'launch_package/predeploy-approval.json',
-  domainRepair = ensureAdminMfaAuthorizedDomains,
 } = {}) {
   if (projectId !== expectedProjectId) {
     throw new Error(`GCP_PROJECT_ID must equal ${expectedProjectId}.`);
   }
 
   const requiredSecrets = requiredFirebaseProductionSecretsForMode(launchMode);
-  if (requireAdminMfaDomainRepairContext({ env, approvalPath })) {
-    await domainRepair({ projectId: expectedProjectId });
-    console.log('Verified canonical protected Admin MFA authorized-domain repair.');
-  }
-
   const failures = [];
+  const verifiedSecretNames = [];
+
   for (const secretName of requiredSecrets) {
     try {
       const result = await firebaseClient.functions.secrets.get(secretName, {
@@ -123,6 +117,7 @@ export async function verifyFirebaseProductionSecrets({
         failures.push(`${secretName}: no enabled secret version is available`);
         continue;
       }
+      verifiedSecretNames.push(secretName);
       console.log(`Verified Firebase production secret metadata: ${secretName}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'metadata lookup failed';
@@ -141,5 +136,26 @@ export async function verifyFirebaseProductionSecrets({
     projectId: expectedProjectId,
     launchMode,
     verifiedSecrets: requiredSecrets.length,
+    verifiedSecretNames,
   };
+}
+
+export async function verifyFirebaseProductionSecrets({
+  projectId = String(process.env.GCP_PROJECT_ID || '').trim(),
+  launchMode = String(process.env.LAUNCH_MODE || '').trim(),
+  firebaseClient = firebaseTools,
+  env = process.env,
+  approvalPath = 'launch_package/predeploy-approval.json',
+  domainRepair = ensureAdminMfaAuthorizedDomains,
+} = {}) {
+  if (projectId !== expectedProjectId) {
+    throw new Error(`GCP_PROJECT_ID must equal ${expectedProjectId}.`);
+  }
+
+  if (requireAdminMfaDomainRepairContext({ env, approvalPath })) {
+    await domainRepair({ projectId: expectedProjectId });
+    console.log('Verified canonical protected Admin MFA authorized-domain repair.');
+  }
+
+  return verifyFirebaseSecretMetadata({ projectId, launchMode, firebaseClient });
 }

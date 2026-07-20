@@ -1,0 +1,103 @@
+name: Production Readiness Preflight
+run-name: Production readiness preflight - ${{ inputs.launch_mode }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type exactly VERIFY_PRODUCTION_READINESS_BIN_GROUP_57C60'
+        required: true
+        type: string
+      launch_mode:
+        description: 'bank-pilot or public'
+        required: true
+        type: choice
+        options:
+          - bank-pilot
+          - public
+        default: bank-pilot
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-readiness-preflight
+  cancel-in-progress: false
+
+jobs:
+  verify-production-readiness:
+    name: Verify production configuration without deployment
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      LAUNCH_MODE: ${{ inputs.launch_mode }}
+      FIREBASE_PHONE_AUTH_REQUIRED_DOMAINS: bin-group-57c60.web.app,bin-group-57c60.firebaseapp.com,bin-group-admin-panel.web.app,bin-group-admin-panel.firebaseapp.com
+      FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION: AE
+
+    steps:
+      - name: Enforce exact protected preflight context
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == "VERIFY_PRODUCTION_READINESS_BIN_GROUP_57C60" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify protected cloud-authentication inputs
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIF_PROVIDER" ]]
+          [[ -n "$GCP_SERVICE_ACCOUNT" ]]
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify Firebase production secret metadata
+        run: node scripts/check-firebase-production-secret-metadata.mjs
+
+      - name: Verify Firebase Phone Auth, Admin domains and SMS MFA configuration
+        run: node scripts/verify-firebase-phone-auth-production.mjs
+
+      - name: Verify active Admin MFA and recovery quorum coverage
+        run: node scripts/verify-admin-mfa-production.mjs
+
+      - name: Publish read-only readiness summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## BIN GROUP production readiness preflight
+
+          - Repository: \`$GITHUB_REPOSITORY\`
+          - Branch: \`$GITHUB_REF_NAME\`
+          - Exact SHA: \`$GITHUB_SHA\`
+          - Launch mode: \`$LAUNCH_MODE\`
+          - Firebase secret metadata: passed
+          - Phone Auth / UAE SMS MFA configuration: passed
+          - Main and Admin Authentication domains: passed
+          - Active Admin MFA and recovery quorum: passed
+          - Deployment performed: no
+          - Hard-launch claim: false
+
+          Continue with **START HERE - Firebase Production Deploy** only after this protected preflight is green.
+          EOF
