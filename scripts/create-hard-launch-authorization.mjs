@@ -13,6 +13,7 @@ import {
   signDocument,
   validateAuthorizationDocument,
 } from './lib/hard-launch-control.mjs';
+import { normalizeAuthorizedEmail } from './lib/identity-normalization.mjs';
 
 function requiredEnv(name) {
   const value = String(process.env[name] || '').trim();
@@ -28,7 +29,7 @@ try {
   const runAttempt = Number(requiredEnv('GITHUB_RUN_ATTEMPT'));
   const actor = requiredEnv('GITHUB_ACTOR');
   const founderName = requiredEnv('FOUNDER_NAME');
-  const founderEmail = requiredEnv('FOUNDER_EMAIL').toLowerCase();
+  const founderEmail = normalizeAuthorizedEmail(requiredEnv('FOUNDER_EMAIL'));
   const deployConfirmation = requiredEnv('DEPLOYMENT_CONFIRMATION');
   const hardLaunchConfirmation = requiredEnv('HARD_LAUNCH_CONFIRMATION');
   const hmacKey = requiredEnv('HARD_LAUNCH_APPROVAL_HMAC_KEY');
