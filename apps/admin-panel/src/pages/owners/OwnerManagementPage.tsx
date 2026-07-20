@@ -97,16 +97,16 @@ export default function OwnerManagementPage() {
           ownerId: ownerDocument.id,
           name: data.name || data.displayName || data.fullName || 'Owner',
           email: data.email || '',
-          totalBuildings: data.totalBuildings || 0,
-          totalUnits: data.totalUnits || 0,
-          monthlyRentCollected: data.monthlyRentCollected || 0,
-          unpaidInvoiceCount: data.unpaidInvoiceCount || 0,
+          totalBuildings: Number(data.totalBuildings || 0),
+          totalUnits: Number(data.totalUnits || 0),
+          monthlyRentCollected: Number(data.monthlyRentCollected || 0),
+          unpaidInvoiceCount: Number(data.unpaidInvoiceCount || 0),
           suspensionStatus: String(data.status || data.suspensionStatus || '').toLowerCase() === 'suspended'
             ? 'SUSPENDED'
             : 'ACTIVE',
           joinedDate: data.createdAt?.toDate
             ? data.createdAt.toDate().toISOString()
-            : data.createdAt || '',
+            : String(data.createdAt || ''),
         } as Owner;
       });
       setOwners(ownerRows);
