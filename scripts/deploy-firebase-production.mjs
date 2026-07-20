@@ -19,6 +19,7 @@ const adminBootstrapMarker = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
 const adminBootstrapFunctions = Object.freeze([
   'registerAdminSecuritySession',
   'getAdminSecurityProfile',
+  'getAdminMfaReadinessOverview',
   'revokeAdminSessions',
   'lockOwnAdminAccount',
   'finalizeOwnAdminMfaRecovery',
@@ -163,8 +164,14 @@ if (adminBootstrapRequested) {
   const adminProfileSource = existsSync('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx')
     ? readFileSync('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx', 'utf8')
     : '';
+  const adminEnrollmentSource = existsSync('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx')
+    ? readFileSync('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx', 'utf8')
+    : '';
   const adminSecuritySource = existsSync('functions/adminSecurityProfile.ts')
     ? readFileSync('functions/adminSecurityProfile.ts', 'utf8')
+    : '';
+  const adminReadinessSource = existsSync('functions/adminMfaReadiness.ts')
+    ? readFileSync('functions/adminMfaReadiness.ts', 'utf8')
     : '';
   const adminRecoverySource = existsSync('functions/adminMfaRecovery.ts')
     ? readFileSync('functions/adminMfaRecovery.ts', 'utf8')
@@ -192,15 +199,28 @@ if (adminBootstrapRequested) {
     process.exit(1);
   }
   if (
+    !adminEnrollmentSource.includes('sendEmailVerification') ||
+    !adminEnrollmentSource.includes('getAdminMfaReadinessOverview') ||
+    !adminEnrollmentSource.includes('admin-mfa-readiness-overview')
+  ) {
+    console.error('[production-deploy] Mobile Admin email/MFA remediation controls are not present in the exact-SHA Admin build');
+    process.exit(1);
+  }
+  if (
     !functionsRuntimeSource.includes('export * from "./adminSecurityProfile"') ||
+    !functionsRuntimeSource.includes('export * from "./adminMfaReadiness"') ||
     !functionsRuntimeSource.includes('export * from "./adminMfaRecovery"')
   ) {
     console.error('[production-deploy] Admin MFA bootstrap callable modules are not exported by the exact-SHA Functions runtime');
     process.exit(1);
   }
 
+  const sourceByFunction = new Map([
+    ['getAdminMfaReadinessOverview', adminReadinessSource],
+    ['finalizeOwnAdminMfaRecovery', adminRecoverySource],
+  ]);
   const missingBootstrapFunctions = adminBootstrapFunctions.filter((functionName) => {
-    const source = functionName === 'finalizeOwnAdminMfaRecovery' ? adminRecoverySource : adminSecuritySource;
+    const source = sourceByFunction.get(functionName) || adminSecuritySource;
     return !source.includes(`export const ${functionName}`);
   });
   if (missingBootstrapFunctions.length > 0) {
@@ -209,7 +229,7 @@ if (adminBootstrapRequested) {
   }
 
   console.log(`[production-deploy] Protected Admin MFA bootstrap requested; deploying ${adminBootstrapDeployTarget} before account-coverage enforcement`);
-  retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and security callables');
+  retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and remediation callables');
   writeFileSync(adminBootstrapMetadataPath, `${JSON.stringify({
     schemaVersion: 2,
     status: 'deployed',
@@ -225,7 +245,7 @@ if (adminBootstrapRequested) {
     mfaGateBypassed: false,
     hardLaunchClaim: false,
   }, null, 2)}\n`);
-  console.log('[production-deploy] Admin MFA enrollment UI and minimal security callables are now deployed. The full production stack remains blocked until real Admin MFA coverage passes.');
+  console.log('[production-deploy] Admin MFA enrollment, email verification, masked readiness UI and minimal security callables are deployed. The full production stack remains blocked until real Admin MFA coverage passes.');
 }
 
 let adminMfaEvidence;
@@ -234,7 +254,7 @@ try {
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Admin MFA account coverage verification failed';
   const bootstrapNote = adminBootstrapRequested
-    ? ' Admin MFA bootstrap UI and security callables completed successfully; enroll the real accounts, then rerun without the bootstrap marker.'
+    ? ' Admin MFA bootstrap UI and remediation callables completed successfully; verify email and enroll the real accounts, then rerun without the bootstrap marker.'
     : '';
   console.error(`[production-deploy] Admin MFA production preflight failed: ${message}${bootstrapNote}`);
   process.exit(1);
