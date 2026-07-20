@@ -13,6 +13,7 @@
   "scripts": {
     "prepare": "node scripts/prepare-hooks.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/generate-launcher-assets.mjs",
     "build": "vite build",
     "build:live": "node scripts/prepare-production-env.mjs && vite build && npm --prefix apps/admin-panel ci --legacy-peer-deps && npm --prefix apps/admin-panel run build",
     "setup:e2e": "npm ci --include=optional --legacy-peer-deps",
