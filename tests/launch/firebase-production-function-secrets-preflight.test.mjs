@@ -9,8 +9,19 @@ const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml'
 const allProviderSecrets = [
   'SMTP_USER',
   'SMTP_PASS',
+  'OPENAI_API_KEY',
+  'IMAGE_GENERATION_API_KEY',
+  'GEMINI_API_KEY',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
+];
+
+const bankPilotProviderSecrets = [
+  'SMTP_USER',
+  'SMTP_PASS',
+  'OPENAI_API_KEY',
+  'IMAGE_GENERATION_API_KEY',
+  'GEMINI_API_KEY',
 ];
 
 test('production secret preflight uses Firebase metadata API without child processes or secret access', () => {
@@ -28,8 +39,11 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('bank-pilot requires SMTP while public mode additionally requires Stripe', () => {
-  assert.match(script, /requiredFirebaseBankPilotSecrets[\s\S]*SMTP_USER[\s\S]*SMTP_PASS/);
+test('bank-pilot requires SMTP and AI while public mode additionally requires Stripe', () => {
+  for (const secretName of bankPilotProviderSecrets) {
+    assert.match(script, new RegExp(`requiredFirebaseBankPilotSecrets[\\s\\S]*['"]${secretName}['"]`));
+  }
+  assert.match(script, /requiredFirebaseAiSecrets[\s\S]*OPENAI_API_KEY[\s\S]*IMAGE_GENERATION_API_KEY[\s\S]*GEMINI_API_KEY/);
   assert.match(script, /requiredFirebasePublicSecrets[\s\S]*STRIPE_SECRET_KEY[\s\S]*STRIPE_WEBHOOK_SECRET/);
   assert.match(script, /normalizedMode === ['"]public['"]/);
   assert.match(script, /LAUNCH_MODE must be bank-pilot or public/);
