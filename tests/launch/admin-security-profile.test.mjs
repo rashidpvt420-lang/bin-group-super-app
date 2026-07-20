@@ -48,6 +48,16 @@ test('Admin security sessions are ephemeral and never stored in localStorage', a
   assert.match(app, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
 });
 
+test('unauthenticated Admin callables expire the stale browser session', async () => {
+  const firebase = await read('apps/admin-panel/src/lib/firebase.ts');
+  assert.match(firebase, /httpsCallable as firebaseHttpsCallable/);
+  assert.match(firebase, /functions\/unauthenticated/);
+  assert.match(firebase, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
+  assert.match(firebase, /signOut\(auth\)/);
+  assert.match(firebase, /window\.location\.replace\('\/login\?session=expired'\)/);
+  assert.match(firebase, /sessionExpiryRedirectStarted/);
+});
+
 test('Admin security profile fails closed instead of inventing MFA and permission status', async () => {
   const page = await read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx');
   assert.match(page, /setProfile\(null\)/);
