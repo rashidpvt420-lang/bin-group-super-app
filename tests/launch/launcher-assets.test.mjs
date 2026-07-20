@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import '../../scripts/generate-launcher-assets.mjs';
 
 const fileUrl = (path) => new URL(`../../${path}`, import.meta.url);
 const read = (path) => readFile(fileUrl(path), 'utf8');
 const readBinary = (path) => readFile(fileUrl(path));
+
+function generateLauncherAssets() {
+  execFileSync(process.execPath, ['scripts/generate-launcher-assets.mjs'], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+  });
+}
 
 async function assertPng(path, width, height) {
   const asset = await readBinary(path);
@@ -15,6 +22,8 @@ async function assertPng(path, width, height) {
 }
 
 test('PWA launcher uses generated raster assets with vector and monochrome fallbacks', async () => {
+  generateLauncherAssets();
+
   const manifest = JSON.parse(await read('public/manifest.json'));
   const index = await read('index.html');
 
@@ -60,6 +69,8 @@ test('PWA launcher uses generated raster assets with vector and monochrome fallb
 });
 
 test('Android launcher uses adaptive vector, themed icon, and a valid splash transition', async () => {
+  generateLauncherAssets();
+
   const manifest = await read('android/app/src/main/AndroidManifest.xml');
   const adaptive = await read('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml');
   const adaptiveRound = await read('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml');
