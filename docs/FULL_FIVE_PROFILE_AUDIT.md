@@ -2,7 +2,7 @@
 
 **Original audit date:** 15 July 2026
 **Source branch:** `main`
-**Source binding:** The exact commit is supplied by the protected CI or deployment workflow. This document intentionally contains no fixed commit SHA.
+**Source binding:** The exact commit is supplied by the protected CI or deployment workflow. This document intentionally does not embed a fixed SHA.
 **Decision:** **HARD PUBLIC LAUNCH = NO-GO** until protected operational evidence is produced for one exact SHA.
 
 ## Audited surfaces
