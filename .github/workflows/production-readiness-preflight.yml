@@ -80,7 +80,7 @@ jobs:
       - name: Verify Firebase Phone Auth, Admin domains and SMS MFA configuration
         run: node scripts/verify-firebase-phone-auth-production.mjs
 
-      - name: Verify active Admin MFA and recovery quorum coverage
+      - name: Verify canonical founder and privileged-account cleanup state
         run: node scripts/verify-admin-mfa-production.mjs
 
       - name: Publish read-only readiness summary
@@ -95,7 +95,8 @@ jobs:
           - Firebase secret metadata: passed
           - Phone Auth / UAE SMS MFA configuration: passed
           - Main and Admin Authentication domains: passed
-          - Active Admin MFA and recovery quorum: passed
+          - Canonical founder email and phone MFA: passed
+          - Unexpected privileged accounts: zero
           - Deployment performed: no
           - Hard-launch claim: false
 

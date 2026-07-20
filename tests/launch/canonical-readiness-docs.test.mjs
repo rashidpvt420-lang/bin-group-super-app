@@ -47,6 +47,22 @@ test('canonical readiness documents remain honest about production evidence', as
   assert.doesNotMatch(operations, /^\s*firebase\s+deploy\b/im);
 });
 
+test('operator guidance enforces canonical single-founder authority', async () => {
+  const [operations, bootstrap] = await Promise.all([
+    read('OPERATIONS_ONLY_CHECKLIST.md'),
+    read('docs/launch/admin-mfa-bootstrap-runbook.md'),
+  ]);
+
+  for (const source of [operations, bootstrap]) {
+    assert.match(source, /ceo@bin-groups\.com/i);
+    assert.match(source, /single-founder|canonical founder/i);
+    assert.match(source, /delete(?:d)? every other privileged|every other privileged.*deleted/i);
+    assert.doesNotMatch(source, /preserve at least two|two distinct active CEO|recovery quorum ready/i);
+  }
+  assert.match(operations, /Owner, Tenant, Technician and Broker accounts.*excluded/i);
+  assert.match(operations, /Google Play Console developer identity/i);
+});
+
 test('operator guidance never directs users to obsolete feature branches', async () => {
   const testing = await read('TESTING.md');
   const historicalAudit = await read('LAUNCH_READINESS_AUDIT.md');

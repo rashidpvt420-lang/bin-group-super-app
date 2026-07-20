@@ -18,18 +18,21 @@ This file covers provider, hosted-runtime, account, physical-device, and pilot e
 - [ ] UAE (`AE`) is present in the SMS allowlist-only policy.
 - [ ] Production test phone numbers are removed.
 - [ ] Main and Admin Hosting domains are authorized for Firebase Authentication.
-- [ ] Every active Admin/staff account required by the pilot has verified email and enrolled phone MFA.
-- [ ] Every active CEO/Super Admin recovery approver has verified email and enrolled phone MFA.
-- [ ] Obsolete or duplicate privileged accounts are disabled or marked inactive through approved administration controls.
+- [ ] The canonical privileged account is exactly `ceo@bin-groups.com` and resolves to CEO or Super Admin authority.
+- [ ] The canonical founder Firebase email is verified.
+- [ ] At least one founder-controlled Firebase phone MFA factor is enrolled.
+- [ ] A matching active `users/{uid}` Firestore profile exists for the canonical founder.
+- [ ] Every other Firebase Auth identity with Admin/staff portal authority has been deleted through `Privileged Account Cleanup - Production`.
+- [ ] Owner, Tenant, Technician and Broker accounts without Admin/staff authority were excluded from privileged cleanup.
 
 ## Protected bank-pilot sequence
 
-1. Run the protected production-readiness preflight on the exact current `main` SHA.
-2. Run `START HERE - Firebase Production Deploy` in `bank-pilot` mode.
-3. Use `ADMIN_MFA_BOOTSTRAP_HOSTING` only when the canonical Admin MFA bootstrap is required.
-4. After bootstrap, verify the dedicated Admin profile reads authoritative Firebase MFA, email, session, and permission state.
-5. Complete the remaining real Admin MFA/email coverage.
-6. Start a new protected bank-pilot deployment without the bootstrap marker.
+1. Run `START HERE - Firebase Production Deploy` with `ADMIN_MFA_BOOTSTRAP_HOSTING` only when the canonical Admin MFA remediation UI and callables are not yet deployed.
+2. Sign in freshly as `ceo@bin-groups.com`, complete the password-and-phone-MFA challenge, verify the Firebase email, and refresh the authoritative security profile.
+3. Run `Privileged Account Cleanup - Production` with `execute_cleanup=false` and review the dry-run inventory.
+4. Execute cleanup only after the dry run passes; preserve audit logs and delete every other privileged Firebase Auth identity and related privileged profile/session records.
+5. Run `Production Readiness Preflight` on the exact current `main` SHA until it reports one claimed privileged account, one active privileged account, one MFA-ready canonical founder, and zero unexpected privileged accounts.
+6. Run `START HERE - Firebase Production Deploy` in `bank-pilot` mode without the bootstrap marker.
 7. Verify same-run deployment metadata, artifact digest, App Check, SMTP, and five-profile evidence.
 
 No local Firebase deployment command is an approved substitute for this sequence.
@@ -62,8 +65,14 @@ No local Firebase deployment command is an approved substitute for this sequence
 - [ ] The postdeploy public-release gate passes in the same protected workflow chain.
 - [ ] The signed final hard-launch decision has `hardLaunchClaim=true` and binds all required evidence to the same repository, SHA, workflow chain, and artifact digest.
 
+## Google Play release requirements
+
+- [ ] Google Play Console developer identity is accepted after the reset verification attempt.
+- [ ] The Play Console legal name, address, contact details and submitted documents match the active Payments profile.
+- [ ] Android release artifacts, signing, store listing, privacy declarations and required testing tracks pass after the developer-account restriction is removed.
+
 ## Secret handling
 
-- Never paste API keys, passwords, verification codes, service-account files, or recovery secrets into issues, pull requests, screenshots, chat, source files, or workflow logs.
+- Never paste API keys, passwords, verification codes, service-account files, recovery secrets, identity-document numbers, or unmasked bank details into issues, pull requests, screenshots, chat, source files, or workflow logs.
 - Evidence may include secret names, enabled-version state, provider message IDs, hashes, masked identities, and workflow references; it must exclude secret values.
 - Any credential exposed in a screenshot, message, commit, or log must be revoked and replaced before launch.

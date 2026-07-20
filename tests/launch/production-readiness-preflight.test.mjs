@@ -25,7 +25,10 @@ test('production readiness preflight is protected, exact-main and read-only', as
   ]) {
     assert.match(workflow, new RegExp(domain.replaceAll('.', '\\.')));
   }
-  assert.match(workflow, /Active Admin MFA and recovery quorum: passed/);
+  assert.match(workflow, /Verify canonical founder and privileged-account cleanup state/);
+  assert.match(workflow, /Canonical founder email and phone MFA: passed/);
+  assert.match(workflow, /Unexpected privileged accounts: zero/);
+  assert.doesNotMatch(workflow, /recovery quorum/i);
   assert.match(workflow, /Deployment performed: no/);
   assert.match(workflow, /Hard-launch claim: false/);
   assert.doesNotMatch(workflow, /firebase\s+deploy|deploy-firebase-production\.mjs|hosting:admin|functions:/i);
