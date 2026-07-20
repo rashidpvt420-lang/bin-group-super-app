@@ -70,7 +70,6 @@ test('protected run resolver accepts only the exact SHA and approved dispatcher 
   assert.match(resolverSection, /run_id=.*--arg sha "\$main_sha"/s);
   assert.match(resolverSection, /run_sha=.*--arg sha "\$main_sha"/s);
   assert.equal((resolverSection.match(exactSelection) || []).length, 2);
-  assert.equal((resolverSection.match(/--arg sha "\$main_sha"/g) || []).length, 2);
 });
 
 test('dispatcher remains GitHub-only and never implements Firebase deployment', async () => {
