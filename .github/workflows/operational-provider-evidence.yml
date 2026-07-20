@@ -193,6 +193,11 @@ jobs:
           OPERATIONAL_GATE: ${{ inputs.gate }}
         run: node scripts/publish-operational-provider-evidence.mjs
 
+      - name: Finalize provider evidence for hard-launch validation
+        env:
+          OPERATIONAL_GATE: ${{ inputs.gate }}
+        run: node scripts/finalize-operational-provider-evidence.mjs
+
       - name: Upload provider proof
         if: success()
         uses: actions/upload-artifact@v4
