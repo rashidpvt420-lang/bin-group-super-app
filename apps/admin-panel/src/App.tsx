@@ -75,6 +75,7 @@ import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperat
 import TenantUnitLinkQueuePage from './pages/ops/TenantUnitLinkQueuePage';
 
 import { adminTheme } from './theme/adminTheme';
+import { functions as adminFunctions } from './lib/firebase';
 
 const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr-admin' });
@@ -241,7 +242,13 @@ function Layout() {
             </Box>
 
             <Box sx={{ position: 'fixed', bottom: 0, right: 0, zIndex: 9999 }}>
-                <SovereignAIChat role="admin" onNavigate={navigate} />
+                <SovereignAIChat
+                    role="admin"
+                    onNavigate={navigate}
+                    functionsOverride={adminFunctions}
+                    isAuthenticated={Boolean(user?.uid)}
+                    authUserId={user?.uid || null}
+                />
             </Box>
             <SovereignAlertHandler />
         </Box>
