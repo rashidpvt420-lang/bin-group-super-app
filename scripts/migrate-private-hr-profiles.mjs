@@ -112,6 +112,7 @@ for (const hrDocument of hrSnapshot.docs) {
   candidates.push({ uid, hrDocument, userDocument, technicianDocument, sensitive });
 }
 
+const executionRequired = candidates.length > 0;
 let migrated = 0;
 let verified = 0;
 const failedHashes = [];
@@ -154,8 +155,12 @@ if (execute) {
   }
 }
 
+const recommendedNextAction = executionRequired
+  ? (execute ? 'MIGRATION_EXECUTED_VERIFY_REPORT' : 'REVIEW_REPORT_THEN_EXECUTE')
+  : 'SKIP_EXECUTE_PROCEED_TO_BANK_PILOT';
+
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   projectId: PROJECT_ID,
   repository: REPOSITORY,
   commitSha: String(process.env.GITHUB_SHA || 'LOCAL_DRY_RUN'),
@@ -164,6 +169,8 @@ const report = {
   generatedAt: new Date().toISOString(),
   hrProfilesScanned: hrSnapshot.size,
   recordsRequiringMigration: candidates.length,
+  executionRequired,
+  recommendedNextAction,
   migrated,
   verified,
   failureCount: failedHashes.length,
@@ -175,7 +182,7 @@ const report = {
 
 mkdirSync('launch_package', { recursive: true });
 writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-console.log(`[private-hr-migration] mode=${report.mode} scanned=${report.hrProfilesScanned} candidates=${report.recordsRequiringMigration} migrated=${migrated} verified=${verified} failures=${report.failureCount}`);
+console.log(`[private-hr-migration] mode=${report.mode} scanned=${report.hrProfilesScanned} candidates=${report.recordsRequiringMigration} executionRequired=${report.executionRequired} migrated=${migrated} verified=${verified} failures=${report.failureCount}`);
 
 if (execute && (migrated !== candidates.length || verified !== candidates.length || failedHashes.length > 0)) {
   throw new Error('Private HR migration did not complete and verify every candidate.');
