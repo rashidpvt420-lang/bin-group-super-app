@@ -42,6 +42,14 @@ npm run test:mobile-store-readiness
 
 No local command may deploy Hosting, Functions, Firestore rules, indexes, or Storage rules to production.
 
+## iOS Apple Silicon development
+
+The current BIN GROUP iOS shell uses web Google Maps inside Capacitor; no native Google Maps, Places or Navigation iOS SDK is installed. `npm run test:mobile-store-readiness` runs the Apple Silicon configuration audit and must report `NOT_INSTALLED_WEB_MAPS_ONLY` unless a separately reviewed native integration is introduced.
+
+By Q3 2026, iOS simulator development, signing and archive generation must use an Apple Silicon Mac. Windows remains valid for web, Firebase and Android development but cannot produce the final iOS archive. A future native Google Maps iOS dependency must use Swift Package Manager with an exact version. Do not add GoogleMapsM4B, a new Google Maps CocoaPod, an Intel-only CI runner, an `x86_64` architecture restriction, or an arm64 simulator exclusion.
+
+The real arm64 Xcode build must be executed on an M-series Mac and must not be inferred from Linux or Windows CI. See `docs/IOS_APPLE_SILICON_READINESS.md`.
+
 ## Protected deployment sequence
 
 1. Confirm the exact current `main` SHA immediately before dispatch.
