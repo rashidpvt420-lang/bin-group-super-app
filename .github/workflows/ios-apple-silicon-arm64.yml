@@ -2,6 +2,7 @@ name: iOS Apple Silicon arm64 Build
 run-name: "iOS arm64 ${{ github.event_name }} ${{ github.sha }}"
 
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
     branches: [main]
