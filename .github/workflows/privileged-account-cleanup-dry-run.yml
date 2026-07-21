@@ -1,9 +1,14 @@
 name: Privileged Account Cleanup Dry Run
-run-name: Privileged cleanup review
+run-name: Privileged cleanup review · ${{ inputs.expected_commit_sha || github.sha }}
 
 on:
   workflow_dispatch:
     inputs:
+      expected_commit_sha:
+        description: "Optional exact current main SHA for automation"
+        required: false
+        type: string
+        default: ""
       confirmation:
         description: "Type REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP"
         required: true
@@ -22,27 +27,38 @@ jobs:
     name: Review obsolete privileged identities without deletion
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 30
     env:
       GCP_PROJECT_ID: bin-group-57c60
 
     steps:
       - name: Enforce protected exact-main context
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
-          [[ "${{ inputs.confirmation }}" == "REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP" ]]
+          [[ "$CONFIRMATION" == "REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP" ]]
           [[ "$GITHUB_REF" == "refs/heads/main" ]]
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ -n "$EXPECTED_COMMIT_SHA" ]]; then
+            [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          fi
 
       - name: Checkout exact main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
+          cache: npm
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -56,9 +72,9 @@ jobs:
         run: node scripts/review-privileged-accounts-production.mjs
 
       - name: Upload aggregate report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: privileged-account-cleanup-review
+          name: privileged-account-cleanup-review-${{ github.sha }}
           path: launch_package/privileged-account-cleanup.json
           if-no-files-found: error
           retention-days: 14
