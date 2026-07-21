@@ -11,13 +11,22 @@ export const IOS_MAPS_DEPENDENCY_MODES = Object.freeze({
   INVALID: 'INVALID_OR_UNPINNED',
 });
 
-const GOOGLE_NATIVE_PRODUCTS = Object.freeze([
-  'GoogleMaps',
-  'GoogleMapsBase',
-  'GoogleMapsCore',
-  'GoogleMapsM4B',
-  'GooglePlaces',
-  'GoogleNavigation',
+const GOOGLE_POD_PATTERNS = Object.freeze([
+  { name: 'GoogleMaps', pattern: /(?:pod\s+['"]GoogleMaps(?:\/[^'"]+)?['"]|^\s*-\s+GoogleMaps(?:\/[^\s(]+)?(?:\s|\(|$))/im },
+  { name: 'GoogleMapsBase', pattern: /(?:pod\s+['"]GoogleMapsBase(?:\/[^'"]+)?['"]|^\s*-\s+GoogleMapsBase(?:\/[^\s(]+)?(?:\s|\(|$))/im },
+  { name: 'GoogleMapsCore', pattern: /(?:pod\s+['"]GoogleMapsCore(?:\/[^'"]+)?['"]|^\s*-\s+GoogleMapsCore(?:\/[^\s(]+)?(?:\s|\(|$))/im },
+  { name: 'GoogleMapsM4B', pattern: /(?:pod\s+['"]GoogleMapsM4B(?:\/[^'"]+)?['"]|^\s*-\s+GoogleMapsM4B(?:\/[^\s(]+)?(?:\s|\(|$))/im },
+  { name: 'GooglePlaces', pattern: /(?:pod\s+['"]GooglePlaces(?:\/[^'"]+)?['"]|^\s*-\s+GooglePlaces(?:\/[^\s(]+)?(?:\s|\(|$))/im },
+  { name: 'GoogleNavigation', pattern: /(?:pod\s+['"]GoogleNavigation(?:\/[^'"]+)?['"]|^\s*-\s+GoogleNavigation(?:\/[^\s(]+)?(?:\s|\(|$))/im },
+]);
+
+const GOOGLE_PRODUCT_PATTERNS = Object.freeze([
+  /\bGoogleMaps\b/,
+  /\bGoogleMapsBase\b/,
+  /\bGoogleMapsCore\b/,
+  /\bGoogleMapsM4B\b/,
+  /\bGooglePlaces\b/,
+  /\bGoogleNavigation\b/,
 ]);
 
 function detectsIntelOnlyArchitecture(source) {
@@ -33,9 +42,7 @@ function detectsExplicitIntelRunner(source) {
 }
 
 function googlePodNames(source) {
-  return GOOGLE_NATIVE_PRODUCTS.filter((name) => (
-    new RegExp(`(?:pod\\s+['\"]${name}(?:\\/[^'\"]+)?['\"]|^\\s*-\\s+${name}(?:\\/[^\\s(]+)?(?:\\s|\\(|$))`, 'im').test(source)
-  ));
+  return GOOGLE_POD_PATTERNS.filter(({ pattern }) => pattern.test(source)).map(({ name }) => name);
 }
 
 function containsGoogleNativeSymbol(source) {
@@ -45,7 +52,7 @@ function containsGoogleNativeSymbol(source) {
 function detectSwiftPackage(projectSource, resolvedSource) {
   const combined = `${projectSource}\n${resolvedSource}`;
   const googleRepository = /github\.com\/googlemaps\/ios-[a-z0-9-]+-sdk(?:\.git)?/i.test(combined);
-  const googleProduct = GOOGLE_NATIVE_PRODUCTS.some((name) => new RegExp(`\\b${name}\\b`).test(combined));
+  const googleProduct = GOOGLE_PRODUCT_PATTERNS.some((pattern) => pattern.test(combined));
   const detected = googleRepository && googleProduct;
   const exactRequirement = /kind\s*=\s*exactVersion\s*;/i.test(projectSource)
     && /version\s*=\s*["']?\d+\.\d+\.\d+["']?\s*;/i.test(projectSource);
