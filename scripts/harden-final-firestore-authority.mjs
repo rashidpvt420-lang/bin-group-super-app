@@ -100,11 +100,12 @@ if (!text.includes('match /admin_security_sessions/{sessionId}')) {
   text = text.replace(anchor, `${adminSecurityBlock}${anchor}`);
 }
 
-if (text.includes(legacyReadCatchAll)) text = text.replace(legacyReadCatchAll, adminSecurityReadCatchAll);
-if (text.includes(brokerReadCatchAll)) text = text.replace(brokerReadCatchAll, adminSecurityReadCatchAll);
-if (text.includes(boundedReadCatchAll)) text = text.replace(boundedReadCatchAll, adminSecurityReadCatchAll);
-if (!text.includes(adminSecurityReadCatchAll) && !text.includes(privateHrReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security and optional private HR exclusions');
+if (text.includes(legacyReadCatchAll)) text = text.replace(legacyReadCatchAll, privateHrReadCatchAll);
+if (text.includes(brokerReadCatchAll)) text = text.replace(brokerReadCatchAll, privateHrReadCatchAll);
+if (text.includes(boundedReadCatchAll)) text = text.replace(boundedReadCatchAll, privateHrReadCatchAll);
+if (text.includes(adminSecurityReadCatchAll)) text = text.replace(adminSecurityReadCatchAll, privateHrReadCatchAll);
+if (!text.includes(privateHrReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security and private HR exclusions');
 }
 
 const legacyWriteCount = text.split(legacyWriteList).length - 1;
@@ -112,10 +113,12 @@ const boundedWriteCount = text.split(boundedWriteList).length - 1;
 const adminSecurityWriteCount = text.split(adminSecurityWriteList).length - 1;
 const privateHrWriteCount = text.split(privateHrWriteList).length - 1;
 if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
-  text = text.replaceAll(legacyWriteList, adminSecurityWriteList);
+  text = text.replaceAll(legacyWriteList, privateHrWriteList);
 } else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
-  text = text.replaceAll(boundedWriteList, adminSecurityWriteList);
-} else if (!(legacyWriteCount === 0 && (adminSecurityWriteCount === 2 || privateHrWriteCount === 2))) {
+  text = text.replaceAll(boundedWriteList, privateHrWriteList);
+} else if (adminSecurityWriteCount === 2 && legacyWriteCount === 0 && boundedWriteCount === 0 && privateHrWriteCount === 0) {
+  text = text.replaceAll(adminSecurityWriteList, privateHrWriteList);
+} else if (!(legacyWriteCount === 0 && boundedWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 2)) {
   throw new Error(`[final-firestore-authority] unexpected write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}, privateHr=${privateHrWriteCount}`);
 }
 
@@ -133,8 +136,6 @@ if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)
 text = hardenReviewedRoleSelfUpdates(text);
 writeFileSync(rulesPath, text, 'utf8');
 
-const activeReadCatchAll = text.includes(privateHrReadCatchAll) ? privateHrReadCatchAll : adminSecurityReadCatchAll;
-const activeWriteList = text.includes(privateHrWriteList) ? privateHrWriteList : adminSecurityWriteList;
 const required = [
   'function profileAllowsAccess(data) {',
   "data.get('status', '') in [",
@@ -159,10 +160,10 @@ const required = [
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
-  activeReadCatchAll.trim(),
+  privateHrReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  activeWriteList.trim(),
+  privateHrWriteList.trim(),
   "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
 ];
 
@@ -198,12 +199,15 @@ const forbidden = [
   'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
   brokerReadCatchAll.trim(),
   boundedReadCatchAll.trim(),
+  adminSecurityReadCatchAll.trim(),
   legacyReadCatchAll.trim(),
   legacyWriteList,
+  boundedWriteList,
+  adminSecurityWriteList,
 ];
 
 for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
+console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, private HR authority isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
