@@ -29,12 +29,16 @@ if (!source.includes(hardenedRead)) {
   throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
 }
 
-const legacyWriteCount = source.split(legacyWritePrefix).length - 1;
-const hardenedWriteCount = source.split(hardenedWritePrefix).length - 1;
-if (legacyWriteCount === 2 && hardenedWriteCount === 0) {
+// The strict list contains the legacy list as a prefix. Detect strict state first.
+if (source.includes(hardenedWritePrefix)) {
+  // Already canonical.
+} else if (source.includes(legacyWritePrefix)) {
   source = source.replaceAll(legacyWritePrefix, hardenedWritePrefix);
-} else if (!(legacyWriteCount === 0 && hardenedWriteCount === 2)) {
-  throw new Error(`[harden-private-hr-authority] unexpected private HR fallback count: legacy=${legacyWriteCount}, hardened=${hardenedWriteCount}`);
+} else {
+  throw new Error('[harden-private-hr-authority] private HR write fallback could not be identified');
+}
+if (source.split(hardenedWritePrefix).length - 1 !== 2) {
+  throw new Error('[harden-private-hr-authority] hardened private HR fallback must exist exactly twice');
 }
 
 if (!source.includes('match /private_hr_profiles/{profileId}')) {
