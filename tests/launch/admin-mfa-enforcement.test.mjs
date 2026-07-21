@@ -163,14 +163,20 @@ test('Admin profile exposes real Firebase phone MFA enrollment and forces re-log
   assert.match(profile, /AdminMfaEnrollmentCard/);
 });
 
-test('Admin email login resolves Firebase MFA and Google redirect path is disabled', async () => {
+test('Admin email login resolves Firebase MFA and public login redirects founder admin', async () => {
   const login = await read('apps/admin-panel/src/components/UnifiedLogin.tsx');
+  const publicLogin = await read('src/pages/LoginPage.tsx');
   const challenge = await read('apps/admin-panel/src/components/security/AdminMfaSignInChallenge.tsx');
   assert.match(login, /auth\/multi-factor-auth-required/);
   assert.match(login, /getMultiFactorResolver\(auth, err\)/);
   assert.match(login, /AdminMfaSignInChallenge/);
   assert.match(login, /admin-google-login-disabled/);
+  assert.match(login, /new URLSearchParams\(window\.location\.search\)\.get\('email'\)/);
   assert.doesNotMatch(login, /signInWithRedirect/);
+  assert.match(publicLogin, /ADMIN_PANEL_LOGIN_URL = 'https:\/\/bin-group-admin-panel\.web\.app\/login'/);
+  assert.match(publicLogin, /CANONICAL_ADMIN_EMAILS = new Set\(\['ceo@bin-groups\.com', 'ceo@bin-group\.com'\]\)/);
+  assert.match(publicLogin, /redirectToAdminPanel\(normalizedEmail\)/);
+  assert.match(publicLogin, /auth\/multi-factor-auth-required/);
   assert.match(challenge, /resolver\.resolveSignIn\(assertion\)/);
 });
 
