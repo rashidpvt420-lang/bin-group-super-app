@@ -29,19 +29,22 @@ test('compiled executable is inspected and Intel slices are rejected', () => {
   assert.match(buildRunner, /x86_64 slice is prohibited/);
 });
 
-test('build runner installs locked pods and builds the committed Capacitor workspace', () => {
+test('build runner installs the exact locked CocoaPods version and committed workspace', () => {
+  assert.match(buildRunner, /EXPECTED_COCOAPODS_VERSION="1\.16\.2"/);
+  assert.match(buildRunner, /gem install cocoapods --version "\$EXPECTED_COCOAPODS_VERSION" --no-document/);
+  assert.match(buildRunner, /pod _\$\{EXPECTED_COCOAPODS_VERSION\}_ install --deployment/);
   assert.match(buildRunner, /npm ci --include=optional --legacy-peer-deps/);
   assert.match(buildRunner, /npm run verify:ios-apple-silicon/);
   assert.match(buildRunner, /npx cap copy ios/);
-  assert.match(buildRunner, /pod install --deployment/);
   assert.match(buildRunner, /-workspace ios\/App\/App\.xcworkspace/);
   assert.match(buildRunner, /-scheme App/);
 });
 
-test('arm64 evidence is commit-bound and retained as an artifact', () => {
+test('arm64 evidence is commit-bound and retains toolchain versions', () => {
   assert.match(buildRunner, /"commitSha": os\.environ\.get\("GITHUB_SHA"/);
   assert.match(buildRunner, /"workflowRunId": os\.environ\.get\("GITHUB_RUN_ID"/);
   assert.match(buildRunner, /"binarySha256": os\.environ\["BINARY_SHA256"\]/);
+  assert.match(buildRunner, /"cocoaPods": os\.environ\["COCOAPODS_VERSION"\]/);
   assert.match(canonicalCi, /ios-arm64-build-evidence-\$\{\{ github\.sha \}\}/);
   assert.match(canonicalCi, /retention-days:\s*30/);
 });
