@@ -5,6 +5,7 @@ const legacyReadCatchAll = "      allow read: if !(collection in ['system_secret
 const brokerReadCatchAll = "      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 const boundedReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 const adminSecurityReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
+const privateHrReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const legacyWriteList = `          'system_secrets',
           'users',
           'tickets',
@@ -17,6 +18,11 @@ const adminSecurityWriteList = `          'system_secrets',
           'users',
           'audit_logs',
           'admin_security_sessions',`;
+const privateHrWriteList = `          'system_secrets',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
 const legacyCreateCatchAll = '      allow create: if !(';
 const boundedCreateCatchAll = "      allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(";
 const legacyUpdateCatchAll = '      allow update, delete: if !(';
@@ -29,55 +35,14 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
 `;
 
 const reviewedRoleFields = Object.freeze({
-  tenant: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'emergencyContact',
-  ],
-  owner: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'companyName',
-    'ownerCompanyName',
-    'billingContact',
-  ],
-  technician: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'requestedTrade',
-    'serviceZonePreference',
-    'emergencyContact',
-  ],
+  tenant: ['displayName', 'phone', 'phoneNumber', 'mobile', 'emergencyContact'],
+  owner: ['displayName', 'phone', 'phoneNumber', 'mobile', 'companyName', 'ownerCompanyName', 'billingContact'],
+  technician: ['displayName', 'phone', 'phoneNumber', 'mobile', 'requestedTrade', 'serviceZonePreference', 'emergencyContact'],
   broker: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'companyName',
-    'reraLicense',
-    'reraStatus',
-    'reraVerified',
-    'primaryRegion',
-    'brokerTerritory',
-    'tradeLicenseNumber',
-    'emiratesIdNumber',
-    'passportNumber',
-    'bankName',
-    'bankAccountHolder',
-    'bankIban',
-    'iban',
-    'commissionAgreementAccepted',
-    'commissionAgreementAcceptedAt',
-    'commissionTermsVersion',
-    'brokerKycStatus',
-    'brokerProfileCompletion',
-    'profileCompletionScore',
+    'displayName', 'phone', 'phoneNumber', 'mobile', 'companyName', 'reraLicense', 'reraStatus', 'reraVerified',
+    'primaryRegion', 'brokerTerritory', 'tradeLicenseNumber', 'emiratesIdNumber', 'passportNumber', 'bankName',
+    'bankAccountHolder', 'bankIban', 'iban', 'commissionAgreementAccepted', 'commissionAgreementAcceptedAt',
+    'commissionTermsVersion', 'brokerKycStatus', 'brokerProfileCompletion', 'profileCompletionScore',
   ],
 });
 
@@ -86,9 +51,7 @@ function reviewedRoleMarker(role) {
 }
 
 function reviewedRoleGuard(role) {
-  const fields = reviewedRoleFields[role]
-    .map((field) => `            '${field}'`)
-    .join(',\n');
+  const fields = reviewedRoleFields[role].map((field) => `            '${field}'`).join(',\n');
   return `
         (
           claimedRole() != '${role}' ||
@@ -140,19 +103,20 @@ if (!text.includes('match /admin_security_sessions/{sessionId}')) {
 if (text.includes(legacyReadCatchAll)) text = text.replace(legacyReadCatchAll, adminSecurityReadCatchAll);
 if (text.includes(brokerReadCatchAll)) text = text.replace(brokerReadCatchAll, adminSecurityReadCatchAll);
 if (text.includes(boundedReadCatchAll)) text = text.replace(boundedReadCatchAll, adminSecurityReadCatchAll);
-if (!text.includes(adminSecurityReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, and Admin security exclusions');
+if (!text.includes(adminSecurityReadCatchAll) && !text.includes(privateHrReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security and optional private HR exclusions');
 }
 
 const legacyWriteCount = text.split(legacyWriteList).length - 1;
 const boundedWriteCount = text.split(boundedWriteList).length - 1;
 const adminSecurityWriteCount = text.split(adminSecurityWriteList).length - 1;
-if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount === 0) {
+const privateHrWriteCount = text.split(privateHrWriteList).length - 1;
+if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
   text = text.replaceAll(legacyWriteList, adminSecurityWriteList);
-} else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0) {
+} else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
   text = text.replaceAll(boundedWriteList, adminSecurityWriteList);
-} else if (!(legacyWriteCount === 0 && adminSecurityWriteCount === 2)) {
-  throw new Error(`[final-firestore-authority] unexpected ticket/Admin security write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}`);
+} else if (!(legacyWriteCount === 0 && boundedWriteCount === 0 && (adminSecurityWriteCount === 2 || privateHrWriteCount === 2))) {
+  throw new Error(`[final-firestore-authority] unexpected write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}, privateHr=${privateHrWriteCount}`);
 }
 
 if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
@@ -169,6 +133,8 @@ if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)
 text = hardenReviewedRoleSelfUpdates(text);
 writeFileSync(rulesPath, text, 'utf8');
 
+const activeReadCatchAll = text.includes(privateHrReadCatchAll) ? privateHrReadCatchAll : adminSecurityReadCatchAll;
+const activeWriteList = text.includes(privateHrWriteList) ? privateHrWriteList : adminSecurityWriteList;
 const required = [
   'function profileAllowsAccess(data) {',
   "data.get('status', '') in [",
@@ -193,10 +159,10 @@ const required = [
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
-  adminSecurityReadCatchAll.trim(),
+  activeReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  "'system_secrets',\n          'users',\n          'audit_logs',\n          'admin_security_sessions'",
+  activeWriteList.trim(),
   "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
 ];
 
