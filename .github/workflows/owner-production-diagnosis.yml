@@ -1,0 +1,139 @@
+name: Owner Production Failure Diagnosis
+run-name: Diagnose latest Firebase production failure
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: owner-production-failure-diagnosis
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnose latest failed Firebase production deployment
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch diagnose-latest-deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+
+    steps:
+      - name: Resolve latest failed protected deployment
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=50")"
+          run="$(jq -c '[.workflow_runs[] | select(.conclusion == "failure")] | sort_by(.created_at) | last // empty' <<<"$runs")"
+          [[ -n "$run" ]] || {
+            echo '::error::No completed failed Firebase Production Deploy run was found.'
+            exit 1
+          }
+
+          run_id="$(jq -r '.id' <<<"$run")"
+          run_sha="$(jq -r '.head_sha' <<<"$run")"
+          run_url="$(jq -r '.html_url' <<<"$run")"
+          created_at="$(jq -r '.created_at' <<<"$run")"
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]]
+
+          created_epoch="$(date -d "$created_at" +%s)"
+          now_epoch="$(date -u +%s)"
+          age_seconds=$((now_epoch - created_epoch))
+          if (( age_seconds < 0 || age_seconds > 86400 )); then
+            echo '::error::The latest failed production run is outside the 24-hour diagnostic window.'
+            exit 1
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_sha=$run_sha" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Collect GitHub-masked failed-job logs
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package
+          jobs="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100")"
+          jq -e '.jobs | any(.conclusion == "failure")' <<<"$jobs" >/dev/null
+          : > launch_package/firebase-production-failure.log
+
+          mapfile -t failed_job_ids < <(jq -r '.jobs[] | select(.conclusion == "failure") | .id' <<<"$jobs")
+          for job_id in "${failed_job_ids[@]}"; do
+            [[ "$job_id" =~ ^[0-9]+$ ]]
+            printf '\n===== FAILED JOB %s =====\n' "$job_id" >> launch_package/firebase-production-failure.log
+            gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> launch_package/firebase-production-failure.log
+          done
+          test -s launch_package/firebase-production-failure.log
+
+          SOURCE_RUN_ID="$SOURCE_RUN_ID" SOURCE_RUN_SHA="$SOURCE_RUN_SHA" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
+            .replace(/\u001b\[[0-9;]*m/g, '');
+          const selected = raw.split(/\r?\n/)
+            .filter((line) =>
+              /##\[error\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|MFA_REQUIRED/i.test(line),
+            )
+            .map((line) => line
+              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<redacted-email>')
+              .replace(/\b[A-Za-z0-9_-]{28}\b/g, '<redacted-id>')
+              .replace(/\b(?:sk|rk|pk|whsec|cs_live|evt)_[A-Za-z0-9_]+\b/g, '<redacted-provider-id>')
+              .slice(0, 500),
+            )
+            .filter((line, index, all) => line && all.indexOf(line) === index)
+            .slice(-20);
+
+          const report = {
+            schemaVersion: 1,
+            status: 'FAILED',
+            sourceWorkflow: 'Firebase Production Deploy',
+            sourceRunId: process.env.SOURCE_RUN_ID,
+            sourceRunSha: process.env.SOURCE_RUN_SHA,
+            normalizedErrorLines: selected,
+            githubSecretMaskingApplied: true,
+            personalIdentifiersRedacted: true,
+            hardLaunchClaim: false,
+            generatedAt: new Date().toISOString(),
+          };
+          writeFileSync('launch_package/firebase-production-failure.json', `${JSON.stringify(report, null, 2)}\n`);
+          NODE
+
+      - name: Upload safe diagnostic evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: firebase-production-manual-diagnosis-${{ steps.source.outputs.run_sha }}-${{ steps.source.outputs.run_id }}
+          path: |
+            launch_package/firebase-production-failure.json
+            launch_package/firebase-production-failure.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Post normalized diagnosis to canonical pilot issue
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
+          SOURCE_RUN_URL: ${{ steps.source.outputs.run_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the GitHub-masked artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+          artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
+          body="## Latest Firebase production failure diagnosis\n\n- Exact source SHA: \`$SOURCE_RUN_SHA\`\n- Source run: $SOURCE_RUN_URL\n- Diagnostic artifact: \`$artifact\`\n- Hard-launch claim: \`false\`\n\n### Normalized failure lines\n$errors\n\nThe deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
