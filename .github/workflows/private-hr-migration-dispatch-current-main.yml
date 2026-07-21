@@ -1,0 +1,36 @@
+name: START HERE - Private HR Data Migration
+run-name: Private HR current-main dispatch · ${{ inputs.mode }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Review only or execute the migration"
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - execute
+        default: dry-run
+      confirmation:
+        description: "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP or MIGRATE_PRIVATE_HR_BIN_GROUP_57C60"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: private-hr-current-main-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch-current-main:
+    name: Bind current main and run protected migration
+    uses: ./.github/workflows/private-hr-migration.yml
+    with:
+      expected_commit_sha: ${{ github.sha }}
+      mode: ${{ inputs.mode }}
+      confirmation: ${{ inputs.confirmation }}
+    secrets: inherit
