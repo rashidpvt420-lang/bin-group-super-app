@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -20,46 +20,6 @@ const GOOGLE_NATIVE_PRODUCTS = Object.freeze([
   'GoogleNavigation',
 ]);
 
-const IOS_NATIVE_EXTENSIONS = new Set(['.swift', '.m', '.mm', '.h']);
-const TEXT_CONFIG_EXTENSIONS = new Set(['.xcconfig', '.pbxproj', '.yml', '.yaml']);
-
-function readOptional(root, relativePath) {
-  const absolutePath = path.join(root, relativePath);
-  return existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : '';
-}
-
-function walkFiles(directory, predicate, output = []) {
-  if (!existsSync(directory)) return output;
-  for (const entry of readdirSync(directory)) {
-    const absolutePath = path.join(directory, entry);
-    const stats = statSync(absolutePath);
-    if (stats.isDirectory()) {
-      walkFiles(absolutePath, predicate, output);
-    } else if (predicate(absolutePath)) {
-      output.push(absolutePath);
-    }
-  }
-  return output;
-}
-
-function readFiles(files) {
-  return files.map((file) => ({ file, source: readFileSync(file, 'utf8') }));
-}
-
-function parsePackageJson(root, failures) {
-  const source = readOptional(root, 'package.json');
-  if (!source) {
-    failures.push('package.json is required for the iOS Apple Silicon audit');
-    return {};
-  }
-  try {
-    return JSON.parse(source);
-  } catch {
-    failures.push('package.json must contain valid JSON');
-    return {};
-  }
-}
-
 function detectsIntelOnlyArchitecture(source) {
   return [
     /(?:^|\s)ARCHS(?:\[[^\]]+\])?\s*=\s*["']?x86_64(?:["';\s]|$)/im,
@@ -74,7 +34,7 @@ function detectsExplicitIntelRunner(source) {
 
 function googlePodNames(source) {
   return GOOGLE_NATIVE_PRODUCTS.filter((name) => (
-    new RegExp(`(?:pod\\s+['\"]${name}['\"]|^-\\s+${name}(?:\\s|\\(|$))`, 'im').test(source)
+    new RegExp(`(?:pod\\s+['\"]${name}(?:\\/[^'\"]+)?['\"]|^\\s*-\\s+${name}(?:\\/[^\\s(]+)?(?:\\s|\\(|$))`, 'im').test(source)
   ));
 }
 
@@ -92,33 +52,40 @@ function detectSwiftPackage(projectSource, resolvedSource) {
   return { detected, exactRequirement };
 }
 
-export function analyzeIosAppleSiliconReadiness(root = process.cwd()) {
+function parsePackageJson(packageJsonText, failures) {
+  if (!packageJsonText) {
+    failures.push('package.json is required for the iOS Apple Silicon audit');
+    return {};
+  }
+  try {
+    return JSON.parse(packageJsonText);
+  } catch {
+    failures.push('package.json must contain valid JSON');
+    return {};
+  }
+}
+
+export function analyzeIosAppleSiliconSources({
+  packageJsonText = '',
+  podfile = '',
+  podfileLock = '',
+  projectSource = '',
+  packageResolved = '',
+  architectureSearchText = '',
+  workflowSearchText = '',
+  nativeSourceText = '',
+} = {}) {
   const failures = [];
   const warnings = [];
-  const pkg = parsePackageJson(root, failures);
+  const pkg = parsePackageJson(packageJsonText, failures);
   const dependencies = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
   const capacitorGoogleMapsVersion = String(dependencies['@capacitor/google-maps'] || '').trim();
 
-  const podfile = readOptional(root, 'ios/App/Podfile');
-  const podfileLock = readOptional(root, 'ios/App/Podfile.lock');
-  const projectSource = readOptional(root, 'ios/App/App.xcodeproj/project.pbxproj');
-  const packageResolved = readOptional(root, 'ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved')
-    || readOptional(root, 'ios/App/App.xcworkspace/xcshareddata/swiftpm/Package.resolved');
-
-  const iosConfigFiles = walkFiles(path.join(root, 'ios'), (file) => TEXT_CONFIG_EXTENSIONS.has(path.extname(file)));
-  const workflowFiles = walkFiles(path.join(root, '.github', 'workflows'), (file) => ['.yml', '.yaml'].includes(path.extname(file)));
-  const iosNativeFiles = walkFiles(path.join(root, 'ios', 'App', 'App'), (file) => IOS_NATIVE_EXTENSIONS.has(path.extname(file)));
-
-  for (const { file, source } of readFiles(iosConfigFiles)) {
-    if (detectsIntelOnlyArchitecture(source)) {
-      failures.push(`Intel-only iOS architecture configuration detected in ${path.relative(root, file)}`);
-    }
+  if (detectsIntelOnlyArchitecture(`${projectSource}\n${podfile}\n${architectureSearchText}`)) {
+    failures.push('Intel-only iOS architecture configuration detected');
   }
-
-  for (const { file, source } of readFiles(workflowFiles)) {
-    if (detectsExplicitIntelRunner(source)) {
-      failures.push(`Explicit Intel macOS runner detected in ${path.relative(root, file)}`);
-    }
+  if (detectsExplicitIntelRunner(workflowSearchText)) {
+    failures.push('Explicit Intel macOS runner detected in a canonical workflow');
   }
 
   const podNames = [...new Set([
@@ -126,7 +93,7 @@ export function analyzeIosAppleSiliconReadiness(root = process.cwd()) {
     ...googlePodNames(podfileLock),
   ])];
   const hasM4B = /\bGoogleMapsM4B\b/.test(`${podfile}\n${podfileLock}\n${projectSource}\n${packageResolved}`);
-  const nativeSymbolsDetected = readFiles(iosNativeFiles).some(({ source }) => containsGoogleNativeSymbol(source));
+  const nativeSymbolsDetected = containsGoogleNativeSymbol(nativeSourceText);
   const swiftPackage = detectSwiftPackage(projectSource, packageResolved);
 
   let dependencyMode = IOS_MAPS_DEPENDENCY_MODES.WEB_ONLY;
@@ -159,18 +126,47 @@ export function analyzeIosAppleSiliconReadiness(root = process.cwd()) {
     dependencyMode,
     nativeGoogleMapsSdkDetected: dependencyMode !== IOS_MAPS_DEPENDENCY_MODES.WEB_ONLY,
     appleSiliconDevelopmentRequiredBy: 'Q3 2026',
-    checkedIosConfigFiles: iosConfigFiles.length,
-    checkedWorkflowFiles: workflowFiles.length,
-    checkedNativeSourceFiles: iosNativeFiles.length,
     failures: [...new Set(failures)],
     warnings: [...new Set(warnings)],
   };
 }
 
+export function analyzeIosAppleSiliconReadiness() {
+  const packageJsonText = readFileSync('package.json', 'utf8');
+  const podfile = existsSync('ios/App/Podfile') ? readFileSync('ios/App/Podfile', 'utf8') : '';
+  const podfileLock = existsSync('ios/App/Podfile.lock') ? readFileSync('ios/App/Podfile.lock', 'utf8') : '';
+  const projectSource = existsSync('ios/App/App.xcodeproj/project.pbxproj')
+    ? readFileSync('ios/App/App.xcodeproj/project.pbxproj', 'utf8')
+    : '';
+  const packageResolved = existsSync('ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved')
+    ? readFileSync('ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'utf8')
+    : existsSync('ios/App/App.xcworkspace/xcshareddata/swiftpm/Package.resolved')
+      ? readFileSync('ios/App/App.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'utf8')
+      : '';
+  const debugConfig = existsSync('ios/App/Debug.xcconfig') ? readFileSync('ios/App/Debug.xcconfig', 'utf8') : '';
+  const releaseConfig = existsSync('ios/App/Release.xcconfig') ? readFileSync('ios/App/Release.xcconfig', 'utf8') : '';
+  const ciWorkflow = existsSync('.github/workflows/ci.yml') ? readFileSync('.github/workflows/ci.yml', 'utf8') : '';
+  const prWorkflow = existsSync('.github/workflows/pr-validation.yml') ? readFileSync('.github/workflows/pr-validation.yml', 'utf8') : '';
+  const productionWorkflow = existsSync('.github/workflows/firebase-production-deploy.yml')
+    ? readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8')
+    : '';
+  const appDelegate = existsSync('ios/App/App/AppDelegate.swift') ? readFileSync('ios/App/App/AppDelegate.swift', 'utf8') : '';
+
+  return analyzeIosAppleSiliconSources({
+    packageJsonText,
+    podfile,
+    podfileLock,
+    projectSource,
+    packageResolved,
+    architectureSearchText: `${debugConfig}\n${releaseConfig}`,
+    workflowSearchText: `${ciWorkflow}\n${prWorkflow}\n${productionWorkflow}`,
+    nativeSourceText: appDelegate,
+  });
+}
+
 function runCli() {
-  const result = analyzeIosAppleSiliconReadiness(process.cwd());
+  const result = analyzeIosAppleSiliconReadiness();
   console.log(`[ios-apple-silicon] dependency mode: ${result.dependencyMode}`);
-  console.log(`[ios-apple-silicon] checked ${result.checkedIosConfigFiles} iOS config file(s), ${result.checkedWorkflowFiles} workflow file(s), and ${result.checkedNativeSourceFiles} native source file(s)`);
   for (const warning of result.warnings) console.warn(`[ios-apple-silicon] warning: ${warning}`);
   if (result.failures.length) {
     console.error('[ios-apple-silicon] FAIL');
