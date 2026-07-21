@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const workflow = readFileSync('.github/workflows/ios-apple-silicon-arm64.yml', 'utf8');
+const canonicalCi = readFileSync('.github/workflows/ci.yml', 'utf8');
 const readinessDoc = readFileSync('docs/IOS_APPLE_SILICON_READINESS.md', 'utf8');
 
 test('iOS build uses a native Apple Silicon GitHub-hosted runner', () => {
@@ -44,11 +45,18 @@ test('arm64 evidence is commit-bound and retained as an artifact', () => {
   assert.match(workflow, /retention-days:\s*30/);
 });
 
-test('workflow runs for pull requests, main pushes, and manual verification', () => {
+test('workflow supports direct and reusable execution', () => {
+  assert.match(workflow, /workflow_call:/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /pull_request:/);
   assert.match(workflow, /push:/);
   assert.match(workflow, /branches:\s*\[main\]/);
+});
+
+test('canonical BIN GROUP CI requires the reusable arm64 workflow', () => {
+  assert.match(canonicalCi, /ios-apple-silicon-arm64:/);
+  assert.match(canonicalCi, /uses:\s*\.\/\.github\/workflows\/ios-apple-silicon-arm64\.yml/);
+  assert.doesNotMatch(canonicalCi, /continue-on-error:\s*true/);
 });
 
 test('operator documentation identifies the protected hosted workflow', () => {
@@ -56,4 +64,5 @@ test('operator documentation identifies the protected hosted workflow', () => {
   assert.match(readinessDoc, /macos-26/);
   assert.match(readinessDoc, /arm64-only/i);
   assert.match(readinessDoc, /ios-arm64-build-evidence/i);
+  assert.match(readinessDoc, /must pass the protected arm64 workflow before merge/i);
 });
