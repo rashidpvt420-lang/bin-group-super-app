@@ -2,6 +2,7 @@
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { PRODUCTION } from './lib/launch-honesty.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_WORKFLOW = 'Operational Provider Evidence';
@@ -20,7 +21,7 @@ if (process.env.GITHUB_ACTIONS !== 'true') fail('GitHub Actions context required
 if (process.env.GITHUB_REPOSITORY !== EXPECTED_REPOSITORY) fail('Repository mismatch.');
 if (process.env.GITHUB_REF !== 'refs/heads/main') fail('Main branch required.');
 if (process.env.GITHUB_WORKFLOW !== EXPECTED_WORKFLOW || process.env.GITHUB_JOB !== EXPECTED_JOB) fail('Protected provider workflow context required.');
-if (process.env.GITHUB_ACTOR !== 'rashidpvt420-lang') fail('Authorized founder actor required.');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 
 const gate = String(process.env.OPERATIONAL_GATE || '').trim();
 const evidenceType = EVIDENCE_TYPES[gate];

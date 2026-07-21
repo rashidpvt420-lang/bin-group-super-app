@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       gate:
-        description: 'Provider gate to verify and publish'
+        description: 'Provider gate to verify and publish; all-baseline runs SMTP and App Check together'
         required: true
         type: choice
         options:
+          - all-baseline
           - brandedEmailDelivery
           - appCheckEnforcement
           - stripeLiveBilling
@@ -44,10 +45,11 @@ concurrency:
 jobs:
   verify-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: hard-public-launch
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
       E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
@@ -70,8 +72,14 @@ jobs:
             echo "::error::Provider evidence may only run from refs/heads/main."
             exit 1
           fi
-          if [[ "$GITHUB_ACTOR" != "rashidpvt420-lang" ]]; then
-            echo "::error::Only the authorized founder account may publish operational provider evidence."
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$GITHUB_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
@@ -83,6 +91,12 @@ jobs:
             exit 1
           fi
           case "$SELECTED_GATE" in
+            all-baseline)
+              if [[ -n "${DEPLOY_RUN_ID}${STRIPE_SESSION}${STRIPE_EVENT}" ]]; then
+                echo "::error::all-baseline must not receive Stripe-only inputs."
+                exit 1
+              fi
+              ;;
             brandedEmailDelivery|appCheckEnforcement) ;;
             stripeLiveBilling)
               if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
@@ -123,11 +137,11 @@ jobs:
         run: bash scripts/npm-install-retry.sh
 
       - name: Verify BIN GROUP branded SMTP delivery
-        if: inputs.gate == 'brandedEmailDelivery'
+        if: inputs.gate == 'brandedEmailDelivery' || inputs.gate == 'all-baseline'
         run: node scripts/verify-smtp-live-delivery.mjs
 
       - name: Verify production App Check enforcement
-        if: inputs.gate == 'appCheckEnforcement'
+        if: inputs.gate == 'appCheckEnforcement' || inputs.gate == 'all-baseline'
         run: node scripts/verify-appcheck-enforcement.mjs
 
       - name: Download exact production deployment metadata
@@ -188,17 +202,25 @@ jobs:
           STRIPE_SECRET_KEY="$stripe_key" STRIPE_WEBHOOK_SECRET="$webhook_secret" \
             node scripts/verify-stripe-live-proof.mjs
 
-      - name: Publish canonical operational provider evidence
+      - name: Publish and finalize canonical provider evidence
         env:
-          OPERATIONAL_GATE: ${{ inputs.gate }}
-        run: node scripts/publish-operational-provider-evidence.mjs
+          SELECTED_GATE: ${{ inputs.gate }}
+        run: |
+          set -euo pipefail
+          if [[ "$SELECTED_GATE" == "all-baseline" ]]; then
+            gates=(brandedEmailDelivery appCheckEnforcement)
+          else
+            gates=("$SELECTED_GATE")
+          fi
 
-      - name: Finalize provider evidence for hard-launch validation
-        env:
-          OPERATIONAL_GATE: ${{ inputs.gate }}
-        run: node scripts/finalize-operational-provider-evidence.mjs
+          for gate in "${gates[@]}"; do
+            echo "::group::Publish and finalize ${gate}"
+            OPERATIONAL_GATE="$gate" node scripts/publish-operational-provider-evidence.mjs
+            OPERATIONAL_GATE="$gate" node scripts/finalize-operational-provider-evidence.mjs
+            echo "::endgroup::"
+          done
 
-      - name: Upload provider proof
+      - name: Upload provider proof batch
         if: success()
         uses: actions/upload-artifact@v4
         with:

@@ -5,6 +5,7 @@ import path from 'node:path';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { PRODUCTION, sha256File } from './lib/launch-honesty.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_WORKFLOW = 'Operational Provider Evidence';
@@ -121,7 +122,7 @@ if (process.env.GITHUB_ACTIONS !== 'true') fail('publisher may only run in GitHu
 if (process.env.GITHUB_REPOSITORY !== EXPECTED_REPOSITORY) fail('unexpected repository');
 if (process.env.GITHUB_REF !== 'refs/heads/main') fail('publisher requires refs/heads/main');
 if (process.env.GITHUB_WORKFLOW !== EXPECTED_WORKFLOW || process.env.GITHUB_JOB !== EXPECTED_JOB) fail('publisher requires the protected provider evidence job');
-if (process.env.GITHUB_ACTOR !== 'rashidpvt420-lang') fail('only the authorized founder account may publish provider evidence');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 
 const gate = text(process.env.OPERATIONAL_GATE);
 const manifest = manifests[gate];

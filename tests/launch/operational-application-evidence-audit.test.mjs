@@ -22,9 +22,11 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE/);
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
-  assert.match(workflow, /Auto-discover and verify production application evidence/);
-  assert.match(workflow, /verify-operational-application-evidence\.mjs/);
-  assert.match(workflow, /publish-operational-application-evidence\.mjs/);
+  assert.match(workflow, /Auto-discover, verify, and publish application evidence/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-application-evidence\.mjs/);
+  assert.match(workflow, /application-proofs\/\$\{gate\}\.json/);
+  assert.match(workflow, /SELECTED_GATE.*all/s);
 
   const gates = [
     'ownerPaymentActivation',
@@ -39,12 +41,12 @@ test('application evidence workflow is protected and auto-discovers fixed produc
     assert.match(verifier, new RegExp(gate));
     assert.match(publisher, new RegExp(`${gate}:`));
   }
-  assert.match(workflow, /path:\s*launch_package\/application-proof\.json/);
+  assert.match(workflow, /launch_package\/application-proof\.json/);
+  assert.match(workflow, /launch_package\/application-proofs/);
   assert.match(verifier, /const APPLICATION_PROOF_PATH = 'launch_package\/application-proof\.json';/);
   assert.match(verifier, /writeFileSync\(APPLICATION_PROOF_PATH,/);
   assert.match(publisher, /readFileSync\('launch_package\/application-proof\.json'/);
   assert.match(publisher, /sha256File\('launch_package\/application-proof\.json'\)/);
-  assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /application-(?:ownerPaymentActivation|paymentUnlockExactlyOnce|tenantNotificationDelivery|brokerCommissionLockExactlyOnce|adminStaffClaims|renewalScheduler)\.json/);
   assert.doesNotMatch(workflow, /payment_id:|contract_id:|notification_id:|ticket_id:|tenant_uid:|staff_uid:|renewal_watch_id:/);
   assert.doesNotMatch(verifier, /process\.env\.(?:PAYMENT_ID|CONTRACT_ID|NOTIFICATION_ID|TICKET_ID|TENANT_UID|STAFF_UID|RENEWAL_WATCH_ID)/);
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /GATE_STATUS|founder_attested|waiv|static green/i);
