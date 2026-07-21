@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
-import { functions, httpsCallable } from '../../lib/firebase';
+import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminMfaEnrollmentCard from '../../components/security/AdminMfaEnrollmentCard';
@@ -82,6 +82,19 @@ export default function AdminSecurityProfilePage() {
     setLoading(true);
     setError('');
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        sessionStorage.removeItem('bin-admin-security-session');
+        setProfile(null);
+        setError(copy(
+          'Your Firebase Auth session is not active on this browser. Sign in again from the protected Admin login, then reopen Personal Security Profile.',
+          'جلسة Firebase Auth غير نشطة في هذا المتصفح. سجّل الدخول مرة أخرى من بوابة المسؤول المحمية ثم افتح ملف الأمان الشخصي.',
+        ));
+        return;
+      }
+
+      await currentUser.getIdToken(true);
+
       let sessionId = sessionStorage.getItem('bin-admin-security-session') || '';
       if (!sessionId) {
         const registered = await httpsCallable(functions, 'registerAdminSecuritySession')({ language: isRTL ? 'ar' : 'en' });
@@ -96,6 +109,15 @@ export default function AdminSecurityProfilePage() {
         ? String((profileError as { code?: unknown }).code || '')
         : '';
       const message = profileError instanceof Error ? profileError.message : String(profileError);
+      const normalizedMessage = message.trim().toLowerCase();
+      if (code === 'functions/unauthenticated' || code === 'unauthenticated' || normalizedMessage === 'unauthenticated') {
+        sessionStorage.removeItem('bin-admin-security-session');
+        setError(copy(
+          'Your Admin security session expired before the server profile loaded. Sign in again and complete MFA; this page will not infer MFA or permission status from cached UI data.',
+          'انتهت جلسة أمان المسؤول قبل تحميل ملف الخادم. سجّل الدخول مرة أخرى وأكمل المصادقة متعددة العوامل؛ لن تستنتج هذه الصفحة حالة MFA أو الصلاحيات من بيانات واجهة مخزنة.',
+        ));
+        return;
+      }
       setError(
         code === 'functions/not-found' || code === 'functions/internal' || message === 'internal'
           ? copy(
