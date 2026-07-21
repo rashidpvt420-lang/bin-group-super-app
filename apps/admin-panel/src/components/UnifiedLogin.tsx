@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
 import {
     getMultiFactorResolver,
@@ -21,6 +21,11 @@ export default function UnifiedLogin() {
 
     const error = authError || localError;
     const loading = localLoading;
+
+    useEffect(() => {
+        const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
+        if (redirectedEmail && !email) setEmail(redirectedEmail);
+    }, [email]);
 
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
