@@ -49,6 +49,9 @@ type ReadinessOverview = {
     activeAdminCount: number;
     emailVerifiedCount: number;
     phoneMfaEnrolledCount: number;
+    canonicalFounderReadyCount: number;
+    unexpectedPrivilegedAccountCount: number;
+    founderSingletonReady: boolean;
     recoveryApproverCount: number;
     recoveryApproverReadyCount: number;
     recoveryQuorumReady: boolean;
@@ -133,20 +136,54 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       : '';
     if (codeValue === 'auth/requires-recent-login') {
       return copy(
-        'For security, sign out and sign in again before enrolling MFA.',
-        'لأسباب أمنية، سجّل الخروج ثم الدخول مجدداً قبل تسجيل المصادقة متعددة العوامل.',
+        'For security, sign out and sign in again before continuing.',
+        'لأسباب أمنية، سجّل الخروج ثم الدخول مجدداً قبل المتابعة.',
+      );
+    }
+    if (codeValue === 'auth/unverified-email') {
+      return copy(
+        'Firebase requires the Admin email to be verified before phone MFA enrollment.',
+        'تتطلب Firebase توثيق بريد المسؤول قبل تسجيل مصادقة الهاتف.',
       );
     }
     if (codeValue === 'auth/invalid-verification-code') {
       return copy('The SMS verification code is incorrect.', 'رمز التحقق المرسل غير صحيح.');
     }
-    if (codeValue === 'auth/too-many-requests') {
-      return copy('Too many security attempts. Try again later.', 'عدد محاولات الأمان كبير. حاول لاحقاً.');
+    if (codeValue === 'auth/code-expired') {
+      return copy('The SMS code expired. Request one new code.', 'انتهت صلاحية رمز الرسالة. اطلب رمزاً جديداً واحداً.');
+    }
+    if (codeValue === 'auth/too-many-requests' || codeValue === 'auth/quota-exceeded') {
+      return copy(
+        'Firebase temporarily blocked additional security codes. Stop retrying and wait before requesting one new code.',
+        'أوقفت Firebase مؤقتاً إرسال رموز أمان إضافية. توقف عن المحاولة وانتظر قبل طلب رمز جديد واحد.',
+      );
+    }
+    if (codeValue === 'auth/captcha-check-failed') {
+      return copy(
+        'The reCAPTCHA security check failed. Reload the page and try once more.',
+        'فشل فحص أمان reCAPTCHA. أعد تحميل الصفحة وحاول مرة واحدة أخرى.',
+      );
+    }
+    if (codeValue === 'auth/invalid-phone-number' || codeValue === 'auth/missing-phone-number') {
+      return copy(
+        'Firebase rejected the phone number. Use a valid international number such as +9715XXXXXXXX.',
+        'رفضت Firebase رقم الهاتف. استخدم رقماً دولياً صالحاً مثل +9715XXXXXXXX.',
+      );
+    }
+    if (codeValue === 'auth/network-request-failed') {
+      return copy(
+        'The Firebase security request could not reach the network. Check the connection and retry once.',
+        'تعذر وصول طلب أمان Firebase إلى الشبكة. تحقق من الاتصال وحاول مرة واحدة.',
+      );
     }
     if (codeValue === 'auth/second-factor-already-in-use') {
       return copy('This phone factor is already enrolled.', 'عامل الهاتف هذا مسجّل بالفعل.');
     }
-    return copy('Admin MFA enrollment failed.', 'فشل تسجيل المصادقة متعددة العوامل للمسؤول.');
+    const safeCode = codeValue || 'unknown-error';
+    return copy(
+      `Admin security action failed (${safeCode}).`,
+      `فشل إجراء أمان المسؤول (${safeCode}).`,
+    );
   };
 
   const sendVerificationEmail = async () => {
@@ -435,9 +472,9 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
               <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
                 <ShieldAlert color={readiness?.launchReady ? '#10b981' : '#ef4444'} />
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                  <Typography fontWeight={950}>{copy('Production Admin MFA readiness', 'جاهزية مصادقة مسؤولي الإنتاج')}</Typography>
+                  <Typography fontWeight={950}>{copy('Production Admin authority readiness', 'جاهزية صلاحية مسؤول الإنتاج')}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {copy('Available only to CEO and Super Admin accounts. Email addresses are masked.', 'متاحة فقط لحسابات الرئيس التنفيذي والمسؤول الأعلى. عناوين البريد مخفية جزئياً.')}
+                    {copy('The production authority model permits only the canonical founder account. Email addresses are masked.', 'يسمح نموذج صلاحية الإنتاج بحساب المؤسس المعتمد فقط. عناوين البريد مخفية جزئياً.')}
                   </Typography>
                 </Box>
               </Stack>
@@ -447,33 +484,39 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
             {readiness && (
               <>
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip label={copy(`Active: ${readiness.summary.activeAdminCount}`, `النشطون: ${readiness.summary.activeAdminCount}`)} />
-                  <Chip color={readiness.summary.emailVerifiedCount === readiness.summary.activeAdminCount ? 'success' : 'warning'} label={copy(`Email verified: ${readiness.summary.emailVerifiedCount}`, `البريد الموثق: ${readiness.summary.emailVerifiedCount}`)} />
-                  <Chip color={readiness.summary.phoneMfaEnrolledCount === readiness.summary.activeAdminCount ? 'success' : 'warning'} label={copy(`Phone MFA: ${readiness.summary.phoneMfaEnrolledCount}`, `مصادقة الهاتف: ${readiness.summary.phoneMfaEnrolledCount}`)} />
-                  <Chip color={readiness.summary.recoveryQuorumReady ? 'success' : 'error'} label={copy(`Recovery ready: ${readiness.summary.recoveryApproverReadyCount}/${readiness.summary.recoveryApproverCount}`, `استعادة جاهزة: ${readiness.summary.recoveryApproverReadyCount}/${readiness.summary.recoveryApproverCount}`)} />
+                  <Chip label={copy(`Privileged: ${readiness.summary.activeAdminCount}`, `الحسابات المميزة: ${readiness.summary.activeAdminCount}`)} />
+                  <Chip color={readiness.summary.canonicalFounderReadyCount === 1 ? 'success' : 'warning'} label={copy(`Founder ready: ${readiness.summary.canonicalFounderReadyCount}/1`, `المؤسس جاهز: ${readiness.summary.canonicalFounderReadyCount}/1`)} />
+                  <Chip color={readiness.summary.unexpectedPrivilegedAccountCount === 0 ? 'success' : 'error'} label={copy(`Unexpected privileged: ${readiness.summary.unexpectedPrivilegedAccountCount}`, `حسابات مميزة غير متوقعة: ${readiness.summary.unexpectedPrivilegedAccountCount}`)} />
+                  <Chip color={readiness.summary.recoveryQuorumReady ? 'success' : 'error'} label={copy(`Singleton ready: ${readiness.summary.recoveryQuorumReady ? 'yes' : 'no'}`, `الحساب الوحيد جاهز: ${readiness.summary.recoveryQuorumReady ? 'نعم' : 'لا'}`)} />
                 </Stack>
                 <Alert severity={readiness.launchReady ? 'success' : 'warning'}>
                   {readiness.launchReady
-                    ? copy('Every active privileged account is email-verified and phone-MFA enrolled, and the recovery quorum is ready.', 'كل حساب مميز نشط موثق البريد ومسجل بمصادقة الهاتف، ونصاب الاستعادة جاهز.')
-                    : copy('The protected production gate remains blocked until every listed account completes its own verification and MFA enrollment.', 'ستبقى بوابة الإنتاج المحمية متوقفة حتى يكمل كل حساب مدرج التحقق وتسجيل المصادقة الخاصة به.')}
+                    ? copy('The canonical founder is email-verified, phone-MFA enrolled, and no other privileged identity remains.', 'بريد المؤسس المعتمد موثّق ومصادقة الهاتف مسجلة ولا توجد هوية مميزة أخرى.')
+                    : copy('Production requires exactly one privileged identity. Verify and enroll the canonical founder, then remove every other privileged account only through the protected cleanup after its dry run.', 'يتطلب الإنتاج هوية مميزة واحدة فقط. وثّق المؤسس المعتمد وسجّل مصادقة هاتفه، ثم احذف كل حساب مميز آخر فقط عبر التنظيف المحمي بعد التشغيل التجريبي.')}
                 </Alert>
                 {!!readiness.blockers.length && <Divider />}
                 <Stack spacing={1.25}>
-                  {readiness.blockers.map((target, index) => (
-                    <Box key={`${target.emailMasked}-${target.role}-${index}`} sx={{ p: 1.75, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 }}>
-                      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={1.5}>
-                        <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                          <Typography fontWeight={900}>{target.displayName}</Typography>
-                          <Typography variant="body2" color="text.secondary">{target.emailMasked} · {target.role.replaceAll('_', ' ')}</Typography>
-                        </Box>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
-                          {target.recoveryApprover && <Chip size="small" color="error" label={copy('Recovery approver', 'مسؤول استعادة')} />}
-                          {!target.emailVerified && <Chip size="small" color="warning" label={copy('Email unverified', 'البريد غير موثق')} />}
-                          {!target.phoneMfaEnrolled && <Chip size="small" color="warning" label={copy('Phone MFA missing', 'مصادقة الهاتف مفقودة')} />}
+                  {readiness.blockers.map((target, index) => {
+                    const deleteRequired = target.blockers.includes('DELETE_REQUIRED');
+                    return (
+                      <Box key={`${target.emailMasked}-${target.role}-${index}`} sx={{ p: 1.75, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 }}>
+                        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={1.5}>
+                          <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                            <Typography fontWeight={900}>{target.displayName}</Typography>
+                            <Typography variant="body2" color="text.secondary">{target.emailMasked} · {target.role.replaceAll('_', ' ')}</Typography>
+                          </Box>
+                          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
+                            {target.recoveryApprover
+                              ? <Chip size="small" color="primary" label={copy('Canonical founder', 'المؤسس المعتمد')} />
+                              : <Chip size="small" color="error" label={copy('Unexpected privileged account', 'حساب مميز غير متوقع')} />}
+                            {deleteRequired && <Chip data-testid="admin-privileged-delete-required" size="small" color="error" label={copy('Protected cleanup required', 'التنظيف المحمي مطلوب')} />}
+                            {!deleteRequired && !target.emailVerified && <Chip size="small" color="warning" label={copy('Email unverified', 'البريد غير موثق')} />}
+                            {!deleteRequired && !target.phoneMfaEnrolled && <Chip size="small" color="warning" label={copy('Phone MFA missing', 'مصادقة الهاتف مفقودة')} />}
+                          </Stack>
                         </Stack>
-                      </Stack>
-                    </Box>
-                  ))}
+                      </Box>
+                    );
+                  })}
                 </Stack>
               </>
             )}
