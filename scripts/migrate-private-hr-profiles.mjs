@@ -9,43 +9,73 @@ const EXECUTE_CONFIRMATION = 'MIGRATE_PRIVATE_HR_BIN_GROUP_57C60';
 const REPORT_PATH = 'launch_package/private-hr-migration.json';
 const execute = process.argv.includes('--execute');
 
-const SENSITIVE_KEYS = Object.freeze([
-  'employeeId',
-  'emiratesId',
-  'salaryPackage',
-  'basicSalary',
-  'housingAllowance',
-  'transportAllowance',
-  'foodAllowance',
-  'otherAllowance',
-  'salaryGrade',
-  'salaryPaymentDay',
-  'contractEndDate',
-  'overtimeEligible',
-  'companyAccommodationProvided',
-  'companyTransportProvided',
-  'companyMedicalInsuranceProvided',
-]);
-
 function hashId(value) {
   return createHash('sha256').update(String(value)).digest('hex');
 }
 
-function presentSensitiveFields(...documents) {
+function present(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function firstPresent(...values) {
+  return values.find((value) => present(value));
+}
+
+function extractSensitiveFields(hrData = {}, userData = {}, technicianData = {}) {
   const result = {};
-  for (const document of documents) {
-    if (!document || typeof document !== 'object') continue;
-    for (const key of SENSITIVE_KEYS) {
-      if (result[key] === undefined && document[key] !== undefined && document[key] !== null && document[key] !== '') {
-        result[key] = document[key];
-      }
-    }
-  }
+  const employeeId = firstPresent(hrData.employeeId, userData.employeeId, technicianData.employeeId);
+  const emiratesId = firstPresent(hrData.emiratesId, userData.emiratesId, technicianData.emiratesId);
+  const salaryPackage = firstPresent(hrData.salaryPackage, userData.salaryPackage, technicianData.salaryPackage);
+  const basicSalary = firstPresent(hrData.basicSalary, userData.basicSalary, technicianData.basicSalary);
+  const housingAllowance = firstPresent(hrData.housingAllowance, userData.housingAllowance, technicianData.housingAllowance);
+  const transportAllowance = firstPresent(hrData.transportAllowance, userData.transportAllowance, technicianData.transportAllowance);
+  const foodAllowance = firstPresent(hrData.foodAllowance, userData.foodAllowance, technicianData.foodAllowance);
+  const otherAllowance = firstPresent(hrData.otherAllowance, userData.otherAllowance, technicianData.otherAllowance);
+  const salaryGrade = firstPresent(hrData.salaryGrade, userData.salaryGrade, technicianData.salaryGrade);
+  const salaryPaymentDay = firstPresent(hrData.salaryPaymentDay, userData.salaryPaymentDay, technicianData.salaryPaymentDay);
+  const contractEndDate = firstPresent(hrData.contractEndDate, userData.contractEndDate, technicianData.contractEndDate);
+  const overtimeEligible = firstPresent(hrData.overtimeEligible, userData.overtimeEligible, technicianData.overtimeEligible);
+  const companyAccommodationProvided = firstPresent(hrData.companyAccommodationProvided, userData.companyAccommodationProvided, technicianData.companyAccommodationProvided);
+  const companyTransportProvided = firstPresent(hrData.companyTransportProvided, userData.companyTransportProvided, technicianData.companyTransportProvided);
+  const companyMedicalInsuranceProvided = firstPresent(hrData.companyMedicalInsuranceProvided, userData.companyMedicalInsuranceProvided, technicianData.companyMedicalInsuranceProvided);
+
+  if (present(employeeId)) result.employeeId = employeeId;
+  if (present(emiratesId)) result.emiratesId = emiratesId;
+  if (present(salaryPackage)) result.salaryPackage = salaryPackage;
+  if (present(basicSalary)) result.basicSalary = basicSalary;
+  if (present(housingAllowance)) result.housingAllowance = housingAllowance;
+  if (present(transportAllowance)) result.transportAllowance = transportAllowance;
+  if (present(foodAllowance)) result.foodAllowance = foodAllowance;
+  if (present(otherAllowance)) result.otherAllowance = otherAllowance;
+  if (present(salaryGrade)) result.salaryGrade = salaryGrade;
+  if (present(salaryPaymentDay)) result.salaryPaymentDay = salaryPaymentDay;
+  if (present(contractEndDate)) result.contractEndDate = contractEndDate;
+  if (present(overtimeEligible)) result.overtimeEligible = overtimeEligible;
+  if (present(companyAccommodationProvided)) result.companyAccommodationProvided = companyAccommodationProvided;
+  if (present(companyTransportProvided)) result.companyTransportProvided = companyTransportProvided;
+  if (present(companyMedicalInsuranceProvided)) result.companyMedicalInsuranceProvided = companyMedicalInsuranceProvided;
   return result;
 }
 
 function deletionPatch() {
-  return Object.fromEntries(SENSITIVE_KEYS.map((key) => [key, admin.firestore.FieldValue.delete()]));
+  const remove = admin.firestore.FieldValue.delete();
+  return {
+    employeeId: remove,
+    emiratesId: remove,
+    salaryPackage: remove,
+    basicSalary: remove,
+    housingAllowance: remove,
+    transportAllowance: remove,
+    foodAllowance: remove,
+    otherAllowance: remove,
+    salaryGrade: remove,
+    salaryPaymentDay: remove,
+    contractEndDate: remove,
+    overtimeEligible: remove,
+    companyAccommodationProvided: remove,
+    companyTransportProvided: remove,
+    companyMedicalInsuranceProvided: remove,
+  };
 }
 
 function assertExecutionContext() {
@@ -73,14 +103,13 @@ const candidates = [];
 
 for (const hrDocument of hrSnapshot.docs) {
   const uid = hrDocument.id;
-  const [userDocument, technicianDocument, privateDocument] = await Promise.all([
+  const [userDocument, technicianDocument] = await Promise.all([
     db.collection('users').doc(uid).get(),
     db.collection('technicians').doc(uid).get(),
-    db.collection('private_hr_profiles').doc(uid).get(),
   ]);
-  const sensitive = presentSensitiveFields(hrDocument.data(), userDocument.data(), technicianDocument.data());
+  const sensitive = extractSensitiveFields(hrDocument.data(), userDocument.data(), technicianDocument.data());
   if (Object.keys(sensitive).length === 0) continue;
-  candidates.push({ uid, hrDocument, userDocument, technicianDocument, privateDocument, sensitive });
+  candidates.push({ uid, hrDocument, userDocument, technicianDocument, sensitive });
 }
 
 let migrated = 0;
@@ -91,8 +120,9 @@ if (execute) {
   for (const candidate of candidates) {
     try {
       const { uid, hrDocument, userDocument, technicianDocument, sensitive } = candidate;
+      const privateReference = db.collection('private_hr_profiles').doc(uid);
       await db.runTransaction(async (transaction) => {
-        transaction.set(db.collection('private_hr_profiles').doc(uid), {
+        transaction.set(privateReference, {
           ...sensitive,
           uid,
           accessClassification: 'PRIVATE_HR_SERVER_ONLY',
@@ -111,14 +141,14 @@ if (execute) {
         hrDocument.ref.get(),
         userDocument.ref.get(),
         technicianDocument.ref.get(),
-        db.collection('private_hr_profiles').doc(uid).get(),
+        privateReference.get(),
       ]);
-      const residue = presentSensitiveFields(freshHr.data(), freshUser.data(), freshTechnician.data());
+      const residue = extractSensitiveFields(freshHr.data(), freshUser.data(), freshTechnician.data());
       if (Object.keys(residue).length !== 0 || !freshPrivate.exists) {
         throw new Error('post-migration verification failed');
       }
       verified += 1;
-    } catch (error) {
+    } catch {
       failedHashes.push({ uidHash: hashId(candidate.uid), errorCode: 'MIGRATION_OR_VERIFICATION_FAILED' });
     }
   }
