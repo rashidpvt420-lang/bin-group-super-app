@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
@@ -55,7 +56,7 @@ const haversineMeters = (left, right) => {
 if (process.env.GITHUB_ACTIONS !== 'true') fail('verifier may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('verifier requires protected main');
 if (process.env.GITHUB_WORKFLOW !== 'Technician Physical Evidence' || process.env.GITHUB_JOB !== 'verify-physical-evidence') fail('unexpected workflow context');
-if (process.env.GITHUB_ACTOR !== 'rashidpvt420-lang') fail('only the authorized founder may run physical evidence');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 const commitSha = text(process.env.GITHUB_SHA);
 const sourceRunId = text(process.env.GITHUB_RUN_ID);
 if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(sourceRunId)) fail('exact commit SHA and workflow run ID are required');
@@ -188,7 +189,7 @@ const proof = {
   commitSha,
   projectId,
   sourceRunId,
-  sourceSystem: 'Firebase technician lifecycle, registered installation, property geofence and Cloud Storage',
+  sourceSystem: 'Firebase technician physical device GPS lifecycle and Cloud Storage',
   observedAt,
   physicalDevice: true,
   gpsCaptured: true,
