@@ -1,0 +1,282 @@
+name: Owner Launch Command
+run-name: Owner launch command · ${{ github.event.comment.body }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: owner-launch-command-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch-controlled-launch:
+    name: Dispatch protected controlled-launch workflows
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+      COMMAND: ${{ github.event.comment.body }}
+      OWNER_LOGIN: ${{ github.repository_owner }}
+      FOUNDER_NAME: Rashid Abdul Ghani Abdul Ghani
+      FOUNDER_EMAIL: ceo@bin-groups.com
+
+    steps:
+      - name: Validate exact owner command
+        id: command
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$COMMAND" in
+            '/bin-launch prepare-bank-pilot')
+              echo 'kind=prepare-bank-pilot' >> "$GITHUB_OUTPUT"
+              echo 'incident_reference=ADMIN_MFA_BOOTSTRAP_HOSTING' >> "$GITHUB_OUTPUT"
+              ;;
+            '/bin-launch bank-pilot-after-mfa')
+              echo 'kind=bank-pilot-after-mfa' >> "$GITHUB_OUTPUT"
+              echo 'incident_reference=https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo '::error::Unsupported owner command. Use exactly /bin-launch prepare-bank-pilot or /bin-launch bank-pilot-after-mfa.'
+              exit 1
+              ;;
+          esac
+
+      - name: Resolve stable current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]]
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch and verify current-main private HR dry run
+        id: private_hr
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          post_comment() {
+            gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$1" >/dev/null
+          }
+
+          locate_run() {
+            local workflow="$1"
+            local started_at="$2"
+            for _ in $(seq 1 40); do
+              local runs run_id
+              runs="$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50")"
+              run_id="$(jq -r --arg sha "$RELEASE_SHA" --arg started "$started_at" --arg owner "$OWNER_LOGIN" '
+                [.workflow_runs[] |
+                  select(.head_sha == $sha and .created_at >= $started and
+                    (.actor.login == "github-actions[bot]" or .actor.login == $owner))]
+                | sort_by(.created_at) | last | .id // empty
+              ' <<<"$runs")"
+              if [[ "$run_id" =~ ^[0-9]+$ ]]; then
+                printf '%s' "$run_id"
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          wait_for_success() {
+            local run_id="$1"
+            for _ in $(seq 1 160); do
+              local run_json status conclusion
+              run_json="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+              if [[ "$status" == 'completed' ]]; then
+                [[ "$conclusion" == 'success' ]]
+                return
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n \
+            --arg ref main \
+            '{ref:$ref,inputs:{mode:"dry-run",confirmation:"REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP"}}' \
+            > private-hr-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/private-hr-migration-dispatch-current-main.yml/dispatches" \
+            --input private-hr-dispatch.json
+
+          run_id="$(locate_run private-hr-migration-dispatch-current-main.yml "$started_at")" || {
+            post_comment "The current-main Private-HR dispatch was accepted for \`$RELEASE_SHA\`, but its run could not be located. Launch preparation stopped."
+            exit 1
+          }
+          run_url="https://github.com/$REPOSITORY/actions/runs/$run_id"
+          post_comment "Current-main Private-HR dry run started for exact SHA \`$RELEASE_SHA\`: $run_url"
+
+          if ! wait_for_success "$run_id"; then
+            post_comment "Private-HR dry run failed or timed out for \`$RELEASE_SHA\`: $run_url. Bank-pilot was not dispatched."
+            exit 1
+          fi
+
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts")"
+          expected_artifact="private-hr-migration-dry-run-$RELEASE_SHA"
+          artifact_id="$(jq -r --arg expected "$expected_artifact" '[.artifacts[] | select(.name == $expected and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
+            post_comment "Private-HR run succeeded but exact-SHA artifact \`$expected_artifact\` is missing. Bank-pilot was not dispatched."
+            exit 1
+          }
+
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > private-hr-report.zip
+          mkdir -p private-hr-report
+          unzip -q private-hr-report.zip -d private-hr-report
+          report_path="$(find private-hr-report -type f -name private-hr-migration.json -print -quit)"
+          [[ -n "$report_path" && -s "$report_path" ]]
+          jq -e --arg sha "$RELEASE_SHA" '
+            .schemaVersion == 2 and
+            .commitSha == $sha and
+            .mode == "DRY_RUN" and
+            .failureCount == 0 and
+            .sensitiveValuesLogged == false and
+            .rawIdentifiersLogged == false and
+            .hardLaunchClaim == false
+          ' "$report_path" >/dev/null
+
+          execution_required="$(jq -r '.executionRequired' "$report_path")"
+          recommended_action="$(jq -r '.recommendedNextAction' "$report_path")"
+          if [[ "$execution_required" != 'false' || "$recommended_action" != 'SKIP_EXECUTE_PROCEED_TO_BANK_PILOT' ]]; then
+            candidate_count="$(jq -r '.recordsRequiringMigration' "$report_path")"
+            post_comment "Private-HR dry run found \`$candidate_count\` migration candidate(s) for \`$RELEASE_SHA\`. Execute mode requires separate protected review; bank-pilot was not dispatched."
+            exit 1
+          fi
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]] || {
+            post_comment "Main advanced from \`$RELEASE_SHA\` to \`$latest_main\` after the Private-HR run. Launch preparation stopped and must restart."
+            exit 1
+          }
+
+          post_comment "Private-HR decision for \`$RELEASE_SHA\`: zero failures, execution not required, proceed to protected bank-pilot."
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch protected bank-pilot wrapper
+        id: deployment
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          INCIDENT_REFERENCE: ${{ steps.command.outputs.incident_reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          post_comment() {
+            gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$1" >/dev/null
+          }
+
+          locate_run() {
+            local workflow="$1"
+            local started_at="$2"
+            for _ in $(seq 1 60); do
+              local runs run_id
+              runs="$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50")"
+              run_id="$(jq -r --arg sha "$RELEASE_SHA" --arg started "$started_at" --arg owner "$OWNER_LOGIN" '
+                [.workflow_runs[] |
+                  select(.head_sha == $sha and .created_at >= $started and
+                    (.actor.login == "github-actions[bot]" or .actor.login == $owner))]
+                | sort_by(.created_at) | last | .id // empty
+              ' <<<"$runs")"
+              if [[ "$run_id" =~ ^[0-9]+$ ]]; then
+                printf '%s' "$run_id"
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]]
+
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n \
+            --arg ref main \
+            --arg confirmation DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
+            --arg hard AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP \
+            --arg expectedSha "$RELEASE_SHA" \
+            --arg founderName "$FOUNDER_NAME" \
+            --arg founderEmail "$FOUNDER_EMAIL" \
+            --arg incidentReference "$INCIDENT_REFERENCE" \
+            '{ref:$ref,inputs:{
+              confirmation:$confirmation,
+              hard_launch_confirmation:$hard,
+              expected_commit_sha:$expectedSha,
+              founder_name:$founderName,
+              founder_email:$founderEmail,
+              launch_mode:"bank-pilot",
+              run_public_release_gate:"false",
+              incident_active_json:"[]",
+              incident_requires_rollback:"false",
+              incident_rollback_reason:"",
+              incident_evidence_refs:$incidentReference,
+              hard_clearance_run_id:"",
+              stripe_live_checkout_session_id:"",
+              stripe_live_webhook_event_id:""
+            }}' > bank-pilot-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/firebase-production-dispatch-current-main.yml/dispatches" \
+            --input bank-pilot-dispatch.json
+
+          dispatcher_run="$(locate_run firebase-production-dispatch-current-main.yml "$started_at")" || {
+            post_comment "Bank-pilot wrapper was accepted for \`$RELEASE_SHA\`, but its exact-SHA run could not be located. No mismatched deployment is authorized."
+            exit 1
+          }
+          dispatcher_url="https://github.com/$REPOSITORY/actions/runs/$dispatcher_run"
+          post_comment "Exact-SHA bank-pilot wrapper started for \`$RELEASE_SHA\`: $dispatcher_url"
+
+          production_run="$(locate_run firebase-production-deploy.yml "$started_at")" || {
+            post_comment "The exact-SHA bank-pilot wrapper started, but the protected Firebase Production Deploy run was not located. Review $dispatcher_url."
+            exit 1
+          }
+          production_url="https://github.com/$REPOSITORY/actions/runs/$production_run"
+          post_comment "Protected Firebase Production Deploy created for exact SHA \`$RELEASE_SHA\`: $production_url"
+
+          echo "dispatcher_run_url=$dispatcher_url" >> "$GITHUB_OUTPUT"
+          echo "production_run_url=$production_url" >> "$GITHUB_OUTPUT"
+
+      - name: Publish controlled-launch command summary
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          PRIVATE_HR_RUN: ${{ steps.private_hr.outputs.run_url }}
+          DISPATCHER_RUN: ${{ steps.deployment.outputs.dispatcher_run_url }}
+          PRODUCTION_RUN: ${{ steps.deployment.outputs.production_run_url }}
+        shell: bash
+        run: |
+          {
+            echo '## Owner controlled-launch command accepted'
+            echo
+            echo "- Exact main SHA: \`$RELEASE_SHA\`"
+            echo "- Private-HR dry run: $PRIVATE_HR_RUN"
+            echo "- Bank-pilot wrapper: $DISPATCHER_RUN"
+            echo "- Protected production run: $PRODUCTION_RUN"
+            echo '- Public deployment: not requested'
+            echo '- Hard-clearance: not requested'
+          } >> "$GITHUB_STEP_SUMMARY"

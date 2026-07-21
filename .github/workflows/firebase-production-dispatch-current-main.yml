@@ -12,6 +12,11 @@ on:
         description: 'Type exactly AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
         required: true
         type: string
+      expected_commit_sha:
+        description: 'Optional automation-only exact current main SHA; leave blank for normal manual dispatch'
+        required: false
+        type: string
+        default: ''
       founder_name:
         description: 'Founder/CEO legal name'
         required: true
@@ -87,6 +92,7 @@ jobs:
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
           HARD_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
           FOUNDER_NAME: ${{ inputs.founder_name }}
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -107,6 +113,9 @@ jobs:
 
           [[ "$CONFIRMATION" == "DEPLOY_PRODUCTION_BIN_GROUP_57C60" ]] || fail "Production confirmation phrase does not match."
           [[ "$HARD_CONFIRMATION" == "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]] || fail "Hard-launch confirmation phrase does not match."
+          if [[ -n "$EXPECTED_COMMIT_SHA" ]]; then
+            [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "expected_commit_sha must be blank or a full lowercase 40-character SHA."
+          fi
           [[ -n "${FOUNDER_NAME// }" ]] || fail "Founder name is required."
           [[ "$FOUNDER_EMAIL" == *@*.* ]] || fail "Founder email must be a valid authorized email address."
           [[ -n "${INCIDENT_EVIDENCE_REFS// }" ]] || fail "At least one incident evidence reference is required."
@@ -135,6 +144,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           CONFIRMATION: ${{ inputs.confirmation }}
           HARD_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
           FOUNDER_NAME: ${{ inputs.founder_name }}
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -210,11 +220,19 @@ jobs:
           for attempt in 1 2 3 4 5; do
             main_before="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
             [[ "$main_before" =~ ^[0-9a-f]{40}$ ]]
+            if [[ -n "$EXPECTED_COMMIT_SHA" && "$main_before" != "$EXPECTED_COMMIT_SHA" ]]; then
+              echo "::error::Current main $main_before no longer matches verified expected SHA $EXPECTED_COMMIT_SHA."
+              exit 1
+            fi
             sleep 3
             main_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
             if [[ "$main_before" != "$main_sha" ]]; then
               echo "main advanced during stability check; retrying ($attempt/5)."
               continue
+            fi
+            if [[ -n "$EXPECTED_COMMIT_SHA" && "$main_sha" != "$EXPECTED_COMMIT_SHA" ]]; then
+              echo "::error::Stable current main $main_sha does not match verified expected SHA $EXPECTED_COMMIT_SHA."
+              exit 1
             fi
 
             attempt_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
