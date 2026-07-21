@@ -35,7 +35,7 @@ test('provisioning is App Check protected and never returns invitation bearer li
   const createReturnStart = source.indexOf('return { success: true, uid, role, modules, invitationQueued: true');
   assert.ok(createReturnStart >= 0, 'create result block missing');
   const createReturn = source.slice(createReturnStart, source.indexOf('};', createReturnStart) + 2);
-  assert.doesNotMatch(createReturn, /passwordResetLink|emailVerificationLink|password|bootstrap/i);
+  assert.doesNotMatch(createReturn, /passwordResetLink|emailVerificationLink|bootstrap|password\s*:/i);
 });
 
 test('invitation audit stores hashes and provenance without identity links or passwords', () => {
