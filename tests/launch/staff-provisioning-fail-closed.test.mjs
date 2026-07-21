@@ -9,19 +9,26 @@ const hrPrivacyHardener = readFileSync('scripts/harden-hr-privacy-rules.mjs', 'u
 
 test('Staff Access UI is callable-only and fail-closed', () => {
   assert.match(staffPage, /httpsCallable\(functions, 'adminCreateUser'\)/);
+  assert.match(staffPage, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
+  assert.match(staffPage, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
   assert.doesNotMatch(staffPage, /setDoc\(/);
   assert.doesNotMatch(staffPage, /doc\(collection\(db, 'users'\)\)/);
   assert.doesNotMatch(staffPage, /Math\.random/);
   assert.doesNotMatch(staffPage, /tempPassword/);
   assert.doesNotMatch(staffPage, /value: 'admin'/);
-  assert.match(staffPage, /provisioning failures create no fallback record/i);
+  assert.match(staffPage, /failed request creates no fallback record/i);
 });
 
 test('staff provisioning backend rejects unsafe identity conversion and binds modules', () => {
-  assert.match(backend, /CUSTOMER_ROLES/);
-  assert.match(backend, /already belongs to a non-staff or privileged identity/);
+  assert.match(backend, /const STAFF_ROLES/);
+  assert.match(backend, /const PRIVILEGED_ADMIN_ROLES/);
+  assert.match(backend, /async function assertNoExistingIdentity\(email: string\)/);
+  assert.match(backend, /getUserByEmail\(email\)/);
+  assert.match(backend, /Customer identities cannot be converted through Staff Access/);
+  assert.match(backend, /Privileged or customer identities cannot be managed from Staff Access/);
   assert.match(backend, /previousClaims/);
-  assert.match(backend, /setCustomUserClaims\(uid, \{/);
+  assert.match(backend, /claimsForAccess\(role, modules, permissions, false\)/);
+  assert.match(backend, /setCustomUserClaims\(uid, claimsForAccess/);
   assert.match(backend, /staffModules: modules/);
   assert.match(backend, /permissions/);
   assert.match(backend, /admin: false/);
@@ -30,10 +37,18 @@ test('staff provisioning backend rejects unsafe identity conversion and binds mo
 });
 
 test('private HR data is kept out of operational staff and technician records', () => {
-  assert.match(backend, /privateHrRecord: true/);
-  assert.match(backend, /operationalFieldDeletes\(\)/);
-  assert.match(backend, /tx\.set\(db\.collection\("users"\)\.doc\(uid\), \{[\s\S]*operationalFieldDeletes\(\)/);
-  assert.match(backend, /tx\.set\(db\.collection\("technicians"\)\.doc\(uid\), \{[\s\S]*operationalFieldDeletes\(\)/);
+  assert.match(backend, /const privateHrProfile = \{/);
+  assert.match(backend, /db\.collection\("private_hr_profiles"\)\.doc\(uid\)/);
+  assert.match(backend, /emailHash: hashValue\(email\)/);
+  assert.match(backend, /salaryPackage/);
+  assert.match(backend, /accessClassification: "PRIVATE_HR_SERVER_ONLY"/);
+  assert.match(backend, /privateHrSeparated: true/);
+
+  const operationalStart = backend.indexOf('const operationalProfile = {');
+  const operationalEnd = backend.indexOf('    };', operationalStart);
+  assert.ok(operationalStart >= 0 && operationalEnd > operationalStart, 'operational profile block must be present');
+  const operationalProfile = backend.slice(operationalStart, operationalEnd);
+  assert.doesNotMatch(operationalProfile, /employeeId|emiratesId|basicSalary|housingAllowance|transportAllowance|foodAllowance|salaryPackage/);
 });
 
 test('HR profile privacy hardening is part of rules preparation', () => {
