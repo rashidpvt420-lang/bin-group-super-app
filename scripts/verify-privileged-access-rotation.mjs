@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import admin from 'firebase-admin';
 import { GoogleAuth } from 'google-auth-library';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
@@ -47,7 +48,7 @@ const verifySecretVersions = (name, payload, now) => {
 if (process.env.GITHUB_ACTIONS !== 'true') fail('verifier may only run in GitHub Actions');
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('verifier requires protected main');
 if (process.env.GITHUB_WORKFLOW !== 'Privileged Access Rotation Evidence' || process.env.GITHUB_JOB !== 'verify-rotation') fail('unexpected workflow context');
-if (process.env.GITHUB_ACTOR !== 'rashidpvt420-lang') fail('only the authorized founder may run rotation evidence');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 const commitSha = text(process.env.GITHUB_SHA);
 const sourceRunId = text(process.env.GITHUB_RUN_ID);
 const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();
