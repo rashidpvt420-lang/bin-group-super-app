@@ -45,7 +45,7 @@ test('arm64 evidence is commit-bound and retained as an artifact', () => {
   assert.match(workflow, /retention-days:\s*30/);
 });
 
-test('workflow supports direct and reusable execution', () => {
+test('dedicated workflow supports direct and reusable execution', () => {
   assert.match(workflow, /workflow_call:/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /pull_request:/);
@@ -53,10 +53,13 @@ test('workflow supports direct and reusable execution', () => {
   assert.match(workflow, /branches:\s*\[main\]/);
 });
 
-test('canonical BIN GROUP CI requires the reusable arm64 workflow', () => {
+test('canonical BIN GROUP CI runs the arm64 build as a first-class job', () => {
   assert.match(canonicalCi, /ios-apple-silicon-arm64:/);
-  assert.match(canonicalCi, /uses:\s*\.\/\.github\/workflows\/ios-apple-silicon-arm64\.yml/);
-  assert.doesNotMatch(canonicalCi, /continue-on-error:\s*true/);
+  assert.match(canonicalCi, /ios-apple-silicon-arm64:[\s\S]*runs-on:\s*macos-26\b/);
+  assert.match(canonicalCi, /ios-apple-silicon-arm64:[\s\S]*xcodebuild \\/);
+  assert.match(canonicalCi, /ios-apple-silicon-arm64:[\s\S]*lipo -archs/);
+  assert.match(canonicalCi, /ios-apple-silicon-arm64:[\s\S]*ios-arm64-build-evidence-\$\{\{ github\.sha \}\}/);
+  assert.doesNotMatch(canonicalCi, /ios-apple-silicon-arm64:[\s\S]*continue-on-error:\s*true/);
 });
 
 test('operator documentation identifies the protected hosted workflow', () => {
