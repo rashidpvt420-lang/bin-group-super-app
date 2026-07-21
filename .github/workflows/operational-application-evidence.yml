@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       gate:
-        description: 'Application gate to verify and publish'
+        description: 'Application gate to verify and publish; all runs the complete application batch'
         required: true
         type: choice
         options:
+          - all
           - ownerPaymentActivation
           - paymentUnlockExactlyOnce
           - tenantNotificationDelivery
@@ -34,7 +35,7 @@ concurrency:
 jobs:
   verify-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: hard-public-launch
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
@@ -77,7 +78,7 @@ jobs:
             exit 1
           fi
           case "$SELECTED_GATE" in
-            ownerPaymentActivation|paymentUnlockExactlyOnce|tenantNotificationDelivery|brokerCommissionLockExactlyOnce|adminStaffClaims|renewalScheduler) ;;
+            all|ownerPaymentActivation|paymentUnlockExactlyOnce|tenantNotificationDelivery|brokerCommissionLockExactlyOnce|adminStaffClaims|renewalScheduler) ;;
             *)
               echo "::error::Unsupported application gate."
               exit 1
@@ -106,17 +107,40 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Auto-discover and verify production application evidence
-        run: node scripts/verify-operational-application-evidence.mjs
+      - name: Auto-discover, verify, and publish application evidence
+        env:
+          SELECTED_GATE: ${{ inputs.gate }}
+        run: |
+          set -euo pipefail
+          if [[ "$SELECTED_GATE" == "all" ]]; then
+            gates=(
+              ownerPaymentActivation
+              paymentUnlockExactlyOnce
+              tenantNotificationDelivery
+              brokerCommissionLockExactlyOnce
+              adminStaffClaims
+              renewalScheduler
+            )
+          else
+            gates=("$SELECTED_GATE")
+          fi
 
-      - name: Publish canonical application evidence
-        run: node scripts/publish-operational-application-evidence.mjs
+          mkdir -p launch_package/application-proofs
+          for gate in "${gates[@]}"; do
+            echo "::group::Verify and publish ${gate}"
+            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence.mjs
+            OPERATIONAL_GATE="$gate" node scripts/publish-operational-application-evidence.mjs
+            cp launch_package/application-proof.json "launch_package/application-proofs/${gate}.json"
+            echo "::endgroup::"
+          done
 
-      - name: Upload application proof
+      - name: Upload application proof batch
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: operational-application-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
-          path: launch_package/application-proof.json
+          path: |
+            launch_package/application-proof.json
+            launch_package/application-proofs
           if-no-files-found: error
           retention-days: 365
