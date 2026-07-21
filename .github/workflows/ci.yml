@@ -165,3 +165,42 @@ jobs:
 
       - name: Verify mobile store source readiness
         run: npm run test:mobile-store-readiness
+
+  ios-apple-silicon-arm64:
+    name: Build iOS Simulator on Apple Silicon
+    runs-on: macos-26
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build and verify arm64 iOS Simulator application
+        run: bash scripts/run-ios-arm64-build.sh
+
+      - name: Publish arm64 build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-arm64-build-evidence-${{ github.sha }}
+          path: |
+            ios-arm64-build-evidence.json
+            ios-arm64-xcodebuild.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-arm64-build-diagnostics-${{ github.sha }}
+          path: |
+            ios-arm64-xcodebuild.log
+            ios/App/Podfile.lock
+          if-no-files-found: warn
+          retention-days: 14
