@@ -171,11 +171,6 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 35
 
-    env:
-      DERIVED_DATA_PATH: ${{ runner.temp }}/bin-group-ios-derived-data
-      IOS_BUILD_LOG: ios-arm64-xcodebuild.log
-      IOS_EVIDENCE_PATH: ios-arm64-build-evidence.json
-
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@v4
