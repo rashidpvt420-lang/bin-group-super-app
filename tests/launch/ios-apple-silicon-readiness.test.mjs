@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -39,6 +39,13 @@ function withFixture(run) {
     rmSync(root, { recursive: true, force: true });
   }
 }
+
+test('repository mobile readiness executes the Apple Silicon verifier', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  assert.equal(pkg.scripts['verify:ios-apple-silicon'], 'node scripts/verify-ios-apple-silicon-readiness.mjs');
+  assert.match(pkg.scripts['test:mobile-store-readiness'], /npm run verify:ios-apple-silicon/);
+  assert.match(readFileSync('docs/DEPLOYMENT.md', 'utf8'), /IOS_APPLE_SILICON_READINESS\.md/);
+});
 
 test('web Google Maps usage remains valid without a native iOS SDK', () => {
   withFixture((root) => {
