@@ -126,8 +126,7 @@ jobs:
           gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > privileged-review.zip
           mkdir -p privileged-review
           unzip -q privileged-review.zip -d privileged-review
-          report_path="$(find privileged-review -type f -name privileged-account-cleanup.json -print -quit)"
-          [[ -n "$report_path" && -s "$report_path" ]]
+          test -s privileged-review/privileged-account-cleanup.json
 
           jq -e --arg sha "$RELEASE_SHA" '
             .schemaVersion == 2 and
@@ -139,16 +138,16 @@ jobs:
             .auditLogsPreserved == true and
             .nonPrivilegedAccountsUntouched == true and
             .hardLaunchClaim == false
-          ' "$report_path" >/dev/null
+          ' privileged-review/privileged-account-cleanup.json >/dev/null
 
-          cp "$report_path" privileged-account-review.json
-          ready="$(jq -r '.canonicalFounderReady' "$report_path")"
-          eligible="$(jq -r '.executionEligible' "$report_path")"
-          privileged_count="$(jq -r '.privilegedAccountCountBefore' "$report_path")"
-          target_count="$(jq -r '.deletionTargetCount' "$report_path")"
-          email_verified="$(jq -r '.founderEmailVerified' "$report_path")"
-          phone_mfa="$(jq -r '.founderPhoneMfaReady' "$report_path")"
-          blockers="$(jq -r '.executionBlockers | join("; ")' "$report_path")"
+          cp privileged-review/privileged-account-cleanup.json privileged-account-review.json
+          ready="$(jq -r '.canonicalFounderReady' privileged-review/privileged-account-cleanup.json)"
+          eligible="$(jq -r '.executionEligible' privileged-review/privileged-account-cleanup.json)"
+          privileged_count="$(jq -r '.privilegedAccountCountBefore' privileged-review/privileged-account-cleanup.json)"
+          target_count="$(jq -r '.deletionTargetCount' privileged-review/privileged-account-cleanup.json)"
+          email_verified="$(jq -r '.founderEmailVerified' privileged-review/privileged-account-cleanup.json)"
+          phone_mfa="$(jq -r '.founderPhoneMfaReady' privileged-review/privileged-account-cleanup.json)"
+          blockers="$(jq -r '.executionBlockers | join("; ")' privileged-review/privileged-account-cleanup.json)"
 
           body="## Privileged-account review\n\n- Exact SHA: \`$RELEASE_SHA\`\n- Review run: $run_url\n- Privileged accounts: \`$privileged_count\`\n- Unexpected deletion targets: \`$target_count\`\n- Canonical Founder ready: \`$ready\`\n- Founder email verified: \`$email_verified\`\n- Founder phone MFA ready: \`$phone_mfa\`\n- Cleanup execution eligible: \`$eligible\`\n- Blockers: \`${blockers:-none}\`\n- Mutation performed: \`false\`\n- Hard-launch claim: \`false\`"
           post_comment "$body"
@@ -221,6 +220,7 @@ jobs:
           run_url="https://github.com/$REPOSITORY/actions/runs/$run_id"
           post_comment "Protected privileged-account cleanup started for exact SHA \`$RELEASE_SHA\`: $run_url"
 
+          cleanup_completed='false'
           for _ in $(seq 1 120); do
             run="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
             status="$(jq -r '.status' <<<"$run")"
@@ -230,10 +230,15 @@ jobs:
                 post_comment "Protected privileged-account cleanup failed: $run_url"
                 exit 1
               }
+              cleanup_completed='true'
               break
             fi
             sleep 15
           done
+          [[ "$cleanup_completed" == 'true' ]] || {
+            post_comment "Protected privileged-account cleanup timed out: $run_url"
+            exit 1
+          }
 
           artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts")"
           artifact_id="$(jq -r --arg prefix "privileged-account-cleanup-$RELEASE_SHA-$run_id-" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | first | .id // empty' <<<"$artifacts")"
@@ -241,8 +246,7 @@ jobs:
           gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > privileged-cleanup.zip
           mkdir -p privileged-cleanup
           unzip -q privileged-cleanup.zip -d privileged-cleanup
-          report_path="$(find privileged-cleanup -type f -name privileged-account-cleanup.json -print -quit)"
-          [[ -n "$report_path" && -s "$report_path" ]]
+          test -s privileged-cleanup/privileged-account-cleanup.json
 
           jq -e --arg sha "$RELEASE_SHA" --argjson expected "$EXPECTED_TARGET_COUNT" '
             .schemaVersion == 1 and
@@ -254,8 +258,8 @@ jobs:
             .auditLogsPreserved == true and
             .nonPrivilegedAccountsUntouched == true and
             .hardLaunchClaim == false
-          ' "$report_path" >/dev/null
+          ' privileged-cleanup/privileged-account-cleanup.json >/dev/null
 
-          deleted="$(jq -r '.deletedAccountCount' "$report_path")"
+          deleted="$(jq -r '.deletedAccountCount' privileged-cleanup/privileged-account-cleanup.json)"
           body="## Privileged-account cleanup completed\n\n- Exact SHA: \`$RELEASE_SHA\`\n- Cleanup run: $run_url\n- Unexpected privileged accounts deleted: \`$deleted\`\n- Canonical Founder retained: \`true\`\n- Audit logs preserved: \`true\`\n- Non-privileged accounts untouched: \`true\`\n- Hard-launch claim: \`false\`\n\nNext protected action: run \`/bin-launch bank-pilot-after-mfa\`."
           post_comment "$body"
