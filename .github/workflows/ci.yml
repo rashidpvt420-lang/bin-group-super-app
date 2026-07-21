@@ -167,5 +167,149 @@ jobs:
         run: npm run test:mobile-store-readiness
 
   ios-apple-silicon-arm64:
-    name: iOS Apple Silicon arm64
-    uses: ./.github/workflows/ios-apple-silicon-arm64.yml
+    name: Build iOS Simulator on Apple Silicon
+    runs-on: macos-26
+    timeout-minutes: 35
+
+    env:
+      DERIVED_DATA_PATH: ${{ runner.temp }}/bin-group-ios-derived-data
+      IOS_BUILD_LOG: ios-arm64-xcodebuild.log
+      IOS_EVIDENCE_PATH: ios-arm64-build-evidence.json
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify native Apple Silicon and Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner_arch="$(uname -m)"
+          if [[ "$runner_arch" != "arm64" ]]; then
+            echo "Expected native Apple Silicon arm64 runner, got: $runner_arch" >&2
+            exit 1
+          fi
+          xcode_version="$(xcodebuild -version | awk 'NR == 1 { print $2 }')"
+          xcode_major="${xcode_version%%.*}"
+          if [[ ! "$xcode_major" =~ ^[0-9]+$ ]] || (( xcode_major < 26 )); then
+            echo "Expected Xcode 26 or newer, got: $xcode_version" >&2
+            exit 1
+          fi
+          echo "Runner architecture: $runner_arch"
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - name: Install JavaScript dependencies
+        run: npm ci --include=optional --legacy-peer-deps
+
+      - name: Verify Apple Silicon source readiness
+        run: npm run verify:ios-apple-silicon
+
+      - name: Build web application
+        env:
+          CI: false
+        run: npm run build
+
+      - name: Copy Capacitor web assets into iOS project
+        run: npx cap copy ios
+
+      - name: Install locked CocoaPods dependencies
+        working-directory: ios/App
+        run: pod install --deployment
+
+      - name: Build arm64 iOS Simulator application
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tee "$IOS_BUILD_LOG"
+
+      - name: Verify compiled executable is arm64 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_binary="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/App.app/App"
+          test -f "$app_binary"
+          binary_archs="$(lipo -archs "$app_binary")"
+          echo "Compiled simulator architectures: $binary_archs"
+          if [[ "$binary_archs" != "arm64" || "$binary_archs" == *x86_64* ]]; then
+            echo "Expected an arm64-only simulator executable, got: $binary_archs" >&2
+            exit 1
+          fi
+
+      - name: Create commit-bound arm64 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_binary="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/App.app/App"
+          RUNNER_ARCH="$(uname -m)" \
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR == 1 { print $2 }')" \
+          SIMULATOR_SDK="$(xcrun --sdk iphonesimulator --show-sdk-version)" \
+          BINARY_ARCHS="$(lipo -archs "$app_binary")" \
+          BINARY_SHA256="$(shasum -a 256 "$app_binary" | awk '{ print $1 }')" \
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = {
+              "schemaVersion": 1,
+              "status": "PASSED",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "commitSha": os.environ["GITHUB_SHA"],
+              "workflowRunId": os.environ["GITHUB_RUN_ID"],
+              "workflowRunAttempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "workflowUrl": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              "runner": {"label": "macos-26", "architecture": os.environ["RUNNER_ARCH"]},
+              "toolchain": {"xcode": os.environ["XCODE_VERSION"], "simulatorSdk": os.environ["SIMULATOR_SDK"]},
+              "build": {
+                  "workspace": "ios/App/App.xcworkspace",
+                  "scheme": "App",
+                  "configuration": "Debug",
+                  "destination": "generic/platform=iOS Simulator",
+                  "architectures": os.environ["BINARY_ARCHS"],
+                  "binarySha256": os.environ["BINARY_SHA256"],
+                  "codeSigningAllowed": False,
+              },
+          }
+          Path(os.environ["IOS_EVIDENCE_PATH"]).write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+          PY
+          cat "$IOS_EVIDENCE_PATH"
+
+      - name: Publish arm64 build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-arm64-build-evidence-${{ github.sha }}
+          path: |
+            ios-arm64-build-evidence.json
+            ios-arm64-xcodebuild.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-arm64-build-diagnostics-${{ github.sha }}
+          path: |
+            ios-arm64-xcodebuild.log
+            ios/App/Podfile.lock
+          if-no-files-found: warn
+          retention-days: 14
