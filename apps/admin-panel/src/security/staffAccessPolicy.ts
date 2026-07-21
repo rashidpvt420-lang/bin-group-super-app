@@ -10,23 +10,25 @@ export const STAFF_PORTAL_ROLES = new Set([
     'hr_staff',
     'finance_staff',
     'dispatcher',
+    'admin_assistant',
     'account_manager',
     'operations_manager',
 ]);
 
 export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'technician', label: 'Technician', description: 'Technician mobile portal only' },
-    { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map' },
-    { value: 'operations_manager', label: 'Operations Manager', description: 'Operations oversight and dispatch' },
+    { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map and SOS' },
+    { value: 'operations_manager', label: 'Operations Manager', description: 'Operations oversight and reporting' },
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and duty command' },
-    { value: 'finance_admin', label: 'Finance Admin', description: 'Financials, payments and payroll' },
-    { value: 'finance_staff', label: 'Finance Staff', description: 'Assigned finance workflows' },
-    { value: 'hr_admin', label: 'HR Admin', description: 'Staff management and approvals' },
-    { value: 'hr_manager', label: 'HR Manager', description: 'HR review and confidential cases' },
-    { value: 'hr_staff', label: 'HR Staff', description: 'Assigned HR workflows' },
-    { value: 'support_admin', label: 'Support Admin', description: 'Tenants, complaints and messages' },
+    { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
+    { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
+    { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
+    { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
+    { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
+    { value: 'support_admin', label: 'Support Admin', description: 'Tenant support, tickets and SOS' },
     { value: 'account_manager', label: 'Account Manager', description: 'Owners, contracts and documents' },
-    { value: 'manager', label: 'Manager', description: 'Reports and assigned management modules' },
+    { value: 'manager', label: 'Manager', description: 'Restricted management reports' },
+    { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
 ] as const;
 
 export const PROVISIONABLE_STAFF_ROLES = PROVISIONABLE_STAFF_ROLE_OPTIONS.map((role) => role.value);
@@ -59,17 +61,18 @@ const MODULE_KEYS = new Set<string>(MODULE_OPTIONS.map((module) => module.key));
 
 export const ROLE_DEFAULT_MODULES: Record<string, StaffModule[]> = {
     technician: [],
-    operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties'],
-    operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'reports'],
-    dispatcher: ['dashboard', 'tickets', 'technicians', 'map', 'sos'],
+    operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos'],
+    operations_manager: ['dashboard', 'tickets', 'technicians', 'reports'],
+    dispatcher: ['dashboard', 'tickets', 'technicians', 'map'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
     finance_staff: ['dashboard', 'financials', 'transactions'],
-    hr_admin: ['dashboard', 'technicians', 'hr', 'reports'],
+    hr_admin: ['dashboard', 'technicians', 'hr'],
     hr_manager: ['dashboard', 'technicians', 'hr', 'reports'],
-    hr_staff: ['dashboard', 'technicians', 'hr'],
-    support_admin: ['dashboard', 'tenants', 'tickets', 'sos'],
+    hr_staff: ['dashboard', 'hr'],
+    support_admin: ['dashboard', 'tenants', 'tickets'],
     account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
-    manager: ['dashboard', 'reports', 'audit', 'owners', 'tenants'],
+    manager: ['dashboard', 'reports'],
+    admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
 };
 
 const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [

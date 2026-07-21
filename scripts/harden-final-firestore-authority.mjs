@@ -5,6 +5,7 @@ const legacyReadCatchAll = "      allow read: if !(collection in ['system_secret
 const brokerReadCatchAll = "      allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 const boundedReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 const adminSecurityReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
+const privateHrReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const legacyWriteList = `          'system_secrets',
           'users',
           'tickets',
@@ -17,6 +18,11 @@ const adminSecurityWriteList = `          'system_secrets',
           'users',
           'audit_logs',
           'admin_security_sessions',`;
+const privateHrWriteList = `          'system_secrets',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
 const legacyCreateCatchAll = '      allow create: if !(';
 const boundedCreateCatchAll = "      allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(";
 const legacyUpdateCatchAll = '      allow update, delete: if !(';
@@ -29,55 +35,14 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
 `;
 
 const reviewedRoleFields = Object.freeze({
-  tenant: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'emergencyContact',
-  ],
-  owner: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'companyName',
-    'ownerCompanyName',
-    'billingContact',
-  ],
-  technician: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'requestedTrade',
-    'serviceZonePreference',
-    'emergencyContact',
-  ],
+  tenant: ['displayName', 'phone', 'phoneNumber', 'mobile', 'emergencyContact'],
+  owner: ['displayName', 'phone', 'phoneNumber', 'mobile', 'companyName', 'ownerCompanyName', 'billingContact'],
+  technician: ['displayName', 'phone', 'phoneNumber', 'mobile', 'requestedTrade', 'serviceZonePreference', 'emergencyContact'],
   broker: [
-    'displayName',
-    'phone',
-    'phoneNumber',
-    'mobile',
-    'companyName',
-    'reraLicense',
-    'reraStatus',
-    'reraVerified',
-    'primaryRegion',
-    'brokerTerritory',
-    'tradeLicenseNumber',
-    'emiratesIdNumber',
-    'passportNumber',
-    'bankName',
-    'bankAccountHolder',
-    'bankIban',
-    'iban',
-    'commissionAgreementAccepted',
-    'commissionAgreementAcceptedAt',
-    'commissionTermsVersion',
-    'brokerKycStatus',
-    'brokerProfileCompletion',
-    'profileCompletionScore',
+    'displayName', 'phone', 'phoneNumber', 'mobile', 'companyName', 'reraLicense', 'reraStatus', 'reraVerified',
+    'primaryRegion', 'brokerTerritory', 'tradeLicenseNumber', 'emiratesIdNumber', 'passportNumber', 'bankName',
+    'bankAccountHolder', 'bankIban', 'iban', 'commissionAgreementAccepted', 'commissionAgreementAcceptedAt',
+    'commissionTermsVersion', 'brokerKycStatus', 'brokerProfileCompletion', 'profileCompletionScore',
   ],
 });
 
@@ -86,9 +51,7 @@ function reviewedRoleMarker(role) {
 }
 
 function reviewedRoleGuard(role) {
-  const fields = reviewedRoleFields[role]
-    .map((field) => `            '${field}'`)
-    .join(',\n');
+  const fields = reviewedRoleFields[role].map((field) => `            '${field}'`).join(',\n');
   return `
         (
           claimedRole() != '${role}' ||
@@ -137,22 +100,29 @@ if (!text.includes('match /admin_security_sessions/{sessionId}')) {
   text = text.replace(anchor, `${adminSecurityBlock}${anchor}`);
 }
 
-if (text.includes(legacyReadCatchAll)) text = text.replace(legacyReadCatchAll, adminSecurityReadCatchAll);
-if (text.includes(brokerReadCatchAll)) text = text.replace(brokerReadCatchAll, adminSecurityReadCatchAll);
-if (text.includes(boundedReadCatchAll)) text = text.replace(boundedReadCatchAll, adminSecurityReadCatchAll);
-if (!text.includes(adminSecurityReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, and Admin security exclusions');
+if (text.includes(legacyReadCatchAll)) text = text.replace(legacyReadCatchAll, privateHrReadCatchAll);
+if (text.includes(brokerReadCatchAll)) text = text.replace(brokerReadCatchAll, privateHrReadCatchAll);
+if (text.includes(boundedReadCatchAll)) text = text.replace(boundedReadCatchAll, privateHrReadCatchAll);
+if (text.includes(adminSecurityReadCatchAll)) text = text.replace(adminSecurityReadCatchAll, privateHrReadCatchAll);
+if (!text.includes(privateHrReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security and private HR exclusions');
 }
 
-const legacyWriteCount = text.split(legacyWriteList).length - 1;
-const boundedWriteCount = text.split(boundedWriteList).length - 1;
-const adminSecurityWriteCount = text.split(adminSecurityWriteList).length - 1;
-if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount === 0) {
-  text = text.replaceAll(legacyWriteList, adminSecurityWriteList);
-} else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0) {
-  text = text.replaceAll(boundedWriteList, adminSecurityWriteList);
-} else if (!(legacyWriteCount === 0 && adminSecurityWriteCount === 2)) {
-  throw new Error(`[final-firestore-authority] unexpected ticket/Admin security write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}`);
+// These lists share prefixes, so detect the strictest state first instead of
+// comparing substring counts. The output must always be the private-HR list.
+if (text.includes(privateHrWriteList)) {
+  // Already canonical.
+} else if (text.includes(adminSecurityWriteList)) {
+  text = text.replaceAll(adminSecurityWriteList, privateHrWriteList);
+} else if (text.includes(legacyWriteList)) {
+  text = text.replaceAll(legacyWriteList, privateHrWriteList);
+} else if (text.includes(boundedWriteList)) {
+  text = text.replaceAll(boundedWriteList, privateHrWriteList);
+} else {
+  throw new Error('[final-firestore-authority] global write fallback list could not be identified');
+}
+if (text.split(privateHrWriteList).length - 1 !== 2) {
+  throw new Error('[final-firestore-authority] private HR write fallback list must exist exactly twice');
 }
 
 if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
@@ -193,10 +163,10 @@ const required = [
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
-  adminSecurityReadCatchAll.trim(),
+  privateHrReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  "'system_secrets',\n          'users',\n          'audit_logs',\n          'admin_security_sessions'",
+  privateHrWriteList.trim(),
   "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
 ];
 
@@ -232,6 +202,7 @@ const forbidden = [
   'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
   brokerReadCatchAll.trim(),
   boundedReadCatchAll.trim(),
+  adminSecurityReadCatchAll.trim(),
   legacyReadCatchAll.trim(),
   legacyWriteList,
 ];
@@ -240,4 +211,4 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
+console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, private HR authority isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
