@@ -1,0 +1,106 @@
+name: Private HR Data Migration
+run-name: Private HR ${{ inputs.mode }} · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Review only or execute the migration"
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - execute
+      confirmation:
+        description: "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP or MIGRATE_PRIVATE_HR_BIN_GROUP_57C60"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: private-hr-data-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Review or migrate legacy private HR fields
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      PRIVATE_HR_MIGRATION_CONFIRMATION: ${{ inputs.confirmation }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ vars.AUTHORIZED_FOUNDER_ACTORS }}
+
+    steps:
+      - name: Enforce protected exact-main context
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "${{ inputs.mode }}" == "dry-run" ]]; then
+            [[ "${{ inputs.confirmation }}" == "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP" ]]
+          else
+            [[ "${{ inputs.mode }}" == "execute" ]]
+            [[ "${{ inputs.confirmation }}" == "MIGRATE_PRIVATE_HR_BIN_GROUP_57C60" ]]
+          fi
+
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Review legacy HR duplication
+        if: inputs.mode == 'dry-run'
+        run: node scripts/migrate-private-hr-profiles.mjs
+
+      - name: Execute and verify private HR migration
+        if: inputs.mode == 'execute'
+        run: node scripts/migrate-private-hr-profiles.mjs --execute
+
+      - name: Upload migration report
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-hr-migration-${{ inputs.mode }}-${{ github.sha }}
+          path: launch_package/private-hr-migration.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish safe summary
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('launch_package/private-hr-migration.json', 'utf8'));
+          const lines = [
+            '## Private HR migration',
+            '',
+            `- Exact SHA: \`${process.env.GITHUB_SHA}\``,
+            `- Mode: \`${report.mode}\``,
+            `- HR profiles scanned: \`${report.hrProfilesScanned}\``,
+            `- Records requiring migration: \`${report.recordsRequiringMigration}\``,
+            `- Records migrated: \`${report.migrated}\``,
+            `- Records verified: \`${report.verified}\``,
+            `- Failures: \`${report.failureCount}\``,
+            '- Sensitive values logged: `false`',
+            '- Raw identifiers logged: `false`',
+            '- Hard-launch claim: `false`',
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+          NODE
