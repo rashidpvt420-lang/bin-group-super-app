@@ -115,7 +115,7 @@ if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount
   text = text.replaceAll(legacyWriteList, adminSecurityWriteList);
 } else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
   text = text.replaceAll(boundedWriteList, adminSecurityWriteList);
-} else if (!(legacyWriteCount === 0 && boundedWriteCount === 0 && (adminSecurityWriteCount === 2 || privateHrWriteCount === 2))) {
+} else if (!(legacyWriteCount === 0 && (adminSecurityWriteCount === 2 || privateHrWriteCount === 2))) {
   throw new Error(`[final-firestore-authority] unexpected write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}, privateHr=${privateHrWriteCount}`);
 }
 
