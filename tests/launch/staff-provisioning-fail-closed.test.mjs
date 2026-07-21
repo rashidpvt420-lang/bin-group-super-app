@@ -32,8 +32,23 @@ test('staff provisioning backend rejects unsafe identity conversion and binds mo
   assert.match(backend, /staffModules: modules/);
   assert.match(backend, /permissions/);
   assert.match(backend, /admin: false/);
-  assert.doesNotMatch(backend, /payload\.tempPassword/);
-  assert.doesNotMatch(backend, /payload\.initialPassword/);
+  assert.match(backend, /payload\.initialPassword !== undefined \|\| payload\.password !== undefined \|\| payload\.tempPassword !== undefined/);
+  assert.match(backend, /Client-supplied passwords are prohibited/);
+  assert.match(backend, /password: generatedBootstrapPassword\(\)/);
+  assert.doesNotMatch(backend, /password:\s*payload\./);
+});
+
+test('identity uniqueness is enforced before Auth creation and registries are create-only', () => {
+  const uniquenessCheck = backend.indexOf('await assertNoExistingIdentity(email);');
+  const authCreation = backend.indexOf('admin.auth().createUser', uniquenessCheck);
+  assert.ok(uniquenessCheck >= 0, 'identity uniqueness check must be present');
+  assert.ok(authCreation > uniquenessCheck, 'identity uniqueness must be verified before Firebase Auth creation');
+
+  assert.match(backend, /tx\.create\(db\.collection\("users"\)\.doc\(uid\), operationalProfile\)/);
+  assert.match(backend, /tx\.create\(db\.collection\("staffAccess"\)\.doc\(uid\)/);
+  assert.match(backend, /tx\.create\(db\.collection\("hrProfiles"\)\.doc\(uid\), scheduleProfile\)/);
+  assert.match(backend, /tx\.create\(db\.collection\("private_hr_profiles"\)\.doc\(uid\), privateHrProfile\)/);
+  assert.doesNotMatch(backend, /tx\.set\(db\.collection\("users"\)\.doc\(uid\)/);
 });
 
 test('private HR data is kept out of operational staff and technician records', () => {
