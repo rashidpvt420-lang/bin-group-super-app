@@ -19,6 +19,20 @@ on:
         description: "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP or MIGRATE_PRIVATE_HR_BIN_GROUP_57C60"
         required: true
         type: string
+  workflow_call:
+    inputs:
+      expected_commit_sha:
+        description: "Exact current main SHA bound by the START HERE dispatcher"
+        required: true
+        type: string
+      mode:
+        description: "dry-run or execute"
+        required: true
+        type: string
+      confirmation:
+        description: "Protected migration confirmation phrase"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -48,22 +62,42 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF" == "refs/heads/main" ]]
-          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$TARGET_SHA" == "$GITHUB_SHA" ]]
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] \
+            || fail "Private HR migration must run from refs/heads/main; received $GITHUB_REF."
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail "expected_commit_sha must be a full lowercase 40-character Git commit SHA."
+          [[ "$TARGET_SHA" == "$GITHUB_SHA" ]] \
+            || fail "Stale SHA: expected_commit_sha=$TARGET_SHA but this workflow is running at $GITHUB_SHA. Start a new START HERE - Private HR Data Migration run instead of rerunning this job."
+          [[ -n "${AUTHORIZED_FOUNDER_ACTORS:-}" ]] \
+            || fail "AUTHORIZED_FOUNDER_ACTORS is not configured in the hard-launch-operations environment."
+
           authorized_actor=false
           IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
           for allowed_actor in "${allowed_actors[@]}"; do
             allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
             if [[ -n "$allowed_actor" && "$GITHUB_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
           done
-          [[ "$authorized_actor" == "true" ]]
-          if [[ "$MODE" == "dry-run" ]]; then
-            [[ "$CONFIRMATION" == "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP" ]]
-          else
-            [[ "$MODE" == "execute" ]]
-            [[ "$CONFIRMATION" == "MIGRATE_PRIVATE_HR_BIN_GROUP_57C60" ]]
-          fi
+          [[ "$authorized_actor" == "true" ]] \
+            || fail "GitHub actor $GITHUB_ACTOR is not authorized to run the protected private HR migration."
+
+          case "$MODE" in
+            dry-run)
+              [[ "$CONFIRMATION" == "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP" ]] \
+                || fail "Dry-run confirmation must equal REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP."
+              ;;
+            execute)
+              [[ "$CONFIRMATION" == "MIGRATE_PRIVATE_HR_BIN_GROUP_57C60" ]] \
+                || fail "Execute confirmation must equal MIGRATE_PRIVATE_HR_BIN_GROUP_57C60."
+              ;;
+            *)
+              fail "Migration mode must be dry-run or execute."
+              ;;
+          esac
 
       - name: Checkout exact main
         uses: actions/checkout@v6
