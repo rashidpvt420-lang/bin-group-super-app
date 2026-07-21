@@ -108,18 +108,21 @@ if (!text.includes(privateHrReadCatchAll)) {
   throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security and private HR exclusions');
 }
 
-const legacyWriteCount = text.split(legacyWriteList).length - 1;
-const boundedWriteCount = text.split(boundedWriteList).length - 1;
-const adminSecurityWriteCount = text.split(adminSecurityWriteList).length - 1;
-const privateHrWriteCount = text.split(privateHrWriteList).length - 1;
-if (legacyWriteCount === 2 && boundedWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
-  text = text.replaceAll(legacyWriteList, privateHrWriteList);
-} else if (boundedWriteCount === 2 && legacyWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 0) {
-  text = text.replaceAll(boundedWriteList, privateHrWriteList);
-} else if (adminSecurityWriteCount === 2 && legacyWriteCount === 0 && boundedWriteCount === 0 && privateHrWriteCount === 0) {
+// These lists share prefixes, so detect the strictest state first instead of
+// comparing substring counts. The output must always be the private-HR list.
+if (text.includes(privateHrWriteList)) {
+  // Already canonical.
+} else if (text.includes(adminSecurityWriteList)) {
   text = text.replaceAll(adminSecurityWriteList, privateHrWriteList);
-} else if (!(legacyWriteCount === 0 && boundedWriteCount === 0 && adminSecurityWriteCount === 0 && privateHrWriteCount === 2)) {
-  throw new Error(`[final-firestore-authority] unexpected write fallback lists: legacy=${legacyWriteCount}, bounded=${boundedWriteCount}, adminSecurity=${adminSecurityWriteCount}, privateHr=${privateHrWriteCount}`);
+} else if (text.includes(legacyWriteList)) {
+  text = text.replaceAll(legacyWriteList, privateHrWriteList);
+} else if (text.includes(boundedWriteList)) {
+  text = text.replaceAll(boundedWriteList, privateHrWriteList);
+} else {
+  throw new Error('[final-firestore-authority] global write fallback list could not be identified');
+}
+if (text.split(privateHrWriteList).length - 1 !== 2) {
+  throw new Error('[final-firestore-authority] private HR write fallback list must exist exactly twice');
 }
 
 if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
@@ -202,8 +205,6 @@ const forbidden = [
   adminSecurityReadCatchAll.trim(),
   legacyReadCatchAll.trim(),
   legacyWriteList,
-  boundedWriteList,
-  adminSecurityWriteList,
 ];
 
 for (const fragment of forbidden) {
