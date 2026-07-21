@@ -49,6 +49,11 @@ const palette = {
 
 const GOOGLE_REDIRECT_INTENT_KEY = 'bin_google_redirect_intended_role';
 const GOOGLE_REDIRECT_RETURN_TO_KEY = 'bin_google_redirect_return_to';
+const ADMIN_PANEL_LOGIN_URL = 'https://bin-group-admin-panel.web.app/login';
+const CANONICAL_ADMIN_EMAILS = new Set(['ceo@bin-groups.com', 'ceo@bin-group.com']);
+
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const isCanonicalAdminEmail = (value: string) => CANONICAL_ADMIN_EMAILS.has(normalizeEmail(value));
 
 const LoginPage: React.FC = () => {
     const { t, tx, isRTL, lang, setLang } = useLanguage();
@@ -68,9 +73,27 @@ const LoginPage: React.FC = () => {
     const safeReturnTo = returnToParam.startsWith('/') && !returnToParam.startsWith('//') ? returnToParam : '';
     const intendedRoleKey = intendedRole?.toLowerCase();
 
+    const buildAdminPanelLoginUrl = (candidateEmail = email) => {
+        const url = new URL(ADMIN_PANEL_LOGIN_URL);
+        const normalized = normalizeEmail(candidateEmail || ownerEmailParam || '');
+        if (normalized) url.searchParams.set('email', normalized);
+        if (safeReturnTo) url.searchParams.set('returnTo', safeReturnTo);
+        return url.toString();
+    };
+
+    const redirectToAdminPanel = (candidateEmail = email) => {
+        window.location.assign(buildAdminPanelLoginUrl(candidateEmail));
+    };
+
     useEffect(() => {
-        if (ownerEmailParam && !email) setEmail(ownerEmailParam.trim().toLowerCase());
+        if (ownerEmailParam && !email) setEmail(normalizeEmail(ownerEmailParam));
     }, [ownerEmailParam, email]);
+
+    useEffect(() => {
+        if (intendedRoleKey === 'admin') {
+            redirectToAdminPanel(ownerEmailParam || email);
+        }
+    }, [intendedRoleKey, ownerEmailParam]);
 
     const resolvePostLoginTarget = () => {
         const resolvedRole = isAdmin ? 'admin' : role;
@@ -159,6 +182,7 @@ const LoginPage: React.FC = () => {
         if (code === 'auth/too-many-requests') return { type: 'error', text: t('login.error.too_many'), diagnostic };
         if (code === 'auth/popup-closed-by-user') return { type: 'error', text: tx('login.error.popup_closed', 'Google sign-in was closed before completion. Try again or use email and password.'), diagnostic };
         if (code === 'auth/popup-blocked') return { type: 'error', text: tx('login.error.popup_blocked', 'The browser blocked the Google sign-in popup. A redirect sign-in will be attempted.'), diagnostic };
+        if (code === 'auth/multi-factor-auth-required') return { type: 'warning', text: `Admin MFA is required. Open the secure Admin Panel to complete phone verification: ${buildAdminPanelLoginUrl(email)}`, diagnostic };
         if (code === 'auth/unauthorized-domain') return { type: 'error', text: tx('login.error.unauthorized_domain', 'This domain is not authorized for Firebase sign-in. Add this app domain in Firebase Authentication → Settings → Authorized domains.'), diagnostic };
         if (code === 'auth/operation-not-allowed') return { type: 'error', text: tx('login.error.provider_disabled', 'This sign-in method is not enabled in Firebase Authentication. Enable Email/Password or Google sign-in first.'), diagnostic };
         if (code === 'auth/account-exists-with-different-credential') return { type: 'error', text: tx('login.error.account_exists', 'This email already exists with another sign-in method. Sign in using email/password first, then link Google later.'), diagnostic };
@@ -198,6 +222,10 @@ const LoginPage: React.FC = () => {
     }, []);
 
     const handleGoogleLogin = async () => {
+        if (intendedRoleKey === 'admin' || isCanonicalAdminEmail(email)) {
+            redirectToAdminPanel(email);
+            return;
+        }
         setLocalLoading(true);
         setNotice(null);
         try {
@@ -237,9 +265,14 @@ const LoginPage: React.FC = () => {
         e.preventDefault();
         setLocalLoading(true);
         setNotice(null);
+        const normalizedEmail = normalizeEmail(email);
+        if (intendedRoleKey === 'admin' || isCanonicalAdminEmail(normalizedEmail)) {
+            redirectToAdminPanel(normalizedEmail);
+            return;
+        }
         try {
             await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
-            const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+            const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
             await userCredential.user.getIdToken(true).catch(() => undefined);
             await refreshRole();
             if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
@@ -250,7 +283,7 @@ const LoginPage: React.FC = () => {
     };
 
     const handlePasswordReset = async () => {
-        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedEmail = normalizeEmail(email);
         if (!normalizedEmail) {
             setNotice({ type: 'warning', text: tx('login.reset.enter_email', 'Enter your registered email address first, then tap Forgot password again.') });
             return;
