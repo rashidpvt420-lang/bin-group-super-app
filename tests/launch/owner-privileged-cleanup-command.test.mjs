@@ -22,11 +22,13 @@ test('fresh exact-SHA review is mandatory before any cleanup', () => {
   assert.match(command, /privileged-account-cleanup-dry-run\.yml\/dispatches/);
   assert.match(command, /expected_commit_sha:\$sha/);
   assert.match(command, /privileged-account-cleanup-review-\$RELEASE_SHA/);
+  assert.match(command, /test -s privileged-review\/privileged-account-cleanup\.json/);
   assert.match(command, /\.schemaVersion == 2/);
   assert.match(command, /\.mutationPerformed == false/);
   assert.match(command, /\.deletedAccountCount == 0/);
   assert.match(command, /\.nonPrivilegedAccountsUntouched == true/);
   assert.match(command, /latest_main.*RELEASE_SHA/s);
+  assert.doesNotMatch(command, /find privileged-review/);
 });
 
 test('destructive cleanup requires canonical founder readiness and targets', () => {
@@ -38,7 +40,8 @@ test('destructive cleanup requires canonical founder readiness and targets', () 
   assert.match(command, /execute_cleanup:"true"/);
 });
 
-test('cleanup result must exactly match reviewed target count', () => {
+test('cleanup result must exactly match reviewed target count using a fixed evidence path', () => {
+  assert.match(command, /test -s privileged-cleanup\/privileged-account-cleanup\.json/);
   assert.match(command, /\.status == "executed"/);
   assert.match(command, /\.deletionTargetCount == \$expected/);
   assert.match(command, /\.deletedAccountCount == \$expected/);
@@ -46,6 +49,9 @@ test('cleanup result must exactly match reviewed target count', () => {
   assert.match(command, /\.auditLogsPreserved == true/);
   assert.match(command, /\.nonPrivilegedAccountsUntouched == true/);
   assert.match(command, /\.hardLaunchClaim == false/);
+  assert.match(command, /cleanup_completed='false'/);
+  assert.match(command, /cleanup_completed='true'/);
+  assert.doesNotMatch(command, /find privileged-cleanup/);
 });
 
 test('review and execution workflows accept and enforce optional expected SHA', () => {
