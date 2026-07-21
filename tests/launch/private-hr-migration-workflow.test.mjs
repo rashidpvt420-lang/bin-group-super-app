@@ -19,6 +19,17 @@ test('private HR migration is protected, exact-main and dry-run-first', () => {
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });
 
+test('private HR migration uses Node 24-compatible action runtimes', () => {
+  assert.match(workflow, /actions\/checkout@v6/);
+  assert.match(workflow, /actions\/setup-node@v6/);
+  assert.match(workflow, /google-github-actions\/auth@v3/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.doesNotMatch(workflow, /actions\/checkout@v4/);
+  assert.doesNotMatch(workflow, /actions\/setup-node@v4/);
+  assert.doesNotMatch(workflow, /google-github-actions\/auth@v2/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/);
+});
+
 test('migration moves sensitive values and verifies deletion without logging them', () => {
   assert.match(migration, /db\.collection\('private_hr_profiles'\)/);
   assert.match(migration, /FieldValue\.delete\(\)/);
@@ -29,7 +40,17 @@ test('migration moves sensitive values and verifies deletion without logging the
   assert.doesNotMatch(migration, /console\.log\([^\n]*(?:emiratesId|salaryPackage|employeeId|candidate\.uid)/);
 });
 
-test('migration execution cannot run locally or against another project/ref', () => {
+test('dry-run report makes the execute-or-skip decision explicit', () => {
+  assert.match(migration, /const executionRequired = candidates\.length > 0/);
+  assert.match(migration, /SKIP_EXECUTE_PROCEED_TO_BANK_PILOT/);
+  assert.match(migration, /REVIEW_REPORT_THEN_EXECUTE/);
+  assert.match(migration, /executionRequired,/);
+  assert.match(migration, /recommendedNextAction,/);
+  assert.match(workflow, /Execution required:/);
+  assert.match(workflow, /Recommended next action:/);
+});
+
+test('migration execution cannot run locally or against another project\/ref', () => {
   assert.match(migration, /execution requires GitHub Actions/);
   assert.match(migration, /repository mismatch/);
   assert.match(migration, /execution requires refs\/heads\/main/);
