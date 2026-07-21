@@ -7,32 +7,55 @@ const source = await readFile(
   'utf8',
 );
 
-test('staff and technician provisioning queues secure first-login invitations', () => {
+test('staff and technician creation queues secure first-login invitations', () => {
   assert.match(source, /generateEmailVerificationLink\s*\(/);
   assert.match(source, /generatePasswordResetLink\s*\(/);
   assert.match(source, /db\.collection\("mail"\)\.doc\(\)/);
-  assert.match(source, /staff-account-invitation-v1/);
+  assert.match(source, /staff-account-invitation-v2/);
   assert.match(source, /delivery:\s*\{\s*state:\s*"QUEUED"\s*\}/);
-  assert.match(source, /role === "technician"[\s\S]*login\?role=technician/);
+  assert.match(source, /role === "technician"[^\n]*login\?role=technician/);
   assert.match(source, /bin-group-admin-panel\.web\.app/);
 });
 
-test('provisioning remains fail-closed and never returns invitation bearer links', () => {
-  assert.match(source, /enforceAppCheck:\s*true/);
-  assert.match(source, /if \(createdAuthUser\)[\s\S]*deleteUser\(uid\)/);
-  assert.match(source, /payload\.tempPassword/);
-  assert.match(source, /invitationQueued/);
-
-  const returnBlock = source.slice(source.lastIndexOf('return {'));
-  assert.doesNotMatch(returnBlock, /passwordResetLink|emailVerificationLink/);
+test('creation is create-only and rejects client passwords and existing identities', () => {
+  assert.match(source, /assertNoExistingIdentity\(email\)/);
+  assert.match(source, /getUserByEmail\(email\)[\s\S]*already-exists/);
+  assert.match(source, /db\.collection\("users"\)\.where\("email", "==", email\)/);
+  assert.match(source, /Client-supplied passwords are prohibited/);
+  assert.match(source, /password:\s*generatedBootstrapPassword\(\)/);
+  assert.match(source, /tx\.create\(db\.collection\("users"\)\.doc\(uid\)/);
+  assert.match(source, /deleteUser\(uid\)/);
 });
 
-test('invitation audit records provenance without storing action links in audit metadata', () => {
-  assert.match(source, /action:\s*"ADMIN_CREATE_STAFF_USER"/);
-  assert.match(source, /invitationMailId:\s*invitationRef\?\.id \|\| null/);
+test('provisioning is App Check protected and never returns invitation bearer links', () => {
+  const callableCount = source.match(/enforceAppCheck:\s*true/g)?.length || 0;
+  assert.ok(callableCount >= 3, `expected at least three App Check-protected staff callables, got ${callableCount}`);
+  assert.match(source, /invitationQueued:\s*true/);
 
-  const auditBlockStart = source.indexOf('action: "ADMIN_CREATE_STAFF_USER"');
-  const auditBlockEnd = source.indexOf('createdAt: now,', auditBlockStart);
-  const auditBlock = source.slice(auditBlockStart, auditBlockEnd);
-  assert.doesNotMatch(auditBlock, /passwordResetLink|emailVerificationLink/);
+  const createReturnStart = source.indexOf('return { success: true, uid, role, modules, invitationQueued: true');
+  assert.ok(createReturnStart >= 0, 'create result block missing');
+  const createReturn = source.slice(createReturnStart, source.indexOf('};', createReturnStart) + 2);
+  assert.doesNotMatch(createReturn, /passwordResetLink|emailVerificationLink|password|bootstrap/i);
+});
+
+test('invitation audit stores hashes and provenance without identity links or passwords', () => {
+  assert.match(source, /action:\s*"ADMIN_CREATE_STAFF_USER"/);
+  assert.match(source, /emailHash:\s*hashValue\(email\)/);
+  assert.match(source, /invitationMailId:\s*invitationRef\.id/);
+  assert.match(source, /privateHrSeparated:\s*true/);
+
+  const auditStart = source.indexOf('action: "ADMIN_CREATE_STAFF_USER"');
+  const auditEnd = source.indexOf('createdAt: now,', auditStart);
+  const auditBlock = source.slice(auditStart, auditEnd);
+  assert.doesNotMatch(auditBlock, /passwordResetLink|emailVerificationLink|password:/);
+  assert.doesNotMatch(auditBlock, /\bemail,\s*role/);
+});
+
+test('access updates and suspension use separate rollback-aware authorities', () => {
+  assert.match(source, /export const adminUpdateStaffAccess = onCall/);
+  assert.match(source, /export const adminSetStaffStatus = onCall/);
+  assert.match(source, /setCustomUserClaims\(uid, previousClaims\)/);
+  assert.match(source, /updateUser\(uid, \{ disabled: previousDisabled \}\)/);
+  assert.match(source, /revokeRefreshTokens\(uid\)/);
+  assert.match(source, /Technician identities cannot be converted to or from Admin-portal staff roles/);
 });
