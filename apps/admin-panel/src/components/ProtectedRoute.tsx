@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { canAccessAdminPath } from '../security/staffAccessPolicy';
 
 type Props = {
     children: React.ReactNode;
@@ -9,11 +10,7 @@ type Props = {
     extraRoles?: string[];
 };
 
-const ProtectedRoute: React.FC<Props> = ({
-    children,
-    adminOnly = false,
-    extraRoles = [],
-}) => {
+const ProtectedRoute: React.FC<Props> = ({ children }) => {
     const location = useLocation();
     const {
         isAuthenticated,
@@ -23,17 +20,6 @@ const ProtectedRoute: React.FC<Props> = ({
         mfaVerified,
         mfaFactorCount,
     } = useAuth();
-    const adminRoles = new Set([
-        'admin',
-        'super_admin',
-        'ceo',
-        'manager',
-        'operations_admin',
-        'finance_admin',
-        'hr_admin',
-        'support_admin',
-        ...extraRoles,
-    ]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}>Loading Auth...</Box>;
     if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -46,11 +32,9 @@ const ProtectedRoute: React.FC<Props> = ({
         return <Navigate to="/login?mfa=required" replace />;
     }
 
-    const hasAdminAccess = user?.claims?.admin === true || user?.isAdmin === true || adminRoles.has(user?.role);
-
-    if (adminOnly && !hasAdminAccess) {
-        console.warn(`[SECURITY] Unauthorized role attempt: ${user?.role}. Redirecting.`);
-        return <Navigate to="/dashboard" replace />;
+    if (!canAccessAdminPath(user, location.pathname)) {
+        console.warn(`[SECURITY] Module access denied for role ${user?.role || 'unknown'} at ${location.pathname}.`);
+        return <Navigate to="/profile?access=denied" replace />;
     }
 
     return <>{children}</>;

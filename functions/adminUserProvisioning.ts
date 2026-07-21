@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) {
@@ -11,6 +11,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 const PRIVILEGED_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo"]);
+const CUSTOMER_ROLES = new Set(["owner", "tenant", "broker", "customer", "property_owner", "institutional_owner"]);
 const STAFF_ROLES = new Set([
   "technician",
   "manager",
@@ -21,20 +22,12 @@ const STAFF_ROLES = new Set([
   "hr_manager",
   "finance_staff",
   "dispatcher",
-  "admin_assistant",
   "account_manager",
   "operations_manager",
   "finance_admin",
 ]);
-const CUSTOMER_ROLES = new Set([
-  "owner",
-  "tenant",
-  "broker",
-  "customer",
-  "property_owner",
-  "institutional_owner",
-]);
-const MODULE_KEYS = [
+
+const STAFF_MODULES = new Set([
   "dashboard",
   "owners",
   "tenants",
@@ -45,47 +38,34 @@ const MODULE_KEYS = [
   "broker",
   "documents",
   "properties",
+  "contracts",
   "reports",
   "audit",
   "compliance",
   "map",
   "sos",
+  "settings",
   "hr",
   "pricing",
-];
-const MODULE_KEY_SET = new Set(MODULE_KEYS);
-const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
-  technician: ["dashboard", "tickets", "map"],
-  operations_admin: ["dashboard", "tickets", "technicians", "map", "sos", "properties"],
-  operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "reports", "properties"],
-  finance_admin: ["dashboard", "financials", "transactions", "reports"],
-  finance_staff: ["dashboard", "financials", "transactions"],
-  hr_admin: ["dashboard", "technicians", "hr"],
-  hr_manager: ["dashboard", "technicians", "hr", "reports"],
-  hr_staff: ["dashboard", "hr"],
-  support_admin: ["dashboard", "tenants", "tickets", "sos"],
-  account_manager: ["dashboard", "owners", "documents", "properties"],
-  dispatcher: ["dashboard", "tickets", "technicians", "map"],
-  manager: ["dashboard", "reports", "audit", "owners", "tenants"],
-  admin_assistant: ["dashboard", "documents", "tenants"],
-};
+]);
+
 const MODULE_PERMISSION_MAP: Record<string, string[]> = {
-  owners: ["canManageOwners"],
+  owners: ["canManageTenants"],
   tenants: ["canManageTenants"],
   tickets: ["canDispatchJobs"],
   technicians: ["canManageTechnicians"],
-  financials: ["canManageFinance"],
-  transactions: ["canManageFinance"],
-  broker: ["canManageBrokers"],
-  documents: ["canManageDocuments"],
+  financials: ["canViewFinancials"],
+  transactions: ["canViewPayments", "canVerifyPayments"],
+  documents: ["canManageProperties"],
   properties: ["canManageProperties"],
-  reports: ["canViewReports"],
+  contracts: ["canManageContracts"],
+  reports: ["canExportReports"],
   audit: ["canViewAuditLogs"],
-  compliance: ["canManageCompliance"],
+  compliance: ["canViewAuditLogs"],
   map: ["canDispatchJobs"],
   sos: ["canDispatchJobs"],
-  hr: ["canManageHr"],
-  pricing: ["canManageCompanyProfile"],
+  settings: ["canManageCompanyProfile"],
+  pricing: ["canEditPricing"],
 };
 
 function cleanString(value: unknown, fallback = "") {
@@ -95,6 +75,46 @@ function cleanString(value: unknown, fallback = "") {
 
 function normalizeEmail(value: unknown) {
   return cleanString(value).toLowerCase();
+}
+
+function roleFrom(value: any) {
+  return cleanString(value?.role || value?.userRole || value?.primaryRole).toLowerCase();
+}
+
+function normalizeModules(value: unknown, role: string) {
+  if (role === "technician") return [];
+  if (!Array.isArray(value)) {
+    throw new HttpsError("invalid-argument", "Staff module access must be provided as an array.");
+  }
+
+  const normalized = [...new Set(value.map((item) => cleanString(item)).filter(Boolean))];
+  const unsupported = normalized.filter((module) => !STAFF_MODULES.has(module));
+  if (unsupported.length > 0) {
+    throw new HttpsError("invalid-argument", `Unsupported staff module: ${unsupported.join(", ")}`);
+  }
+  return normalized;
+}
+
+function permissionsForModules(modules: string[]) {
+  const permissions: Record<string, boolean> = {};
+  for (const module of modules) {
+    for (const permission of MODULE_PERMISSION_MAP[module] || []) permissions[permission] = true;
+  }
+  return permissions;
+}
+
+function operationalFieldDeletes() {
+  return {
+    employeeId: FieldValue.delete(),
+    emiratesId: FieldValue.delete(),
+    salaryPackage: FieldValue.delete(),
+    basicSalary: FieldValue.delete(),
+    housingAllowance: FieldValue.delete(),
+    transportAllowance: FieldValue.delete(),
+    foodAllowance: FieldValue.delete(),
+    otherAllowance: FieldValue.delete(),
+    salaryGrade: FieldValue.delete(),
+  };
 }
 
 function escapeHtml(value: unknown) {
@@ -114,12 +134,8 @@ function titleCaseRole(role: string) {
     .join(" ");
 }
 
-function roleFromClaims(claims: any = {}) {
-  return cleanString(claims?.role || claims?.userRole || claims?.primaryRole).toLowerCase();
-}
-
 function hasAdminAccess(token: any) {
-  const role = roleFromClaims(token);
+  const role = roleFrom(token);
   return token?.suspended !== true && (
     PRIVILEGED_ADMIN_ROLES.has(role) ||
     token?.super_admin === true ||
@@ -130,7 +146,7 @@ function hasAdminAccess(token: any) {
 }
 
 function generatedPassword() {
-  return `BinPilot#${randomBytes(18).toString("base64url")}!`;
+  return `${randomBytes(24).toString("base64url")}Aa1!`;
 }
 
 function loginUrlForRole(role: string) {
@@ -139,60 +155,6 @@ function loginUrlForRole(role: string) {
   return role === "technician"
     ? `${mainAppUrl}/login?role=technician`
     : `${adminAppUrl}/login`;
-}
-
-function stringArray(value: unknown) {
-  const source = Array.isArray(value) ? value : [];
-  return source.map((item) => cleanString(item).toLowerCase()).filter(Boolean);
-}
-
-function normalizeModules(role: string, payload: any) {
-  const requested = stringArray(payload.modules || payload.staffModules);
-  const allowed = requested.filter((module) => MODULE_KEY_SET.has(module));
-  const modules = allowed.length > 0 ? allowed : (ROLE_DEFAULT_MODULES[role] || ["dashboard"]);
-  return [...new Set(modules)];
-}
-
-function normalizePermissions(modules: string[], rawPermissions: unknown) {
-  const permissions: Record<string, boolean> = {};
-  if (rawPermissions && typeof rawPermissions === "object" && !Array.isArray(rawPermissions)) {
-    for (const [key, value] of Object.entries(rawPermissions as Record<string, unknown>)) {
-      if (/^can[A-Z][A-Za-z0-9]+$/.test(key) && value === true) {
-        permissions[key] = true;
-      }
-    }
-  }
-  for (const module of modules) {
-    for (const permission of MODULE_PERMISSION_MAP[module] || []) {
-      permissions[permission] = true;
-    }
-  }
-  return permissions;
-}
-
-function operationalFieldDeletes() {
-  return {
-    employeeId: FieldValue.delete(),
-    emiratesId: FieldValue.delete(),
-    salaryPackage: FieldValue.delete(),
-    basicSalary: FieldValue.delete(),
-    housingAllowance: FieldValue.delete(),
-    transportAllowance: FieldValue.delete(),
-    foodAllowance: FieldValue.delete(),
-    otherAllowance: FieldValue.delete(),
-    salaryGrade: FieldValue.delete(),
-  };
-}
-
-function existingIdentityIsStaffSafe(userRecord: admin.auth.UserRecord, profile: FirebaseFirestore.DocumentData | undefined) {
-  const claims = userRecord.customClaims || {};
-  const claimRole = roleFromClaims(claims);
-  const profileRole = cleanString(profile?.role || profile?.userRole || profile?.primaryRole).toLowerCase();
-  const roles = [claimRole, profileRole].filter(Boolean);
-  if (roles.some((role) => PRIVILEGED_ADMIN_ROLES.has(role) || CUSTOMER_ROLES.has(role))) return false;
-  if (claims.staff === true || claims.technician === true || profile?.isStaff === true) return true;
-  if (roles.some((role) => STAFF_ROLES.has(role))) return true;
-  return false;
 }
 
 function buildInvitationMessage({
@@ -242,9 +204,15 @@ function buildInvitationMessage({
         <p>Hello <strong>${safeName}</strong>,</p>
         <p>A <strong>${safeRole}</strong> account has been created for <strong>${safeEmail}</strong>.</p>
         <ol>
-          <li style="margin-bottom:16px"><a href="${safeVerificationLink}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Verify email address</a></li>
-          <li style="margin-bottom:16px"><a href="${safePasswordResetLink}" style="display:inline-block;background:#d4af37;color:#111827;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Set private password</a></li>
-          <li><a href="${safeLoginUrl}" style="font-weight:700">Open the ${escapeHtml(portalName)}</a></li>
+          <li style="margin-bottom:16px">
+            <a href="${safeVerificationLink}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Verify email address</a>
+          </li>
+          <li style="margin-bottom:16px">
+            <a href="${safePasswordResetLink}" style="display:inline-block;background:#d4af37;color:#111827;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Set private password</a>
+          </li>
+          <li>
+            <a href="${safeLoginUrl}" style="font-weight:700">Open the ${escapeHtml(portalName)}</a>
+          </li>
         </ol>
         <p style="margin-top:24px;padding:12px;background:#f8fafc;border-radius:8px"><strong>Security:</strong> Never share passwords, verification links, SMS codes, or device access.</p>
         <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0" />
@@ -258,17 +226,15 @@ function buildInvitationMessage({
 
 export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const authContext = request.auth;
-  if (!authContext) {
-    throw new HttpsError("unauthenticated", "Admin session required.");
-  }
+  if (!authContext) throw new HttpsError("unauthenticated", "Admin session required.");
 
   const actorId = authContext.uid;
   const actorToken = authContext.token || {};
-  const actorRole = cleanString(actorToken.role || actorToken.userRole || actorToken.primaryRole, "admin");
-
+  const actorRole = roleFrom(actorToken) || "admin";
   if (!hasAdminAccess(actorToken)) {
-    throw new HttpsError("permission-denied", "Only authorized admins can provision staff accounts.");
+    throw new HttpsError("permission-denied", "Only the canonical Founder/Admin can provision staff accounts.");
   }
+
   const actorRecord = await admin.auth().getUser(actorId);
   if (actorRecord.disabled) {
     throw new HttpsError("permission-denied", "Disabled administrators cannot provision accounts.");
@@ -280,38 +246,49 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
   const displayName = cleanString(payload.displayName || payload.fullName);
   const phoneNumber = cleanString(payload.phoneNumber || payload.phone || payload.mobile);
   const specialization = cleanString(payload.specialization || payload.trade || payload.department, "General Maintenance");
-  const modules = normalizeModules(role, payload);
-  const permissions = normalizePermissions(modules, payload.permissions);
 
-  if (!email || !email.includes("@")) {
-    throw new HttpsError("invalid-argument", "A valid email address is required.");
-  }
-  if (!displayName) {
-    throw new HttpsError("invalid-argument", "Full name is required.");
-  }
-  if (!STAFF_ROLES.has(role)) {
-    throw new HttpsError("invalid-argument", `Unsupported staff role: ${role}. Privileged Founder/Admin identities are not provisioned from Staff Access.`);
-  }
+  if (!email || !email.includes("@")) throw new HttpsError("invalid-argument", "A valid email address is required.");
+  if (!displayName) throw new HttpsError("invalid-argument", "Full name is required.");
+  if (!STAFF_ROLES.has(role)) throw new HttpsError("invalid-argument", `Unsupported staff role: ${role}`);
 
+  const modules = normalizeModules(payload.modules, role);
+  const permissions = permissionsForModules(modules);
   const now = FieldValue.serverTimestamp();
   let userRecord: admin.auth.UserRecord;
   let createdAuthUser = false;
-  let previousClaims: Record<string, unknown> | undefined;
+  let previousClaims: Record<string, unknown> = {};
   let previousDisabled = false;
+  let previousProfile: FirebaseFirestore.DocumentData | null = null;
 
   try {
     userRecord = await admin.auth().getUserByEmail(email);
     previousClaims = { ...(userRecord.customClaims || {}) };
     previousDisabled = userRecord.disabled === true;
-    const existingProfile = await db.collection("users").doc(userRecord.uid).get();
-    if (!existingIdentityIsStaffSafe(userRecord, existingProfile.data())) {
-      throw new HttpsError("already-exists", "This email already belongs to a non-staff or privileged identity. Use a separate protected conversion workflow; Staff Access cannot convert Owner, Tenant, Broker, or Founder/Admin accounts.");
+    if (userRecord.disabled) {
+      throw new HttpsError("failed-precondition", "The existing account is disabled and cannot be converted through staff provisioning.");
     }
-  } catch (err: any) {
-    if (err instanceof HttpsError) throw err;
-    if (err?.code !== "auth/user-not-found") {
-      throw new HttpsError("internal", `Unable to check existing user: ${err?.message || err}`);
+
+    const profileSnap = await db.collection("users").doc(userRecord.uid).get();
+    previousProfile = profileSnap.exists ? profileSnap.data() || null : null;
+    const existingRole = roleFrom(previousProfile) || roleFrom(previousClaims);
+    const existingIsStaff = Boolean(
+      previousProfile?.isStaff === true ||
+      previousClaims.staff === true ||
+      STAFF_ROLES.has(existingRole)
+    );
+
+    if (!profileSnap.exists || !existingIsStaff || PRIVILEGED_ADMIN_ROLES.has(existingRole) || CUSTOMER_ROLES.has(existingRole)) {
+      throw new HttpsError(
+        "already-exists",
+        "This email already belongs to a non-staff or privileged identity. Use a different work email; customer and Founder/Admin accounts cannot be converted here.",
+      );
     }
+  } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
+    if (error?.code !== "auth/user-not-found") {
+      throw new HttpsError("internal", `Unable to validate the existing identity safely: ${error?.message || error}`);
+    }
+
     userRecord = await admin.auth().createUser({
       email,
       displayName,
@@ -320,37 +297,39 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       disabled: false,
     });
     createdAuthUser = true;
-    previousClaims = undefined;
-    previousDisabled = false;
   }
 
   const uid = userRecord.uid;
   const queueInvitation = payload.sendInvitation !== false;
   const resendInvitation = payload.resendInvitation === true;
+  if (createdAuthUser && !queueInvitation) {
+    await admin.auth().deleteUser(uid).catch(() => undefined);
+    throw new HttpsError("failed-precondition", "New staff accounts require the secure email-verification and private-password invitation.");
+  }
+
   const shouldQueueInvitation = queueInvitation && (createdAuthUser || resendInvitation);
   const loginUrl = loginUrlForRole(role);
+  const customClaims = {
+    role,
+    userRole: role,
+    primaryRole: role,
+    staff: true,
+    technician: role === "technician",
+    admin: false,
+    isAdmin: false,
+    super_admin: false,
+    superAdmin: false,
+    ceo: false,
+    manager: false,
+    modules,
+    permissions,
+    suspended: false,
+  };
+
   let invitationRef: FirebaseFirestore.DocumentReference | null = null;
   let invitationMessage: ReturnType<typeof buildInvitationMessage> | null = null;
 
   try {
-    await admin.auth().updateUser(uid, { displayName, disabled: false });
-    await admin.auth().setCustomUserClaims(uid, {
-      role,
-      userRole: role,
-      primaryRole: role,
-      staff: true,
-      isStaff: true,
-      technician: role === "technician",
-      admin: false,
-      super_admin: false,
-      superAdmin: false,
-      ceo: false,
-      modules,
-      staffModules: modules,
-      permissions,
-      suspended: false,
-    });
-
     if (shouldQueueInvitation) {
       const actionCodeSettings = { url: loginUrl, handleCodeInApp: false };
       const [emailVerificationLink, passwordResetLink] = await Promise.all([
@@ -358,9 +337,20 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         admin.auth().generatePasswordResetLink(email, actionCodeSettings),
       ]);
       invitationRef = db.collection("mail").doc();
-      invitationMessage = buildInvitationMessage({ displayName, email, role, loginUrl, emailVerificationLink, passwordResetLink });
+      invitationMessage = buildInvitationMessage({
+        displayName,
+        email,
+        role,
+        loginUrl,
+        emailVerificationLink,
+        passwordResetLink,
+      });
     }
 
+    await admin.auth().updateUser(uid, { displayName, disabled: false });
+    await admin.auth().setCustomUserClaims(uid, { ...customClaims });
+
+    const createdAt = previousProfile?.createdAt || now;
     const operationalProfile = {
       uid,
       email,
@@ -378,12 +368,11 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       isStaff: true,
       isAdmin: false,
       staffModules: modules,
-      modules,
       permissions,
       onboardingComplete: true,
-      createdAt: now,
+      createdAt,
       updatedAt: now,
-      createdBy: actorId,
+      createdBy: previousProfile?.createdBy || actorId,
       provisionedBy: actorId,
       provisionedVia: "adminCreateUser",
     };
@@ -406,6 +395,19 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       companyMedicalInsuranceProvided: payload.companyMedicalInsuranceProvided !== false,
     };
 
+    const privateHrProfile = {
+      ...operationalProfile,
+      employeeId: cleanString(payload.employeeId),
+      emiratesId: cleanString(payload.emiratesId),
+      employeeType: role,
+      joiningDate: cleanString(payload.joiningDate) || null,
+      offDay: cleanString(payload.offDay, "Sunday"),
+      shiftName: cleanString(payload.shiftName, "Day Shift"),
+      workingHours: cleanString(payload.workingHours, "9 AM - 4 PM"),
+      salaryPackage,
+      privateHrRecord: true,
+    };
+
     await db.runTransaction(async (tx) => {
       tx.set(db.collection("users").doc(uid), {
         ...operationalProfile,
@@ -417,35 +419,23 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         role,
         active: true,
         modules,
-        staffModules: modules,
         permissions,
         grantedAt: now,
         grantedBy: actorId,
         updatedAt: now,
       }, { merge: true });
 
-      tx.set(db.collection("hrProfiles").doc(uid), {
-        ...operationalProfile,
-        employeeType: role,
-        employeeId: cleanString(payload.employeeId),
-        emiratesId: cleanString(payload.emiratesId),
-        joiningDate: cleanString(payload.joiningDate) || null,
-        offDay: cleanString(payload.offDay, "Sunday"),
-        shiftName: cleanString(payload.shiftName, "Day Shift"),
-        workingHours: cleanString(payload.workingHours, "9 AM - 4 PM"),
-        salaryPackage,
-        privateHrRecord: true,
-      }, { merge: true });
+      tx.set(db.collection("hrProfiles").doc(uid), privateHrProfile, { merge: true });
 
       if (role === "technician") {
         tx.set(db.collection("technicians").doc(uid), {
           ...operationalProfile,
+          ...operationalFieldDeletes(),
           available: true,
           onDuty: false,
           currentJobCount: 0,
           maxConcurrentJobs: Number(payload.maxConcurrentJobs || 3),
           emergencyEligible: Boolean(payload.emergencyEligible || false),
-          ...operationalFieldDeletes(),
         }, { merge: true });
       }
 
@@ -460,10 +450,9 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
             replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
           },
           type: "staff_account_invitation",
-          template: "staff-account-invitation-v2",
+          template: "staff-account-invitation-v1",
           targetUid: uid,
           targetRole: role,
-          modules,
           status: "QUEUED",
           delivery: { state: "QUEUED" },
           createdAt: now,
@@ -475,17 +464,17 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       tx.set(db.collection("audit_logs").doc(), {
         actorId,
         actorRole,
-        action: "ADMIN_CREATE_STAFF_USER",
+        action: createdAuthUser ? "ADMIN_CREATE_STAFF_USER" : "ADMIN_UPDATE_STAFF_ACCESS",
         targetType: "users",
         targetId: uid,
         metadata: {
           email,
           role,
           modules,
+          permissionKeys: Object.keys(permissions),
           createdAuthUser,
           invitationQueued: Boolean(invitationRef),
           invitationMailId: invitationRef?.id || null,
-          sensitiveHrValuesStoredOnlyInHrProfile: true,
         },
         createdAt: now,
       });
@@ -496,11 +485,11 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         console.error("Failed to roll back newly created staff Auth user", { uid, rollbackError });
       });
     } else {
-      await admin.auth().setCustomUserClaims(uid, previousClaims || null).catch((rollbackError) => {
-        console.error("Failed to restore previous staff claims", { uid, rollbackError });
+      await admin.auth().setCustomUserClaims(uid, previousClaims).catch((rollbackError) => {
+        console.error("Failed to restore previous staff claims after provisioning failure", { uid, rollbackError });
       });
       await admin.auth().updateUser(uid, { disabled: previousDisabled }).catch((rollbackError) => {
-        console.error("Failed to restore previous disabled state", { uid, rollbackError });
+        console.error("Failed to restore previous disabled state after provisioning failure", { uid, rollbackError });
       });
     }
     if (error instanceof HttpsError) throw error;
@@ -514,15 +503,14 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
     email,
     role,
     modules,
+    permissions,
     createdAuthUser,
     invitationQueued,
     message: createdAuthUser
-      ? invitationQueued
-        ? "Staff account created. A secure email-verification and password-setup invitation was queued."
-        : "Staff account created without an invitation. Send a password-reset email before first login."
+      ? "Staff account created. A secure email-verification and private-password invitation was queued."
       : invitationQueued
-        ? "Existing staff account updated and a fresh secure invitation was queued."
-        : "Existing staff account updated through secure claims authority.",
+        ? "Existing staff access updated and a fresh secure invitation was queued."
+        : "Existing staff access updated. The user must refresh their token or sign in again.",
   };
 });
 
@@ -531,63 +519,60 @@ export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (
   const after = event.data?.after.data();
   if (!after) return;
 
-  const roleBefore = cleanString(before?.role);
-  const roleAfter = cleanString(after?.role).toLowerCase();
-  const staffModulesBefore = JSON.stringify(before?.staffModules || before?.modules || []);
-  const staffModulesAfter = JSON.stringify(after?.staffModules || after?.modules || []);
-  const permissionsBefore = JSON.stringify(before?.permissions || {});
-  const permissionsAfter = JSON.stringify(after?.permissions || {});
+  const roleBefore = roleFrom(before);
+  const roleAfter = roleFrom(after);
+  const staffModulesBefore = JSON.stringify(before?.staffModules || []);
+  const staffModulesAfter = JSON.stringify(after?.staffModules || []);
   const statusBefore = cleanString(before?.status).toLowerCase();
   const statusAfter = cleanString(after?.status).toLowerCase();
 
-  if (roleBefore === roleAfter && staffModulesBefore === staffModulesAfter && permissionsBefore === permissionsAfter && statusBefore === statusAfter) {
-    return;
-  }
+  if (roleBefore === roleAfter && staffModulesBefore === staffModulesAfter && statusBefore === statusAfter) return;
+  if (!STAFF_ROLES.has(roleAfter) && !PRIVILEGED_ADMIN_ROLES.has(roleAfter)) return;
 
   const uid = event.params.userId;
-  const role = roleAfter;
-
   try {
     const userRecord = await admin.auth().getUser(uid);
-    const modules = normalizeModules(role, after);
-    const permissions = normalizePermissions(modules, after.permissions || userRecord.customClaims?.permissions || {});
+    const existingClaims = userRecord.customClaims || {};
 
     if (["suspended", "disabled", "rejected"].includes(statusAfter)) {
       await admin.auth().updateUser(uid, { disabled: true });
-      await admin.auth().setCustomUserClaims(uid, {
-        role,
-        userRole: role,
-        primaryRole: role,
-        staff: STAFF_ROLES.has(role),
-        isStaff: STAFF_ROLES.has(role),
-        technician: role === "technician",
-        admin: false,
-        modules,
-        staffModules: modules,
-        permissions,
-        suspended: true,
-      });
+      await admin.auth().setCustomUserClaims(uid, { ...existingClaims, suspended: true });
       await admin.auth().revokeRefreshTokens(uid);
       return;
     }
 
-    if (!STAFF_ROLES.has(role)) return;
-    if (userRecord.disabled) {
-      await admin.auth().updateUser(uid, { disabled: false });
+    if (userRecord.disabled) await admin.auth().updateUser(uid, { disabled: false });
+
+    if (PRIVILEGED_ADMIN_ROLES.has(roleAfter)) {
+      await admin.auth().setCustomUserClaims(uid, {
+        ...existingClaims,
+        role: roleAfter,
+        userRole: roleAfter,
+        primaryRole: roleAfter,
+        admin: true,
+        isAdmin: true,
+        staff: true,
+        technician: false,
+        suspended: false,
+      });
+      return;
     }
+
+    const modules = normalizeModules(after.staffModules || [], roleAfter);
+    const permissions = permissionsForModules(modules);
     await admin.auth().setCustomUserClaims(uid, {
-      role,
-      userRole: role,
-      primaryRole: role,
+      role: roleAfter,
+      userRole: roleAfter,
+      primaryRole: roleAfter,
       staff: true,
-      isStaff: true,
-      technician: role === "technician",
+      technician: roleAfter === "technician",
       admin: false,
+      isAdmin: false,
       super_admin: false,
       superAdmin: false,
       ceo: false,
+      manager: false,
       modules,
-      staffModules: modules,
       permissions,
       suspended: false,
     });

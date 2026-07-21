@@ -1,91 +1,91 @@
 // apps/admin-panel/src/pages/admin/StaffAccessPage.tsx
-// Secure staff provisioning: callable-only, fail-closed, least-privilege module access.
+// Founder/Admin provisions staff accounts through the fail-closed callable only.
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Box, Paper, Typography, Grid, Stack, Button, TextField,
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    FormControl, InputLabel, Select, MenuItem, Checkbox,
-    FormControlLabel, Alert, CircularProgress,
-    alpha, Divider, Tooltip, IconButton
+    Alert,
+    Box,
+    Button,
+    Checkbox,
+    Chip,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    FormControl,
+    FormControlLabel,
+    Grid,
+    IconButton,
+    InputLabel,
+    MenuItem,
+    Paper,
+    Select,
+    Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TextField,
+    Tooltip,
+    Typography,
+    alpha,
 } from '@mui/material';
-import { UserPlus, Edit, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, Edit, UserPlus, XCircle } from 'lucide-react';
 import {
-    db, collection, doc, updateDoc,
-    query, where, onSnapshot, serverTimestamp
+    collection,
+    db,
+    doc,
+    functions,
+    httpsCallable,
+    onSnapshot,
+    query,
+    serverTimestamp,
+    updateDoc,
+    where,
 } from '../../lib/firebase';
-import { functions, httpsCallable } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
-
-const STAFF_ROLES = [
-    { value: 'technician', label: 'Technician', description: 'Field technician app access' },
-    { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map' },
-    { value: 'operations_manager', label: 'Operations Manager', description: 'Operations reporting and dispatch oversight' },
-    { value: 'finance_admin', label: 'Finance Admin', description: 'Financials, payments, payroll' },
-    { value: 'finance_staff', label: 'Finance Staff', description: 'Finance support without founder privileges' },
-    { value: 'hr_admin', label: 'HR Admin', description: 'HR records and staff lifecycle' },
-    { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and private employee records' },
-    { value: 'hr_staff', label: 'HR Staff', description: 'HR support access' },
-    { value: 'support_admin', label: 'Support Admin', description: 'Tenants, complaints, messages' },
-    { value: 'account_manager', label: 'Account Manager', description: 'Owners, contracts, documents' },
-    { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment, duty command' },
-    { value: 'manager', label: 'Manager', description: 'Reports and analytics' },
-    { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
-];
-
-const MODULE_ACCESS = [
-    { key: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { key: 'owners', label: 'Owner Management', icon: '🏠' },
-    { key: 'tenants', label: 'Tenant Management', icon: '👤' },
-    { key: 'tickets', label: 'Tickets / Maintenance', icon: '🔧' },
-    { key: 'technicians', label: 'Technician Management', icon: '👷' },
-    { key: 'financials', label: 'Financials & Payroll', icon: '💰' },
-    { key: 'transactions', label: 'Transactions', icon: '💳' },
-    { key: 'broker', label: 'Broker Management', icon: '🤝' },
-    { key: 'documents', label: 'Document Vault', icon: '📁' },
-    { key: 'properties', label: 'Properties & Passports', icon: '🏢' },
-    { key: 'reports', label: 'Reports & Analytics', icon: '📈' },
-    { key: 'audit', label: 'Audit Log', icon: '🔍' },
-    { key: 'compliance', label: 'Compliance', icon: '✅' },
-    { key: 'map', label: 'Live Map', icon: '🗺️' },
-    { key: 'sos', label: 'SOS Feed', icon: '🚨' },
-    { key: 'hr', label: 'HR Management', icon: '👥' },
-    { key: 'pricing', label: 'Pricing Matrix', icon: '💲' },
-];
-
-const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
-    technician: ['dashboard', 'tickets', 'map'],
-    operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties'],
-    operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'reports', 'properties'],
-    finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
-    finance_staff: ['dashboard', 'financials', 'transactions'],
-    hr_admin: ['dashboard', 'technicians', 'hr'],
-    hr_manager: ['dashboard', 'technicians', 'hr', 'reports'],
-    hr_staff: ['dashboard', 'hr'],
-    support_admin: ['dashboard', 'tenants', 'tickets', 'sos'],
-    account_manager: ['dashboard', 'owners', 'documents', 'properties'],
-    dispatcher: ['dashboard', 'tickets', 'technicians', 'map'],
-    manager: ['dashboard', 'reports', 'audit', 'owners', 'tenants'],
-    admin_assistant: ['dashboard', 'documents', 'tenants'],
-};
+import {
+    MODULE_OPTIONS,
+    PROVISIONABLE_STAFF_ROLE_OPTIONS,
+    PROVISIONABLE_STAFF_ROLES,
+    ROLE_DEFAULT_MODULES,
+    type StaffModule,
+} from '../../security/staffAccessPolicy';
 
 interface StaffMember {
     id: string;
     displayName: string;
     email: string;
     role: string;
-    modules: string[];
+    modules: StaffModule[];
     status: string;
     createdAt?: any;
     lastLogin?: any;
 }
 
-function safeErrorMessage(error: any) {
-    const message = String(error?.message || error?.details || error?.code || 'Secure provisioning failed.');
-    return message.replace(/^FirebaseError:\s*/i, '').slice(0, 240);
+interface StaffForm {
+    displayName: string;
+    email: string;
+    role: string;
+    modules: StaffModule[];
 }
+
+const initialForm = (): StaffForm => ({
+    displayName: '',
+    email: '',
+    role: 'support_admin',
+    modules: [...(ROLE_DEFAULT_MODULES.support_admin || [])],
+});
+
+const callableErrorMessage = (error: any) => {
+    const raw = String(error?.details || error?.message || 'Secure staff provisioning failed.');
+    return raw.replace(/^FirebaseError:\s*/i, '').replace(/^functions\//i, '');
+};
 
 export default function StaffAccessPage() {
     const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -95,58 +95,57 @@ export default function StaffAccessPage() {
     const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
-
-    const [formData, setFormData] = useState({
-        displayName: '',
-        email: '',
-        role: 'support_admin',
-        modules: ROLE_DEFAULT_MODULES['support_admin'],
-    });
+    const [formData, setFormData] = useState<StaffForm>(initialForm);
 
     useEffect(() => {
-        const staffRoleValues = STAFF_ROLES.map((role) => role.value);
-        const unsub = onSnapshot(
-            query(collection(db, 'users'), where('role', 'in', staffRoleValues)),
-            (snap) => {
-                const list: StaffMember[] = snap.docs.map(d => ({
-                    id: d.id,
-                    displayName: d.data().displayName || d.data().name || 'Staff',
-                    email: d.data().email || '',
-                    role: d.data().role || 'support_admin',
-                    modules: d.data().staffModules || d.data().modules || ROLE_DEFAULT_MODULES[d.data().role] || [],
-                    status: String(d.data().status || 'active').toUpperCase(),
-                    createdAt: d.data().createdAt,
-                    lastLogin: d.data().lastLogin,
-                }));
+        const unsubscribe = onSnapshot(
+            query(collection(db, 'users'), where('role', 'in', PROVISIONABLE_STAFF_ROLES)),
+            (snapshot) => {
+                const list: StaffMember[] = snapshot.docs.map((document) => {
+                    const data = document.data();
+                    return {
+                        id: document.id,
+                        displayName: data.displayName || data.name || 'Staff',
+                        email: data.email || '',
+                        role: data.role || 'support_admin',
+                        modules: Array.isArray(data.staffModules) ? data.staffModules : ROLE_DEFAULT_MODULES[data.role] || [],
+                        status: String(data.status || 'active').toUpperCase(),
+                        createdAt: data.createdAt,
+                        lastLogin: data.lastLogin,
+                    };
+                });
                 setStaff(list);
                 setLoading(false);
             },
-            () => setLoading(false)
+            (error) => {
+                setLoading(false);
+                setSnackbar({ open: true, message: callableErrorMessage(error), error: true });
+            },
         );
-        return () => unsub();
+        return () => unsubscribe();
     }, []);
 
     const handleRoleChange = (role: string) => {
-        setFormData(prev => ({
-            ...prev,
+        setFormData((previous) => ({
+            ...previous,
             role,
-            modules: ROLE_DEFAULT_MODULES[role] || [],
+            modules: [...(ROLE_DEFAULT_MODULES[role] || [])],
         }));
     };
 
-    const toggleModule = (key: string) => {
-        setFormData(prev => ({
-            ...prev,
-            modules: prev.modules.includes(key)
-                ? prev.modules.filter(m => m !== key)
-                : [...prev.modules, key],
+    const toggleModule = (key: StaffModule) => {
+        setFormData((previous) => ({
+            ...previous,
+            modules: previous.modules.includes(key)
+                ? previous.modules.filter((module) => module !== key)
+                : [...previous.modules, key],
         }));
     };
 
     const openAddDialog = () => {
         setEditMode(false);
         setSelectedStaff(null);
-        setFormData({ displayName: '', email: '', role: 'support_admin', modules: ROLE_DEFAULT_MODULES['support_admin'] });
+        setFormData(initialForm());
         setDialogOpen(true);
     };
 
@@ -157,40 +156,34 @@ export default function StaffAccessPage() {
             displayName: member.displayName,
             email: member.email,
             role: member.role,
-            modules: member.modules,
+            modules: [...member.modules],
         });
         setDialogOpen(true);
     };
 
     const handleSubmit = async () => {
-        if (!formData.displayName || !formData.email || !formData.role) return;
+        if (!formData.displayName.trim() || !formData.email.trim() || !formData.role) return;
         setSubmitting(true);
         try {
-            const createStaff = httpsCallable(functions, 'adminCreateUser');
-            const result: any = await createStaff({
-                displayName: formData.displayName,
-                email: formData.email,
+            const provisionStaff = httpsCallable(functions, 'adminCreateUser');
+            const response: any = await provisionStaff({
+                displayName: formData.displayName.trim(),
+                email: formData.email.trim().toLowerCase(),
                 role: formData.role,
-                modules: formData.modules,
-                staffModules: formData.modules,
-                permissions: {},
+                modules: formData.role === 'technician' ? [] : formData.modules,
                 sendInvitation: !editMode,
                 resendInvitation: false,
             });
-
-            setDialogOpen(false);
-            const message = result?.data?.message || (
-                editMode
-                    ? `${formData.displayName} access updated through secure claims authority.`
-                    : `${formData.displayName} created. A secure invitation/password setup email will be sent.`
-            );
-            setSnackbar({ open: true, message, error: false });
-        } catch (err: any) {
             setSnackbar({
                 open: true,
-                message: `Secure provisioning blocked: ${safeErrorMessage(err)}`,
-                error: true,
+                message: String(response?.data?.message || (editMode
+                    ? `${formData.displayName} access updated. The user must sign in again.`
+                    : `${formData.displayName} created. A secure invitation was queued.`)),
+                error: false,
             });
+            setDialogOpen(false);
+        } catch (error: any) {
+            setSnackbar({ open: true, message: callableErrorMessage(error), error: true });
         } finally {
             setSubmitting(false);
         }
@@ -203,9 +196,9 @@ export default function StaffAccessPage() {
                 suspendedAt: serverTimestamp(),
                 suspendedBy: 'admin',
             });
-            setSnackbar({ open: true, message: `${member.displayName} access suspension queued. Auth disable/revoke is handled by the protected claims sync.`, error: false });
-        } catch {
-            setSnackbar({ open: true, message: 'Failed to suspend access.', error: true });
+            setSnackbar({ open: true, message: `${member.displayName} access suspended. Active sessions will be revoked.`, error: false });
+        } catch (error) {
+            setSnackbar({ open: true, message: callableErrorMessage(error), error: true });
         }
     };
 
@@ -215,38 +208,35 @@ export default function StaffAccessPage() {
                 status: 'active',
                 restoredAt: serverTimestamp(),
             });
-            setSnackbar({ open: true, message: `${member.displayName} access restore queued.`, error: false });
-        } catch {
-            setSnackbar({ open: true, message: 'Failed to restore access.', error: true });
+            setSnackbar({ open: true, message: `${member.displayName} access restored. They must sign in again.`, error: false });
+        } catch (error) {
+            setSnackbar({ open: true, message: callableErrorMessage(error), error: true });
         }
     };
 
     const getRoleColor = (role: string) => {
+        if (role === 'technician') return '#06b6d4';
         if (role.includes('finance')) return '#10b981';
         if (role.includes('hr')) return '#3b82f6';
-        if (role.includes('operations') || role === 'dispatcher' || role === 'technician') return '#f59e0b';
+        if (role.includes('operations') || role === 'dispatcher') return '#f59e0b';
         return 'rgba(255,255,255,0.4)';
     };
 
     return (
         <AdminPageFrame
             title="Staff Access Control"
-            subtitle="SECURE ROLE-BASED MODULE PERMISSIONS"
+            subtitle="FAIL-CLOSED ROLE AND MODULE PROVISIONING"
             lastUpdated={new Date()}
             onRefresh={() => window.location.reload()}
         >
             <Box sx={{ pb: 8 }}>
-                <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
-                    Privileged Founder/Admin accounts are not created here. This screen provisions only approved Staff, HR, Operations, Finance, Support and Technician roles through the protected Cloud Function. Failed provisioning creates no Firestore-only account.
-                </Alert>
-
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                            Manage staff accounts and control which modules each staff member can access.
+                            Create Staff/HR and Technician identities through the protected callable. Customer and Founder accounts cannot be converted here.
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>
-                            {staff.filter(s => s.status !== 'SUSPENDED').length} active staff · {staff.filter(s => s.status === 'SUSPENDED').length} suspended
+                            {staff.filter((member) => member.status !== 'SUSPENDED').length} active staff · {staff.filter((member) => member.status === 'SUSPENDED').length} suspended
                         </Typography>
                     </Box>
                     <Button
@@ -293,11 +283,17 @@ export default function StaffAccessPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 300 }}>
-                                                    {member.modules.slice(0, 4).map(m => (
-                                                        <Chip key={m} label={`${MODULE_ACCESS.find(ma => ma.key === m)?.icon || '•'} ${m}`} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)' }} />
-                                                    ))}
+                                                    {member.role === 'technician' && (
+                                                        <Chip label="TECHNICIAN PORTAL" size="small" sx={{ height: 18, fontSize: '0.55rem', bgcolor: alpha('#06b6d4', 0.12), color: '#06b6d4' }} />
+                                                    )}
+                                                    {member.modules.slice(0, 4).map((module) => {
+                                                        const option = MODULE_OPTIONS.find((item) => item.key === module);
+                                                        return (
+                                                            <Chip key={module} label={`${option?.icon || ''} ${option?.label || module}`} size="small" sx={{ height: 18, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)' }} />
+                                                        );
+                                                    })}
                                                     {member.modules.length > 4 && (
-                                                        <Chip label={`+${member.modules.length - 4} more`} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }} />
+                                                        <Chip label={`+${member.modules.length - 4} more`} size="small" sx={{ height: 18, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }} />
                                                     )}
                                                 </Box>
                                             </TableCell>
@@ -308,7 +304,8 @@ export default function StaffAccessPage() {
                                                     sx={{
                                                         bgcolor: member.status === 'ACTIVE' ? alpha('#10b981', 0.1) : alpha('#ef4444', 0.1),
                                                         color: member.status === 'ACTIVE' ? '#10b981' : '#ef4444',
-                                                        fontWeight: 900, fontSize: '0.6rem'
+                                                        fontWeight: 900,
+                                                        fontSize: '0.6rem',
                                                     }}
                                                 />
                                             </TableCell>
@@ -354,32 +351,38 @@ export default function StaffAccessPage() {
 
                 <Dialog
                     open={dialogOpen}
-                    onClose={() => setDialogOpen(false)}
+                    onClose={() => !submitting && setDialogOpen(false)}
                     maxWidth="md"
                     fullWidth
                     PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}
                 >
                     <DialogTitle sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        {editMode ? `Edit Access: ${selectedStaff?.displayName}` : 'Add New Staff / Technician'}
+                        {editMode ? `Edit Access: ${selectedStaff?.displayName}` : 'Add New Staff Member'}
                     </DialogTitle>
                     <DialogContent sx={{ pt: 3 }}>
                         <Alert severity="info" sx={{ mb: 3 }}>
-                            No temporary password is generated or shown here. The backend queues a secure email verification and private password setup invitation from the approved BIN GROUP sender.
+                            New users receive separate email-verification and private-password setup links. No temporary password is created in this browser, and provisioning failures create no fallback record.
                         </Alert>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <TextField
-                                    fullWidth label="Full Name" value={formData.displayName}
-                                    onChange={e => setFormData(p => ({ ...p, displayName: e.target.value }))}
+                                    fullWidth
+                                    label="Full Name"
+                                    value={formData.displayName}
+                                    onChange={(event) => setFormData((previous) => ({ ...previous, displayName: event.target.value }))}
                                     disabled={editMode}
                                     sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                 />
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <TextField
-                                    fullWidth label="Email Address" type="email" value={formData.email}
-                                    onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                                    fullWidth
+                                    label="Work Email Address"
+                                    type="email"
+                                    value={formData.email}
+                                    onChange={(event) => setFormData((previous) => ({ ...previous, email: event.target.value }))}
                                     disabled={editMode}
+                                    helperText="Use a dedicated work email that is not already an Owner, Tenant, Broker or Founder identity."
                                     sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                 />
                             </Grid>
@@ -388,15 +391,15 @@ export default function StaffAccessPage() {
                                     <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
                                     <Select
                                         value={formData.role}
-                                        onChange={e => handleRoleChange(e.target.value)}
+                                        onChange={(event) => handleRoleChange(String(event.target.value))}
                                         label="Role"
                                         sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' } }}
                                     >
-                                        {STAFF_ROLES.map(r => (
-                                            <MenuItem key={r.value} value={r.value}>
+                                        {PROVISIONABLE_STAFF_ROLE_OPTIONS.map((role) => (
+                                            <MenuItem key={role.value} value={role.value}>
                                                 <Box>
-                                                    <Typography variant="body2" fontWeight="700">{r.label}</Typography>
-                                                    <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.5)' }}>{r.description}</Typography>
+                                                    <Typography variant="body2" fontWeight="700">{role.label}</Typography>
+                                                    <Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.5)' }}>{role.description}</Typography>
                                                 </Box>
                                             </MenuItem>
                                         ))}
@@ -406,58 +409,66 @@ export default function StaffAccessPage() {
 
                             <Grid item xs={12}>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>MODULE ACCESS CONTROL</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 2 }}>
-                                    Select which modules this staff member can access. Role defaults are pre-selected and will be bound into claims and the staff access registry.
-                                </Typography>
-                                <Grid container spacing={1}>
-                                    {MODULE_ACCESS.map(module => (
-                                        <Grid item xs={12} sm={6} md={4} key={module.key}>
-                                            <FormControlLabel
-                                                control={
-                                                    <Checkbox
-                                                        checked={formData.modules.includes(module.key)}
-                                                        onChange={() => toggleModule(module.key)}
-                                                        size="small"
-                                                        sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: binThemeTokens.gold } }}
+                                {formData.role === 'technician' ? (
+                                    <Alert severity="info">
+                                        Technician accounts use the Technician Portal. Dispatch readiness, device registration, GPS and evidence permissions are controlled by Technician workflows rather than Admin modules.
+                                    </Alert>
+                                ) : (
+                                    <>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>MODULE ACCESS CONTROL</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 2 }}>
+                                            These exact modules are persisted to the profile, access registry and Firebase Auth claims. Unselected routes are hidden and denied.
+                                        </Typography>
+                                        <Grid container spacing={1}>
+                                            {MODULE_OPTIONS.map((module) => (
+                                                <Grid item xs={12} sm={6} md={4} key={module.key}>
+                                                    <FormControlLabel
+                                                        control={(
+                                                            <Checkbox
+                                                                checked={formData.modules.includes(module.key)}
+                                                                onChange={() => toggleModule(module.key)}
+                                                                size="small"
+                                                                sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: binThemeTokens.gold } }}
+                                                            />
+                                                        )}
+                                                        label={(
+                                                            <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700 }}>
+                                                                {module.icon} {module.label}
+                                                            </Typography>
+                                                        )}
                                                     />
-                                                }
-                                                label={
-                                                    <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700 }}>
-                                                        {module.icon} {module.label}
-                                                    </Typography>
-                                                }
-                                            />
+                                                </Grid>
+                                            ))}
                                         </Grid>
-                                    ))}
-                                </Grid>
-                                <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
-                                        Selected: {formData.modules.length} / {MODULE_ACCESS.length} modules
-                                    </Typography>
-                                    <Button
-                                        size="small"
-                                        sx={{ ml: 2, color: binThemeTokens.gold, fontSize: '0.65rem' }}
-                                        onClick={() => setFormData(p => ({ ...p, modules: MODULE_ACCESS.map(m => m.key) }))}
-                                    >SELECT ALL</Button>
-                                    <Button
-                                        size="small"
-                                        sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}
-                                        onClick={() => setFormData(p => ({ ...p, modules: [] }))}
-                                    >CLEAR</Button>
-                                </Box>
+                                        <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
+                                                Selected: {formData.modules.length} / {MODULE_OPTIONS.length} modules
+                                            </Typography>
+                                            <Button
+                                                size="small"
+                                                sx={{ ml: 2, color: binThemeTokens.gold, fontSize: '0.65rem' }}
+                                                onClick={() => setFormData((previous) => ({ ...previous, modules: MODULE_OPTIONS.map((module) => module.key) }))}
+                                            >SELECT ALL</Button>
+                                            <Button
+                                                size="small"
+                                                sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }}
+                                                onClick={() => setFormData((previous) => ({ ...previous, modules: [] }))}
+                                            >CLEAR</Button>
+                                        </Box>
+                                    </>
+                                )}
                             </Grid>
                         </Grid>
                     </DialogContent>
                     <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Button onClick={() => setDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
+                        <Button disabled={submitting} onClick={() => setDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
                         <Button
                             variant="contained"
                             onClick={handleSubmit}
-                            disabled={submitting || !formData.displayName || !formData.email}
+                            disabled={submitting || !formData.displayName.trim() || !formData.email.trim()}
                             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                         >
-                            {submitting ? 'SAVING...' : editMode ? 'UPDATE SECURE ACCESS' : 'CREATE SECURE INVITATION'}
+                            {submitting ? 'SAVING...' : editMode ? 'UPDATE ACCESS' : 'CREATE & SEND SECURE INVITATION'}
                         </Button>
                     </DialogActions>
                 </Dialog>
@@ -465,8 +476,8 @@ export default function StaffAccessPage() {
                 {snackbar.open && (
                     <Alert
                         severity={snackbar.error ? 'error' : 'success'}
-                        onClose={() => setSnackbar(p => ({ ...p, open: false }))}
-                        sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, fontWeight: 900, borderRadius: 3, minWidth: 300 }}
+                        onClose={() => setSnackbar((previous) => ({ ...previous, open: false }))}
+                        sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, fontWeight: 900, borderRadius: 3, minWidth: 300, maxWidth: 560 }}
                     >
                         {snackbar.message}
                     </Alert>

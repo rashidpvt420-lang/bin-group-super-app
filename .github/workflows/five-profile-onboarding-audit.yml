@@ -25,6 +25,7 @@ on:
       - 'scripts/delete-obsolete-privileged-accounts-production.mjs'
       - 'scripts/ensure-admin-mfa-authorized-domains.mjs'
       - 'scripts/grant-admin.mjs'
+      - 'scripts/harden-hr-privacy-rules.mjs'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
       - 'scripts/setup-ai-secrets.ps1'
       - 'scripts/verify-admin-access.mjs'
@@ -45,6 +46,8 @@ on:
       - 'src/utils/geoAnchor.ts'
       - 'tests/launch/admin-mfa-recovery-deployment.test.mjs'
       - 'tests/launch/admin-property-review-authority.test.mjs'
+      - 'tests/launch/admin-staff-invitation-provisioning.test.mjs'
+      - 'tests/launch/staff-provisioning-fail-closed.test.mjs'
       - 'tests/launch/ai-secret-setup-deploy-guard.test.mjs'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
       - 'tests/launch/canonical-readiness-docs.test.mjs'
@@ -84,7 +87,32 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        id: install_dependencies
+        shell: bash
+        run: |
+          set +e
+          npm ci > npm-ci-output.txt 2>&1
+          status=$?
+          cat npm-ci-output.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload dependency-install diagnostics
+        if: steps.install_dependencies.outputs.status != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: five-profile-npm-ci-diagnostics-${{ github.sha }}
+          path: npm-ci-output.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce dependency installation
+        shell: bash
+        run: |
+          if [ "${{ steps.install_dependencies.outputs.status }}" != "0" ]; then
+            echo "Frozen dependency installation failed. See the uploaded npm-ci diagnostic artifact."
+            exit 1
+          fi
 
       - name: Run focused launch audits
         run: >-
@@ -95,6 +123,8 @@ jobs:
           tests/launch/canonical-readiness-docs.test.mjs
           tests/launch/admin-mfa-recovery-deployment.test.mjs
           tests/launch/admin-property-review-authority.test.mjs
+          tests/launch/admin-staff-invitation-provisioning.test.mjs
+          tests/launch/staff-provisioning-fail-closed.test.mjs
           tests/launch/ai-secret-setup-deploy-guard.test.mjs
           tests/launch/windows-ai-recovery-deploy-guard.test.mjs
           tests/launch/protected-admin-deployment-docs.test.mjs
