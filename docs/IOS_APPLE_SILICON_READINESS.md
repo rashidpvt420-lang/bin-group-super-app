@@ -14,13 +14,34 @@ NOT_INSTALLED_WEB_MAPS_ONLY
 
 Do not add a native Google Maps iOS dependency merely to respond to the architecture notice.
 
+## Protected Apple Silicon build
+
+The repository includes the protected GitHub Actions workflow:
+
+```text
+iOS Apple Silicon arm64 Build
+```
+
+It runs on GitHub's native Apple Silicon `macos-26` runner for pull requests, relevant pushes to `main`, and manual verification. The workflow:
+
+1. requires `uname -m` to equal `arm64`;
+2. requires Xcode 26 or newer;
+3. installs the committed JavaScript and CocoaPods dependency locks;
+4. builds the actual Capacitor workspace for `generic/platform=iOS Simulator`;
+5. forces `ARCHS=arm64` and disables signing only for simulator verification;
+6. inspects the compiled executable using `lipo`;
+7. rejects any result other than an arm64-only executable;
+8. uploads `ios-arm64-build-evidence-<commit SHA>` with the Xcode version, Simulator SDK, workflow run, binary architecture and SHA-256 digest.
+
+A successful workflow run is the canonical repository evidence that the exact commit builds on real Apple Silicon. Linux and Windows workflows remain source-readiness checks only.
+
 ## Required development environment
 
 By Q3 2026:
 
-- iOS simulator development, archive creation and App Store signing must use an Apple Silicon Mac.
+- iOS simulator development, archive creation and App Store signing must use an Apple Silicon Mac or the protected `macos-26` GitHub-hosted runner where signing is not required.
 - `uname -m` must report `arm64` on the build machine.
-- A real iPhone may be used for device testing, but signing and archive generation still require macOS and Xcode.
+- A real iPhone may be used for device testing, but local signing and archive generation still require macOS, Xcode and Apple Developer credentials.
 - Windows remains supported for BIN GROUP web, Firebase and Android development. It cannot perform the final iOS archive or App Store upload.
 - Do not exclude `arm64` from the iOS Simulator as a workaround.
 - Do not restrict `ARCHS` or `VALID_ARCHS` to `x86_64`.
@@ -40,7 +61,7 @@ Web Google Maps usage must not be misclassified as a native iOS SDK dependency.
 
 ## Validation
 
-Repository-only validation:
+Repository source validation:
 
 ```bash
 npm run verify:ios-apple-silicon
@@ -48,24 +69,36 @@ npm run test:mobile-store-readiness
 npm run test:launch-honesty
 ```
 
-Apple Silicon validation, executed only on a real M-series Mac:
+Canonical hosted Apple Silicon validation:
+
+1. Open GitHub Actions.
+2. Select **iOS Apple Silicon arm64 Build**.
+3. Open the successful run for the exact required commit.
+4. Confirm the runner is `macos-26 / arm64`.
+5. Download the `ios-arm64-build-evidence-<commit SHA>` artifact.
+6. Confirm the evidence reports `status: PASSED`, architecture `arm64`, and the same commit SHA.
+
+Equivalent local validation on a real M-series Mac:
 
 ```bash
 uname -m
 npm ci --include=optional --legacy-peer-deps
+npm run verify:ios-apple-silicon
 npm run build
-npx cap sync ios
+npx cap copy ios
 cd ios/App
-pod install
+pod install --deployment
+cd ../..
 xcodebuild \
-  -workspace App.xcworkspace \
+  -workspace ios/App/App.xcworkspace \
   -scheme App \
   -sdk iphonesimulator \
   -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
   ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
   build
 ```
 
-A green Linux or Windows CI run proves repository configuration readiness only. It does not prove that the Xcode arm64 build has run.
+A successful simulator build does not replace App Store signing, archive validation or testing on a real iPhone. Those remain separate release operations requiring Apple Developer credentials.
