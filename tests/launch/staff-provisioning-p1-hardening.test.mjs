@@ -48,7 +48,7 @@ test('existing customer or privileged identities cannot be converted into staff'
 test('sensitive employment data is absent from operational and scheduling profiles', () => {
   const operational = block(backend, 'const operationalProfile = {', 'const scheduleProfile = {');
   const schedule = block(backend, 'const scheduleProfile = {', 'const privateHrProfile = {');
-  const technician = block(backend, 'if (role === "technician") {', 'tx.create(invitationRef');
+  const technician = block(backend, 'if (role === "technician") {\n        tx.create(db.collection("technicians")', 'tx.create(invitationRef');
 
   for (const publicBlock of [operational, schedule, technician]) {
     assert.doesNotMatch(publicBlock, /emiratesId|employeeId|salaryPackage|basicSalary|housingAllowance|transportAllowance|foodAllowance|otherAllowance|salaryGrade/);
