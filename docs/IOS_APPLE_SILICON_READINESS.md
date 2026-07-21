@@ -35,6 +35,8 @@ It runs on GitHub's native Apple Silicon `macos-26` runner for pull requests, re
 
 A successful workflow run is the canonical repository evidence that the exact commit builds on real Apple Silicon. Linux and Windows workflows remain source-readiness checks only.
 
+Every pull request that changes the iOS project, Capacitor configuration, JavaScript application, mobile dependency locks, or this readiness control must pass the protected arm64 workflow before merge.
+
 ## Required development environment
 
 By Q3 2026:
