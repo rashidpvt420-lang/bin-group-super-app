@@ -95,13 +95,15 @@ During the 24-hour pilot:
 
 After at least 24 real hours:
 
+- Create or update a GitHub pilot-report issue with real observations, screenshots, rollback notes, and monitoring notes.
 - Run `Live Role Smoke Tests` in `hard-clearance` mode.
 - Supply the exact live-evidence run ID.
 - Let the workflow derive the pilot start and completion timestamps.
 - Use `open_p0=0` and `open_p1=0` only when true.
 - Use the successful live-evidence run URL as the incident reference.
 - Use the successful bank-pilot deploy run URL as the rollback reference.
-- Use the current hard-clearance run URL as the monitoring reference.
+- Use the pilot-report or monitoring issue URL as the monitoring reference.
+- Do not use the hard-clearance run URL as an input before that run exists.
 
 ## Public hard launch
 
