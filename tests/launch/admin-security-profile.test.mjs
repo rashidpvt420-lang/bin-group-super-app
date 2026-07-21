@@ -58,6 +58,16 @@ test('unauthenticated Admin callables expire the stale browser session', async (
   assert.match(firebase, /sessionExpiryRedirectStarted/);
 });
 
+test('Admin security profile refreshes Firebase Auth before protected callables', async () => {
+  const page = await read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx');
+  assert.match(page, /import \{ auth, functions, httpsCallable \} from '..\/..\/lib\/firebase'/);
+  assert.match(page, /const currentUser = auth\.currentUser/);
+  assert.match(page, /await currentUser\.getIdToken\(true\)/);
+  assert.match(page, /Your Firebase Auth session is not active on this browser/);
+  assert.match(page, /functions\/unauthenticated/);
+  assert.match(page, /Your Admin security session expired before the server profile loaded/);
+});
+
 test('Admin security profile fails closed instead of inventing MFA and permission status', async () => {
   const page = await read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx');
   assert.match(page, /setProfile\(null\)/);
@@ -65,7 +75,8 @@ test('Admin security profile fails closed instead of inventing MFA and permissio
   assert.match(page, /No MFA, email-verification, session or permission status is displayed/);
   assert.match(page, /\{profile && \(/);
   assert.match(page, /\{\(profile \|\| mfaEnrollmentRequired\) && \(/);
-  assert.doesNotMatch(page, /<AdminMfaEnrollmentCard enrolled=\{profile\?\.mfa\.enrolled === true\}[^\n]*\/>\s*\n\s*<Grid/);
+  assert.doesNotMatch(page, /<AdminMfaEnrollmentCard enrolled=\{profile\?\.mfa\.enrolled === true\}[^\n]*\/>
+\s*<Grid/);
 });
 
 test('runtime exports Admin security authority', async () => {
