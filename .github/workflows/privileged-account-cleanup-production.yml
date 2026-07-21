@@ -1,9 +1,14 @@
 name: Privileged Account Cleanup - Production
-run-name: Privileged cleanup - ${{ inputs.execute_cleanup && 'EXECUTE' || 'DRY RUN' }}
+run-name: Privileged cleanup - ${{ inputs.execute_cleanup && 'EXECUTE' || 'DRY RUN' }} · ${{ inputs.expected_commit_sha || github.sha }}
 
 on:
   workflow_dispatch:
     inputs:
+      expected_commit_sha:
+        description: 'Optional exact current main SHA for automation'
+        required: false
+        type: string
+        default: ''
       confirmation:
         description: 'Type exactly REVIEW_SINGLE_FOUNDER_PRIVILEGED_ACCOUNTS'
         required: true
@@ -47,6 +52,7 @@ jobs:
     steps:
       - name: Enforce protected exact-main inputs
         env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
           CONFIRMATION: ${{ inputs.confirmation }}
           EXECUTE_CLEANUP: ${{ inputs.execute_cleanup }}
           DESTRUCTIVE_CONFIRMATION: ${{ inputs.destructive_confirmation }}
@@ -57,6 +63,10 @@ jobs:
           [[ "$FOUNDER_EMAIL" == "ceo@bin-groups.com" ]]
           [[ "$GITHUB_REF" == "refs/heads/main" ]]
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ -n "$EXPECTED_COMMIT_SHA" ]]; then
+            [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          fi
           if [[ "$EXECUTE_CLEANUP" == "true" ]]; then
             [[ "$DESTRUCTIVE_CONFIRMATION" == "DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP" ]]
           else
@@ -64,14 +74,15 @@ jobs:
           fi
 
       - name: Checkout exact main commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
+          cache: npm
 
       - name: Verify protected cloud-authentication inputs
         env:
@@ -83,7 +94,7 @@ jobs:
           [[ -n "$GCP_SERVICE_ACCOUNT" ]]
 
       - name: Authenticate to Google Cloud by Workload Identity Federation
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -106,9 +117,9 @@ jobs:
 
       - name: Upload cleanup evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: privileged-account-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
+          name: privileged-account-cleanup-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: launch_package/privileged-account-cleanup.json
           if-no-files-found: error
           retention-days: 30
