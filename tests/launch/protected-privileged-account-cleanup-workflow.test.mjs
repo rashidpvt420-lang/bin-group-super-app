@@ -18,6 +18,8 @@ test('privileged cleanup workflow is production-protected and exact-main only', 
   assert.match(workflow, /ref: \$\{\{ github\.sha \}\}/);
   assert.match(workflow, /GCP_PROJECT_ID: bin-group-57c60/);
   assert.match(workflow, /DEPLOYMENT_ENVIRONMENT: production/);
+  assert.match(workflow, /EXPECTED_COMMIT_SHA:\s*\$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(workflow, /\[\[ "\$EXPECTED_COMMIT_SHA" == "\$GITHUB_SHA" \]\]/);
 });
 
 test('privileged cleanup always performs a dry run before destructive execution', () => {
@@ -33,7 +35,8 @@ test('privileged cleanup always performs a dry run before destructive execution'
 });
 
 test('privileged cleanup publishes evidence and excludes unrelated portal accounts', () => {
-  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/);
   assert.match(workflow, /launch_package\/privileged-account-cleanup\.json/);
   assert.match(workflow, /Audit logs preserved: required/);
   assert.match(workflow, /Non-privileged Owner, Tenant, Technician and Broker accounts: excluded/);
