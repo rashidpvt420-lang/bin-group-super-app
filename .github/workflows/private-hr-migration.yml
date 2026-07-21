@@ -1,9 +1,13 @@
 name: Private HR Data Migration
-run-name: Private HR ${{ inputs.mode }} · ${{ github.sha }}
+run-name: Private HR ${{ inputs.mode }} · ${{ inputs.expected_commit_sha }}
 
 on:
   workflow_dispatch:
     inputs:
+      expected_commit_sha:
+        description: "Full lowercase current production main SHA"
+        required: true
+        type: string
       mode:
         description: "Review only or execute the migration"
         required: true
@@ -21,40 +25,56 @@ permissions:
   id-token: write
 
 concurrency:
-  group: private-hr-data-migration
+  group: private-hr-data-migration-${{ inputs.expected_commit_sha }}
   cancel-in-progress: false
 
 jobs:
   migrate:
     name: Review or migrate legacy private HR fields
     runs-on: ubuntu-latest
-    environment: production
+    timeout-minutes: 30
+    environment: hard-launch-operations
     env:
-      GCP_PROJECT_ID: bin-group-57c60
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       PRIVATE_HR_MIGRATION_CONFIRMATION: ${{ inputs.confirmation }}
-      AUTHORIZED_FOUNDER_ACTORS: ${{ vars.AUTHORIZED_FOUNDER_ACTORS }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
 
     steps:
       - name: Enforce protected exact-main context
         shell: bash
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF" == "refs/heads/main" ]]
-          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
-          if [[ "${{ inputs.mode }}" == "dry-run" ]]; then
-            [[ "${{ inputs.confirmation }}" == "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP" ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGET_SHA" == "$GITHUB_SHA" ]]
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$GITHUB_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          [[ "$authorized_actor" == "true" ]]
+          if [[ "$MODE" == "dry-run" ]]; then
+            [[ "$CONFIRMATION" == "REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP" ]]
           else
-            [[ "${{ inputs.mode }}" == "execute" ]]
-            [[ "${{ inputs.confirmation }}" == "MIGRATE_PRIVATE_HR_BIN_GROUP_57C60" ]]
+            [[ "$MODE" == "execute" ]]
+            [[ "$CONFIRMATION" == "MIGRATE_PRIVATE_HR_BIN_GROUP_57C60" ]]
           fi
 
       - name: Checkout exact main
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
