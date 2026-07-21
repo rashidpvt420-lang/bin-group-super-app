@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const workflow = await readFile(
+  new URL('../../.github/workflows/owner-production-diagnosis.yml', import.meta.url),
+  'utf8',
+);
+
+test('manual production diagnosis is owner-only and canonical-issue-only', () => {
+  assert.match(workflow, /issue_comment:\s*\n\s*types:\s*\[created\]/);
+  assert.match(workflow, /github\.event\.issue\.number == 434/);
+  assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
+  assert.match(workflow, /github\.event\.comment\.author_association == 'OWNER'/);
+  assert.match(workflow, /github\.event\.comment\.body == '\/bin-launch diagnose-latest-deploy'/);
+  assert.doesNotMatch(workflow, /actions:\s*write/);
+  assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
+});
+
+test('diagnosis accepts only a recent failed protected production run', () => {
+  assert.match(workflow, /firebase-production-deploy\.yml\/runs\?event=workflow_dispatch&branch=main&status=completed/);
+  assert.match(workflow, /select\(\.conclusion == "failure"\)/);
+  assert.match(workflow, /age_seconds > 86400/);
+  assert.match(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
+});
+
+test('diagnosis uploads masked logs but posts only normalized redacted lines', () => {
+  assert.match(workflow, /actions\/jobs\/\$job_id\/logs/);
+  assert.match(workflow, /githubSecretMaskingApplied:\s*true/);
+  assert.match(workflow, /personalIdentifiersRedacted:\s*true/);
+  assert.match(workflow, /<redacted-email>/);
+  assert.match(workflow, /<redacted-id>/);
+  assert.match(workflow, /<redacted-provider-id>/);
+  assert.match(workflow, /normalizedErrorLines/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.match(workflow, /hardLaunchClaim:\s*false/);
+  assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+});
