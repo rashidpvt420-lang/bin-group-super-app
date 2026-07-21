@@ -15,17 +15,16 @@ import { useLanguage } from '@bin/shared';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import CeoContactButtons from './CeoContactButtons';
-
 import { useAuth } from '../context/AuthContext';
+import { canAccessAdminPath, isFullAdminUser } from '../security/staffAccessPolicy';
 
 const Navigation = () => {
     const { t, tx, isRTL } = useLanguage();
     const { user } = useAuth();
     const navText = (en: string, ar: string) => (isRTL ? ar : en);
-    
-    const privilegedAdminRoles = new Set(['admin', 'super_admin', 'ceo']);
+
     const hrRoles = new Set(['hr_admin', 'hr_manager', 'hr_staff']);
-    const isHRAuthorized = Boolean(user?.claims?.admin === true || user?.isAdmin === true || privilegedAdminRoles.has(String(user?.role)) || hrRoles.has(String(user?.role)));
+    const isHRAuthorized = Boolean(isFullAdminUser(user) || hrRoles.has(String(user?.role)));
     const isRecoveryApprover = user?.role === 'ceo' || user?.role === 'super_admin';
 
     const primaryMenu = [
@@ -76,6 +75,10 @@ const Navigation = () => {
         { text: tx('nav.support', 'Support'), icon: <SettingsIcon />, path: '/settings' },
     ];
 
+    const visiblePrimaryMenu = primaryMenu.filter((item) => canAccessAdminPath(user, item.path));
+    const visibleManagementMenu = managementMenu.filter((item) => canAccessAdminPath(user, item.path));
+    const visibleSystemMenu = systemMenu.filter((item) => canAccessAdminPath(user, item.path));
+
     return (
         <Drawer
             variant="permanent"
@@ -83,14 +86,14 @@ const Navigation = () => {
             sx={{
                 width: 280,
                 flexShrink: 0,
-                '& .MuiDrawer-paper': { 
-                    width: 280, 
+                '& .MuiDrawer-paper': {
+                    width: 280,
                     boxSizing: 'border-box',
                     bgcolor: '#020617',
                     borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
                     borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.1)}` : 'none',
                     right: isRTL ? 0 : 'auto',
-                    left: isRTL ? 'auto' : 0
+                    left: isRTL ? 'auto' : 0,
                 },
             }}
         >
@@ -102,59 +105,65 @@ const Navigation = () => {
                     {t('nav.administry')}
                 </Typography>
             </Box>
-            
-            <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />
-            
-            <List sx={{ px: 2, pt: 2 }}>
-                <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left', display: 'block' }}>
-                    {t('nav.sovereign_core')}
-                </Typography>
-                {primaryMenu.map((item) => (
-                    <ListItem 
-                        key={item.text} 
-                        component={NavLink} 
-                        to={item.path} 
-                        sx={{ 
-                            borderRadius: 2, mb: 0.5,
-                            flexDirection: isRTL ? 'row-reverse' : 'row',
-                            textAlign: isRTL ? 'right' : 'left',
-                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
-                        }}
-                    >
-                        <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
-                    </ListItem>
-                ))}
-            </List>
 
-            <List sx={{ px: 2 }}>
-                <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left', display: 'block' }}>
-                    {t('nav.operations')}
-                </Typography>
-                {managementMenu.map((item) => (
-                    <ListItem 
-                        key={item.text} 
-                        component={NavLink} 
-                        to={item.path}
-                        sx={{ 
-                            borderRadius: 2, mb: 0.5,
-                            flexDirection: isRTL ? 'row-reverse' : 'row',
-                            textAlign: isRTL ? 'right' : 'left',
-                            '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } }
-                        }}
-                    >
-                        <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
-                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
-                    </ListItem>
-                ))}
-            </List>
+            <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />
+
+            {visiblePrimaryMenu.length > 0 && (
+                <List sx={{ px: 2, pt: 2 }}>
+                    <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left', display: 'block' }}>
+                        {t('nav.sovereign_core')}
+                    </Typography>
+                    {visiblePrimaryMenu.map((item) => (
+                        <ListItem
+                            key={item.text}
+                            component={NavLink}
+                            to={item.path}
+                            sx={{
+                                borderRadius: 2,
+                                mb: 0.5,
+                                flexDirection: isRTL ? 'row-reverse' : 'row',
+                                textAlign: isRTL ? 'right' : 'left',
+                                '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } },
+                            }}
+                        >
+                            <ListItemIcon sx={{ color: item.color || binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
+                        </ListItem>
+                    ))}
+                </List>
+            )}
+
+            {visibleManagementMenu.length > 0 && (
+                <List sx={{ px: 2 }}>
+                    <Typography variant="overline" sx={{ px: 2, color: binThemeTokens.textTertiary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left', display: 'block' }}>
+                        {t('nav.operations')}
+                    </Typography>
+                    {visibleManagementMenu.map((item) => (
+                        <ListItem
+                            key={item.text}
+                            component={NavLink}
+                            to={item.path}
+                            sx={{
+                                borderRadius: 2,
+                                mb: 0.5,
+                                flexDirection: isRTL ? 'row-reverse' : 'row',
+                                textAlign: isRTL ? 'right' : 'left',
+                                '&.active': { bgcolor: alpha(binThemeTokens.gold, 0.1), '& .MuiTypography-root': { color: binThemeTokens.gold } },
+                            }}
+                        >
+                            <ListItemIcon sx={{ color: binThemeTokens.textSecondary, minWidth: 40, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>{item.icon}</ListItemIcon>
+                            <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 700, fontSize: '0.85rem' }} sx={{ textAlign: isRTL ? 'right' : 'left' }} />
+                        </ListItem>
+                    ))}
+                </List>
+            )}
 
             <Box sx={{ mt: 'auto', p: 2 }}>
                 <List>
-                    {systemMenu.map((item) => (
-                        <ListItem 
-                            key={item.text} 
-                            component={NavLink} 
+                    {visibleSystemMenu.map((item) => (
+                        <ListItem
+                            key={item.text}
+                            component={NavLink}
                             to={item.path}
                             sx={{ borderRadius: 2, textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row' }}
                         >
@@ -185,11 +194,11 @@ const Navigation = () => {
                     </ListItem>
                     <ListItem
                         button
-                        onClick={() => { 
+                        onClick={() => {
                             const currentLang = localStorage.getItem('bin_language');
-                            localStorage.clear(); 
+                            localStorage.clear();
                             if (currentLang) localStorage.setItem('bin_language', currentLang);
-                            signOut(auth).then(() => window.location.href = '/'); 
+                            signOut(auth).then(() => window.location.href = '/');
                         }}
                         sx={{ borderRadius: 2, mt: 4, bgcolor: alpha('#ef4444', 0.1), textAlign: isRTL ? 'right' : 'left', flexDirection: isRTL ? 'row-reverse' : 'row', '&:hover': { bgcolor: alpha('#ef4444', 0.2) } }}
                     >

@@ -9,12 +9,12 @@ const hrPrivacyHardener = readFileSync('scripts/harden-hr-privacy-rules.mjs', 'u
 
 test('Staff Access UI is callable-only and fail-closed', () => {
   assert.match(staffPage, /httpsCallable\(functions, 'adminCreateUser'\)/);
-  assert.doesNotMatch(staffPage, /setDoc\(/, 'UI must not create Firestore-only staff records');
-  assert.doesNotMatch(staffPage, /doc\(collection\(db, 'users'\)\)/, 'UI must not create random users documents');
-  assert.doesNotMatch(staffPage, /Math\.random/, 'UI must not generate passwords client-side');
-  assert.doesNotMatch(staffPage, /tempPassword/, 'UI must not transmit temporary passwords');
-  assert.doesNotMatch(staffPage, /value: 'admin'/, 'General Staff Access must not offer privileged Admin creation');
-  assert.match(staffPage, /Failed provisioning creates no Firestore-only account/);
+  assert.doesNotMatch(staffPage, /setDoc\(/);
+  assert.doesNotMatch(staffPage, /doc\(collection\(db, 'users'\)\)/);
+  assert.doesNotMatch(staffPage, /Math\.random/);
+  assert.doesNotMatch(staffPage, /tempPassword/);
+  assert.doesNotMatch(staffPage, /value: 'admin'/);
+  assert.match(staffPage, /provisioning failures create no fallback record/i);
 });
 
 test('staff provisioning backend rejects unsafe identity conversion and binds modules', () => {
@@ -40,5 +40,9 @@ test('HR profile privacy hardening is part of rules preparation', () => {
   assert.equal(packageJson.scripts['harden:hr-privacy'], 'node scripts/harden-hr-privacy-rules.mjs');
   assert.match(packageJson.scripts['prepare:rules'], /harden:hr-privacy/);
   assert.match(hrPrivacyHardener, /allow read: if isHrManagerTier\(\) \|\| \(signedIn\(\) && request\.auth\.uid == profileId\);/);
-  assert.doesNotMatch(hrPrivacyHardener, /allow read: if isHr\(\) \|\| isFinance\(\) \|\| isOps\(\)/);
+  const hardenedStart = hrPrivacyHardener.indexOf('const hardened =');
+  const hardenedEnd = hrPrivacyHardener.indexOf('`;', hardenedStart);
+  const hardenedRuleBlock = hrPrivacyHardener.slice(hardenedStart, hardenedEnd);
+  assert.ok(hardenedStart >= 0 && hardenedEnd > hardenedStart);
+  assert.doesNotMatch(hardenedRuleBlock, /isOps\(\)|isFinance\(\)|staffCanRead/);
 });
