@@ -220,12 +220,14 @@ jobs:
             --arg ref main \
             --arg confirmation DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
             --arg hard AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP \
+            --arg expectedSha "$RELEASE_SHA" \
             --arg founderName "$FOUNDER_NAME" \
             --arg founderEmail "$FOUNDER_EMAIL" \
             --arg incidentReference "$INCIDENT_REFERENCE" \
             '{ref:$ref,inputs:{
               confirmation:$confirmation,
               hard_launch_confirmation:$hard,
+              expected_commit_sha:$expectedSha,
               founder_name:$founderName,
               founder_email:$founderEmail,
               launch_mode:"bank-pilot",
@@ -244,14 +246,14 @@ jobs:
             --input bank-pilot-dispatch.json
 
           dispatcher_run="$(locate_run firebase-production-dispatch-current-main.yml "$started_at")" || {
-            post_comment "Bank-pilot wrapper was accepted for \`$RELEASE_SHA\`, but its run could not be located."
+            post_comment "Bank-pilot wrapper was accepted for \`$RELEASE_SHA\`, but its exact-SHA run could not be located. No mismatched deployment is authorized."
             exit 1
           }
           dispatcher_url="https://github.com/$REPOSITORY/actions/runs/$dispatcher_run"
-          post_comment "Bank-pilot wrapper started for exact SHA \`$RELEASE_SHA\`: $dispatcher_url"
+          post_comment "Exact-SHA bank-pilot wrapper started for \`$RELEASE_SHA\`: $dispatcher_url"
 
           production_run="$(locate_run firebase-production-deploy.yml "$started_at")" || {
-            post_comment "The bank-pilot wrapper started, but the protected Firebase Production Deploy run was not located. Review $dispatcher_url."
+            post_comment "The exact-SHA bank-pilot wrapper started, but the protected Firebase Production Deploy run was not located. Review $dispatcher_url."
             exit 1
           }
           production_url="https://github.com/$REPOSITORY/actions/runs/$production_run"
