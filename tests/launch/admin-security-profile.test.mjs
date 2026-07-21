@@ -75,8 +75,10 @@ test('Admin security profile fails closed instead of inventing MFA and permissio
   assert.match(page, /No MFA, email-verification, session or permission status is displayed/);
   assert.match(page, /\{profile && \(/);
   assert.match(page, /\{\(profile \|\| mfaEnrollmentRequired\) && \(/);
-  assert.doesNotMatch(page, /<AdminMfaEnrollmentCard enrolled=\{profile\?\.mfa\.enrolled === true\}[^\n]*\/>
-\s*<Grid/);
+  assert.ok(
+    page.indexOf('{(profile || mfaEnrollmentRequired) && (') < page.indexOf('{profile && ('),
+    'MFA enrollment card must stay separate from the profile-only identity grid',
+  );
 });
 
 test('runtime exports Admin security authority', async () => {
