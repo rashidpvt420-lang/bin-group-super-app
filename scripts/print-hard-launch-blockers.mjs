@@ -112,7 +112,8 @@ function printWorkflowSequence(sha) {
   console.log('   open_p1: 0');
   console.log('   incident_reference: https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/<LIVE_EVIDENCE_RUN_ID>');
   console.log('   rollback_reference: https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/<BANK_PILOT_DEPLOY_RUN_ID>');
-  console.log('   monitoring_reference: https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/<HARD_CLEARANCE_RUN_ID>');
+  console.log('   monitoring_reference: https://github.com/rashidpvt420-lang/bin-group-super-app/issues/<CONTROLLED_PILOT_REPORT_ISSUE_NUMBER>');
+  console.log('   Use a real pilot-report or monitoring URL that exists before dispatch; do not use the hard-clearance run URL before the run is created.');
 
   console.log('\n4) Start a new public dispatch with real live Stripe proof.');
   console.log('   Workflow: START HERE - Firebase Production Deploy');
