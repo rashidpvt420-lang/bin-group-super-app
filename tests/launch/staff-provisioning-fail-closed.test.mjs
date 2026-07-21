@@ -32,8 +32,10 @@ test('staff provisioning backend rejects unsafe identity conversion and binds mo
   assert.match(backend, /staffModules: modules/);
   assert.match(backend, /permissions/);
   assert.match(backend, /admin: false/);
-  assert.doesNotMatch(backend, /payload\.tempPassword/);
-  assert.doesNotMatch(backend, /payload\.initialPassword/);
+  assert.match(backend, /payload\.initialPassword !== undefined \|\| payload\.password !== undefined \|\| payload\.tempPassword !== undefined/);
+  assert.match(backend, /Client-supplied passwords are prohibited/);
+  assert.match(backend, /password: generatedBootstrapPassword\(\)/);
+  assert.doesNotMatch(backend, /password:\s*payload\./);
 });
 
 test('identity uniqueness is enforced before Auth creation and registries are create-only', () => {
