@@ -1,5 +1,5 @@
 // apps/admin-panel/src/pages/admin/StaffAccessPage.tsx
-// Admin creates staff accounts with role-based module access control
+// Secure staff provisioning: callable-only, fail-closed, least-privilege module access.
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -7,27 +7,32 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     FormControl, InputLabel, Select, MenuItem, Checkbox,
-    FormGroup, FormControlLabel, Alert, CircularProgress,
+    FormControlLabel, Alert, CircularProgress,
     alpha, Divider, Tooltip, IconButton
 } from '@mui/material';
-import { UserPlus, Shield, Edit, Trash2, Eye, CheckCircle2, XCircle, Key } from 'lucide-react';
+import { UserPlus, Edit, CheckCircle2, XCircle } from 'lucide-react';
 import {
-    db, collection, getDocs, doc, setDoc, updateDoc, deleteDoc,
+    db, collection, doc, updateDoc,
     query, where, onSnapshot, serverTimestamp
 } from '../../lib/firebase';
-import { auth, functions, httpsCallable } from '../../lib/firebase';
+import { functions, httpsCallable } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 const STAFF_ROLES = [
-    { value: 'admin', label: 'Admin (Full Access)', description: 'Full system access' },
+    { value: 'technician', label: 'Technician', description: 'Field technician app access' },
     { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map' },
+    { value: 'operations_manager', label: 'Operations Manager', description: 'Operations reporting and dispatch oversight' },
     { value: 'finance_admin', label: 'Finance Admin', description: 'Financials, payments, payroll' },
-    { value: 'hr_admin', label: 'HR Admin', description: 'Staff management, technician approvals' },
+    { value: 'finance_staff', label: 'Finance Staff', description: 'Finance support without founder privileges' },
+    { value: 'hr_admin', label: 'HR Admin', description: 'HR records and staff lifecycle' },
+    { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and private employee records' },
+    { value: 'hr_staff', label: 'HR Staff', description: 'HR support access' },
     { value: 'support_admin', label: 'Support Admin', description: 'Tenants, complaints, messages' },
     { value: 'account_manager', label: 'Account Manager', description: 'Owners, contracts, documents' },
     { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment, duty command' },
     { value: 'manager', label: 'Manager', description: 'Reports and analytics' },
+    { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
 ];
 
 const MODULE_ACCESS = [
@@ -46,20 +51,24 @@ const MODULE_ACCESS = [
     { key: 'compliance', label: 'Compliance', icon: '✅' },
     { key: 'map', label: 'Live Map', icon: '🗺️' },
     { key: 'sos', label: 'SOS Feed', icon: '🚨' },
-    { key: 'settings', label: 'System Settings', icon: '⚙️' },
     { key: 'hr', label: 'HR Management', icon: '👥' },
     { key: 'pricing', label: 'Pricing Matrix', icon: '💲' },
 ];
 
 const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
-    admin: MODULE_ACCESS.map(m => m.key),
+    technician: ['dashboard', 'tickets', 'map'],
     operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties'],
+    operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'reports', 'properties'],
     finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
+    finance_staff: ['dashboard', 'financials', 'transactions'],
     hr_admin: ['dashboard', 'technicians', 'hr'],
+    hr_manager: ['dashboard', 'technicians', 'hr', 'reports'],
+    hr_staff: ['dashboard', 'hr'],
     support_admin: ['dashboard', 'tenants', 'tickets', 'sos'],
-    account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
+    account_manager: ['dashboard', 'owners', 'documents', 'properties'],
     dispatcher: ['dashboard', 'tickets', 'technicians', 'map'],
     manager: ['dashboard', 'reports', 'audit', 'owners', 'tenants'],
+    admin_assistant: ['dashboard', 'documents', 'tenants'],
 };
 
 interface StaffMember {
@@ -73,6 +82,11 @@ interface StaffMember {
     lastLogin?: any;
 }
 
+function safeErrorMessage(error: any) {
+    const message = String(error?.message || error?.details || error?.code || 'Secure provisioning failed.');
+    return message.replace(/^FirebaseError:\s*/i, '').slice(0, 240);
+}
+
 export default function StaffAccessPage() {
     const [staff, setStaff] = useState<StaffMember[]>([]);
     const [loading, setLoading] = useState(true);
@@ -81,33 +95,26 @@ export default function StaffAccessPage() {
     const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
-    const [deleteConfirm, setDeleteConfirm] = useState<StaffMember | null>(null);
 
     const [formData, setFormData] = useState({
         displayName: '',
         email: '',
         role: 'support_admin',
         modules: ROLE_DEFAULT_MODULES['support_admin'],
-        tempPassword: '',
     });
 
     useEffect(() => {
-        const ADMIN_ROLES = [
-            'admin', 'super_admin', 'ceo', 'manager', 'operations_admin',
-            'finance_admin', 'hr_admin', 'support_admin', 'hr_manager', 'hr_staff',
-            'finance_staff', 'account_manager', 'dispatcher', 'operations_manager'
-        ];
-
+        const staffRoleValues = STAFF_ROLES.map((role) => role.value);
         const unsub = onSnapshot(
-            query(collection(db, 'users'), where('role', 'in', ADMIN_ROLES)),
+            query(collection(db, 'users'), where('role', 'in', staffRoleValues)),
             (snap) => {
                 const list: StaffMember[] = snap.docs.map(d => ({
                     id: d.id,
                     displayName: d.data().displayName || d.data().name || 'Staff',
                     email: d.data().email || '',
                     role: d.data().role || 'support_admin',
-                    modules: d.data().staffModules || ROLE_DEFAULT_MODULES[d.data().role] || [],
-                    status: d.data().status || 'ACTIVE',
+                    modules: d.data().staffModules || d.data().modules || ROLE_DEFAULT_MODULES[d.data().role] || [],
+                    status: String(d.data().status || 'active').toUpperCase(),
                     createdAt: d.data().createdAt,
                     lastLogin: d.data().lastLogin,
                 }));
@@ -139,7 +146,7 @@ export default function StaffAccessPage() {
     const openAddDialog = () => {
         setEditMode(false);
         setSelectedStaff(null);
-        setFormData({ displayName: '', email: '', role: 'support_admin', modules: ROLE_DEFAULT_MODULES['support_admin'], tempPassword: '' });
+        setFormData({ displayName: '', email: '', role: 'support_admin', modules: ROLE_DEFAULT_MODULES['support_admin'] });
         setDialogOpen(true);
     };
 
@@ -151,7 +158,6 @@ export default function StaffAccessPage() {
             email: member.email,
             role: member.role,
             modules: member.modules,
-            tempPassword: '',
         });
         setDialogOpen(true);
     };
@@ -160,44 +166,31 @@ export default function StaffAccessPage() {
         if (!formData.displayName || !formData.email || !formData.role) return;
         setSubmitting(true);
         try {
-            if (editMode && selectedStaff) {
-                // Update existing staff member's role + modules
-                await updateDoc(doc(db, 'users', selectedStaff.id), {
-                    role: formData.role,
-                    staffModules: formData.modules,
-                    updatedAt: serverTimestamp(),
-                });
-                setSnackbar({ open: true, message: `${formData.displayName} updated successfully.`, error: false });
-            } else {
-                // Attempt to create via Cloud Function if available, fallback to Firestore only
-                try {
-                    const createStaff = httpsCallable(functions, 'adminCreateUser');
-                    await createStaff({
-                        displayName: formData.displayName,
-                        email: formData.email,
-                        role: formData.role,
-                        modules: formData.modules,
-                        tempPassword: formData.tempPassword || `BIN@${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-                    });
-                    setSnackbar({ open: true, message: `${formData.displayName} created. They will receive an email to set their password.`, error: false });
-                } catch (fnErr: any) {
-                    // Fallback: create Firestore record only (admin must create Firebase Auth manually)
-                    const docRef = doc(collection(db, 'users'));
-                    await setDoc(docRef, {
-                        displayName: formData.displayName,
-                        email: formData.email,
-                        role: formData.role,
-                        staffModules: formData.modules,
-                        status: 'PENDING_LOGIN',
-                        createdAt: serverTimestamp(),
-                        createdBy: 'admin',
-                    });
-                    setSnackbar({ open: true, message: `Staff record created for ${formData.email}. Please create their Firebase Auth account manually.`, error: false });
-                }
-            }
+            const createStaff = httpsCallable(functions, 'adminCreateUser');
+            const result: any = await createStaff({
+                displayName: formData.displayName,
+                email: formData.email,
+                role: formData.role,
+                modules: formData.modules,
+                staffModules: formData.modules,
+                permissions: {},
+                sendInvitation: !editMode,
+                resendInvitation: false,
+            });
+
             setDialogOpen(false);
-        } catch (err) {
-            setSnackbar({ open: true, message: 'Failed to save staff member. Check permissions.', error: true });
+            const message = result?.data?.message || (
+                editMode
+                    ? `${formData.displayName} access updated through secure claims authority.`
+                    : `${formData.displayName} created. A secure invitation/password setup email will be sent.`
+            );
+            setSnackbar({ open: true, message, error: false });
+        } catch (err: any) {
+            setSnackbar({
+                open: true,
+                message: `Secure provisioning blocked: ${safeErrorMessage(err)}`,
+                error: true,
+            });
         } finally {
             setSubmitting(false);
         }
@@ -206,11 +199,11 @@ export default function StaffAccessPage() {
     const handleRevokeAccess = async (member: StaffMember) => {
         try {
             await updateDoc(doc(db, 'users', member.id), {
-                status: 'SUSPENDED',
+                status: 'suspended',
                 suspendedAt: serverTimestamp(),
                 suspendedBy: 'admin',
             });
-            setSnackbar({ open: true, message: `${member.displayName} access suspended.`, error: false });
+            setSnackbar({ open: true, message: `${member.displayName} access suspension queued. Auth disable/revoke is handled by the protected claims sync.`, error: false });
         } catch {
             setSnackbar({ open: true, message: 'Failed to suspend access.', error: true });
         }
@@ -219,32 +212,34 @@ export default function StaffAccessPage() {
     const handleRestoreAccess = async (member: StaffMember) => {
         try {
             await updateDoc(doc(db, 'users', member.id), {
-                status: 'ACTIVE',
+                status: 'active',
                 restoredAt: serverTimestamp(),
             });
-            setSnackbar({ open: true, message: `${member.displayName} access restored.`, error: false });
+            setSnackbar({ open: true, message: `${member.displayName} access restore queued.`, error: false });
         } catch {
             setSnackbar({ open: true, message: 'Failed to restore access.', error: true });
         }
     };
 
     const getRoleColor = (role: string) => {
-        if (role === 'admin' || role === 'super_admin' || role === 'ceo') return binThemeTokens.gold;
         if (role.includes('finance')) return '#10b981';
         if (role.includes('hr')) return '#3b82f6';
-        if (role.includes('operations') || role === 'dispatcher') return '#f59e0b';
+        if (role.includes('operations') || role === 'dispatcher' || role === 'technician') return '#f59e0b';
         return 'rgba(255,255,255,0.4)';
     };
 
     return (
         <AdminPageFrame
             title="Staff Access Control"
-            subtitle="ROLE-BASED MODULE PERMISSIONS"
+            subtitle="SECURE ROLE-BASED MODULE PERMISSIONS"
             lastUpdated={new Date()}
             onRefresh={() => window.location.reload()}
         >
             <Box sx={{ pb: 8 }}>
-                {/* Header Actions */}
+                <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
+                    Privileged Founder/Admin accounts are not created here. This screen provisions only approved Staff, HR, Operations, Finance, Support and Technician roles through the protected Cloud Function. Failed provisioning creates no Firestore-only account.
+                </Alert>
+
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Box>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
@@ -264,7 +259,6 @@ export default function StaffAccessPage() {
                     </Button>
                 </Box>
 
-                {/* Staff Table */}
                 <Paper sx={{ bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
                     {loading ? (
                         <Box sx={{ p: 6, textAlign: 'center' }}>
@@ -300,7 +294,7 @@ export default function StaffAccessPage() {
                                             <TableCell>
                                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 300 }}>
                                                     {member.modules.slice(0, 4).map(m => (
-                                                        <Chip key={m} label={MODULE_ACCESS.find(ma => ma.key === m)?.icon + ' ' + m} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)' }} />
+                                                        <Chip key={m} label={`${MODULE_ACCESS.find(ma => ma.key === m)?.icon || '•'} ${m}`} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)' }} />
                                                     ))}
                                                     {member.modules.length > 4 && (
                                                         <Chip label={`+${member.modules.length - 4} more`} size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }} />
@@ -358,7 +352,6 @@ export default function StaffAccessPage() {
                     )}
                 </Paper>
 
-                {/* Add/Edit Staff Dialog */}
                 <Dialog
                     open={dialogOpen}
                     onClose={() => setDialogOpen(false)}
@@ -367,9 +360,12 @@ export default function StaffAccessPage() {
                     PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}
                 >
                     <DialogTitle sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        {editMode ? `Edit Access: ${selectedStaff?.displayName}` : 'Add New Staff Member'}
+                        {editMode ? `Edit Access: ${selectedStaff?.displayName}` : 'Add New Staff / Technician'}
                     </DialogTitle>
                     <DialogContent sx={{ pt: 3 }}>
+                        <Alert severity="info" sx={{ mb: 3 }}>
+                            No temporary password is generated or shown here. The backend queues a secure email verification and private password setup invitation from the approved BIN GROUP sender.
+                        </Alert>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <TextField
@@ -387,17 +383,7 @@ export default function StaffAccessPage() {
                                     sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                 />
                             </Grid>
-                            {!editMode && (
-                                <Grid item xs={12} md={6}>
-                                    <TextField
-                                        fullWidth label="Temporary Password (optional)" type="password" value={formData.tempPassword}
-                                        onChange={e => setFormData(p => ({ ...p, tempPassword: e.target.value }))}
-                                        placeholder="Leave blank for auto-generated"
-                                        sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
-                                    />
-                                </Grid>
-                            )}
-                            <Grid item xs={12} md={editMode ? 12 : 6}>
+                            <Grid item xs={12}>
                                 <FormControl fullWidth>
                                     <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
                                     <Select
@@ -422,7 +408,7 @@ export default function StaffAccessPage() {
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>MODULE ACCESS CONTROL</Typography>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 2 }}>
-                                    Select which modules this staff member can access. Role defaults are pre-selected.
+                                    Select which modules this staff member can access. Role defaults are pre-selected and will be bound into claims and the staff access registry.
                                 </Typography>
                                 <Grid container spacing={1}>
                                     {MODULE_ACCESS.map(module => (
@@ -471,12 +457,11 @@ export default function StaffAccessPage() {
                             disabled={submitting || !formData.displayName || !formData.email}
                             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                         >
-                            {submitting ? 'SAVING...' : editMode ? 'UPDATE ACCESS' : 'CREATE STAFF MEMBER'}
+                            {submitting ? 'SAVING...' : editMode ? 'UPDATE SECURE ACCESS' : 'CREATE SECURE INVITATION'}
                         </Button>
                     </DialogActions>
                 </Dialog>
 
-                {/* Snackbar */}
                 {snackbar.open && (
                     <Alert
                         severity={snackbar.error ? 'error' : 'success'}
