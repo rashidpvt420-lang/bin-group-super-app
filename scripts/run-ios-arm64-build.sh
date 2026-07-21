@@ -4,7 +4,15 @@ set -euo pipefail
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-${RUNNER_TEMP:-/tmp}/bin-group-ios-derived-data}"
 IOS_BUILD_LOG="${IOS_BUILD_LOG:-ios-arm64-xcodebuild.log}"
 IOS_EVIDENCE_PATH="${IOS_EVIDENCE_PATH:-ios-arm64-build-evidence.json}"
+IOS_FAILURE_SUMMARY="${IOS_FAILURE_SUMMARY:-ios-arm64-failure-summary.txt}"
 
+: > "$IOS_BUILD_LOG"
+exec > >(tee -a "$IOS_BUILD_LOG") 2>&1
+
+stage="bootstrap"
+trap 'status=$?; printf "stage=%s\nexitCode=%s\n" "$stage" "$status" > "$IOS_FAILURE_SUMMARY"; echo "Apple Silicon build failed at stage: $stage (exit $status)" >&2; exit "$status"' ERR
+
+stage="runner-and-xcode"
 runner_arch="$(uname -m)"
 if [[ "$runner_arch" != "arm64" ]]; then
   echo "Expected native Apple Silicon arm64 runner, got: $runner_arch" >&2
@@ -24,15 +32,25 @@ sw_vers
 xcodebuild -version
 echo "iOS Simulator SDK: $simulator_sdk"
 
+stage="npm-install"
 npm ci --include=optional --legacy-peer-deps
+
+stage="source-readiness"
 npm run verify:ios-apple-silicon
+
+stage="web-build"
 CI=false npm run build
+
+stage="capacitor-copy"
 npx cap copy ios
+
+stage="cocoapods-install"
 (
   cd ios/App
   pod install --deployment
 )
 
+stage="xcodebuild"
 rm -rf "$DERIVED_DATA_PATH"
 xcodebuild \
   -workspace ios/App/App.xcworkspace \
@@ -45,8 +63,9 @@ xcodebuild \
   ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
-  build | tee "$IOS_BUILD_LOG"
+  build
 
+stage="binary-architecture"
 app_binary="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/App.app/App"
 if [[ ! -f "$app_binary" ]]; then
   echo "Expected simulator executable is missing: $app_binary" >&2
@@ -64,6 +83,7 @@ if [[ "$binary_archs" == *x86_64* ]]; then
   exit 1
 fi
 
+stage="evidence"
 binary_sha256="$(shasum -a 256 "$app_binary" | awk '{ print $1 }')"
 workflow_url="https://github.com/${GITHUB_REPOSITORY:-local}/actions/runs/${GITHUB_RUN_ID:-local}"
 
@@ -111,4 +131,5 @@ Path(os.environ["IOS_EVIDENCE_PATH"]).write_text(
 )
 PY
 
+rm -f "$IOS_FAILURE_SUMMARY"
 cat "$IOS_EVIDENCE_PATH"
