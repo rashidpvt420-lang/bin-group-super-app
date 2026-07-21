@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [commandWorkflow, diagnosticsWorkflow] = await Promise.all([
+const [commandWorkflow, diagnosticsWorkflow, productionDispatcher] = await Promise.all([
   readFile(new URL('../../.github/workflows/owner-launch-command.yml', import.meta.url), 'utf8'),
   readFile(new URL('../../.github/workflows/firebase-production-failure-diagnostics.yml', import.meta.url), 'utf8'),
+  readFile(new URL('../../.github/workflows/firebase-production-dispatch-current-main.yml', import.meta.url), 'utf8'),
 ]);
 
 test('owner launch command is issue-bound, owner-only and exact-command only', () => {
@@ -36,6 +37,17 @@ test('private HR report is inspected before bank-pilot is dispatched', () => {
   assert.match(commandWorkflow, /execution_required.*false/s);
   assert.match(commandWorkflow, /SKIP_EXECUTE_PROCEED_TO_BANK_PILOT/);
   assert.match(commandWorkflow, /latest_main.*RELEASE_SHA/s);
+});
+
+test('bank-pilot wrapper is bound to the exact SHA verified by private HR', () => {
+  assert.match(commandWorkflow, /--arg expectedSha "\$RELEASE_SHA"/);
+  assert.match(commandWorkflow, /expected_commit_sha:\$expectedSha/);
+  assert.match(productionDispatcher, /^\s+expected_commit_sha:/m);
+  assert.match(productionDispatcher, /EXPECTED_COMMIT_SHA:\s*\$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(productionDispatcher, /main_before.*!=.*EXPECTED_COMMIT_SHA/s);
+  assert.match(productionDispatcher, /main_sha.*!=.*EXPECTED_COMMIT_SHA/s);
+  assert.match(productionDispatcher, /no longer matches verified expected SHA/);
+  assert.match(productionDispatcher, /does not match verified expected SHA/);
 });
 
 test('owner launch command cannot request public launch or hard clearance', () => {
