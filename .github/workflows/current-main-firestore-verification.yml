@@ -80,7 +80,32 @@ jobs:
           fi
 
       - name: Run stability suite
-        run: npm run test:stability
+        id: stability
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          npm run test:stability 2>&1 | tee current-main-stability-output.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload stability diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-main-stability-diagnostics-${{ github.run_id }}
+          path: current-main-stability-output.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce stability result
+        shell: bash
+        run: |
+          if [ "${{ steps.stability.outputs.exit_code }}" != "0" ]; then
+            echo "Stability suite failed. See current-main-stability-diagnostics artifact."
+            exit 1
+          fi
 
       - name: Run launch-honesty suite
         run: npm run test:launch-honesty
