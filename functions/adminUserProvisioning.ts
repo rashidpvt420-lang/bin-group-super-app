@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
 if (!admin.apps.length) {
@@ -25,6 +26,67 @@ const STAFF_ROLES = new Set([
   "operations_manager",
   "finance_admin",
 ]);
+const CUSTOMER_ROLES = new Set([
+  "owner",
+  "tenant",
+  "broker",
+  "customer",
+  "property_owner",
+  "institutional_owner",
+]);
+const MODULE_KEYS = [
+  "dashboard",
+  "owners",
+  "tenants",
+  "tickets",
+  "technicians",
+  "financials",
+  "transactions",
+  "broker",
+  "documents",
+  "properties",
+  "reports",
+  "audit",
+  "compliance",
+  "map",
+  "sos",
+  "hr",
+  "pricing",
+];
+const MODULE_KEY_SET = new Set(MODULE_KEYS);
+const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
+  technician: ["dashboard", "tickets", "map"],
+  operations_admin: ["dashboard", "tickets", "technicians", "map", "sos", "properties"],
+  operations_manager: ["dashboard", "tickets", "technicians", "map", "sos", "reports", "properties"],
+  finance_admin: ["dashboard", "financials", "transactions", "reports"],
+  finance_staff: ["dashboard", "financials", "transactions"],
+  hr_admin: ["dashboard", "technicians", "hr"],
+  hr_manager: ["dashboard", "technicians", "hr", "reports"],
+  hr_staff: ["dashboard", "hr"],
+  support_admin: ["dashboard", "tenants", "tickets", "sos"],
+  account_manager: ["dashboard", "owners", "documents", "properties"],
+  dispatcher: ["dashboard", "tickets", "technicians", "map"],
+  manager: ["dashboard", "reports", "audit", "owners", "tenants"],
+  admin_assistant: ["dashboard", "documents", "tenants"],
+};
+const MODULE_PERMISSION_MAP: Record<string, string[]> = {
+  owners: ["canManageOwners"],
+  tenants: ["canManageTenants"],
+  tickets: ["canDispatchJobs"],
+  technicians: ["canManageTechnicians"],
+  financials: ["canManageFinance"],
+  transactions: ["canManageFinance"],
+  broker: ["canManageBrokers"],
+  documents: ["canManageDocuments"],
+  properties: ["canManageProperties"],
+  reports: ["canViewReports"],
+  audit: ["canViewAuditLogs"],
+  compliance: ["canManageCompliance"],
+  map: ["canDispatchJobs"],
+  sos: ["canDispatchJobs"],
+  hr: ["canManageHr"],
+  pricing: ["canManageCompanyProfile"],
+};
 
 function cleanString(value: unknown, fallback = "") {
   const text = String(value ?? "").trim();
@@ -52,8 +114,12 @@ function titleCaseRole(role: string) {
     .join(" ");
 }
 
+function roleFromClaims(claims: any = {}) {
+  return cleanString(claims?.role || claims?.userRole || claims?.primaryRole).toLowerCase();
+}
+
 function hasAdminAccess(token: any) {
-  const role = cleanString(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
+  const role = roleFromClaims(token);
   return token?.suspended !== true && (
     PRIVILEGED_ADMIN_ROLES.has(role) ||
     token?.super_admin === true ||
@@ -64,8 +130,7 @@ function hasAdminAccess(token: any) {
 }
 
 function generatedPassword() {
-  const secureRandom = randomBytes(6).toString("hex");
-  return `BinPilot#${secureRandom}!`;
+  return `BinPilot#${randomBytes(18).toString("base64url")}!`;
 }
 
 function loginUrlForRole(role: string) {
@@ -74,6 +139,60 @@ function loginUrlForRole(role: string) {
   return role === "technician"
     ? `${mainAppUrl}/login?role=technician`
     : `${adminAppUrl}/login`;
+}
+
+function stringArray(value: unknown) {
+  const source = Array.isArray(value) ? value : [];
+  return source.map((item) => cleanString(item).toLowerCase()).filter(Boolean);
+}
+
+function normalizeModules(role: string, payload: any) {
+  const requested = stringArray(payload.modules || payload.staffModules);
+  const allowed = requested.filter((module) => MODULE_KEY_SET.has(module));
+  const modules = allowed.length > 0 ? allowed : (ROLE_DEFAULT_MODULES[role] || ["dashboard"]);
+  return [...new Set(modules)];
+}
+
+function normalizePermissions(modules: string[], rawPermissions: unknown) {
+  const permissions: Record<string, boolean> = {};
+  if (rawPermissions && typeof rawPermissions === "object" && !Array.isArray(rawPermissions)) {
+    for (const [key, value] of Object.entries(rawPermissions as Record<string, unknown>)) {
+      if (/^can[A-Z][A-Za-z0-9]+$/.test(key) && value === true) {
+        permissions[key] = true;
+      }
+    }
+  }
+  for (const module of modules) {
+    for (const permission of MODULE_PERMISSION_MAP[module] || []) {
+      permissions[permission] = true;
+    }
+  }
+  return permissions;
+}
+
+function operationalFieldDeletes() {
+  return {
+    employeeId: FieldValue.delete(),
+    emiratesId: FieldValue.delete(),
+    salaryPackage: FieldValue.delete(),
+    basicSalary: FieldValue.delete(),
+    housingAllowance: FieldValue.delete(),
+    transportAllowance: FieldValue.delete(),
+    foodAllowance: FieldValue.delete(),
+    otherAllowance: FieldValue.delete(),
+    salaryGrade: FieldValue.delete(),
+  };
+}
+
+function existingIdentityIsStaffSafe(userRecord: admin.auth.UserRecord, profile: FirebaseFirestore.DocumentData | undefined) {
+  const claims = userRecord.customClaims || {};
+  const claimRole = roleFromClaims(claims);
+  const profileRole = cleanString(profile?.role || profile?.userRole || profile?.primaryRole).toLowerCase();
+  const roles = [claimRole, profileRole].filter(Boolean);
+  if (roles.some((role) => PRIVILEGED_ADMIN_ROLES.has(role) || CUSTOMER_ROLES.has(role))) return false;
+  if (claims.staff === true || claims.technician === true || profile?.isStaff === true) return true;
+  if (roles.some((role) => STAFF_ROLES.has(role))) return true;
+  return false;
 }
 
 function buildInvitationMessage({
@@ -123,15 +242,9 @@ function buildInvitationMessage({
         <p>Hello <strong>${safeName}</strong>,</p>
         <p>A <strong>${safeRole}</strong> account has been created for <strong>${safeEmail}</strong>.</p>
         <ol>
-          <li style="margin-bottom:16px">
-            <a href="${safeVerificationLink}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Verify email address</a>
-          </li>
-          <li style="margin-bottom:16px">
-            <a href="${safePasswordResetLink}" style="display:inline-block;background:#d4af37;color:#111827;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Set private password</a>
-          </li>
-          <li>
-            <a href="${safeLoginUrl}" style="font-weight:700">Open the ${escapeHtml(portalName)}</a>
-          </li>
+          <li style="margin-bottom:16px"><a href="${safeVerificationLink}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Verify email address</a></li>
+          <li style="margin-bottom:16px"><a href="${safePasswordResetLink}" style="display:inline-block;background:#d4af37;color:#111827;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Set private password</a></li>
+          <li><a href="${safeLoginUrl}" style="font-weight:700">Open the ${escapeHtml(portalName)}</a></li>
         </ol>
         <p style="margin-top:24px;padding:12px;background:#f8fafc;border-radius:8px"><strong>Security:</strong> Never share passwords, verification links, SMS codes, or device access.</p>
         <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0" />
@@ -167,6 +280,8 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
   const displayName = cleanString(payload.displayName || payload.fullName);
   const phoneNumber = cleanString(payload.phoneNumber || payload.phone || payload.mobile);
   const specialization = cleanString(payload.specialization || payload.trade || payload.department, "General Maintenance");
+  const modules = normalizeModules(role, payload);
+  const permissions = normalizePermissions(modules, payload.permissions);
 
   if (!email || !email.includes("@")) {
     throw new HttpsError("invalid-argument", "A valid email address is required.");
@@ -175,30 +290,38 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
     throw new HttpsError("invalid-argument", "Full name is required.");
   }
   if (!STAFF_ROLES.has(role)) {
-    throw new HttpsError("invalid-argument", `Unsupported staff role: ${role}`);
+    throw new HttpsError("invalid-argument", `Unsupported staff role: ${role}. Privileged Founder/Admin identities are not provisioned from Staff Access.`);
   }
 
   const now = FieldValue.serverTimestamp();
   let userRecord: admin.auth.UserRecord;
   let createdAuthUser = false;
-
-  const initialPassword = cleanString(payload.initialPassword || payload.password || payload.tempPassword);
-  const passwordToUse = initialPassword.length >= 8 ? initialPassword : generatedPassword();
+  let previousClaims: Record<string, unknown> | undefined;
+  let previousDisabled = false;
 
   try {
     userRecord = await admin.auth().getUserByEmail(email);
+    previousClaims = { ...(userRecord.customClaims || {}) };
+    previousDisabled = userRecord.disabled === true;
+    const existingProfile = await db.collection("users").doc(userRecord.uid).get();
+    if (!existingIdentityIsStaffSafe(userRecord, existingProfile.data())) {
+      throw new HttpsError("already-exists", "This email already belongs to a non-staff or privileged identity. Use a separate protected conversion workflow; Staff Access cannot convert Owner, Tenant, Broker, or Founder/Admin accounts.");
+    }
   } catch (err: any) {
+    if (err instanceof HttpsError) throw err;
     if (err?.code !== "auth/user-not-found") {
       throw new HttpsError("internal", `Unable to check existing user: ${err?.message || err}`);
     }
     userRecord = await admin.auth().createUser({
       email,
       displayName,
-      password: passwordToUse,
+      password: generatedPassword(),
       emailVerified: false,
       disabled: false,
     });
     createdAuthUser = true;
+    previousClaims = undefined;
+    previousDisabled = false;
   }
 
   const uid = userRecord.uid;
@@ -210,13 +333,22 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
   let invitationMessage: ReturnType<typeof buildInvitationMessage> | null = null;
 
   try {
+    await admin.auth().updateUser(uid, { displayName, disabled: false });
     await admin.auth().setCustomUserClaims(uid, {
       role,
       userRole: role,
       primaryRole: role,
       staff: true,
+      isStaff: true,
       technician: role === "technician",
-      admin: PRIVILEGED_ADMIN_ROLES.has(role),
+      admin: false,
+      super_admin: false,
+      superAdmin: false,
+      ceo: false,
+      modules,
+      staffModules: modules,
+      permissions,
+      suspended: false,
     });
 
     if (shouldQueueInvitation) {
@@ -226,17 +358,10 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         admin.auth().generatePasswordResetLink(email, actionCodeSettings),
       ]);
       invitationRef = db.collection("mail").doc();
-      invitationMessage = buildInvitationMessage({
-        displayName,
-        email,
-        role,
-        loginUrl,
-        emailVerificationLink,
-        passwordResetLink,
-      });
+      invitationMessage = buildInvitationMessage({ displayName, email, role, loginUrl, emailVerificationLink, passwordResetLink });
     }
 
-    const commonProfile = {
+    const operationalProfile = {
       uid,
       email,
       displayName,
@@ -251,20 +376,20 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
       trade: specialization,
       status: "active",
       isStaff: true,
-      isAdmin: PRIVILEGED_ADMIN_ROLES.has(role),
+      isAdmin: false,
+      staffModules: modules,
+      modules,
+      permissions,
       onboardingComplete: true,
       createdAt: now,
       updatedAt: now,
       createdBy: actorId,
       provisionedBy: actorId,
       provisionedVia: "adminCreateUser",
-      employeeId: cleanString(payload.employeeId),
-      emiratesId: cleanString(payload.emiratesId),
     };
 
     const parsedSalaryPaymentDay = parseInt(cleanString(payload.salaryPaymentDay, "1"), 10);
     const salaryPaymentDay = Number.isInteger(parsedSalaryPaymentDay) ? parsedSalaryPaymentDay : 1;
-
     const salaryPackage = {
       basicSalary: Number(payload.basicSalary || 0),
       housingAllowance: Number(payload.housingAllowance || 0),
@@ -283,39 +408,44 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
 
     await db.runTransaction(async (tx) => {
       tx.set(db.collection("users").doc(uid), {
-        ...commonProfile,
-        salaryPackage,
+        ...operationalProfile,
+        ...operationalFieldDeletes(),
       }, { merge: true });
 
       tx.set(db.collection("staffAccess").doc(uid), {
         uid,
         role,
         active: true,
-        permissions: payload.permissions || {},
+        modules,
+        staffModules: modules,
+        permissions,
         grantedAt: now,
         grantedBy: actorId,
         updatedAt: now,
       }, { merge: true });
 
       tx.set(db.collection("hrProfiles").doc(uid), {
-        ...commonProfile,
+        ...operationalProfile,
         employeeType: role,
+        employeeId: cleanString(payload.employeeId),
+        emiratesId: cleanString(payload.emiratesId),
         joiningDate: cleanString(payload.joiningDate) || null,
         offDay: cleanString(payload.offDay, "Sunday"),
         shiftName: cleanString(payload.shiftName, "Day Shift"),
         workingHours: cleanString(payload.workingHours, "9 AM - 4 PM"),
         salaryPackage,
+        privateHrRecord: true,
       }, { merge: true });
 
       if (role === "technician") {
         tx.set(db.collection("technicians").doc(uid), {
-          ...commonProfile,
+          ...operationalProfile,
           available: true,
           onDuty: false,
           currentJobCount: 0,
           maxConcurrentJobs: Number(payload.maxConcurrentJobs || 3),
           emergencyEligible: Boolean(payload.emergencyEligible || false),
-          salaryPackage,
+          ...operationalFieldDeletes(),
         }, { merge: true });
       }
 
@@ -330,9 +460,10 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
             replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
           },
           type: "staff_account_invitation",
-          template: "staff-account-invitation-v1",
+          template: "staff-account-invitation-v2",
           targetUid: uid,
           targetRole: role,
+          modules,
           status: "QUEUED",
           delivery: { state: "QUEUED" },
           createdAt: now,
@@ -350,9 +481,11 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         metadata: {
           email,
           role,
+          modules,
           createdAuthUser,
           invitationQueued: Boolean(invitationRef),
           invitationMailId: invitationRef?.id || null,
+          sensitiveHrValuesStoredOnlyInHrProfile: true,
         },
         createdAt: now,
       });
@@ -361,6 +494,13 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
     if (createdAuthUser) {
       await admin.auth().deleteUser(uid).catch((rollbackError) => {
         console.error("Failed to roll back newly created staff Auth user", { uid, rollbackError });
+      });
+    } else {
+      await admin.auth().setCustomUserClaims(uid, previousClaims || null).catch((rollbackError) => {
+        console.error("Failed to restore previous staff claims", { uid, rollbackError });
+      });
+      await admin.auth().updateUser(uid, { disabled: previousDisabled }).catch((rollbackError) => {
+        console.error("Failed to restore previous disabled state", { uid, rollbackError });
       });
     }
     if (error instanceof HttpsError) throw error;
@@ -373,6 +513,7 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
     uid,
     email,
     role,
+    modules,
     createdAuthUser,
     invitationQueued,
     message: createdAuthUser
@@ -381,11 +522,9 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
         : "Staff account created without an invitation. Send a password-reset email before first login."
       : invitationQueued
         ? "Existing staff account updated and a fresh secure invitation was queued."
-        : "Existing staff account updated.",
+        : "Existing staff account updated through secure claims authority.",
   };
 });
-
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 
 export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (event) => {
   const before = event.data?.before.data();
@@ -393,30 +532,46 @@ export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (
   if (!after) return;
 
   const roleBefore = cleanString(before?.role);
-  const roleAfter = cleanString(after?.role);
-  const staffModulesBefore = JSON.stringify(before?.staffModules || []);
-  const staffModulesAfter = JSON.stringify(after?.staffModules || []);
-  const statusBefore = before?.status;
+  const roleAfter = cleanString(after?.role).toLowerCase();
+  const staffModulesBefore = JSON.stringify(before?.staffModules || before?.modules || []);
+  const staffModulesAfter = JSON.stringify(after?.staffModules || after?.modules || []);
+  const permissionsBefore = JSON.stringify(before?.permissions || {});
+  const permissionsAfter = JSON.stringify(after?.permissions || {});
+  const statusBefore = cleanString(before?.status).toLowerCase();
   const statusAfter = cleanString(after?.status).toLowerCase();
 
-  if (roleBefore === roleAfter && staffModulesBefore === staffModulesAfter && statusBefore === statusAfter) {
+  if (roleBefore === roleAfter && staffModulesBefore === staffModulesAfter && permissionsBefore === permissionsAfter && statusBefore === statusAfter) {
     return;
   }
 
   const uid = event.params.userId;
-  const role = roleAfter.toLowerCase();
+  const role = roleAfter;
 
   try {
     const userRecord = await admin.auth().getUser(uid);
-    const existingClaims = userRecord.customClaims || {};
+    const modules = normalizeModules(role, after);
+    const permissions = normalizePermissions(modules, after.permissions || userRecord.customClaims?.permissions || {});
 
     if (["suspended", "disabled", "rejected"].includes(statusAfter)) {
       await admin.auth().updateUser(uid, { disabled: true });
-      await admin.auth().setCustomUserClaims(uid, { suspended: true });
+      await admin.auth().setCustomUserClaims(uid, {
+        role,
+        userRole: role,
+        primaryRole: role,
+        staff: STAFF_ROLES.has(role),
+        isStaff: STAFF_ROLES.has(role),
+        technician: role === "technician",
+        admin: false,
+        modules,
+        staffModules: modules,
+        permissions,
+        suspended: true,
+      });
       await admin.auth().revokeRefreshTokens(uid);
       return;
     }
 
+    if (!STAFF_ROLES.has(role)) return;
     if (userRecord.disabled) {
       await admin.auth().updateUser(uid, { disabled: false });
     }
@@ -424,11 +579,16 @@ export const syncStaffCustomClaims = onDocumentUpdated("users/{userId}", async (
       role,
       userRole: role,
       primaryRole: role,
-      staff: STAFF_ROLES.has(role) || PRIVILEGED_ADMIN_ROLES.has(role),
+      staff: true,
+      isStaff: true,
       technician: role === "technician",
-      admin: PRIVILEGED_ADMIN_ROLES.has(role),
-      modules: after.staffModules || [],
-      permissions: after.permissions || existingClaims.permissions || {},
+      admin: false,
+      super_admin: false,
+      superAdmin: false,
+      ceo: false,
+      modules,
+      staffModules: modules,
+      permissions,
       suspended: false,
     });
   } catch (error: any) {
