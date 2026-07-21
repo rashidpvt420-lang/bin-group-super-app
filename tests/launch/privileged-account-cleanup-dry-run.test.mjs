@@ -15,7 +15,14 @@ test('privileged cleanup review is protected, exact-main and non-destructive', a
   assert.match(workflow, /name: Privileged Account Cleanup Dry Run/);
   assert.match(workflow, /environment: production/);
   assert.match(workflow, /GCP_PROJECT_ID: bin-group-57c60/);
-  assert.match(workflow, /google-github-actions\/auth@v2/);
+  assert.match(workflow, /actions\/checkout@v6/);
+  assert.match(workflow, /actions\/setup-node@v6/);
+  assert.match(workflow, /google-github-actions\/auth@v3/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.doesNotMatch(workflow, /actions\/checkout@v4/);
+  assert.doesNotMatch(workflow, /actions\/setup-node@v4/);
+  assert.doesNotMatch(workflow, /google-github-actions\/auth@v2/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/);
   assert.match(workflow, /REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP/);
   assert.match(workflow, /refs\/heads\/main/);
   assert.match(workflow, /review-privileged-accounts-production\.mjs/);
