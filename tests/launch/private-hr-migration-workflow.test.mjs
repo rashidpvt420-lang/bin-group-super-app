@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [workflow, migration] = await Promise.all([
+const [workflow, dispatcher, migration] = await Promise.all([
   readFile(new URL('../../.github/workflows/private-hr-migration.yml', import.meta.url), 'utf8'),
+  readFile(new URL('../../.github/workflows/private-hr-migration-dispatch-current-main.yml', import.meta.url), 'utf8'),
   readFile(new URL('../../scripts/migrate-private-hr-profiles.mjs', import.meta.url), 'utf8'),
 ]);
 
@@ -16,7 +17,32 @@ test('private HR migration is protected, exact-main and dry-run-first', () => {
   assert.match(workflow, /MIGRATE_PRIVATE_HR_BIN_GROUP_57C60/);
   assert.match(workflow, /if: inputs\.mode == 'dry-run'/);
   assert.match(workflow, /if: inputs\.mode == 'execute'/);
+  assert.match(workflow, /workflow_call:/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+});
+
+test('START HERE dispatcher binds current main without a manually copied SHA', () => {
+  assert.match(dispatcher, /name: START HERE - Private HR Data Migration/);
+  assert.match(dispatcher, /uses: \.\/\.github\/workflows\/private-hr-migration\.yml/);
+  assert.match(dispatcher, /expected_commit_sha:\s*\$\{\{ github\.sha \}\}/);
+  assert.match(dispatcher, /mode:\s*\$\{\{ inputs\.mode \}\}/);
+  assert.match(dispatcher, /confirmation:\s*\$\{\{ inputs\.confirmation \}\}/);
+  assert.match(dispatcher, /secrets:\s*inherit/);
+  assert.match(dispatcher, /default:\s*dry-run/);
+
+  const inputSection = dispatcher.slice(dispatcher.indexOf('    inputs:'), dispatcher.indexOf('\npermissions:'));
+  assert.doesNotMatch(inputSection, /expected_commit_sha:/);
+  assert.doesNotMatch(dispatcher, /firebase deploy|deploy-firebase-production|migrate-private-hr-profiles\.mjs/);
+});
+
+test('stale and unauthorized migration runs fail with actionable diagnostics', () => {
+  assert.match(workflow, /Stale SHA: expected_commit_sha=\$TARGET_SHA/);
+  assert.match(workflow, /Start a new START HERE - Private HR Data Migration run instead of rerunning this job/);
+  assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS is not configured/);
+  assert.match(workflow, /GitHub actor \$GITHUB_ACTOR is not authorized/);
+  assert.match(workflow, /Dry-run confirmation must equal REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP/);
+  assert.match(workflow, /Execute confirmation must equal MIGRATE_PRIVATE_HR_BIN_GROUP_57C60/);
+  assert.match(workflow, /Migration mode must be dry-run or execute/);
 });
 
 test('private HR migration uses Node 24-compatible action runtimes', () => {
