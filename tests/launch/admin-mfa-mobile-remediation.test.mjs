@@ -37,6 +37,32 @@ test('Admin profile provides self-service email verification and phone MFA remed
   assert.doesNotMatch(source, /setCustomUserClaims|updateUser\(|deleteUser\(/);
 });
 
+test('Admin remediation UI enforces the singleton-founder cleanup model without misleading MFA instructions', async () => {
+  const source = await read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx');
+  assert.match(source, /Production requires exactly one privileged identity/);
+  assert.match(source, /Protected cleanup required/);
+  assert.match(source, /Unexpected privileged account/);
+  assert.match(source, /admin-privileged-delete-required/);
+  assert.match(source, /unexpectedPrivilegedAccountCount/);
+  assert.match(source, /canonicalFounderReadyCount/);
+  assert.doesNotMatch(source, /every listed account completes its own verification and MFA enrollment/);
+});
+
+test('Admin remediation UI exposes safe Firebase Auth diagnostics for real external failures', async () => {
+  const source = await read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx');
+  for (const code of [
+    'auth/unverified-email',
+    'auth/code-expired',
+    'auth/quota-exceeded',
+    'auth/captcha-check-failed',
+    'auth/invalid-phone-number',
+    'auth/network-request-failed',
+  ]) {
+    assert.ok(source.includes(code), `missing Firebase Auth diagnostic: ${code}`);
+  }
+  assert.match(source, /Admin security action failed \(\$\{safeCode\}\)/);
+});
+
 test('Functions runtime and protected bootstrap export only the remediation callable needed before coverage passes', async () => {
   const [runtime, deploy] = await Promise.all([
     read('functions/runtime.ts'),
