@@ -5,20 +5,26 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('provider evidence workflow is protected, exact-commit and fixed-manifest', async () => {
-  const [workflow, publisher] = await Promise.all([
+  const [workflow, publisher, finalizer] = await Promise.all([
     read('.github/workflows/operational-provider-evidence.yml'),
     read('scripts/publish-operational-provider-evidence.mjs'),
+    read('scripts/finalize-operational-provider-evidence.mjs'),
   ]);
 
   assert.match(workflow, /^name:\s*Operational Provider Evidence/m);
   assert.match(workflow, /^\s{2}verify-and-publish:/m);
   assert.match(workflow, /environment:\s*hard-public-launch/);
   assert.match(workflow, /GITHUB_REF.*refs\/heads\/main/s);
-  assert.match(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
+  assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS:\s*\$\{\{ secrets\.AUTHORIZED_FOUNDER_ACTORS \}\}/);
+  assert.match(workflow, /allowed_actors/);
+  assert.match(workflow, /GITHUB_ACTOR.*allowed_actor/s);
+  assert.doesNotMatch(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
   assert.match(workflow, /PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE/);
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
-  assert.match(workflow, /node scripts\/publish-operational-provider-evidence\.mjs/);
+  assert.match(workflow, /all-baseline/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-provider-evidence\.mjs/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/finalize-operational-provider-evidence\.mjs/);
 
   for (const gate of ['brandedEmailDelivery', 'appCheckEnforcement', 'stripeLiveBilling']) {
     assert.match(workflow, new RegExp(gate));
@@ -29,6 +35,9 @@ test('provider evidence workflow is protected, exact-commit and fixed-manifest',
   assert.match(publisher, /artifactHash/);
   assert.match(publisher, /sourceProofHash/);
   assert.match(publisher, /verifiedBy:\s*'workflow'/);
+  assert.match(publisher, /requireAuthorizedApprover\(process\.env\.GITHUB_ACTOR\)/);
+  assert.match(finalizer, /requireAuthorizedApprover\(process\.env\.GITHUB_ACTOR\)/);
+  assert.doesNotMatch(`${publisher}\n${finalizer}`, /GITHUB_ACTOR !== 'rashidpvt420-lang'/);
   assert.match(publisher, /process\.env\.GITHUB_WORKFLOW !== EXPECTED_WORKFLOW/);
   assert.match(publisher, /process\.env\.GITHUB_JOB !== EXPECTED_JOB/);
   assert.doesNotMatch(publisher, /process\.env\.(?:STATUS|GATE_STATUS)|request\.data|founder_attested|waiv/i);
@@ -42,6 +51,7 @@ test('branded SMTP proof requires provider acceptance and approved BIN GROUP sen
   ]);
 
   assert.match(workflow, /Verify BIN GROUP branded SMTP delivery/);
+  assert.match(workflow, /inputs\.gate == 'brandedEmailDelivery' \|\| inputs\.gate == 'all-baseline'/);
   assert.match(verifier, /BIN GROUP <ceo@bin-groups\.com>/);
   assert.match(verifier, /BIN GROUP Admin <ceo@bin-groups\.com>/);
   assert.match(verifier, /accepted.*recipient/s);
@@ -85,6 +95,7 @@ test('App Check enforcement proof performs invalid and valid authenticated Fires
   ]);
 
   assert.match(workflow, /Verify production App Check enforcement/);
+  assert.match(workflow, /inputs\.gate == 'appCheckEnforcement' \|\| inputs\.gate == 'all-baseline'/);
   assert.match(workflow, /VITE_FIREBASE_API_KEY:\s*\$\{\{ secrets\.VITE_FIREBASE_API_KEY \}\}/);
   assert.match(workflow, /VITE_FIREBASE_APP_ID:\s*\$\{\{ secrets\.VITE_FIREBASE_APP_ID \}\}/);
   assert.match(verifier, /accounts:signInWithPassword/);
