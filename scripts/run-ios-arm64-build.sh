@@ -5,6 +5,7 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-${RUNNER_TEMP:-/tmp}/bin-group-ios-deriv
 IOS_BUILD_LOG="${IOS_BUILD_LOG:-ios-arm64-xcodebuild.log}"
 IOS_EVIDENCE_PATH="${IOS_EVIDENCE_PATH:-ios-arm64-build-evidence.json}"
 IOS_FAILURE_SUMMARY="${IOS_FAILURE_SUMMARY:-ios-arm64-failure-summary.txt}"
+EXPECTED_COCOAPODS_VERSION="1.16.2"
 
 : > "$IOS_BUILD_LOG"
 exec > >(tee -a "$IOS_BUILD_LOG") 2>&1
@@ -44,10 +45,21 @@ CI=false npm run build
 stage="capacitor-copy"
 npx cap copy ios
 
+stage="cocoapods-version"
+if ! gem list --installed --exact cocoapods --version "$EXPECTED_COCOAPODS_VERSION" >/dev/null; then
+  gem install cocoapods --version "$EXPECTED_COCOAPODS_VERSION" --no-document
+fi
+cocoapods_version="$(pod _${EXPECTED_COCOAPODS_VERSION}_ --version)"
+if [[ "$cocoapods_version" != "$EXPECTED_COCOAPODS_VERSION" ]]; then
+  echo "Expected CocoaPods $EXPECTED_COCOAPODS_VERSION, got: $cocoapods_version" >&2
+  exit 1
+fi
+echo "CocoaPods: $cocoapods_version"
+
 stage="cocoapods-install"
 (
   cd ios/App
-  pod install --deployment
+  pod _${EXPECTED_COCOAPODS_VERSION}_ install --deployment
 )
 
 stage="xcodebuild"
@@ -90,6 +102,7 @@ workflow_url="https://github.com/${GITHUB_REPOSITORY:-local}/actions/runs/${GITH
 RUNNER_ARCH="$runner_arch" \
 XCODE_VERSION="$xcode_version" \
 SIMULATOR_SDK="$simulator_sdk" \
+COCOAPODS_VERSION="$cocoapods_version" \
 BINARY_ARCHS="$binary_archs" \
 BINARY_SHA256="$binary_sha256" \
 WORKFLOW_URL="$workflow_url" \
@@ -114,6 +127,7 @@ evidence = {
     "toolchain": {
         "xcode": os.environ["XCODE_VERSION"],
         "simulatorSdk": os.environ["SIMULATOR_SDK"],
+        "cocoaPods": os.environ["COCOAPODS_VERSION"],
     },
     "build": {
         "workspace": "ios/App/App.xcworkspace",
