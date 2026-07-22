@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import crypto from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
@@ -27,6 +28,7 @@ if (!brokerUser.emailVerified) {
 
 const brokerUid = brokerUser.uid;
 const profileRef = db.collection('users').doc(brokerUid);
+const privateKycRef = db.collection('broker_kyc_profiles').doc(brokerUid);
 const profileSnap = await profileRef.get();
 const profile = profileSnap.data() || {};
 if (profile.e2eLaunchSeed !== true || String(profile.role || profile.userRole || '').toLowerCase() !== 'broker') {
@@ -35,6 +37,7 @@ if (profile.e2eLaunchSeed !== true || String(profile.role || profile.userRole ||
 
 const safeId = String(brokerUid).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const commissionId = `e2e-live-broker-commission-${safeId}`;
+const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
 
 const challengeSnapshot = await db.collection('broker_payout_otps')
@@ -53,8 +56,32 @@ batch.set(profileRef, {
   bankIban: 'AE070331234567890123456',
   iban: 'AE070331234567890123456',
   ibanVerified: true,
+  approvedSubmissionHash: submissionHash,
   payoutOtpE2eReady: true,
   updatedAt: now,
+}, { merge: true });
+
+batch.set(privateKycRef, {
+  uid: brokerUid,
+  brokerUid,
+  brokerEmail,
+  displayName: brokerUser.displayName || profile.displayName || profile.name || 'E2E Broker',
+  reraVerified: true,
+  brokerKycStatus: 'verified',
+  kycStatus: 'VERIFIED',
+  ibanVerified: true,
+  commissionAgreementAccepted: true,
+  bankName: 'BIN GROUP E2E BANK',
+  bankAccountHolder: brokerUser.displayName || profile.displayName || profile.name || 'E2E Broker',
+  bankIban: 'AE070331234567890123456',
+  iban: 'AE070331234567890123456',
+  submissionHash,
+  approvedSubmissionHash: submissionHash,
+  approvedAt: now,
+  approvedBy: 'e2e-launch-fixture',
+  e2eLaunchSeed: true,
+  updatedAt: now,
+  createdAt: profile.createdAt || now,
 }, { merge: true });
 
 batch.set(db.collection('broker_commissions').doc(commissionId), {
@@ -86,4 +113,4 @@ for (const challenge of challengeSnapshot.docs) {
 }
 
 await batch.commit();
-console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; cleared ${challengeSnapshot.size} challenge candidate(s).`);
