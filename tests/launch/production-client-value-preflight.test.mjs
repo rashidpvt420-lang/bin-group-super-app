@@ -19,7 +19,7 @@ function validEnv() {
     AUTHORIZED_FOUNDER_EMAILS: 'founder@bin-groups.com',
     PRODUCTION_APPROVED_BY: 'founder@bin-groups.com',
     VITE_FIREBASE_API_KEY: `AIza${'A'.repeat(35)}`,
-    VITE_FIREBASE_APP_ID: '1:123413252227:web:abcdef1234567890',
+    VITE_FIREBASE_APP_ID: '1:123413252227:web:285cb53bc26626d699f3b6',
     VITE_FIREBASE_MESSAGING_SENDER_ID: '123413252227',
     VITE_FIREBASE_VAPID_KEY: `B${'C'.repeat(86)}`,
     VITE_GOOGLE_MAPS_API_KEY: `AIza${'M'.repeat(35)}`,
@@ -53,6 +53,7 @@ test('production client value preflight accepts exact, separated and well-formed
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_ENABLE_FIREBASE_APPCHECK'));
   const summary = productionWorkflowEnvSummary(env);
   assert.equal(summary.projectIdMatched, true);
+  assert.equal(summary.firebaseAppIdMatched, true);
   assert.equal(summary.mainUrlMatched, true);
   assert.equal(summary.adminUrlMatched, true);
   assert.equal(summary.appCheckEnabled, true);
@@ -82,11 +83,12 @@ test('production client value preflight rejects missing, reused, malformed and p
   assert.match(failures, /reCAPTCHA site key/);
 });
 
-test('production client value preflight binds exact project, identities, URLs and launch mode', () => {
+test('production client value preflight binds exact project, app id, identities, URLs and launch mode', () => {
   const env = validEnv();
   env.GCP_PROJECT_ID = 'wrong-project';
   env.GCP_WORKLOAD_IDENTITY_PROVIDER = 'provider-short-name';
   env.GCP_SERVICE_ACCOUNT = 'not-a-service-account';
+  env.VITE_FIREBASE_APP_ID = '1:123413252227:web:wrongapp1234567890';
   env.VITE_ENABLE_FIREBASE_APPCHECK = 'false';
   env.E2E_BASE_URL = 'https://example.com';
   env.E2E_ADMIN_BASE_URL = 'http://bin-group-admin-panel.web.app';
@@ -96,6 +98,7 @@ test('production client value preflight binds exact project, identities, URLs an
   assert.match(failures, /GCP_PROJECT_ID must equal bin-group-57c60/);
   assert.match(failures, /full Workload Identity provider resource name/);
   assert.match(failures, /Google service-account email/);
+  assert.match(failures, /VITE_FIREBASE_APP_ID must equal the BIN GROUP production web app ID/);
   assert.match(failures, /VITE_ENABLE_FIREBASE_APPCHECK must equal true/);
   assert.match(failures, /E2E_BASE_URL must equal https:\/\/bin-group-57c60\.web\.app/);
   assert.match(failures, /E2E_ADMIN_BASE_URL must equal https:\/\/bin-group-admin-panel\.web\.app/);
