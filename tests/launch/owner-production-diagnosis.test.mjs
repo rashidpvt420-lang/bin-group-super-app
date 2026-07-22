@@ -10,17 +10,17 @@ const workflow = await readFile(
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 
-const MAIN_SHA = 'a'.repeat(40);
-const OTHER_SHA = 'b'.repeat(40);
+const FIXTURE_MAIN_SHA = 'a'.repeat(40);
+const FIXTURE_OTHER_SHA = 'b'.repeat(40);
 const NOW = Date.now();
 
 /**
  * Build a minimal canonical eligible run fixture.
- * All defaults produce a run that is eligible and matches MAIN_SHA.
+ * All defaults produce a run that is eligible and matches FIXTURE_MAIN_SHA.
  */
 function run({
   id = 1,
-  head_sha = MAIN_SHA,
+  head_sha = FIXTURE_MAIN_SHA,
   html_url = `https://github.com/owner/repo/actions/runs/1`,
   created_at = new Date(NOW - 3_600_000).toISOString(), // 1 h ago
   conclusion = 'failure',
@@ -32,7 +32,7 @@ function run({
   return { id, head_sha, html_url, created_at, conclusion, status, event, name, path };
 }
 
-function select(mainSha, runs) {
+function selectRun(mainSha, runs) {
   return selectProductionDiagnosisRun(mainSha, runs, { now: NOW });
 }
 
@@ -97,17 +97,17 @@ test('diagnosis captures Playwright suite, test and assertion context', () => {
 test('current-main failure preferred over newer old-SHA failure', () => {
   const olderMainRun = run({
     id: 1,
-    head_sha: MAIN_SHA,
+    head_sha: FIXTURE_MAIN_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/1',
     created_at: new Date(NOW - 7_200_000).toISOString(), // 2 h ago (older)
   });
   const newerOtherRun = run({
     id: 2,
-    head_sha: OTHER_SHA,
+    head_sha: FIXTURE_OTHER_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/2',
     created_at: new Date(NOW - 1_800_000).toISOString(), // 30 min ago (newer)
   });
-  const result = select(MAIN_SHA, [newerOtherRun, olderMainRun]);
+  const result = selectRun(FIXTURE_MAIN_SHA, [newerOtherRun, olderMainRun]);
   assert.equal(result.runId, 1);
   assert.equal(result.matchesCurrentMain, true);
 });
@@ -115,17 +115,17 @@ test('current-main failure preferred over newer old-SHA failure', () => {
 test('newest relevant fallback when current main has no failure', () => {
   const olderOtherRun = run({
     id: 10,
-    head_sha: OTHER_SHA,
+    head_sha: FIXTURE_OTHER_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/10',
     created_at: new Date(NOW - 7_200_000).toISOString(), // 2 h ago
   });
   const newerOtherRun = run({
     id: 11,
-    head_sha: OTHER_SHA,
+    head_sha: FIXTURE_OTHER_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/11',
     created_at: new Date(NOW - 3_600_000).toISOString(), // 1 h ago (newest)
   });
-  const result = select(MAIN_SHA, [olderOtherRun, newerOtherRun]);
+  const result = selectRun(FIXTURE_MAIN_SHA, [olderOtherRun, newerOtherRun]);
   assert.equal(result.runId, 11);
   assert.equal(result.matchesCurrentMain, false);
 });
@@ -133,11 +133,11 @@ test('newest relevant fallback when current main has no failure', () => {
 test('failure older than 24 hours remains diagnosable and is marked stale', () => {
   const staleRun = run({
     id: 20,
-    head_sha: MAIN_SHA,
+    head_sha: FIXTURE_MAIN_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/20',
     created_at: new Date(NOW - 90_000_000).toISOString(), // ~25 h ago
   });
-  const result = select(MAIN_SHA, [staleRun]);
+  const result = selectRun(FIXTURE_MAIN_SHA, [staleRun]);
   assert.equal(result.runId, 20);
   assert.equal(result.staleEvidence, true);
   assert.ok(result.ageSeconds > 86400);
@@ -148,18 +148,18 @@ test('failures found after the first API page are considered', () => {
   const filler = Array.from({ length: 149 }, (_, i) =>
     run({
       id: 100 + i,
-      head_sha: OTHER_SHA,
+      head_sha: FIXTURE_OTHER_SHA,
       html_url: `https://github.com/owner/repo/actions/runs/${100 + i}`,
       created_at: new Date(NOW - (200 - i) * 60_000).toISOString(),
     }),
   );
   const expectedRun = run({
     id: 999,
-    head_sha: MAIN_SHA,
+    head_sha: FIXTURE_MAIN_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/999',
     created_at: new Date(NOW - 60_000).toISOString(), // newest
   });
-  const result = select(MAIN_SHA, [...filler, expectedRun]);
+  const result = selectRun(FIXTURE_MAIN_SHA, [...filler, expectedRun]);
   assert.equal(result.runId, 999);
   assert.equal(result.matchesCurrentMain, true);
 });
@@ -171,7 +171,7 @@ test('unrelated workflows are excluded', () => {
     path: '.github/workflows/other.yml',
   });
   assert.throws(
-    () => select(MAIN_SHA, [unrelated]),
+    () => selectRun(FIXTURE_MAIN_SHA, [unrelated]),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });
@@ -180,7 +180,7 @@ test('successful and cancelled runs are excluded', () => {
   const success = run({ id: 40, conclusion: 'success' });
   const cancelled = run({ id: 41, conclusion: 'cancelled' });
   assert.throws(
-    () => select(MAIN_SHA, [success, cancelled]),
+    () => selectRun(FIXTURE_MAIN_SHA, [success, cancelled]),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });
@@ -188,7 +188,7 @@ test('successful and cancelled runs are excluded', () => {
 test('malformed run ID is rejected', () => {
   const bad = run({ id: 'not-a-number' });
   assert.throws(
-    () => select(MAIN_SHA, [bad]),
+    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });
@@ -196,7 +196,7 @@ test('malformed run ID is rejected', () => {
 test('malformed SHA is rejected', () => {
   const bad = run({ head_sha: 'tooshort' });
   assert.throws(
-    () => select(MAIN_SHA, [bad]),
+    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });
@@ -204,7 +204,7 @@ test('malformed SHA is rejected', () => {
 test('malformed URL is rejected', () => {
   const bad = run({ html_url: 'not-a-url' });
   assert.throws(
-    () => select(MAIN_SHA, [bad]),
+    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });
@@ -212,14 +212,14 @@ test('malformed URL is rejected', () => {
 test('malformed timestamp is rejected', () => {
   const bad = run({ created_at: 'not-a-date' });
   assert.throws(
-    () => select(MAIN_SHA, [bad]),
+    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });
 
 test('empty eligible set fails closed', () => {
   assert.throws(
-    () => select(MAIN_SHA, []),
+    () => selectRun(FIXTURE_MAIN_SHA, []),
     /No completed failed Firebase Production Deploy run was found/,
   );
 });

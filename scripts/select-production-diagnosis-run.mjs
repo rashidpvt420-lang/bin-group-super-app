@@ -49,9 +49,9 @@ function isEligibleRun(run) {
   if (run.path !== WORKFLOW_PATH) return false;
   if ((run.name ?? '') !== WORKFLOW_NAME) return false;
   if (!isValidRunId(run.id)) return false;
-  if (!isValidSha(run.head_sha)) return false;
-  if (!isValidUrl(run.html_url)) return false;
-  if (!isValidTimestamp(run.created_at)) return false;
+  if (!run.head_sha || !isValidSha(run.head_sha)) return false;
+  if (!run.html_url || !isValidUrl(run.html_url)) return false;
+  if (!run.created_at || !isValidTimestamp(run.created_at)) return false;
   return true;
 }
 
