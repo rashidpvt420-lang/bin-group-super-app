@@ -17,11 +17,21 @@ test('manual production diagnosis is owner-only and canonical-issue-only', () =>
   assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
 });
 
-test('diagnosis accepts only a recent failed protected production run', () => {
-  assert.match(workflow, /firebase-production-deploy\.yml\/runs\?event=workflow_dispatch&branch=main&status=completed/);
+test('diagnosis prioritizes current main SHA and paginates completed failed deploy runs', () => {
+  assert.match(workflow, /repos\/\$REPOSITORY\/git\/ref\/heads\/main/);
+  assert.match(workflow, /for page in \$\(seq 1 10\)/);
+  assert.match(workflow, /per_page=100&page=\$page/);
   assert.match(workflow, /select\(\.conclusion == "failure"\)/);
-  assert.match(workflow, /age_seconds > 86400/);
-  assert.match(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
+  assert.match(workflow, /select\(\.path == ".github\/workflows\/firebase-production-deploy\.yml"\)/);
+  assert.match(workflow, /select\(\(.name \/\/ ""\) == "Firebase Production Deploy"\)/);
+  assert.match(workflow, /select\(\.head_sha == \$main_sha\)/);
+  assert.match(workflow, /Unable to resolve the current origin\/main SHA/);
+  assert.match(workflow, /No completed failed Firebase Production Deploy run was found/);
+  assert.match(workflow, /sourceRunMatchesResolvedMainSha/);
+  assert.match(workflow, /sourceRunStaleFailureEvidence/);
+  assert.match(workflow, /resolvedMainSha/);
+  assert.match(workflow, /Stale failure evidence preserved:/);
+  assert.doesNotMatch(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
 });
 
 test('diagnosis uploads masked logs but posts only normalized redacted lines', () => {

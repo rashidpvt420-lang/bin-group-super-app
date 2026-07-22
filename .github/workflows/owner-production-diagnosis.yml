@@ -36,8 +36,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=50")"
-          run="$(jq -c '[.workflow_runs[] | select(.conclusion == "failure")] | sort_by(.created_at) | last // empty' <<<"$runs")"
+          main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::Unable to resolve the current origin/main SHA.'
+            exit 1
+          }
+
+          runs_json='[]'
+          for page in $(seq 1 10); do
+            runs_page="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100&page=$page")"
+            page_count="$(jq -r '.workflow_runs | length' <<<"$runs_page")"
+            [[ "$page_count" =~ ^[0-9]+$ ]] || {
+              echo '::error::Invalid workflow runs payload when paginating completed runs.'
+              exit 1
+            }
+            runs_json="$(jq -c --argjson acc "$runs_json" '[($acc[]), (.workflow_runs[])]' <<<"$runs_page")"
+            if (( page_count < 100 )); then
+              break
+            fi
+          done
+
+          failures="$(jq -c '[.[] | select(.conclusion == "failure") | select(.path == ".github/workflows/firebase-production-deploy.yml") | select((.name // "") == "Firebase Production Deploy")]' <<<"$runs_json")"
+          run="$(jq -c --arg main_sha "$main_sha" '([.[] | select(.head_sha == $main_sha)] | sort_by(.created_at) | last) // (sort_by(.created_at) | last) // empty' <<<"$failures")"
           [[ -n "$run" ]] || {
             echo '::error::No completed failed Firebase Production Deploy run was found.'
             exit 1
@@ -47,25 +67,49 @@ jobs:
           run_sha="$(jq -r '.head_sha' <<<"$run")"
           run_url="$(jq -r '.html_url' <<<"$run")"
           created_at="$(jq -r '.created_at' <<<"$run")"
+          run_name="$(jq -r '.name' <<<"$run")"
+          run_path="$(jq -r '.path' <<<"$run")"
           [[ "$run_id" =~ ^[0-9]+$ ]]
           [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$run_url" =~ ^https://github\.com/ ]]
+          [[ "$run_name" == "Firebase Production Deploy" ]]
+          [[ "$run_path" == ".github/workflows/firebase-production-deploy.yml" ]]
 
           created_epoch="$(date -d "$created_at" +%s)"
           now_epoch="$(date -u +%s)"
           age_seconds=$((now_epoch - created_epoch))
-          if (( age_seconds < 0 || age_seconds > 86400 )); then
-            echo '::error::The latest failed production run is outside the 24-hour diagnostic window.'
+          if (( age_seconds < 0 )); then
+            echo '::error::The selected failed production run has an invalid timestamp.'
             exit 1
           fi
 
+          if [[ "$run_sha" == "$main_sha" ]]; then
+            matches_main_sha=true
+          else
+            matches_main_sha=false
+          fi
+          if (( age_seconds > 86400 )); then
+            stale_failure=true
+          else
+            stale_failure=false
+          fi
+
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_sha=$run_sha" >> "$GITHUB_OUTPUT"
           echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          echo "run_age_seconds=$age_seconds" >> "$GITHUB_OUTPUT"
+          echo "run_matches_main_sha=$matches_main_sha" >> "$GITHUB_OUTPUT"
+          echo "run_is_stale=$stale_failure" >> "$GITHUB_OUTPUT"
 
       - name: Collect GitHub-masked failed-job logs
         env:
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
           SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
+          SOURCE_RUN_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
+          SOURCE_RUN_AGE_SECONDS: ${{ steps.source.outputs.run_age_seconds }}
+          SOURCE_RUN_MATCHES_MAIN_SHA: ${{ steps.source.outputs.run_matches_main_sha }}
+          SOURCE_RUN_IS_STALE: ${{ steps.source.outputs.run_is_stale }}
         shell: bash
         run: |
           set -euo pipefail
@@ -121,6 +165,10 @@ jobs:
             sourceWorkflow: 'Firebase Production Deploy',
             sourceRunId: process.env.SOURCE_RUN_ID,
             sourceRunSha: process.env.SOURCE_RUN_SHA,
+            resolvedMainSha: process.env.SOURCE_RUN_MAIN_SHA,
+            sourceRunAgeSeconds: Number.parseInt(process.env.SOURCE_RUN_AGE_SECONDS || '0', 10),
+            sourceRunMatchesResolvedMainSha: process.env.SOURCE_RUN_MATCHES_MAIN_SHA === 'true',
+            sourceRunStaleFailureEvidence: process.env.SOURCE_RUN_IS_STALE === 'true',
             normalizedErrorLines: selected,
             failedSuiteSignals,
             githubSecretMaskingApplied: true,
@@ -143,9 +191,13 @@ jobs:
 
       - name: Post normalized diagnosis to canonical pilot issue
         env:
+          RESOLVED_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
           SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
           SOURCE_RUN_URL: ${{ steps.source.outputs.run_url }}
+          SOURCE_RUN_AGE_SECONDS: ${{ steps.source.outputs.run_age_seconds }}
+          SOURCE_RUN_MATCHES_MAIN_SHA: ${{ steps.source.outputs.run_matches_main_sha }}
+          SOURCE_RUN_IS_STALE: ${{ steps.source.outputs.run_is_stale }}
         shell: bash
         run: |
           set -euo pipefail
@@ -154,8 +206,12 @@ jobs:
           artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
           body="## Latest Firebase production failure diagnosis
 
+- Resolved origin/main SHA: \`$RESOLVED_MAIN_SHA\`
 - Exact source SHA: \`$SOURCE_RUN_SHA\`
 - Source run: $SOURCE_RUN_URL
+- Source run matches resolved main SHA: \`$SOURCE_RUN_MATCHES_MAIN_SHA\`
+- Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
+- Stale failure evidence preserved: \`$SOURCE_RUN_IS_STALE\`
 - Diagnostic artifact: \`$artifact\`
 - Hard-launch claim: \`false\`
 
