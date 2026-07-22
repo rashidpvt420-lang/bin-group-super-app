@@ -20,6 +20,8 @@ test('manual production diagnosis is owner-only and canonical-issue-only', () =>
 test('diagnosis prioritizes current main SHA and paginates completed failed deploy runs', () => {
   assert.match(workflow, /repos\/\$REPOSITORY\/git\/ref\/heads\/main/);
   assert.match(workflow, /while \(\( page <= max_pages \)\)/);
+  assert.match(workflow, /max_pagination_pages=10/);
+  assert.match(workflow, /stale_threshold_seconds=86400/);
   assert.match(workflow, /per_page=100&page=\$page/);
   assert.match(workflow, /total_count/);
   assert.match(workflow, /required_pages=\$\(\( \(total_count \+ 99\) \/ 100 \)\)/);
@@ -32,7 +34,7 @@ test('diagnosis prioritizes current main SHA and paginates completed failed depl
   assert.match(workflow, /sha_matched_run/);
   assert.match(workflow, /if \[\[ -n "\$sha_matched_run" \]\]/);
   assert.match(workflow, /run_url" == "https:\/\/github\.com\/\$REPOSITORY\/actions\/runs\/\$run_id"/);
-  assert.match(workflow, /Unable to resolve the current origin\/main SHA/);
+  assert.match(workflow, /Unable to resolve the current main branch SHA/);
   assert.match(workflow, /No completed failed Firebase Production Deploy run was found/);
   assert.match(workflow, /sourceRunMatchesResolvedMainSha/);
   assert.match(workflow, /sourceRunStaleFailureEvidence/);

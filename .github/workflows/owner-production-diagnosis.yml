@@ -38,16 +38,18 @@ jobs:
           set -euo pipefail
           workflow_name='Firebase Production Deploy'
           workflow_path='.github/workflows/firebase-production-deploy.yml'
+          max_pagination_pages=10
+          stale_threshold_seconds=86400
 
           main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
-            echo '::error::Unable to resolve the current origin/main SHA.'
+            echo '::error::Unable to resolve the current main branch SHA.'
             exit 1
           }
 
           runs_json='[]'
           page=1
-          max_pages=10
+          max_pages=$max_pagination_pages
           while (( page <= max_pages )); do
             runs_page="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100&page=$page")"
             page_count="$(jq -r '.workflow_runs | length' <<<"$runs_page")"
@@ -106,7 +108,7 @@ jobs:
             exit 1
           fi
 
-          if (( age_seconds > 86400 )); then
+          if (( age_seconds > stale_threshold_seconds )); then
             stale_failure=true
           else
             stale_failure=false
