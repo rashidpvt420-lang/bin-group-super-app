@@ -36,6 +36,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          workflow_name='Firebase Production Deploy'
+          workflow_path='.github/workflows/firebase-production-deploy.yml'
+
           main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
             echo '::error::Unable to resolve the current origin/main SHA.'
@@ -70,8 +73,15 @@ jobs:
             page=$((page + 1))
           done
 
-          failures="$(jq -c '[.[] | select(.conclusion == "failure") | select(.path == ".github/workflows/firebase-production-deploy.yml") | select((.name // "") == "Firebase Production Deploy")]' <<<"$runs_json")"
-          run="$(jq -c --arg main_sha "$main_sha" '([.[] | select(.head_sha == $main_sha)] | sort_by(.created_at) | last) // (sort_by(.created_at) | last) // empty' <<<"$failures")"
+          failures="$(jq -c --arg workflow_name "$workflow_name" --arg workflow_path "$workflow_path" '[.[] | select(.conclusion == "failure") | select(.path == $workflow_path) | select((.name // "") == $workflow_name)]' <<<"$runs_json")"
+          sha_matched_run="$(jq -c --arg main_sha "$main_sha" '[.[] | select(.head_sha == $main_sha)] | sort_by(.created_at) | last // empty' <<<"$failures")"
+          if [[ -n "$sha_matched_run" ]]; then
+            run="$sha_matched_run"
+            matches_main_sha=true
+          else
+            run="$(jq -c 'sort_by(.created_at) | last // empty' <<<"$failures")"
+            matches_main_sha=false
+          fi
           [[ -n "$run" ]] || {
             echo '::error::No completed failed Firebase Production Deploy run was found.'
             exit 1
@@ -83,7 +93,10 @@ jobs:
           created_at="$(jq -r '.created_at' <<<"$run")"
           [[ "$run_id" =~ ^[0-9]+$ ]]
           [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$run_url" =~ ^https://github\.com/ ]]
+          [[ "$run_url" == "https://github.com/$REPOSITORY/actions/runs/$run_id" ]] || {
+            echo '::error::The selected failed production run has an unexpected URL.'
+            exit 1
+          }
 
           created_epoch="$(date -d "$created_at" +%s)"
           now_epoch="$(date -u +%s)"
@@ -93,11 +106,6 @@ jobs:
             exit 1
           fi
 
-          if [[ "$run_sha" == "$main_sha" ]]; then
-            matches_main_sha=true
-          else
-            matches_main_sha=false
-          fi
           if (( age_seconds > 86400 )); then
             stale_failure=true
           else
@@ -141,8 +149,11 @@ jobs:
 
           const requireEnv = (name, pattern) => {
             const value = String(process.env[name] || '').trim();
-            if (!value || (pattern && !pattern.test(value))) {
-              throw new Error(`Missing or malformed ${name} diagnostic metadata.`);
+            if (!value) {
+              throw new Error(`Missing ${name} diagnostic metadata.`);
+            }
+            if (pattern && !pattern.test(value)) {
+              throw new Error(`Malformed ${name} diagnostic metadata: "${value}" does not match ${pattern}.`);
             }
             return value;
           };
