@@ -43,17 +43,31 @@ jobs:
           }
 
           runs_json='[]'
-          for page in $(seq 1 10); do
+          page=1
+          max_pages=10
+          while (( page <= max_pages )); do
             runs_page="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100&page=$page")"
             page_count="$(jq -r '.workflow_runs | length' <<<"$runs_page")"
+            total_count="$(jq -r '.total_count' <<<"$runs_page")"
             [[ "$page_count" =~ ^[0-9]+$ ]] || {
               echo '::error::Invalid workflow runs payload when paginating completed runs.'
               exit 1
             }
+            [[ "$total_count" =~ ^[0-9]+$ ]] || {
+              echo '::error::Invalid workflow runs payload total_count.'
+              exit 1
+            }
+            if (( page == 1 )); then
+              required_pages=$(( (total_count + 99) / 100 ))
+              if (( required_pages > 0 && required_pages < max_pages )); then
+                max_pages=$required_pages
+              fi
+            fi
             runs_json="$(jq -c --argjson acc "$runs_json" '[($acc[]), (.workflow_runs[])]' <<<"$runs_page")"
-            if (( page_count < 100 )); then
+            if (( page_count < 100 || page_count == 0 )); then
               break
             fi
+            page=$((page + 1))
           done
 
           failures="$(jq -c '[.[] | select(.conclusion == "failure") | select(.path == ".github/workflows/firebase-production-deploy.yml") | select((.name // "") == "Firebase Production Deploy")]' <<<"$runs_json")"
@@ -67,13 +81,9 @@ jobs:
           run_sha="$(jq -r '.head_sha' <<<"$run")"
           run_url="$(jq -r '.html_url' <<<"$run")"
           created_at="$(jq -r '.created_at' <<<"$run")"
-          run_name="$(jq -r '.name' <<<"$run")"
-          run_path="$(jq -r '.path' <<<"$run")"
           [[ "$run_id" =~ ^[0-9]+$ ]]
           [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]]
           [[ "$run_url" =~ ^https://github\.com/ ]]
-          [[ "$run_name" == "Firebase Production Deploy" ]]
-          [[ "$run_path" == ".github/workflows/firebase-production-deploy.yml" ]]
 
           created_epoch="$(date -d "$created_at" +%s)"
           now_epoch="$(date -u +%s)"
@@ -129,6 +139,21 @@ jobs:
           SOURCE_RUN_ID="$SOURCE_RUN_ID" SOURCE_RUN_SHA="$SOURCE_RUN_SHA" node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
 
+          const requireEnv = (name, pattern) => {
+            const value = String(process.env[name] || '').trim();
+            if (!value || (pattern && !pattern.test(value))) {
+              throw new Error(`Missing or malformed ${name} diagnostic metadata.`);
+            }
+            return value;
+          };
+
+          const sourceRunId = requireEnv('SOURCE_RUN_ID', /^[0-9]+$/);
+          const sourceRunSha = requireEnv('SOURCE_RUN_SHA', /^[0-9a-f]{40}$/);
+          const resolvedMainSha = requireEnv('SOURCE_RUN_MAIN_SHA', /^[0-9a-f]{40}$/);
+          const sourceRunAgeSecondsRaw = requireEnv('SOURCE_RUN_AGE_SECONDS', /^[0-9]+$/);
+          const sourceRunMatchesMainShaRaw = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
+          const sourceRunIsStaleRaw = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
+
           const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
             .replace(/\u001b\[[0-9;]*m/g, '');
           const lines = raw.split(/\r?\n/);
@@ -163,12 +188,12 @@ jobs:
             schemaVersion: 2,
             status: 'FAILED',
             sourceWorkflow: 'Firebase Production Deploy',
-            sourceRunId: process.env.SOURCE_RUN_ID,
-            sourceRunSha: process.env.SOURCE_RUN_SHA,
-            resolvedMainSha: process.env.SOURCE_RUN_MAIN_SHA,
-            sourceRunAgeSeconds: Number.parseInt(process.env.SOURCE_RUN_AGE_SECONDS || '0', 10),
-            sourceRunMatchesResolvedMainSha: process.env.SOURCE_RUN_MATCHES_MAIN_SHA === 'true',
-            sourceRunStaleFailureEvidence: process.env.SOURCE_RUN_IS_STALE === 'true',
+            sourceRunId,
+            sourceRunSha,
+            resolvedMainSha,
+            sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSecondsRaw, 10),
+            sourceRunMatchesResolvedMainSha: sourceRunMatchesMainShaRaw === 'true',
+            sourceRunStaleFailureEvidence: sourceRunIsStaleRaw === 'true',
             normalizedErrorLines: selected,
             failedSuiteSignals,
             githubSecretMaskingApplied: true,

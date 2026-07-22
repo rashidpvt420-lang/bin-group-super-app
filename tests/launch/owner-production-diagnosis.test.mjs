@@ -19,8 +19,10 @@ test('manual production diagnosis is owner-only and canonical-issue-only', () =>
 
 test('diagnosis prioritizes current main SHA and paginates completed failed deploy runs', () => {
   assert.match(workflow, /repos\/\$REPOSITORY\/git\/ref\/heads\/main/);
-  assert.match(workflow, /for page in \$\(seq 1 10\)/);
+  assert.match(workflow, /while \(\( page <= max_pages \)\)/);
   assert.match(workflow, /per_page=100&page=\$page/);
+  assert.match(workflow, /total_count/);
+  assert.match(workflow, /required_pages=\$\(\( \(total_count \+ 99\) \/ 100 \)\)/);
   assert.match(workflow, /select\(\.conclusion == "failure"\)/);
   assert.match(workflow, /select\(\.path == ".github\/workflows\/firebase-production-deploy\.yml"\)/);
   assert.match(workflow, /select\(\(.name \/\/ ""\) == "Firebase Production Deploy"\)/);
@@ -30,6 +32,7 @@ test('diagnosis prioritizes current main SHA and paginates completed failed depl
   assert.match(workflow, /sourceRunMatchesResolvedMainSha/);
   assert.match(workflow, /sourceRunStaleFailureEvidence/);
   assert.match(workflow, /resolvedMainSha/);
+  assert.match(workflow, /Missing or malformed .* diagnostic metadata/);
   assert.match(workflow, /Stale failure evidence preserved:/);
   assert.doesNotMatch(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
 });
