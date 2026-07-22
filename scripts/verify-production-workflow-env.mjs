@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
+const EXPECTED_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const EXPECTED_MAIN_URL = 'https://bin-group-57c60.web.app';
 const EXPECTED_ADMIN_URL = 'https://bin-group-admin-panel.web.app';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -92,6 +93,9 @@ export function validateProductionWorkflowEnv(env = process.env) {
   requirePattern(failures, env, 'VITE_FIREBASE_API_KEY', GOOGLE_API_KEY_RE, 'must be a plausible Google API key');
   requirePattern(failures, env, 'VITE_GOOGLE_MAPS_API_KEY', GOOGLE_API_KEY_RE, 'must be a plausible Google Maps API key');
   requirePattern(failures, env, 'VITE_FIREBASE_APP_ID', FIREBASE_APP_ID_RE, 'must be a Firebase web App ID');
+  if (value(env, 'VITE_FIREBASE_APP_ID') && value(env, 'VITE_FIREBASE_APP_ID') !== EXPECTED_FIREBASE_APP_ID) {
+    failures.push('VITE_FIREBASE_APP_ID must equal the BIN GROUP production web app ID');
+  }
   requirePattern(failures, env, 'VITE_FIREBASE_MESSAGING_SENDER_ID', MESSAGING_SENDER_ID_RE, 'must be a numeric Firebase sender ID');
   requirePattern(failures, env, 'VITE_FIREBASE_VAPID_KEY', VAPID_KEY_RE, 'must be a plausible Web Push VAPID public key');
   requirePattern(failures, env, 'VITE_APP_CHECK_SITE_KEY', RECAPTCHA_SITE_KEY_RE, 'must be a plausible reCAPTCHA site key');
@@ -138,6 +142,7 @@ export function validateProductionWorkflowEnv(env = process.env) {
 export function productionWorkflowEnvSummary(env = process.env) {
   return {
     projectIdMatched: value(env, 'GCP_PROJECT_ID') === EXPECTED_PROJECT_ID,
+    firebaseAppIdMatched: value(env, 'VITE_FIREBASE_APP_ID') === EXPECTED_FIREBASE_APP_ID,
     mainUrlMatched: value(env, 'E2E_BASE_URL').replace(/\/+$/, '') === EXPECTED_MAIN_URL,
     adminUrlMatched: value(env, 'E2E_ADMIN_BASE_URL').replace(/\/+$/, '') === EXPECTED_ADMIN_URL,
     appCheckEnabled: value(env, 'VITE_ENABLE_FIREBASE_APPCHECK') === 'true',
