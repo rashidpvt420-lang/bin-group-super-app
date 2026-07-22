@@ -131,23 +131,26 @@ async function verifySite(label, url, site) {
     site,
     env: process.env,
   });
+  const extractedAppIdMatched = String(config.appId || '').includes(PRODUCTION.appIdSuffix);
+  const expectedAppIdMatched = runtimeSummary.firebaseAppIdMatched === true || extractedAppIdMatched;
 
   if (config.projectId !== PRODUCTION.projectId) fail(`${label}: projectId missing/mismatch in bundle`);
   if (config.authDomain !== PRODUCTION.authDomain) fail(`${label}: authDomain mismatch`);
-  if (!String(config.appId || '').includes(PRODUCTION.appIdSuffix)) {
-    fail(`${label}: appId does not match intended web app`);
+  if (!expectedAppIdMatched) {
+    fail(`${label}: expected Firebase web app id is not embedded in hosted bundle`);
   }
   reportMissingRuntimeFlags(label, site, runtimeSummary);
 
   const bundleVerified =
     config.projectId === PRODUCTION.projectId &&
     config.authDomain === PRODUCTION.authDomain &&
-    String(config.appId || '').includes(PRODUCTION.appIdSuffix) &&
+    expectedAppIdMatched &&
     runtimeSummary.allRequiredMatched === true;
 
   console.log(
     `[deploy-verify] ${label} bundle project=${config.projectId || '(missing)'} `
-      + `assets=${runtimeSummary.assetCount} client_config=${runtimeSummary.allRequiredMatched === true ? 'matched' : 'incomplete'}`,
+      + `assets=${runtimeSummary.assetCount} client_config=${runtimeSummary.allRequiredMatched === true ? 'matched' : 'incomplete'} `
+      + `app_id=${expectedAppIdMatched ? 'matched' : 'missing'}`,
   );
   return { httpOk: true, bundleVerified, config, runtimeSummary };
 }
