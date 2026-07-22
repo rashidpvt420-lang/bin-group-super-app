@@ -41,7 +41,7 @@ test('diagnosis prioritizes current main SHA and paginates completed failed depl
   assert.match(workflow, /resolvedMainSha/);
   assert.match(workflow, /Missing .* diagnostic metadata/);
   assert.match(workflow, /Malformed .* diagnostic metadata:/);
-  assert.match(workflow, /Stale failure evidence preserved:/);
+  assert.match(workflow, /Source run is stale failure:/);
   assert.doesNotMatch(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
 });
 

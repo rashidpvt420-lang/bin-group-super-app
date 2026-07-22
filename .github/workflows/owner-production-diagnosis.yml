@@ -74,6 +74,7 @@ jobs:
                 max_pages=$required_pages
               fi
             fi
+            # Guard against unrelated runs by requiring both canonical workflow path and display name.
             jq -c \
               --arg workflow_name "$workflow_name" \
               --arg workflow_path "$workflow_path" \
@@ -173,9 +174,9 @@ jobs:
           const sourceRunId = requireEnv('SOURCE_RUN_ID', /^[0-9]+$/);
           const sourceRunSha = requireEnv('SOURCE_RUN_SHA', /^[0-9a-f]{40}$/);
           const resolvedMainSha = requireEnv('SOURCE_RUN_MAIN_SHA', /^[0-9a-f]{40}$/);
-          const sourceRunAgeSecondsRaw = requireEnv('SOURCE_RUN_AGE_SECONDS', /^[0-9]+$/);
-          const sourceRunMatchesMainShaRaw = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
-          const sourceRunIsStaleRaw = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
+          const sourceRunAgeSeconds = requireEnv('SOURCE_RUN_AGE_SECONDS', /^[0-9]+$/);
+          const sourceRunMatchesMainSha = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
+          const sourceRunIsStale = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
 
           const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
             .replace(/\u001b\[[0-9;]*m/g, '');
@@ -214,9 +215,9 @@ jobs:
             sourceRunId,
             sourceRunSha,
             resolvedMainSha,
-            sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSecondsRaw, 10),
-            sourceRunMatchesResolvedMainSha: sourceRunMatchesMainShaRaw === 'true',
-            sourceRunStaleFailureEvidence: sourceRunIsStaleRaw === 'true',
+            sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSeconds, 10),
+            sourceRunMatchesResolvedMainSha: sourceRunMatchesMainSha === 'true',
+            sourceRunStaleFailureEvidence: sourceRunIsStale === 'true',
             normalizedErrorLines: selected,
             failedSuiteSignals,
             githubSecretMaskingApplied: true,
@@ -259,7 +260,7 @@ jobs:
 - Source run: $SOURCE_RUN_URL
 - Source run matches resolved main SHA: \`$SOURCE_RUN_MATCHES_MAIN_SHA\`
 - Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
-- Stale failure evidence preserved: \`$SOURCE_RUN_IS_STALE\`
+- Source run is stale failure: \`$SOURCE_RUN_IS_STALE\`
 - Diagnostic artifact: \`$artifact\`
 - Hard-launch claim: \`false\`
 
