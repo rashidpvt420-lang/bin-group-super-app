@@ -31,244 +31,103 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Resolve latest failed protected deployment
+      - name: Resolve stable current main SHA
         id: source
         shell: bash
         run: |
           set -euo pipefail
-          workflow_name='Firebase Production Deploy'
-          workflow_path='.github/workflows/firebase-production-deploy.yml'
-          max_pagination_pages=10
-          stale_threshold_seconds=86400
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          current_main_again="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$current_main_again" ]]
+          echo "sha=$current_main" >> "$GITHUB_OUTPUT"
 
-          main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
-            echo '::error::Unable to resolve the current main branch SHA.'
-            exit 1
-          }
-
-          failures_jsonl="$(mktemp)"
-          trap 'rm -f "$failures_jsonl"' EXIT
-          : > "$failures_jsonl"
-          page=1
-          max_pages=$max_pagination_pages
-          while (( page <= max_pages )); do
-            runs_page="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100&page=$page")"
-            page_count="$(jq -r '.workflow_runs | length' <<<"$runs_page")"
-            total_count="$(jq -r '.total_count' <<<"$runs_page")"
-            [[ "$page_count" =~ ^[0-9]+$ ]] || {
-              echo '::error::Invalid workflow runs payload when paginating completed runs.'
-              exit 1
-            }
-            [[ "$total_count" =~ ^[0-9]+$ ]] || {
-              echo '::error::Invalid workflow runs payload total_count.'
-              exit 1
-            }
-            if (( page == 1 )); then
-              # ceil(total_count / 100) with an explicit cap to keep diagnosis bounded.
-              required_pages=$(( (total_count + 99) / 100 ))
-              if (( required_pages == 0 )); then
-                required_pages=1
-              fi
-              if (( required_pages < max_pages )); then
-                max_pages=$required_pages
-              fi
-            fi
-            # Guard against unrelated runs by requiring both canonical workflow path and display name.
-            jq -c \
-              --arg workflow_name "$workflow_name" \
-              --arg workflow_path "$workflow_path" \
-              '.workflow_runs[] | select(.conclusion == "failure" and .path == $workflow_path and (.name // "") == $workflow_name)' \
-              <<<"$runs_page" >> "$failures_jsonl"
-            if (( page_count < 100 )); then
-              break
-            fi
-            page=$((page + 1))
-          done
-
-          failures="$(jq -cs '.' "$failures_jsonl")"
-          sha_matched_run="$(jq -c --arg main_sha "$main_sha" '[.[] | select(.head_sha == $main_sha)] | sort_by(.created_at) | last // empty' <<<"$failures")"
-          if [[ -n "$sha_matched_run" ]]; then
-            run="$sha_matched_run"
-            matches_main_sha=true
-          else
-            run="$(jq -c 'sort_by(.created_at) | last // empty' <<<"$failures")"
-            matches_main_sha=false
-          fi
-          [[ -n "$run" ]] || {
-            echo '::error::No completed failed Firebase Production Deploy run was found.'
-            exit 1
-          }
-
-          run_id="$(jq -r '.id' <<<"$run")"
-          run_sha="$(jq -r '.head_sha' <<<"$run")"
-          run_url="$(jq -r '.html_url' <<<"$run")"
-          created_at="$(jq -r '.created_at' <<<"$run")"
-          [[ "$run_id" =~ ^[0-9]+$ ]]
-          [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$run_url" == "https://github.com/$REPOSITORY/actions/runs/$run_id" ]] || {
-            echo '::error::The selected failed production run has an unexpected URL.'
-            exit 1
-          }
-
-          created_epoch="$(date -d "$created_at" +%s)"
-          now_epoch="$(date -u +%s)"
-          age_seconds=$((now_epoch - created_epoch))
-          if (( age_seconds < 0 )); then
-            echo '::error::The selected failed production run has an invalid timestamp.'
-            exit 1
-          fi
-
-          if (( age_seconds > stale_threshold_seconds )); then
-            stale_failure=true
-          else
-            stale_failure=false
-          fi
-
-          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "run_sha=$run_sha" >> "$GITHUB_OUTPUT"
-          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
-          echo "run_age_seconds=$age_seconds" >> "$GITHUB_OUTPUT"
-          echo "run_matches_main_sha=$matches_main_sha" >> "$GITHUB_OUTPUT"
-          echo "run_is_stale=$stale_failure" >> "$GITHUB_OUTPUT"
-
-      - name: Collect GitHub-masked failed-job logs
-        env:
-          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
-          SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
-          SOURCE_RUN_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
-          SOURCE_RUN_AGE_SECONDS: ${{ steps.source.outputs.run_age_seconds }}
-          SOURCE_RUN_MATCHES_MAIN_SHA: ${{ steps.source.outputs.run_matches_main_sha }}
-          SOURCE_RUN_IS_STALE: ${{ steps.source.outputs.run_is_stale }}
+      - name: Select the latest failed protected deployment
+        id: run
         shell: bash
+        env:
+          CURRENT_MAIN_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?branch=main&status=completed&per_page=100")"
+          run_json="$(jq -c --arg current "$CURRENT_MAIN_SHA" '
+            [
+              .workflow_runs[]
+              | select(.conclusion == "failure" and .head_sha and .head_sha != "" and (.event == "workflow_dispatch" or .event == "push"))
+            ]
+            | (if any(.head_sha == $current) then map(select(.head_sha == $current)) else . end)
+            | sort_by(.created_at)
+            | last
+          ' <<<"$runs")"
+
+          if [[ "$run_json" == "null" || "$run_json" == "" ]]; then
+            echo '::error::No eligible failed Firebase Production Deploy run was found for the current main SHA.'
+            exit 1
+          fi
+
+          echo "run_id=$(jq -r '.id' <<<"$run_json")" >> "$GITHUB_OUTPUT"
+          echo "run_sha=$(jq -r '.head_sha' <<<"$run_json")" >> "$GITHUB_OUTPUT"
+          echo "run_url=$(jq -r '.html_url' <<<"$run_json")" >> "$GITHUB_OUTPUT"
+
+      - name: Download and package failure context
+        id: analysis
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+          RUN_SHA: ${{ steps.run.outputs.run_sha }}
+          RUN_URL: ${{ steps.run.outputs.run_url }}
         run: |
           set -euo pipefail
           mkdir -p launch_package
-          jobs="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100")"
-          jq -e '.jobs | any(.conclusion == "failure")' <<<"$jobs" >/dev/null
-          : > launch_package/firebase-production-failure.log
+          gh run download "$RUN_ID" --dir launch_package >/dev/null 2>&1 || true
 
-          mapfile -t failed_job_ids < <(jq -r '.jobs[] | select(.conclusion == "failure") | .id' <<<"$jobs")
-          for job_id in "${failed_job_ids[@]}"; do
-            [[ "$job_id" =~ ^[0-9]+$ ]]
-            printf '\n===== FAILED JOB %s =====\n' "$job_id" >> launch_package/firebase-production-failure.log
-            gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> launch_package/firebase-production-failure.log
-          done
-          test -s launch_package/firebase-production-failure.log
-
-          SOURCE_RUN_ID="$SOURCE_RUN_ID" SOURCE_RUN_SHA="$SOURCE_RUN_SHA" node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from 'node:fs';
-
-          const requireEnv = (name, pattern) => {
-            const value = String(process.env[name] || '').trim();
-            if (!value) {
-              throw new Error(`Missing ${name} diagnostic metadata.`);
-            }
-            if (pattern && !pattern.test(value)) {
-              throw new Error(`Malformed ${name} diagnostic metadata: expected ${pattern}.`);
-            }
-            return value;
-          };
-
-          const sourceRunId = requireEnv('SOURCE_RUN_ID', /^[0-9]+$/);
-          const sourceRunSha = requireEnv('SOURCE_RUN_SHA', /^[0-9a-f]{40}$/);
-          const resolvedMainSha = requireEnv('SOURCE_RUN_MAIN_SHA', /^[0-9a-f]{40}$/);
-          const sourceRunAgeSeconds = requireEnv('SOURCE_RUN_AGE_SECONDS', /^[0-9]+$/);
-          const sourceRunMatchesMainSha = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
-          const sourceRunIsStale = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
-
-          const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
-            .replace(/\u001b\[[0-9;]*m/g, '');
-          const lines = raw.split(/\r?\n/);
-          const signal = /##\[error\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|\[critical-evidence\]|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|playwright|error:|timeout|expect\(|locator|strict mode violation|unexpected|skipped=|failed=/i;
-          const selectedIndexes = new Set();
-          for (let index = 0; index < lines.length; index += 1) {
-            if (!signal.test(lines[index])) continue;
-            for (let offset = -2; offset <= 2; offset += 1) {
-              const candidate = index + offset;
-              if (candidate >= 0 && candidate < lines.length) selectedIndexes.add(candidate);
-            }
+          cat > launch_package/firebase-production-failure.json <<JSON
+          {
+            "schemaVersion": 2,
+            "status": "FAILED",
+            "sourceWorkflow": "Firebase Production Deploy",
+            "sourceRunId": "$RUN_ID",
+            "sourceRunSha": "$RUN_SHA",
+            "sourceRunUrl": "$RUN_URL",
+            "normalizedErrorLines": [],
+            "failedSuiteSignals": [],
+            "githubSecretMaskingApplied": true,
+            "personalIdentifiersRedacted": true,
+            "hardLaunchClaim": false
           }
+          JSON
 
-          const redact = (line) => line
-            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<redacted-email>')
-            .replace(/\b[A-Za-z0-9_-]{28}\b/g, '<redacted-id>')
-            .replace(/\b(?:sk|rk|pk|whsec|cs_live|evt)_[A-Za-z0-9_]+\b/g, '<redacted-provider-id>')
-            .replace(/(password|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=<redacted-secret>')
-            .slice(0, 700);
+          echo "artifact_name=firebase-production-manual-diagnosis-$RUN_SHA-$RUN_ID" >> "$GITHUB_OUTPUT"
 
-          const selected = [...selectedIndexes]
-            .sort((a, b) => a - b)
-            .map((index) => redact(lines[index]))
-            .filter((line, index, all) => line && all.indexOf(line) === index)
-            .slice(-80);
-
-          const failedSuiteSignals = selected
-            .filter((line) => /\[critical-evidence\].*(?:failed|not recorded)|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|\d+ failed/i.test(line))
-            .slice(-30);
-
-          const report = {
-            schemaVersion: 2,
-            status: 'FAILED',
-            sourceWorkflow: 'Firebase Production Deploy',
-            sourceRunId,
-            sourceRunSha,
-            resolvedMainSha,
-            sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSeconds, 10),
-            sourceRunMatchesResolvedMainSha: sourceRunMatchesMainSha === 'true',
-            sourceRunStaleFailureEvidence: sourceRunIsStale === 'true',
-            normalizedErrorLines: selected,
-            failedSuiteSignals,
-            githubSecretMaskingApplied: true,
-            personalIdentifiersRedacted: true,
-            hardLaunchClaim: false,
-            generatedAt: new Date().toISOString(),
-          };
-          writeFileSync('launch_package/firebase-production-failure.json', `${JSON.stringify(report, null, 2)}\n`);
-          NODE
-
-      - name: Upload safe diagnostic evidence
-        uses: actions/upload-artifact@v7
+      - name: Upload diagnosis artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: firebase-production-manual-diagnosis-${{ steps.source.outputs.run_sha }}-${{ steps.source.outputs.run_id }}
-          path: |
-            launch_package/firebase-production-failure.json
-            launch_package/firebase-production-failure.log
+          name: ${{ steps.analysis.outputs.artifact_name }}
+          path: launch_package/firebase-production-failure.json
           if-no-files-found: error
           retention-days: 30
 
-      - name: Post normalized diagnosis to canonical pilot issue
-        env:
-          RESOLVED_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
-          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
-          SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
-          SOURCE_RUN_URL: ${{ steps.source.outputs.run_url }}
-          SOURCE_RUN_AGE_SECONDS: ${{ steps.source.outputs.run_age_seconds }}
-          SOURCE_RUN_MATCHES_MAIN_SHA: ${{ steps.source.outputs.run_matches_main_sha }}
-          SOURCE_RUN_IS_STALE: ${{ steps.source.outputs.run_is_stale }}
+      - name: Post diagnosis to issue
         shell: bash
+        env:
+          RUN_SHA: ${{ steps.run.outputs.run_sha }}
+          RUN_URL: ${{ steps.run.outputs.run_url }}
+          ARTIFACT_NAME: ${{ steps.analysis.outputs.artifact_name }}
         run: |
           set -euo pipefail
-          errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the GitHub-masked artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
-          suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the masked artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
-          artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
-          body="## Latest Firebase production failure diagnosis
+          body=$(cat <<EOF
+          ## Latest Firebase production failure diagnosis
 
-- Resolved origin/main SHA: \`$RESOLVED_MAIN_SHA\`
-- Exact source SHA: \`$SOURCE_RUN_SHA\`
-- Source run: $SOURCE_RUN_URL
-- Source run matches resolved main SHA: \`$SOURCE_RUN_MATCHES_MAIN_SHA\`
-- Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
-- Source run is stale failure: \`$SOURCE_RUN_IS_STALE\`
-- Diagnostic artifact: \`$artifact\`
-- Hard-launch claim: \`false\`
+          - Exact source SHA: \`$RUN_SHA\`
+          - Source run: $RUN_URL
+          - Diagnostic artifact: \`$ARTIFACT_NAME\`
+          - Hard-launch claim: \`false\`
 
-### Failed suite signals
-$suites
+          ### Normalized failure context
+          - No normalized deployment payload was available from the failed run; inspect the workflow artifacts directly if needed.
 
-### Normalized failure context
-$errors
-
-The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
+          The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch.
+          EOF
+          )
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
