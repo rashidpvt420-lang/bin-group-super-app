@@ -31,8 +31,20 @@ test('diagnosis uploads masked logs but posts only normalized redacted lines', (
   assert.match(workflow, /<redacted-email>/);
   assert.match(workflow, /<redacted-id>/);
   assert.match(workflow, /<redacted-provider-id>/);
+  assert.match(workflow, /<redacted-secret>/);
   assert.match(workflow, /normalizedErrorLines/);
   assert.match(workflow, /actions\/upload-artifact@v7/);
   assert.match(workflow, /hardLaunchClaim:\s*false/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+});
+
+test('diagnosis captures Playwright suite, test and assertion context', () => {
+  assert.match(workflow, /\\\[critical-evidence\\\]/);
+  assert.match(workflow, /business-\(\?:admin\|owner\|tenant\|technician\|broker\|global\)/);
+  assert.match(workflow, /tests\\\/e2e\\\/\[\^\\s\]\+\\\.spec\\\.ts/);
+  assert.match(workflow, /strict mode violation/);
+  assert.match(workflow, /failedSuiteSignals/);
+  assert.match(workflow, /Failed suite signals/);
+  assert.match(workflow, /for \(let offset = -2; offset <= 2; offset \+= 1\)/);
+  assert.match(workflow, /slice\(-80\)/);
 });

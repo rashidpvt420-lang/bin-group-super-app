@@ -87,26 +87,42 @@ jobs:
 
           const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
             .replace(/\u001b\[[0-9;]*m/g, '');
-          const selected = raw.split(/\r?\n/)
-            .filter((line) =>
-              /##\[error\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|MFA_REQUIRED/i.test(line),
-            )
-            .map((line) => line
-              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<redacted-email>')
-              .replace(/\b[A-Za-z0-9_-]{28}\b/g, '<redacted-id>')
-              .replace(/\b(?:sk|rk|pk|whsec|cs_live|evt)_[A-Za-z0-9_]+\b/g, '<redacted-provider-id>')
-              .slice(0, 500),
-            )
+          const lines = raw.split(/\r?\n/);
+          const signal = /##\[error\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|\[critical-evidence\]|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|playwright|error:|timeout|expect\(|locator|strict mode violation|unexpected|skipped=|failed=/i;
+          const selectedIndexes = new Set();
+          for (let index = 0; index < lines.length; index += 1) {
+            if (!signal.test(lines[index])) continue;
+            for (let offset = -2; offset <= 2; offset += 1) {
+              const candidate = index + offset;
+              if (candidate >= 0 && candidate < lines.length) selectedIndexes.add(candidate);
+            }
+          }
+
+          const redact = (line) => line
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<redacted-email>')
+            .replace(/\b[A-Za-z0-9_-]{28}\b/g, '<redacted-id>')
+            .replace(/\b(?:sk|rk|pk|whsec|cs_live|evt)_[A-Za-z0-9_]+\b/g, '<redacted-provider-id>')
+            .replace(/(password|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=<redacted-secret>')
+            .slice(0, 700);
+
+          const selected = [...selectedIndexes]
+            .sort((a, b) => a - b)
+            .map((index) => redact(lines[index]))
             .filter((line, index, all) => line && all.indexOf(line) === index)
-            .slice(-20);
+            .slice(-80);
+
+          const failedSuiteSignals = selected
+            .filter((line) => /\[critical-evidence\].*(?:failed|not recorded)|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|\d+ failed/i.test(line))
+            .slice(-30);
 
           const report = {
-            schemaVersion: 1,
+            schemaVersion: 2,
             status: 'FAILED',
             sourceWorkflow: 'Firebase Production Deploy',
             sourceRunId: process.env.SOURCE_RUN_ID,
             sourceRunSha: process.env.SOURCE_RUN_SHA,
             normalizedErrorLines: selected,
+            failedSuiteSignals,
             githubSecretMaskingApplied: true,
             personalIdentifiersRedacted: true,
             hardLaunchClaim: false,
@@ -134,6 +150,20 @@ jobs:
         run: |
           set -euo pipefail
           errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the GitHub-masked artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+          suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the masked artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
           artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
-          body="## Latest Firebase production failure diagnosis\n\n- Exact source SHA: \`$SOURCE_RUN_SHA\`\n- Source run: $SOURCE_RUN_URL\n- Diagnostic artifact: \`$artifact\`\n- Hard-launch claim: \`false\`\n\n### Normalized failure lines\n$errors\n\nThe deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
+          body="## Latest Firebase production failure diagnosis
+
+- Exact source SHA: \`$SOURCE_RUN_SHA\`
+- Source run: $SOURCE_RUN_URL
+- Diagnostic artifact: \`$artifact\`
+- Hard-launch claim: \`false\`
+
+### Failed suite signals
+$suites
+
+### Normalized failure context
+$errors
+
+The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
