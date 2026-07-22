@@ -47,7 +47,9 @@ jobs:
             exit 1
           }
 
-          runs_json='[]'
+          failures_jsonl="$(mktemp)"
+          trap 'rm -f "$failures_jsonl"' EXIT
+          : > "$failures_jsonl"
           page=1
           max_pages=$max_pagination_pages
           while (( page <= max_pages )); do
@@ -63,19 +65,20 @@ jobs:
               exit 1
             }
             if (( page == 1 )); then
+              # ceil(total_count / 100) with an explicit cap to keep diagnosis bounded.
               required_pages=$(( (total_count + 99) / 100 ))
               if (( required_pages > 0 && required_pages < max_pages )); then
                 max_pages=$required_pages
               fi
             fi
-            runs_json="$(jq -c --argjson acc "$runs_json" '[($acc[]), (.workflow_runs[])]' <<<"$runs_page")"
-            if (( page_count < 100 || page_count == 0 )); then
+            jq -c --arg workflow_name "$workflow_name" --arg workflow_path "$workflow_path" '.workflow_runs[] | select(.conclusion == "failure" and .path == $workflow_path and (.name // "") == $workflow_name)' <<<"$runs_page" >> "$failures_jsonl"
+            if (( page_count < 100 )); then
               break
             fi
             page=$((page + 1))
           done
 
-          failures="$(jq -c --arg workflow_name "$workflow_name" --arg workflow_path "$workflow_path" '[.[] | select(.conclusion == "failure") | select(.path == $workflow_path) | select((.name // "") == $workflow_name)]' <<<"$runs_json")"
+          failures="$(jq -cs '.' "$failures_jsonl")"
           sha_matched_run="$(jq -c --arg main_sha "$main_sha" '[.[] | select(.head_sha == $main_sha)] | sort_by(.created_at) | last // empty' <<<"$failures")"
           if [[ -n "$sha_matched_run" ]]; then
             run="$sha_matched_run"

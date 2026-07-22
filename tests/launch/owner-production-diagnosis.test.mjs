@@ -27,9 +27,9 @@ test('diagnosis prioritizes current main SHA and paginates completed failed depl
   assert.match(workflow, /required_pages=\$\(\( \(total_count \+ 99\) \/ 100 \)\)/);
   assert.match(workflow, /workflow_name='Firebase Production Deploy'/);
   assert.match(workflow, /workflow_path='.github\/workflows\/firebase-production-deploy\.yml'/);
-  assert.match(workflow, /select\(\.conclusion == "failure"\)/);
-  assert.match(workflow, /select\(\.path == \$workflow_path\)/);
-  assert.match(workflow, /select\(\(.name \/\/ ""\) == \$workflow_name\)/);
+  assert.match(workflow, /select\(\.conclusion == "failure" and \.path == \$workflow_path and \(\.name \/\/ ""\) == \$workflow_name\)/);
+  assert.match(workflow, /jq -cs '\.' "\$failures_jsonl"/);
+  assert.match(workflow, /trap 'rm -f "\$failures_jsonl"' EXIT/);
   assert.match(workflow, /select\(\.head_sha == \$main_sha\)/);
   assert.match(workflow, /sha_matched_run/);
   assert.match(workflow, /if \[\[ -n "\$sha_matched_run" \]\]/);
