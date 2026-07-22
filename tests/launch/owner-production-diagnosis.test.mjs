@@ -17,11 +17,32 @@ test('manual production diagnosis is owner-only and canonical-issue-only', () =>
   assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
 });
 
-test('diagnosis accepts only a recent failed protected production run', () => {
-  assert.match(workflow, /firebase-production-deploy\.yml\/runs\?event=workflow_dispatch&branch=main&status=completed/);
-  assert.match(workflow, /select\(\.conclusion == "failure"\)/);
-  assert.match(workflow, /age_seconds > 86400/);
-  assert.match(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
+test('diagnosis prioritizes current main SHA and paginates completed failed deploy runs', () => {
+  assert.match(workflow, /repos\/\$REPOSITORY\/git\/ref\/heads\/main/);
+  assert.match(workflow, /while \(\( page <= max_pages \)\)/);
+  assert.match(workflow, /max_pagination_pages=10/);
+  assert.match(workflow, /stale_threshold_seconds=86400/);
+  assert.match(workflow, /per_page=100&page=\$page/);
+  assert.match(workflow, /total_count/);
+  assert.match(workflow, /required_pages=\$\(\( \(total_count \+ 99\) \/ 100 \)\)/);
+  assert.match(workflow, /workflow_name='Firebase Production Deploy'/);
+  assert.match(workflow, /workflow_path='.github\/workflows\/firebase-production-deploy\.yml'/);
+  assert.match(workflow, /select\(\.conclusion == "failure" and \.path == \$workflow_path and \(\.name \/\/ ""\) == \$workflow_name\)/);
+  assert.match(workflow, /jq -cs '\.' "\$failures_jsonl"/);
+  assert.match(workflow, /trap 'rm -f "\$failures_jsonl"' EXIT/);
+  assert.match(workflow, /select\(\.head_sha == \$main_sha\)/);
+  assert.match(workflow, /sha_matched_run/);
+  assert.match(workflow, /if \[\[ -n "\$sha_matched_run" \]\]/);
+  assert.match(workflow, /run_url" == "https:\/\/github\.com\/\$REPOSITORY\/actions\/runs\/\$run_id"/);
+  assert.match(workflow, /Unable to resolve the current main branch SHA/);
+  assert.match(workflow, /No completed failed Firebase Production Deploy run was found/);
+  assert.match(workflow, /sourceRunMatchesResolvedMainSha/);
+  assert.match(workflow, /sourceRunStaleFailureEvidence/);
+  assert.match(workflow, /resolvedMainSha/);
+  assert.match(workflow, /Missing .* diagnostic metadata/);
+  assert.match(workflow, /Malformed .* diagnostic metadata:/);
+  assert.match(workflow, /Source run is stale failure:/);
+  assert.doesNotMatch(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
 });
 
 test('diagnosis uploads masked logs but posts only normalized redacted lines', () => {

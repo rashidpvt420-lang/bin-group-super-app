@@ -36,8 +36,65 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=50")"
-          run="$(jq -c '[.workflow_runs[] | select(.conclusion == "failure")] | sort_by(.created_at) | last // empty' <<<"$runs")"
+          workflow_name='Firebase Production Deploy'
+          workflow_path='.github/workflows/firebase-production-deploy.yml'
+          max_pagination_pages=10
+          stale_threshold_seconds=86400
+
+          main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::Unable to resolve the current main branch SHA.'
+            exit 1
+          }
+
+          failures_jsonl="$(mktemp)"
+          trap 'rm -f "$failures_jsonl"' EXIT
+          : > "$failures_jsonl"
+          page=1
+          max_pages=$max_pagination_pages
+          while (( page <= max_pages )); do
+            runs_page="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100&page=$page")"
+            page_count="$(jq -r '.workflow_runs | length' <<<"$runs_page")"
+            total_count="$(jq -r '.total_count' <<<"$runs_page")"
+            [[ "$page_count" =~ ^[0-9]+$ ]] || {
+              echo '::error::Invalid workflow runs payload when paginating completed runs.'
+              exit 1
+            }
+            [[ "$total_count" =~ ^[0-9]+$ ]] || {
+              echo '::error::Invalid workflow runs payload total_count.'
+              exit 1
+            }
+            if (( page == 1 )); then
+              # ceil(total_count / 100) with an explicit cap to keep diagnosis bounded.
+              required_pages=$(( (total_count + 99) / 100 ))
+              if (( required_pages == 0 )); then
+                required_pages=1
+              fi
+              if (( required_pages < max_pages )); then
+                max_pages=$required_pages
+              fi
+            fi
+            # Guard against unrelated runs by requiring both canonical workflow path and display name.
+            jq -c \
+              --arg workflow_name "$workflow_name" \
+              --arg workflow_path "$workflow_path" \
+              '.workflow_runs[] | select(.conclusion == "failure" and .path == $workflow_path and (.name // "") == $workflow_name)' \
+              <<<"$runs_page" >> "$failures_jsonl"
+            if (( page_count < 100 )); then
+              break
+            fi
+            page=$((page + 1))
+          done
+
+          failures="$(jq -cs '.' "$failures_jsonl")"
+          sha_matched_run="$(jq -c --arg main_sha "$main_sha" '[.[] | select(.head_sha == $main_sha)] | sort_by(.created_at) | last // empty' <<<"$failures")"
+          if [[ -n "$sha_matched_run" ]]; then
+            run="$sha_matched_run"
+            matches_main_sha=true
+          else
+            run="$(jq -c 'sort_by(.created_at) | last // empty' <<<"$failures")"
+            matches_main_sha=false
+          fi
           [[ -n "$run" ]] || {
             echo '::error::No completed failed Firebase Production Deploy run was found.'
             exit 1
@@ -49,23 +106,41 @@ jobs:
           created_at="$(jq -r '.created_at' <<<"$run")"
           [[ "$run_id" =~ ^[0-9]+$ ]]
           [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$run_url" == "https://github.com/$REPOSITORY/actions/runs/$run_id" ]] || {
+            echo '::error::The selected failed production run has an unexpected URL.'
+            exit 1
+          }
 
           created_epoch="$(date -d "$created_at" +%s)"
           now_epoch="$(date -u +%s)"
           age_seconds=$((now_epoch - created_epoch))
-          if (( age_seconds < 0 || age_seconds > 86400 )); then
-            echo '::error::The latest failed production run is outside the 24-hour diagnostic window.'
+          if (( age_seconds < 0 )); then
+            echo '::error::The selected failed production run has an invalid timestamp.'
             exit 1
           fi
 
+          if (( age_seconds > stale_threshold_seconds )); then
+            stale_failure=true
+          else
+            stale_failure=false
+          fi
+
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_sha=$run_sha" >> "$GITHUB_OUTPUT"
           echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          echo "run_age_seconds=$age_seconds" >> "$GITHUB_OUTPUT"
+          echo "run_matches_main_sha=$matches_main_sha" >> "$GITHUB_OUTPUT"
+          echo "run_is_stale=$stale_failure" >> "$GITHUB_OUTPUT"
 
       - name: Collect GitHub-masked failed-job logs
         env:
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
           SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
+          SOURCE_RUN_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
+          SOURCE_RUN_AGE_SECONDS: ${{ steps.source.outputs.run_age_seconds }}
+          SOURCE_RUN_MATCHES_MAIN_SHA: ${{ steps.source.outputs.run_matches_main_sha }}
+          SOURCE_RUN_IS_STALE: ${{ steps.source.outputs.run_is_stale }}
         shell: bash
         run: |
           set -euo pipefail
@@ -84,6 +159,24 @@ jobs:
 
           SOURCE_RUN_ID="$SOURCE_RUN_ID" SOURCE_RUN_SHA="$SOURCE_RUN_SHA" node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
+
+          const requireEnv = (name, pattern) => {
+            const value = String(process.env[name] || '').trim();
+            if (!value) {
+              throw new Error(`Missing ${name} diagnostic metadata.`);
+            }
+            if (pattern && !pattern.test(value)) {
+              throw new Error(`Malformed ${name} diagnostic metadata: expected ${pattern}.`);
+            }
+            return value;
+          };
+
+          const sourceRunId = requireEnv('SOURCE_RUN_ID', /^[0-9]+$/);
+          const sourceRunSha = requireEnv('SOURCE_RUN_SHA', /^[0-9a-f]{40}$/);
+          const resolvedMainSha = requireEnv('SOURCE_RUN_MAIN_SHA', /^[0-9a-f]{40}$/);
+          const sourceRunAgeSeconds = requireEnv('SOURCE_RUN_AGE_SECONDS', /^[0-9]+$/);
+          const sourceRunMatchesMainSha = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
+          const sourceRunIsStale = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
 
           const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
             .replace(/\u001b\[[0-9;]*m/g, '');
@@ -119,8 +212,12 @@ jobs:
             schemaVersion: 2,
             status: 'FAILED',
             sourceWorkflow: 'Firebase Production Deploy',
-            sourceRunId: process.env.SOURCE_RUN_ID,
-            sourceRunSha: process.env.SOURCE_RUN_SHA,
+            sourceRunId,
+            sourceRunSha,
+            resolvedMainSha,
+            sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSeconds, 10),
+            sourceRunMatchesResolvedMainSha: sourceRunMatchesMainSha === 'true',
+            sourceRunStaleFailureEvidence: sourceRunIsStale === 'true',
             normalizedErrorLines: selected,
             failedSuiteSignals,
             githubSecretMaskingApplied: true,
@@ -143,9 +240,13 @@ jobs:
 
       - name: Post normalized diagnosis to canonical pilot issue
         env:
+          RESOLVED_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
           SOURCE_RUN_SHA: ${{ steps.source.outputs.run_sha }}
           SOURCE_RUN_URL: ${{ steps.source.outputs.run_url }}
+          SOURCE_RUN_AGE_SECONDS: ${{ steps.source.outputs.run_age_seconds }}
+          SOURCE_RUN_MATCHES_MAIN_SHA: ${{ steps.source.outputs.run_matches_main_sha }}
+          SOURCE_RUN_IS_STALE: ${{ steps.source.outputs.run_is_stale }}
         shell: bash
         run: |
           set -euo pipefail
@@ -154,8 +255,12 @@ jobs:
           artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
           body="## Latest Firebase production failure diagnosis
 
+- Resolved origin/main SHA: \`$RESOLVED_MAIN_SHA\`
 - Exact source SHA: \`$SOURCE_RUN_SHA\`
 - Source run: $SOURCE_RUN_URL
+- Source run matches resolved main SHA: \`$SOURCE_RUN_MATCHES_MAIN_SHA\`
+- Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
+- Source run is stale failure: \`$SOURCE_RUN_IS_STALE\`
 - Diagnostic artifact: \`$artifact\`
 - Hard-launch claim: \`false\`
 
