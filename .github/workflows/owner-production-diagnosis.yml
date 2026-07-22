@@ -31,15 +31,28 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Resolve latest failed protected deployment
+      - name: Resolve current main and latest failed protected deployment
         id: source
         shell: bash
         run: |
           set -euo pipefail
-          runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=50")"
-          run="$(jq -c '[.workflow_runs[] | select(.conclusion == "failure")] | sort_by(.created_at) | last // empty' <<<"$runs")"
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          current_main_again="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$current_main_again" ]]
+          runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100")"
+          run="$(jq -c --arg current "$current_main" '
+            [
+              .workflow_runs[]
+              | select(.conclusion == "failure" and .head_sha and .head_sha != "" and .event == "workflow_dispatch")
+            ]
+            | (if any(.head_sha == $current) then map(select(.head_sha == $current)) else . end)
+            | sort_by(.created_at)
+            | last // empty
+          ' <<<"$runs")"
           [[ -n "$run" ]] || {
-            echo '::error::No completed failed Firebase Production Deploy run was found.'
+            echo '::error::No completed failed Firebase Production Deploy run was found for the current main SHA or latest release candidate.'
             exit 1
           }
 
@@ -58,6 +71,7 @@ jobs:
             exit 1
           fi
 
+          echo "current_main=$current_main" >> "$GITHUB_OUTPUT"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_sha=$run_sha" >> "$GITHUB_OUTPUT"
           echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
