@@ -21,7 +21,9 @@ jobs:
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.author_association == 'OWNER'
+      github.event.comment.author_association == 'OWNER' &&
+      (github.event.comment.body == '/bin-launch prepare-bank-pilot' ||
+       github.event.comment.body == '/bin-launch bank-pilot-after-mfa')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
