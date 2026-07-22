@@ -13,10 +13,20 @@ test('owner launch command is issue-bound, owner-only and exact-command only', (
   assert.match(commandWorkflow, /github\.event\.issue\.number == 434/);
   assert.match(commandWorkflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
   assert.match(commandWorkflow, /github\.event\.comment\.author_association == 'OWNER'/);
+  assert.match(commandWorkflow, /github\.event\.comment\.body == '\/bin-launch prepare-bank-pilot'/);
+  assert.match(commandWorkflow, /github\.event\.comment\.body == '\/bin-launch bank-pilot-after-mfa'/);
   assert.match(commandWorkflow, /'\/bin-launch prepare-bank-pilot'/);
   assert.match(commandWorkflow, /'\/bin-launch bank-pilot-after-mfa'/);
+  assert.doesNotMatch(commandWorkflow, /github\.event\.comment\.body == '\/bin-launch diagnose-latest-deploy'/);
   assert.doesNotMatch(commandWorkflow, /\$\{\{\s*secrets\./);
   assert.doesNotMatch(commandWorkflow, /continue-on-error:\s*true/);
+});
+
+test('owner launch command ignores non-launch issue comments before any privileged dispatch', () => {
+  const jobIf = commandWorkflow.match(/if: >-\n(?<condition>(?:\s+.*\n)+?)\s+runs-on:/)?.groups?.condition || '';
+  assert.match(jobIf, /github\.event\.comment\.body == '\/bin-launch prepare-bank-pilot'/);
+  assert.match(jobIf, /github\.event\.comment\.body == '\/bin-launch bank-pilot-after-mfa'/);
+  assert.doesNotMatch(jobIf, /diagnose-latest-deploy/);
 });
 
 test('owner launch command uses both current-main START HERE wrappers', () => {
