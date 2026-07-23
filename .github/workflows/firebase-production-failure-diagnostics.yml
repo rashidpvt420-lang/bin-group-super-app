@@ -33,53 +33,140 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Collect failed jobs and GitHub-masked logs
+      - name: Validate exact source metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || {
+            echo '::error::Malformed Firebase Production Deploy run ID.'
+            exit 1
+          }
+          [[ "$SOURCE_RUN_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::Malformed Firebase Production Deploy source SHA.'
+            exit 1
+          }
+
+      - name: Checkout exact failed source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Collect and sanitize GitHub-masked failed-job logs
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p launch_package
-          : > launch_package/firebase-production-failure.log
+          raw_log="$(mktemp)"
+          trap 'rm -f "$raw_log"' EXIT
 
-          jobs_json="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100")"
-          jq '{
-            schemaVersion: 1,
-            status: "FAILED",
-            sourceWorkflow: "Firebase Production Deploy",
-            sourceRunId: env.SOURCE_RUN_ID,
-            sourceRunSha: env.SOURCE_RUN_SHA,
-            repository: env.REPOSITORY,
-            collectedAt: (now | todateiso8601),
-            failedJobs: [
-              .jobs[]
-              | select(.conclusion == "failure")
-              | {
-                  id,
-                  name,
-                  status,
-                  conclusion,
-                  failedSteps: [
-                    .steps[]?
-                    | select(.conclusion == "failure")
-                    | {number, name, status, conclusion}
-                  ]
-                }
-            ],
-            githubSecretMaskingApplied: true,
-            secretValuesIntentionallyCollected: false,
-            hardLaunchClaim: false
-          }' <<<"$jobs_json" > launch_package/firebase-production-failure.json
+          jobs_json="$(
+            gh api --paginate --slurp \
+              "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100" |
+              jq -ce '{jobs: [.[].jobs[]]}'
+          )"
+          jq -e '.jobs | any(.conclusion == "failure")' <<<"$jobs_json" >/dev/null || {
+            echo '::error::Selected Firebase Production Deploy run contains no failed job.'
+            exit 1
+          }
 
-          mapfile -t failed_job_ids < <(jq -r '.jobs[] | select(.conclusion == "failure") | .id' <<<"$jobs_json")
+          mapfile -t failed_job_ids < <(
+            jq -r '.jobs[] | select(.conclusion == "failure") | .id' <<<"$jobs_json"
+          )
           for job_id in "${failed_job_ids[@]}"; do
-            [[ "$job_id" =~ ^[0-9]+$ ]]
-            printf '\n===== FAILED JOB %s =====\n' "$job_id" >> launch_package/firebase-production-failure.log
-            gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> launch_package/firebase-production-failure.log
+            [[ "$job_id" =~ ^[1-9][0-9]*$ ]]
+            printf '\n===== FAILED JOB %s =====\n' "$job_id" >> "$raw_log"
+            gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> "$raw_log"
           done
+          test -s "$raw_log"
 
-          jq -e '.failedJobs | length > 0' launch_package/firebase-production-failure.json >/dev/null
+          node scripts/sanitize-production-diagnostic-log.mjs \
+            "$raw_log" \
+            launch_package/firebase-production-failure.log
           test -s launch_package/firebase-production-failure.log
 
-      - name: Upload production failure evidence
+          JOBS_JSON="$jobs_json" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const runId = String(process.env.SOURCE_RUN_ID || '').trim();
+          const runSha = String(process.env.SOURCE_RUN_SHA || '').trim();
+          const repository = String(process.env.REPOSITORY || '').trim();
+          if (!/^[1-9][0-9]*$/.test(runId)) throw new Error('Malformed SOURCE_RUN_ID.');
+          if (!/^[0-9a-f]{40}$/.test(runSha)) throw new Error('Malformed SOURCE_RUN_SHA.');
+          if (!repository.includes('/')) throw new Error('Malformed REPOSITORY.');
+
+          const jobs = JSON.parse(process.env.JOBS_JSON || '{"jobs":[]}');
+          const sanitizedLog = readFileSync('launch_package/firebase-production-failure.log', 'utf8');
+          const lines = sanitizedLog.split(/\r?\n/);
+          const signal = /##\[error\]|\[production-deploy\]|\[deploy-verify\]|FirebaseError|deployment (?:failed|stopped|blocked)|deploy failed|functions:|hosting:|firestore:|storage:|error:|timeout|unexpected|permission|quota|operation|failed after 3 attempts/i;
+          const selectedIndexes = new Set();
+          for (let index = 0; index < lines.length; index += 1) {
+            if (!signal.test(lines[index])) continue;
+            for (let offset = -3; offset <= 3; offset += 1) {
+              const candidate = index + offset;
+              if (candidate >= 0 && candidate < lines.length) selectedIndexes.add(candidate);
+            }
+          }
+          const normalizedErrorLines = [...selectedIndexes]
+            .sort((left, right) => left - right)
+            .map((index) => lines[index].slice(0, 900))
+            .filter((line, index, all) => line && all.indexOf(line) === index)
+            .slice(-120);
+
+          const failedJobs = jobs.jobs
+            .filter((job) => job?.conclusion === 'failure')
+            .map((job) => ({
+              id: String(job.id || ''),
+              name: String(job.name || ''),
+              status: String(job.status || ''),
+              conclusion: String(job.conclusion || ''),
+              failedSteps: (job.steps || [])
+                .filter((step) => step?.conclusion === 'failure')
+                .map((step) => ({
+                  number: Number(step.number || 0),
+                  name: String(step.name || ''),
+                  status: String(step.status || ''),
+                  conclusion: String(step.conclusion || ''),
+                })),
+            }));
+
+          const report = {
+            schemaVersion: 2,
+            status: 'FAILED',
+            sourceWorkflow: 'Firebase Production Deploy',
+            sourceRunId: runId,
+            sourceRunSha: runSha,
+            repository,
+            collectedAt: new Date().toISOString(),
+            failedJobs,
+            normalizedErrorLines,
+            githubSecretMaskingApplied: true,
+            personalIdentifiersRedacted: true,
+            fullArtifactLogRedacted: true,
+            rawJobLogUploaded: false,
+            secretValuesIntentionallyCollected: false,
+            hardLaunchClaim: false,
+          };
+          writeFileSync(
+            'launch_package/firebase-production-failure.json',
+            `${JSON.stringify(report, null, 2)}\n`,
+          );
+          NODE
+
+          jq -e '
+            .schemaVersion == 2 and
+            .status == "FAILED" and
+            .sourceRunId == env.SOURCE_RUN_ID and
+            .sourceRunSha == env.SOURCE_RUN_SHA and
+            .failedJobs | length > 0
+          ' launch_package/firebase-production-failure.json >/dev/null
+
+      - name: Upload redacted production failure evidence
         uses: actions/upload-artifact@v7
         with:
           name: firebase-production-failure-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}
@@ -89,12 +176,26 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Record failure in canonical pilot issue
+      - name: Record sanitized failure in canonical pilot issue
         shell: bash
         run: |
           set -euo pipefail
           run_url="https://github.com/$REPOSITORY/actions/runs/$SOURCE_RUN_ID"
           artifact_name="firebase-production-failure-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
           failed_steps="$(jq -r '[.failedJobs[] | .failedSteps[]?.name] | unique | join(", ")' launch_package/firebase-production-failure.json)"
-          body="## Firebase production deployment failed\n\n- Exact SHA: \`$SOURCE_RUN_SHA\`\n- Source run: $run_url\n- Failed step(s): \`${failed_steps:-unknown}\`\n- Diagnostic artifact: \`$artifact_name\`\n- Public launch claim: \`false\`\n\nThe deployment remains fail-closed. Review the diagnostic artifact before another protected dispatch."
+          errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized terminal error was extracted; inspect the redacted artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+          body="## Firebase production deployment failed
+
+- Exact SHA: \`$SOURCE_RUN_SHA\`
+- Source run: $run_url
+- Failed step(s): \`${failed_steps:-unknown}\`
+- Diagnostic artifact: \`$artifact_name\`
+- Full artifact log redacted: \`true\`
+- Raw job log uploaded: \`false\`
+- Public launch claim: \`false\`
+
+### Normalized terminal errors
+$errors
+
+The deployment remains fail-closed. Fix only the identified software or operational requirement before another protected dispatch."
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
