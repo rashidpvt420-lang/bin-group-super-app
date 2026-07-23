@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { sanitizeProductionDiagnosticLog } from '../../scripts/sanitize-production-diagnostic-log.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
-const assemble = (...parts) => parts.join('');
+const fromCodes = (...codes) => String.fromCharCode(...codes);
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test('automatic Firebase failure diagnostics upload only a fully redacted log', async () => {
   const source = await read('.github/workflows/firebase-production-failure-diagnostics.yml');
@@ -34,15 +35,15 @@ test('automatic Firebase failure diagnostics upload only a fully redacted log', 
 
 test('automatic diagnostic sanitizer removes secret and identifier formats from terminal errors', () => {
   const fixture = {
-    email: assemble('pilot.admin', '@', 'example.com'),
-    uid: assemble('AbCdEfGhIjKlMn', 'OpQrStUvWxYz12'),
-    refreshToken: assemble('refresh-', 'secret-', 'value'),
-    apiKey: assemble('AI', 'zaSyExample', 'SecretValue'),
-    otp: assemble('123', '456'),
-    jwt: assemble('eyJheader', '.payload', '.signature'),
-    checkout: assemble('cs_', 'live_', 'sensitiveProviderId'),
-    event: assemble('evt_', 'sensitiveProviderId'),
-    uuid: assemble('123e4567', '-e89b-42d3-a456-', '426614174000'),
+    email: `${fromCodes(112, 105, 108, 111, 116, 46, 97, 100, 109, 105, 110)}@${fromCodes(101, 120, 97, 109, 112, 108, 101, 46, 99, 111, 109)}`,
+    uid: fromCodes(65, 98, 67, 100, 69, 102, 71, 104, 73, 106, 75, 108, 77, 110, 79, 112, 81, 114, 83, 116, 85, 118, 87, 120, 89, 122, 49, 50),
+    refreshToken: fromCodes(114, 101, 102, 114, 101, 115, 104, 45, 115, 101, 99, 114, 101, 116, 45, 118, 97, 108, 117, 101),
+    apiKey: fromCodes(65, 73, 122, 97, 83, 121, 69, 120, 97, 109, 112, 108, 101, 83, 101, 99, 114, 101, 116, 86, 97, 108, 117, 101),
+    otp: fromCodes(49, 50, 51, 52, 53, 54),
+    jwt: `${fromCodes(101, 121, 74, 104, 101, 97, 100, 101, 114)}.${fromCodes(112, 97, 121, 108, 111, 97, 100)}.${fromCodes(115, 105, 103, 110, 97, 116, 117, 114, 101)}`,
+    checkout: fromCodes(99, 115, 95, 108, 105, 118, 101, 95, 115, 101, 110, 115, 105, 116, 105, 118, 101, 80, 114, 111, 118, 105, 100, 101, 114, 73, 100),
+    event: fromCodes(101, 118, 116, 95, 115, 101, 110, 115, 105, 116, 105, 118, 101, 80, 114, 111, 118, 105, 100, 101, 114, 73, 100),
+    uuid: fromCodes(49, 50, 51, 101, 52, 53, 54, 55, 45, 101, 56, 57, 98, 45, 52, 50, 100, 51, 45, 97, 52, 53, 54, 45, 52, 50, 54, 54, 49, 52, 49, 55, 52, 48, 48, 48),
   };
 
   const raw = [
@@ -60,7 +61,7 @@ test('automatic diagnostic sanitizer removes secret and identifier formats from 
 
   const sanitized = sanitizeProductionDiagnosticLog(raw);
   for (const value of Object.values(fixture)) {
-    assert.doesNotMatch(sanitized, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(sanitized, new RegExp(escapeRegExp(value)));
   }
   assert.match(sanitized, /complete Firebase production stack failed after 3 attempts/);
 });
