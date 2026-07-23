@@ -84,7 +84,7 @@ test('Admin hosted verification cannot be satisfied by public-app runtime values
   assert.equal(admin.allRequiredMatched, false);
 });
 
-test('main hosted verification cannot be satisfied by Admin runtime values', () => {
+test('main app-specific verification cannot be satisfied by Admin runtime values', () => {
   const main = summarizeHostedClientBundle({
     texts: adminTexts(),
     assetCount: 2,
@@ -93,7 +93,9 @@ test('main hosted verification cannot be satisfied by Admin runtime values', () 
   });
   assert.equal(main.firebaseApiKeyMatched, false);
   assert.equal(main.firebaseAppIdMatched, false);
-  assert.equal(main.messagingSenderIdMatched, false);
+  // The Firebase project number is shared authority and is also encoded inside
+  // every web app ID, so substring scanning correctly observes it here.
+  assert.equal(main.messagingSenderIdMatched, true);
   assert.equal(main.appCheckSiteKeyMatched, false);
   assert.equal(main.allRequiredMatched, false);
 });
