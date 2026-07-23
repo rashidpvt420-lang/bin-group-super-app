@@ -58,10 +58,10 @@ test('diagnosis checks out exact current main and uses paginated deterministic r
 test('diagnosis uploads only sanitized evidence and captures deployment plus Playwright context', () => {
   assert.match(workflow, /raw_log="\$\(mktemp\)"/);
   assert.match(workflow, /sanitize-production-diagnostic-log\.mjs/);
-  assert.match(workflow, /\[production-deploy\]/);
-  assert.match(workflow, /\[deploy-verify\]/);
+  assert.match(workflow, /\\\[production-deploy\\\]/);
+  assert.match(workflow, /\\\[deploy-verify\\\]/);
   assert.match(workflow, /FirebaseError/);
-  assert.match(workflow, /\[critical-evidence\]/);
+  assert.match(workflow, /\\\[critical-evidence\\\]/);
   assert.match(workflow, /business-\(\?:admin\|owner\|tenant\|technician\|broker\|global\)/);
   assert.match(workflow, /tests\\\/e2e\\\/\[\^\\s\]\+\\\.spec\\\.ts/);
   assert.match(workflow, /fullArtifactLogRedacted:\s*true/);
