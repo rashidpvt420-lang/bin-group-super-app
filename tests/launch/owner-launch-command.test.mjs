@@ -72,8 +72,13 @@ test('owner launch command cannot request public launch or hard clearance', () =
 
 test('production failure diagnostics are failure-only and preserve fail-closed authority', () => {
   assert.match(diagnosticsWorkflow, /workflows:\s*\n\s*- Firebase Production Deploy/);
-  assert.match(diagnosticsWorkflow, /workflow_run\.conclusion == 'failure'/);
-  assert.match(diagnosticsWorkflow, /workflow_run\.head_branch == 'main'/);
+  assert.match(diagnosticsWorkflow, /if: github\.event\.workflow_run\.conclusion == 'failure'/);
+  assert.match(diagnosticsWorkflow, /Validate protected source run through GitHub API/);
+  assert.match(diagnosticsWorkflow, /\.event == "workflow_dispatch"/);
+  assert.match(diagnosticsWorkflow, /\.head_branch == "main"/);
+  assert.match(diagnosticsWorkflow, /\.head_sha == \$sha/);
+  assert.match(diagnosticsWorkflow, /\.repository\.full_name == \$repository/);
+  assert.match(diagnosticsWorkflow, /\.conclusion == "failure"/);
   assert.match(diagnosticsWorkflow, /actions:\s*read/);
   assert.match(diagnosticsWorkflow, /issues:\s*write/);
   assert.match(diagnosticsWorkflow, /githubSecretMaskingApplied:\s*true/);
