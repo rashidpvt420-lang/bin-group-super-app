@@ -12,9 +12,16 @@ const JWT = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
 const BEARER = /(authorization\s*[:=]\s*bearer\s+|bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 const COOKIE_HEADER = /((?:set-)?cookie\s*:)\s*[^\r\n]+/gi;
 const QUERY_SECRET = /([?&](?:token|access_token|id_token|refresh_token|api[_-]?key|key|debug_token|appcheck[_-]?token)=)[^&\s]+/gi;
-const NAMED_SECRET = /((?:password|passphrase|token|secret|api[_-]?key|appcheck(?:[_-]?debug)?[_-]?token|refresh[_-]?token|id[_-]?token)\s*[=:]\s*)[^\s,;]+/gi;
-const NAMED_IDENTIFIER = /((?:uid|user[_-]?id|account[_-]?id|firebase[_-]?uid)\s*[=:]\s*)[A-Za-z0-9_-]+/gi;
-const OTP = /((?:otp|one[- ]time(?: password| code)?|verification code|mfa code)\s*[=:]\s*)\d{4,10}/gi;
+const SECRET_KEY = String.raw`(?:password|passphrase|token|secret|api[_-]?key|appcheck(?:[_-]?debug)?[_-]?token|refresh[_-]?token|id[_-]?token)`;
+const IDENTIFIER_KEY = String.raw`(?:uid|user[_-]?id|account[_-]?id|firebase[_-]?uid)`;
+const OTP_KEY = String.raw`(?:otp|one[- ]time(?: password| code)?|verification code|mfa code)`;
+const JSON_VALUE = String.raw`(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,\s}\]]+)`;
+const JSON_SECRET = new RegExp(`((["']?)${SECRET_KEY}\\2\\s*:\\s*)${JSON_VALUE}`, 'gi');
+const JSON_IDENTIFIER = new RegExp(`((["']?)${IDENTIFIER_KEY}\\2\\s*:\\s*)${JSON_VALUE}`, 'gi');
+const JSON_OTP = new RegExp(`((["']?)${OTP_KEY}\\2\\s*:\\s*)${JSON_VALUE}`, 'gi');
+const NAMED_SECRET = new RegExp(`(${SECRET_KEY}\\s*[=:]\\s*)[^\\s,;]+`, 'gi');
+const NAMED_IDENTIFIER = new RegExp(`(${IDENTIFIER_KEY}\\s*[=:]\\s*)[A-Za-z0-9_-]+`, 'gi');
+const OTP = new RegExp(`(${OTP_KEY}\\s*[=:]\\s*)\\d{4,10}`, 'gi');
 
 export function sanitizeProductionDiagnosticLog(value) {
   return String(value ?? '')
@@ -23,6 +30,9 @@ export function sanitizeProductionDiagnosticLog(value) {
     .replace(BEARER, '$1<redacted-secret>')
     .replace(COOKIE_HEADER, '$1 <redacted-secret>')
     .replace(QUERY_SECRET, '$1<redacted-secret>')
+    .replace(JSON_SECRET, '$1"<redacted-secret>"')
+    .replace(JSON_IDENTIFIER, '$1"<redacted-id>"')
+    .replace(JSON_OTP, '$1"<redacted-secret>"')
     .replace(NAMED_SECRET, '$1<redacted-secret>')
     .replace(NAMED_IDENTIFIER, '$1<redacted-id>')
     .replace(OTP, '$1<redacted-secret>')
