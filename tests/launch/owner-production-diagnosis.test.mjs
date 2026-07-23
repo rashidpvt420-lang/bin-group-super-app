@@ -29,15 +29,20 @@ function run({
 const select = (runs, mainSha = MAIN_SHA) =>
   selectProductionDiagnosisRun(mainSha, runs, { now: NOW });
 
-test('diagnosis starts only for the canonical command and validates exact repository-owner authority in the first step', () => {
+test('diagnosis starts for the canonical command and validates owner plus issue context in the first step', () => {
   assert.match(workflow, /issue_comment:\s*\n\s*types:\s*\[created\]/);
   assert.match(workflow, /github\.event\.issue\.number == 434/);
   assert.match(workflow, /github\.event\.comment\.body == '\/bin-launch diagnose-latest-deploy'/);
-  assert.match(workflow, /name: Validate owner command authority/);
+  const jobIf = workflow.match(/if: >-\n(?<condition>(?:\s+.*\n)+?)\s+runs-on:/)?.groups?.condition || '';
+  assert.doesNotMatch(jobIf, /issue\.pull_request/);
+  assert.match(workflow, /name: Validate owner command and canonical issue context/);
   assert.match(workflow, /COMMENT_ACTOR: \$\{\{ github\.event\.comment\.user\.login \}\}/);
   assert.match(workflow, /REPOSITORY_OWNER: \$\{\{ github\.repository_owner \}\}/);
   assert.match(workflow, /\[\[ "\$COMMENT_ACTOR" == "\$REPOSITORY_OWNER" \]\]/);
   assert.match(workflow, /Only the repository owner may run production diagnosis/);
+  assert.match(workflow, /repos\/\$REPOSITORY\/issues\/\$ISSUE_NUMBER/);
+  assert.match(workflow, /has\("pull_request"\) \| not/);
+  assert.match(workflow, /authorized only on canonical issue/);
   assert.doesNotMatch(workflow, /actions:\s*write/);
   assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
 });
