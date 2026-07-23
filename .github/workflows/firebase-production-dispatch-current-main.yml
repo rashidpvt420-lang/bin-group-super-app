@@ -180,7 +180,6 @@ jobs:
                 echo "::error::The latest failed Firebase Production Deploy run has no usable timestamp."
                 exit 1
               }
-
               failed_epoch="$(date -d "$resolved_failed_at" +%s 2>/dev/null || true)"
               [[ -n "$failed_epoch" ]] || {
                 echo "::error::The latest failed deployment timestamp is not valid ISO-8601."
@@ -226,31 +225,24 @@ jobs:
               exit 1
             fi
             sleep 3
-            stable_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-            if [[ "$main_before" != "$stable_sha" ]]; then
-              echo "main advanced during stability check; retrying ($attempt/5)."
-              continue
+            main_after="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            if [[ "$main_before" == "$main_after" ]]; then
+              main_sha="$main_after"
+              break
             fi
-            if [[ -n "$EXPECTED_COMMIT_SHA" && "$stable_sha" != "$EXPECTED_COMMIT_SHA" ]]; then
-              echo "::error::Stable current main $stable_sha does not match verified expected SHA $EXPECTED_COMMIT_SHA."
-              exit 1
-            fi
-            main_sha="$stable_sha"
-            break
+            echo "main advanced during stability check; retrying ($attempt/5)."
           done
 
           [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "::error::Unable to resolve a stable current main SHA after five checks."
+            echo "::error::Unable to resolve a stable current main SHA after five attempts."
             exit 1
           }
+          if [[ -n "$EXPECTED_COMMIT_SHA" && "$main_sha" != "$EXPECTED_COMMIT_SHA" ]]; then
+            echo "::error::Stable current main $main_sha does not match verified expected SHA $EXPECTED_COMMIT_SHA."
+            exit 1
+          fi
 
-          before_runs="$(
-            gh api --paginate --slurp \
-              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" |
-              jq -c '[.[].workflow_runs[]]'
-          )"
-          before_ids="$(jq -c '[.[].id | tostring]' <<<"$before_runs")"
-          jq -e 'type == "array"' <<<"$before_ids" >/dev/null
+          baseline_ids="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" --jq '.workflow_runs[].id')"
 
           jq -n \
             --arg ref main \
@@ -279,53 +271,42 @@ jobs:
             "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/dispatches" \
             --input dispatch.json
 
-          selected_run=''
+          run_id=''
+          run_sha=''
           for poll in $(seq 1 60); do
-            runs_json="$(
-              gh api --paginate --slurp \
-                "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" |
-                jq -c '[.[].workflow_runs[]]'
-            )"
-            selected_run="$(jq -c --argjson before "$before_ids" --arg sha "$main_sha" '
-              [
-                .[] as $run
-                | select(
-                    $run.event == "workflow_dispatch"
-                    and $run.head_branch == "main"
-                    and $run.head_sha == $sha
-                    and ($before | index(($run.id | tostring))) == null
-                  )
-              ]
-              | sort_by(.created_at, .id)
-              | first // empty
+            runs_json="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            selected="$(jq -c --arg sha "$main_sha" --arg baseline "$baseline_ids" '
+              ($baseline | split("\n") | map(select(length > 0) | tonumber)) as $old
+              | [.workflow_runs[]
+                  | select(.head_sha == $sha)
+                  | select((.id as $id | ($old | index($id))) == null)]
+              | sort_by(.created_at)
+              | last // empty
             ' <<<"$runs_json")"
-            if [[ -n "$selected_run" ]]; then
-              break
+            if [[ -n "$selected" ]]; then
+              run_id="$(jq -r '.id // empty' <<<"$selected")"
+              run_sha="$(jq -r '.head_sha // empty' <<<"$selected")"
+              [[ "$run_id" =~ ^[1-9][0-9]*$ && "$run_sha" =~ ^[0-9a-f]{40}$ ]] && break
             fi
             sleep 2
           done
 
-          if [[ -z "$selected_run" ]]; then
-            echo "::error::The protected dispatch request succeeded, but no new exact-SHA Firebase Production Deploy run appeared within 120 seconds. No second deployment was dispatched."
+          if [[ -z "$run_id" || -z "$run_sha" ]]; then
+            echo "::error::The protected deployment dispatch was accepted, but no new exact-SHA run was observable after 120 seconds. No duplicate dispatch was attempted."
             exit 1
           fi
 
-          run_id="$(jq -r '.id // empty' <<<"$selected_run")"
-          run_sha="$(jq -r '.head_sha // empty' <<<"$selected_run")"
-          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || {
-            echo "::error::The correlated production run has an invalid run ID."
-            exit 1
-          }
-          [[ "$run_sha" == "$main_sha" ]] || {
-            echo "::error::The correlated production run is not bound to the expected main SHA."
-            exit 1
-          }
-
-          main_after_dispatch="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          if [[ "$main_after_dispatch" != "$main_sha" ]]; then
-            echo "::error::main advanced from $main_sha to $main_after_dispatch after dispatch. Cancelling run $run_id."
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$current_main" != "$main_sha" ]]; then
+            echo "Dispatch race detected: main advanced from $main_sha to $current_main. Cancelling run $run_id."
             gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
             exit 1
           fi
+
+          [[ "$run_sha" == "$main_sha" ]] || {
+            echo "Dispatch race detected: expected $main_sha but GitHub resolved $run_sha. Cancelling run $run_id."
+            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
+            exit 1
+          }
 
           echo "Protected Firebase Production Deploy run $run_id is bound to exact SHA $main_sha."

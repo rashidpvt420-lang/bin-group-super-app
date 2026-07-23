@@ -3,35 +3,31 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const workflowPath = '.github/workflows/firebase-production-dispatch-current-main.yml';
 
-test('START HERE correlates the downstream run by baseline exclusion and exact SHA, not actor identity', async () => {
-  const source = await read('.github/workflows/firebase-production-dispatch-current-main.yml');
+test('START HERE resolves only a newly created downstream run on the exact SHA', async () => {
+  const source = await read(workflowPath);
 
-  assert.match(source, /before_ids=/);
-  assert.match(source, /\$before \| index\(\(\$run\.id \| tostring\)\)\) == null/);
-  assert.match(source, /\$run\.head_sha == \$sha/);
-  assert.match(source, /\$run\.event == "workflow_dispatch"/);
-  assert.match(source, /\$run\.head_branch == "main"/);
-  assert.doesNotMatch(source, /\.actor\.login == \$actor/);
-  assert.match(source, /main_after_dispatch/);
-  assert.match(source, /actions\/runs\/\$run_id\/cancel/);
+  assert.match(source, /baseline_ids=.*\.workflow_runs\[\]\.id/);
+  assert.match(source, /select\(\.head_sha == \$sha\)/);
+  assert.match(source, /select\(\(\.id as \$id \| \(\$old \| index\(\$id\)\)\) == null\)/);
+  assert.match(source, /--arg sha "\$main_sha"/);
+  assert.match(source, /run_sha.*==.*main_sha/);
+  assert.doesNotMatch(source, /\.actor\.login/);
 });
 
-test('START HERE cannot accept an unrelated recent or pre-existing workflow run', async () => {
-  const source = await read('.github/workflows/firebase-production-dispatch-current-main.yml');
-  const resolverSection = source.match(/selected_run=''[\s\S]*?if \[\[ -z "\$selected_run" \]\]/)?.[0] || '';
-
-  assert.match(resolverSection, /\$run\.head_sha == \$sha/);
-  assert.match(resolverSection, /\$run\.event == "workflow_dispatch"/);
-  assert.match(resolverSection, /\$run\.head_branch == "main"/);
-  assert.match(resolverSection, /\$before \| index\(\(\$run\.id \| tostring\)\)\) == null/);
-  assert.match(resolverSection, /sort_by\(\.created_at, \.id\)/);
-});
-
-test('START HERE does not redispatch when GitHub run discovery is delayed', async () => {
-  const source = await read('.github/workflows/firebase-production-dispatch-current-main.yml');
+test('START HERE dispatches once and never creates duplicates when run discovery is delayed', async () => {
+  const source = await read(workflowPath);
 
   assert.equal((source.match(/firebase-production-deploy\.yml\/dispatches/g) || []).length, 1);
-  assert.match(source, /no new exact-SHA Firebase Production Deploy run appeared within 120 seconds/i);
-  assert.match(source, /No second deployment was dispatched/);
+  assert.match(source, /for poll in \$\(seq 1 60\)/);
+  assert.match(source, /no new exact-SHA run was observable after 120 seconds/i);
+  assert.match(source, /No duplicate dispatch was attempted/);
+});
+
+test('START HERE cancels a resolved run when main advances after dispatch', async () => {
+  const source = await read(workflowPath);
+
+  assert.match(source, /current_main.*!=.*main_sha/);
+  assert.match(source, /actions\/runs\/\$run_id\/cancel/);
 });
