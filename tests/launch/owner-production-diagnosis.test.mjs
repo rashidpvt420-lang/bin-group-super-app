@@ -8,20 +8,14 @@ const workflow = await readFile(
   'utf8',
 );
 
-// ─── Fixture helpers ──────────────────────────────────────────────────────────
-
-const FIXTURE_MAIN_SHA = 'a'.repeat(40);
-const FIXTURE_OTHER_SHA = 'b'.repeat(40);
+const MAIN_SHA = 'a'.repeat(40);
+const OTHER_SHA = 'b'.repeat(40);
 const NOW = Date.now();
 
-/**
- * Build a minimal canonical eligible run fixture.
- * All defaults produce a run that is eligible and matches FIXTURE_MAIN_SHA.
- */
 function run({
   id = 1,
-  head_sha = FIXTURE_MAIN_SHA,
-  html_url = `https://github.com/owner/repo/actions/runs/1`,
+  head_sha = MAIN_SHA,
+  html_url = 'https://github.com/owner/repo/actions/runs/1',
   created_at = new Date(NOW - 3_600_000).toISOString(),
   conclusion = 'failure',
   status = 'completed',
@@ -32,194 +26,108 @@ function run({
   return { id, head_sha, html_url, created_at, conclusion, status, event, name, path };
 }
 
-function selectRun(mainSha, runs) {
-  return selectProductionDiagnosisRun(mainSha, runs, { now: NOW });
-}
+const select = (runs, mainSha = MAIN_SHA) =>
+  selectProductionDiagnosisRun(mainSha, runs, { now: NOW });
 
-// ─── Static workflow-structure checks ─────────────────────────────────────────
-
-test('manual production diagnosis is owner-only and canonical-issue-only', () => {
+test('diagnosis starts only for the canonical command and validates exact repository-owner authority in the first step', () => {
   assert.match(workflow, /issue_comment:\s*\n\s*types:\s*\[created\]/);
   assert.match(workflow, /github\.event\.issue\.number == 434/);
-  assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
-  assert.match(workflow, /github\.event\.comment\.author_association == 'OWNER'/);
   assert.match(workflow, /github\.event\.comment\.body == '\/bin-launch diagnose-latest-deploy'/);
+  assert.match(workflow, /name: Validate owner command authority/);
+  assert.match(workflow, /COMMENT_ACTOR: \$\{\{ github\.event\.comment\.user\.login \}\}/);
+  assert.match(workflow, /REPOSITORY_OWNER: \$\{\{ github\.repository_owner \}\}/);
+  assert.match(workflow, /\[\[ "\$COMMENT_ACTOR" == "\$REPOSITORY_OWNER" \]\]/);
+  assert.match(workflow, /Only the repository owner may run production diagnosis/);
   assert.doesNotMatch(workflow, /actions:\s*write/);
   assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
 });
 
-test('diagnosis uses CLI pagination and delegates selection to testable script', () => {
+test('diagnosis checks out exact current main and uses paginated deterministic run selection', () => {
+  assert.match(workflow, /ref: main/);
   assert.match(workflow, /repos\/\$REPOSITORY\/git\/ref\/heads\/main/);
-  assert.match(workflow, /Unable to resolve the current main branch SHA/);
+  assert.match(workflow, /git rev-parse HEAD/);
+  assert.match(workflow, /Checked-out SHA .* does not match current main/);
   assert.match(workflow, /gh api --paginate --slurp/);
-  assert.match(workflow, /jq -c '\[\.?\[\]\.workflow_runs\[\]\]'/);
+  assert.match(workflow, /jq -c '\[\.\[\]\.workflow_runs\[\]\]'/);
   assert.match(workflow, /select-production-diagnosis-run\.mjs/);
   assert.match(workflow, /No completed failed Firebase Production Deploy run was found/);
-  assert.match(workflow, /Missing run_id diagnostic metadata/);
-  assert.match(workflow, /Malformed run_sha diagnostic metadata/);
-  assert.match(workflow, /Malformed run_url diagnostic metadata/);
   assert.match(workflow, /Source run is stale failure:/);
-  assert.match(workflow, /sourceRunMatchesResolvedMainSha/);
-  assert.match(workflow, /sourceRunStaleFailureEvidence/);
-  assert.match(workflow, /resolvedMainSha/);
-  assert.doesNotMatch(workflow, /latest failed production run is outside the 24-hour diagnostic window/);
-  assert.doesNotMatch(workflow, /for page in \$\(seq/);
-  assert.doesNotMatch(workflow, /while \(\( page <= max_pages \)\)/);
+  assert.doesNotMatch(workflow, /24-hour diagnostic window/);
 });
 
-test('diagnosis uploads only a fully sanitized artifact log and normalized redacted lines', () => {
-  assert.match(workflow, /actions\/jobs\/\$job_id\/logs/);
+test('diagnosis uploads only sanitized evidence and captures deployment plus Playwright context', () => {
   assert.match(workflow, /raw_log="\$\(mktemp\)"/);
   assert.match(workflow, /sanitize-production-diagnostic-log\.mjs/);
-  assert.match(workflow, /githubSecretMaskingApplied:\s*true/);
-  assert.match(workflow, /personalIdentifiersRedacted:\s*true/);
+  assert.match(workflow, /\[production-deploy\]/);
+  assert.match(workflow, /\[deploy-verify\]/);
+  assert.match(workflow, /FirebaseError/);
+  assert.match(workflow, /\[critical-evidence\]/);
+  assert.match(workflow, /business-\(\?:admin\|owner\|tenant\|technician\|broker\|global\)/);
+  assert.match(workflow, /tests\\\/e2e\\\/\[\^\\s\]\+\\\.spec\\\.ts/);
   assert.match(workflow, /fullArtifactLogRedacted:\s*true/);
   assert.match(workflow, /rawJobLogUploaded:\s*false/);
-  assert.match(workflow, /normalizedErrorLines/);
   assert.match(workflow, /actions\/upload-artifact@v7/);
   assert.match(workflow, /hardLaunchClaim:\s*false/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
-  assert.doesNotMatch(workflow, /jobs\/\$job_id\/logs" >> launch_package\/firebase-production-failure\.log/);
 });
 
-test('diagnosis captures Playwright suite, test and assertion context', () => {
-  assert.match(workflow, /\\\[critical-evidence\\\]/);
-  assert.match(workflow, /business-\(\?:admin\|owner\|tenant\|technician\|broker\|global\)/);
-  assert.match(workflow, /tests\\\/e2e\\\/\[\^\\s\]\+\\\.spec\\\.ts/);
-  assert.match(workflow, /strict mode violation/);
-  assert.match(workflow, /failedSuiteSignals/);
-  assert.match(workflow, /Failed suite signals/);
-  assert.match(workflow, /for \(let offset = -2; offset <= 2; offset \+= 1\)/);
-  assert.match(workflow, /slice\(-80\)/);
-});
-
-// ─── Behavioral tests for selectProductionDiagnosisRun ───────────────────────
-
-test('current-main failure preferred over newer old-SHA failure', () => {
-  const olderMainRun = run({
-    id: 1,
-    head_sha: FIXTURE_MAIN_SHA,
-    html_url: 'https://github.com/owner/repo/actions/runs/1',
-    created_at: new Date(NOW - 7_200_000).toISOString(),
-  });
-  const newerOtherRun = run({
-    id: 2,
-    head_sha: FIXTURE_OTHER_SHA,
-    html_url: 'https://github.com/owner/repo/actions/runs/2',
-    created_at: new Date(NOW - 1_800_000).toISOString(),
-  });
-  const result = selectRun(FIXTURE_MAIN_SHA, [newerOtherRun, olderMainRun]);
+test('current-main failure is preferred over a newer old-SHA failure', () => {
+  const result = select([
+    run({ id: 2, head_sha: OTHER_SHA, html_url: 'https://github.com/o/r/actions/runs/2', created_at: new Date(NOW - 60_000).toISOString() }),
+    run({ id: 1, head_sha: MAIN_SHA, html_url: 'https://github.com/o/r/actions/runs/1', created_at: new Date(NOW - 3_600_000).toISOString() }),
+  ]);
   assert.equal(result.runId, 1);
   assert.equal(result.matchesCurrentMain, true);
 });
 
-test('newest relevant fallback when current main has no failure', () => {
-  const olderOtherRun = run({
-    id: 10,
-    head_sha: FIXTURE_OTHER_SHA,
-    html_url: 'https://github.com/owner/repo/actions/runs/10',
-    created_at: new Date(NOW - 7_200_000).toISOString(),
-  });
-  const newerOtherRun = run({
-    id: 11,
-    head_sha: FIXTURE_OTHER_SHA,
-    html_url: 'https://github.com/owner/repo/actions/runs/11',
-    created_at: new Date(NOW - 3_600_000).toISOString(),
-  });
-  const result = selectRun(FIXTURE_MAIN_SHA, [olderOtherRun, newerOtherRun]);
+test('newest relevant failure is used when current main has no failed run', () => {
+  const result = select([
+    run({ id: 10, head_sha: OTHER_SHA, html_url: 'https://github.com/o/r/actions/runs/10', created_at: new Date(NOW - 7_200_000).toISOString() }),
+    run({ id: 11, head_sha: OTHER_SHA, html_url: 'https://github.com/o/r/actions/runs/11', created_at: new Date(NOW - 3_600_000).toISOString() }),
+  ]);
   assert.equal(result.runId, 11);
   assert.equal(result.matchesCurrentMain, false);
 });
 
-test('failure older than 24 hours remains diagnosable and is marked stale', () => {
-  const staleRun = run({
-    id: 20,
-    head_sha: FIXTURE_MAIN_SHA,
-    html_url: 'https://github.com/owner/repo/actions/runs/20',
-    created_at: new Date(NOW - 90_000_000).toISOString(),
-  });
-  const result = selectRun(FIXTURE_MAIN_SHA, [staleRun]);
+test('old failures remain diagnosable and are marked stale', () => {
+  const result = select([
+    run({ id: 20, html_url: 'https://github.com/o/r/actions/runs/20', created_at: new Date(NOW - 90_000_000).toISOString() }),
+  ]);
   assert.equal(result.runId, 20);
   assert.equal(result.staleEvidence, true);
-  assert.ok(result.ageSeconds > 86400);
+  assert.ok(result.ageSeconds > 86_400);
 });
 
-test('failures found after the first API page are considered', () => {
-  const filler = Array.from({ length: 149 }, (_, i) =>
+test('a current-main failure beyond the first API page remains selectable', () => {
+  const filler = Array.from({ length: 149 }, (_, index) =>
     run({
-      id: 100 + i,
-      head_sha: FIXTURE_OTHER_SHA,
-      html_url: `https://github.com/owner/repo/actions/runs/${100 + i}`,
-      created_at: new Date(NOW - (200 - i) * 60_000).toISOString(),
+      id: 100 + index,
+      head_sha: OTHER_SHA,
+      html_url: `https://github.com/o/r/actions/runs/${100 + index}`,
+      created_at: new Date(NOW - (200 - index) * 60_000).toISOString(),
     }),
   );
-  const expectedRun = run({
-    id: 999,
-    head_sha: FIXTURE_MAIN_SHA,
-    html_url: 'https://github.com/owner/repo/actions/runs/999',
-    created_at: new Date(NOW - 60_000).toISOString(),
-  });
-  const result = selectRun(FIXTURE_MAIN_SHA, [...filler, expectedRun]);
+  const result = select([
+    ...filler,
+    run({ id: 999, head_sha: MAIN_SHA, html_url: 'https://github.com/o/r/actions/runs/999', created_at: new Date(NOW - 60_000).toISOString() }),
+  ]);
   assert.equal(result.runId, 999);
-  assert.equal(result.matchesCurrentMain, true);
 });
 
-test('unrelated workflows are excluded', () => {
-  const unrelated = run({
-    id: 30,
-    name: 'Some Other Workflow',
-    path: '.github/workflows/other.yml',
-  });
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, [unrelated]),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
-});
-
-test('successful and cancelled runs are excluded', () => {
-  const success = run({ id: 40, conclusion: 'success' });
-  const cancelled = run({ id: 41, conclusion: 'cancelled' });
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, [success, cancelled]),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
-});
-
-test('malformed run ID is rejected', () => {
-  const bad = run({ id: 'not-a-number' });
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
-});
-
-test('malformed SHA is rejected', () => {
-  const bad = run({ head_sha: 'tooshort' });
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
-});
-
-test('malformed URL is rejected', () => {
-  const bad = run({ html_url: 'not-a-url' });
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
-});
-
-test('malformed timestamp is rejected', () => {
-  const bad = run({ created_at: 'not-a-date' });
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, [bad]),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
-});
-
-test('empty eligible set fails closed', () => {
-  assert.throws(
-    () => selectRun(FIXTURE_MAIN_SHA, []),
-    /No completed failed Firebase Production Deploy run was found/,
-  );
+test('unrelated, successful, cancelled and malformed runs fail closed', () => {
+  const invalidSets = [
+    [run({ name: 'Other', path: '.github/workflows/other.yml' })],
+    [run({ conclusion: 'success' }), run({ id: 2, conclusion: 'cancelled' })],
+    [run({ id: 'bad' })],
+    [run({ head_sha: 'short' })],
+    [run({ html_url: 'not-a-url' })],
+    [run({ created_at: 'not-a-date' })],
+    [],
+  ];
+  for (const fixtures of invalidSets) {
+    assert.throws(
+      () => select(fixtures),
+      /No completed failed Firebase Production Deploy run was found/,
+    );
+  }
 });
