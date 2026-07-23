@@ -149,7 +149,15 @@ jobs:
           target_count="$(jq -r '.deletionTargetCount' "$report_path")"
           privileged_count="$(jq -r '.privilegedAccountCountBefore' "$report_path")"
 
-          body="## Privileged-account review\n\n- Exact SHA: \`$RELEASE_SHA\`\n- Review run: $run_url\n- Privileged accounts: \`$privileged_count\`\n- Unexpected deletion targets: \`$target_count\`\n- Canonical Founder ready: \`$ready\`\n- Cleanup execution eligible: \`$eligible\`\n- Hard-launch claim: \`false\`"
+          body="## Privileged-account review
+
+- Exact SHA: \`$RELEASE_SHA\`
+- Review run: $run_url
+- Privileged accounts: \`$privileged_count\`
+- Unexpected deletion targets: \`$target_count\`
+- Canonical Founder ready: \`$ready\`
+- Cleanup execution eligible: \`$eligible\`
+- Hard-launch claim: \`false\`"
           post_comment "$body"
 
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
@@ -174,11 +182,12 @@ jobs:
           [[ "$EXECUTION_ELIGIBLE" == 'true' ]]
           [[ "$TARGET_COUNT" =~ ^[1-9][0-9]*$ ]]
 
-      - name: Execute exact-SHA privileged cleanup
+      - name: Execute and verify exact-SHA privileged cleanup
         if: github.event.comment.body == '/bin-launch execute-privileged-cleanup'
         id: cleanup
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          EXPECTED_TARGET_COUNT: ${{ steps.review.outputs.target_count }}
         shell: bash
         run: |
           set -euo pipefail
@@ -208,6 +217,22 @@ jobs:
             return 1
           }
 
+          wait_for_success() {
+            local run_id="$1"
+            for _ in $(seq 1 120); do
+              local run_json status conclusion
+              run_json="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+              if [[ "$status" == 'completed' ]]; then
+                [[ "$conclusion" == 'success' ]]
+                return
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
           started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           jq -n \
             --arg ref main \
@@ -225,5 +250,67 @@ jobs:
           }
           run_url="https://github.com/$REPOSITORY/actions/runs/$run_id"
           post_comment "Protected privileged-account cleanup started for exact SHA \`$RELEASE_SHA\`: $run_url"
+
+          cleanup_completed='false'
+          if wait_for_success "$run_id"; then
+            cleanup_completed='true'
+          else
+            post_comment "Protected privileged-account cleanup failed or timed out for \`$RELEASE_SHA\`: $run_url"
+            exit 1
+          fi
+          [[ "$cleanup_completed" == 'true' ]]
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]] || {
+            post_comment "Protected cleanup completed, but main moved away from \`$RELEASE_SHA\`; its result cannot be used as current launch evidence."
+            exit 1
+          }
+
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts")"
+          prefix="privileged-account-cleanup-$RELEASE_SHA-$run_id-"
+          artifact_id="$(jq -r --arg prefix "$prefix" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
+            post_comment "Protected cleanup completed but its exact-SHA evidence artifact is missing: $run_url"
+            exit 1
+          }
+
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > privileged-cleanup.zip
+          mkdir -p privileged-cleanup
+          unzip -q privileged-cleanup.zip -d privileged-cleanup
+          report_path="$(find privileged-cleanup -type f -name 'privileged-account-cleanup.json' -print -quit)"
+          [[ -n "$report_path" && -s "$report_path" ]]
+
+          jq -e \
+            --arg sha "$RELEASE_SHA" \
+            --arg workflow_run_id "$run_id" \
+            --argjson expected "$EXPECTED_TARGET_COUNT" '
+              .schemaVersion == 1 and
+              .status == "executed" and
+              .commitSha == $sha and
+              .workflowRunId == $workflow_run_id and
+              .canonicalFounderReady == true and
+              .deletionTargetCount == $expected and
+              .deletedAccountCount == $expected and
+              .sensitiveValuesExcluded == true and
+              .auditLogsPreserved == true and
+              .nonPrivilegedAccountsUntouched == true and
+              .hardLaunchClaim == false
+            ' "$report_path" >/dev/null
+
+          deleted="$(jq -r '.deletedAccountCount' "$report_path")"
+          body="## Privileged-account cleanup completed
+
+- Exact SHA: \`$RELEASE_SHA\`
+- Cleanup run: $run_url
+- Unexpected privileged accounts deleted: \`$deleted\`
+- Canonical Founder retained: \`true\`
+- Audit logs preserved: \`true\`
+- Non-privileged accounts untouched: \`true\`
+- Hard-launch claim: \`false\`
+
+Next protected action: run \`/bin-launch bank-pilot-after-mfa\`."
+          post_comment "$body"
+
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          echo "deleted_count=$deleted" >> "$GITHUB_OUTPUT"
