@@ -93,7 +93,7 @@ jobs:
           echo "run_matches_main_sha=$matches_main" >> "$GITHUB_OUTPUT"
           echo "run_is_stale=$stale_evidence" >> "$GITHUB_OUTPUT"
 
-      - name: Collect GitHub-masked failed-job logs
+      - name: Collect and sanitize GitHub-masked failed-job logs
         env:
           SOURCE_RUN_ID: ${{ steps.run.outputs.run_id }}
           SOURCE_RUN_SHA: ${{ steps.run.outputs.run_sha }}
@@ -107,17 +107,23 @@ jobs:
           mkdir -p launch_package
           jobs="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100")"
           jq -e '.jobs | any(.conclusion == "failure")' <<<"$jobs" >/dev/null
-          : > launch_package/firebase-production-failure.log
+          raw_log="$(mktemp)"
+          trap 'rm -f "$raw_log"' EXIT
 
           mapfile -t failed_job_ids < <(jq -r '.jobs[] | select(.conclusion == "failure") | .id' <<<"$jobs")
           for job_id in "${failed_job_ids[@]}"; do
             [[ "$job_id" =~ ^[0-9]+$ ]]
-            printf '\n===== FAILED JOB %s =====\n' "$job_id" >> launch_package/firebase-production-failure.log
-            gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> launch_package/firebase-production-failure.log
+            printf '\n===== FAILED JOB %s =====\n' "$job_id" >> "$raw_log"
+            gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> "$raw_log"
           done
+          test -s "$raw_log"
+
+          node scripts/sanitize-production-diagnostic-log.mjs \
+            "$raw_log" \
+            launch_package/firebase-production-failure.log
           test -s launch_package/firebase-production-failure.log
 
-          SOURCE_RUN_ID="$SOURCE_RUN_ID" SOURCE_RUN_SHA="$SOURCE_RUN_SHA" node --input-type=module <<'NODE'
+          node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
 
           const requireEnv = (name, pattern) => {
@@ -138,9 +144,8 @@ jobs:
           const sourceRunMatchesMainSha = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
           const sourceRunIsStale = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
 
-          const raw = readFileSync('launch_package/firebase-production-failure.log', 'utf8')
-            .replace(/\u001b\[[0-9;]*m/g, '');
-          const lines = raw.split(/\r?\n/);
+          const sanitizedLog = readFileSync('launch_package/firebase-production-failure.log', 'utf8');
+          const lines = sanitizedLog.split(/\r?\n/);
           const signal = /##\[error\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|\[critical-evidence\]|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|playwright|error:|timeout|expect\(|locator|strict mode violation|unexpected|skipped=|failed=/i;
           const selectedIndexes = new Set();
           for (let index = 0; index < lines.length; index += 1) {
@@ -151,16 +156,9 @@ jobs:
             }
           }
 
-          const redact = (line) => line
-            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<redacted-email>')
-            .replace(/\b[A-Za-z0-9_-]{28}\b/g, '<redacted-id>')
-            .replace(/\b(?:sk|rk|pk|whsec|cs_live|evt)_[A-Za-z0-9_]+\b/g, '<redacted-provider-id>')
-            .replace(/(password|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=<redacted-secret>')
-            .slice(0, 700);
-
           const selected = [...selectedIndexes]
             .sort((a, b) => a - b)
-            .map((index) => redact(lines[index]))
+            .map((index) => lines[index].slice(0, 700))
             .filter((line, index, all) => line && all.indexOf(line) === index)
             .slice(-80);
 
@@ -169,7 +167,7 @@ jobs:
             .slice(-30);
 
           const report = {
-            schemaVersion: 2,
+            schemaVersion: 3,
             status: 'FAILED',
             sourceWorkflow: 'Firebase Production Deploy',
             sourceRunId,
@@ -182,6 +180,8 @@ jobs:
             failedSuiteSignals,
             githubSecretMaskingApplied: true,
             personalIdentifiersRedacted: true,
+            fullArtifactLogRedacted: true,
+            rawJobLogUploaded: false,
             hardLaunchClaim: false,
             generatedAt: new Date().toISOString(),
           };
@@ -210,8 +210,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the GitHub-masked artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
-          suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the masked artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+          errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the redacted artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+          suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the redacted artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
           artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
           body="## Latest Firebase production failure diagnosis
 
@@ -222,6 +222,8 @@ jobs:
 - Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
 - Source run is stale failure: \`$SOURCE_RUN_IS_STALE\`
 - Diagnostic artifact: \`$artifact\`
+- Full artifact log redacted: \`true\`
+- Raw job log uploaded: \`false\`
 - Hard-launch claim: \`false\`
 
 ### Failed suite signals

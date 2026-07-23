@@ -22,7 +22,7 @@ function run({
   id = 1,
   head_sha = FIXTURE_MAIN_SHA,
   html_url = `https://github.com/owner/repo/actions/runs/1`,
-  created_at = new Date(NOW - 3_600_000).toISOString(), // 1 h ago
+  created_at = new Date(NOW - 3_600_000).toISOString(),
   conclusion = 'failure',
   status = 'completed',
   event = 'workflow_dispatch',
@@ -67,18 +67,19 @@ test('diagnosis uses CLI pagination and delegates selection to testable script',
   assert.doesNotMatch(workflow, /while \(\( page <= max_pages \)\)/);
 });
 
-test('diagnosis uploads masked logs but posts only normalized redacted lines', () => {
+test('diagnosis uploads only a fully sanitized artifact log and normalized redacted lines', () => {
   assert.match(workflow, /actions\/jobs\/\$job_id\/logs/);
+  assert.match(workflow, /raw_log="\$\(mktemp\)"/);
+  assert.match(workflow, /sanitize-production-diagnostic-log\.mjs/);
   assert.match(workflow, /githubSecretMaskingApplied:\s*true/);
   assert.match(workflow, /personalIdentifiersRedacted:\s*true/);
-  assert.match(workflow, /<redacted-email>/);
-  assert.match(workflow, /<redacted-id>/);
-  assert.match(workflow, /<redacted-provider-id>/);
-  assert.match(workflow, /<redacted-secret>/);
+  assert.match(workflow, /fullArtifactLogRedacted:\s*true/);
+  assert.match(workflow, /rawJobLogUploaded:\s*false/);
   assert.match(workflow, /normalizedErrorLines/);
   assert.match(workflow, /actions\/upload-artifact@v7/);
   assert.match(workflow, /hardLaunchClaim:\s*false/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+  assert.doesNotMatch(workflow, /jobs\/\$job_id\/logs" >> launch_package\/firebase-production-failure\.log/);
 });
 
 test('diagnosis captures Playwright suite, test and assertion context', () => {
@@ -99,13 +100,13 @@ test('current-main failure preferred over newer old-SHA failure', () => {
     id: 1,
     head_sha: FIXTURE_MAIN_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/1',
-    created_at: new Date(NOW - 7_200_000).toISOString(), // 2 h ago (older)
+    created_at: new Date(NOW - 7_200_000).toISOString(),
   });
   const newerOtherRun = run({
     id: 2,
     head_sha: FIXTURE_OTHER_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/2',
-    created_at: new Date(NOW - 1_800_000).toISOString(), // 30 min ago (newer)
+    created_at: new Date(NOW - 1_800_000).toISOString(),
   });
   const result = selectRun(FIXTURE_MAIN_SHA, [newerOtherRun, olderMainRun]);
   assert.equal(result.runId, 1);
@@ -117,13 +118,13 @@ test('newest relevant fallback when current main has no failure', () => {
     id: 10,
     head_sha: FIXTURE_OTHER_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/10',
-    created_at: new Date(NOW - 7_200_000).toISOString(), // 2 h ago
+    created_at: new Date(NOW - 7_200_000).toISOString(),
   });
   const newerOtherRun = run({
     id: 11,
     head_sha: FIXTURE_OTHER_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/11',
-    created_at: new Date(NOW - 3_600_000).toISOString(), // 1 h ago (newest)
+    created_at: new Date(NOW - 3_600_000).toISOString(),
   });
   const result = selectRun(FIXTURE_MAIN_SHA, [olderOtherRun, newerOtherRun]);
   assert.equal(result.runId, 11);
@@ -135,7 +136,7 @@ test('failure older than 24 hours remains diagnosable and is marked stale', () =
     id: 20,
     head_sha: FIXTURE_MAIN_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/20',
-    created_at: new Date(NOW - 90_000_000).toISOString(), // ~25 h ago
+    created_at: new Date(NOW - 90_000_000).toISOString(),
   });
   const result = selectRun(FIXTURE_MAIN_SHA, [staleRun]);
   assert.equal(result.runId, 20);
@@ -144,7 +145,6 @@ test('failure older than 24 hours remains diagnosable and is marked stale', () =
 });
 
 test('failures found after the first API page are considered', () => {
-  // Simulate 150 runs (beyond a 100-run first page); eligible run is the last.
   const filler = Array.from({ length: 149 }, (_, i) =>
     run({
       id: 100 + i,
@@ -157,7 +157,7 @@ test('failures found after the first API page are considered', () => {
     id: 999,
     head_sha: FIXTURE_MAIN_SHA,
     html_url: 'https://github.com/owner/repo/actions/runs/999',
-    created_at: new Date(NOW - 60_000).toISOString(), // newest
+    created_at: new Date(NOW - 60_000).toISOString(),
   });
   const result = selectRun(FIXTURE_MAIN_SHA, [...filler, expectedRun]);
   assert.equal(result.runId, 999);
