@@ -19,7 +19,6 @@ jobs:
     name: Diagnose latest failed Firebase production deployment
     if: >-
       github.event.issue.number == 434 &&
-      !github.event.issue.pull_request &&
       github.event.comment.body == '/bin-launch diagnose-latest-deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -29,7 +28,7 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Validate owner command authority
+      - name: Validate owner command and canonical issue context
         shell: bash
         env:
           COMMENT_ACTOR: ${{ github.event.comment.user.login }}
@@ -46,7 +45,14 @@ jobs:
             echo "::error::Production diagnosis command does not match the authorized command."
             exit 1
           }
-          echo "Authorized owner command accepted (association=${COMMENT_ASSOCIATION:-unknown})."
+          issue_json="$(gh api "repos/$REPOSITORY/issues/$ISSUE_NUMBER")"
+          jq -e --argjson issueNumber "$ISSUE_NUMBER" '
+            .number == $issueNumber and (has("pull_request") | not)
+          ' <<<"$issue_json" >/dev/null || {
+            echo "::error::Production diagnosis is authorized only on canonical issue #$ISSUE_NUMBER, not a pull request."
+            exit 1
+          }
+          echo "Authorized owner command accepted on canonical issue #$ISSUE_NUMBER (association=${COMMENT_ASSOCIATION:-unknown})."
 
       - name: Checkout exact current main
         uses: actions/checkout@v4
