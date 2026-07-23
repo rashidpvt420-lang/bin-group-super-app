@@ -7,11 +7,15 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8
 const fromCodes = (...codes) => String.fromCharCode(...codes);
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-test('automatic Firebase failure diagnostics upload only a fully redacted log', async () => {
+test('automatic Firebase failure diagnostics trust only protected same-repository runs and upload a redacted log', async () => {
   const source = await read('.github/workflows/firebase-production-failure-diagnostics.yml');
 
-  assert.match(source, /Checkout exact failed source/);
-  assert.match(source, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+  assert.match(source, /github\.event\.workflow_run\.event == 'workflow_dispatch'/);
+  assert.match(source, /github\.event\.workflow_run\.head_branch == 'main'/);
+  assert.match(source, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
+  assert.match(source, /Checkout trusted diagnostic implementation/);
+  assert.match(source, /ref: main/);
+  assert.doesNotMatch(source, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
   assert.match(source, /node-version: '22'/);
   assert.match(source, /raw_log="\$\(mktemp\)"/);
   assert.match(source, /trap 'rm -f "\$raw_log"' EXIT/);
