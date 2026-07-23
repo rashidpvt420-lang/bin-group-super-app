@@ -5,7 +5,6 @@ import { sanitizeProductionDiagnosticLog } from '../../scripts/sanitize-producti
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 const fromCodes = (...codes) => String.fromCharCode(...codes);
-const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test('automatic Firebase failure diagnostics trust only protected same-repository runs and upload a redacted log', async () => {
   const source = await read('.github/workflows/firebase-production-failure-diagnostics.yml');
@@ -64,8 +63,8 @@ test('automatic diagnostic sanitizer removes secret and identifier formats from 
   ].join('\n');
 
   const sanitized = sanitizeProductionDiagnosticLog(raw);
-  for (const value of Object.values(fixture)) {
-    assert.doesNotMatch(sanitized, new RegExp(escapeRegExp(value)));
+  for (const [label, value] of Object.entries(fixture)) {
+    assert.equal(sanitized.includes(value), false, `${label} must be redacted from the diagnostic log`);
   }
   assert.match(sanitized, /complete Firebase production stack failed after 3 attempts/);
 });
