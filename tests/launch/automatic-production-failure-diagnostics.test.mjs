@@ -6,12 +6,20 @@ import { sanitizeProductionDiagnosticLog } from '../../scripts/sanitize-producti
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 const fromCodes = (...codes) => String.fromCharCode(...codes);
 
-test('automatic Firebase failure diagnostics trust only protected same-repository runs and upload a redacted log', async () => {
+test('automatic Firebase failure diagnostics start visibly and validate the protected source through GitHub API', async () => {
   const source = await read('.github/workflows/firebase-production-failure-diagnostics.yml');
 
-  assert.match(source, /github\.event\.workflow_run\.event == 'workflow_dispatch'/);
-  assert.match(source, /github\.event\.workflow_run\.head_branch == 'main'/);
-  assert.match(source, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
+  assert.match(source, /if: github\.event\.workflow_run\.conclusion == 'failure'/);
+  assert.doesNotMatch(source, /if:[\s\S]{0,300}head_repository\.full_name == github\.repository/);
+  assert.match(source, /Validate protected source run through GitHub API/);
+  assert.match(source, /actions\/runs\/\$SOURCE_RUN_ID/);
+  assert.match(source, /\.name == "Firebase Production Deploy"/);
+  assert.match(source, /\.event == "workflow_dispatch"/);
+  assert.match(source, /\.head_branch == "main"/);
+  assert.match(source, /\.head_sha == \$sha/);
+  assert.match(source, /\.repository\.full_name == \$repository/);
+  assert.match(source, /\.conclusion == "failure"/);
+  assert.match(source, /Refusing diagnostics for a run that is not the failed same-repository main workflow_dispatch/);
   assert.match(source, /Checkout trusted diagnostic implementation/);
   assert.match(source, /ref: main/);
   assert.doesNotMatch(source, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
