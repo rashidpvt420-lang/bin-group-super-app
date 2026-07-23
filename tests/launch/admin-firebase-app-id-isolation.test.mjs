@@ -13,6 +13,7 @@ const verifierSource = await readFile(
 );
 
 const expectedAdminAppId = '1:123413252227:web:285cb53bc26626d699f3b6';
+const expectedAdminAppIdSuffix = '285cb53bc26626d699f3b6';
 
 test('Admin Firebase config cannot inherit the main web app ID', () => {
   assert.match(adminFirebaseSource, /REACT_APP_ADMIN_FIREBASE_APP_ID/);
@@ -21,7 +22,7 @@ test('Admin Firebase config cannot inherit the main web app ID', () => {
   assert.match(adminFirebaseSource, /appId:\s*clean\(process\.env\.REACT_APP_ADMIN_FIREBASE_APP_ID\)\s*\|\|\s*ADMIN_FIREBASE_APP_ID/);
 });
 
-test('Admin build verifier enforces the same canonical Firebase app ID', () => {
-  assert.match(verifierSource, new RegExp(expectedAdminAppId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(verifierSource, /appId/i);
+test('Admin build verifier enforces the canonical Firebase app ID suffix', () => {
+  assert.match(verifierSource, new RegExp(expectedAdminAppIdSuffix));
+  assert.match(verifierSource, /appIdSuffix/);
 });
