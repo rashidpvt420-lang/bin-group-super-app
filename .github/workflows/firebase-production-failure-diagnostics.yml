@@ -163,7 +163,7 @@ jobs:
             .status == "FAILED" and
             .sourceRunId == env.SOURCE_RUN_ID and
             .sourceRunSha == env.SOURCE_RUN_SHA and
-            .failedJobs | length > 0
+            ((.failedJobs | length) > 0)
           ' launch_package/firebase-production-failure.json >/dev/null
 
       - name: Upload redacted production failure evidence
