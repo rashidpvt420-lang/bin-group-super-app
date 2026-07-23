@@ -8,8 +8,13 @@ const workflow = await readFile(
   'utf8',
 );
 
-test('production diagnostic sanitizer removes secrets and personal identifiers while preserving failure context', () => {
+test('production diagnostic sanitizer removes text and JSON secrets while preserving failure context', () => {
   const uid = 'AbCdEfGhIjKlMnOpQrStUvWxYz12';
+  const shortUid = 'shortUid12';
+  const sensitivePassword = ['diagnostic', 'password', 'value'].join('-');
+  const sensitiveApiValue = ['diagnostic', 'api', 'value'].join('-');
+  const jsonRefreshValue = ['json', 'refresh', 'value'].join('-');
+  const jsonApiValue = ['json', 'api', 'value'].join('-');
   const raw = [
     '\u001b[31m[critical-evidence] business-tenant failed\u001b[0m',
     'tests/e2e/business-tenant.spec.ts:42:7',
@@ -17,13 +22,14 @@ test('production diagnostic sanitizer removes secrets and personal identifiers w
     'email=test.tenant@example.com',
     `uid=${uid}`,
     'Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.signature',
-    'password=SuperSecretPassword123!',
-    'api_key=AIzaSyExampleSecret',
+    `password=${sensitivePassword}`,
+    `api_key=${sensitiveApiValue}`,
     'otp=123456',
     'Set-Cookie: session=private-session-value; Secure; HttpOnly',
     'https://example.test/path?debug_token=debug-value&safe=1',
-    'checkout=cs_live_secretvalue event=evt_secretvalue webhook=whsec_secretvalue',
+    'checkout=cs_live_testfixture event=evt_testfixture webhook=whsec_testfixture',
     'challengeId=123e4567-e89b-12d3-a456-426614174000',
+    JSON.stringify({ refreshToken: jsonRefreshValue, apiKey: jsonApiValue, uid: shortUid, otp: '654321' }),
   ].join('\n');
 
   const sanitized = sanitizeProductionDiagnosticLog(raw);
@@ -32,23 +38,35 @@ test('production diagnostic sanitizer removes secrets and personal identifiers w
   assert.match(sanitized, /tests\/e2e\/business-tenant\.spec\.ts:42:7/);
   assert.match(sanitized, /expect\(locator\).*timed out after 15000ms/);
 
-  assert.doesNotMatch(sanitized, /test\.tenant@example\.com/);
-  assert.doesNotMatch(sanitized, new RegExp(uid));
-  assert.doesNotMatch(sanitized, /eyJhbGci/);
-  assert.doesNotMatch(sanitized, /SuperSecretPassword123/);
-  assert.doesNotMatch(sanitized, /AIzaSyExampleSecret/);
-  assert.doesNotMatch(sanitized, /123456/);
-  assert.doesNotMatch(sanitized, /private-session-value/);
-  assert.doesNotMatch(sanitized, /debug-value/);
-  assert.doesNotMatch(sanitized, /cs_live_secretvalue/);
-  assert.doesNotMatch(sanitized, /evt_secretvalue/);
-  assert.doesNotMatch(sanitized, /whsec_secretvalue/);
-  assert.doesNotMatch(sanitized, /123e4567-e89b-12d3-a456-426614174000/);
+  for (const forbidden of [
+    'test.tenant@example.com',
+    uid,
+    shortUid,
+    'eyJhbGci',
+    sensitivePassword,
+    sensitiveApiValue,
+    jsonRefreshValue,
+    jsonApiValue,
+    '123456',
+    '654321',
+    'private-session-value',
+    'debug-value',
+    'cs_live_testfixture',
+    'evt_testfixture',
+    'whsec_testfixture',
+    '123e4567-e89b-12d3-a456-426614174000',
+  ]) {
+    assert.doesNotMatch(sanitized, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
 
   assert.match(sanitized, /<redacted-email>/);
   assert.match(sanitized, /<redacted-id>/);
   assert.match(sanitized, /<redacted-secret>/);
   assert.match(sanitized, /<redacted-provider-id>/);
+  assert.match(sanitized, /"refreshToken":"<redacted-secret>"/);
+  assert.match(sanitized, /"apiKey":"<redacted-secret>"/);
+  assert.match(sanitized, /"uid":"<redacted-id>"/);
+  assert.match(sanitized, /"otp":"<redacted-secret>"/);
 });
 
 test('diagnosis workflow uploads only the sanitized artifact log', () => {
