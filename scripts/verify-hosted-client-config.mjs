@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
+const CANONICAL_ADMIN_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const EVIDENCE_MAX_AGE_MS = 1000 * 60 * 60 * 24;
 const MAX_CLOCK_SKEW_MS = 1000 * 60 * 5;
 
@@ -33,6 +34,13 @@ function containsAny(texts, value) {
   return Boolean(expected) && texts.some((source) => String(source || '').includes(expected));
 }
 
+function expectedFirebaseAppId(site, env) {
+  if (site === 'admin') {
+    return text(env.REACT_APP_ADMIN_FIREBASE_APP_ID) || CANONICAL_ADMIN_FIREBASE_APP_ID;
+  }
+  return text(env.VITE_FIREBASE_APP_ID);
+}
+
 export function summarizeHostedClientBundle({
   texts = [],
   assetCount = 0,
@@ -48,7 +56,7 @@ export function summarizeHostedClientBundle({
       containsAny(sources, 'bin-group-57c60.firebasestorage.app') ||
       containsAny(sources, 'bin-group-57c60.appspot.com'),
     firebaseApiKeyMatched: containsAny(sources, env.VITE_FIREBASE_API_KEY),
-    firebaseAppIdMatched: containsAny(sources, env.VITE_FIREBASE_APP_ID),
+    firebaseAppIdMatched: containsAny(sources, expectedFirebaseAppId(site, env)),
     messagingSenderIdMatched: containsAny(sources, env.VITE_FIREBASE_MESSAGING_SENDER_ID),
     appCheckSiteKeyMatched: containsAny(sources, env.VITE_APP_CHECK_SITE_KEY),
     mapsApiKeyMatched: containsAny(sources, env.VITE_GOOGLE_MAPS_API_KEY),
