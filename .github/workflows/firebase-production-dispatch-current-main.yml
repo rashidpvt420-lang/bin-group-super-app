@@ -217,6 +217,7 @@ jobs:
             resolved_evidence_refs="$resolved_evidence_refs,GITHUB_PRODUCTION_RUN_$latest_run_id"
           fi
 
+          main_sha=''
           for attempt in 1 2 3 4 5; do
             main_before="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
             [[ "$main_before" =~ ^[0-9a-f]{40}$ ]]
@@ -225,79 +226,106 @@ jobs:
               exit 1
             fi
             sleep 3
-            main_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-            if [[ "$main_before" != "$main_sha" ]]; then
+            stable_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            if [[ "$main_before" != "$stable_sha" ]]; then
               echo "main advanced during stability check; retrying ($attempt/5)."
               continue
             fi
-            if [[ -n "$EXPECTED_COMMIT_SHA" && "$main_sha" != "$EXPECTED_COMMIT_SHA" ]]; then
-              echo "::error::Stable current main $main_sha does not match verified expected SHA $EXPECTED_COMMIT_SHA."
+            if [[ -n "$EXPECTED_COMMIT_SHA" && "$stable_sha" != "$EXPECTED_COMMIT_SHA" ]]; then
+              echo "::error::Stable current main $stable_sha does not match verified expected SHA $EXPECTED_COMMIT_SHA."
               exit 1
             fi
-
-            attempt_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            jq -n \
-              --arg ref main \
-              --arg confirmation "$CONFIRMATION" \
-              --arg hard "$HARD_CONFIRMATION" \
-              --arg sha "$main_sha" \
-              --arg founderName "$FOUNDER_NAME" \
-              --arg founderEmail "$FOUNDER_EMAIL" \
-              --arg launchMode "$LAUNCH_MODE" \
-              --arg publicGate "$PUBLIC_GATE" \
-              --arg incidentAttestation "$incident_attestation" \
-              --arg incidentActive "$INCIDENT_ACTIVE_JSON" \
-              --arg incidentRollback "$INCIDENT_REQUIRES_ROLLBACK" \
-              --arg incidentRollbackReason "$INCIDENT_ROLLBACK_REASON" \
-              --arg incidentFailed "$incident_failed" \
-              --arg incidentFailedAt "$resolved_failed_at" \
-              --arg evidenceRefs "$resolved_evidence_refs" \
-              --arg clearanceRun "$HARD_CLEARANCE_RUN_ID" \
-              --arg stripeSession "$STRIPE_SESSION_ID" \
-              --arg stripeEvent "$STRIPE_EVENT_ID" \
-              '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}}' \
-              > dispatch.json
-
-            gh api --method POST \
-              -H 'Accept: application/vnd.github+json' \
-              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/dispatches" \
-              --input dispatch.json
-
-            run_id=''
-            run_sha=''
-            for poll in $(seq 1 20); do
-              runs_json="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=20")"
-              run_id="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" --arg sha "$main_sha" '
-                [.workflow_runs[] | select((.actor.login == $actor or .actor.login == "github-actions[bot]") and .head_sha == $sha and .created_at >= $started)]
-                | sort_by(.created_at)
-                | last
-                | .id // empty
-              ' <<<"$runs_json")"
-              run_sha="$(jq -r --arg actor "$GITHUB_ACTOR" --arg started "$attempt_started" --arg sha "$main_sha" '
-                [.workflow_runs[] | select((.actor.login == $actor or .actor.login == "github-actions[bot]") and .head_sha == $sha and .created_at >= $started)]
-                | sort_by(.created_at)
-                | last
-                | .head_sha // empty
-              ' <<<"$runs_json")"
-              if [[ -n "$run_id" && -n "$run_sha" ]]; then
-                break
-              fi
-              sleep 2
-            done
-
-            if [[ -z "$run_id" || -z "$run_sha" ]]; then
-              echo "Could not resolve the dispatched production run; retrying ($attempt/5)."
-              continue
-            fi
-
-            if [[ "$run_sha" == "$main_sha" ]]; then
-              echo "Protected Firebase Production Deploy run $run_id is bound to exact SHA $main_sha."
-              exit 0
-            fi
-
-            echo "Dispatch race detected: expected $main_sha but GitHub resolved $run_sha. Cancelling run $run_id."
-            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
+            main_sha="$stable_sha"
+            break
           done
 
-          echo "::error::Unable to dispatch a protected production run bound to a stable current main SHA after five attempts."
-          exit 1
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Unable to resolve a stable current main SHA after five checks."
+            exit 1
+          }
+
+          before_runs="$(
+            gh api --paginate --slurp \
+              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" |
+              jq -c '[.[].workflow_runs[]]'
+          )"
+          before_ids="$(jq -c '[.[].id | tostring]' <<<"$before_runs")"
+          jq -e 'type == "array"' <<<"$before_ids" >/dev/null
+
+          jq -n \
+            --arg ref main \
+            --arg confirmation "$CONFIRMATION" \
+            --arg hard "$HARD_CONFIRMATION" \
+            --arg sha "$main_sha" \
+            --arg founderName "$FOUNDER_NAME" \
+            --arg founderEmail "$FOUNDER_EMAIL" \
+            --arg launchMode "$LAUNCH_MODE" \
+            --arg publicGate "$PUBLIC_GATE" \
+            --arg incidentAttestation "$incident_attestation" \
+            --arg incidentActive "$INCIDENT_ACTIVE_JSON" \
+            --arg incidentRollback "$INCIDENT_REQUIRES_ROLLBACK" \
+            --arg incidentRollbackReason "$INCIDENT_ROLLBACK_REASON" \
+            --arg incidentFailed "$incident_failed" \
+            --arg incidentFailedAt "$resolved_failed_at" \
+            --arg evidenceRefs "$resolved_evidence_refs" \
+            --arg clearanceRun "$HARD_CLEARANCE_RUN_ID" \
+            --arg stripeSession "$STRIPE_SESSION_ID" \
+            --arg stripeEvent "$STRIPE_EVENT_ID" \
+            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}}' \
+            > dispatch.json
+
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/dispatches" \
+            --input dispatch.json
+
+          selected_run=''
+          for poll in $(seq 1 60); do
+            runs_json="$(
+              gh api --paginate --slurp \
+                "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" |
+                jq -c '[.[].workflow_runs[]]'
+            )"
+            selected_run="$(jq -c --argjson before "$before_ids" --arg sha "$main_sha" '
+              [
+                .[] as $run
+                | select(
+                    $run.event == "workflow_dispatch"
+                    and $run.head_branch == "main"
+                    and $run.head_sha == $sha
+                    and ($before | index(($run.id | tostring))) == null
+                  )
+              ]
+              | sort_by(.created_at, .id)
+              | first // empty
+            ' <<<"$runs_json")"
+            if [[ -n "$selected_run" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$selected_run" ]]; then
+            echo "::error::The protected dispatch request succeeded, but no new exact-SHA Firebase Production Deploy run appeared within 120 seconds. No second deployment was dispatched."
+            exit 1
+          fi
+
+          run_id="$(jq -r '.id // empty' <<<"$selected_run")"
+          run_sha="$(jq -r '.head_sha // empty' <<<"$selected_run")"
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::The correlated production run has an invalid run ID."
+            exit 1
+          }
+          [[ "$run_sha" == "$main_sha" ]] || {
+            echo "::error::The correlated production run is not bound to the expected main SHA."
+            exit 1
+          }
+
+          main_after_dispatch="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$main_after_dispatch" != "$main_sha" ]]; then
+            echo "::error::main advanced from $main_sha to $main_after_dispatch after dispatch. Cancelling run $run_id."
+            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" || true
+            exit 1
+          fi
+
+          echo "Protected Firebase Production Deploy run $run_id is bound to exact SHA $main_sha."

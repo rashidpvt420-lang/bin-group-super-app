@@ -6,19 +6,27 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8
 
 const workflowPath = '.github/workflows/firebase-production-dispatch-current-main.yml';
 
-test('production dispatcher atomically binds current main and cancels race-dispatched runs', async () => {
+test('production dispatcher atomically binds current main and correlates one new exact-SHA run', async () => {
   const source = await read(workflowPath);
 
   assert.match(source, /name: START HERE - Firebase Production Deploy/);
   assert.match(source, /for attempt in 1 2 3 4 5/);
   assert.match(source, /main_before=.*commits\/main/);
-  assert.match(source, /main_before.*!=.*main_sha/);
+  assert.match(source, /main_before.*!=.*stable_sha/);
   assert.match(source, /expected_commit_sha:\$sha/);
   assert.match(source, /firebase-production-deploy\.yml\/dispatches/);
-  assert.match(source, /actions\/workflows\/firebase-production-deploy\.yml\/runs/);
-  assert.match(source, /run_sha.*==.*main_sha/);
+  assert.match(source, /gh api --paginate --slurp/);
+  assert.match(source, /before_ids=/);
+  assert.match(source, /\$before \| index\(\(\$run\.id \| tostring\)\)/);
+  assert.match(source, /\$run\.head_sha == \$sha/);
+  assert.match(source, /main_after_dispatch/);
   assert.match(source, /actions\/runs\/\$run_id\/cancel/);
-  assert.match(source, /Dispatch race detected/);
+  assert.equal(
+    (source.match(/firebase-production-deploy\.yml\/dispatches/g) || []).length,
+    1,
+    'the wrapper must dispatch at most one protected deployment per run',
+  );
+  assert.match(source, /No second deployment was dispatched/);
 });
 
 test('operator form cannot mistype incident attestation or manually misreport the latest deployment result', async () => {
@@ -62,14 +70,18 @@ test('dispatcher keeps incident, rollback and public-mode validation fail closed
   assert.match(source, /ADMIN_MFA_BOOTSTRAP_HOSTING is permitted only in bank-pilot mode/);
 });
 
-test('protected run resolver accepts only the exact SHA and approved dispatcher actor identities', async () => {
+test('protected run resolver accepts only a newly observed exact-main workflow-dispatch run', async () => {
   const source = await read(workflowPath);
-  const resolverSection = source.match(/run_id=''[\s\S]*?if \[\[ "\$run_sha" == "\$main_sha" \]\]/)?.[0] || '';
-  const exactSelection = /select\(\(\.actor\.login == \$actor or \.actor\.login == "github-actions\[bot\]"\) and \.head_sha == \$sha and \.created_at >= \$started\)/g;
+  const resolverSection = source.match(/before_runs='?[\s\S]*?Protected Firebase Production Deploy run \$run_id/)?.[0] || '';
 
-  assert.match(resolverSection, /run_id=.*--arg sha "\$main_sha"/s);
-  assert.match(resolverSection, /run_sha=.*--arg sha "\$main_sha"/s);
-  assert.equal((resolverSection.match(exactSelection) || []).length, 2);
+  assert.match(resolverSection, /\$run\.event == "workflow_dispatch"/);
+  assert.match(resolverSection, /\$run\.head_branch == "main"/);
+  assert.match(resolverSection, /\$run\.head_sha == \$sha/);
+  assert.match(resolverSection, /\$before \| index\(\(\$run\.id \| tostring\)\)\) == null/);
+  assert.match(resolverSection, /sort_by\(\.created_at, \.id\)/);
+  assert.match(resolverSection, /first \/\/ empty/);
+  assert.doesNotMatch(resolverSection, /\.actor\.login/);
+  assert.doesNotMatch(resolverSection, /created_at >= \$started/);
 });
 
 test('dispatcher remains GitHub-only and never implements Firebase deployment', async () => {
