@@ -22,36 +22,42 @@ test('fresh exact-SHA review is mandatory before any cleanup', () => {
   assert.match(command, /privileged-account-cleanup-dry-run\.yml\/dispatches/);
   assert.match(command, /expected_commit_sha:\$sha/);
   assert.match(command, /privileged-account-cleanup-review-\$RELEASE_SHA/);
-  assert.match(command, /test -s privileged-review\/privileged-account-cleanup\.json/);
+  assert.match(command, /report_path="\$\(find privileged-review -type f -name 'privileged-account-cleanup\.json' -print -quit\)"/);
+  assert.match(command, /\[\[ -n "\$report_path" && -s "\$report_path" \]\]/);
   assert.match(command, /\.schemaVersion == 2/);
   assert.match(command, /\.mutationPerformed == false/);
   assert.match(command, /\.deletedAccountCount == 0/);
   assert.match(command, /\.nonPrivilegedAccountsUntouched == true/);
   assert.match(command, /latest_main.*RELEASE_SHA/s);
-  assert.doesNotMatch(command, /find privileged-review/);
 });
 
-test('destructive cleanup requires canonical founder readiness and targets', () => {
+test('destructive cleanup requires canonical founder readiness and reviewed targets', () => {
   assert.match(command, /FOUNDER_READY.*true/s);
   assert.match(command, /EXECUTION_ELIGIBLE.*true/s);
   assert.match(command, /TARGET_COUNT.*\^\[1-9\]\[0-9\]\*\$/s);
+  assert.match(command, /EXPECTED_TARGET_COUNT:\s*\$\{\{ steps\.review\.outputs\.target_count \}\}/);
   assert.match(command, /DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP/);
   assert.match(command, /canonical_founder_email:"ceo@bin-groups\.com"/);
-  assert.match(command, /execute_cleanup:"true"/);
+  assert.match(command, /execute_cleanup:true/);
 });
 
-test('cleanup result must exactly match reviewed target count using a fixed evidence path', () => {
-  assert.match(command, /test -s privileged-cleanup\/privileged-account-cleanup\.json/);
+test('cleanup waits for success and verifies exact-SHA result artifact against reviewed target count', () => {
+  assert.match(command, /cleanup_completed='false'/);
+  assert.match(command, /cleanup_completed='true'/);
+  assert.match(command, /wait_for_success "\$run_id"/);
+  assert.match(command, /privileged-account-cleanup-\$RELEASE_SHA-\$run_id-/);
+  assert.match(command, /report_path="\$\(find privileged-cleanup -type f -name 'privileged-account-cleanup\.json' -print -quit\)"/);
+  assert.match(command, /\.schemaVersion == 1/);
   assert.match(command, /\.status == "executed"/);
+  assert.match(command, /\.commitSha == \$sha/);
+  assert.match(command, /\.workflowRunId == \$workflow_run_id/);
   assert.match(command, /\.deletionTargetCount == \$expected/);
   assert.match(command, /\.deletedAccountCount == \$expected/);
   assert.match(command, /\.canonicalFounderReady == true/);
   assert.match(command, /\.auditLogsPreserved == true/);
   assert.match(command, /\.nonPrivilegedAccountsUntouched == true/);
   assert.match(command, /\.hardLaunchClaim == false/);
-  assert.match(command, /cleanup_completed='false'/);
-  assert.match(command, /cleanup_completed='true'/);
-  assert.doesNotMatch(command, /find privileged-cleanup/);
+  assert.match(command, /latest_main.*RELEASE_SHA/s);
 });
 
 test('review and execution workflows accept and enforce optional expected SHA', () => {
