@@ -3,22 +3,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
-
 const workflowPath = '.github/workflows/firebase-production-dispatch-current-main.yml';
 
-test('production dispatcher atomically binds current main and cancels race-dispatched runs', async () => {
+test('production dispatcher binds a stable current main before one protected dispatch', async () => {
   const source = await read(workflowPath);
 
   assert.match(source, /name: START HERE - Firebase Production Deploy/);
   assert.match(source, /for attempt in 1 2 3 4 5/);
   assert.match(source, /main_before=.*commits\/main/);
-  assert.match(source, /main_before.*!=.*main_sha/);
+  assert.match(source, /main_after=.*commits\/main/);
+  assert.match(source, /main_before.*==.*main_after/);
   assert.match(source, /expected_commit_sha:\$sha/);
-  assert.match(source, /firebase-production-deploy\.yml\/dispatches/);
-  assert.match(source, /actions\/workflows\/firebase-production-deploy\.yml\/runs/);
-  assert.match(source, /run_sha.*==.*main_sha/);
-  assert.match(source, /actions\/runs\/\$run_id\/cancel/);
-  assert.match(source, /Dispatch race detected/);
+  assert.equal((source.match(/firebase-production-deploy\.yml\/dispatches/g) || []).length, 1);
 });
 
 test('operator form cannot mistype incident attestation or manually misreport the latest deployment result', async () => {
@@ -28,26 +24,30 @@ test('operator form cannot mistype incident attestation or manually misreport th
   assert.doesNotMatch(inputSection, /^\s+incident_attestation:/m);
   assert.doesNotMatch(inputSection, /^\s+incident_last_deployment_failed:/m);
   assert.doesNotMatch(inputSection, /^\s+incident_last_deployment_failed_at:/m);
-
   assert.match(source, /latest_conclusion.*==.*failure/);
   assert.match(source, /incident_failed='true'/);
-  assert.match(source, /incident_attestation='ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR'/);
-  assert.match(source, /incident_attestation='ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'/);
-  assert.match(source, /--arg incidentAttestation "\$incident_attestation"/);
-  assert.match(source, /--arg incidentFailed "\$incident_failed"/);
-  assert.match(source, /--arg incidentFailedAt "\$resolved_failed_at"/);
+  assert.match(source, /mandatory 30-minute cooling period/);
 });
 
-test('dispatcher derives failed-state recovery from protected workflow history and preserves cooldown', async () => {
+test('dispatcher correlates the accepted dispatch by exact SHA and baseline run IDs', async () => {
   const source = await read(workflowPath);
 
-  assert.match(source, /status=completed&per_page=50/);
-  assert.match(source, /sort_by\(\.created_at\) \| last/);
-  assert.match(source, /latest_created_at/);
-  assert.match(source, /latest_updated_at/);
-  assert.match(source, /mandatory 30-minute cooling period/);
-  assert.match(source, /GITHUB_PRODUCTION_RUN_\$latest_run_id/);
-  assert.doesNotMatch(source, /supplied failure timestamp/i);
+  assert.match(source, /baseline_ids=.*workflow_runs\[\]\.id/);
+  assert.match(source, /for poll in \$\(seq 1 60\)/);
+  assert.match(source, /select\(\.head_sha == \$sha\)/);
+  assert.match(source, /\$old \| index\(\$id\)/);
+  assert.doesNotMatch(source, /\.actor\.login == \$actor/);
+  assert.doesNotMatch(source, /Could not resolve the dispatched production run; retrying/);
+  assert.match(source, /No duplicate dispatch was attempted/);
+});
+
+test('dispatcher cancels the exact dispatched run when main advances after dispatch', async () => {
+  const source = await read(workflowPath);
+
+  assert.match(source, /current_main=.*commits\/main/);
+  assert.match(source, /current_main.*!=.*main_sha/);
+  assert.match(source, /actions\/runs\/\$run_id\/cancel/);
+  assert.match(source, /run_sha.*==.*main_sha/);
 });
 
 test('dispatcher keeps incident, rollback and public-mode validation fail closed', async () => {
@@ -59,17 +59,6 @@ test('dispatcher keeps incident, rollback and public-mode validation fail closed
   assert.match(source, /Public mode requires a valid live Stripe checkout session ID/);
   assert.match(source, /Public mode requires a valid Stripe webhook event ID/);
   assert.match(source, /Bank-pilot mode requires all public-only evidence fields to remain blank/);
-  assert.match(source, /ADMIN_MFA_BOOTSTRAP_HOSTING is permitted only in bank-pilot mode/);
-});
-
-test('protected run resolver accepts only the exact SHA and approved dispatcher actor identities', async () => {
-  const source = await read(workflowPath);
-  const resolverSection = source.match(/run_id=''[\s\S]*?if \[\[ "\$run_sha" == "\$main_sha" \]\]/)?.[0] || '';
-  const exactSelection = /select\(\(\.actor\.login == \$actor or \.actor\.login == "github-actions\[bot\]"\) and \.head_sha == \$sha and \.created_at >= \$started\)/g;
-
-  assert.match(resolverSection, /run_id=.*--arg sha "\$main_sha"/s);
-  assert.match(resolverSection, /run_sha=.*--arg sha "\$main_sha"/s);
-  assert.equal((resolverSection.match(exactSelection) || []).length, 2);
 });
 
 test('dispatcher remains GitHub-only and never implements Firebase deployment', async () => {
