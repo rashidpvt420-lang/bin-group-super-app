@@ -20,8 +20,6 @@ jobs:
     if: >-
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
-      github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.author_association == 'OWNER' &&
       github.event.comment.body == '/bin-launch diagnose-latest-deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -31,8 +29,29 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Checkout repository
+      - name: Validate owner command authority
+        shell: bash
+        env:
+          COMMENT_ACTOR: ${{ github.event.comment.user.login }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+        run: |
+          set -euo pipefail
+          [[ "$COMMENT_ACTOR" == "$REPOSITORY_OWNER" ]] || {
+            echo "::error::Only the repository owner may run production diagnosis."
+            exit 1
+          }
+          [[ "$COMMENT_BODY" == "/bin-launch diagnose-latest-deploy" ]] || {
+            echo "::error::Production diagnosis command does not match the authorized command."
+            exit 1
+          }
+          echo "Authorized owner command accepted (association=${COMMENT_ASSOCIATION:-unknown})."
+
+      - name: Checkout exact current main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Resolve stable current main SHA
         id: source
@@ -44,6 +63,11 @@ jobs:
             echo '::error::Unable to resolve the current main branch SHA.'
             exit 1
           }
+          checkout_sha="$(git rev-parse HEAD)"
+          [[ "$checkout_sha" == "$main_sha" ]] || {
+            echo "::error::Checked-out SHA $checkout_sha does not match current main $main_sha."
+            exit 1
+          }
           echo "sha=$main_sha" >> "$GITHUB_OUTPUT"
 
       - name: Paginate and select the latest failed protected deployment
@@ -53,38 +77,34 @@ jobs:
           CURRENT_MAIN_SHA: ${{ steps.source.outputs.sha }}
         run: |
           set -euo pipefail
-
           runs_json="$(
             gh api --paginate --slurp \
               "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&status=completed&per_page=100" |
             jq -c '[.[].workflow_runs[]]'
           )"
-
-          if ! jq -e 'type == "array"' <<<"$runs_json" >/dev/null 2>&1; then
+          jq -e 'type == "array"' <<<"$runs_json" >/dev/null || {
             echo '::error::Paginated run result is malformed (expected JSON array).'
             exit 1
-          fi
-
-          result="$(echo "$runs_json" | node scripts/select-production-diagnosis-run.mjs "$CURRENT_MAIN_SHA")" || {
+          }
+          result="$(printf '%s' "$runs_json" | node scripts/select-production-diagnosis-run.mjs "$CURRENT_MAIN_SHA")" || {
             echo '::error::No completed failed Firebase Production Deploy run was found.'
             exit 1
           }
-
           run_id="$(jq -r '.runId' <<<"$result")"
           run_sha="$(jq -r '.runSha' <<<"$result")"
           run_url="$(jq -r '.runUrl' <<<"$result")"
           age_seconds="$(jq -r '.ageSeconds' <<<"$result")"
           matches_main="$(jq -r '.matchesCurrentMain' <<<"$result")"
           stale_evidence="$(jq -r '.staleEvidence' <<<"$result")"
-
           [[ "$run_id" =~ ^[0-9]+$ ]] || { echo '::error::Missing run_id diagnostic metadata.'; exit 1; }
           [[ "$run_sha" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Malformed run_sha diagnostic metadata: expected 40-char hex.'; exit 1; }
           [[ "$run_url" =~ ^https://github\.com/ ]] || { echo '::error::Malformed run_url diagnostic metadata: unexpected URL.'; exit 1; }
-
+          [[ "$age_seconds" =~ ^[0-9]+$ ]] || { echo '::error::Malformed run age diagnostic metadata.'; exit 1; }
+          [[ "$matches_main" =~ ^(true|false)$ ]] || { echo '::error::Malformed main-SHA match diagnostic metadata.'; exit 1; }
+          [[ "$stale_evidence" =~ ^(true|false)$ ]] || { echo '::error::Malformed stale-evidence diagnostic metadata.'; exit 1; }
           if [[ "$stale_evidence" == "true" ]]; then
             echo "::warning::Source run is stale failure: $run_sha ($age_seconds seconds old)"
           fi
-
           echo "main_sha=$CURRENT_MAIN_SHA" >> "$GITHUB_OUTPUT"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_sha=$run_sha" >> "$GITHUB_OUTPUT"
@@ -105,11 +125,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p launch_package
-          jobs="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100")"
-          jq -e '.jobs | any(.conclusion == "failure")' <<<"$jobs" >/dev/null
+          jobs="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?filter=latest&per_page=100" | jq -c '{jobs: [.[].jobs[]]}')"
+          jq -e '.jobs | any(.conclusion == "failure")' <<<"$jobs" >/dev/null || {
+            echo '::error::Selected production run has no failed job.'
+            exit 1
+          }
           raw_log="$(mktemp)"
           trap 'rm -f "$raw_log"' EXIT
-
           mapfile -t failed_job_ids < <(jq -r '.jobs[] | select(.conclusion == "failure") | .id' <<<"$jobs")
           for job_id in "${failed_job_ids[@]}"; do
             [[ "$job_id" =~ ^[0-9]+$ ]]
@@ -117,7 +139,6 @@ jobs:
             gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> "$raw_log"
           done
           test -s "$raw_log"
-
           node scripts/sanitize-production-diagnostic-log.mjs \
             "$raw_log" \
             launch_package/firebase-production-failure.log
@@ -128,12 +149,8 @@ jobs:
 
           const requireEnv = (name, pattern) => {
             const value = String(process.env[name] || '').trim();
-            if (!value) {
-              throw new Error(`Missing ${name} diagnostic metadata.`);
-            }
-            if (pattern && !pattern.test(value)) {
-              throw new Error(`Malformed ${name} diagnostic metadata: expected ${pattern}.`);
-            }
+            if (!value) throw new Error(`Missing ${name} diagnostic metadata.`);
+            if (pattern && !pattern.test(value)) throw new Error(`Malformed ${name} diagnostic metadata.`);
             return value;
           };
 
@@ -143,31 +160,27 @@ jobs:
           const sourceRunAgeSeconds = requireEnv('SOURCE_RUN_AGE_SECONDS', /^[0-9]+$/);
           const sourceRunMatchesMainSha = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(true|false)$/);
           const sourceRunIsStale = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
-
           const sanitizedLog = readFileSync('launch_package/firebase-production-failure.log', 'utf8');
           const lines = sanitizedLog.split(/\r?\n/);
-          const signal = /##\[error\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|\[critical-evidence\]|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|playwright|error:|timeout|expect\(|locator|strict mode violation|unexpected|skipped=|failed=/i;
+          const signal = /##\[error\]|\[production-deploy\]|\[deploy-verify\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|functions:|hosting:|firestore:|storage:|\[critical-evidence\]|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|playwright|error:|timeout|expect\(|locator|strict mode violation|unexpected|skipped=|failed=/i;
           const selectedIndexes = new Set();
           for (let index = 0; index < lines.length; index += 1) {
             if (!signal.test(lines[index])) continue;
-            for (let offset = -2; offset <= 2; offset += 1) {
+            for (let offset = -3; offset <= 3; offset += 1) {
               const candidate = index + offset;
               if (candidate >= 0 && candidate < lines.length) selectedIndexes.add(candidate);
             }
           }
-
           const selected = [...selectedIndexes]
             .sort((a, b) => a - b)
-            .map((index) => lines[index].slice(0, 700))
+            .map((index) => lines[index].slice(0, 900))
             .filter((line, index, all) => line && all.indexOf(line) === index)
-            .slice(-80);
-
+            .slice(-120);
           const failedSuiteSignals = selected
             .filter((line) => /\[critical-evidence\].*(?:failed|not recorded)|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|\d+ failed/i.test(line))
             .slice(-30);
-
           const report = {
-            schemaVersion: 3,
+            schemaVersion: 4,
             status: 'FAILED',
             sourceWorkflow: 'Firebase Production Deploy',
             sourceRunId,
