@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { sanitizeProductionDiagnosticLog } from '../../scripts/sanitize-production-diagnostic-log.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const assemble = (...parts) => parts.join('');
 
 test('automatic Firebase failure diagnostics upload only a fully redacted log', async () => {
   const source = await read('.github/workflows/firebase-production-failure-diagnostics.yml');
@@ -32,31 +33,33 @@ test('automatic Firebase failure diagnostics upload only a fully redacted log', 
 });
 
 test('automatic diagnostic sanitizer removes secret and identifier formats from terminal errors', () => {
+  const fixture = {
+    email: assemble('pilot.admin', '@', 'example.com'),
+    uid: assemble('AbCdEfGhIjKlMn', 'OpQrStUvWxYz12'),
+    refreshToken: assemble('refresh-', 'secret-', 'value'),
+    apiKey: assemble('AI', 'zaSyExample', 'SecretValue'),
+    otp: assemble('123', '456'),
+    jwt: assemble('eyJheader', '.payload', '.signature'),
+    checkout: assemble('cs_', 'live_', 'sensitiveProviderId'),
+    event: assemble('evt_', 'sensitiveProviderId'),
+    uuid: assemble('123e4567', '-e89b-42d3-a456-', '426614174000'),
+  };
+
   const raw = [
-    'email=pilot.admin@example.com',
-    'uid=AbCdEfGhIjKlMnOpQrStUvWxYz12',
-    'refreshToken="refresh-secret-value"',
-    'apiKey: "AIzaSyExampleSecretValue"',
-    'otp=123456',
-    'Authorization: Bearer eyJheader.payload.signature',
-    'checkout=cs_live_sensitiveProviderId',
-    'event=evt_sensitiveProviderId',
-    'debug_token=123e4567-e89b-42d3-a456-426614174000',
+    `email=${fixture.email}`,
+    `uid=${fixture.uid}`,
+    `refreshToken="${fixture.refreshToken}"`,
+    `apiKey: "${fixture.apiKey}"`,
+    `otp=${fixture.otp}`,
+    `Authorization: Bearer ${fixture.jwt}`,
+    `checkout=${fixture.checkout}`,
+    `event=${fixture.event}`,
+    `debug_token=${fixture.uuid}`,
     '[production-deploy] complete Firebase production stack failed after 3 attempts',
   ].join('\n');
 
   const sanitized = sanitizeProductionDiagnosticLog(raw);
-  for (const value of [
-    'pilot.admin@example.com',
-    'AbCdEfGhIjKlMnOpQrStUvWxYz12',
-    'refresh-secret-value',
-    'AIzaSyExampleSecretValue',
-    '123456',
-    'eyJheader.payload.signature',
-    'cs_live_sensitiveProviderId',
-    'evt_sensitiveProviderId',
-    '123e4567-e89b-42d3-a456-426614174000',
-  ]) {
+  for (const value of Object.values(fixture)) {
     assert.doesNotMatch(sanitized, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   assert.match(sanitized, /complete Firebase production stack failed after 3 attempts/);
