@@ -6,11 +6,25 @@ const workflowPath = new URL('../../.github/workflows/extract-play-store-cert.ym
 const workflow = await readFile(workflowPath, 'utf8');
 
 test('Play Store certificate extraction is owner-only and production-protected', () => {
+  assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /github\.event\.issue\.number == 434/);
   assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
   assert.match(workflow, /github\.event\.comment\.author_association == 'OWNER'/);
   assert.match(workflow, /github\.event\.comment\.body == '\/bin-launch extract-play-store-cert'/);
   assert.match(workflow, /environment: production/);
+});
+
+test('runtime status is published before protected environment access', () => {
+  assert.match(workflow, /announce:/);
+  assert.match(workflow, /Publish directly readable running status/);
+  assert.match(workflow, /TRACKING_ISSUE: '478'/);
+  assert.match(workflow, /WAITING_FOR_PRODUCTION_ENVIRONMENT/);
+  assert.match(workflow, /Workflow run ID:/);
+  assert.match(workflow, /needs: announce/);
+  assert.match(workflow, /report:/);
+  assert.match(workflow, /Publish certificate extraction outcome/);
+  assert.match(workflow, /EXTRACT_RESULT: \$\{\{ needs\.extract-certificate\.result \}\}/);
+  assert.match(workflow, /Status: \\`SUCCESS\\`/);
 });
 
 test('Play Store certificate extraction uses all protected Android signing secrets', () => {
@@ -41,12 +55,13 @@ test('certificate artifact excludes private signing material', () => {
   assert.doesNotMatch(workflow, /path:\s+android\/keystore\.properties/);
 });
 
-test('certificate evidence binds to stable exact current main', () => {
+test('certificate evidence binds to stable exact current main and workflow run', () => {
   assert.match(workflow, /Resolve stable exact current main/);
   assert.match(workflow, /first_sha=.*commits\/main/);
   assert.match(workflow, /second_sha=.*commits\/main/);
-  assert.match(workflow, /ref: \$\{\{ steps\.release\.outputs\.sha \}\}/);
+  assert.match(workflow, /ref: \$\{\{ env\.RELEASE_SHA \}\}/);
   assert.match(workflow, /commitSha: \$commitSha/);
+  assert.match(workflow, /workflowRunId: \$workflowRunId/);
   assert.match(workflow, /packageName: \$packageName/);
   assert.match(workflow, /hardLaunchClaim: false/);
 });
