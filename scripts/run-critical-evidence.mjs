@@ -60,7 +60,6 @@ function shouldRunE2eAdminLifecycle() {
   return process.env.GITHUB_ACTIONS === 'true' &&
     process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
     process.env.GITHUB_REF === 'refs/heads/main' &&
-    process.env.DEPLOYMENT_ENVIRONMENT === 'production' &&
     String(process.env.E2E_ADMIN_EMAIL || '').trim().length > 0;
 }
 
@@ -70,7 +69,10 @@ function retireEphemeralE2eAdmin(phase) {
   const result = spawnSync(
     process.execPath,
     ['scripts/e2e-admin-lifecycle.mjs', `--phase=${phase}`],
-    { stdio: 'inherit', env: process.env },
+    {
+      stdio: 'inherit',
+      env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' },
+    },
   );
   const status = result.status ?? 1;
   if (status !== 0) {
