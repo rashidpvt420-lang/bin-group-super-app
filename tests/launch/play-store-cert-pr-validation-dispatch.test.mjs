@@ -5,25 +5,17 @@ import test from 'node:test';
 const workflowPath = new URL('../../.github/workflows/pr-validation.yml', import.meta.url);
 const workflow = await readFile(workflowPath, 'utf8');
 
-test('active PR Validation separates ordinary validation from trusted certificate export', () => {
-  assert.match(workflow, /pull_request_target:/);
-  assert.match(workflow, /types: \[opened, synchronize, reopened\]/);
-  assert.match(workflow, /paths:\s*\n\s*- \.github\/play-cert-extraction-request/);
-  assert.match(
-    workflow,
-    /validate:\s*[\s\S]*?if: github\.event_name == 'pull_request' \|\| github\.event_name == 'workflow_dispatch'/,
-  );
-  assert.match(workflow, /export-play-upload-certificate:/);
-  assert.match(workflow, /name: Export protected Play upload certificate/);
+test('PR Validation keeps ordinary validation and adds the protected certificate route', () => {
+  assert.match(workflow, /validate:/);
+  assert.match(workflow, /Install, typecheck, lint, and build/);
+  assert.match(workflow, /dispatch_play_certificate:/);
+  assert.match(workflow, /announce_play_certificate:/);
+  assert.match(workflow, /export_play_certificate:/);
   assert.match(workflow, /environment: production/);
-  assert.match(workflow, /github\.event_name == 'pull_request_target'/);
-  assert.doesNotMatch(
-    workflow,
-    /export-play-upload-certificate:\s*[\s\S]*?github\.event_name == 'pull_request' &&/,
-  );
 });
 
-test('trusted certificate request is owner-only, same-repository, and exact-title scoped', () => {
+test('dispatcher is owner-only, same-repository, draft-only, exact-title and exact-branch scoped', () => {
+  assert.match(workflow, /github\.event\.pull_request\.draft == true/);
   assert.match(workflow, /github\.event\.pull_request\.base\.ref == 'main'/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /github\.event\.pull_request\.user\.login == github\.repository_owner/);
@@ -31,36 +23,24 @@ test('trusted certificate request is owner-only, same-repository, and exact-titl
   assert.match(workflow, /github\.event\.pull_request\.title == 'Dispatch protected Play certificate extraction'/);
 });
 
-test('active certificate job executes stable current main and not PR-head code', () => {
-  assert.match(workflow, /Resolve stable exact current main/);
-  assert.match(workflow, /first_sha=.*commits\/main/);
-  assert.match(workflow, /second_sha=.*commits\/main/);
-  assert.match(workflow, /ref: \$\{\{ steps\.release\.outputs\.sha \}\}/);
-  assert.match(workflow, /Verify main remained frozen before extraction/);
-  assert.match(workflow, /Verify main remained frozen through extraction/);
-  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
-  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.head_ref \}\}/);
+test('dispatcher invokes the registered workflow on exact main', () => {
+  assert.match(workflow, /actions: write/);
+  assert.match(workflow, /actions\/workflows\/pr-validation\.yml\/dispatches/);
+  assert.match(workflow, /-f ref='main'/);
+  assert.match(workflow, /inputs\[expected_commit_sha\]/);
+  assert.match(workflow, /inputs\[request_pr\]/);
+  assert.match(workflow, /EXPORT_PUBLIC_PLAY_CERTIFICATE_BIN_GROUP/);
 });
 
-test('active certificate job uses protected signing inputs and exports only public evidence', () => {
-  for (const secret of [
-    'ANDROID_UPLOAD_KEYSTORE_BASE64',
-    'ANDROID_KEYSTORE_PASSWORD',
-    'ANDROID_KEY_ALIAS',
-    'ANDROID_KEY_PASSWORD',
-  ]) {
-    assert.match(workflow, new RegExp(`secrets\\.${secret}`));
-  }
-
-  assert.match(workflow, /base64 --decode > android\/app\/bin-group-upload\.jks/);
+test('protected child exports only public evidence', () => {
   assert.match(workflow, /keytool -exportcert -rfc/);
   assert.match(workflow, /bin-group-upload-certificate\.pem/);
+  assert.match(workflow, /play-store-certificate-evidence\.json/);
   assert.match(workflow, /publicCertificateOnly: true/);
   assert.match(workflow, /privateKeyExcluded: true/);
   assert.match(workflow, /keystoreExcluded: true/);
   assert.match(workflow, /passwordsExcluded: true/);
   assert.match(workflow, /Verify certificate artifact allowlist/);
-  assert.match(workflow, /Upload public Play certificate artifact/);
   assert.match(workflow, /Remove private Android signing material/);
   assert.doesNotMatch(workflow, /path:\s+android\/app\/bin-group-upload\.jks/);
   assert.doesNotMatch(workflow, /path:\s+android\/keystore\.properties/);
