@@ -54,7 +54,7 @@ test('privileged cleanup publishes evidence and excludes unrelated portal accoun
   assert.doesNotMatch(workflow, /firebase\s+deploy/i);
 });
 
-test('production deploy runs a non-destructive privileged-account preflight before Firebase deployment', () => {
+test('production deploy runs a guarded privileged-account preflight before Firebase deployment', () => {
   const cleanupStep = deployWorkflow.indexOf('Remove unexpected privileged Firebase accounts');
   const deployStep = deployWorkflow.indexOf('Deploy and verify Firebase production stack');
   assert.ok(cleanupStep >= 0, 'deploy workflow must include a privileged-account preflight step');
@@ -67,7 +67,9 @@ test('production deploy runs a non-destructive privileged-account preflight befo
   );
   assert.match(cleanupSource, /workflowName === DEPLOY_WORKFLOW_NAME\) return 'deploy-preflight'/);
   assert.match(cleanupSource, /requiresOwnerCleanup: executionMode === 'deploy-preflight'/);
-  assert.match(cleanupSource, /No identity was modified/);
+  assert.match(cleanupSource, /No unexpected privileged identity was modified/);
+  assert.match(cleanupSource, /retireConfiguredE2eAdmin/);
+  assert.match(cleanupSource, /phase: 'predeploy'/);
   assert.match(cleanupSource, /executionMode === 'owner-cleanup'/);
   assert.match(cleanupSource, /schemaVersion: executionMode === 'owner-cleanup' \? 1 : 2/);
 });
