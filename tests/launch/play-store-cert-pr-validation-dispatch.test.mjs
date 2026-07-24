@@ -5,11 +5,25 @@ import test from 'node:test';
 const workflowPath = new URL('../../.github/workflows/pr-validation.yml', import.meta.url);
 const workflow = await readFile(workflowPath, 'utf8');
 
-test('active PR Validation workflow contains the protected Play certificate job', () => {
+test('active PR Validation separates ordinary validation from trusted certificate export', () => {
+  assert.match(workflow, /pull_request_target:/);
+  assert.match(workflow, /types: \[opened, synchronize, reopened\]/);
+  assert.match(workflow, /paths:\s*\n\s*- \.github\/play-cert-extraction-request/);
+  assert.match(
+    workflow,
+    /validate:\s*[\s\S]*?if: github\.event_name == 'pull_request' \|\| github\.event_name == 'workflow_dispatch'/,
+  );
   assert.match(workflow, /export-play-upload-certificate:/);
   assert.match(workflow, /name: Export protected Play upload certificate/);
   assert.match(workflow, /environment: production/);
-  assert.match(workflow, /github\.event_name == 'pull_request'/);
+  assert.match(workflow, /github\.event_name == 'pull_request_target'/);
+  assert.doesNotMatch(
+    workflow,
+    /export-play-upload-certificate:\s*[\s\S]*?github\.event_name == 'pull_request' &&/,
+  );
+});
+
+test('trusted certificate request is owner-only, same-repository, and exact-title scoped', () => {
   assert.match(workflow, /github\.event\.pull_request\.base\.ref == 'main'/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /github\.event\.pull_request\.user\.login == github\.repository_owner/);
