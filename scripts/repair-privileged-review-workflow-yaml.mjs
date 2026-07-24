@@ -2,6 +2,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
+// Temporary branch-only repair. Remove this file before merging the workflow fix.
 const workflowPath = '.github/workflows/privileged-account-review-request.yml';
 const source = readFileSync(workflowPath, 'utf8');
 const lines = source.split('\n');
