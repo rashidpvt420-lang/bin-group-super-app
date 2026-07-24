@@ -14,6 +14,12 @@ test('Play Store certificate extraction is owner-only and production-protected',
   assert.match(workflow, /environment: production/);
 });
 
+test('certificate extraction uses run-specific concurrency', () => {
+  assert.match(workflow, /group: extract-play-store-upload-certificate-\$\{\{ github\.run_id \}\}/);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.doesNotMatch(workflow, /group: extract-play-store-upload-certificate\s*$/m);
+});
+
 test('runtime status is published before protected environment access', () => {
   assert.match(workflow, /announce:/);
   assert.match(workflow, /Publish directly readable running status/);
