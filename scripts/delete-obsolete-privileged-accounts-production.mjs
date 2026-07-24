@@ -169,7 +169,7 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   }
 
   const result = {
-    schemaVersion: 2,
+    schemaVersion: executionMode === 'owner-cleanup' ? 1 : 2,
     status: executionMode === 'owner-cleanup'
       ? 'executed'
       : executionMode === 'deploy-preflight'
