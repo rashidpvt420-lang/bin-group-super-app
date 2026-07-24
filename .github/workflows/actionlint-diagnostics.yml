@@ -28,4 +28,17 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
       - name: Validate protected review workflow
-        run: actionlint -color .github/workflows/privileged-account-review-request.yml
+        id: actionlint
+        shell: bash
+        run: |
+          set -o pipefail
+          actionlint -no-color .github/workflows/privileged-account-review-request.yml 2>&1 | tee actionlint-report.txt
+
+      - name: Upload complete actionlint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actionlint-privileged-review-${{ github.sha }}
+          path: actionlint-report.txt
+          if-no-files-found: error
+          retention-days: 3
