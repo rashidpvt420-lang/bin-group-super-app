@@ -500,6 +500,13 @@ jobs:
           PREDEPLOY_FUNCTIONS_LOAD_OK: ${{ steps.functions_load.outputs.ok }}
         run: node scripts/predeploy-approval-gate.mjs
 
+      - name: Remove unexpected privileged Firebase accounts
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION: DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP
+          CANONICAL_FOUNDER_EMAIL_CONFIRMATION: ceo@bin-groups.com
+        run: node scripts/delete-obsolete-privileged-accounts-production.mjs --execute
+
       - name: Deploy and verify Firebase production stack
         env:
           DEPLOYMENT_ENVIRONMENT: production
