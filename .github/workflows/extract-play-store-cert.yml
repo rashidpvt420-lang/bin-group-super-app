@@ -54,6 +54,16 @@ jobs:
           ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
 
+      - name: Verify main remained frozen before extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
+            echo "Main moved from $RELEASE_SHA to $remote_main before certificate extraction." >&2
+            exit 1
+          }
+
       - name: Use Java 21
         uses: actions/setup-java@v4
         with:
@@ -160,6 +170,16 @@ jobs:
           retention-days: 7
           compression-level: 9
 
+      - name: Verify main remained frozen through extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
+            echo "Certificate was exported, but main moved to $remote_main; refusing exact-SHA evidence." >&2
+            exit 1
+          }
+
       - name: Remove private signing material
         if: always()
         shell: bash
@@ -168,19 +188,26 @@ jobs:
           shred -u android/app/bin-group-upload.jks 2>/dev/null || rm -f android/app/bin-group-upload.jks
           shred -u android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
 
-  report:
-    name: Publish certificate extraction outcome
-    needs: [announce, extract-certificate]
-    if: always() && needs.announce.result == 'success'
+  report-result:
+    name: Publish certificate extraction result
+    needs:
+      - authorize
+      - extract-certificate
+    if: always() && needs.authorize.result != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      RELEASE_SHA: ${{ needs.announce.outputs.release_sha }}
-      EXTRACT_RESULT: ${{ needs.extract-certificate.result }}
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+      RELEASE_SHA: ${{ needs.authorize.outputs.release_sha }}
+      EXTRACTION_RESULT: ${{ needs.extract-certificate.result }}
       ARTIFACT_NAME: ${{ needs.extract-certificate.outputs.artifact_name }}
       CERTIFICATE_FINGERPRINT: ${{ needs.extract-certificate.outputs.fingerprint }}
+
     steps:
-      - name: Update tracking issue and command issue
+      - name: Publish successful extraction result
+        if: env.EXTRACTION_RESULT == 'success'
         shell: bash
         run: |
           set -euo pipefail
