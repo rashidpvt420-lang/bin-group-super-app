@@ -11,12 +11,6 @@ on:
     paths:
       - .github/play-cert-extraction-request
   workflow_dispatch:
-    inputs:
-      export_play_certificate:
-        description: Export the public Android Play upload certificate
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -225,17 +219,16 @@ jobs:
             exit 1
           }
           echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
-          gh api "repos/$REPOSITORY/actions/workflows/pr-validation.yml/runs?event=workflow_dispatch&per_page=30" \
+          gh api "repos/$REPOSITORY/actions/workflows/extract-play-store-cert.yml/runs?event=workflow_dispatch&per_page=30" \
             --jq '.workflow_runs[].id' > certificate-run-baseline.txt
 
-      - name: Dispatch registered PR Validation certificate export on main
+      - name: Dispatch registered certificate workflow on main
         shell: bash
         run: |
           set -euo pipefail
           gh api --method POST \
-            "repos/$REPOSITORY/actions/workflows/pr-validation.yml/dispatches" \
-            -f ref='main' \
-            -F 'inputs[export_play_certificate]=true'
+            "repos/$REPOSITORY/actions/workflows/extract-play-store-cert.yml/dispatches" \
+            -f ref='main'
 
       - name: Correlate the new exact-main workflow run
         env:
@@ -248,7 +241,7 @@ jobs:
 
           for _ in $(seq 1 30); do
             candidate="$({
-              gh api "repos/$REPOSITORY/actions/workflows/pr-validation.yml/runs?event=workflow_dispatch&per_page=30" \
+              gh api "repos/$REPOSITORY/actions/workflows/extract-play-store-cert.yml/runs?event=workflow_dispatch&per_page=30" \
                 --jq --arg sha "$RELEASE_SHA" '.workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url] | @tsv'
             } | while IFS=$'\t' read -r id url; do
               if ! grep -Fxq "$id" certificate-run-baseline.txt; then
@@ -265,7 +258,7 @@ jobs:
           done
 
           [[ "$run_id" =~ ^[0-9]+$ ]] || {
-            echo '::error::The certificate export was dispatched, but no unique exact-main PR Validation run could be correlated.'
+            echo '::error::The certificate workflow was dispatched, but no unique exact-main run could be correlated.'
             exit 1
           }
 
@@ -282,18 +275,12 @@ jobs:
   export-play-upload-certificate:
     name: Export protected Play upload certificate
     if: >-
-      (
-        github.event_name == 'workflow_dispatch' &&
-        inputs.export_play_certificate == true
-      ) ||
-      (
-        github.event_name == 'pull_request_target' &&
-        github.event.pull_request.base.ref == 'main' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.pull_request.user.login == github.repository_owner &&
-        startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-extraction-') &&
-        github.event.pull_request.title == 'Dispatch protected Play certificate extraction'
-      )
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-extraction-') &&
+      github.event.pull_request.title == 'Dispatch protected Play certificate extraction'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 15
