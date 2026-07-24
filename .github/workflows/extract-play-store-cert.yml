@@ -2,11 +2,8 @@ name: Extract Play Store Upload Certificate
 run-name: Export Play upload certificate · 087444dcd0961a0f3b941b3dabacb75b976b1152
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/extract-play-store-cert.yml
+  issue_comment:
+    types: [created]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +15,15 @@ concurrency:
 
 jobs:
   export-certificate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.issue.number == 434 &&
+        !github.event.issue.pull_request &&
+        github.event.comment.user.login == github.repository_owner &&
+        github.event.comment.author_association == 'OWNER' &&
+        github.event.comment.body == '/bin-launch extract-play-store-cert'
+      )
     name: Export protected Android upload certificate
     runs-on: ubuntu-latest
     environment: production
@@ -47,12 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          required=(
-            ANDROID_UPLOAD_KEYSTORE_BASE64
-            ANDROID_KEYSTORE_PASSWORD
-            ANDROID_KEY_ALIAS
-            ANDROID_KEY_PASSWORD
-          )
+          required=(ANDROID_UPLOAD_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD)
           for name in "${required[@]}"; do
             [[ -n "${!name:-}" ]] || {
               echo "::error::Missing protected Android signing value: $name"
@@ -101,5 +102,4 @@ jobs:
       - name: Remove protected signing material
         if: always()
         shell: bash
-        run: |
-          rm -f android/app/bin-group-upload.jks android/keystore.properties
+        run: rm -f android/app/bin-group-upload.jks android/keystore.properties
