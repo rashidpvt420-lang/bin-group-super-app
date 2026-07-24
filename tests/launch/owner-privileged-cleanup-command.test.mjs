@@ -9,17 +9,17 @@ const [command, reviewWorkflow, executeWorkflow, correlationHelper] = await Prom
   readFile(new URL('../../scripts/owner-launch-run-correlation.sh', import.meta.url), 'utf8'),
 ]);
 
-test('runtime authorization evaluates exact issue commands before production review', () => {
-  assert.match(command, /authorize-command:/);
-  assert.match(command, /name: Evaluate exact issue command/);
+test('single job authorizes exact issue commands before every production step', () => {
+  assert.match(command, /jobs:\s*\n\s*review-and-clean:/);
+  assert.doesNotMatch(command, /authorize-command:/);
+  assert.doesNotMatch(command, /\n\s+needs:/);
+  assert.match(command, /name: Authorize exact issue command and resolve main/);
   assert.match(command, /EVENT_NAME:\s*\$\{\{ github\.event_name \}\}/);
-  assert.match(command, /ISSUE_NUMBER:\s*\$\{\{ github\.event\.issue\.number \}\}/);
+  assert.match(command, /EVENT_ISSUE_NUMBER:\s*\$\{\{ github\.event\.issue\.number \}\}/);
   assert.match(command, /PULL_REQUEST_URL:\s*\$\{\{ github\.event\.issue\.pull_request\.url \}\}/);
-  assert.match(command, /\[\[ "\$EVENT_NAME" == 'issue_comment' && "\$ISSUE_NUMBER" == '434' && -z "\$PULL_REQUEST_URL" \]\]/);
+  assert.match(command, /\[\[ "\$EVENT_NAME" == 'issue_comment' && "\$EVENT_ISSUE_NUMBER" == "\$TARGET_ISSUE_NUMBER" && -z "\$PULL_REQUEST_URL" \]\]/);
   assert.match(command, /\[\[ "\$COMMENT_BODY" == '\/bin-launch review-privileged-accounts' \]\]/);
-  assert.match(command, /needs: authorize-command/);
-  assert.match(command, /if: needs\.authorize-command\.outputs\.authorized == 'true'/);
-  assert.doesNotMatch(command, /review-and-clean:[\s\S]{0,300}github\.event\.issue\.number == 434/);
+  assert.equal((command.match(/if: steps\.authorize\.outputs\.authorized == 'true'/g) || []).length, 3);
 });
 
 test('read-only review is transport-neutral while destructive cleanup remains owner-only twice', () => {
@@ -27,7 +27,7 @@ test('read-only review is transport-neutral while destructive cleanup remains ow
   assert.match(command, /REPOSITORY_OWNER:\s*\$\{\{ github\.repository_owner \}\}/);
   assert.match(command, /COMMENT_BODY" == '\/bin-launch execute-privileged-cleanup'[\s\S]*COMMENT_AUTHOR" == "\$REPOSITORY_OWNER/);
   assert.match(command, /execute='true'/);
-  assert.equal((command.match(/if: needs\.authorize-command\.outputs\.execute == 'true'/g) || []).length, 2);
+  assert.equal((command.match(/if: steps\.authorize\.outputs\.execute == 'true'/g) || []).length, 2);
   assert.match(command, /\[\[ "\$COMMENT_AUTHOR" == "\$REPOSITORY_OWNER" \]\]/);
   assert.doesNotMatch(command, /chatgpt-codex-connector/);
   assert.doesNotMatch(command, /author_association/);
@@ -38,7 +38,7 @@ test('read-only review is transport-neutral while destructive cleanup remains ow
 
 test('cleanup command checks out exact main and uses shared paginated baseline correlation', () => {
   assert.match(command, /name: Checkout exact current main/);
-  assert.match(command, /ref: \$\{\{ steps\.release\.outputs\.sha \}\}/);
+  assert.match(command, /ref: \$\{\{ steps\.authorize\.outputs\.release_sha \}\}/);
   assert.match(command, /persist-credentials: false/);
   assert.match(command, /node-version: '22'/);
   assert.match(command, /source scripts\/owner-launch-run-correlation\.sh/g);
