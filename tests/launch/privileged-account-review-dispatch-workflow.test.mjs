@@ -32,7 +32,8 @@ test('privileged review dispatcher validates a canonical one-file no-mutation ma
 
 test('privileged review dispatcher binds one protected dry-run to stable exact main', () => {
   assert.match(workflow, /Resolve stable current main and snapshot workflow runs/);
-  assert.match(workflow, /privileged-account-cleanup-dry-run\.yml\/runs\?event=workflow_dispatch&per_page=100/);
+  assert.match(workflow, /privileged-account-cleanup-dry-run\.yml\/runs\?event=workflow_dispatch&branch=main&per_page=100/);
+  assert.match(workflow, /gh api --paginate --slurp/);
   assert.match(workflow, /privileged-account-cleanup-dry-run\.yml\/dispatches/);
   assert.equal((workflow.match(/privileged-account-cleanup-dry-run\.yml\/dispatches/g) || []).length, 1);
   assert.match(workflow, /expected_commit_sha:\$sha/);
