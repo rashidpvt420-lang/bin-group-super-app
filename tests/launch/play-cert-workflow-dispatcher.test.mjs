@@ -36,13 +36,14 @@ test('dispatcher resolves stable current main and invokes workflow_dispatch on t
   assert.match(workflow, /head_sha == \$sha/);
 });
 
-test('dispatcher never accesses Android signing secrets or private material', () => {
+test('dispatcher never accesses Android signing secrets or private signing material', () => {
   const dispatcher = workflow.match(/dispatch-play-certificate-workflow:[\s\S]*?\n  export-play-upload-certificate:/)?.[0] ?? '';
   assert.ok(dispatcher.length > 0);
   assert.doesNotMatch(dispatcher, /ANDROID_UPLOAD_KEYSTORE_BASE64/);
   assert.doesNotMatch(dispatcher, /ANDROID_KEYSTORE_PASSWORD/);
   assert.doesNotMatch(dispatcher, /ANDROID_KEY_ALIAS/);
   assert.doesNotMatch(dispatcher, /ANDROID_KEY_PASSWORD/);
-  assert.doesNotMatch(dispatcher, /base64 --decode/);
+  assert.doesNotMatch(dispatcher, /bin-group-upload\.jks/);
+  assert.doesNotMatch(dispatcher, /keystore\.properties/);
   assert.doesNotMatch(dispatcher, /keytool/);
 });
