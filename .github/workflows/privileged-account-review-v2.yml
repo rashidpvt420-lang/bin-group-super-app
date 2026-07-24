@@ -1,0 +1,206 @@
+name: Privileged Account Review V2
+run-name: Privileged review v2 · ${{ github.run_id }}
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/privileged-review-request-v2
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: privileged-account-review-v2
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  ISSUE_NUMBER: '434'
+
+jobs:
+  review:
+    name: Review privileged accounts without mutation
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      REQUEST_PR: ${{ github.event.pull_request.number }}
+      REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+    steps:
+      - name: Authorize canonical one-file owner request
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EVENT_NAME" == 'pull_request_target' ]]
+          [[ "$BASE_REF" == 'main' ]]
+          [[ "$HEAD_REPOSITORY" == "$REPOSITORY" ]]
+          [[ "$PR_AUTHOR" == "$REPOSITORY_OWNER" ]]
+          [[ "$HEAD_REF" == ops/dispatch-privileged-review-v2-* ]]
+          [[ "$PR_TITLE" == 'Dispatch protected privileged account review v2' ]]
+
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/privileged-review-request-v2' ]] || {
+            printf '::error::Request must change only .github/privileged-review-request-v2. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/privileged-review-request-v2?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          expected=$'request=review-privileged-accounts-v2\nmutation_allowed=false\nhard_launch_claim=false'
+          [[ "$marker" == "$expected" ]] || {
+            echo '::error::Privileged review request marker is not canonical.'
+            exit 1
+          }
+
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main changed while authorizing privileged-account review.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Verify main remained frozen before review
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
+            echo "::error::Main moved from $RELEASE_SHA to $remote_main before privileged review."
+            exit 1
+          }
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Build read-only privileged-account inventory
+        env:
+          GITHUB_SHA: ${{ steps.release.outputs.sha }}
+          GITHUB_REF: refs/heads/main
+        run: node scripts/review-privileged-accounts-production.mjs
+
+      - name: Validate exact-SHA no-mutation review evidence
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          report='launch_package/privileged-account-cleanup.json'
+          [[ -s "$report" ]]
+          jq -e --arg sha "$RELEASE_SHA" '
+            .schemaVersion == 2 and
+            .status == "dry-run" and
+            .projectId == "bin-group-57c60" and
+            .commitSha == $sha and
+            .mutationPerformed == false and
+            .deletedAccountCount == 0 and
+            .deletedProfileDocumentCount == 0 and
+            .sensitiveValuesExcluded == true and
+            .auditLogsPreserved == true and
+            .nonPrivilegedAccountsUntouched == true and
+            .hardLaunchClaim == false and
+            (.canonicalFounderReady | type) == "boolean" and
+            (.founderEmailVerified | type) == "boolean" and
+            (.founderPhoneMfaReady | type) == "boolean" and
+            (.executionEligible | type) == "boolean" and
+            (.deletionTargetCount | type) == "number"
+          ' "$report" >/dev/null
+
+      - name: Verify main remained frozen through review
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
+            echo "::error::Privileged review completed, but main moved to $remote_main."
+            exit 1
+          }
+
+      - name: Upload sanitized privileged review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: privileged-account-cleanup-review-${{ steps.release.outputs.sha }}-${{ github.run_id }}
+          path: launch_package/privileged-account-cleanup.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 9
+
+      - name: Publish sanitized review result
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          report='launch_package/privileged-account-cleanup.json'
+          ready="$(jq -r '.canonicalFounderReady' "$report")"
+          email_verified="$(jq -r '.founderEmailVerified' "$report")"
+          phone_mfa="$(jq -r '.founderPhoneMfaReady' "$report")"
+          eligible="$(jq -r '.executionEligible' "$report")"
+          privileged_count="$(jq -r '.privilegedAccountCountBefore' "$report")"
+          target_count="$(jq -r '.deletionTargetCount' "$report")"
+          blockers="$(jq -r '.executionBlockers | join("; ") | if length == 0 then "none" else . end' "$report")"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          artifact="privileged-account-cleanup-review-$RELEASE_SHA-$GITHUB_RUN_ID"
+          body="## Privileged-account review v2
+
+- Exact SHA: \`$RELEASE_SHA\`
+- Review run ID: \`$GITHUB_RUN_ID\`
+- Review run: $run_url
+- Artifact: \`$artifact\`
+- Canonical Founder ready: \`$ready\`
+- Founder email verified: \`$email_verified\`
+- Founder phone MFA ready: \`$phone_mfa\`
+- Privileged accounts: \`$privileged_count\`
+- Unexpected deletion targets: \`$target_count\`
+- Cleanup execution eligible: \`$eligible\`
+- Execution blockers: \`$blockers\`
+- Mutation performed: \`false\`
+- Hard-launch claim: \`false\`"
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+          printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
+          gh api --method PATCH "repos/$REPOSITORY/pulls/$REQUEST_PR" -f state='closed' >/dev/null
