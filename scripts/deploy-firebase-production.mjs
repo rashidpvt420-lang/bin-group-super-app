@@ -97,11 +97,40 @@ const remoteMain = spawnSync(
   { cwd: process.cwd(), encoding: 'utf8', shell: false },
 );
 const remoteMainSha = String(remoteMain.stdout || '').trim().split(/\s+/)[0] || '';
-if ((remoteMain.status ?? 1) !== 0 || remoteMainSha !== githubSha) {
+if ((remoteMain.status ?? 1) !== 0 || !remoteMainSha) {
   console.error(
-    `[production-deploy] Refusing stale deployment: current origin/main ${remoteMainSha || '(unavailable)'} does not match GITHUB_SHA`,
+    `[production-deploy] Refusing stale deployment: could not resolve current origin/main`,
   );
   process.exit(1);
+}
+if (remoteMainSha !== githubSha) {
+  // origin/main has advanced since dispatch; verify GITHUB_SHA is still an ancestor
+  // (i.e. main only moved forward — not reverted or force-pushed)
+  const fetchResult = spawnSync(
+    'git',
+    ['fetch', '--depth=500', 'origin', 'main'],
+    { cwd: process.cwd(), encoding: 'utf8', stdio: 'inherit', shell: false },
+  );
+  if ((fetchResult.status ?? 1) !== 0) {
+    console.error(
+      `[production-deploy] Refusing stale deployment: current origin/main ${remoteMainSha} does not match GITHUB_SHA and ancestry-check fetch failed`,
+    );
+    process.exit(1);
+  }
+  const ancestorCheck = spawnSync(
+    'git',
+    ['merge-base', '--is-ancestor', githubSha, 'FETCH_HEAD'],
+    { cwd: process.cwd(), encoding: 'utf8', shell: false },
+  );
+  if ((ancestorCheck.status ?? 1) !== 0) {
+    console.error(
+      `[production-deploy] Refusing stale deployment: current origin/main ${remoteMainSha} does not match GITHUB_SHA and ${githubSha} is not an ancestor of origin/main`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `[production-deploy] origin/main has advanced to ${remoteMainSha}; GITHUB_SHA ${githubSha} is a verified ancestor — proceeding with deployment`,
+  );
 }
 
 try {
