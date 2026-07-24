@@ -54,9 +54,12 @@ test('Android store release is manual, exact-main, production-protected, and sig
   assert.match(androidScript, /EXPECTED_APP_ID="ae\.bingroups\.superapp"/);
   assert.match(androidScript, /:app:assembleRelease :app:bundleRelease/);
   assert.match(androidScript, /jarsigner -verify -verbose -certs/);
+  assert.match(androidScript, /keytool -printcert -jarfile "\$AAB_PATH"/);
+  assert.match(androidScript, /Release AAB certificate does not match the protected upload keystore/);
   assert.match(androidScript, /apksigner.*verify --verbose --print-certs/s);
   assert.match(androidScript, /aapt dump badging/);
   assert.match(androidScript, /Release APK certificate does not match the protected upload keystore/);
+  assert.match(androidScript, /aabCertificateMatchedUploadKeystore': True/);
   assert.match(androidScript, /trap cleanup EXIT/);
   assert.match(androidScript, /rm -f "\$KEYSTORE_PATH" "\$KEYSTORE_PROPERTIES"/);
 
