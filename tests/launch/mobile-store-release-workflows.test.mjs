@@ -24,6 +24,16 @@ function assertBashSyntax(path) {
   );
 }
 
+function assertProductionFirebaseContract(workflow) {
+  assert.match(workflow, /VITE_FIREBASE_AUTH_DOMAIN: bin-group-57c60\.firebaseapp\.com/);
+  assert.match(workflow, /VITE_FIREBASE_PROJECT_ID: bin-group-57c60/);
+  assert.match(workflow, /VITE_FIREBASE_STORAGE_BUCKET: bin-group-57c60\.firebasestorage\.app/);
+  assert.match(workflow, /VITE_FIREBASE_VAPID_KEY: \$\{\{ secrets\.VITE_FIREBASE_VAPID_KEY \}\}/);
+  assert.match(workflow, /VITE_ENABLE_FIREBASE_APPCHECK: 'true'/);
+  assert.match(workflow, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ''/);
+  assert.match(workflow, /\[\[ -z "\$VITE_FIREBASE_APPCHECK_DEBUG_TOKEN" \]\]/);
+}
+
 test('store release shell scripts pass bash syntax validation', () => {
   assertBashSyntax('scripts/run-android-store-release.sh');
   assertBashSyntax('scripts/run-ios-app-store-release.sh');
@@ -40,6 +50,7 @@ test('Android store release is manual, exact-main, production-protected, and sig
   assert.match(androidWorkflow, /\[\[ "\$EXPECTED_COMMIT_SHA" == "\$GITHUB_SHA" \]\]/);
   assert.match(androidWorkflow, /Verify main has not moved before signing/);
   assert.match(androidWorkflow, /Verify main remained frozen through signing/);
+  assertProductionFirebaseContract(androidWorkflow);
 
   for (const secret of [
     'ANDROID_UPLOAD_KEYSTORE_BASE64',
@@ -80,6 +91,7 @@ test('iOS App Store release is manual, exact-main, production-protected, and dis
   assert.match(iosWorkflow, /\[\[ "\$BUILD_NUMBER" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/);
   assert.match(iosWorkflow, /Verify main has not moved before signing/);
   assert.match(iosWorkflow, /Verify main remained frozen through signing/);
+  assertProductionFirebaseContract(iosWorkflow);
 
   for (const secret of [
     'APPLE_DISTRIBUTION_CERTIFICATE_P12_BASE64',
