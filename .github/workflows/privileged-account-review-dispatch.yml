@@ -71,7 +71,7 @@ jobs:
           }
           echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
           gh api --paginate --slurp \
-            "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/runs?event=workflow_dispatch&per_page=100" \
+            "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
             | jq -r '.[].workflow_runs[].id' > privileged-review-run-baseline.txt
 
       - name: Dispatch registered protected dry-run workflow
