@@ -100,21 +100,24 @@ jobs:
           run_url=''
 
           for _ in $(seq 1 60); do
-            candidate="$({
+            new="$(
               gh api --paginate --slurp \
-                "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/runs?event=workflow_dispatch&per_page=100" \
-                | jq -r --arg sha "$RELEASE_SHA" '.[].workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url] | @tsv'
-            } | while IFS=$'\t' read -r id url; do
-              if ! grep -Fxq "$id" privileged-review-run-baseline.txt; then
-                printf '%s\t%s\n' "$id" "$url"
-                break
-              fi
-            done)"
+                "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+                | jq -r --arg sha "$RELEASE_SHA" '.[].workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url] | @tsv' |
+                awk 'NR==FNR {baseline[$0]=1; next} {split($0,a,"\t"); if (!baseline[a[1]]) print $0}' privileged-review-run-baseline.txt -
+            )"
+            new_count="$(awk 'NF{c++} END{print c+0}' <<<"$new")"
 
-            if [[ -n "$candidate" ]]; then
-              IFS=$'\t' read -r run_id run_url <<< "$candidate"
+            if [[ "$new_count" -eq 1 ]]; then
+              IFS=$'\t' read -r run_id run_url <<<"$new"
               break
             fi
+
+            if [[ "$new_count" -gt 1 ]]; then
+              echo '::error::The protected review was dispatched, but no unique exact-main run could be correlated.'
+              exit 1
+            fi
+
             sleep 5
           done
 
