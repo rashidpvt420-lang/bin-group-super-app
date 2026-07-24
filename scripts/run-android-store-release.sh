@@ -130,15 +130,17 @@ if [[ "$package_name" != "$EXPECTED_APP_ID" ]]; then
   exit 1
 fi
 
-keystore_sha256="$(
+keystore_sha256="$({
   keytool -list -v \
     -keystore "$KEYSTORE_PATH" \
     -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-    -alias "$ANDROID_KEY_ALIAS" |
-  sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' |
-  head -n 1 |
-  tr '[:lower:]' '[:upper:]'
-)"
+    -alias "$ANDROID_KEY_ALIAS"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+
+aab_certificate_sha256="$({
+  keytool -printcert -jarfile "$AAB_PATH"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+
 apk_sha256="$(
   sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$apk_signing_report" |
   head -n 1 |
@@ -147,7 +149,11 @@ apk_sha256="$(
 )"
 rm -f "$apk_signing_report"
 
-if [[ -z "$keystore_sha256" || -z "$apk_sha256" || "$keystore_sha256" != "$apk_sha256" ]]; then
+if [[ -z "$keystore_sha256" || -z "$aab_certificate_sha256" || "$keystore_sha256" != "$aab_certificate_sha256" ]]; then
+  echo "::error::Release AAB certificate does not match the protected upload keystore."
+  exit 1
+fi
+if [[ -z "$apk_sha256" || "$keystore_sha256" != "$apk_sha256" ]]; then
   echo "::error::Release APK certificate does not match the protected upload keystore."
   exit 1
 fi
@@ -186,6 +192,7 @@ result = {
     },
     'signing': {
         'certificateSha256': os.environ['CERTIFICATE_SHA256'],
+        'aabCertificateMatchedUploadKeystore': True,
         'apkCertificateMatchedUploadKeystore': True,
         'privateKeyExcludedFromArtifacts': True,
     },
