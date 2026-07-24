@@ -34,6 +34,21 @@ function profileActive(user) {
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status));
 }
 
+function resolveEvidenceContext(env) {
+  const overrideSha = text(env.PRIVILEGED_REVIEW_COMMIT_SHA);
+  const overrideRef = text(env.PRIVILEGED_REVIEW_REF);
+  if (overrideSha && !/^[0-9a-f]{40}$/.test(overrideSha)) {
+    throw new Error('PRIVILEGED_REVIEW_COMMIT_SHA must be a full lowercase commit SHA.');
+  }
+  if (overrideRef && overrideRef !== 'refs/heads/main') {
+    throw new Error('PRIVILEGED_REVIEW_REF must equal refs/heads/main.');
+  }
+  return {
+    commitSha: overrideSha || text(env.GITHUB_SHA) || null,
+    ref: overrideRef || text(env.GITHUB_REF) || null,
+  };
+}
+
 export function summarizePrivilegedAccountReview(privilegedUsers) {
   const privileged = Array.isArray(privilegedUsers) ? privilegedUsers : [];
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
@@ -92,6 +107,7 @@ export async function reviewPrivilegedAccountsProduction({
     throw new Error(`GCP_PROJECT_ID must equal ${EXPECTED_PROJECT_ID}.`);
   }
 
+  const evidenceContext = resolveEvidenceContext(env);
   initializeFirebaseAdmin(admin, projectId);
   const auth = authClient || admin.auth();
   const db = firestoreClient || admin.firestore();
@@ -104,8 +120,8 @@ export async function reviewPrivilegedAccountsProduction({
     status: 'dry-run',
     projectId,
     repository: text(env.GITHUB_REPOSITORY) || null,
-    ref: text(env.GITHUB_REF) || null,
-    commitSha: text(env.GITHUB_SHA) || null,
+    ref: evidenceContext.ref,
+    commitSha: evidenceContext.commitSha,
     workflowRunId: text(env.GITHUB_RUN_ID) || null,
     workflowRunAttempt: Number(env.GITHUB_RUN_ATTEMPT || 0) || null,
     verifiedAt: now.toISOString(),
