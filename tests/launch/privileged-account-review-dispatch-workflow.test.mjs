@@ -45,3 +45,17 @@ test('privileged review dispatcher binds one protected dry-run to stable exact m
   assert.match(workflow, /Mutation requested: false/);
   assert.match(workflow, /Hard-launch claim: false/);
 });
+
+test('dispatcher publishes only sanitized exact-run correlation evidence', () => {
+  assert.match(workflow, /privileged-review-dispatch-evidence\.json/);
+  assert.match(workflow, /schemaVersion:1/);
+  assert.match(workflow, /commitSha:\$commitSha/);
+  assert.match(workflow, /workflowRunId:\$workflowRunId/);
+  assert.match(workflow, /workflowRunUrl:\$workflowRunUrl/);
+  assert.match(workflow, /mutationRequested:false/);
+  assert.match(workflow, /hardLaunchClaim:false/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /name: privileged-review-dispatch-\$\{\{ steps\.release\.outputs\.sha \}\}-\$\{\{ steps\.correlate\.outputs\.run_id \}\}/);
+  assert.doesNotMatch(workflow, /privileged-review-dispatch-evidence[\s\S]*password/i);
+  assert.doesNotMatch(workflow, /privileged-review-dispatch-evidence[\s\S]*privateKey/i);
+});
