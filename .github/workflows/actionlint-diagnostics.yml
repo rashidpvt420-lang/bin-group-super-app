@@ -39,6 +39,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: actionlint-privileged-review-${{ github.sha }}
-          path: actionlint-report.txt
+          path: |
+            actionlint-report.txt
+            .github/workflows/privileged-account-review-request.yml
           if-no-files-found: error
           retention-days: 3
