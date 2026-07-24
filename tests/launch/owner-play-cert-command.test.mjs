@@ -10,8 +10,8 @@ test('certificate workflow accepts only the exact owner issue command', () => {
   assert.match(workflow, /github\.event\.issue\.number == 434/);
   assert.match(workflow, /!github\.event\.issue\.pull_request/);
   assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
-  assert.match(workflow, /github\.event\.comment\.author_association == 'OWNER'/);
   assert.match(workflow, /github\.event\.comment\.body == '\/bin-launch extract-play-store-cert'/);
+  assert.doesNotMatch(workflow, /author_association/);
 });
 
 test('certificate run announces stable exact current main before production access', () => {
