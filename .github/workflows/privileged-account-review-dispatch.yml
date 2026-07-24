@@ -1,0 +1,144 @@
+name: Dispatch Protected Privileged Account Review
+run-name: Privileged review dispatch · ${{ github.run_id }}
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, converted_to_draft]
+    paths:
+      - .github/privileged-account-review-dispatch-request
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: privileged-account-review-dispatch-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  REQUEST_PR: ${{ github.event.pull_request.number }}
+  REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  dispatch:
+    name: Dispatch exact-main protected review
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      startsWith(github.event.pull_request.head.ref, 'ops/dispatch-privileged-review-workflow-') &&
+      github.event.pull_request.title == 'Dispatch protected privileged account review workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Validate canonical one-file owner request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/privileged-account-review-dispatch-request' ]] || {
+            printf '::error::Request must change only .github/privileged-account-review-dispatch-request. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/privileged-account-review-dispatch-request?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          expected=$'request=dispatch-protected-privileged-account-review\nmutation_allowed=false\nhard_launch_claim=false'
+          [[ "$marker" == "$expected" ]] || {
+            echo '::error::Privileged review dispatch marker is not canonical.'
+            exit 1
+          }
+
+      - name: Resolve stable current main and snapshot workflow runs
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while preparing privileged review dispatch.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+          gh api --paginate --slurp \
+            "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+            | jq -r '.[].workflow_runs[].id' > privileged-review-run-baseline.txt
+
+      - name: Dispatch registered protected dry-run workflow
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$RELEASE_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP"}}' \
+            > privileged-review-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/dispatches" \
+            --input privileged-review-dispatch.json
+
+      - name: Correlate new exact-main protected review run
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          run_url=''
+
+          for _ in $(seq 1 60); do
+            new="$(
+              gh api --paginate --slurp \
+                "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+                | jq -r --arg sha "$RELEASE_SHA" '.[].workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url] | @tsv' |
+                awk 'NR==FNR {baseline[$0]=1; next} {split($0,a,"\t"); if (!baseline[a[1]]) print $0}' privileged-review-run-baseline.txt -
+            )"
+            new_count="$(awk 'NF{c++} END{print c+0}' <<<"$new")"
+
+            if [[ "$new_count" -eq 1 ]]; then
+              IFS=$'\t' read -r run_id run_url <<<"$new"
+              break
+            fi
+
+            if [[ "$new_count" -gt 1 ]]; then
+              echo '::error::The protected review was dispatched, but no unique exact-main run could be correlated.'
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          [[ "$run_id" =~ ^[0-9]+$ ]] || {
+            echo '::error::The protected review was dispatched, but no unique exact-main run could be correlated.'
+            exit 1
+          }
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]] || {
+            echo "::error::Main moved from $RELEASE_SHA to $latest_main after dispatch."
+            exit 1
+          }
+
+          echo "Protected privileged review run: $run_url"
+          {
+            echo '## Protected privileged-account review dispatched'
+            echo
+            echo "- Exact main SHA: \`$RELEASE_SHA\`"
+            echo "- Workflow run ID: \`$run_id\`"
+            echo "- Workflow run: $run_url"
+            echo '- Mutation requested: false'
+            echo '- Hard-launch claim: false'
+          } >> "$GITHUB_STEP_SUMMARY"
