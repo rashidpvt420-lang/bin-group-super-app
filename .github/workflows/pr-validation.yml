@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: pr-validation-${{ github.ref }}
@@ -354,9 +355,6 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-privileged-review-') &&
       github.event.pull_request.title == 'Dispatch protected privileged account review'
-    permissions:
-      contents: read
-      id-token: write
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
