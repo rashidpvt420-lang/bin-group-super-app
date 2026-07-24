@@ -2,11 +2,8 @@ name: Extract Play Store Upload Certificate
 run-name: Play Store certificate · ${{ github.run_id }}
 
 on:
-  push:
-    branches:
-      - ops/extract-play-store-cert-087444d
-    paths:
-      - .github/workflows/extract-play-store-cert.yml
+  issue_comment:
+    types: [created]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +11,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: extract-play-store-cert-087444d
+  group: extract-play-store-upload-certificate
   cancel-in-progress: false
 
 env:
@@ -24,31 +21,82 @@ env:
   TRACKING_ISSUE: '478'
 
 jobs:
-  export-certificate:
-    name: Export protected Android upload certificate
+  announce:
+    name: Announce exact protected certificate run
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.issue.number == 434 &&
+        !github.event.issue.pull_request &&
+        github.event.comment.user.login == github.repository_owner &&
+        github.event.comment.author_association == 'OWNER' &&
+        github.event.comment.body == '/bin-launch extract-play-store-cert'
+      )
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while authorizing certificate extraction.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Publish waiting-for-production status
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="## Protected Play Store certificate extraction
+
+- Status: \`WAITING_FOR_PRODUCTION_ENVIRONMENT\`
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
+- Workflow run: $run_url
+- Protected job: \`Export public Android upload certificate\`
+- Artifact: pending
+- Package: \`ae.bingroups.superapp\`
+- Private key included: \`false\`
+- Keystore included: \`false\`
+- Passwords included: \`false\`
+- Hard-launch claim: \`false\`"
+          gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
+            -f state='open' \
+            -f body="$body" >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$COMMAND_ISSUE/comments" -f body="$body" >/dev/null
+
+  export_certificate:
+    name: Export public Android upload certificate
+    needs: announce
+    if: needs.announce.result == 'success'
+    runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 15
+    outputs:
+      artifact_name: ${{ steps.certificate.outputs.artifact_name }}
+      fingerprint: ${{ steps.certificate.outputs.fingerprint }}
+      signing_ready: ${{ steps.signing_inputs.outputs.ready }}
+      missing_inputs: ${{ steps.signing_inputs.outputs.missing }}
     env:
-      RELEASE_SHA: 087444dcd0961a0f3b941b3dabacb75b976b1152
+      RELEASE_SHA: ${{ needs.announce.outputs.release_sha }}
       ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
     steps:
-      - name: Verify exact main remains authorized
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          remote_main="$(git ls-remote --exit-code https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | awk '{print $1}')"
-          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
-            echo "::error::Refusing certificate export because main moved from $RELEASE_SHA to $remote_main."
-            exit 1
-          }
-
-      - name: Checkout exact accepted release commit
+      - name: Checkout exact current main
         uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_SHA }}
@@ -60,7 +108,7 @@ jobs:
           set -euo pipefail
           remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
           [[ "$remote_main" == "$RELEASE_SHA" ]] || {
-            echo "Main moved from $RELEASE_SHA to $remote_main before certificate extraction." >&2
+            echo "::error::Main moved from $RELEASE_SHA to $remote_main before certificate extraction."
             exit 1
           }
 
@@ -70,24 +118,35 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Validate protected signing inputs
+      - name: Inspect protected Android signing inputs
+        id: signing_inputs
         shell: bash
         run: |
           set -euo pipefail
-          required=(
-            ANDROID_UPLOAD_KEYSTORE_BASE64
-            ANDROID_KEYSTORE_PASSWORD
-            ANDROID_KEY_ALIAS
-            ANDROID_KEY_PASSWORD
-          )
-          for name in "${required[@]}"; do
-            [[ -n "${!name:-}" ]] || {
-              echo "Missing required protected secret: $name" >&2
-              exit 1
-            }
+          missing=()
+          for name in \
+            ANDROID_UPLOAD_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
           done
 
-      - name: Decode keystore and write local signing properties
+          missing_csv="$(IFS=,; printf '%s' "${missing[*]-}")"
+          echo "missing=$missing_csv" >> "$GITHUB_OUTPUT"
+          if [[ "${#missing[@]}" -eq 0 ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo "::error::Missing protected Android signing inputs: $missing_csv"
+          fi
+
+      - name: Fail closed when protected signing inputs are missing
+        if: steps.signing_inputs.outputs.ready != 'true'
+        shell: bash
+        run: exit 1
+
+      - name: Decode keystore and write signing properties
         shell: bash
         run: |
           set -euo pipefail
@@ -105,7 +164,7 @@ jobs:
             > android/keystore.properties
           [[ -s android/keystore.properties ]]
 
-      - name: Export and verify public certificate
+      - name: Export and verify public upload certificate
         id: certificate
         shell: bash
         run: |
@@ -127,7 +186,6 @@ jobs:
 
           fingerprint="$(awk -F': ' '/SHA256:/{print $2; exit}' play-store-certificate/bin-group-upload-certificate-details.txt)"
           [[ "$fingerprint" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]
-
           certificate_file_sha256="$(sha256sum play-store-certificate/bin-group-upload-certificate.pem | awk '{print $1}')"
           [[ "$certificate_file_sha256" =~ ^[0-9a-f]{64}$ ]]
 
@@ -138,7 +196,7 @@ jobs:
             --arg certificateSha256Fingerprint "$fingerprint" \
             --arg certificateFileSha256 "$certificate_file_sha256" \
             '{
-              schemaVersion: 1,
+              schemaVersion: 8,
               commitSha: $commitSha,
               workflowRunId: $workflowRunId,
               packageName: $packageName,
@@ -151,21 +209,28 @@ jobs:
               hardLaunchClaim: false
             }' > play-store-certificate/play-store-certificate-evidence.json
 
-      - name: Verify main remained frozen
+          artifact_name="bin-group-play-store-certificate-$RELEASE_SHA-$GITHUB_RUN_ID"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Verify certificate artifact allowlist
         shell: bash
         run: |
           set -euo pipefail
-          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
-          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
-            echo "::error::Certificate was exported, but main moved to $remote_main; refusing evidence upload."
-            exit 1
-          }
+          mapfile -t files < <(find play-store-certificate -maxdepth 1 -type f -printf '%f\n' | sort)
+          expected=(
+            bin-group-upload-certificate-details.txt
+            bin-group-upload-certificate.pem
+            play-store-certificate-evidence.json
+          )
+          [[ "${files[*]}" == "${expected[*]}" ]]
+          ! find play-store-certificate -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'keystore.properties' \) | grep -q .
 
-      - name: Upload Play upload certificate
+      - name: Upload public Play certificate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bin-group-upload-certificate-${{ env.RELEASE_SHA }}-${{ github.run_id }}
-          path: bin-group-upload-certificate.pem
+          name: ${{ steps.certificate.outputs.artifact_name }}
+          path: play-store-certificate/
           if-no-files-found: error
           retention-days: 7
           compression-level: 9
@@ -176,11 +241,11 @@ jobs:
           set -euo pipefail
           remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
           [[ "$remote_main" == "$RELEASE_SHA" ]] || {
-            echo "Certificate was exported, but main moved to $remote_main; refusing exact-SHA evidence." >&2
+            echo "::error::Certificate exported, but main moved to $remote_main."
             exit 1
           }
 
-      - name: Remove private signing material
+      - name: Remove private Android signing material
         if: always()
         shell: bash
         run: |
@@ -188,32 +253,20 @@ jobs:
           shred -u android/app/bin-group-upload.jks 2>/dev/null || rm -f android/app/bin-group-upload.jks
           shred -u android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
 
-  report-result:
-    name: Publish certificate extraction result
-    needs:
-      - authorize
-      - extract-certificate
-    if: always() && needs.authorize.result != 'skipped'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      GH_TOKEN: ${{ github.token }}
-      REPOSITORY: ${{ github.repository }}
-      ISSUE_NUMBER: '434'
-      RELEASE_SHA: ${{ needs.authorize.outputs.release_sha }}
-      EXTRACTION_RESULT: ${{ needs.extract-certificate.result }}
-      ARTIFACT_NAME: ${{ needs.extract-certificate.outputs.artifact_name }}
-      CERTIFICATE_FINGERPRINT: ${{ needs.extract-certificate.outputs.fingerprint }}
-
-    steps:
-      - name: Publish successful extraction result
-        if: env.EXTRACTION_RESULT == 'success'
+      - name: Publish certificate extraction outcome
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          SIGNING_READY: ${{ steps.signing_inputs.outputs.ready }}
+          MISSING_INPUTS: ${{ steps.signing_inputs.outputs.missing }}
+          ARTIFACT_NAME: ${{ steps.certificate.outputs.artifact_name }}
+          CERTIFICATE_FINGERPRINT: ${{ steps.certificate.outputs.fingerprint }}
         shell: bash
         run: |
           set -euo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-          if [[ "$EXTRACT_RESULT" == 'success' ]]; then
+          if [[ "$JOB_STATUS" == 'success' ]]; then
             body="## Protected Play Store certificate extraction
 
 - Status: \`SUCCESS\`
@@ -233,10 +286,22 @@ jobs:
               -f body="$body" >/dev/null
             gh api --method POST "repos/$REPOSITORY/issues/$COMMAND_ISSUE/comments" -f body="$body" >/dev/null
           else
+            missing="${MISSING_INPUTS:-none-reported}"
             body="## Protected Play Store certificate extraction
 
-      - name: Remove private signing material
-        if: always()
-        shell: bash
-        run: |
-          rm -f android/app/bin-group-upload.jks android/keystore.properties
+- Status: \`FAILURE\`
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
+- Workflow run: $run_url
+- Protected signing inputs ready: \`${SIGNING_READY:-unknown}\`
+- Missing protected inputs: \`$missing\`
+- Artifact: unavailable
+- Private key included: \`false\`
+- Keystore included: \`false\`
+- Passwords included: \`false\`
+- Hard-launch claim: \`false\`"
+            gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
+              -f state='open' \
+              -f body="$body" >/dev/null
+            gh api --method POST "repos/$REPOSITORY/issues/$COMMAND_ISSUE/comments" -f body="$body" >/dev/null
+          fi
