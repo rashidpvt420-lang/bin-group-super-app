@@ -50,6 +50,19 @@ test('direct diagnosis script is exact-main, paginated, sanitized and aggregate-
   assert.doesNotMatch(diagnosisScript, /\/dispatches/);
 });
 
+test('direct diagnosis preserves bounded terminal failure context ahead of noisy signals', () => {
+  assert.match(diagnosisScript, /Signal matching can be dominated by expected PERMISSION_DENIED/);
+  assert.match(diagnosisScript, /const terminalMarker =/);
+  assert.match(diagnosisScript, /process completed with exit code/);
+  assert.match(diagnosisScript, /terminalMarkerIndex - 70/);
+  assert.match(diagnosisScript, /terminalMarkerIndex \+ 20/);
+  assert.match(diagnosisScript, /terminalContextLines:\s*terminalContext/);
+  assert.match(diagnosisScript, /schemaVersion:\s*5/);
+  assert.match(diagnosisScript, /### Terminal failed-job context/);
+  assert.match(diagnosisScript, /normalizedErrorLines\[-40:\]/);
+  assert.match(diagnosisScript, /No terminal context was found; inspect the sanitized artifact/);
+});
+
 test('owner launch command uses both current-main START HERE wrappers', () => {
   assert.match(commandWorkflow, /repos\/\$REPOSITORY\/commits\/main/);
   assert.match(commandWorkflow, /\[\[ "\$first_sha" == "\$second_sha" \]\]/);
