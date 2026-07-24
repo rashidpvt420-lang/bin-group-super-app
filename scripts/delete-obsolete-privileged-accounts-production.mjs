@@ -15,6 +15,8 @@ import {
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const EXECUTION_CONFIRMATION = 'DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP';
+const DEPLOY_WORKFLOW_NAME = 'Firebase Production Deploy';
+const OWNER_CLEANUP_WORKFLOW_NAME = 'Privileged Account Cleanup - Production';
 const EVIDENCE_PATH = 'launch_package/privileged-account-cleanup.json';
 const DIRECT_PROFILE_COLLECTIONS = [
   'users',
@@ -41,29 +43,52 @@ function profileActive(user) {
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status));
 }
 
+function resolveExecutionMode({ execute, env = process.env }) {
+  if (!execute) return 'dry-run';
+  const workflowName = text(env.GITHUB_WORKFLOW);
+  if (workflowName === DEPLOY_WORKFLOW_NAME) return 'deploy-preflight';
+  if (workflowName === OWNER_CLEANUP_WORKFLOW_NAME) return 'owner-cleanup';
+  throw new Error(
+    `Destructive privileged-account cleanup is restricted to ${OWNER_CLEANUP_WORKFLOW_NAME}.`,
+  );
+}
+
 function requireProtectedExecutionContext({ execute, projectId, env = process.env }) {
   if (projectId !== EXPECTED_PROJECT_ID) {
     throw new Error(`GCP_PROJECT_ID must equal ${EXPECTED_PROJECT_ID}.`);
   }
-  if (!execute) return;
+
+  const executionMode = resolveExecutionMode({ execute, env });
+  if (executionMode === 'dry-run') return executionMode;
+
   if (env.GITHUB_ACTIONS !== 'true') {
-    throw new Error('Destructive privileged-account cleanup is allowed only in GitHub Actions.');
+    throw new Error('Privileged-account production checks are allowed only in GitHub Actions.');
   }
   if (env.GITHUB_REF !== 'refs/heads/main') {
-    throw new Error('Destructive privileged-account cleanup requires refs/heads/main.');
+    throw new Error('Privileged-account production checks require refs/heads/main.');
   }
   if (text(env.DEPLOYMENT_ENVIRONMENT) !== 'production') {
     throw new Error('DEPLOYMENT_ENVIRONMENT must equal production.');
   }
-  if (text(env.PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION) !== EXECUTION_CONFIRMATION) {
-    throw new Error('Exact privileged-account cleanup confirmation is required.');
-  }
-  if (lower(env.CANONICAL_FOUNDER_EMAIL_CONFIRMATION) !== CANONICAL_FOUNDER_EMAIL) {
-    throw new Error(`Canonical founder confirmation must equal ${CANONICAL_FOUNDER_EMAIL}.`);
-  }
   if (!/^[0-9a-f]{40}$/.test(text(env.GITHUB_SHA))) {
     throw new Error('A valid exact main commit SHA is required.');
   }
+
+  if (executionMode === 'owner-cleanup') {
+    if (text(env.PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION) !== EXECUTION_CONFIRMATION) {
+      throw new Error('Exact privileged-account cleanup confirmation is required.');
+    }
+    if (lower(env.CANONICAL_FOUNDER_EMAIL_CONFIRMATION) !== CANONICAL_FOUNDER_EMAIL) {
+      throw new Error(`Canonical founder confirmation must equal ${CANONICAL_FOUNDER_EMAIL}.`);
+    }
+  }
+
+  return executionMode;
+}
+
+function writeEvidence(result) {
+  mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
+  writeFileSync(EVIDENCE_PATH, `${JSON.stringify(result, null, 2)}\n`);
 }
 
 async function deleteQuery(db, collectionName, field, uid) {
@@ -118,7 +143,7 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   authClient,
   firestoreClient,
 } = {}) {
-  requireProtectedExecutionContext({ execute, projectId, env });
+  const executionMode = requireProtectedExecutionContext({ execute, projectId, env });
   initializeFirebaseAdmin(admin, projectId);
   const auth = authClient || admin.auth();
   const db = firestoreClient || admin.firestore();
@@ -144,8 +169,13 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   }
 
   const result = {
-    schemaVersion: 1,
-    status: execute ? 'executed' : 'dry-run',
+    schemaVersion: 2,
+    status: executionMode === 'owner-cleanup'
+      ? 'executed'
+      : executionMode === 'deploy-preflight'
+        ? 'deploy-preflight'
+        : 'dry-run',
+    executionMode,
     projectId,
     repository: text(env.GITHUB_REPOSITORY) || null,
     ref: text(env.GITHUB_REF) || null,
@@ -160,13 +190,26 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     deletedAccountCount: 0,
     deletedProfileDocumentCount: 0,
     targetIdentityHashes: targets.map((target) => sha256(`${target.uid}|${lower(target.email)}`)).sort(),
+    requiresOwnerCleanup: executionMode === 'deploy-preflight' && targets.length > 0,
     sensitiveValuesExcluded: true,
     auditLogsPreserved: true,
     nonPrivilegedAccountsUntouched: true,
+    mutationPerformed: false,
     hardLaunchClaim: false,
   };
 
-  if (execute) {
+  if (executionMode === 'deploy-preflight') {
+    writeEvidence(result);
+    if (targets.length > 0) {
+      throw new Error(
+        `Deployment blocked: ${targets.length} unexpected privileged account(s) require the owner-authorized /bin-launch execute-privileged-cleanup workflow. No identity was modified.`,
+      );
+    }
+    console.log('[privileged-cleanup] deploy-preflight targets=0 deleted=0 mutation_performed=false');
+    return result;
+  }
+
+  if (executionMode === 'owner-cleanup') {
     for (const target of targets) {
       const deleted = await purgePrivilegedTarget({
         auth,
@@ -183,12 +226,12 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     if (remainingPrivileged.length !== 1 || !isCanonicalFounderAccount(remainingPrivileged[0])) {
       throw new Error('Cleanup completed incompletely: production does not contain exactly one canonical privileged account.');
     }
+    result.mutationPerformed = result.deletedAccountCount > 0;
   }
 
-  mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
-  writeFileSync(EVIDENCE_PATH, `${JSON.stringify(result, null, 2)}\n`);
+  writeEvidence(result);
   console.log(
-    `[privileged-cleanup] ${result.status} targets=${result.deletionTargetCount} deleted=${result.deletedAccountCount} canonical_founder_ready=true`,
+    `[privileged-cleanup] ${result.status} targets=${result.deletionTargetCount} deleted=${result.deletedAccountCount} canonical_founder_ready=true mutation_performed=${result.mutationPerformed}`,
   );
   return result;
 }
