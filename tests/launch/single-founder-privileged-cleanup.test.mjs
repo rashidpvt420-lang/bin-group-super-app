@@ -25,16 +25,21 @@ test('destructive cleanup is restricted to the dedicated owner cleanup workflow'
   assert.match(source, /executionMode === 'owner-cleanup'/);
 });
 
-test('Firebase production deployment can only perform a read-only privileged preflight', () => {
+test('Firebase production deployment performs guarded preflight after retiring only the configured E2E Admin', () => {
+  const e2eRetirement = source.indexOf("phase: 'predeploy'");
+  const inventory = source.indexOf('const users = await fetchAllAuthUsers');
   const deployPreflight = source.indexOf("executionMode === 'deploy-preflight'");
   const ownerCleanup = source.indexOf("executionMode === 'owner-cleanup'", deployPreflight + 1);
   const purgeTarget = source.indexOf('purgePrivilegedTarget({', ownerCleanup);
 
+  assert.ok(e2eRetirement >= 0);
+  assert.ok(inventory > e2eRetirement);
   assert.ok(deployPreflight >= 0);
   assert.ok(ownerCleanup > deployPreflight);
   assert.ok(purgeTarget > ownerCleanup);
   assert.match(source, /requiresOwnerCleanup: executionMode === 'deploy-preflight'/);
-  assert.match(source, /No identity was modified/);
+  assert.match(source, /No unexpected privileged identity was modified/);
+  assert.match(source, /ephemeralE2eAdminDeletedAccountCount/);
   assert.match(source, /mutation_performed=false/);
   assert.match(source, /\/bin-launch execute-privileged-cleanup/);
 });
