@@ -7,6 +7,10 @@ const workflow = await readFile(workflowPath, 'utf8');
 
 test('Play Store certificate extraction is owner-only and production-protected', () => {
   assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /push:/);
+  assert.match(workflow, /branches:\s*\n\s*- main/);
+  assert.match(workflow, /\.github\/play-cert-extraction-request/);
+  assert.match(workflow, /github\.event_name == 'push'/);
   assert.match(workflow, /github\.event\.issue\.number == 434/);
   assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
   assert.match(workflow, /github\.event\.comment\.author_association == 'OWNER'/);
