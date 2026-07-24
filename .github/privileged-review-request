@@ -1,4 +1,5 @@
 request=review-privileged-accounts
 requested_sha=eb595cbcd5a71d1d02469cff4af86c8b01037e49
+request_attempt=ready-synchronize
 mutation_allowed=false
 hard_launch_claim=false
