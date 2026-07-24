@@ -10,6 +10,10 @@ on:
       - main
     paths:
       - .github/play-cert-extraction-request
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/play-cert-extraction-request
 
 permissions:
   contents: read
@@ -31,6 +35,14 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.user.login == github.repository_owner &&
+        startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-extraction-') &&
+        github.event.pull_request.title == 'Dispatch protected Play certificate extraction'
+      ) ||
       (
         github.event.issue.number == 434 &&
         !github.event.issue.pull_request &&
