@@ -1,0 +1,69 @@
+name: Play Certificate Request Diagnostic
+run-name: Play certificate request diagnostic · ${{ github.event_name }} · ${{ github.run_id }}
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/play-cert-extraction-request
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/play-cert-extraction-request
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Record sanitized certificate request event
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write sanitized event metadata
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          ACTOR: ${{ github.actor }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p play-cert-event-diagnostic
+          jq -n \
+            --arg eventName "$EVENT_NAME" \
+            --arg repository "$REPOSITORY" \
+            --arg repositoryOwner "$REPOSITORY_OWNER" \
+            --arg actor "$ACTOR" \
+            --arg baseRef "$BASE_REF" \
+            --arg headRef "$HEAD_REF" \
+            --arg headRepository "$HEAD_REPOSITORY" \
+            --arg prAuthor "$PR_AUTHOR" \
+            --arg prTitle "$PR_TITLE" \
+            '{
+              eventName: $eventName,
+              repository: $repository,
+              repositoryOwner: $repositoryOwner,
+              actor: $actor,
+              baseRef: $baseRef,
+              headRef: $headRef,
+              headRepository: $headRepository,
+              prAuthor: $prAuthor,
+              prTitle: $prTitle,
+              secretsAccessed: false,
+              privateMaterialAccessed: false,
+              hardLaunchClaim: false
+            }' > play-cert-event-diagnostic/event.json
+
+      - name: Upload sanitized diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-cert-request-event-${{ github.event_name }}-${{ github.run_id }}
+          path: play-cert-event-diagnostic/event.json
+          if-no-files-found: error
+          retention-days: 3
