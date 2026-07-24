@@ -24,7 +24,7 @@ for (let index = 0; index < lines.length; index += 1) {
     repairedLines += 1;
   }
 
-  if (/`false`"\s*$/.test(line)) {
+  if (line.includes('Hard-launch claim:') && line.trimEnd().endsWith('"')) {
     inBody = false;
   }
 }
