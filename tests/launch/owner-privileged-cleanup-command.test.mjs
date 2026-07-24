@@ -9,17 +9,17 @@ const [command, reviewWorkflow, executeWorkflow, correlationHelper] = await Prom
   readFile(new URL('../../scripts/owner-launch-run-correlation.sh', import.meta.url), 'utf8'),
 ]);
 
-test('privileged cleanup command is exact trusted-actor and issue-bound', () => {
+test('read-only review is issue-bound while destructive cleanup remains owner-only', () => {
   assert.match(command, /github\.event\.issue\.number == 434/);
   assert.match(command, /!github\.event\.issue\.pull_request/);
-  assert.match(command, /github\.event\.comment\.user\.login == github\.repository_owner/);
-  assert.match(command, /github\.event\.comment\.user\.login == 'chatgpt-codex-connector\[bot\]'/);
-  assert.match(command, /github\.event\.comment\.user\.type == 'Bot'/);
-  assert.match(command, /github\.event\.comment\.user\.id == 199175422/);
-  assert.doesNotMatch(command, /endsWith\([^\n]*\[bot\]/);
+  assert.match(command, /github\.event\.comment\.body == '\/bin-launch review-privileged-accounts'/);
+  assert.match(command, /github\.event\.comment\.body == '\/bin-launch execute-privileged-cleanup'[\s\S]*github\.event\.comment\.user\.login == github\.repository_owner/);
+  assert.match(command, /COMMENT_AUTHOR:\s*\$\{\{ github\.event\.comment\.user\.login \}\}/);
+  assert.match(command, /REPOSITORY_OWNER:\s*\$\{\{ github\.repository_owner \}\}/);
+  assert.match(command, /\[\[ "\$COMMENT_AUTHOR" == "\$REPOSITORY_OWNER" \]\]/);
+  assert.doesNotMatch(command, /chatgpt-codex-connector/);
   assert.doesNotMatch(command, /author_association/);
-  assert.match(command, /'\/bin-launch review-privileged-accounts'/);
-  assert.match(command, /'\/bin-launch execute-privileged-cleanup'/);
+  assert.doesNotMatch(command, /endsWith\([^\n]*\[bot\]/);
   assert.doesNotMatch(command, /\$\{\{\s*secrets\./);
   assert.doesNotMatch(command, /continue-on-error:\s*true/);
 });
