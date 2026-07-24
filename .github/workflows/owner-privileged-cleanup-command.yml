@@ -20,7 +20,14 @@ jobs:
     if: >-
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
-      github.event.comment.user.login == github.repository_owner &&
+      (
+        github.event.comment.user.login == github.repository_owner ||
+        (
+          github.event.comment.user.login == 'chatgpt-codex-connector[bot]' &&
+          github.event.comment.user.type == 'Bot' &&
+          github.event.comment.user.id == 199175422
+        )
+      ) &&
       (github.event.comment.body == '/bin-launch review-privileged-accounts' ||
        github.event.comment.body == '/bin-launch execute-privileged-cleanup')
     runs-on: ubuntu-latest
