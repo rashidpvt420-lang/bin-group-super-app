@@ -15,25 +15,58 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  authorize-command:
+    name: Authorize issue command at runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      authorized: ${{ steps.authorize.outputs.authorized }}
+      execute: ${{ steps.authorize.outputs.execute }}
+      command: ${{ steps.authorize.outputs.command }}
+    steps:
+      - name: Evaluate exact issue command
+        id: authorize
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PULL_REQUEST_URL: ${{ github.event.issue.pull_request.url }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          authorized='false'
+          execute='false'
+
+          if [[ "$EVENT_NAME" == 'issue_comment' && "$ISSUE_NUMBER" == '434' && -z "$PULL_REQUEST_URL" ]]; then
+            if [[ "$COMMENT_BODY" == '/bin-launch review-privileged-accounts' ]]; then
+              authorized='true'
+            elif [[ "$COMMENT_BODY" == '/bin-launch execute-privileged-cleanup' && "$COMMENT_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
+              authorized='true'
+              execute='true'
+            fi
+          fi
+
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+          echo "execute=$execute" >> "$GITHUB_OUTPUT"
+          echo "command=$COMMENT_BODY" >> "$GITHUB_OUTPUT"
+
+          if [[ "$authorized" != 'true' ]]; then
+            echo 'Ignoring non-canonical or unauthorized issue comment.'
+          fi
+
   review-and-clean:
     name: Review and conditionally clean privileged identities
-    if: >-
-      github.event.issue.number == 434 &&
-      !github.event.issue.pull_request &&
-      (
-        github.event.comment.body == '/bin-launch review-privileged-accounts' ||
-        (
-          github.event.comment.body == '/bin-launch execute-privileged-cleanup' &&
-          github.event.comment.user.login == github.repository_owner
-        )
-      )
+    needs: authorize-command
+    if: needs.authorize-command.outputs.authorized == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: '434'
-      COMMAND: ${{ github.event.comment.body }}
+      COMMAND: ${{ needs.authorize-command.outputs.command }}
 
     steps:
       - name: Resolve stable exact current main
@@ -175,7 +208,7 @@ jobs:
           echo "target_count=$target_count" >> "$GITHUB_OUTPUT"
 
       - name: Enforce destructive execution eligibility
-        if: github.event.comment.body == '/bin-launch execute-privileged-cleanup'
+        if: needs.authorize-command.outputs.execute == 'true'
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           FOUNDER_READY: ${{ steps.review.outputs.ready }}
@@ -194,7 +227,7 @@ jobs:
           [[ "$TARGET_COUNT" =~ ^[1-9][0-9]*$ ]]
 
       - name: Execute and verify exact-SHA privileged cleanup
-        if: github.event.comment.body == '/bin-launch execute-privileged-cleanup'
+        if: needs.authorize-command.outputs.execute == 'true'
         id: cleanup
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}

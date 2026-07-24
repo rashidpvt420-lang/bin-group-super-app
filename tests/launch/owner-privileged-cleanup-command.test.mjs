@@ -9,13 +9,25 @@ const [command, reviewWorkflow, executeWorkflow, correlationHelper] = await Prom
   readFile(new URL('../../scripts/owner-launch-run-correlation.sh', import.meta.url), 'utf8'),
 ]);
 
-test('read-only review is issue-bound while destructive cleanup remains owner-only', () => {
-  assert.match(command, /github\.event\.issue\.number == 434/);
-  assert.match(command, /!github\.event\.issue\.pull_request/);
-  assert.match(command, /github\.event\.comment\.body == '\/bin-launch review-privileged-accounts'/);
-  assert.match(command, /github\.event\.comment\.body == '\/bin-launch execute-privileged-cleanup'[\s\S]*github\.event\.comment\.user\.login == github\.repository_owner/);
+test('runtime authorization evaluates exact issue commands before production review', () => {
+  assert.match(command, /authorize-command:/);
+  assert.match(command, /name: Evaluate exact issue command/);
+  assert.match(command, /EVENT_NAME:\s*\$\{\{ github\.event_name \}\}/);
+  assert.match(command, /ISSUE_NUMBER:\s*\$\{\{ github\.event\.issue\.number \}\}/);
+  assert.match(command, /PULL_REQUEST_URL:\s*\$\{\{ github\.event\.issue\.pull_request\.url \}\}/);
+  assert.match(command, /\[\[ "\$EVENT_NAME" == 'issue_comment' && "\$ISSUE_NUMBER" == '434' && -z "\$PULL_REQUEST_URL" \]\]/);
+  assert.match(command, /\[\[ "\$COMMENT_BODY" == '\/bin-launch review-privileged-accounts' \]\]/);
+  assert.match(command, /needs: authorize-command/);
+  assert.match(command, /if: needs\.authorize-command\.outputs\.authorized == 'true'/);
+  assert.doesNotMatch(command, /review-and-clean:[\s\S]{0,300}github\.event\.issue\.number == 434/);
+});
+
+test('read-only review is transport-neutral while destructive cleanup remains owner-only twice', () => {
   assert.match(command, /COMMENT_AUTHOR:\s*\$\{\{ github\.event\.comment\.user\.login \}\}/);
   assert.match(command, /REPOSITORY_OWNER:\s*\$\{\{ github\.repository_owner \}\}/);
+  assert.match(command, /COMMENT_BODY" == '\/bin-launch execute-privileged-cleanup'[\s\S]*COMMENT_AUTHOR" == "\$REPOSITORY_OWNER/);
+  assert.match(command, /execute='true'/);
+  assert.equal((command.match(/if: needs\.authorize-command\.outputs\.execute == 'true'/g) || []).length, 2);
   assert.match(command, /\[\[ "\$COMMENT_AUTHOR" == "\$REPOSITORY_OWNER" \]\]/);
   assert.doesNotMatch(command, /chatgpt-codex-connector/);
   assert.doesNotMatch(command, /author_association/);
