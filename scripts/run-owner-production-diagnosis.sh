@@ -100,6 +100,11 @@ const sourceRunMatchesMainSha = requireEnv('SOURCE_RUN_MATCHES_MAIN_SHA', /^(tru
 const sourceRunIsStale = requireEnv('SOURCE_RUN_IS_STALE', /^(true|false)$/);
 const sanitizedLog = readFileSync('launch_package/firebase-production-failure.log', 'utf8');
 const lines = sanitizedLog.split(/\r?\n/);
+const clampLine = (line) => String(line || '').slice(0, 900);
+const uniqueNonEmpty = (items) => items
+  .map(clampLine)
+  .filter((line, index, all) => line.trim() && all.indexOf(line) === index);
+
 const signal = /##\[error\]|\[production-deploy\]|\[deploy-verify\]|FirebaseError|admin[- ]mfa|multi[- ]factor|privileged|deployment (?:failed|stopped|blocked)|deploy failed|functions:|hosting:|firestore:|storage:|\[critical-evidence\]|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|playwright|error:|timeout|expect\(|locator|strict mode violation|unexpected|skipped=|failed=/i;
 const selectedIndexes = new Set();
 for (let index = 0; index < lines.length; index += 1) {
@@ -109,16 +114,34 @@ for (let index = 0; index < lines.length; index += 1) {
     if (candidate >= 0 && candidate < lines.length) selectedIndexes.add(candidate);
   }
 }
-const selected = [...selectedIndexes]
-  .sort((a, b) => a - b)
-  .map((index) => lines[index].slice(0, 900))
-  .filter((line, index, all) => line && all.indexOf(line) === index)
-  .slice(-120);
+const selected = uniqueNonEmpty(
+  [...selectedIndexes]
+    .sort((a, b) => a - b)
+    .map((index) => lines[index]),
+).slice(-120);
+
+// Signal matching can be dominated by expected PERMISSION_DENIED output from
+// passing Rules tests. Preserve a separate, bounded window around the final
+// failed-process marker so the actual Firebase CLI or postdeploy verifier exit
+// remains visible without exposing the unredacted raw job log.
+const terminalMarker = /##\[error\]|process completed with exit code|command failed|firebaseerror|deployment failed|deploy failed|\[production-deploy\]|\[deploy-verify\]|refused:/i;
+let terminalMarkerIndex = -1;
+for (let index = 0; index < lines.length; index += 1) {
+  if (terminalMarker.test(lines[index])) terminalMarkerIndex = index;
+}
+const terminalStart = terminalMarkerIndex >= 0
+  ? Math.max(0, terminalMarkerIndex - 70)
+  : Math.max(0, lines.length - 90);
+const terminalEnd = terminalMarkerIndex >= 0
+  ? Math.min(lines.length, terminalMarkerIndex + 20)
+  : lines.length;
+const terminalContext = uniqueNonEmpty(lines.slice(terminalStart, terminalEnd)).slice(-90);
+
 const failedSuiteSignals = selected
   .filter((line) => /\[critical-evidence\].*(?:failed|not recorded)|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|\d+ failed/i.test(line))
   .slice(-30);
 const report = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   status: 'FAILED',
   sourceWorkflow: 'Firebase Production Deploy',
   sourceRunId,
@@ -127,6 +150,7 @@ const report = {
   sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSeconds, 10),
   sourceRunMatchesResolvedMainSha: sourceRunMatchesMainSha === 'true',
   sourceRunStaleFailureEvidence: sourceRunIsStale === 'true',
+  terminalContextLines: terminalContext,
   normalizedErrorLines: selected,
   failedSuiteSignals,
   githubSecretMaskingApplied: true,
@@ -139,8 +163,9 @@ const report = {
 writeFileSync('launch_package/firebase-production-failure.json', `${JSON.stringify(report, null, 2)}\n`);
 NODE
 
-errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the redacted artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
-suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the redacted artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+terminal="$(jq -r 'if (.terminalContextLines | length) == 0 then "- No terminal context was found; inspect the sanitized artifact." else (.terminalContextLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the sanitized artifact." else (.normalizedErrorLines[-40:] | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the sanitized artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
 artifact="firebase-production-manual-diagnosis-$run_sha-$run_id"
 body="## Latest Firebase production failure diagnosis
 
@@ -155,10 +180,13 @@ body="## Latest Firebase production failure diagnosis
 - Raw job log uploaded: \`false\`
 - Hard-launch claim: \`false\`
 
+### Terminal failed-job context
+$terminal
+
 ### Failed suite signals
 $suites
 
-### Normalized error lines
+### Normalized error lines (last 40)
 $errors
 
 The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
