@@ -16,6 +16,29 @@ test('privileged cleanup is exact-main production only and explicitly confirmed'
   assert.match(source, /GCP_PROJECT_ID must equal/);
 });
 
+test('destructive cleanup is restricted to the dedicated owner cleanup workflow', () => {
+  assert.match(source, /DEPLOY_WORKFLOW_NAME = 'Firebase Production Deploy'/);
+  assert.match(source, /OWNER_CLEANUP_WORKFLOW_NAME = 'Privileged Account Cleanup - Production'/);
+  assert.match(source, /workflowName === DEPLOY_WORKFLOW_NAME\) return 'deploy-preflight'/);
+  assert.match(source, /workflowName === OWNER_CLEANUP_WORKFLOW_NAME\) return 'owner-cleanup'/);
+  assert.match(source, /Destructive privileged-account cleanup is restricted to/);
+  assert.match(source, /executionMode === 'owner-cleanup'/);
+});
+
+test('Firebase production deployment can only perform a read-only privileged preflight', () => {
+  const deployPreflight = source.indexOf("executionMode === 'deploy-preflight'");
+  const ownerCleanup = source.indexOf("executionMode === 'owner-cleanup'", deployPreflight + 1);
+  const purgeTarget = source.indexOf('purgePrivilegedTarget({', ownerCleanup);
+
+  assert.ok(deployPreflight >= 0);
+  assert.ok(ownerCleanup > deployPreflight);
+  assert.ok(purgeTarget > ownerCleanup);
+  assert.match(source, /requiresOwnerCleanup: executionMode === 'deploy-preflight'/);
+  assert.match(source, /No identity was modified/);
+  assert.match(source, /mutation_performed=false/);
+  assert.match(source, /\/bin-launch execute-privileged-cleanup/);
+});
+
 test('cleanup refuses unless canonical founder is active, verified and phone-MFA ready', () => {
   assert.match(source, /canonical\.length !== 1/);
   assert.match(source, /founder\.disabled === true \|\| !profileActive\(founder\)/);
