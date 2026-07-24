@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [command, reviewWorkflow, executeWorkflow] = await Promise.all([
+const [command, reviewWorkflow, executeWorkflow, correlationHelper] = await Promise.all([
   readFile(new URL('../../.github/workflows/owner-privileged-cleanup-command.yml', import.meta.url), 'utf8'),
   readFile(new URL('../../.github/workflows/privileged-account-cleanup-dry-run.yml', import.meta.url), 'utf8'),
   readFile(new URL('../../.github/workflows/privileged-account-cleanup-production.yml', import.meta.url), 'utf8'),
+  readFile(new URL('../../scripts/owner-launch-run-correlation.sh', import.meta.url), 'utf8'),
 ]);
 
 test('privileged cleanup command is owner-only and issue-bound', () => {
@@ -18,8 +19,29 @@ test('privileged cleanup command is owner-only and issue-bound', () => {
   assert.doesNotMatch(command, /continue-on-error:\s*true/);
 });
 
+test('cleanup command checks out exact main and uses shared paginated baseline correlation', () => {
+  assert.match(command, /name: Checkout exact current main/);
+  assert.match(command, /ref: \$\{\{ steps\.release\.outputs\.sha \}\}/);
+  assert.match(command, /persist-credentials: false/);
+  assert.match(command, /node-version: '22'/);
+  assert.match(command, /source scripts\/owner-launch-run-correlation\.sh/g);
+  assert.match(command, /owner_snapshot_workflow_run_ids[\s\S]*privileged-account-cleanup-dry-run\.yml/);
+  assert.match(command, /owner_locate_new_exact_sha_workflow_run[\s\S]*privileged-account-cleanup-dry-run\.yml/);
+  assert.match(command, /owner_snapshot_workflow_run_ids[\s\S]*privileged-account-cleanup-production\.yml/);
+  assert.match(command, /owner_locate_new_exact_sha_workflow_run[\s\S]*privileged-account-cleanup-production\.yml/);
+  assert.match(command, /No duplicate review was attempted/);
+  assert.match(command, /No duplicate destructive dispatch was attempted/);
+  assert.match(correlationHelper, /gh api --paginate --slurp/);
+  assert.match(correlationHelper, /select-new-exact-sha-workflow-run\.mjs/);
+  assert.doesNotMatch(command, /created_at >= \$started/);
+  assert.doesNotMatch(command, /actor\.login/);
+  assert.doesNotMatch(command, /per_page=50/);
+  assert.doesNotMatch(command, /started_at=/);
+});
+
 test('fresh exact-SHA review is mandatory before any cleanup', () => {
   assert.match(command, /privileged-account-cleanup-dry-run\.yml\/dispatches/);
+  assert.equal((command.match(/privileged-account-cleanup-dry-run\.yml\/dispatches/g) || []).length, 1);
   assert.match(command, /expected_commit_sha:\$sha/);
   assert.match(command, /privileged-account-cleanup-review-\$RELEASE_SHA/);
   assert.match(command, /report_path="\$\(find privileged-review -type f -name 'privileged-account-cleanup\.json' -print -quit\)"/);
@@ -28,7 +50,7 @@ test('fresh exact-SHA review is mandatory before any cleanup', () => {
   assert.match(command, /\.mutationPerformed == false/);
   assert.match(command, /\.deletedAccountCount == 0/);
   assert.match(command, /\.nonPrivilegedAccountsUntouched == true/);
-  assert.match(command, /latest_main.*RELEASE_SHA/s);
+  assert.match(command, /gh api --paginate --slurp[\s\S]*actions\/runs\/\$run_id\/artifacts\?per_page=100/);
 });
 
 test('destructive cleanup requires canonical founder readiness and reviewed targets', () => {
@@ -39,6 +61,7 @@ test('destructive cleanup requires canonical founder readiness and reviewed targ
   assert.match(command, /DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP/);
   assert.match(command, /canonical_founder_email:"ceo@bin-groups\.com"/);
   assert.match(command, /execute_cleanup:true/);
+  assert.equal((command.match(/privileged-account-cleanup-production\.yml\/dispatches/g) || []).length, 1);
 });
 
 test('cleanup waits for success and verifies exact-SHA result artifact against reviewed target count', () => {
