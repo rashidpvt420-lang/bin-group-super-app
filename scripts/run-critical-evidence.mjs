@@ -56,6 +56,31 @@ if (mainUrl !== PRODUCTION.mainUrl) {
   process.exit(1);
 }
 
+function shouldRunE2eAdminLifecycle() {
+  return process.env.GITHUB_ACTIONS === 'true' &&
+    process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
+    process.env.GITHUB_REF === 'refs/heads/main' &&
+    String(process.env.E2E_ADMIN_EMAIL || '').trim().length > 0;
+}
+
+function retireEphemeralE2eAdmin(phase) {
+  if (!shouldRunE2eAdminLifecycle()) return 0;
+  console.log(`[critical-evidence] retiring ephemeral E2E Admin after ${phase}`);
+  const result = spawnSync(
+    process.execPath,
+    ['scripts/e2e-admin-lifecycle.mjs', `--phase=${phase}`],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' },
+    },
+  );
+  const status = result.status ?? 1;
+  if (status !== 0) {
+    console.error(`[critical-evidence] E2E Admin retirement failed for phase ${phase} with exit code ${status}`);
+  }
+  return status;
+}
+
 const SUITE_FIXTURES = Object.freeze({
   businessBroker: {
     label: 'request-only Broker payout OTP evidence',
@@ -248,14 +273,19 @@ async function main() {
       ? [...allBusiness, 'launchAuditLive']
       : allBusiness;
     let failed = 0;
-    for (const key of suites) {
-      const def = SUITE_SPECS[key];
-      const result = runPlaywrightSuite(key, def);
-      if (!result.ok) failed += 1;
-    }
-    if (suiteArg === 'all-required') {
-      const deploy = await runProductionDeployment();
-      if (!deploy.ok) failed += 1;
+    try {
+      for (const key of suites) {
+        const def = SUITE_SPECS[key];
+        const result = runPlaywrightSuite(key, def);
+        if (!result.ok) failed += 1;
+      }
+      if (suiteArg === 'all-required') {
+        const deploy = await runProductionDeployment();
+        if (!deploy.ok) failed += 1;
+      }
+    } finally {
+      const cleanupStatus = retireEphemeralE2eAdmin('post-business-evidence');
+      if (cleanupStatus !== 0) failed += 1;
     }
     console.log(`[critical-evidence] hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
     process.exit(failed === 0 ? 0 : 1);
