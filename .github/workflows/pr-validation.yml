@@ -354,17 +354,15 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-privileged-review-') &&
       github.event.pull_request.title == 'Dispatch protected privileged account review'
-    runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
-      issues: write
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
-      ISSUE_NUMBER: '434'
       GCP_PROJECT_ID: bin-group-57c60
 
     steps:
@@ -420,8 +418,8 @@ jobs:
 
       - name: Build read-only privileged-account inventory
         env:
-          GITHUB_SHA: ${{ steps.release.outputs.sha }}
-          GITHUB_REF: refs/heads/main
+          PRIVILEGED_REVIEW_COMMIT_SHA: ${{ steps.release.outputs.sha }}
+          PRIVILEGED_REVIEW_REF: refs/heads/main
         run: node scripts/review-privileged-accounts-production.mjs
 
       - name: Validate exact-SHA no-mutation review evidence
@@ -437,6 +435,7 @@ jobs:
             .status == "dry-run" and
             .projectId == "bin-group-57c60" and
             .commitSha == $sha and
+            .ref == "refs/heads/main" and
             .mutationPerformed == false and
             .deletedAccountCount == 0 and
             .deletedProfileDocumentCount == 0 and
@@ -470,7 +469,7 @@ jobs:
           retention-days: 14
           compression-level: 9
 
-      - name: Publish sanitized privileged review result
+      - name: Publish sanitized privileged review summary
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         shell: bash
@@ -484,13 +483,11 @@ jobs:
           privileged_count="$(jq -r '.privilegedAccountCountBefore' "$report")"
           target_count="$(jq -r '.deletionTargetCount' "$report")"
           blockers="$(jq -r '.executionBlockers | join("; ") | if length == 0 then "none" else . end' "$report")"
-          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           artifact="privileged-account-cleanup-review-$RELEASE_SHA-$GITHUB_RUN_ID"
           body="## Privileged-account review
 
 - Exact SHA: \`$RELEASE_SHA\`
 - Review run ID: \`$GITHUB_RUN_ID\`
-- Review run: $run_url
 - Artifact: \`$artifact\`
 - Canonical Founder ready: \`$ready\`
 - Founder email verified: \`$email_verified\`
@@ -501,5 +498,4 @@ jobs:
 - Execution blockers: \`$blockers\`
 - Mutation performed: \`false\`
 - Hard-launch claim: \`false\`"
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
           printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
