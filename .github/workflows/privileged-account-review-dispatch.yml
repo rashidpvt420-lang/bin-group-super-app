@@ -91,6 +91,7 @@ jobs:
             --input privileged-review-dispatch.json
 
       - name: Correlate new exact-main protected review run
+        id: correlate
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         shell: bash
@@ -132,6 +133,23 @@ jobs:
             exit 1
           }
 
+          jq -n \
+            --arg commitSha "$RELEASE_SHA" \
+            --arg workflowRunId "$run_id" \
+            --arg workflowRunUrl "$run_url" \
+            --arg requestPullRequest "$REQUEST_PR" \
+            '{
+              schemaVersion: 1,
+              commitSha: $commitSha,
+              workflowRunId: $workflowRunId,
+              workflowRunUrl: $workflowRunUrl,
+              requestPullRequest: $requestPullRequest,
+              mutationRequested: false,
+              hardLaunchClaim: false
+            }' > privileged-review-dispatch-evidence.json
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
           echo "Protected privileged review run: $run_url"
           {
             echo '## Protected privileged-account review dispatched'
@@ -142,3 +160,11 @@ jobs:
             echo '- Mutation requested: false'
             echo '- Hard-launch claim: false'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized dispatch evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: privileged-review-dispatch-${{ steps.release.outputs.sha }}-${{ steps.correlate.outputs.run_id }}
+          path: privileged-review-dispatch-evidence.json
+          if-no-files-found: error
+          retention-days: 14
