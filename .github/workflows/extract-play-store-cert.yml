@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  extract-certificate:
-    name: Export public Android upload certificate
+  authorize:
+    name: Authorize exact-main certificate extraction
     if: >-
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
@@ -23,16 +23,13 @@ jobs:
       github.event.comment.author_association == 'OWNER' &&
       github.event.comment.body == '/bin-launch extract-play-store-cert'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
+    timeout-minutes: 5
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: '434'
-      ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Resolve stable exact current main
@@ -44,14 +41,61 @@ jobs:
           [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
           sleep 3
           second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          [[ "$first_sha" == "$second_sha" ]]
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo 'Main changed while authorizing certificate extraction.' >&2
+            exit 1
+          }
           echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Publish extraction run link
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="## Play Store certificate extraction started
+
+- Exact current main SHA: \`$RELEASE_SHA\`
+- Workflow run: $run_url
+- Production environment approval may be required before the secret-backed extraction job starts.
+- Private signing material will not be uploaded.
+- Hard-launch claim: \`false\`"
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+
+  extract-certificate:
+    name: Export public Android upload certificate
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    outputs:
+      artifact_name: ${{ steps.certificate.outputs.artifact_name }}
+      fingerprint: ${{ steps.certificate.outputs.fingerprint }}
+    env:
+      RELEASE_SHA: ${{ needs.authorize.outputs.release_sha }}
+      ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
       - name: Checkout exact current main
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.release.outputs.sha }}
+          ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
+
+      - name: Verify main remained frozen before extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
+            echo "Main moved from $RELEASE_SHA to $remote_main before certificate extraction." >&2
+            exit 1
+          }
 
       - name: Use Java 21
         uses: actions/setup-java@v4
@@ -95,8 +139,6 @@ jobs:
       - name: Export and verify public certificate
         id: certificate
         shell: bash
-        env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
           set -euo pipefail
           mkdir -p play-store-certificate
@@ -164,11 +206,44 @@ jobs:
           retention-days: 7
           compression-level: 9
 
-      - name: Post extraction result
-        env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
-          ARTIFACT_NAME: ${{ steps.certificate.outputs.artifact_name }}
-          CERTIFICATE_FINGERPRINT: ${{ steps.certificate.outputs.fingerprint }}
+      - name: Verify main remained frozen through extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$RELEASE_SHA" ]] || {
+            echo "Certificate was exported, but main moved to $remote_main; refusing exact-SHA evidence." >&2
+            exit 1
+          }
+
+      - name: Remove private signing material
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          shred -u android/app/bin-group-upload.jks 2>/dev/null || rm -f android/app/bin-group-upload.jks
+          shred -u android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
+
+  report-result:
+    name: Publish certificate extraction result
+    needs:
+      - authorize
+      - extract-certificate
+    if: always() && needs.authorize.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+      RELEASE_SHA: ${{ needs.authorize.outputs.release_sha }}
+      EXTRACTION_RESULT: ${{ needs.extract-certificate.result }}
+      ARTIFACT_NAME: ${{ needs.extract-certificate.outputs.artifact_name }}
+      CERTIFICATE_FINGERPRINT: ${{ needs.extract-certificate.outputs.fingerprint }}
+
+    steps:
+      - name: Publish successful extraction result
+        if: env.EXTRACTION_RESULT == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -185,10 +260,18 @@ jobs:
 - Hard-launch claim: \`false\`"
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
 
-      - name: Remove private signing material
-        if: always()
+      - name: Publish failed extraction result
+        if: env.EXTRACTION_RESULT != 'success'
         shell: bash
         run: |
-          set +e
-          shred -u android/app/bin-group-upload.jks 2>/dev/null || rm -f android/app/bin-group-upload.jks
-          shred -u android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="## Play Store certificate extraction did not complete
+
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run: $run_url
+- Extraction job result: \`$EXTRACTION_RESULT\`
+- Artifact uploaded: \`false\`
+- Next safe action: open the failed or cancelled extraction job in this run and review the first failing step. Do not replace or regenerate the upload key unless the keystore itself is proven invalid.
+- Hard-launch claim: \`false\`"
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
