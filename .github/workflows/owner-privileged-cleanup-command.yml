@@ -30,7 +30,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: '434'
-      OWNER_LOGIN: ${{ github.repository_owner }}
       COMMAND: ${{ github.event.comment.body }}
 
     steps:
@@ -46,6 +45,17 @@ jobs:
           [[ "$first_sha" == "$second_sha" ]]
           echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Dispatch fresh exact-SHA privileged review
         id: review
         env:
@@ -53,30 +63,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
 
           post_comment() {
             gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$1" >/dev/null
-          }
-
-          locate_run() {
-            local workflow="$1"
-            local started_at="$2"
-            for _ in $(seq 1 60); do
-              local runs run_id
-              runs="$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50")"
-              run_id="$(jq -r --arg sha "$RELEASE_SHA" --arg started "$started_at" --arg owner "$OWNER_LOGIN" '
-                [.workflow_runs[] |
-                  select(.head_sha == $sha and .created_at >= $started and
-                    (.actor.login == "github-actions[bot]" or .actor.login == $owner))]
-                | sort_by(.created_at) | last | .id // empty
-              ' <<<"$runs")"
-              if [[ "$run_id" =~ ^[0-9]+$ ]]; then
-                printf '%s' "$run_id"
-                return 0
-              fi
-              sleep 5
-            done
-            return 1
           }
 
           wait_for_success() {
@@ -95,7 +85,10 @@ jobs:
             return 1
           }
 
-          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          owner_snapshot_workflow_run_ids \
+            privileged-account-cleanup-dry-run.yml \
+            privileged-review-baseline-run-ids.json
+
           jq -n \
             --arg ref main \
             --arg sha "$RELEASE_SHA" \
@@ -106,11 +99,19 @@ jobs:
             "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/dispatches" \
             --input privileged-review-dispatch.json
 
-          run_id="$(locate_run privileged-account-cleanup-dry-run.yml "$started_at")" || {
-            post_comment "Privileged-account review dispatch was accepted for \`$RELEASE_SHA\`, but its exact-SHA run could not be located."
+          run_record="$(
+            owner_locate_new_exact_sha_workflow_run \
+              privileged-account-cleanup-dry-run.yml \
+              "$RELEASE_SHA" \
+              privileged-review-baseline-run-ids.json \
+              60 \
+              5
+          )" || {
+            post_comment "Privileged-account review was dispatched once for \`$RELEASE_SHA\`, but no unique new exact-SHA run could be correlated. No duplicate review was attempted."
             exit 1
           }
-          run_url="https://github.com/$REPOSITORY/actions/runs/$run_id"
+          run_id="$(jq -r '.runId' <<<"$run_record")"
+          run_url="$(jq -r '.runUrl' <<<"$run_record")"
           post_comment "Privileged-account review started for exact SHA \`$RELEASE_SHA\`: $run_url"
 
           if ! wait_for_success "$run_id"; then
@@ -118,7 +119,11 @@ jobs:
             exit 1
           fi
 
-          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts")"
+          artifacts="$(
+            gh api --paginate --slurp \
+              "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" |
+              jq -ce '{artifacts: [.[].artifacts[]]}'
+          )"
           expected="privileged-account-cleanup-review-$RELEASE_SHA"
           artifact_id="$(jq -r --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | first | .id // empty' <<<"$artifacts")"
           [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
@@ -191,30 +196,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
 
           post_comment() {
             gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$1" >/dev/null
-          }
-
-          locate_run() {
-            local workflow="$1"
-            local started_at="$2"
-            for _ in $(seq 1 60); do
-              local runs run_id
-              runs="$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=50")"
-              run_id="$(jq -r --arg sha "$RELEASE_SHA" --arg started "$started_at" --arg owner "$OWNER_LOGIN" '
-                [.workflow_runs[] |
-                  select(.head_sha == $sha and .created_at >= $started and
-                    (.actor.login == "github-actions[bot]" or .actor.login == $owner))]
-                | sort_by(.created_at) | last | .id // empty
-              ' <<<"$runs")"
-              if [[ "$run_id" =~ ^[0-9]+$ ]]; then
-                printf '%s' "$run_id"
-                return 0
-              fi
-              sleep 5
-            done
-            return 1
           }
 
           wait_for_success() {
@@ -233,7 +218,10 @@ jobs:
             return 1
           }
 
-          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          owner_snapshot_workflow_run_ids \
+            privileged-account-cleanup-production.yml \
+            privileged-cleanup-baseline-run-ids.json
+
           jq -n \
             --arg ref main \
             --arg sha "$RELEASE_SHA" \
@@ -244,11 +232,19 @@ jobs:
             "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-production.yml/dispatches" \
             --input cleanup-dispatch.json
 
-          run_id="$(locate_run privileged-account-cleanup-production.yml "$started_at")" || {
-            post_comment "The protected cleanup dispatch was accepted for \`$RELEASE_SHA\`, but its exact-SHA run could not be located."
+          run_record="$(
+            owner_locate_new_exact_sha_workflow_run \
+              privileged-account-cleanup-production.yml \
+              "$RELEASE_SHA" \
+              privileged-cleanup-baseline-run-ids.json \
+              60 \
+              5
+          )" || {
+            post_comment "Protected cleanup was dispatched once for \`$RELEASE_SHA\`, but no unique new exact-SHA run could be correlated. No duplicate destructive dispatch was attempted."
             exit 1
           }
-          run_url="https://github.com/$REPOSITORY/actions/runs/$run_id"
+          run_id="$(jq -r '.runId' <<<"$run_record")"
+          run_url="$(jq -r '.runUrl' <<<"$run_record")"
           post_comment "Protected privileged-account cleanup started for exact SHA \`$RELEASE_SHA\`: $run_url"
 
           cleanup_completed='false'
@@ -266,7 +262,11 @@ jobs:
             exit 1
           }
 
-          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts")"
+          artifacts="$(
+            gh api --paginate --slurp \
+              "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" |
+              jq -ce '{artifacts: [.[].artifacts[]]}'
+          )"
           prefix="privileged-account-cleanup-$RELEASE_SHA-$run_id-"
           artifact_id="$(jq -r --arg prefix "$prefix" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | first | .id // empty' <<<"$artifacts")"
           [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
