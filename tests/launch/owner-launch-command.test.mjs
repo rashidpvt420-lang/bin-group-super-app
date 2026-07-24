@@ -50,17 +50,16 @@ test('direct diagnosis script is exact-main, paginated, sanitized and aggregate-
   assert.doesNotMatch(diagnosisScript, /\/dispatches/);
 });
 
-test('direct diagnosis preserves bounded terminal failure context ahead of noisy signals', () => {
-  assert.match(diagnosisScript, /Signal matching can be dominated by expected PERMISSION_DENIED/);
-  assert.match(diagnosisScript, /const terminalMarker =/);
-  assert.match(diagnosisScript, /process completed with exit code/);
-  assert.match(diagnosisScript, /terminalMarkerIndex - 70/);
-  assert.match(diagnosisScript, /terminalMarkerIndex \+ 20/);
-  assert.match(diagnosisScript, /terminalContextLines:\s*terminalContext/);
-  assert.match(diagnosisScript, /schemaVersion:\s*5/);
-  assert.match(diagnosisScript, /### Terminal failed-job context/);
-  assert.match(diagnosisScript, /normalizedErrorLines\[-40:\]/);
-  assert.match(diagnosisScript, /No terminal context was found; inspect the sanitized artifact/);
+test('direct diagnosis extracts deploy process output after GitHub environment metadata', () => {
+  assert.match(diagnosisScript, /##\\\[group\\\]Run node scripts\\\/deploy-firebase-production\\\.mjs/);
+  assert.match(diagnosisScript, /##\\\[endgroup\\\]/);
+  assert.match(diagnosisScript, /Post job cleanup\\\.|##\\\[group\\\]Post/);
+  assert.match(diagnosisScript, /deployStepOutputLines:\s*deployStepOutput/);
+  assert.match(diagnosisScript, /schemaVersion:\s*6/);
+  assert.match(diagnosisScript, /### Deploy-step output/);
+  assert.match(diagnosisScript, /deployStepOutputLines\[-60:\]/);
+  assert.match(diagnosisScript, /normalizedErrorLines\[-20:\]/);
+  assert.match(diagnosisScript, /Deploy-step output was not found; inspect the sanitized artifact/);
 });
 
 test('owner launch command uses both current-main START HERE wrappers', () => {
