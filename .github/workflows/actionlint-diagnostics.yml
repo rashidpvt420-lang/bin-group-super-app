@@ -47,18 +47,22 @@ jobs:
           set -o pipefail
           actionlint -no-color .github/workflows/privileged-account-review-request.yml 2>&1 | tee actionlint-report.txt
 
-      - name: Commit corrected workflow only
+      - name: Stage validated workflow as non-workflow blob
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- .github/workflows/privileged-account-review-request.yml; then
-            echo 'Protected workflow was already repaired.'
-            exit 0
-          fi
+          mkdir -p .github/workflow-fixes
+          cp .github/workflows/privileged-account-review-request.yml \
+            .github/workflow-fixes/privileged-account-review-request.yml
+          git checkout -- .github/workflows/privileged-account-review-request.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/privileged-account-review-request.yml
-          git commit -m 'fix(ci): repair protected review workflow YAML'
+          git add .github/workflow-fixes/privileged-account-review-request.yml
+          if git diff --cached --quiet; then
+            echo 'Validated staging blob already exists.'
+            exit 0
+          fi
+          git commit -m 'ci: stage actionlint-validated protected workflow blob'
           git push origin HEAD:fix/privileged-review-workflow-startup
 
       - name: Upload complete actionlint report
@@ -68,6 +72,6 @@ jobs:
           name: actionlint-privileged-review-${{ github.sha }}
           path: |
             actionlint-report.txt
-            .github/workflows/privileged-account-review-request.yml
+            .github/workflow-fixes/privileged-account-review-request.yml
           if-no-files-found: error
           retention-days: 3
