@@ -98,14 +98,14 @@ jobs:
             "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/dispatches" \
             --input privileged-review-dispatch.json
 
-          run_record="$([
+          run_record="$(
             owner_locate_new_exact_sha_workflow_run \
               privileged-account-cleanup-dry-run.yml \
               "$RELEASE_SHA" \
               privileged-review-baseline-run-ids.json \
               60 \
               5
-          ])" || {
+          )" || {
             post_comment "Privileged-account review was dispatched once for \`$RELEASE_SHA\`, but no unique new exact-SHA run could be correlated. No duplicate review was attempted."
             exit 1
           }
@@ -118,11 +118,11 @@ jobs:
             exit 1
           fi
 
-          artifacts="$([
+          artifacts="$(
             gh api --paginate --slurp \
               "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" |
               jq -ce '{artifacts: [.[].artifacts[]]}'
-          ])"
+          )"
           expected="privileged-account-cleanup-review-$RELEASE_SHA"
           artifact_id="$(jq -r --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | first | .id // empty' <<<"$artifacts")"
           [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
@@ -231,14 +231,14 @@ jobs:
             "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-production.yml/dispatches" \
             --input cleanup-dispatch.json
 
-          run_record="$([
+          run_record="$(
             owner_locate_new_exact_sha_workflow_run \
               privileged-account-cleanup-production.yml \
               "$RELEASE_SHA" \
               privileged-cleanup-baseline-run-ids.json \
               60 \
               5
-          ])" || {
+          )" || {
             post_comment "Protected cleanup was dispatched once for \`$RELEASE_SHA\`, but no unique new exact-SHA run could be correlated. No duplicate destructive dispatch was attempted."
             exit 1
           }
@@ -261,11 +261,11 @@ jobs:
             exit 1
           }
 
-          artifacts="$([
+          artifacts="$(
             gh api --paginate --slurp \
               "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" |
               jq -ce '{artifacts: [.[].artifacts[]]}'
-          ])"
+          )"
           prefix="privileged-account-cleanup-$RELEASE_SHA-$run_id-"
           artifact_id="$(jq -r --arg prefix "$prefix" '[.artifacts[] | select((.name | startswith($prefix)) and .expired == false)] | first | .id // empty' <<<"$artifacts")"
           [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
