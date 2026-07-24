@@ -38,6 +38,7 @@ test('direct diagnosis script is exact-main, paginated, sanitized and aggregate-
   assert.match(diagnosisScript, /current_main.*RELEASE_SHA/s);
   assert.match(diagnosisScript, /git rev-parse HEAD/);
   assert.match(diagnosisScript, /gh api --paginate --slurp/);
+  assert.match(diagnosisScript, /event=workflow_dispatch/);
   assert.match(diagnosisScript, /select-production-diagnosis-run\.mjs/);
   assert.match(diagnosisScript, /sanitize-production-diagnostic-log\.mjs/);
   assert.match(diagnosisScript, /fullArtifactLogRedacted:\s*true/);
@@ -46,7 +47,7 @@ test('direct diagnosis script is exact-main, paginated, sanitized and aggregate-
   assert.match(diagnosisScript, /hardLaunchClaim:\s*false/);
   assert.match(diagnosisScript, /Latest Firebase production failure diagnosis/);
   assert.doesNotMatch(diagnosisScript, /firebase deploy/);
-  assert.doesNotMatch(diagnosisScript, /workflow_dispatch/);
+  assert.doesNotMatch(diagnosisScript, /\/dispatches/);
 });
 
 test('owner launch command uses both current-main START HERE wrappers', () => {
