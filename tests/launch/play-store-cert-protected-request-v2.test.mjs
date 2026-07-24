@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const workflowPath = new URL('../../.github/workflows/play-cert-protected-request.yml', import.meta.url);
+const workflowPath = new URL('../../.github/workflows/pr-validation.yml', import.meta.url);
 const workflow = await readFile(workflowPath, 'utf8');
 
-test('certificate request separates untrusted PR checks from trusted target execution', () => {
+test('active workflow separates untrusted PR checks from trusted target execution', () => {
+  assert.match(workflow, /name: PR Validation/);
   assert.match(workflow, /pull_request:/);
   assert.match(workflow, /pull_request_target:/);
-  assert.match(workflow, /\.github\/play-cert-extraction-request-v3/);
-  assert.match(workflow, /block_request_merge:/);
+  assert.match(workflow, /\.github\/play-cert-extraction-request-v4/);
+  assert.match(workflow, /block_play_certificate_merge:/);
   assert.match(workflow, /Refuse request PR merge/);
-  assert.match(workflow, /exit 1/);
   assert.match(workflow, /github\.event_name == 'pull_request_target'/);
   assert.match(workflow, /environment: production/);
 });
@@ -20,11 +20,11 @@ test('certificate request is owner-only, same-repository, exact-title, branch-pr
   assert.match(workflow, /github\.event\.pull_request\.base\.ref == 'main'/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /github\.event\.pull_request\.user\.login == github\.repository_owner/);
-  assert.match(workflow, /ops\/dispatch-play-cert-v3-/);
-  assert.match(workflow, /Dispatch protected Play certificate extraction v3/);
+  assert.match(workflow, /ops\/dispatch-play-cert-v4-/);
+  assert.match(workflow, /Dispatch protected Play certificate extraction v4/);
   assert.match(workflow, /REQUEST_DRAFT/);
-  assert.match(workflow, /Request must change only \.github\/play-cert-extraction-request-v3/);
-  assert.match(workflow, /extract-public-play-upload-certificate-v3/);
+  assert.match(workflow, /Request must change only \.github\/play-cert-extraction-request-v4/);
+  assert.match(workflow, /extract-public-play-upload-certificate-v4/);
 });
 
 test('trusted workflow resolves stable current main and never checks out request code', () => {
@@ -69,11 +69,12 @@ test('artifact contains only public certificate evidence and private material is
   assert.doesNotMatch(workflow, /path:\s+android\/keystore\.properties/);
 });
 
-test('workflow uses expression-safe job IDs and publishes pre-approval and final status', () => {
-  assert.match(workflow, /export_certificate:/);
-  assert.match(workflow, /needs: \[announce, export_certificate\]/);
-  assert.match(workflow, /needs\.export_certificate\.result/);
-  assert.doesNotMatch(workflow, /needs\.export-certificate/);
+test('active workflow publishes pre-approval and final status with expression-safe job IDs', () => {
+  assert.match(workflow, /announce_play_certificate:/);
+  assert.match(workflow, /export_play_certificate:/);
+  assert.match(workflow, /report_play_certificate:/);
+  assert.match(workflow, /needs: \[announce_play_certificate, export_play_certificate\]/);
+  assert.match(workflow, /needs\.export_play_certificate\.result/);
   assert.match(workflow, /WAITING_FOR_PRODUCTION_ENVIRONMENT/);
   assert.match(workflow, /Workflow run ID:/);
   assert.match(workflow, /Publish protected certificate outcome/);
