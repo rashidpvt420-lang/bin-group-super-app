@@ -18,9 +18,11 @@ test('Play Store certificate extraction is owner-only and production-protected',
   assert.match(workflow, /environment: production/);
 });
 
-test('trusted-base pull request dispatch is tightly scoped and never checks out request code', () => {
+test('same-repository pull request dispatch is tightly scoped and never checks out request code', () => {
+  assert.match(workflow, /pull_request:/);
   assert.match(workflow, /pull_request_target:/);
   assert.match(workflow, /types: \[opened, synchronize, reopened\]/);
+  assert.match(workflow, /github\.event_name == 'pull_request'/);
   assert.match(workflow, /github\.event_name == 'pull_request_target'/);
   assert.match(workflow, /github\.event\.pull_request\.base\.ref == 'main'/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
