@@ -29,6 +29,9 @@ jobs:
     env:
       CI: 'true'
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: bin-group-57c60
+      VITE_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
       VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
@@ -88,8 +91,12 @@ jobs:
           set -euo pipefail
           required=(
             VITE_FIREBASE_API_KEY
+            VITE_FIREBASE_AUTH_DOMAIN
+            VITE_FIREBASE_PROJECT_ID
+            VITE_FIREBASE_STORAGE_BUCKET
             VITE_FIREBASE_APP_ID
             VITE_FIREBASE_MESSAGING_SENDER_ID
+            VITE_FIREBASE_VAPID_KEY
             VITE_APP_CHECK_SITE_KEY
             VITE_GOOGLE_MAPS_API_KEY
             ANDROID_UPLOAD_KEYSTORE_BASE64
@@ -103,6 +110,11 @@ jobs:
               exit 1
             }
           done
+          [[ "$VITE_FIREBASE_AUTH_DOMAIN" == 'bin-group-57c60.firebaseapp.com' ]]
+          [[ "$VITE_FIREBASE_PROJECT_ID" == 'bin-group-57c60' ]]
+          [[ "$VITE_FIREBASE_STORAGE_BUCKET" == 'bin-group-57c60.firebasestorage.app' ]]
+          [[ "$VITE_ENABLE_FIREBASE_APPCHECK" == 'true' ]]
+          [[ -z "$VITE_FIREBASE_APPCHECK_DEBUG_TOKEN" ]]
 
       - name: Build and cryptographically verify signed AAB
         run: bash scripts/run-android-store-release.sh
