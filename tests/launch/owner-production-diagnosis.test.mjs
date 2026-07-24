@@ -29,20 +29,25 @@ function run({
 const select = (runs, mainSha = MAIN_SHA) =>
   selectProductionDiagnosisRun(mainSha, runs, { now: NOW });
 
-test('diagnosis starts for the canonical command and validates owner plus issue context in the first step', () => {
+test('diagnosis uses an always-visible router and gates every privileged step', () => {
   assert.match(workflow, /issue_comment:\s*\n\s*types:\s*\[created\]/);
-  assert.match(workflow, /github\.event\.issue\.number == 434/);
-  assert.match(workflow, /github\.event\.comment\.body == '\/bin-launch diagnose-latest-deploy'/);
-  const jobIf = workflow.match(/if: >-\n(?<condition>(?:\s+.*\n)+?)\s+runs-on:/)?.groups?.condition || '';
-  assert.doesNotMatch(jobIf, /issue\.pull_request/);
-  assert.match(workflow, /name: Validate owner command and canonical issue context/);
+  const jobHeader = workflow.match(/\n  diagnose:\n(?<header>[\s\S]*?)\n    steps:/)?.groups?.header || '';
+  assert.doesNotMatch(jobHeader, /^\s+if:/m);
+  assert.match(workflow, /name: Route canonical owner diagnosis command/);
+  assert.match(workflow, /id: auth/);
+  assert.match(workflow, /EVENT_ISSUE_NUMBER: \$\{\{ github\.event\.issue\.number \}\}/);
+  assert.match(workflow, /echo 'authorized=false' >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /Ignoring unrelated issue comment; no production diagnosis was requested/);
+  assert.match(workflow, /COMMENT_BODY.*\/bin-launch diagnose-latest-deploy/s);
   assert.match(workflow, /COMMENT_ACTOR: \$\{\{ github\.event\.comment\.user\.login \}\}/);
   assert.match(workflow, /REPOSITORY_OWNER: \$\{\{ github\.repository_owner \}\}/);
   assert.match(workflow, /\[\[ "\$COMMENT_ACTOR" == "\$REPOSITORY_OWNER" \]\]/);
   assert.match(workflow, /Only the repository owner may run production diagnosis/);
   assert.match(workflow, /repos\/\$REPOSITORY\/issues\/\$ISSUE_NUMBER/);
   assert.match(workflow, /has\("pull_request"\) \| not/);
-  assert.match(workflow, /authorized only on canonical issue/);
+  assert.match(workflow, /echo 'authorized=true' >> "\$GITHUB_OUTPUT"/);
+  const guardedSteps = workflow.match(/if: steps\.auth\.outputs\.authorized == 'true'/g) || [];
+  assert.ok(guardedSteps.length >= 6, `expected at least 6 guarded diagnostic steps, found ${guardedSteps.length}`);
   assert.doesNotMatch(workflow, /actions:\s*write/);
   assert.doesNotMatch(workflow, /\$\{\{\s*secrets\./);
 });
