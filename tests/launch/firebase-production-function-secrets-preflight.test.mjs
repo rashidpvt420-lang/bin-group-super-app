@@ -72,3 +72,17 @@ test('protected production deploy imports mode-aware secret preflight before Fir
   assert.match(deploy, /Required Firebase production function secret preflight failed/);
   assert.match(workflow, /run:\s*node scripts\/deploy-firebase-production\.mjs/);
 });
+
+test('production deploy allows deployment when GITHUB_SHA is an ancestor of origin/main (race-condition tolerance)', () => {
+  // Verifies the deploy script uses ancestry check when origin/main has advanced beyond GITHUB_SHA.
+  // This prevents spurious "stale deployment" failures when new commits land on main while the
+  // workflow is running (the GITHUB_SHA was valid at dispatch time).
+  assert.match(deploy, /merge-base.*--is-ancestor/, 'ancestry check via git merge-base must be present');
+  assert.match(deploy, /FETCH_HEAD/, 'ancestry check must reference FETCH_HEAD after fetching origin/main');
+  assert.match(deploy, /fetch.*--depth.*origin.*main|fetch.*origin.*main.*--depth/s, 'must fetch origin main before ancestry check');
+  assert.match(deploy, /is a verified ancestor/, 'must log confirmation when ancestor check passes');
+  assert.match(deploy, /is not an ancestor of origin\/main/, 'must log reason when ancestry check fails');
+  const lsRemoteIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
+  const ancestorIndex = deploy.indexOf("'merge-base', '--is-ancestor'");
+  assert.ok(ancestorIndex > lsRemoteIndex, 'ancestry check must follow ls-remote probe');
+});
