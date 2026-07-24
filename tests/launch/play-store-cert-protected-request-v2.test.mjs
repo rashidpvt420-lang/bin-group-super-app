@@ -5,11 +5,11 @@ import test from 'node:test';
 const workflowPath = new URL('../../.github/workflows/play-cert-protected-request.yml', import.meta.url);
 const workflow = await readFile(workflowPath, 'utf8');
 
-test('certificate request v2 separates untrusted PR checks from trusted target execution', () => {
+test('certificate request separates untrusted PR checks from trusted target execution', () => {
   assert.match(workflow, /pull_request:/);
   assert.match(workflow, /pull_request_target:/);
-  assert.match(workflow, /\.github\/play-cert-extraction-request-v2/);
-  assert.match(workflow, /block-request-merge:/);
+  assert.match(workflow, /\.github\/play-cert-extraction-request-v3/);
+  assert.match(workflow, /block_request_merge:/);
   assert.match(workflow, /Refuse request PR merge/);
   assert.match(workflow, /exit 1/);
   assert.match(workflow, /github\.event_name == 'pull_request_target'/);
@@ -20,11 +20,11 @@ test('certificate request is owner-only, same-repository, exact-title, branch-pr
   assert.match(workflow, /github\.event\.pull_request\.base\.ref == 'main'/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /github\.event\.pull_request\.user\.login == github\.repository_owner/);
-  assert.match(workflow, /ops\/dispatch-play-cert-v2-/);
-  assert.match(workflow, /Dispatch protected Play certificate extraction v2/);
+  assert.match(workflow, /ops\/dispatch-play-cert-v3-/);
+  assert.match(workflow, /Dispatch protected Play certificate extraction v3/);
   assert.match(workflow, /REQUEST_DRAFT/);
-  assert.match(workflow, /Request PR must change only \.github\/play-cert-extraction-request-v2/);
-  assert.match(workflow, /extract-public-play-upload-certificate-v2/);
+  assert.match(workflow, /Request must change only \.github\/play-cert-extraction-request-v3/);
+  assert.match(workflow, /extract-public-play-upload-certificate-v3/);
 });
 
 test('trusted workflow resolves stable current main and never checks out request code', () => {
@@ -52,16 +52,16 @@ test('protected signing inputs are fail-closed and sanitized', () => {
   assert.match(workflow, /Missing protected Android signing inputs/);
   assert.match(workflow, /Fail closed when protected signing inputs are missing/);
   assert.match(workflow, /missing_inputs:/);
-  assert.doesNotMatch(workflow, /echo \"\$ANDROID_UPLOAD_KEYSTORE_BASE64\"/);
+  assert.doesNotMatch(workflow, /echo "\$ANDROID_UPLOAD_KEYSTORE_BASE64"/);
 });
 
 test('artifact contains only public certificate evidence and private material is removed', () => {
   assert.match(workflow, /keytool -exportcert -rfc/);
   assert.match(workflow, /bin-group-upload-certificate\.pem/);
-  assert.match(workflow, /publicCertificateOnly: true/);
-  assert.match(workflow, /privateKeyExcluded: true/);
-  assert.match(workflow, /keystoreExcluded: true/);
-  assert.match(workflow, /passwordsExcluded: true/);
+  assert.match(workflow, /publicCertificateOnly:true/);
+  assert.match(workflow, /privateKeyExcluded:true/);
+  assert.match(workflow, /keystoreExcluded:true/);
+  assert.match(workflow, /passwordsExcluded:true/);
   assert.match(workflow, /Verify certificate artifact allowlist/);
   assert.match(workflow, /Remove private Android signing material/);
   assert.match(workflow, /shred -u android\/app\/bin-group-upload\.jks/);
@@ -69,7 +69,11 @@ test('artifact contains only public certificate evidence and private material is
   assert.doesNotMatch(workflow, /path:\s+android\/keystore\.properties/);
 });
 
-test('workflow publishes pre-approval and final status and closes successful request without merge', () => {
+test('workflow uses expression-safe job IDs and publishes pre-approval and final status', () => {
+  assert.match(workflow, /export_certificate:/);
+  assert.match(workflow, /needs: \[announce, export_certificate\]/);
+  assert.match(workflow, /needs\.export_certificate\.result/);
+  assert.doesNotMatch(workflow, /needs\.export-certificate/);
   assert.match(workflow, /WAITING_FOR_PRODUCTION_ENVIRONMENT/);
   assert.match(workflow, /Workflow run ID:/);
   assert.match(workflow, /Publish protected certificate outcome/);
