@@ -1,9 +1,17 @@
 name: Owner Production Failure Diagnosis
-run-name: Diagnose latest Firebase production failure
+run-name: Diagnose Firebase production failure · ${{ inputs.expected_main_sha }}
 
 on:
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Exact diagnosis confirmation phrase
+        required: true
+        type: string
+      expected_main_sha:
+        description: Exact current main SHA authorized by the owner command
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -25,55 +33,68 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Route canonical owner diagnosis command
+      - name: Validate owner-authorized exact-main diagnosis dispatch
         id: auth
         shell: bash
         env:
-          EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
-          COMMENT_ACTOR: ${{ github.event.comment.user.login }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_ACTOR: ${{ github.actor }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
         run: |
           set -euo pipefail
           echo 'authorized=false' >> "$GITHUB_OUTPUT"
-
-          if [[ "$EVENT_ISSUE_NUMBER" != "$ISSUE_NUMBER" || "$COMMENT_BODY" != "/bin-launch diagnose-latest-deploy" ]]; then
-            echo "Ignoring unrelated issue comment; no production diagnosis was requested."
-            exit 0
-          fi
-
-          [[ "$COMMENT_ACTOR" == "$REPOSITORY_OWNER" ]] || {
-            echo "::error::Only the repository owner may run production diagnosis."
+          [[ "$EVENT_NAME" == 'workflow_dispatch' ]] || {
+            echo '::error::Production diagnosis must use the protected workflow_dispatch entry point.'
             exit 1
           }
-
+          [[ "$DISPATCH_ACTOR" == "$REPOSITORY_OWNER" || "$DISPATCH_ACTOR" == 'github-actions[bot]' ]] || {
+            echo '::error::Production diagnosis dispatch actor is not authorized.'
+            exit 1
+          }
+          [[ "$CONFIRMATION" == 'DIAGNOSE_LATEST_FIREBASE_PRODUCTION_FAILURE' ]] || {
+            echo '::error::Production diagnosis confirmation phrase does not match.'
+            exit 1
+          }
+          [[ "$EXPECTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::expected_main_sha must be a full lowercase 40-character SHA.'
+            exit 1
+          }
+          current_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$EXPECTED_MAIN_SHA" ]] || {
+            echo "::error::Current main $current_main does not match authorized diagnosis SHA $EXPECTED_MAIN_SHA."
+            exit 1
+          }
           issue_json="$(gh api "repos/$REPOSITORY/issues/$ISSUE_NUMBER")"
           jq -e --argjson issueNumber "$ISSUE_NUMBER" '
             .number == $issueNumber and (has("pull_request") | not)
           ' <<<"$issue_json" >/dev/null || {
-            echo "::error::Production diagnosis is authorized only on canonical issue #$ISSUE_NUMBER, not a pull request."
+            echo "::error::Canonical diagnosis destination #$ISSUE_NUMBER is not a normal issue."
             exit 1
           }
-
           echo 'authorized=true' >> "$GITHUB_OUTPUT"
-          echo "Authorized owner command accepted on canonical issue #$ISSUE_NUMBER (association=${COMMENT_ASSOCIATION:-unknown})."
+          echo "sha=$current_main" >> "$GITHUB_OUTPUT"
+          echo "Authorized exact-main diagnosis dispatch accepted for $current_main."
 
-      - name: Checkout exact current main
+      - name: Checkout exact authorized main
         if: steps.auth.outputs.authorized == 'true'
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.expected_main_sha }}
+          persist-credentials: false
 
       - name: Resolve stable current main SHA
         if: steps.auth.outputs.authorized == 'true'
         id: source
         shell: bash
+        env:
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
         run: |
           set -euo pipefail
           main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]] || {
-            echo '::error::Unable to resolve the current main branch SHA.'
+          [[ "$main_sha" == "$EXPECTED_MAIN_SHA" ]] || {
+            echo "::error::Current main $main_sha moved away from authorized SHA $EXPECTED_MAIN_SHA."
             exit 1
           }
           checkout_sha="$(git rev-parse HEAD)"
