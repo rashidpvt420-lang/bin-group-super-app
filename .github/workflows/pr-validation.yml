@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+  pull_request_target:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/play-cert-extraction-request
   workflow_dispatch:
 
 permissions:
@@ -20,6 +26,7 @@ env:
 jobs:
   validate:
     name: Install, typecheck, lint, and build
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -161,7 +168,7 @@ jobs:
   export-play-upload-certificate:
     name: Export protected Play upload certificate
     if: >-
-      github.event_name == 'pull_request' &&
+      github.event_name == 'pull_request_target' &&
       github.event.pull_request.base.ref == 'main' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login == github.repository_owner &&
