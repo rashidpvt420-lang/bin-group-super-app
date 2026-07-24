@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { retireConfiguredE2eAdmin } from './e2e-admin-lifecycle.mjs';
 import {
   CANONICAL_FOUNDER_EMAIL,
   attachAdminProfiles,
@@ -148,6 +149,18 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   const auth = authClient || admin.auth();
   const db = firestoreClient || admin.firestore();
 
+  let ephemeralE2eAdminRetirement = null;
+  if (executionMode === 'deploy-preflight') {
+    ephemeralE2eAdminRetirement = await retireConfiguredE2eAdmin({
+      projectId,
+      phase: 'predeploy',
+      env,
+      now,
+      authClient: auth,
+      firestoreClient: db,
+    });
+  }
+
   const users = await fetchAllAuthUsers({ authClient: auth });
   const enriched = await attachAdminProfiles(users, { firestoreClient: db });
   const privileged = enriched.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
@@ -191,6 +204,10 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     deletedProfileDocumentCount: 0,
     targetIdentityHashes: targets.map((target) => sha256(`${target.uid}|${lower(target.email)}`)).sort(),
     requiresOwnerCleanup: executionMode === 'deploy-preflight' && targets.length > 0,
+    ephemeralE2eAdminRetirementStatus: ephemeralE2eAdminRetirement?.status || null,
+    ephemeralE2eAdminDeletedAccountCount: ephemeralE2eAdminRetirement?.deletedAccountCount || 0,
+    ephemeralE2eAdminMutationPerformed: ephemeralE2eAdminRetirement?.mutationPerformed === true,
+    ephemeralE2eAdminTargetIdentityHash: ephemeralE2eAdminRetirement?.targetIdentityHash || null,
     sensitiveValuesExcluded: true,
     auditLogsPreserved: true,
     nonPrivilegedAccountsUntouched: true,
@@ -202,10 +219,12 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     writeEvidence(result);
     if (targets.length > 0) {
       throw new Error(
-        `Deployment blocked: ${targets.length} unexpected privileged account(s) require the owner-authorized /bin-launch execute-privileged-cleanup workflow. No identity was modified.`,
+        `Deployment blocked: ${targets.length} unexpected privileged account(s) require the owner-authorized /bin-launch execute-privileged-cleanup workflow. No unexpected privileged identity was modified.`,
       );
     }
-    console.log('[privileged-cleanup] deploy-preflight targets=0 deleted=0 mutation_performed=false');
+    console.log(
+      `[privileged-cleanup] deploy-preflight targets=0 deleted=0 ephemeral_e2e_admin_deleted=${result.ephemeralE2eAdminDeletedAccountCount} mutation_performed=false`,
+    );
     return result;
   }
 
