@@ -1,0 +1,194 @@
+name: Extract Play Store Upload Certificate
+run-name: Play Store certificate · ${{ github.event.comment.body }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: extract-play-store-upload-certificate
+  cancel-in-progress: false
+
+jobs:
+  extract-certificate:
+    name: Export public Android upload certificate
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch extract-play-store-cert'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+      ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]]
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Use Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Validate protected signing inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            ANDROID_UPLOAD_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD; do
+            [[ -n "${!name:-}" ]] || {
+              echo "Missing required protected secret: $name" >&2
+              exit 1
+            }
+          done
+
+      - name: Decode keystore and write local signing properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 android/app
+          printf '%s' "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/bin-group-upload.jks
+          chmod 600 android/app/bin-group-upload.jks
+          [[ -s android/app/bin-group-upload.jks ]]
+
+          umask 077
+          printf '%s\n' \
+            'storeFile=app/bin-group-upload.jks' \
+            "storePassword=$ANDROID_KEYSTORE_PASSWORD" \
+            "keyAlias=$ANDROID_KEY_ALIAS" \
+            "keyPassword=$ANDROID_KEY_PASSWORD" \
+            > android/keystore.properties
+          [[ -s android/keystore.properties ]]
+
+      - name: Export and verify public certificate
+        id: certificate
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p play-store-certificate
+
+          keytool -exportcert -rfc \
+            -keystore android/app/bin-group-upload.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -file play-store-certificate/bin-group-upload-certificate.pem
+
+          grep -q -- '-----BEGIN CERTIFICATE-----' play-store-certificate/bin-group-upload-certificate.pem
+          grep -q -- '-----END CERTIFICATE-----' play-store-certificate/bin-group-upload-certificate.pem
+
+          keytool -printcert \
+            -file play-store-certificate/bin-group-upload-certificate.pem \
+            > play-store-certificate/bin-group-upload-certificate-details.txt
+
+          fingerprint="$(awk -F': ' '/SHA256:/{print $2; exit}' play-store-certificate/bin-group-upload-certificate-details.txt)"
+          [[ "$fingerprint" =~ ^([0-9A-F]{2}:){31}[0-9A-F]{2}$ ]]
+
+          certificate_file_sha256="$(sha256sum play-store-certificate/bin-group-upload-certificate.pem | awk '{print $1}')"
+          [[ "$certificate_file_sha256" =~ ^[0-9a-f]{64}$ ]]
+
+          jq -n \
+            --arg commitSha "$RELEASE_SHA" \
+            --arg packageName 'ae.bingroups.superapp' \
+            --arg certificateSha256Fingerprint "$fingerprint" \
+            --arg certificateFileSha256 "$certificate_file_sha256" \
+            '{
+              schemaVersion: 1,
+              commitSha: $commitSha,
+              packageName: $packageName,
+              certificateSha256Fingerprint: $certificateSha256Fingerprint,
+              certificateFileSha256: $certificateFileSha256,
+              publicCertificateOnly: true,
+              privateKeyExcluded: true,
+              keystoreExcluded: true,
+              passwordsExcluded: true,
+              hardLaunchClaim: false
+            }' > play-store-certificate/play-store-certificate-evidence.json
+
+          artifact_name="bin-group-play-store-certificate-$RELEASE_SHA"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Verify artifact allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find play-store-certificate -maxdepth 1 -type f -printf '%f\n' | sort)
+          expected=(
+            bin-group-upload-certificate-details.txt
+            bin-group-upload-certificate.pem
+            play-store-certificate-evidence.json
+          )
+          [[ "${files[*]}" == "${expected[*]}" ]]
+          ! find play-store-certificate -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'keystore.properties' \) | grep -q .
+
+      - name: Upload public certificate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.certificate.outputs.artifact_name }}
+          path: play-store-certificate/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
+
+      - name: Post extraction result
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          ARTIFACT_NAME: ${{ steps.certificate.outputs.artifact_name }}
+          CERTIFICATE_FINGERPRINT: ${{ steps.certificate.outputs.fingerprint }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="## Play Store upload certificate ready
+
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run: $run_url
+- Artifact: \`$ARTIFACT_NAME\`
+- Package: \`ae.bingroups.superapp\`
+- Certificate SHA-256: \`$CERTIFICATE_FINGERPRINT\`
+- Private key included: \`false\`
+- Keystore included: \`false\`
+- Hard-launch claim: \`false\`"
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+
+      - name: Remove private signing material
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          shred -u android/app/bin-group-upload.jks 2>/dev/null || rm -f android/app/bin-group-upload.jks
+          shred -u android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
