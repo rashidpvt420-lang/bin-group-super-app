@@ -120,10 +120,38 @@ const selected = uniqueNonEmpty(
     .map((index) => lines[index]),
 ).slice(-120);
 
-// Signal matching can be dominated by expected PERMISSION_DENIED output from
-// passing Rules tests. Preserve a separate, bounded window around the final
-// failed-process marker so the actual Firebase CLI or postdeploy verifier exit
-// remains visible without exposing the unredacted raw job log.
+// Extract only output produced by deploy-firebase-production.mjs. GitHub first
+// prints a command/environment group, closes it with ##[endgroup], then emits
+// the process output. This avoids filling the canonical issue comment with
+// masked environment metadata while preserving the verifier's exact failure.
+let deployGroupStart = -1;
+for (let index = 0; index < lines.length; index += 1) {
+  if (/##\[group\]Run node scripts\/deploy-firebase-production\.mjs/.test(lines[index])) {
+    deployGroupStart = index;
+  }
+}
+let deployOutputStart = -1;
+if (deployGroupStart >= 0) {
+  for (let index = deployGroupStart + 1; index < lines.length; index += 1) {
+    if (/##\[endgroup\]/.test(lines[index])) {
+      deployOutputStart = index + 1;
+      break;
+    }
+  }
+}
+let deployOutputEnd = lines.length;
+if (deployOutputStart >= 0) {
+  for (let index = deployOutputStart; index < lines.length; index += 1) {
+    if (/Post job cleanup\.|##\[group\]Post /.test(lines[index])) {
+      deployOutputEnd = index;
+      break;
+    }
+  }
+}
+const deployStepOutput = deployOutputStart >= 0
+  ? uniqueNonEmpty(lines.slice(deployOutputStart, deployOutputEnd)).slice(-120)
+  : [];
+
 const terminalMarker = /##\[error\]|process completed with exit code|command failed|firebaseerror|deployment failed|deploy failed|\[production-deploy\]|\[deploy-verify\]|refused:/i;
 let terminalMarkerIndex = -1;
 for (let index = 0; index < lines.length; index += 1) {
@@ -141,7 +169,7 @@ const failedSuiteSignals = selected
   .filter((line) => /\[critical-evidence\].*(?:failed|not recorded)|business-(?:admin|owner|tenant|technician|broker|global)|tests\/e2e\/[^\s]+\.spec\.ts|\d+ failed/i.test(line))
   .slice(-30);
 const report = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   status: 'FAILED',
   sourceWorkflow: 'Firebase Production Deploy',
   sourceRunId,
@@ -150,6 +178,7 @@ const report = {
   sourceRunAgeSeconds: Number.parseInt(sourceRunAgeSeconds, 10),
   sourceRunMatchesResolvedMainSha: sourceRunMatchesMainSha === 'true',
   sourceRunStaleFailureEvidence: sourceRunIsStale === 'true',
+  deployStepOutputLines: deployStepOutput,
   terminalContextLines: terminalContext,
   normalizedErrorLines: selected,
   failedSuiteSignals,
@@ -163,8 +192,8 @@ const report = {
 writeFileSync('launch_package/firebase-production-failure.json', `${JSON.stringify(report, null, 2)}\n`);
 NODE
 
-terminal="$(jq -r 'if (.terminalContextLines | length) == 0 then "- No terminal context was found; inspect the sanitized artifact." else (.terminalContextLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
-errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the sanitized artifact." else (.normalizedErrorLines[-40:] | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+deploy_output="$(jq -r 'if (.deployStepOutputLines | length) == 0 then "- Deploy-step output was not found; inspect the sanitized artifact." else (.deployStepOutputLines[-60:] | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
+errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized error line was found; inspect the sanitized artifact." else (.normalizedErrorLines[-20:] | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
 suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the sanitized artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
 artifact="firebase-production-manual-diagnosis-$run_sha-$run_id"
 body="## Latest Firebase production failure diagnosis
@@ -180,13 +209,13 @@ body="## Latest Firebase production failure diagnosis
 - Raw job log uploaded: \`false\`
 - Hard-launch claim: \`false\`
 
-### Terminal failed-job context
-$terminal
+### Deploy-step output
+$deploy_output
 
 ### Failed suite signals
 $suites
 
-### Normalized error lines (last 40)
+### Normalized error lines (last 20)
 $errors
 
 The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
