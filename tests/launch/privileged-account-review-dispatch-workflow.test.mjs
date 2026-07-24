@@ -32,7 +32,7 @@ test('privileged review dispatcher validates a canonical one-file no-mutation ma
 
 test('privileged review dispatcher binds one protected dry-run to stable exact main', () => {
   assert.match(workflow, /Resolve stable current main and snapshot workflow runs/);
-  assert.match(workflow, /privileged-account-cleanup-dry-run\.yml\/runs\?event=workflow_dispatch&per_page=100/);
+  assert.match(workflow, /privileged-account-cleanup-dry-run\.yml\/runs\?event=workflow_dispatch&branch=main&per_page=100/);
   assert.match(workflow, /privileged-account-cleanup-dry-run\.yml\/dispatches/);
   assert.equal((workflow.match(/privileged-account-cleanup-dry-run\.yml\/dispatches/g) || []).length, 1);
   assert.match(workflow, /expected_commit_sha:\$sha/);
@@ -43,4 +43,18 @@ test('privileged review dispatcher binds one protected dry-run to stable exact m
   assert.match(workflow, /latest_main/);
   assert.match(workflow, /Mutation requested: false/);
   assert.match(workflow, /Hard-launch claim: false/);
+});
+
+test('dispatcher publishes only sanitized exact-run correlation evidence', () => {
+  assert.match(workflow, /privileged-review-dispatch-evidence\.json/);
+  assert.match(workflow, /schemaVersion: 1/);
+  assert.match(workflow, /commitSha: \$commitSha/);
+  assert.match(workflow, /workflowRunId: \$workflowRunId/);
+  assert.match(workflow, /workflowRunUrl: \$workflowRunUrl/);
+  assert.match(workflow, /mutationRequested: false/);
+  assert.match(workflow, /hardLaunchClaim: false/);
+  assert.match(workflow, /name: privileged-review-dispatch-\$\{\{ steps\.release\.outputs\.sha \}\}-\$\{\{ steps\.correlate\.outputs\.run_id \}\}/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.doesNotMatch(workflow, /privileged-review-dispatch-evidence[\s\S]*password/i);
+  assert.doesNotMatch(workflow, /privileged-review-dispatch-evidence[\s\S]*token/i);
 });
