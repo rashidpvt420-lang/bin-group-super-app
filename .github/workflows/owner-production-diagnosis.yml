@@ -17,9 +17,6 @@ concurrency:
 jobs:
   diagnose:
     name: Diagnose latest failed Firebase production deployment
-    if: >-
-      github.event.issue.number == 434 &&
-      github.event.comment.body == '/bin-launch diagnose-latest-deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -28,23 +25,29 @@ jobs:
       ISSUE_NUMBER: '434'
 
     steps:
-      - name: Validate owner command and canonical issue context
+      - name: Route canonical owner diagnosis command
+        id: auth
         shell: bash
         env:
+          EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
           COMMENT_ACTOR: ${{ github.event.comment.user.login }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
           set -euo pipefail
+          echo 'authorized=false' >> "$GITHUB_OUTPUT"
+
+          if [[ "$EVENT_ISSUE_NUMBER" != "$ISSUE_NUMBER" || "$COMMENT_BODY" != "/bin-launch diagnose-latest-deploy" ]]; then
+            echo "Ignoring unrelated issue comment; no production diagnosis was requested."
+            exit 0
+          fi
+
           [[ "$COMMENT_ACTOR" == "$REPOSITORY_OWNER" ]] || {
             echo "::error::Only the repository owner may run production diagnosis."
             exit 1
           }
-          [[ "$COMMENT_BODY" == "/bin-launch diagnose-latest-deploy" ]] || {
-            echo "::error::Production diagnosis command does not match the authorized command."
-            exit 1
-          }
+
           issue_json="$(gh api "repos/$REPOSITORY/issues/$ISSUE_NUMBER")"
           jq -e --argjson issueNumber "$ISSUE_NUMBER" '
             .number == $issueNumber and (has("pull_request") | not)
@@ -52,14 +55,18 @@ jobs:
             echo "::error::Production diagnosis is authorized only on canonical issue #$ISSUE_NUMBER, not a pull request."
             exit 1
           }
+
+          echo 'authorized=true' >> "$GITHUB_OUTPUT"
           echo "Authorized owner command accepted on canonical issue #$ISSUE_NUMBER (association=${COMMENT_ASSOCIATION:-unknown})."
 
       - name: Checkout exact current main
+        if: steps.auth.outputs.authorized == 'true'
         uses: actions/checkout@v4
         with:
           ref: main
 
       - name: Resolve stable current main SHA
+        if: steps.auth.outputs.authorized == 'true'
         id: source
         shell: bash
         run: |
@@ -77,6 +84,7 @@ jobs:
           echo "sha=$main_sha" >> "$GITHUB_OUTPUT"
 
       - name: Paginate and select the latest failed protected deployment
+        if: steps.auth.outputs.authorized == 'true'
         id: run
         shell: bash
         env:
@@ -120,6 +128,7 @@ jobs:
           echo "run_is_stale=$stale_evidence" >> "$GITHUB_OUTPUT"
 
       - name: Collect and sanitize GitHub-masked failed-job logs
+        if: steps.auth.outputs.authorized == 'true'
         env:
           SOURCE_RUN_ID: ${{ steps.run.outputs.run_id }}
           SOURCE_RUN_SHA: ${{ steps.run.outputs.run_sha }}
@@ -208,6 +217,7 @@ jobs:
           NODE
 
       - name: Upload safe diagnostic evidence
+        if: steps.auth.outputs.authorized == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: firebase-production-manual-diagnosis-${{ steps.run.outputs.run_sha }}-${{ steps.run.outputs.run_id }}
@@ -218,6 +228,7 @@ jobs:
           retention-days: 30
 
       - name: Post normalized diagnosis to canonical pilot issue
+        if: steps.auth.outputs.authorized == 'true'
         env:
           RESOLVED_MAIN_SHA: ${{ steps.run.outputs.main_sha }}
           SOURCE_RUN_ID: ${{ steps.run.outputs.run_id }}
