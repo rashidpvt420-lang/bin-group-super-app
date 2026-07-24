@@ -294,3 +294,95 @@ jobs:
             echo '- Public deployment: not requested'
             echo '- Hard-clearance: not requested'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  dispatch-production-diagnosis:
+    name: Dispatch protected production diagnosis
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch diagnose-latest-deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+
+    steps:
+      - name: Resolve stable current main for diagnosis
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main changed while authorizing production diagnosis.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current main for correlation helper
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Dispatch exact-main diagnosis once
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
+
+          owner_snapshot_workflow_run_ids \
+            owner-production-diagnosis.yml \
+            owner-diagnosis-baseline-run-ids.json
+
+          jq -n \
+            --arg ref main \
+            --arg confirmation DIAGNOSE_LATEST_FIREBASE_PRODUCTION_FAILURE \
+            --arg expectedMainSha "$RELEASE_SHA" \
+            '{ref:$ref,inputs:{confirmation:$confirmation,expected_main_sha:$expectedMainSha}}' \
+            > owner-diagnosis-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/owner-production-diagnosis.yml/dispatches" \
+            --input owner-diagnosis-dispatch.json
+
+          run_record="$(
+            owner_locate_new_exact_sha_workflow_run \
+              owner-production-diagnosis.yml \
+              "$RELEASE_SHA" \
+              owner-diagnosis-baseline-run-ids.json \
+              40 \
+              5
+          )" || {
+            gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+              -f body="Production diagnosis was dispatched once for \`$RELEASE_SHA\`, but no unique exact-SHA run could be correlated. No retry was attempted." >/dev/null
+            exit 1
+          }
+
+          run_id="$(jq -r '.runId' <<<"$run_record")"
+          run_url="$(jq -r '.runUrl' <<<"$run_record")"
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+            -f body="Protected production diagnosis started for current main \`$RELEASE_SHA\`: $run_url" >/dev/null
+
+          {
+            echo '## Owner production diagnosis dispatched'
+            echo
+            echo "- Exact main SHA: \`$RELEASE_SHA\`"
+            echo "- Diagnosis run: $run_url"
+            echo '- Production mutation: none'
+            echo '- Hard-launch claim: false'
+          } >> "$GITHUB_STEP_SUMMARY"
