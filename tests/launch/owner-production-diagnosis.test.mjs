@@ -29,23 +29,19 @@ function run({
 const select = (runs, mainSha = MAIN_SHA) =>
   selectProductionDiagnosisRun(mainSha, runs, { now: NOW });
 
-test('diagnosis uses an always-visible router and gates every privileged step', () => {
-  assert.match(workflow, /issue_comment:\s*\n\s*types:\s*\[created\]/);
-  const jobHeader = workflow.match(/\n  diagnose:\n(?<header>[\s\S]*?)\n    steps:/)?.groups?.header || '';
-  assert.doesNotMatch(jobHeader, /^\s+if:/m);
-  assert.match(workflow, /name: Route canonical owner diagnosis command/);
-  assert.match(workflow, /id: auth/);
-  assert.match(workflow, /EVENT_ISSUE_NUMBER: \$\{\{ github\.event\.issue\.number \}\}/);
-  assert.match(workflow, /echo 'authorized=false' >> "\$GITHUB_OUTPUT"/);
-  assert.match(workflow, /Ignoring unrelated issue comment; no production diagnosis was requested/);
-  assert.match(workflow, /COMMENT_BODY.*\/bin-launch diagnose-latest-deploy/s);
-  assert.match(workflow, /COMMENT_ACTOR: \$\{\{ github\.event\.comment\.user\.login \}\}/);
+test('diagnosis is workflow-dispatch only and requires owner-authorized exact main', () => {
+  assert.match(workflow, /workflow_dispatch:\s*\n\s*inputs:/);
+  assert.doesNotMatch(workflow, /issue_comment:/);
+  assert.match(workflow, /confirmation:/);
+  assert.match(workflow, /expected_main_sha:/);
+  assert.match(workflow, /DIAGNOSE_LATEST_FIREBASE_PRODUCTION_FAILURE/);
+  assert.match(workflow, /DISPATCH_ACTOR: \$\{\{ github\.actor \}\}/);
   assert.match(workflow, /REPOSITORY_OWNER: \$\{\{ github\.repository_owner \}\}/);
-  assert.match(workflow, /\[\[ "\$COMMENT_ACTOR" == "\$REPOSITORY_OWNER" \]\]/);
-  assert.match(workflow, /Only the repository owner may run production diagnosis/);
-  assert.match(workflow, /repos\/\$REPOSITORY\/issues\/\$ISSUE_NUMBER/);
-  assert.match(workflow, /has\("pull_request"\) \| not/);
-  assert.match(workflow, /echo 'authorized=true' >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /github-actions\[bot\]/);
+  assert.match(workflow, /expected_main_sha must be a full lowercase 40-character SHA/);
+  assert.match(workflow, /does not match authorized diagnosis SHA/);
+  assert.match(workflow, /ref: \$\{\{ inputs\.expected_main_sha \}\}/);
+  assert.match(workflow, /persist-credentials: false/);
   const guardedSteps = workflow.match(/if: steps\.auth\.outputs\.authorized == 'true'/g) || [];
   assert.ok(guardedSteps.length >= 6, `expected at least 6 guarded diagnostic steps, found ${guardedSteps.length}`);
   assert.doesNotMatch(workflow, /actions:\s*write/);
@@ -53,7 +49,6 @@ test('diagnosis uses an always-visible router and gates every privileged step', 
 });
 
 test('diagnosis checks out exact current main and uses paginated deterministic run selection', () => {
-  assert.match(workflow, /ref: main/);
   assert.match(workflow, /repos\/\$REPOSITORY\/git\/ref\/heads\/main/);
   assert.match(workflow, /git rev-parse HEAD/);
   assert.match(workflow, /Checked-out SHA .* does not match current main/);
