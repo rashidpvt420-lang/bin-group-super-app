@@ -103,7 +103,14 @@ npx cap sync android
 test -s "$AAB_PATH"
 test -s "$APK_PATH"
 
-jarsigner -verify -strict -certs "$AAB_PATH" >/dev/null
+aab_signing_report="$(mktemp)"
+jarsigner -verify -verbose -certs "$AAB_PATH" > "$aab_signing_report" 2>&1
+grep -q 'jar verified\.' "$aab_signing_report" || {
+  cat "$aab_signing_report"
+  echo "::error::Android App Bundle signature verification did not report a verified JAR."
+  exit 1
+}
+rm -f "$aab_signing_report"
 
 build_tools_dir="$(find "${ANDROID_HOME:?ANDROID_HOME is required}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
 apksigner="$build_tools_dir/apksigner"
