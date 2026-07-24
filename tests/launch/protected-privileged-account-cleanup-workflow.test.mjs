@@ -53,6 +53,7 @@ test('production deploy workflow removes unexpected privileged accounts before d
   const cleanupStep = deployWorkflow.indexOf('Remove unexpected privileged Firebase accounts');
   const deployStep = deployWorkflow.indexOf('Deploy and verify Firebase production stack');
   assert.ok(cleanupStep >= 0, 'deploy workflow must include a privileged-account cleanup step');
+  assert.ok(deployStep >= 0, 'deploy workflow must include the Firebase deploy step');
   assert.ok(deployStep > cleanupStep, 'privileged-account cleanup must precede the Firebase deploy step');
   assert.match(
     deployWorkflow,
