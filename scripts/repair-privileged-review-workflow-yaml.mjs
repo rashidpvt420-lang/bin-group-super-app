@@ -6,20 +6,22 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const workflowPath = '.github/workflows/privileged-account-review-request.yml';
 const source = readFileSync(workflowPath, 'utf8');
 const lines = source.split('\n');
-let repairedBlocks = 0;
+let discoveredBlocks = 0;
+let repairedLines = 0;
 let inBody = false;
 
 for (let index = 0; index < lines.length; index += 1) {
   const line = lines[index];
   if (!inBody && /^\s+body="## /.test(line)) {
     inBody = true;
-    repairedBlocks += 1;
+    discoveredBlocks += 1;
     continue;
   }
   if (!inBody) continue;
 
   if (line === '' || !/^\s/.test(line)) {
     lines[index] = `          ${line}`;
+    repairedLines += 1;
   }
 
   if (/`false`"\s*$/.test(line)) {
@@ -30,13 +32,11 @@ for (let index = 0; index < lines.length; index += 1) {
 if (inBody) {
   throw new Error('Protected workflow repair found an unterminated body assignment.');
 }
-if (repairedBlocks !== 4) {
-  throw new Error(`Expected exactly 4 multiline body assignments; found ${repairedBlocks}.`);
+if (discoveredBlocks !== 4) {
+  throw new Error(`Expected exactly 4 multiline body assignments; found ${discoveredBlocks}.`);
 }
 
-const repaired = lines.join('\n');
-if (repaired === source) {
-  throw new Error('Protected workflow repair made no change.');
+if (repairedLines > 0) {
+  writeFileSync(workflowPath, lines.join('\n'));
 }
-writeFileSync(workflowPath, repaired);
-console.log(`[workflow-repair] repaired_blocks=${repairedBlocks} path=${workflowPath}`);
+console.log(`[workflow-repair] discovered_blocks=${discoveredBlocks} repaired_lines=${repairedLines} path=${workflowPath}`);
