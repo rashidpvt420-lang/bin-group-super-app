@@ -165,6 +165,113 @@ jobs:
       - name: Verify mobile store source readiness
         run: npm run test:mobile-store-readiness
 
+  dispatch-play-certificate-workflow:
+    name: Dispatch protected Play certificate workflow
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-workflow-') &&
+      github.event.pull_request.title == 'Dispatch protected Play certificate workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      REQUEST_PR: ${{ github.event.pull_request.number }}
+      REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Validate one-file owner dispatch request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/play-cert-workflow-dispatch-request' ]] || {
+            printf '::error::Request must change only .github/play-cert-workflow-dispatch-request. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/play-cert-workflow-dispatch-request?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          expected=$'request=dispatch-protected-play-certificate-workflow\nprivate_material_artifact_allowed=false\nhard_launch_claim=false'
+          [[ "$marker" == "$expected" ]] || {
+            echo '::error::Certificate workflow request marker is not canonical.'
+            exit 1
+          }
+
+      - name: Resolve stable current main and snapshot workflow runs
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while preparing certificate workflow dispatch.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+          gh api "repos/$REPOSITORY/actions/workflows/extract-play-store-cert.yml/runs?event=workflow_dispatch&per_page=30" \
+            --jq '.workflow_runs[].id' > certificate-run-baseline.txt
+
+      - name: Dispatch registered certificate workflow on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/extract-play-store-cert.yml/dispatches" \
+            -f ref='main'
+
+      - name: Correlate the new exact-main workflow run
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          run_url=''
+
+          for _ in $(seq 1 30); do
+            candidate="$({
+              gh api "repos/$REPOSITORY/actions/workflows/extract-play-store-cert.yml/runs?event=workflow_dispatch&per_page=30" \
+                --jq --arg sha "$RELEASE_SHA" '.workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url] | @tsv'
+            } | while IFS=$'\t' read -r id url; do
+              if ! grep -Fxq "$id" certificate-run-baseline.txt; then
+                printf '%s\t%s\n' "$id" "$url"
+                break
+              fi
+            done)"
+
+            if [[ -n "$candidate" ]]; then
+              IFS=$'\t' read -r run_id run_url <<< "$candidate"
+              break
+            fi
+            sleep 4
+          done
+
+          [[ "$run_id" =~ ^[0-9]+$ ]] || {
+            echo '::error::The certificate workflow was dispatched, but no unique exact-main run could be correlated.'
+            exit 1
+          }
+
+          echo "Protected certificate workflow run: $run_url"
+          {
+            echo '## Protected Play certificate workflow dispatched'
+            echo
+            echo "- Exact main SHA: \`$RELEASE_SHA\`"
+            echo "- Workflow run ID: \`$run_id\`"
+            echo "- Workflow run: $run_url"
+            echo '- Public launch claim: false'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   export-play-upload-certificate:
     name: Export protected Play upload certificate
     if: >-
