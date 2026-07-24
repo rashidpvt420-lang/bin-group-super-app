@@ -1,0 +1,214 @@
+name: Dispatch Protected Privileged Account Cleanup
+run-name: Privileged cleanup dispatch · ${{ github.run_id }}
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, converted_to_draft]
+    paths:
+      - .github/privileged-account-cleanup-dispatch-request
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: privileged-account-cleanup-dispatch-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  REQUEST_PR: ${{ github.event.pull_request.number }}
+  REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  dispatch:
+    name: Validate review and dispatch exact-main cleanup
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      startsWith(github.event.pull_request.head.ref, 'ops/dispatch-privileged-cleanup-workflow-') &&
+      github.event.pull_request.title == 'Dispatch protected privileged account cleanup workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Validate canonical one-file owner cleanup request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/privileged-account-cleanup-dispatch-request' ]] || {
+            printf '::error::Request must change only .github/privileged-account-cleanup-dispatch-request. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/privileged-account-cleanup-dispatch-request?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          request="$(sed -n 's/^request=//p' <<<"$marker")"
+          review_run_id="$(sed -n 's/^review_workflow_run_id=//p' <<<"$marker")"
+          expected_target_count="$(sed -n 's/^expected_target_count=//p' <<<"$marker")"
+          mutation_allowed="$(sed -n 's/^mutation_allowed=//p' <<<"$marker")"
+          hard_launch_claim="$(sed -n 's/^hard_launch_claim=//p' <<<"$marker")"
+          line_count="$(awk 'END{print NR}' <<<"$marker")"
+
+          [[ "$line_count" -eq 5 ]]
+          [[ "$request" == 'dispatch-protected-privileged-account-cleanup' ]]
+          [[ "$review_run_id" =~ ^[0-9]+$ ]]
+          [[ "$expected_target_count" =~ ^[1-9][0-9]*$ ]]
+          [[ "$mutation_allowed" == 'true' ]]
+          [[ "$hard_launch_claim" == 'false' ]]
+
+          echo "review_run_id=$review_run_id" >> "$GITHUB_OUTPUT"
+          echo "expected_target_count=$expected_target_count" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while preparing privileged cleanup dispatch.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Validate exact schema-v2 review authorization
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          REVIEW_RUN_ID: ${{ steps.request.outputs.review_run_id }}
+          EXPECTED_TARGET_COUNT: ${{ steps.request.outputs.expected_target_count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$REVIEW_RUN_ID")"
+          [[ "$(jq -r '.status' <<<"$run_json")" == 'completed' ]]
+          [[ "$(jq -r '.conclusion' <<<"$run_json")" == 'success' ]]
+          [[ "$(jq -r '.event' <<<"$run_json")" == 'workflow_dispatch' ]]
+          [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$RELEASE_SHA" ]]
+
+          artifact_name="privileged-account-cleanup-review-$RELEASE_SHA"
+          artifacts="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$REVIEW_RUN_ID/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+          artifact_id="$(jq -r --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]]
+
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > privileged-review.zip
+          mkdir -p privileged-review
+          unzip -q privileged-review.zip -d privileged-review
+          report_path="$(find privileged-review -type f -name 'privileged-account-cleanup.json' -print -quit)"
+          [[ -n "$report_path" && -s "$report_path" ]]
+
+          jq -e \
+            --arg sha "$RELEASE_SHA" \
+            --arg workflow_run_id "$REVIEW_RUN_ID" \
+            --argjson expected "$EXPECTED_TARGET_COUNT" '
+              .schemaVersion == 2 and
+              .status == "dry-run" and
+              .commitSha == $sha and
+              .workflowRunId == $workflow_run_id and
+              .canonicalFounderCount == 1 and
+              .canonicalFounderReady == true and
+              .founderAccountEnabled == true and
+              .founderProfileActive == true and
+              .founderEmailVerified == true and
+              .founderPhoneMfaReady == true and
+              .executionEligible == true and
+              .deletionTargetCount == $expected and
+              .deletedAccountCount == 0 and
+              .mutationPerformed == false and
+              .sensitiveValuesExcluded == true and
+              .auditLogsPreserved == true and
+              .nonPrivilegedAccountsUntouched == true and
+              .hardLaunchClaim == false
+            ' "$report_path" >/dev/null
+
+      - name: Snapshot protected cleanup workflow runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-production.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+            | jq -r '.[].workflow_runs[].id' > privileged-cleanup-run-baseline.txt
+
+      - name: Dispatch registered protected cleanup workflow
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$RELEASE_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"REVIEW_SINGLE_FOUNDER_PRIVILEGED_ACCOUNTS",canonical_founder_email:"ceo@bin-groups.com",execute_cleanup:true,destructive_confirmation:"DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP"}}' \
+            > privileged-cleanup-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-production.yml/dispatches" \
+            --input privileged-cleanup-dispatch.json
+
+      - name: Correlate new exact-main protected cleanup run
+        id: correlate
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          REVIEW_RUN_ID: ${{ steps.request.outputs.review_run_id }}
+          EXPECTED_TARGET_COUNT: ${{ steps.request.outputs.expected_target_count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          run_url=''
+
+          for _ in $(seq 1 60); do
+            new="$(
+              gh api --paginate --slurp \
+                "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-production.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+                | jq -r --arg sha "$RELEASE_SHA" '.[].workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url] | @tsv' |
+                awk 'NR==FNR {baseline[$0]=1; next} {split($0,a,"\t"); if (!baseline[a[1]]) print $0}' privileged-cleanup-run-baseline.txt -
+            )"
+            new_count="$(awk 'NF{c++} END{print c+0}' <<<"$new")"
+
+            if [[ "$new_count" -eq 1 ]]; then
+              IFS=$'\t' read -r run_id run_url <<<"$new"
+              break
+            fi
+            if [[ "$new_count" -gt 1 ]]; then
+              echo '::error::No unique exact-main protected cleanup run could be correlated.'
+              exit 1
+            fi
+            sleep 5
+          done
+
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]]
+
+          jq -n \
+            --arg commitSha "$RELEASE_SHA" \
+            --arg reviewWorkflowRunId "$REVIEW_RUN_ID" \
+            --arg cleanupWorkflowRunId "$run_id" \
+            --arg cleanupWorkflowRunUrl "$run_url" \
+            --argjson expectedTargetCount "$EXPECTED_TARGET_COUNT" \
+            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,cleanupWorkflowRunId:$cleanupWorkflowRunId,cleanupWorkflowRunUrl:$cleanupWorkflowRunUrl,expectedTargetCount:$expectedTargetCount,mutationRequested:true,hardLaunchClaim:false}' \
+            > privileged-cleanup-dispatch-evidence.json
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Protected privileged cleanup run: $run_url"
+
+      - name: Upload sanitized cleanup dispatch evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: privileged-cleanup-dispatch-${{ steps.release.outputs.sha }}-${{ steps.correlate.outputs.run_id }}
+          path: privileged-cleanup-dispatch-evidence.json
+          if-no-files-found: error
+          retention-days: 14
