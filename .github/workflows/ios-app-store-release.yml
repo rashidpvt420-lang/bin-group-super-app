@@ -166,8 +166,16 @@ jobs:
           path: |
             ios-release/BIN-GROUP.ipa
             ios-app-store-release-evidence.json
-            ios-app-store-upload-result.json
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload TestFlight receipt
+        if: ${{ inputs.upload_to_testflight == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-testflight-upload-${{ github.sha }}-${{ github.run_id }}
+          path: ios-app-store-upload-result.json
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload iOS release diagnostics on failure
