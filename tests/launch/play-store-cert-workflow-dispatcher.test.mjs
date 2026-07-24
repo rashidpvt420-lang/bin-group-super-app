@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+// Contract v2: PR Validation dispatches its own production-protected certificate job.
 const workflowPath = new URL('../../.github/workflows/pr-validation.yml', import.meta.url);
 const workflow = await readFile(workflowPath, 'utf8');
 
-test('active PR Validation dispatches certificate export only from an exact draft owner request', () => {
+test('v2 active PR Validation dispatches certificate export only from an exact draft owner request', () => {
   assert.match(workflow, /dispatch-play-certificate-workflow:/);
   assert.match(workflow, /github\.event_name == 'pull_request'/);
   assert.match(workflow, /github\.event\.pull_request\.draft == true/);
@@ -16,7 +17,7 @@ test('active PR Validation dispatches certificate export only from an exact draf
   assert.match(workflow, /Dispatch protected Play certificate workflow/);
 });
 
-test('dispatcher requires one canonical marker and minimum write permission', () => {
+test('v2 dispatcher requires one canonical marker and minimum write permission', () => {
   assert.match(workflow, /actions: write/);
   assert.match(workflow, /contents: read/);
   assert.match(workflow, /pull-requests: read/);
@@ -26,7 +27,7 @@ test('dispatcher requires one canonical marker and minimum write permission', ()
   assert.match(workflow, /hard_launch_claim=false/);
 });
 
-test('registered workflow exposes boolean certificate input and direct exact-main dispatch', () => {
+test('v2 registered workflow exposes boolean certificate input and direct exact-main dispatch', () => {
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /export_play_certificate:/);
   assert.match(workflow, /type: boolean/);
@@ -36,9 +37,10 @@ test('registered workflow exposes boolean certificate input and direct exact-mai
   assert.match(workflow, /-f ref='main'/);
   assert.match(workflow, /event=workflow_dispatch/);
   assert.match(workflow, /head_sha == \$sha/);
+  assert.doesNotMatch(workflow, /actions\/workflows\/extract-play-store-cert\.yml\/dispatches/);
 });
 
-test('dispatcher never accesses Android signing secrets or private signing material', () => {
+test('v2 dispatcher never accesses Android signing secrets or private signing material', () => {
   const dispatcher = workflow.match(/dispatch-play-certificate-workflow:[\s\S]*?\n  export-play-upload-certificate:/)?.[0] ?? '';
   assert.ok(dispatcher.length > 0);
   assert.doesNotMatch(dispatcher, /ANDROID_UPLOAD_KEYSTORE_BASE64/);
@@ -50,7 +52,7 @@ test('dispatcher never accesses Android signing secrets or private signing mater
   assert.doesNotMatch(dispatcher, /keytool/);
 });
 
-test('certificate export remains production-protected and exact-main bound', () => {
+test('v2 certificate export remains production-protected and exact-main bound', () => {
   assert.match(workflow, /export-play-upload-certificate:/);
   assert.match(workflow, /environment: production/);
   assert.match(workflow, /Resolve stable exact current main/);
