@@ -1,9 +1,10 @@
 name: Extract Play Store Upload Certificate
-run-name: Play Store certificate · ${{ github.event.comment.body }}
+run-name: Play Store certificate · ${{ github.run_id }}
 
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,15 +14,24 @@ concurrency:
   group: extract-play-store-upload-certificate
   cancel-in-progress: false
 
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  COMMAND_ISSUE: '434'
+  TRACKING_ISSUE: '478'
+
 jobs:
   authorize:
     name: Authorize exact-main certificate extraction
     if: >-
-      github.event.issue.number == 434 &&
-      !github.event.issue.pull_request &&
-      github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.author_association == 'OWNER' &&
-      github.event.comment.body == '/bin-launch extract-play-store-cert'
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.issue.number == 434 &&
+        !github.event.issue.pull_request &&
+        github.event.comment.user.login == github.repository_owner &&
+        github.event.comment.author_association == 'OWNER' &&
+        github.event.comment.body == '/bin-launch extract-play-store-cert'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -107,6 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           for name in \
             ANDROID_UPLOAD_KEYSTORE_BASE64 \
             ANDROID_KEYSTORE_PASSWORD \
@@ -164,12 +175,14 @@ jobs:
 
           jq -n \
             --arg commitSha "$RELEASE_SHA" \
+            --arg workflowRunId "$GITHUB_RUN_ID" \
             --arg packageName 'ae.bingroups.superapp' \
             --arg certificateSha256Fingerprint "$fingerprint" \
             --arg certificateFileSha256 "$certificate_file_sha256" \
             '{
               schemaVersion: 1,
               commitSha: $commitSha,
+              workflowRunId: $workflowRunId,
               packageName: $packageName,
               certificateSha256Fingerprint: $certificateSha256Fingerprint,
               certificateFileSha256: $certificateFileSha256,
@@ -180,7 +193,7 @@ jobs:
               hardLaunchClaim: false
             }' > play-store-certificate/play-store-certificate-evidence.json
 
-          artifact_name="bin-group-play-store-certificate-$RELEASE_SHA"
+          artifact_name="bin-group-play-store-certificate-$RELEASE_SHA-$GITHUB_RUN_ID"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
           echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
 
@@ -248,17 +261,28 @@ jobs:
         run: |
           set -euo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          body="## Play Store upload certificate ready
 
+          if [[ "$EXTRACT_RESULT" == 'success' ]]; then
+            body="## Protected Play Store certificate extraction
+
+- Status: \`SUCCESS\`
 - Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
 - Workflow run: $run_url
 - Artifact: \`$ARTIFACT_NAME\`
 - Package: \`ae.bingroups.superapp\`
 - Certificate SHA-256: \`$CERTIFICATE_FINGERPRINT\`
 - Private key included: \`false\`
 - Keystore included: \`false\`
+- Passwords included: \`false\`
 - Hard-launch claim: \`false\`"
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+            gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
+              -f state='closed' \
+              -f state_reason='completed' \
+              -f body="$body" >/dev/null
+            gh api --method POST "repos/$REPOSITORY/issues/$COMMAND_ISSUE/comments" -f body="$body" >/dev/null
+          else
+            body="## Protected Play Store certificate extraction
 
       - name: Publish failed extraction result
         if: env.EXTRACTION_RESULT != 'success'
