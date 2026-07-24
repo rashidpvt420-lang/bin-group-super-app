@@ -9,10 +9,11 @@ const [command, reviewWorkflow, executeWorkflow, correlationHelper] = await Prom
   readFile(new URL('../../scripts/owner-launch-run-correlation.sh', import.meta.url), 'utf8'),
 ]);
 
-test('privileged cleanup command is owner-only and issue-bound', () => {
+test('privileged cleanup command is exact-owner-only and issue-bound', () => {
   assert.match(command, /github\.event\.issue\.number == 434/);
+  assert.match(command, /!github\.event\.issue\.pull_request/);
   assert.match(command, /github\.event\.comment\.user\.login == github\.repository_owner/);
-  assert.match(command, /github\.event\.comment\.author_association == 'OWNER'/);
+  assert.doesNotMatch(command, /author_association/);
   assert.match(command, /'\/bin-launch review-privileged-accounts'/);
   assert.match(command, /'\/bin-launch execute-privileged-cleanup'/);
   assert.doesNotMatch(command, /\$\{\{\s*secrets\./);

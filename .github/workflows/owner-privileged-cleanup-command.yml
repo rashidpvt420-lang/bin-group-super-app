@@ -21,7 +21,6 @@ jobs:
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.author_association == 'OWNER' &&
       (github.event.comment.body == '/bin-launch review-privileged-accounts' ||
        github.event.comment.body == '/bin-launch execute-privileged-cleanup')
     runs-on: ubuntu-latest

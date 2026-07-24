@@ -1914,6 +1914,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Sensitive employment, Emirates ID and salary data. Admin SDK callables only.
+    match /private_hr_profiles/{profileId} {
+      allow read, write: if false;
+    }
+
     // Server-managed cryptographic material. Cloud Functions use the Admin SDK;
     // no browser, tenant, owner, technician, broker, or admin client may access it.
     match /system_secrets/{secretId} {

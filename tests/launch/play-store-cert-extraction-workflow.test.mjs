@@ -18,6 +18,21 @@ test('Play Store certificate extraction is owner-only and production-protected',
   assert.match(workflow, /environment: production/);
 });
 
+test('same-repository pull request dispatch is tightly scoped and never checks out request code', () => {
+  assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /pull_request_target:/);
+  assert.match(workflow, /types: \[opened, synchronize, reopened\]/);
+  assert.match(workflow, /github\.event_name == 'pull_request'/);
+  assert.match(workflow, /github\.event_name == 'pull_request_target'/);
+  assert.match(workflow, /github\.event\.pull_request\.base\.ref == 'main'/);
+  assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  assert.match(workflow, /github\.event\.pull_request\.user\.login == github\.repository_owner/);
+  assert.match(workflow, /startsWith\(github\.event\.pull_request\.head\.ref, 'ops\/dispatch-play-cert-extraction-'\)/);
+  assert.match(workflow, /github\.event\.pull_request\.title == 'Dispatch protected Play certificate extraction'/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ github\.head_ref \}\}/);
+});
+
 test('certificate extraction uses run-specific concurrency', () => {
   assert.match(workflow, /group: extract-play-store-upload-certificate-\$\{\{ github\.run_id \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
