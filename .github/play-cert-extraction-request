@@ -1,0 +1,5 @@
+requestVersion=1
+operation=export-public-android-upload-certificate
+packageName=ae.bingroups.superapp
+privateKeyExport=false
+hardLaunchClaim=false
