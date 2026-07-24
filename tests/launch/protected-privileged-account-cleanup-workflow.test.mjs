@@ -7,6 +7,11 @@ const workflow = await readFile(
   'utf8',
 );
 
+const deployWorkflow = await readFile(
+  new URL('../../.github/workflows/firebase-production-deploy.yml', import.meta.url),
+  'utf8',
+);
+
 test('privileged cleanup workflow is production-protected and exact-main only', () => {
   assert.match(workflow, /name: Privileged Account Cleanup - Production/);
   assert.match(workflow, /workflow_dispatch:/);
@@ -42,4 +47,31 @@ test('privileged cleanup publishes evidence and excludes unrelated portal accoun
   assert.match(workflow, /Non-privileged Owner, Tenant, Technician and Broker accounts: excluded/);
   assert.match(workflow, /Hard-launch claim: false/);
   assert.doesNotMatch(workflow, /firebase\s+deploy/i);
+});
+
+test('production deploy workflow removes unexpected privileged accounts before deploying', () => {
+  const cleanupStep = deployWorkflow.indexOf('Remove unexpected privileged Firebase accounts');
+  const deployStep = deployWorkflow.indexOf('Deploy and verify Firebase production stack');
+  assert.ok(cleanupStep >= 0, 'deploy workflow must include a privileged-account cleanup step');
+  assert.ok(deployStep > cleanupStep, 'privileged-account cleanup must precede the Firebase deploy step');
+  assert.match(
+    deployWorkflow,
+    /delete-obsolete-privileged-accounts-production\.mjs --execute/,
+    'deploy workflow must run cleanup in execute mode',
+  );
+  assert.match(
+    deployWorkflow,
+    /PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION: DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP/,
+    'deploy workflow must set the exact cleanup confirmation',
+  );
+  assert.match(
+    deployWorkflow,
+    /CANONICAL_FOUNDER_EMAIL_CONFIRMATION: ceo@bin-groups\.com/,
+    'deploy workflow must confirm the canonical founder email',
+  );
+  assert.match(
+    deployWorkflow,
+    /DEPLOYMENT_ENVIRONMENT: production/,
+    'cleanup step must run under the production deployment environment',
+  );
 });
