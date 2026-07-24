@@ -1,6 +1,7 @@
 request=extract-public-play-upload-certificate
-requested_from_main=86c0b6313cbfbfa36057525d2c4f727545117aa8
+requested_from_main=08b0bb590d4432325e7d18b6fe850fed9f1b79d1
 command_issue=434
 tracking_issue=478
 private_material_artifact_allowed=false
 hard_launch_claim=false
+request_nonce=08b0bb59-active-pr-validation
