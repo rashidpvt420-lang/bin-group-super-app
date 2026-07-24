@@ -21,9 +21,10 @@ test('active PR Validation dispatch restricts privileged review to exact owner r
   assert.match(reviewJob, /Dispatch protected privileged account review/);
 });
 
-test('privileged review job uses protected workload identity and current main only', () => {
+test('privileged review job uses workflow-scoped OIDC and current main only', () => {
+  assert.match(workflow, /permissions:\s*\n\s*contents: read\s*\n\s*id-token: write/);
   assert.match(reviewJob, /environment: production/);
-  assert.match(reviewJob, /id-token: write/);
+  assert.doesNotMatch(reviewJob, /\n\s*permissions:/);
   assert.match(reviewJob, /workload_identity_provider: \$\{\{ secrets\.GCP_WORKLOAD_IDENTITY_PROVIDER \}\}/);
   assert.match(reviewJob, /service_account: \$\{\{ secrets\.GCP_SERVICE_ACCOUNT \}\}/);
   assert.match(reviewJob, /Resolve stable exact current main/);
