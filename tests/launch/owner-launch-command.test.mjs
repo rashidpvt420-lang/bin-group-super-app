@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [commandWorkflow, diagnosticsWorkflow, productionDispatcher, ownerDiagnosis] = await Promise.all([
+const [commandWorkflow, diagnosticsWorkflow, productionDispatcher, diagnosisScript] = await Promise.all([
   readFile(new URL('../../.github/workflows/owner-launch-command.yml', import.meta.url), 'utf8'),
   readFile(new URL('../../.github/workflows/firebase-production-failure-diagnostics.yml', import.meta.url), 'utf8'),
   readFile(new URL('../../.github/workflows/firebase-production-dispatch-current-main.yml', import.meta.url), 'utf8'),
-  readFile(new URL('../../.github/workflows/owner-production-diagnosis.yml', import.meta.url), 'utf8'),
+  readFile(new URL('../../scripts/run-owner-production-diagnosis.sh', import.meta.url), 'utf8'),
 ]);
 
 test('owner launch command is issue-bound, owner-only and exact-command only', () => {
@@ -17,25 +17,36 @@ test('owner launch command is issue-bound, owner-only and exact-command only', (
   assert.match(commandWorkflow, /github\.event\.comment\.body == '\/bin-launch prepare-bank-pilot'/);
   assert.match(commandWorkflow, /github\.event\.comment\.body == '\/bin-launch bank-pilot-after-mfa'/);
   assert.match(commandWorkflow, /github\.event\.comment\.body == '\/bin-launch diagnose-latest-deploy'/);
-  assert.match(commandWorkflow, /'\/bin-launch prepare-bank-pilot'/);
-  assert.match(commandWorkflow, /'\/bin-launch bank-pilot-after-mfa'/);
   assert.doesNotMatch(commandWorkflow, /\$\{\{\s*secrets\./);
   assert.doesNotMatch(commandWorkflow, /continue-on-error:\s*true/);
 });
 
-test('owner diagnosis command dispatches once through exact-main workflow inputs', () => {
+test('owner diagnosis command runs directly without secondary workflow dispatch', () => {
   assert.match(commandWorkflow, /dispatch-production-diagnosis:/);
-  assert.match(commandWorkflow, /owner-production-diagnosis\.yml\/dispatches/);
-  assert.match(commandWorkflow, /owner_snapshot_workflow_run_ids[\s\S]*owner-production-diagnosis\.yml/);
-  assert.match(commandWorkflow, /owner_locate_new_exact_sha_workflow_run[\s\S]*owner-production-diagnosis\.yml/);
-  assert.match(commandWorkflow, /DIAGNOSE_LATEST_FIREBASE_PRODUCTION_FAILURE/);
-  assert.match(commandWorkflow, /expected_main_sha:\$expectedMainSha/);
-  assert.match(commandWorkflow, /No retry was attempted/);
+  assert.match(commandWorkflow, /Run exact-main sanitized diagnosis/);
+  assert.match(commandWorkflow, /bash scripts\/run-owner-production-diagnosis\.sh/);
+  assert.match(commandWorkflow, /actions\/upload-artifact@v7/);
+  assert.match(commandWorkflow, /steps\.diagnosis\.outputs\.artifact_name/);
   assert.match(commandWorkflow, /Production mutation: none/);
-  assert.match(ownerDiagnosis, /workflow_dispatch:\s*\n\s*inputs:/);
-  assert.doesNotMatch(ownerDiagnosis, /issue_comment:/);
-  assert.match(ownerDiagnosis, /expected_main_sha:/);
-  assert.match(ownerDiagnosis, /Current main .* does not match authorized diagnosis SHA/);
+  assert.match(commandWorkflow, /Raw job log uploaded: false/);
+  assert.doesNotMatch(commandWorkflow, /owner-production-diagnosis\.yml\/dispatches/);
+  assert.doesNotMatch(commandWorkflow, /owner_snapshot_workflow_run_ids[\s\S]*owner-production-diagnosis\.yml/);
+});
+
+test('direct diagnosis script is exact-main, paginated, sanitized and aggregate-only', () => {
+  assert.match(diagnosisScript, /current_main=.*git\/ref\/heads\/main/s);
+  assert.match(diagnosisScript, /current_main.*RELEASE_SHA/s);
+  assert.match(diagnosisScript, /git rev-parse HEAD/);
+  assert.match(diagnosisScript, /gh api --paginate --slurp/);
+  assert.match(diagnosisScript, /select-production-diagnosis-run\.mjs/);
+  assert.match(diagnosisScript, /sanitize-production-diagnostic-log\.mjs/);
+  assert.match(diagnosisScript, /fullArtifactLogRedacted:\s*true/);
+  assert.match(diagnosisScript, /rawJobLogUploaded:\s*false/);
+  assert.match(diagnosisScript, /personalIdentifiersRedacted:\s*true/);
+  assert.match(diagnosisScript, /hardLaunchClaim:\s*false/);
+  assert.match(diagnosisScript, /Latest Firebase production failure diagnosis/);
+  assert.doesNotMatch(diagnosisScript, /firebase deploy/);
+  assert.doesNotMatch(diagnosisScript, /workflow_dispatch/);
 });
 
 test('owner launch command uses both current-main START HERE wrappers', () => {
