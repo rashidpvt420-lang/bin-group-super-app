@@ -1,5 +1,5 @@
 name: Extract Play Store Upload Certificate
-run-name: Play Store certificate · ${{ github.event.comment.body }}
+run-name: Play Store certificate · ${{ github.run_id }}
 
 on:
   push:
@@ -16,6 +16,12 @@ permissions:
 concurrency:
   group: extract-play-store-cert-087444d
   cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  COMMAND_ISSUE: '434'
+  TRACKING_ISSUE: '478'
 
 jobs:
   export-certificate:
@@ -92,8 +98,6 @@ jobs:
       - name: Export and verify public certificate
         id: certificate
         shell: bash
-        env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
           set -euo pipefail
           mkdir -p play-store-certificate
@@ -119,12 +123,14 @@ jobs:
 
           jq -n \
             --arg commitSha "$RELEASE_SHA" \
+            --arg workflowRunId "$GITHUB_RUN_ID" \
             --arg packageName 'ae.bingroups.superapp' \
             --arg certificateSha256Fingerprint "$fingerprint" \
             --arg certificateFileSha256 "$certificate_file_sha256" \
             '{
               schemaVersion: 1,
               commitSha: $commitSha,
+              workflowRunId: $workflowRunId,
               packageName: $packageName,
               certificateSha256Fingerprint: $certificateSha256Fingerprint,
               certificateFileSha256: $certificateFileSha256,
@@ -154,26 +160,53 @@ jobs:
           retention-days: 7
           compression-level: 9
 
-      - name: Post extraction result
-        env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
-          ARTIFACT_NAME: ${{ steps.certificate.outputs.artifact_name }}
-          CERTIFICATE_FINGERPRINT: ${{ steps.certificate.outputs.fingerprint }}
+      - name: Remove private signing material
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          shred -u android/app/bin-group-upload.jks 2>/dev/null || rm -f android/app/bin-group-upload.jks
+          shred -u android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
+
+  report:
+    name: Publish certificate extraction outcome
+    needs: [announce, extract-certificate]
+    if: always() && needs.announce.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RELEASE_SHA: ${{ needs.announce.outputs.release_sha }}
+      EXTRACT_RESULT: ${{ needs.extract-certificate.result }}
+      ARTIFACT_NAME: ${{ needs.extract-certificate.outputs.artifact_name }}
+      CERTIFICATE_FINGERPRINT: ${{ needs.extract-certificate.outputs.fingerprint }}
+    steps:
+      - name: Update tracking issue and command issue
         shell: bash
         run: |
           set -euo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          body="## Play Store upload certificate ready
 
+          if [[ "$EXTRACT_RESULT" == 'success' ]]; then
+            body="## Protected Play Store certificate extraction
+
+- Status: \`SUCCESS\`
 - Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
 - Workflow run: $run_url
 - Artifact: \`$ARTIFACT_NAME\`
 - Package: \`ae.bingroups.superapp\`
 - Certificate SHA-256: \`$CERTIFICATE_FINGERPRINT\`
 - Private key included: \`false\`
 - Keystore included: \`false\`
+- Passwords included: \`false\`
 - Hard-launch claim: \`false\`"
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+            gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
+              -f state='closed' \
+              -f state_reason='completed' \
+              -f body="$body" >/dev/null
+            gh api --method POST "repos/$REPOSITORY/issues/$COMMAND_ISSUE/comments" -f body="$body" >/dev/null
+          else
+            body="## Protected Play Store certificate extraction
 
       - name: Remove private signing material
         if: always()
