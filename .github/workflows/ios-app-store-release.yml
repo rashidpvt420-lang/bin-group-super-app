@@ -1,0 +1,182 @@
+name: iOS App Store Release IPA
+run-name: iOS signed IPA · ${{ inputs.expected_commit_sha }} · build ${{ inputs.build_number }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: Exact current main SHA to sign for App Store Connect
+        required: true
+        type: string
+      build_number:
+        description: Positive App Store build number
+        required: true
+        type: string
+      upload_to_testflight:
+        description: Validate and upload the signed IPA to App Store Connect/TestFlight
+        required: true
+        type: boolean
+        default: false
+      confirmation:
+        description: Type BUILD_SIGNED_IOS_IPA_BIN_GROUP
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-store-release
+  cancel-in-progress: false
+
+jobs:
+  build-signed-ipa:
+    name: Archive, export, verify, and optionally upload iOS IPA
+    runs-on: macos-26
+    environment: production
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ''
+      VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+      VITE_ENABLE_FIREBASE_APPCHECK: 'true'
+      VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      APPLE_DISTRIBUTION_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_P12_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+    steps:
+      - name: Enforce owner-authorized exact-main release
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == 'BUILD_SIGNED_IOS_IPA_BIN_GROUP' ]]
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_COMMIT_SHA" == "$GITHUB_SHA" ]]
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+          persist-credentials: false
+
+      - name: Verify main has not moved before signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$GITHUB_SHA" ]] || {
+            echo "::error::Refusing iOS signing because main moved from $GITHUB_SHA to $remote_main."
+            exit 1
+          }
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify protected signing and production configuration inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            VITE_FIREBASE_API_KEY
+            VITE_FIREBASE_APP_ID
+            VITE_FIREBASE_MESSAGING_SENDER_ID
+            VITE_APP_CHECK_SITE_KEY
+            VITE_GOOGLE_MAPS_API_KEY
+            APPLE_DISTRIBUTION_CERTIFICATE_P12_BASE64
+            APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD
+            APPLE_PROVISIONING_PROFILE_BASE64
+            APPLE_TEAM_ID
+          )
+          for name in "${required[@]}"; do
+            [[ -n "${!name:-}" ]] || {
+              echo "::error::Missing protected iOS release value: $name"
+              exit 1
+            }
+          done
+
+      - name: Archive and cryptographically verify signed IPA
+        run: bash scripts/run-ios-app-store-release.sh
+
+      - name: Validate IPA with App Store Connect
+        if: ${{ inputs.upload_to_testflight == true }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$APPLE_ID" && -n "$APPLE_APP_SPECIFIC_PASSWORD" ]] || {
+            echo '::error::APPLE_ID and APPLE_APP_SPECIFIC_PASSWORD are required for TestFlight upload.'
+            exit 1
+          }
+          xcrun altool \
+            --validate-app \
+            -f ios-release/BIN-GROUP.ipa \
+            -t ios \
+            -u "$APPLE_ID" \
+            -p "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --output-format json
+
+      - name: Upload IPA to App Store Connect for TestFlight
+        if: ${{ inputs.upload_to_testflight == true }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun altool \
+            --upload-app \
+            -f ios-release/BIN-GROUP.ipa \
+            -t ios \
+            -u "$APPLE_ID" \
+            -p "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --output-format json | tee ios-app-store-upload-result.json
+
+      - name: Verify main remained frozen through signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$GITHUB_SHA" ]] || {
+            echo "::error::iOS artifact completed, but main moved to $remote_main; refusing release evidence."
+            exit 1
+          }
+
+      - name: Upload signed iOS release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-store-release-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            ios-release/BIN-GROUP.ipa
+            ios-app-store-release-evidence.json
+            ios-app-store-upload-result.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload iOS release diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-store-release-diagnostics-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            ios-app-store-xcodebuild.log
+            ios/App/Podfile.lock
+          if-no-files-found: warn
+          retention-days: 14
