@@ -18,7 +18,7 @@ test('privileged review v3 runs only for a trusted main marker push', () => {
 test('privileged review v3 validates the exact one-file merge contract', () => {
   assert.match(workflow, /Authorize canonical main marker merge/);
   assert.match(workflow, /Dispatch commit must change only \.github\/privileged-review-request-v3/);
-  assert.match(workflow, /request=review-privileged-accounts-v3/);
+  assert.match(workflow, /\[\[ "\$request" == 'review-privileged-accounts-v3' \]\]/);
   assert.match(workflow, /requested_from_main/);
   assert.match(workflow, /mutation_allowed/);
   assert.match(workflow, /hard_launch_claim/);
