@@ -108,7 +108,7 @@ if (remoteMainSha !== githubSha) {
   // (i.e. main only moved forward — not reverted or force-pushed)
   const fetchResult = spawnSync(
     'git',
-    ['fetch', '--depth=100', 'origin', 'main'],
+    ['fetch', '--depth=500', 'origin', 'main'],
     { cwd: process.cwd(), encoding: 'utf8', stdio: 'inherit', shell: false },
   );
   if ((fetchResult.status ?? 1) !== 0) {

@@ -79,7 +79,7 @@ test('production deploy allows deployment when GITHUB_SHA is an ancestor of orig
   // workflow is running (the GITHUB_SHA was valid at dispatch time).
   assert.match(deploy, /merge-base.*--is-ancestor/, 'ancestry check via git merge-base must be present');
   assert.match(deploy, /FETCH_HEAD/, 'ancestry check must reference FETCH_HEAD after fetching origin/main');
-  assert.match(deploy, /fetch.*--depth.*origin.*main|fetch.*origin.*main.*--depth/s, 'must fetch origin main before ancestry check');
+  assert.match(deploy, /fetch.*--depth.*origin.*main/s, 'must fetch origin main before ancestry check');
   assert.match(deploy, /is a verified ancestor/, 'must log confirmation when ancestor check passes');
   assert.match(deploy, /is not an ancestor of origin\/main/, 'must log reason when ancestry check fails');
   const lsRemoteIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
