@@ -1,0 +1,60 @@
+name: Repair Privileged Review Workflow YAML
+
+on:
+  push:
+    branches:
+      - fix/privileged-review-workflow-startup
+    paths:
+      - scripts/repair-privileged-review-workflow-yaml.mjs
+      - .github/workflows/repair-privileged-review-workflow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    name: Repair exactly four malformed YAML blocks
+    if: github.repository == 'rashidpvt420-lang/bin-group-super-app' && github.ref == 'refs/heads/fix/privileged-review-workflow-startup'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/privileged-review-workflow-startup
+          persist-credentials: true
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Repair malformed multiline body assignments
+        run: node scripts/repair-privileged-review-workflow-yaml.mjs
+
+      - name: Verify YAML parses and expected jobs remain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import yaml
+          path = '.github/workflows/privileged-account-review-request.yml'
+          with open(path, encoding='utf-8') as handle:
+              workflow = yaml.safe_load(handle)
+          jobs = set((workflow or {}).get('jobs', {}).keys())
+          expected = {'review', 'announce_play_certificate', 'export_play_certificate'}
+          if jobs != expected:
+              raise SystemExit(f'unexpected jobs after repair: {sorted(jobs)}')
+          print('workflow YAML parsed; jobs=', sorted(jobs))
+          PY
+
+      - name: Commit repaired workflow only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/privileged-account-review-request.yml
+          git diff --cached --exit-code && { echo '::error::Repair produced no workflow change.'; exit 1; }
+          git commit -m 'fix(ci): repair protected review workflow YAML'
+          git push origin HEAD:fix/privileged-review-workflow-startup
