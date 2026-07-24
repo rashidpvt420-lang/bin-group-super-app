@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const workflowPath = new URL('../../.github/workflows/pr-validation.yml', import.meta.url);
+const scriptPath = new URL('../../scripts/review-privileged-accounts-production.mjs', import.meta.url);
 const workflow = await readFile(workflowPath, 'utf8');
+const script = await readFile(scriptPath, 'utf8');
 
 const marker = '  review-privileged-accounts:';
 const start = workflow.indexOf(marker);
@@ -30,18 +32,30 @@ test('privileged review job uses protected workload identity and current main on
   assert.doesNotMatch(reviewJob, /github\.event\.pull_request\.head\.sha/);
 });
 
-test('privileged review evidence is exact-SHA and mutation-free', () => {
-  assert.match(reviewJob, /GITHUB_SHA: \$\{\{ steps\.release\.outputs\.sha \}\}/);
-  assert.match(reviewJob, /GITHUB_REF: refs\/heads\/main/);
+test('privileged review evidence is explicitly bound to main and mutation-free', () => {
+  assert.match(reviewJob, /PRIVILEGED_REVIEW_COMMIT_SHA: \$\{\{ steps\.release\.outputs\.sha \}\}/);
+  assert.match(reviewJob, /PRIVILEGED_REVIEW_REF: refs\/heads\/main/);
+  assert.doesNotMatch(reviewJob, /\n\s*GITHUB_SHA:/);
+  assert.doesNotMatch(reviewJob, /\n\s*GITHUB_REF:/);
   assert.match(reviewJob, /node scripts\/review-privileged-accounts-production\.mjs/);
   assert.match(reviewJob, /\.schemaVersion == 2/);
   assert.match(reviewJob, /\.commitSha == \$sha/);
+  assert.match(reviewJob, /\.ref == "refs\/heads\/main"/);
   assert.match(reviewJob, /\.mutationPerformed == false/);
   assert.match(reviewJob, /\.deletedAccountCount == 0/);
   assert.match(reviewJob, /\.deletedProfileDocumentCount == 0/);
   assert.match(reviewJob, /\.auditLogsPreserved == true/);
   assert.match(reviewJob, /\.nonPrivilegedAccountsUntouched == true/);
   assert.match(reviewJob, /\.hardLaunchClaim == false/);
+});
+
+test('privileged review script validates explicit evidence context', () => {
+  assert.match(script, /PRIVILEGED_REVIEW_COMMIT_SHA/);
+  assert.match(script, /PRIVILEGED_REVIEW_REF/);
+  assert.match(script, /full lowercase commit SHA/);
+  assert.match(script, /must equal refs\/heads\/main/);
+  assert.match(script, /commitSha: evidenceContext\.commitSha/);
+  assert.match(script, /ref: evidenceContext\.ref/);
 });
 
 test('privileged review exposes sanitized aggregate result and artifact', () => {
