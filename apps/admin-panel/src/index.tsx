@@ -1,69 +1,84 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
-import ErrorBoundary from './components/ErrorBoundary';
-import { setupSovereignAlertInterceptor } from '@bin/shared';
-
-setupSovereignAlertInterceptor();
 
 let reactMounted = false;
+let bootErrorRendered = false;
 
-// [STABILITY-PROTOCOL] Global System Recovery
-// Only replace the root during true pre-mount bootstrap failures. After React is mounted,
-// log recoverable promise rejections instead of wiping the whole admin console.
-const renderBootError = (msg: any, error: any) => {
+const escapeHtml = (value: unknown) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
+
+// Install bootstrap error handling before importing the application graph. A
+// Firebase/App Check or route-module initialization error must never leave the
+// static HTML loader on screen with no diagnosis.
+const renderBootError = (message: unknown, error: unknown) => {
+  if (reactMounted || bootErrorRendered) return;
+  bootErrorRendered = true;
   const debugId = `ADMIN-BOOT-${Date.now().toString(36).toUpperCase()}`;
-  console.error(`[${debugId}] Admin bootstrap error:`, msg, error);
+  console.error(`[${debugId}] Admin bootstrap error:`, message, error);
   const root = document.getElementById('root');
-  if (root) {
-    root.innerHTML = `<div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#020617; color:#fff; font-family:sans-serif; text-align:center; padding:20px;">
-      <h2 style="color:#DAA520;">Admin Console Could Not Start</h2>
-      <p style="opacity:0.75; max-width:560px;">The admin console hit a startup problem. Please reload once. If it continues, contact BIN-GROUPS support with debug ID <strong>${debugId}</strong>.</p>
-      <button onclick="window.location.reload()" style="margin-top:30px; background:#DAA520; border:none; color:#000; padding:12px 30px; font-weight:900; cursor:pointer; border-radius:5px;">RELOAD TERMINAL</button>
-    </div>`;
-  }
+  if (!root) return;
+
+  root.innerHTML = `<div data-testid="admin-bootstrap-error" style="height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#020617;color:#fff;font-family:sans-serif;text-align:center;padding:20px;box-sizing:border-box;">
+    <h2 style="color:#DAA520;">Admin Console Could Not Start</h2>
+    <p style="opacity:0.78;max-width:620px;">The secure Admin bundle loaded, but application initialization failed. Reload once. If the problem continues, contact BIN GROUP support with debug ID <strong>${escapeHtml(debugId)}</strong>.</p>
+    <button onclick="window.location.reload()" style="margin-top:30px;background:#DAA520;border:none;color:#000;padding:12px 30px;font-weight:900;cursor:pointer;border-radius:5px;">RELOAD ADMIN</button>
+  </div>`;
 };
 
-(window as any).onerror = (msg: any, url: any, line: any, col: any, error: any) => {
-  if (!reactMounted) renderBootError(msg, error);
-  else console.error('[ADMIN-RUNTIME] Window error after mount:', msg, error);
+window.onerror = (message, _url, _line, _column, error) => {
+  if (!reactMounted) renderBootError(message, error);
+  else console.error('[ADMIN-RUNTIME] Window error after mount:', message, error);
+  return false;
 };
 
-(window as any).onunhandledrejection = (event: any) => {
-  const reason = event?.reason || 'Unknown';
-  if (!reactMounted) renderBootError('Unhandled Promise Rejection: ' + reason, reason);
+window.onunhandledrejection = (event) => {
+  const reason = event?.reason || 'Unknown promise rejection';
+  if (!reactMounted) renderBootError('Unhandled Promise Rejection', reason);
   else console.warn('[ADMIN-RUNTIME] Recoverable promise rejection after mount:', reason);
 };
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-    const root = ReactDOM.createRoot(rootElement as HTMLElement);
+async function bootstrapAdmin() {
+  try {
+    const [appModule, boundaryModule, sharedModule] = await Promise.all([
+      import('./App'),
+      import('./components/ErrorBoundary'),
+      import('@bin/shared'),
+    ]);
 
-    // [STABILITY] Unregister Service Workers without allowing a cache purge failure
-    // to crash the entire admin console.
+    sharedModule.setupSovereignAlertInterceptor();
+
+    const rootElement = document.getElementById('root');
+    if (!rootElement) throw new Error('Admin root element is missing.');
+
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-            for (const registration of registrations) {
-                registration.unregister();
-                console.log('🛡️ [INIT] Purged Administrative Cache.');
-            }
-        }).catch((error) => {
-            console.warn('[ADMIN-INIT] Service worker cleanup skipped:', error);
-        });
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+        if (registrations.length > 0) console.info('[ADMIN-INIT] Removed stale Admin service workers.');
+      } catch (error) {
+        console.warn('[ADMIN-INIT] Service worker cleanup skipped:', error);
+      }
     }
 
-    try {
-        root.render(
-            <React.StrictMode>
-                <ErrorBoundary>
-                    <App />
-                </ErrorBoundary>
-            </React.StrictMode>
-        );
-        reactMounted = true;
-    } catch (err) {
-        console.error('[ADMIN-SYSTEM] Critical Mount Error:', err);
-        renderBootError('Bootstrap Execution Fault', err);
-    }
+    const App = appModule.default;
+    const ErrorBoundary = boundaryModule.default;
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </React.StrictMode>,
+    );
+    reactMounted = true;
+  } catch (error) {
+    renderBootError('Bootstrap Execution Fault', error);
+  }
 }
+
+void bootstrapAdmin();

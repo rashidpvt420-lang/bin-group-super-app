@@ -1,17 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
-import {
-    getMultiFactorResolver,
-    sendPasswordResetEmail,
-    signOut,
-} from 'firebase/auth';
+import { getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
 import { Shield, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
 import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
 
-const E2E_MFA_MARKER = 'bin-e2e-admin-mfa-test';
 const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
 const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
 const AUTH_VERIFICATION_TIMEOUT_MS = 15_000;
@@ -33,25 +28,6 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
     );
 });
 
-const enableProtectedE2eMfaVerification = () => {
-    if (typeof window === 'undefined') return false;
-    const webdriver = window.navigator.webdriver === true;
-    const marker = window.localStorage.getItem(E2E_MFA_MARKER) === 'enabled';
-    const trustedHost = window.location.hostname === 'bin-group-admin-panel.web.app'
-        || window.location.hostname === 'bin-group-admin-panel.firebaseapp.com';
-    if (webdriver && marker && trustedHost) {
-        auth.settings.appVerificationDisabledForTesting = true;
-        console.info('[AUTH] Protected fictional-phone verification enabled for this automated E2E browser only.');
-        return true;
-    }
-    return false;
-};
-
-const clearProtectedE2eMfaMarker = () => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.removeItem(E2E_MFA_MARKER);
-};
-
 export default function UnifiedLogin() {
     const { error: authError, isAuthenticated } = useAuth();
     const { t, isRTL } = useLanguage();
@@ -72,6 +48,16 @@ export default function UnifiedLogin() {
         }
     };
 
+    const startAuthorizationTimer = () => {
+        clearVerificationTimer();
+        verificationTimerRef.current = window.setTimeout(() => {
+            verificationTimerRef.current = null;
+            setLocalLoading(false);
+            setLocalError('The primary credential was accepted, but Admin authorization did not finish. Reset the secure session and sign in again.');
+            void signOut(auth).catch(() => undefined);
+        }, AUTH_VERIFICATION_TIMEOUT_MS);
+    };
+
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
         if (redirectedEmail && !email) setEmail(redirectedEmail);
@@ -90,58 +76,32 @@ export default function UnifiedLogin() {
         }
     }, [authError, isAuthenticated, mfaResolver]);
 
-    const getFriendlyAuthError = (err: any) => {
-        const code = err?.code || '';
-        const message = err?.message || '';
-
-        console.error('🛡️ [AUTH_DIAGNOSTIC]', {
+    const friendlyAuthError = (err: any) => {
+        const code = String(err?.code || '');
+        const message = String(err?.message || '');
+        console.error('[ADMIN-AUTH]', {
             code,
             message,
             authDomain: auth.config?.authDomain,
             currentUrl: window.location.href,
             provider: 'password',
-            env: process.env.NODE_ENV,
-            timestamp: new Date().toISOString(),
-            userAgent: navigator.userAgent,
             emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
-        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') {
-            return 'Secure browser storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
-        }
-        if (code === 'ADMIN_SIGN_IN_TIMEOUT') {
-            return 'Firebase sign-in did not respond within 20 seconds. Check the connection, reset the secure session, and try again.';
-        }
-        if (code === 'ADMIN_VERIFICATION_TIMEOUT') {
-            return 'The primary credential was accepted, but Admin authorization did not finish. Reset the secure session and sign in again.';
-        }
-        if (code === 'ADMIN_PASSWORD_RESET_TIMEOUT') {
-            return 'The password-reset request timed out. Check the connection and try again.';
-        }
-        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-            return 'The admin email or password is incorrect.';
-        }
-        if (code === 'auth/too-many-requests') {
-            return 'Security lockout: Too many attempts. Please wait.';
-        }
-        if (code === 'auth/unauthorized-domain') {
-            return 'This admin domain is not authorized for Firebase sign-in. Add bin-group-admin-panel.web.app and bin-group-admin-panel.firebaseapp.com in Firebase Authentication authorized domains.';
-        }
-        if (code === 'auth/operation-not-allowed') {
-            return 'Email/password Admin sign-in is not enabled in Firebase Authentication.';
-        }
-        if (code === 'auth/network-request-failed') {
-            return 'Network connection failed. Please try again.';
-        }
-        if (code === 'auth/multi-factor-auth-required') {
-            return 'Admin MFA is required to complete sign-in.';
-        }
+        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') return 'Secure browser storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
+        if (code === 'ADMIN_SIGN_IN_TIMEOUT') return 'Firebase sign-in did not respond within 20 seconds. Check the connection, reset the secure session, and try again.';
+        if (code === 'ADMIN_PASSWORD_RESET_TIMEOUT') return 'The password-reset request timed out. Check the connection and try again.';
+        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return 'The admin email or password is incorrect.';
+        if (code === 'auth/too-many-requests') return 'Security lockout: Too many attempts. Please wait.';
+        if (code === 'auth/unauthorized-domain') return 'This admin domain is not authorized for Firebase sign-in.';
+        if (code === 'auth/operation-not-allowed') return 'Email/password Admin sign-in is not enabled in Firebase Authentication.';
+        if (code === 'auth/network-request-failed') return 'Network connection failed. Please try again.';
+        if (code === 'auth/multi-factor-auth-required') return 'Admin MFA is required to complete sign-in.';
         return 'Login could not be completed. Please contact BIN GROUP support.';
     };
 
     const resetSecureSession = async () => {
         clearVerificationTimer();
-        clearProtectedE2eMfaMarker();
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
@@ -152,81 +112,62 @@ export default function UnifiedLogin() {
             try {
                 window.indexedDB?.deleteDatabase('firebaseLocalStorageDb');
             } catch {
-                // The targeted Firebase Auth persistence reset is best effort.
+                // Targeted Firebase Auth persistence reset is best effort.
             }
-            const cleanEmail = email.trim().toLowerCase();
-            const query = cleanEmail ? `?email=${encodeURIComponent(cleanEmail)}&session=reset` : '?session=reset';
+            const normalizedEmail = email.trim().toLowerCase();
+            const query = normalizedEmail ? `?email=${encodeURIComponent(normalizedEmail)}&session=reset` : '?session=reset';
             window.location.replace(`/login${query}`);
         }
     };
 
-    const handleEmailLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleEmailLogin = async (event: React.FormEvent) => {
+        event.preventDefault();
         clearVerificationTimer();
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
         try {
-            enableProtectedE2eMfaVerification();
-            await withTimeout(
-                setPersistence(auth, browserLocalPersistence),
-                AUTH_PERSISTENCE_TIMEOUT_MS,
-                'ADMIN_PERSISTENCE_TIMEOUT',
-            );
+            await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
             const result = await withTimeout(
                 signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
                 AUTH_SIGN_IN_TIMEOUT_MS,
                 'ADMIN_SIGN_IN_TIMEOUT',
             );
             if (result.user) {
-                clearProtectedE2eMfaMarker();
-                console.info('🛡️ [AUTH] Primary Admin credential accepted.');
-                verificationTimerRef.current = window.setTimeout(() => {
-                    verificationTimerRef.current = null;
-                    setLocalLoading(false);
-                    setLocalError(getFriendlyAuthError(timeoutError('ADMIN_VERIFICATION_TIMEOUT')));
-                    void signOut(auth).catch(() => undefined);
-                }, AUTH_VERIFICATION_TIMEOUT_MS);
+                console.info('[ADMIN-AUTH] Primary credential accepted.');
+                startAuthorizationTimer();
             }
         } catch (err: any) {
             clearVerificationTimer();
             if (err?.code === 'auth/multi-factor-auth-required') {
                 try {
-                    const resolver = getMultiFactorResolver(auth, err);
-                    setMfaResolver(resolver);
+                    setMfaResolver(getMultiFactorResolver(auth, err));
                     setLocalError(null);
                 } catch (resolverError) {
-                    clearProtectedE2eMfaMarker();
-                    setLocalError(getFriendlyAuthError(resolverError));
+                    setLocalError(friendlyAuthError(resolverError));
                 }
             } else {
-                clearProtectedE2eMfaMarker();
                 if (err?.code === 'ADMIN_PERSISTENCE_TIMEOUT' || err?.code === 'ADMIN_SIGN_IN_TIMEOUT') {
                     void signOut(auth).catch(() => undefined);
                 }
-                setLocalError(getFriendlyAuthError(err));
+                setLocalError(friendlyAuthError(err));
             }
             setLocalLoading(false);
         }
     };
 
     const handlePasswordReset = async () => {
-        if (!email) {
+        if (!email.trim()) {
             setLocalError('Enter your admin email first.');
             return;
         }
-
         setLocalLoading(true);
         setLocalError(null);
         try {
-            await withTimeout(
-                sendPasswordResetEmail(auth, email.trim().toLowerCase()),
-                AUTH_SIGN_IN_TIMEOUT_MS,
-                'ADMIN_PASSWORD_RESET_TIMEOUT',
-            );
+            await withTimeout(sendPasswordResetEmail(auth, email.trim().toLowerCase()), AUTH_SIGN_IN_TIMEOUT_MS, 'ADMIN_PASSWORD_RESET_TIMEOUT');
             setLocalError('Password reset email sent. Check your inbox.');
         } catch (err: any) {
-            setLocalError(getFriendlyAuthError(err));
+            setLocalError(friendlyAuthError(err));
         } finally {
             setLocalLoading(false);
         }
@@ -235,20 +176,10 @@ export default function UnifiedLogin() {
     if (loading && !error && !mfaResolver) {
         return (
             <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4">
-                <div className="w-12 h-12 border-4 border-[#C6A75E] border-t-transparent rounded-full animate-spin mb-6"></div>
-                <p className="text-[#C6A75E] font-black uppercase tracking-[0.4em] text-sm text-center">
-                    {t('common.auth_sync')}
-                </p>
-                <p className="mt-4 max-w-md text-center text-xs leading-relaxed text-[#64748b]">
-                    Secure sign-in is bounded and will return an error instead of remaining on this screen indefinitely.
-                </p>
-                <button
-                    type="button"
-                    onClick={() => void resetSecureSession()}
-                    className="mt-8 rounded-xl border border-[#C6A75E]/40 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-[#C6A75E] hover:bg-[#C6A75E]/10"
-                >
-                    Reset secure session
-                </button>
+                <div className="w-12 h-12 border-4 border-[#C6A75E] border-t-transparent rounded-full animate-spin mb-6" />
+                <p className="text-[#C6A75E] font-black uppercase tracking-[0.4em] text-sm text-center">{t('common.auth_sync')}</p>
+                <p className="mt-4 max-w-md text-center text-xs leading-relaxed text-[#64748b]">Secure sign-in is bounded and will return an error instead of remaining on this screen indefinitely.</p>
+                <button type="button" onClick={() => void resetSecureSession()} className="mt-8 rounded-xl border border-[#C6A75E]/40 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-[#C6A75E] hover:bg-[#C6A75E]/10">Reset secure session</button>
             </div>
         );
     }
@@ -256,60 +187,33 @@ export default function UnifiedLogin() {
     return (
         <div className={`min-h-screen bg-[#020617] flex flex-col items-center justify-center p-4 selection:bg-[#C6A75E]/30 ${isRTL ? 'rtl' : 'ltr'}`}>
             <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]"></div>
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#C6A75E]/10 rounded-full blur-[120px]" />
             </div>
-
             <div className="w-full max-w-[420px] relative z-10">
                 <div className="text-center mb-12">
-                    <div className="inline-block p-4 rounded-3xl bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-[#C6A75E]/20 shadow-2xl mb-6">
-                        <Shield className="w-12 h-12 text-[#C6A75E]" strokeWidth={1.5} />
-                    </div>
-                    <h1 className="text-4xl font-black text-white tracking-tighter mb-2 italic">
-                        BIN GROUP
-                    </h1>
-                    <p className="text-[#94a3b8] font-bold tracking-[0.2em] text-[10px] uppercase">
-                        Admin Portal
-                    </p>
+                    <div className="inline-block p-4 rounded-3xl bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-[#C6A75E]/20 shadow-2xl mb-6"><Shield className="w-12 h-12 text-[#C6A75E]" strokeWidth={1.5} /></div>
+                    <h1 className="text-4xl font-black text-white tracking-tighter mb-2 italic">BIN GROUP</h1>
+                    <p className="text-[#94a3b8] font-bold tracking-[0.2em] text-[10px] uppercase">Admin Portal</p>
                 </div>
-
                 <div className="bg-[#0f172a]/80 backdrop-blur-xl border border-white/5 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50"></div>
-
+                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50" />
                     <div className="mb-8">
                         <h2 className="text-xl font-black text-white mb-2">{mfaResolver ? 'Admin MFA Verification' : 'Admin Login'}</h2>
-                        <p className="text-sm text-[#64748b] leading-relaxed">
-                            {mfaResolver
-                                ? 'The primary credential was accepted. Complete the enrolled Firebase second factor.'
-                                : 'Authorized BIN GROUP administrators only.'}
-                        </p>
+                        <p className="text-sm text-[#64748b] leading-relaxed">{mfaResolver ? 'The primary credential was accepted. Complete the enrolled Firebase second factor.' : 'Authorized BIN GROUP administrators only.'}</p>
                     </div>
-
-                    {error && !mfaResolver && (
-                        <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></div>
-                            {error}
-                        </div>
-                    )}
-
+                    {error && !mfaResolver && <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{error}</div>}
                     {mfaResolver ? (
                         <AdminMfaSignInChallenge
                             resolver={mfaResolver}
                             onResolved={() => {
-                                clearProtectedE2eMfaMarker();
                                 clearVerificationTimer();
                                 setLocalLoading(true);
                                 setMfaResolver(null);
                                 setPassword('');
-                                verificationTimerRef.current = window.setTimeout(() => {
-                                    verificationTimerRef.current = null;
-                                    setLocalLoading(false);
-                                    setLocalError(getFriendlyAuthError(timeoutError('ADMIN_VERIFICATION_TIMEOUT')));
-                                    void signOut(auth).catch(() => undefined);
-                                }, AUTH_VERIFICATION_TIMEOUT_MS);
+                                startAuthorizationTimer();
                             }}
                             onCancel={() => {
-                                clearProtectedE2eMfaMarker();
                                 clearVerificationTimer();
                                 setLocalLoading(false);
                                 setMfaResolver(null);
@@ -320,68 +224,16 @@ export default function UnifiedLogin() {
                     ) : (
                         <>
                             <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
-                                <div>
-                                    <input
-                                        data-testid="admin-login-email"
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder={t('login.email')}
-                                        autoComplete="username"
-                                        className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <input
-                                        data-testid="admin-login-password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder={t('login.password')}
-                                        autoComplete="current-password"
-                                        className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E] transition-colors"
-                                        required
-                                    />
-                                </div>
-                                <button
-                                    data-testid="admin-login-submit"
-                                    type="submit"
-                                    disabled={loading || !email || !password}
-                                    className="w-full relative flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl transition-all hover:bg-[#d4b76e] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
-                                >
-                                    {loading ? '...' : t('login.signin')}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handlePasswordReset}
-                                    disabled={loading}
-                                    className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
-                                >
-                                    {t('login.forgot_password')}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => void resetSecureSession()}
-                                    disabled={loading}
-                                    className="w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
-                                >
-                                    Reset secure session
-                                </button>
+                                <input data-testid="admin-login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('login.email')} autoComplete="username" className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E]" required />
+                                <input data-testid="admin-login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('login.password')} autoComplete="current-password" className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E]" required />
+                                <button data-testid="admin-login-submit" type="submit" disabled={loading || !email || !password} className="w-full flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl disabled:opacity-50 uppercase tracking-widest text-sm">{loading ? '...' : t('login.signin')}</button>
+                                <button type="button" onClick={handlePasswordReset} disabled={loading} className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest disabled:opacity-50">{t('login.forgot_password')}</button>
+                                <button type="button" onClick={() => void resetSecureSession()} disabled={loading} className="w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest disabled:opacity-50">Reset secure session</button>
                             </form>
-
-                            <div data-testid="admin-google-login-disabled" className="p-4 rounded-2xl border border-white/10 bg-white/[0.03] text-[#94a3b8] text-xs leading-relaxed">
-                                Google redirect Admin sign-in is disabled until its redirect-return MFA resolver is supported. Use the protected email/password + MFA path.
-                            </div>
+                            <div data-testid="admin-google-login-disabled" className="p-4 rounded-2xl border border-white/10 bg-white/[0.03] text-[#94a3b8] text-xs leading-relaxed">Google redirect Admin sign-in is disabled until redirect-return MFA resolution is supported. Use email/password and the enrolled Firebase MFA factor.</div>
                         </>
                     )}
-
-                    <div className="mt-8 flex items-center justify-center gap-2 opacity-40">
-                        <Lock className="w-3 h-3 text-[#94a3b8]" />
-                        <span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">
-                            {t('login.iso_secure_badge')}
-                        </span>
-                    </div>
+                    <div className="mt-8 flex items-center justify-center gap-2 opacity-40"><Lock className="w-3 h-3 text-[#94a3b8]" /><span className="text-[9px] text-[#94a3b8] font-black uppercase tracking-widest">{t('login.iso_secure_badge')}</span></div>
                 </div>
             </div>
         </div>
