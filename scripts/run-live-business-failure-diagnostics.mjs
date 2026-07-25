@@ -39,7 +39,9 @@ function redact(value, maxLength = 8_000) {
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<redacted-email>')
     .replace(/AIza[0-9A-Za-z_-]{20,}/g, '<redacted-api-key>')
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '<redacted-uuid>')
-    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '<redacted-jwt>');
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '<redacted-jwt>')
+    .replace(/\+1650555\d{4}/g, '<redacted-test-phone>')
+    .replace(/"verificationCode"\s*:\s*"\d{6}"/g, '"verificationCode":"<redacted-test-code>"');
   return text.slice(0, maxLength);
 }
 
@@ -82,7 +84,7 @@ function requireInfrastructure(label, result) {
 }
 
 const summary = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: 'RUNNING',
   repository: String(process.env.GITHUB_REPOSITORY || ''),
   deployedSha: String(process.env.DIAGNOSTIC_DEPLOYED_SHA || ''),
@@ -90,7 +92,9 @@ const summary = {
   diagnosticRunId: String(process.env.GITHUB_RUN_ID || ''),
   startedAt: new Date().toISOString(),
   suites: [],
+  ephemeralAdminMfaPrepared: false,
   ephemeralAdminRetired: false,
+  ephemeralAdminMfaConfigRemoved: false,
   sensitiveValuesExcluded: true,
   hardLaunchClaim: false,
 };
@@ -101,6 +105,8 @@ try {
   requireInfrastructure('App Check verification', runNode('scripts/ensure-appcheck.mjs'));
   requireInfrastructure('E2E auth seeding', runNode('scripts/seed-e2e-auth.mjs'));
   requireInfrastructure('Live role fixture seeding', runNode('scripts/seed-live-role-test-data.mjs'));
+  requireInfrastructure('E2E Admin MFA preparation', runNode('scripts/manage-e2e-admin-mfa-test.mjs', ['--mode', 'prepare']));
+  summary.ephemeralAdminMfaPrepared = true;
 
   for (const suite of suites) {
     const reportPath = path.join(outputDir, `${suite.key}.json`);
@@ -136,10 +142,16 @@ try {
 } catch (error) {
   infrastructureFailure = redact(error instanceof Error ? error.message : error, 8_000);
 } finally {
-  const cleanup = runNode('scripts/e2e-admin-lifecycle.mjs', ['--phase=post-business-diagnostic']);
-  summary.ephemeralAdminRetired = (cleanup.status ?? 1) === 0;
+  const accountCleanup = runNode('scripts/e2e-admin-lifecycle.mjs', ['--phase=post-business-diagnostic']);
+  summary.ephemeralAdminRetired = (accountCleanup.status ?? 1) === 0;
+  const mfaCleanup = runNode('scripts/manage-e2e-admin-mfa-test.mjs', ['--mode', 'cleanup']);
+  summary.ephemeralAdminMfaConfigRemoved = (mfaCleanup.status ?? 1) === 0;
+
   if (!summary.ephemeralAdminRetired && !infrastructureFailure) {
-    infrastructureFailure = `E2E Admin cleanup failed: ${redact(cleanup.stderr || cleanup.stdout || `exit ${cleanup.status}`)}`;
+    infrastructureFailure = `E2E Admin cleanup failed: ${redact(accountCleanup.stderr || accountCleanup.stdout || `exit ${accountCleanup.status}`)}`;
+  }
+  if (!summary.ephemeralAdminMfaConfigRemoved && !infrastructureFailure) {
+    infrastructureFailure = `E2E Admin MFA config cleanup failed: ${redact(mfaCleanup.stderr || mfaCleanup.stdout || `exit ${mfaCleanup.status}`)}`;
   }
 }
 
@@ -159,5 +171,5 @@ console.log(`[live-business-diagnostics] status=${summary.status} failedSuites=$
 console.log(`[live-business-diagnostics] summary=${path.relative(root, outputPath)}`);
 console.log('[live-business-diagnostics] hardLaunchClaim=false');
 
-if (infrastructureFailure || !summary.ephemeralAdminRetired) process.exit(1);
+if (infrastructureFailure || !summary.ephemeralAdminRetired || !summary.ephemeralAdminMfaConfigRemoved) process.exit(1);
 process.exit(0);
