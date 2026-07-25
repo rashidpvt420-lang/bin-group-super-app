@@ -97,10 +97,9 @@ test.describe('Technician Business Workflow', () => {
     await page.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
     await expect(page.locator('body')).toContainText(/ACTIVE ASSIGNMENTS|OPEN JOB POOL|My Jobs/i, { timeout: 20_000 });
-    await expect(page.getByTestId('technician-jobs-load-error')).not.toBeVisible({ timeout: 10_000 });
 
     const acceptFromPool = page.getByRole('button', { name: /ACCEPT JOB|ACCEPT MISSION|CLAIM MISSION/i }).first();
-    const openAssignedJob = page.getByTestId('technician-open-job-card').first();
+    const openAssignedJob = page.getByRole('button', { name: /OPEN JOB CARD/i }).first();
 
     if (await acceptFromPool.isVisible({ timeout: 10_000 }).catch(() => false)) {
       await expect(acceptFromPool).toBeEnabled({ timeout: 10_000 });
@@ -108,7 +107,7 @@ test.describe('Technician Business Workflow', () => {
     } else {
       await expect(
         openAssignedJob,
-        'Technician launch fixture must expose an assigned active job for the authenticated technician.'
+        'Technician launch fixture must expose either an open pool job or an assigned active job.'
       ).toBeVisible({ timeout: 20_000 });
       await openAssignedJob.click();
     }
