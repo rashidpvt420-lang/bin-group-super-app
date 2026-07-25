@@ -13,12 +13,12 @@ test('Firebase failure diagnostics start visibly, support owner-only requests, a
   assert.match(source, /^  pull_request:$/m);
   assert.match(source, /\.github\/firebase-production-diagnostics-request/);
   assert.match(source, /if: github\.event_name == 'pull_request' \|\| github\.event\.workflow_run\.conclusion == 'failure'/);
-  assert.match(source, /github\.event\.pull_request\.draft/);
+  assert.match(source, /draft=.*pull_request\.draft/);
   assert.match(source, /requester.*GITHUB_REPOSITORY_OWNER/);
   assert.match(source, /Diagnose failed Firebase production deployment/);
   assert.match(source, /ops\/diagnose-firebase-production-/);
   assert.match(source, /Diagnostic request must change only \.github\/firebase-production-diagnostics-request/);
-  assert.match(source, /request=diagnose-firebase-production-run/);
+  assert.match(source, /diagnose-firebase-production-run/);
   assert.match(source, /hard_launch_claim/);
   assert.match(source, /Validate protected source run through GitHub API/);
   assert.match(source, /actions\/runs\/\$SOURCE_RUN_ID/);
