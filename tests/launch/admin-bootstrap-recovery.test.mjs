@@ -28,7 +28,7 @@ test('every Admin build verifies index entries and all generated JavaScript chun
   assert.match(verifierSource, /built Admin chunks are missing Firebase marker/);
   assert.match(verifierSource, /protected production build requested App Check/);
   assert.match(verifierSource, /protected production App Check site key was not embedded in the Admin chunks/);
-  assert.match(verifierSource, /unsafeMfaTestPathsExcluded: true/);
+  assert.match(verifierSource, /sourceLevelUnsafeMfaChecksRequired: true/);
   assert.match(verifierSource, /sensitiveValuesExcluded: true/);
   assert.match(verifierSource, /hardLaunchClaim: false/);
 });

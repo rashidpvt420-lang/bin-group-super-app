@@ -88,16 +88,17 @@ if (productionAppCheckRequired) {
   console.log(`[admin-build-assets] PASS protected App Check fingerprint=${appCheckSiteKeyFingerprint.slice(0, 12)}…`);
 }
 
+// Firebase Auth ships testing-related API symbol names in its SDK bundle. Their
+// presence is not proof that application code invokes them. Source-level launch
+// tests separately reject any use from Admin application/workflow code.
 for (const marker of [
   'e2e-admin-mfa-factor',
   'bin-e2e-admin-mfa-test',
-  'appVerificationDisabledForTesting',
-  'testPhoneNumbers',
   'E2E test bypass approval',
   'GPS_DEBUG',
   'DEBUG UI status',
 ]) {
-  if (mergedJavaScript.includes(marker)) fail(`forbidden recovery marker found in Admin chunks: ${marker}`);
+  if (mergedJavaScript.includes(marker)) fail(`forbidden application marker found in Admin chunks: ${marker}`);
 }
 
 mkdirSync(path.dirname(evidencePath), { recursive: true });
@@ -114,7 +115,7 @@ writeFileSync(evidencePath, `${JSON.stringify({
   firebaseAdminAppIdSuffix: '285cb53bc26626d699f3b6',
   productionAppCheckRequired,
   appCheckSiteKeyFingerprint,
-  unsafeMfaTestPathsExcluded: true,
+  sourceLevelUnsafeMfaChecksRequired: true,
   sensitiveValuesExcluded: true,
   hardLaunchClaim: false,
 }, null, 2)}\n`);
