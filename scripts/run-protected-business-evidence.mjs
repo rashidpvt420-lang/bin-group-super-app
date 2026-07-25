@@ -2,10 +2,31 @@
 
 import { spawnSync } from 'node:child_process';
 
+const DEPLOY_WORKFLOW = 'Firebase Production Deploy';
+const DEPLOY_JOB = 'deploy-firebase-production-stack';
+
+function protectedProcessEnv(env = process.env) {
+  const exactProductionDeployJob =
+    env.GITHUB_ACTIONS === 'true' &&
+    env.GITHUB_WORKFLOW === DEPLOY_WORKFLOW &&
+    env.GITHUB_JOB === DEPLOY_JOB &&
+    env.GITHUB_REF === 'refs/heads/main' &&
+    /^[0-9a-f]{40}$/.test(String(env.GITHUB_SHA || ''));
+
+  if (env.DEPLOYMENT_ENVIRONMENT === 'production' || !exactProductionDeployJob) return env;
+
+  return {
+    ...env,
+    DEPLOYMENT_ENVIRONMENT: 'production',
+  };
+}
+
+const evidenceEnv = protectedProcessEnv();
+
 function run(script, args = []) {
   const result = spawnSync(process.execPath, [script, ...args], {
     cwd: process.cwd(),
-    env: process.env,
+    env: evidenceEnv,
     stdio: 'inherit',
   });
   return result.status ?? 1;
@@ -30,3 +51,5 @@ try {
 
 console.log('[protected-business-evidence] hardLaunchClaim=false');
 process.exit(exitCode);
+
+export { protectedProcessEnv };
