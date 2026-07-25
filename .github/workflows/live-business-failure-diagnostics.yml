@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 60
     environment: production
     env:
+      DEPLOYMENT_ENVIRONMENT: production
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       REQUEST_PR: ${{ github.event.pull_request.number }}
@@ -149,6 +150,7 @@ jobs:
             scripts/seed-e2e-auth.mjs \
             scripts/seed-live-role-test-data.mjs \
             scripts/e2e-admin-lifecycle.mjs \
+            scripts/manage-e2e-admin-mfa-test.mjs \
             package.json \
             package-lock.json
 

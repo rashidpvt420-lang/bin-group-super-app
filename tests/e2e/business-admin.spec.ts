@@ -4,11 +4,14 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import admin from 'firebase-admin';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
+const MFA_RUNTIME_PATH = path.resolve(process.cwd(), process.env.E2E_ADMIN_MFA_RUNTIME_PATH || '.e2e-admin-mfa-runtime.json');
 const PROPERTY_ID = 'e2e-test-property';
 const TICKET_ID = 'e2e-test-ticket-id';
 const CONTRACT_ID = 'e2e-test-contract-id';
@@ -23,6 +26,18 @@ function requireLaunchCredentials() {
   ].filter(Boolean);
   if (missing.length) {
     throw new Error(`Missing ${missing.join(', ')}. Dedicated admin launch validation cannot be skipped.`);
+  }
+}
+
+function readProtectedMfaRuntime() {
+  try {
+    const runtime = JSON.parse(readFileSync(MFA_RUNTIME_PATH, 'utf8'));
+    const code = String(runtime?.verificationCode || '').trim();
+    const phone = String(runtime?.phoneNumber || '').trim();
+    if (!/^\d{6}$/.test(code) || !/^\+1650555\d{4}$/.test(phone)) throw new Error('invalid protected runtime values');
+    return { code };
+  } catch (error) {
+    throw new Error(`Protected E2E Admin MFA runtime is required and must be valid: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -62,14 +77,29 @@ async function waitForLoader(page: Page) {
 
 async function login(page: Page) {
   requireLaunchCredentials();
+  const mfa = readProtectedMfaRuntime();
+  await page.addInitScript(() => {
+    window.localStorage.setItem('bin-e2e-admin-mfa-test', 'enabled');
+  });
   await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 25_000 });
+
+  const challenge = page.getByTestId('admin-mfa-signin-challenge');
+  await expect(challenge, 'the protected E2E Admin must receive a real Firebase MFA challenge').toBeVisible({ timeout: 25_000 });
+  await page.getByTestId('admin-mfa-send-signin-code').click();
+  const codeInput = page.getByTestId('admin-mfa-signin-code');
+  await expect(codeInput).toBeVisible({ timeout: 25_000 });
+  await codeInput.fill(mfa.code);
+  const resolve = page.getByTestId('admin-mfa-resolve-signin');
+  await expect(resolve).toBeEnabled({ timeout: 10_000 });
+  await resolve.click();
+
+  await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 35_000 });
   await waitForLoader(page);
   await expect(page.locator('body')).not.toContainText(
-    /permission-denied|missing or insufficient permissions|application error|minified react error|system interruption/i,
+    /permission-denied|missing or insufficient permissions|application error|minified react error|system interruption|mfa enrollment is completed/i,
     { timeout: 10_000 },
   );
 }
