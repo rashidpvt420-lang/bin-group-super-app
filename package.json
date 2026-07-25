@@ -91,7 +91,7 @@
     "test:e2e:local": "npm run build && playwright install --with-deps chromium && playwright test --grep \"production public smoke\" --project=chromium-desktop",
     "test:e2e:launch-audit": "npm run test:e2e:env && npm run e2e:ensure-appcheck && playwright install --with-deps chromium && playwright test tests/e2e/launch-audit-*.spec.ts tests/e2e/hard-launch-routes.spec.ts --project=chromium-desktop",
     "test:e2e:launch-audit:live": "node scripts/run-live-launch-audit.mjs",
-    "test:e2e:business": "node scripts/run-critical-evidence.mjs --suite all-business",
+    "test:e2e:business": "node scripts/run-protected-business-evidence.mjs",
     "test:e2e:walkthrough": "npm run test:e2e:env && npm run e2e:ensure-appcheck && playwright install --with-deps chromium && playwright test tests/e2e/launch-five-profile-walkthrough.spec.ts --project=chromium-desktop",
     "test:e2e:profile-gates": "npm run test:e2e:env && npm run e2e:ensure-appcheck && node scripts/verify-hosted-appcheck.mjs && playwright install --with-deps chromium && playwright test tests/e2e/profile-readiness-gates.spec.ts --project=chromium-desktop",
     "test:e2e:gate11:routes": "node scripts/gate11-staging-route-check.mjs",
