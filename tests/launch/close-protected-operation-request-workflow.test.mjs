@@ -15,6 +15,7 @@ test('protected operation closer is success-only and restricted to same-reposito
   assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
   assert.match(workflow, /github\.event\.workflow_run\.event == 'pull_request'/);
   assert.match(workflow, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
+  assert.match(workflow, /actions: read/);
   assert.match(workflow, /contents: read/);
   assert.match(workflow, /pull-requests: write/);
   assert.doesNotMatch(workflow, /actions: write/);
@@ -34,6 +35,17 @@ test('protected operation closer maps exact workflow, branch, title, and marker 
   assert.match(workflow, /ops\/dispatch-bank-pilot-workflow-/);
   assert.match(workflow, /\.github\/bank-pilot-dispatch-request/);
   assert.match(workflow, /Unrecognized protected dispatcher/);
+});
+
+test('protected operation closer independently revalidates the dispatcher run', () => {
+  assert.match(workflow, /SOURCE_WORKFLOW_ID/);
+  assert.match(workflow, /repos\/\$REPOSITORY\/actions\/runs\/\$SOURCE_RUN_ID/);
+  assert.match(workflow, /\.workflow_id == \$workflow_id/);
+  assert.match(workflow, /\.event == "pull_request"/);
+  assert.match(workflow, /\.status == "completed"/);
+  assert.match(workflow, /\.conclusion == "success"/);
+  assert.match(workflow, /\.head_repository\.full_name == \$repository/);
+  assert.match(workflow, /Completed dispatcher run no longer matches/);
 });
 
 test('protected operation closer validates exactly one owner draft PR and one marker file', () => {
