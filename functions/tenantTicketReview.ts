@@ -51,7 +51,6 @@ export const tenantReviewTicketCompletion = onCall({ cors: true }, async (reques
       "RESOLVED",
       "PENDING_TENANT_REVIEW",
       "COMPLETED_PENDING_APPROVAL",
-      "COMPLETED_PENDING_TENANT_APPROVAL",
     ];
     if (!validReviewStates.includes(currentStatus)) {
       throw new HttpsError("failed-precondition", "Ticket is not in a valid state for tenant review.");

@@ -34,6 +34,7 @@
     "start": "craco start",
     "dev": "npm start",
     "build": "craco build",
+    "postbuild": "node ../../scripts/verify-admin-build-assets.mjs",
     "test": "craco test",
     "eject": "react-scripts eject"
   },

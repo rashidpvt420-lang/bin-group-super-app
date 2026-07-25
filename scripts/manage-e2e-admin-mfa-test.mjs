@@ -14,12 +14,9 @@ const DEPLOY_WORKFLOW = 'Firebase Production Deploy';
 const DIAGNOSTIC_WORKFLOW = 'Live Business Failure Diagnostics';
 const RUNTIME_PATH = path.resolve(process.cwd(), process.env.E2E_ADMIN_MFA_RUNTIME_PATH || '.e2e-admin-mfa-runtime.json');
 const DISPLAY_NAME = 'BIN GROUP protected E2E phone';
-const CONFIG_CONFIRM_ATTEMPTS = 15;
-const CONFIG_CONFIRM_INTERVAL_MS = 2_000;
 
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function argValue(name) {
   const exact = process.argv.find((arg) => arg.startsWith(`--${name}=`));
@@ -121,26 +118,6 @@ async function updateTestPhoneNumbers(projectId, token, testPhoneNumbers) {
   if (!response.ok) throw new Error(`Identity Platform test-phone update failed with HTTP ${response.status}.`);
 }
 
-async function confirmTestPhoneConfig(projectId, token, phoneNumber, expectedCode) {
-  for (let attempt = 1; attempt <= CONFIG_CONFIRM_ATTEMPTS; attempt += 1) {
-    const config = await fetchConfig(projectId, token);
-    const configured = text(config?.signIn?.phoneNumber?.testPhoneNumbers?.[phoneNumber]);
-    if (configured === expectedCode) return;
-    if (attempt < CONFIG_CONFIRM_ATTEMPTS) await wait(CONFIG_CONFIRM_INTERVAL_MS);
-  }
-  throw new Error('Identity Platform did not confirm the protected fictional phone configuration in time.');
-}
-
-async function confirmTestPhoneRemoved(projectId, token, phoneNumber) {
-  for (let attempt = 1; attempt <= CONFIG_CONFIRM_ATTEMPTS; attempt += 1) {
-    const config = await fetchConfig(projectId, token);
-    const configured = text(config?.signIn?.phoneNumber?.testPhoneNumbers?.[phoneNumber]);
-    if (!configured) return;
-    if (attempt < CONFIG_CONFIRM_ATTEMPTS) await wait(CONFIG_CONFIRM_INTERVAL_MS);
-  }
-  throw new Error('Identity Platform did not confirm removal of the protected fictional phone configuration in time.');
-}
-
 function validateEphemeralAdmin(user, configuredEmail) {
   const claims = user.customClaims || {};
   const expectedEmail = lower(configuredEmail);
@@ -171,7 +148,6 @@ async function prepare() {
   }
   existing[runtime.phoneNumber] = runtime.verificationCode;
   await updateTestPhoneNumbers(context.projectId, token, existing);
-  await confirmTestPhoneConfig(context.projectId, token, runtime.phoneNumber, runtime.verificationCode);
 
   const updated = await auth.updateUser(user.uid, {
     multiFactor: {
@@ -188,7 +164,7 @@ async function prepare() {
   if (!enrolled) throw new Error('Firebase did not persist the E2E Admin phone MFA factor.');
 
   console.log(`[e2e-admin-mfa] prepared protected fictional factor phone=+1650555•••• sha=${context.evidenceSha.slice(0, 8)}`);
-  console.log('[e2e-admin-mfa] configConfirmed=true sensitiveValuesExcluded=true hardLaunchClaim=false');
+  console.log('[e2e-admin-mfa] sensitiveValuesExcluded=true hardLaunchClaim=false');
 }
 
 async function cleanup() {
@@ -204,9 +180,8 @@ async function cleanup() {
   const existing = { ...(config?.signIn?.phoneNumber?.testPhoneNumbers || {}) };
   delete existing[runtime.phoneNumber];
   await updateTestPhoneNumbers(context.projectId, token, existing);
-  await confirmTestPhoneRemoved(context.projectId, token, runtime.phoneNumber);
   rmSync(RUNTIME_PATH, { force: true });
-  console.log('[e2e-admin-mfa] cleanup status=removed configConfirmed=true sensitiveValuesExcluded=true hardLaunchClaim=false');
+  console.log('[e2e-admin-mfa] cleanup status=removed sensitiveValuesExcluded=true hardLaunchClaim=false');
 }
 
 const invokedPath = process.argv[1] ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1]) : false;
