@@ -6,11 +6,20 @@ import { sanitizeProductionDiagnosticLog } from '../../scripts/sanitize-producti
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 const fromCodes = (...codes) => String.fromCharCode(...codes);
 
-test('automatic Firebase failure diagnostics start visibly and validate the protected source through GitHub API', async () => {
+test('Firebase failure diagnostics start visibly, support owner-only requests, and validate the protected source', async () => {
   const source = await read('.github/workflows/firebase-production-failure-diagnostics.yml');
 
-  assert.match(source, /if: github\.event\.workflow_run\.conclusion == 'failure'/);
-  assert.doesNotMatch(source, /if:[\s\S]{0,300}head_repository\.full_name == github\.repository/);
+  assert.match(source, /^  workflow_run:$/m);
+  assert.match(source, /^  pull_request:$/m);
+  assert.match(source, /\.github\/firebase-production-diagnostics-request/);
+  assert.match(source, /if: github\.event_name == 'pull_request' \|\| github\.event\.workflow_run\.conclusion == 'failure'/);
+  assert.match(source, /draft=.*pull_request\.draft/);
+  assert.match(source, /requester.*GITHUB_REPOSITORY_OWNER/);
+  assert.match(source, /Diagnose failed Firebase production deployment/);
+  assert.match(source, /ops\/diagnose-firebase-production-/);
+  assert.match(source, /Diagnostic request must change only \.github\/firebase-production-diagnostics-request/);
+  assert.match(source, /diagnose-firebase-production-run/);
+  assert.match(source, /hard_launch_claim/);
   assert.match(source, /Validate protected source run through GitHub API/);
   assert.match(source, /actions\/runs\/\$SOURCE_RUN_ID/);
   assert.match(source, /\.name == "Firebase Production Deploy"/);
@@ -19,10 +28,8 @@ test('automatic Firebase failure diagnostics start visibly and validate the prot
   assert.match(source, /\.head_sha == \$sha/);
   assert.match(source, /\.repository\.full_name == \$repository/);
   assert.match(source, /\.conclusion == "failure"/);
-  assert.match(source, /Refusing diagnostics for a run that is not the failed same-repository main workflow_dispatch/);
   assert.match(source, /Checkout trusted diagnostic implementation/);
   assert.match(source, /ref: main/);
-  assert.doesNotMatch(source, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
   assert.match(source, /node-version: '22'/);
   assert.match(source, /raw_log="\$\(mktemp\)"/);
   assert.match(source, /trap 'rm -f "\$raw_log"' EXIT/);
@@ -33,6 +40,8 @@ test('automatic Firebase failure diagnostics start visibly and validate the prot
   assert.match(source, /personalIdentifiersRedacted: true/);
   assert.match(source, /Normalized terminal errors/);
   assert.match(source, /gh api --paginate --slurp/);
+  assert.match(source, /actions\/upload-artifact@v4/);
+  assert.match(source, /body="\$\(cat <<EOF/);
   assert.doesNotMatch(
     source,
     /gh api "repos\/\$REPOSITORY\/actions\/jobs\/\$job_id\/logs" >> launch_package\/firebase-production-failure\.log/,
