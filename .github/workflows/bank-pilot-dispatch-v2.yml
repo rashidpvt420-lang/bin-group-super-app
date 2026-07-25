@@ -1,0 +1,335 @@
+name: Dispatch Protected Bank Pilot V2
+run-name: Bank-pilot v2 dispatch · ${{ github.run_id }}
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, converted_to_draft]
+    paths:
+      - .github/bank-pilot-dispatch-request-v2
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: bank-pilot-v2-dispatch-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  REQUEST_PR: ${{ github.event.pull_request.number }}
+  REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  FOUNDER_NAME: Rashid Abdul Ghani Abdul Ghani
+  FOUNDER_EMAIL: ceo@bin-groups.com
+
+jobs:
+  dispatch:
+    name: Validate gates, wait for wrapper, and correlate production
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      startsWith(github.event.pull_request.head.ref, 'ops/dispatch-bank-pilot-v2-') &&
+      github.event.pull_request.title == 'Dispatch protected bank pilot workflow v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Validate canonical one-file owner request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/bank-pilot-dispatch-request-v2' ]] || {
+            printf '::error::Request must change only .github/bank-pilot-dispatch-request-v2. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/bank-pilot-dispatch-request-v2?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          request="$(sed -n 's/^request=//p' <<<"$marker")"
+          review_run_id="$(sed -n 's/^review_workflow_run_id=//p' <<<"$marker")"
+          incident_reference="$(sed -n 's/^incident_evidence_refs=//p' <<<"$marker")"
+          public_gate="$(sed -n 's/^public_release_gate=//p' <<<"$marker")"
+          hard_launch_claim="$(sed -n 's/^hard_launch_claim=//p' <<<"$marker")"
+          line_count="$(awk 'END{print NR}' <<<"$marker")"
+
+          [[ "$line_count" -eq 5 ]]
+          [[ "$request" == 'dispatch-protected-bank-pilot-v2' ]]
+          [[ "$review_run_id" =~ ^[0-9]+$ ]]
+          [[ "$incident_reference" == 'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434' ]]
+          [[ "$public_gate" == 'false' ]]
+          [[ "$hard_launch_claim" == 'false' ]]
+
+          echo "review_run_id=$review_run_id" >> "$GITHUB_OUTPUT"
+          echo "incident_reference=$incident_reference" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while preparing bank-pilot v2 dispatch.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Validate clean schema-v2 privileged review
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          REVIEW_RUN_ID: ${{ steps.request.outputs.review_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$REVIEW_RUN_ID")"
+          [[ "$(jq -r '.status' <<<"$run_json")" == 'completed' ]]
+          [[ "$(jq -r '.conclusion' <<<"$run_json")" == 'success' ]]
+          [[ "$(jq -r '.event' <<<"$run_json")" == 'workflow_dispatch' ]]
+          [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$RELEASE_SHA" ]]
+
+          artifact_name="privileged-account-cleanup-review-$RELEASE_SHA"
+          artifacts="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$REVIEW_RUN_ID/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+          artifact_id="$(jq -r --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]]
+
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > privileged-review.zip
+          mkdir -p privileged-review
+          unzip -q privileged-review.zip -d privileged-review
+          report_path="$(find privileged-review -type f -name 'privileged-account-cleanup.json' -print -quit)"
+          [[ -n "$report_path" && -s "$report_path" ]]
+
+          jq -e --arg sha "$RELEASE_SHA" --arg workflow_run_id "$REVIEW_RUN_ID" '
+            .schemaVersion == 2 and
+            .status == "dry-run" and
+            .commitSha == $sha and
+            .workflowRunId == $workflow_run_id and
+            .canonicalFounderCount == 1 and
+            .canonicalFounderReady == true and
+            .founderAccountEnabled == true and
+            .founderProfileActive == true and
+            .founderEmailVerified == true and
+            .founderPhoneMfaReady == true and
+            .executionEligible == true and
+            (.executionBlockers | length) == 0 and
+            .privilegedAccountCountBefore == 1 and
+            .deletionTargetCount == 0 and
+            .deletedAccountCount == 0 and
+            .mutationPerformed == false and
+            .sensitiveValuesExcluded == true and
+            .auditLogsPreserved == true and
+            .nonPrivilegedAccountsUntouched == true and
+            .hardLaunchClaim == false
+          ' "$report_path" >/dev/null
+
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Dispatch and verify current-main Private-HR dry run
+        id: private_hr
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
+
+          wait_for_success() {
+            local run_id="$1"
+            for _ in $(seq 1 160); do
+              local run_json status conclusion
+              run_json="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+              if [[ "$status" == 'completed' ]]; then
+                [[ "$conclusion" == 'success' ]]
+                return
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
+          owner_snapshot_workflow_run_ids private-hr-migration-dispatch-current-main.yml private-hr-baseline-run-ids.json
+          jq -n --arg ref main '{ref:$ref,inputs:{mode:"dry-run",confirmation:"REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP"}}' > private-hr-dispatch.json
+          gh api --method POST "repos/$REPOSITORY/actions/workflows/private-hr-migration-dispatch-current-main.yml/dispatches" --input private-hr-dispatch.json
+
+          run_record="$(owner_locate_new_exact_sha_workflow_run private-hr-migration-dispatch-current-main.yml "$RELEASE_SHA" private-hr-baseline-run-ids.json 40 5)"
+          run_id="$(jq -r '.runId' <<<"$run_record")"
+          run_url="$(jq -r '.runUrl' <<<"$run_record")"
+          wait_for_success "$run_id"
+
+          artifacts="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+          expected_artifact="private-hr-migration-dry-run-$RELEASE_SHA"
+          artifact_id="$(jq -r --arg expected "$expected_artifact" '[.artifacts[] | select(.name == $expected and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]]
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > private-hr-report.zip
+          mkdir -p private-hr-report
+          unzip -q private-hr-report.zip -d private-hr-report
+          report_path="$(find private-hr-report -type f -name private-hr-migration.json -print -quit)"
+          [[ -n "$report_path" && -s "$report_path" ]]
+
+          jq -e --arg sha "$RELEASE_SHA" '
+            .schemaVersion == 2 and
+            .commitSha == $sha and
+            .mode == "DRY_RUN" and
+            .failureCount == 0 and
+            .executionRequired == false and
+            .recommendedNextAction == "SKIP_EXECUTE_PROCEED_TO_BANK_PILOT" and
+            .sensitiveValuesLogged == false and
+            .rawIdentifiersLogged == false and
+            .hardLaunchClaim == false
+          ' "$report_path" >/dev/null
+
+          [[ "$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')" == "$RELEASE_SHA" ]]
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Snapshot wrapper and production workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
+          owner_snapshot_workflow_run_ids firebase-production-dispatch-current-main.yml wrapper-baseline-run-ids.json
+          owner_snapshot_workflow_run_ids firebase-production-deploy.yml production-baseline-run-ids.json
+
+      - name: Dispatch protected exact-main bank-pilot wrapper
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          INCIDENT_REFERENCE: ${{ steps.request.outputs.incident_reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg confirmation DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
+            --arg hard AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP \
+            --arg expectedSha "$RELEASE_SHA" \
+            --arg founderName "$FOUNDER_NAME" \
+            --arg founderEmail "$FOUNDER_EMAIL" \
+            --arg incidentReference "$INCIDENT_REFERENCE" \
+            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$expectedSha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:"bank-pilot",run_public_release_gate:"false",incident_active_json:"[]",incident_requires_rollback:"false",incident_rollback_reason:"",incident_evidence_refs:$incidentReference,hard_clearance_run_id:"",stripe_live_checkout_session_id:"",stripe_live_webhook_event_id:""}}' \
+            > bank-pilot-dispatch.json
+          gh api --method POST "repos/$REPOSITORY/actions/workflows/firebase-production-dispatch-current-main.yml/dispatches" --input bank-pilot-dispatch.json
+
+      - name: Correlate and wait for wrapper conclusion
+        id: wrapper
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
+          mkdir -p launch_package
+
+          if ! wrapper_record="$(owner_locate_new_exact_sha_workflow_run firebase-production-dispatch-current-main.yml "$RELEASE_SHA" wrapper-baseline-run-ids.json 120 5)"; then
+            jq -n --arg sha "$RELEASE_SHA" '{schemaVersion:1,status:"WRAPPER_NOT_CORRELATED",commitSha:$sha,mutationRequested:false,publicReleaseGate:false,hardLaunchClaim:false,sensitiveValuesExcluded:true}' > launch_package/bank-pilot-wrapper-evidence.json
+            echo '::error::The exact-main wrapper dispatch was accepted but no unique run was correlated.'
+            exit 1
+          fi
+
+          wrapper_run_id="$(jq -r '.runId' <<<"$wrapper_record")"
+          wrapper_run_url="$(jq -r '.runUrl' <<<"$wrapper_record")"
+          [[ "$wrapper_run_id" =~ ^[0-9]+$ ]]
+
+          final_status=''
+          final_conclusion=''
+          for _ in $(seq 1 150); do
+            run_json="$(gh api "repos/$REPOSITORY/actions/runs/$wrapper_run_id")"
+            final_status="$(jq -r '.status' <<<"$run_json")"
+            final_conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+            [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$RELEASE_SHA" ]]
+            if [[ "$final_status" == 'completed' ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "$final_status" != 'completed' || "$final_conclusion" != 'success' ]]; then
+            jobs="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$wrapper_run_id/jobs?filter=latest&per_page=100" | jq -c '{jobs:[.[].jobs[]]}')"
+            jq -n \
+              --arg sha "$RELEASE_SHA" \
+              --arg runId "$wrapper_run_id" \
+              --arg runUrl "$wrapper_run_url" \
+              --arg status "$final_status" \
+              --arg conclusion "${final_conclusion:-pending}" \
+              --argjson jobs "$jobs" \
+              '{schemaVersion:1,status:"WRAPPER_FAILED",commitSha:$sha,wrapperWorkflowRunId:$runId,wrapperWorkflowRunUrl:$runUrl,wrapperStatus:$status,wrapperConclusion:$conclusion,failedJobs:[$jobs.jobs[] | select(.conclusion == "failure") | {name,failedSteps:[.steps[]? | select(.conclusion == "failure") | .name]}],mutationRequested:false,publicReleaseGate:false,hardLaunchClaim:false,sensitiveValuesExcluded:true}' \
+              > launch_package/bank-pilot-wrapper-evidence.json
+            echo "::error::Bank-pilot wrapper $wrapper_run_id concluded ${final_conclusion:-pending}."
+            exit 1
+          fi
+
+          jq -n --arg sha "$RELEASE_SHA" --arg runId "$wrapper_run_id" --arg runUrl "$wrapper_run_url" '{schemaVersion:1,status:"WRAPPER_SUCCESS",commitSha:$sha,wrapperWorkflowRunId:$runId,wrapperWorkflowRunUrl:$runUrl,mutationRequested:false,publicReleaseGate:false,hardLaunchClaim:false,sensitiveValuesExcluded:true}' > launch_package/bank-pilot-wrapper-evidence.json
+          echo "run_id=$wrapper_run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$wrapper_run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Correlate protected Firebase Production Deploy
+        id: production
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          REVIEW_RUN_ID: ${{ steps.request.outputs.review_run_id }}
+          PRIVATE_HR_RUN_ID: ${{ steps.private_hr.outputs.run_id }}
+          WRAPPER_RUN_ID: ${{ steps.wrapper.outputs.run_id }}
+          WRAPPER_RUN_URL: ${{ steps.wrapper.outputs.run_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
+          mkdir -p launch_package
+
+          if ! production_record="$(owner_locate_new_exact_sha_workflow_run firebase-production-deploy.yml "$RELEASE_SHA" production-baseline-run-ids.json 120 5)"; then
+            jq -n --arg sha "$RELEASE_SHA" --arg wrapperId "$WRAPPER_RUN_ID" --arg wrapperUrl "$WRAPPER_RUN_URL" '{schemaVersion:1,status:"PRODUCTION_NOT_CORRELATED",commitSha:$sha,wrapperWorkflowRunId:$wrapperId,wrapperWorkflowRunUrl:$wrapperUrl,mutationRequested:false,publicReleaseGate:false,hardLaunchClaim:false,sensitiveValuesExcluded:true}' > launch_package/bank-pilot-production-evidence.json
+            echo '::error::The wrapper succeeded but no unique exact-SHA Firebase Production Deploy run was correlated.'
+            exit 1
+          fi
+
+          production_run_id="$(jq -r '.runId' <<<"$production_record")"
+          production_run_url="$(jq -r '.runUrl' <<<"$production_record")"
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$production_run_id")"
+          [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$RELEASE_SHA" ]]
+          [[ "$(jq -r '.event' <<<"$run_json")" == 'workflow_dispatch' ]]
+          [[ "$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')" == "$RELEASE_SHA" ]]
+
+          jq -n \
+            --arg commitSha "$RELEASE_SHA" \
+            --arg reviewWorkflowRunId "$REVIEW_RUN_ID" \
+            --arg privateHrWorkflowRunId "$PRIVATE_HR_RUN_ID" \
+            --arg wrapperWorkflowRunId "$WRAPPER_RUN_ID" \
+            --arg wrapperWorkflowRunUrl "$WRAPPER_RUN_URL" \
+            --arg productionWorkflowRunId "$production_run_id" \
+            --arg productionWorkflowRunUrl "$production_run_url" \
+            '{schemaVersion:2,status:"PRODUCTION_CORRELATED",commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapperWorkflowRunId,wrapperWorkflowRunUrl:$wrapperWorkflowRunUrl,productionWorkflowRunId:$productionWorkflowRunId,productionWorkflowRunUrl:$productionWorkflowRunUrl,launchMode:"bank-pilot",publicReleaseGate:false,mutationRequested:false,hardLaunchClaim:false,sensitiveValuesExcluded:true}' \
+            > launch_package/bank-pilot-production-evidence.json
+
+          echo "run_id=$production_run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$production_run_url" >> "$GITHUB_OUTPUT"
+          echo "Protected Firebase Production Deploy: $production_run_url"
+
+      - name: Upload sanitized dispatcher evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bank-pilot-v2-dispatch-${{ steps.release.outputs.sha }}-${{ github.run_id }}
+          path: |
+            launch_package/bank-pilot-wrapper-evidence.json
+            launch_package/bank-pilot-production-evidence.json
+          if-no-files-found: warn
+          retention-days: 14
