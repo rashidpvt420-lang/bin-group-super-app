@@ -41,6 +41,22 @@ test('business wrapper always removes the fictional phone configuration', () => 
   assert.equal(packageJson.scripts['test:e2e:business'], 'node scripts/run-protected-business-evidence.mjs');
 });
 
+test('business wrapper recognizes only the exact protected production deploy job', () => {
+  assert.match(wrapper, /EXPECTED_REPOSITORY = 'rashidpvt420-lang\/bin-group-super-app'/);
+  assert.match(wrapper, /DEPLOY_WORKFLOW = 'Firebase Production Deploy'/);
+  assert.match(wrapper, /DEPLOY_JOB = 'deploy-firebase-production-stack'/);
+  assert.match(wrapper, /env\.GITHUB_ACTIONS === 'true'/);
+  assert.match(wrapper, /env\.GITHUB_REPOSITORY === EXPECTED_REPOSITORY/);
+  assert.match(wrapper, /env\.GITHUB_WORKFLOW === DEPLOY_WORKFLOW/);
+  assert.match(wrapper, /env\.GITHUB_JOB === DEPLOY_JOB/);
+  assert.match(wrapper, /env\.GITHUB_REF === 'refs\/heads\/main'/);
+  assert.match(wrapper, /\^\[0-9a-f\]\{40\}\$/);
+  assert.match(wrapper, /return \{ \.\.\.env, DEPLOYMENT_ENVIRONMENT: 'production' \}/);
+  assert.match(wrapper, /mfaManagerEnvironment[\s\S]*--mode', 'prepare'/);
+  assert.match(wrapper, /--mode', 'cleanup'[\s\S]*mfaManagerEnvironment/);
+  assert.doesNotMatch(wrapper, /GITHUB_WORKFLOW\s*!==/);
+});
+
 test('Admin browser disables app verification only for webdriver, marker, and canonical Admin host', () => {
   assert.match(login, /window\.navigator\.webdriver === true/);
   assert.match(login, /bin-e2e-admin-mfa-test/);
