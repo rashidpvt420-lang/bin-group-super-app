@@ -10,6 +10,7 @@ on:
     types: [completed]
 
 permissions:
+  actions: read
   contents: read
   pull-requests: write
 
@@ -33,6 +34,7 @@ jobs:
       SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
       SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
       SOURCE_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      SOURCE_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
       HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
 
@@ -66,6 +68,7 @@ jobs:
           esac
 
           [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_BRANCH" == "$expected_prefix"* ]] || {
             echo "::error::Protected request branch does not match the expected dispatcher prefix."
@@ -75,6 +78,33 @@ jobs:
           echo "title=$expected_title" >> "$GITHUB_OUTPUT"
           echo "prefix=$expected_prefix" >> "$GITHUB_OUTPUT"
           echo "marker=$expected_marker" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate completed dispatcher through Actions API
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          source_run="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          jq -e \
+            --arg repository "$REPOSITORY" \
+            --arg workflow "$SOURCE_WORKFLOW" \
+            --arg branch "$HEAD_BRANCH" \
+            --arg sha "$HEAD_SHA" \
+            --argjson workflow_id "$SOURCE_WORKFLOW_ID" '
+              (.id | tostring) == env.SOURCE_RUN_ID and
+              .workflow_id == $workflow_id and
+              .name == $workflow and
+              .event == "pull_request" and
+              .status == "completed" and
+              .conclusion == "success" and
+              .repository.full_name == $repository and
+              .head_repository.full_name == $repository and
+              .head_branch == $branch and
+              .head_sha == $sha
+            ' <<<"$source_run" >/dev/null || {
+              echo '::error::Completed dispatcher run no longer matches the protected request event.'
+              exit 1
+            }
 
       - name: Locate and validate exact owner draft request
         id: request
