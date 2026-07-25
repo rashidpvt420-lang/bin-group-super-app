@@ -12,11 +12,12 @@ import {
 } from './verify-admin-mfa-production.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
+const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const DEPLOY_WORKFLOW_NAME = 'Firebase Production Deploy';
-const ALLOWED_PHASES = new Set([
-  'predeploy',
-  'post-business-evidence',
-  'post-launch-audit',
+const DIAGNOSTIC_WORKFLOW_NAME = 'Live Business Failure Diagnostics';
+const ALLOWED_PHASES_BY_WORKFLOW = new Map([
+  [DEPLOY_WORKFLOW_NAME, new Set(['predeploy', 'post-business-evidence', 'post-launch-audit'])],
+  [DIAGNOSTIC_WORKFLOW_NAME, new Set(['post-business-diagnostic'])],
 ]);
 const DIRECT_PROFILE_COLLECTIONS = [
   'users',
@@ -48,27 +49,43 @@ function writeEvidence(result) {
 }
 
 export function shouldManageEphemeralE2eAdmin(env = process.env) {
+  const workflow = text(env.GITHUB_WORKFLOW);
   return env.GITHUB_ACTIONS === 'true' &&
-    text(env.GITHUB_WORKFLOW) === DEPLOY_WORKFLOW_NAME &&
+    ALLOWED_PHASES_BY_WORKFLOW.has(workflow) &&
     text(env.DEPLOYMENT_ENVIRONMENT) === 'production' &&
     text(env.E2E_ADMIN_EMAIL).length > 0;
 }
 
 function requireProtectedContext({ projectId, phase, env }) {
+  const workflow = text(env.GITHUB_WORKFLOW);
+  const allowedPhases = ALLOWED_PHASES_BY_WORKFLOW.get(workflow);
   if (projectId !== EXPECTED_PROJECT_ID) {
     throw new Error(`GCP_PROJECT_ID must equal ${EXPECTED_PROJECT_ID}.`);
   }
-  if (!ALLOWED_PHASES.has(phase)) {
+  if (text(env.GITHUB_REPOSITORY) !== EXPECTED_REPOSITORY) {
+    throw new Error(`E2E Admin lifecycle requires repository ${EXPECTED_REPOSITORY}.`);
+  }
+  if (!allowedPhases?.has(phase)) {
     throw new Error(`Unsupported E2E Admin lifecycle phase: ${phase || '(blank)'}.`);
   }
   if (!shouldManageEphemeralE2eAdmin(env)) {
-    throw new Error('E2E Admin lifecycle changes require the protected Firebase Production Deploy workflow.');
+    throw new Error('E2E Admin lifecycle changes require an approved protected production workflow.');
   }
-  if (env.GITHUB_REF !== 'refs/heads/main') {
-    throw new Error('E2E Admin lifecycle changes require refs/heads/main.');
+
+  let evidenceSha = '';
+  if (workflow === DEPLOY_WORKFLOW_NAME) {
+    if (env.GITHUB_REF !== 'refs/heads/main') {
+      throw new Error('Firebase Production Deploy lifecycle changes require refs/heads/main.');
+    }
+    evidenceSha = text(env.GITHUB_SHA);
+  } else if (workflow === DIAGNOSTIC_WORKFLOW_NAME) {
+    if (env.GITHUB_EVENT_NAME !== 'pull_request') {
+      throw new Error('Live business diagnostic lifecycle changes require pull_request transport.');
+    }
+    evidenceSha = text(env.DIAGNOSTIC_DEPLOYED_SHA);
   }
-  if (!/^[0-9a-f]{40}$/.test(text(env.GITHUB_SHA))) {
-    throw new Error('E2E Admin lifecycle changes require an exact lowercase main commit SHA.');
+  if (!/^[0-9a-f]{40}$/.test(evidenceSha)) {
+    throw new Error('E2E Admin lifecycle changes require an exact lowercase evidence SHA.');
   }
 
   const configuredEmail = lower(env.E2E_ADMIN_EMAIL);
@@ -78,7 +95,7 @@ function requireProtectedContext({ projectId, phase, env }) {
   if (configuredEmail === CANONICAL_FOUNDER_EMAIL) {
     throw new Error('E2E_ADMIN_EMAIL must never equal the canonical Founder email.');
   }
-  return configuredEmail;
+  return { configuredEmail, evidenceSha, workflow };
 }
 
 export function validateEphemeralE2eAdminIdentity({ authUser, profile, configuredEmail }) {
@@ -140,19 +157,21 @@ export async function retireConfiguredE2eAdmin({
   authClient,
   firestoreClient,
 } = {}) {
-  const configuredEmail = requireProtectedContext({ projectId, phase, env });
+  const context = requireProtectedContext({ projectId, phase, env });
+  const configuredEmail = context.configuredEmail;
   initializeFirebaseAdmin(admin, projectId);
   const auth = authClient || admin.auth();
   const db = firestoreClient || admin.firestore();
 
   const baseResult = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'absent',
     phase,
     projectId,
     repository: text(env.GITHUB_REPOSITORY) || null,
     ref: text(env.GITHUB_REF) || null,
-    commitSha: text(env.GITHUB_SHA) || null,
+    commitSha: context.evidenceSha,
+    workflow: context.workflow,
     workflowRunId: text(env.GITHUB_RUN_ID) || null,
     workflowRunAttempt: Number(env.GITHUB_RUN_ATTEMPT || 0) || null,
     verifiedAt: now.toISOString(),

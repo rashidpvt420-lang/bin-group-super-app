@@ -4,7 +4,7 @@
  * Verifies: job acceptance, GPS/arrival actions, proof upload, and ticket resolution.
  */
 import { test, expect, Page, Locator } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
@@ -47,9 +47,9 @@ async function firstVisible(page: Page, selectors: string[], timeout = 15_000): 
   throw new Error(`No visible target found for selectors: ${selectors.join(' | ')}. Last error: ${lastError}. Diagnostics: ${JSON.stringify(diagnostics)}`);
 }
 
-async function clickRequired(page: Page, selectors: string[], label: string) {
+async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 10_000) {
   const target = await firstVisible(page, selectors);
-  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: 10_000 });
+  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
   await target.click();
 }
 
@@ -91,9 +91,8 @@ test.describe('Technician Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-
   test('Technician can accept a job, upload proof, and resolve ticket', async ({ page }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(180_000);
 
     await page.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
@@ -128,13 +127,18 @@ test.describe('Technician Business Workflow', () => {
       'button:has-text("Start Trip")',
       'button:has-text("En Route")',
     ], 'Start trip action');
-    await expect(page.locator('body')).toContainText(/EN ROUTE|On The Way|Status updated/i, { timeout: 20_000 });
+
+    const enRouteChip = page.locator('.MuiChip-label').filter({ hasText: /^EN ROUTE$/i }).first();
+    await expect(
+      enRouteChip,
+      'Firestore lifecycle must reach EN_ROUTE before arrival is attempted; static button text is not transition evidence.'
+    ).toBeVisible({ timeout: 35_000 });
 
     await clickRequired(page, [
       'button:has-text("Arrived")',
       'button:has-text("I have arrived")',
       'button:has-text("On Site")',
-    ], 'Arrival action');
+    ], 'Arrival action', 35_000);
     await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 20_000 });
 
     const ppe = page.locator('#ppe');
