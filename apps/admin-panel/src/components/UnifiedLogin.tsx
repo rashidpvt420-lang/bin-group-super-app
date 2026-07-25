@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
 import {
     getMultiFactorResolver,
     sendPasswordResetEmail,
+    signOut,
 } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
 import { Shield, Lock } from 'lucide-react';
@@ -11,6 +12,26 @@ import { useLanguage } from '@bin/shared';
 import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
 
 const E2E_MFA_MARKER = 'bin-e2e-admin-mfa-test';
+const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
+const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
+const AUTH_VERIFICATION_TIMEOUT_MS = 15_000;
+const AUTH_RESET_TIMEOUT_MS = 5_000;
+
+const timeoutError = (code: string) => Object.assign(new Error(code), { code });
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise<T> => new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(timeoutError(code)), ms);
+    promise.then(
+        (value) => {
+            window.clearTimeout(timer);
+            resolve(value);
+        },
+        (error) => {
+            window.clearTimeout(timer);
+            reject(error);
+        },
+    );
+});
 
 const enableProtectedE2eMfaVerification = () => {
     if (typeof window === 'undefined') return false;
@@ -32,21 +53,42 @@ const clearProtectedE2eMfaMarker = () => {
 };
 
 export default function UnifiedLogin() {
-    const { error: authError } = useAuth();
+    const { error: authError, isAuthenticated } = useAuth();
     const { t, isRTL } = useLanguage();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
+    const verificationTimerRef = useRef<number | null>(null);
 
     const error = authError || localError;
     const loading = localLoading;
+
+    const clearVerificationTimer = () => {
+        if (verificationTimerRef.current !== null) {
+            window.clearTimeout(verificationTimerRef.current);
+            verificationTimerRef.current = null;
+        }
+    };
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
         if (redirectedEmail && !email) setEmail(redirectedEmail);
     }, [email]);
+
+    useEffect(() => () => clearVerificationTimer(), []);
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            clearVerificationTimer();
+            return;
+        }
+        if (authError || mfaResolver) {
+            clearVerificationTimer();
+            setLocalLoading(false);
+        }
+    }, [authError, isAuthenticated, mfaResolver]);
 
     const getFriendlyAuthError = (err: any) => {
         const code = err?.code || '';
@@ -64,6 +106,18 @@ export default function UnifiedLogin() {
             emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
+        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') {
+            return 'Secure browser storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
+        }
+        if (code === 'ADMIN_SIGN_IN_TIMEOUT') {
+            return 'Firebase sign-in did not respond within 20 seconds. Check the connection, reset the secure session, and try again.';
+        }
+        if (code === 'ADMIN_VERIFICATION_TIMEOUT') {
+            return 'The primary credential was accepted, but Admin authorization did not finish. Reset the secure session and sign in again.';
+        }
+        if (code === 'ADMIN_PASSWORD_RESET_TIMEOUT') {
+            return 'The password-reset request timed out. Check the connection and try again.';
+        }
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
             return 'The admin email or password is incorrect.';
         }
@@ -85,20 +139,57 @@ export default function UnifiedLogin() {
         return 'Login could not be completed. Please contact BIN GROUP support.';
     };
 
+    const resetSecureSession = async () => {
+        clearVerificationTimer();
+        clearProtectedE2eMfaMarker();
+        setLocalLoading(true);
+        setLocalError(null);
+        setMfaResolver(null);
+        try {
+            await withTimeout(signOut(auth), AUTH_RESET_TIMEOUT_MS, 'ADMIN_SIGN_OUT_TIMEOUT').catch(() => undefined);
+        } finally {
+            sessionStorage.removeItem('bin-admin-security-session');
+            try {
+                window.indexedDB?.deleteDatabase('firebaseLocalStorageDb');
+            } catch {
+                // The targeted Firebase Auth persistence reset is best effort.
+            }
+            const cleanEmail = email.trim().toLowerCase();
+            const query = cleanEmail ? `?email=${encodeURIComponent(cleanEmail)}&session=reset` : '?session=reset';
+            window.location.replace(`/login${query}`);
+        }
+    };
+
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        clearVerificationTimer();
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
         try {
             enableProtectedE2eMfaVerification();
-            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
-            const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+            await withTimeout(
+                setPersistence(auth, browserLocalPersistence),
+                AUTH_PERSISTENCE_TIMEOUT_MS,
+                'ADMIN_PERSISTENCE_TIMEOUT',
+            );
+            const result = await withTimeout(
+                signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
+                AUTH_SIGN_IN_TIMEOUT_MS,
+                'ADMIN_SIGN_IN_TIMEOUT',
+            );
             if (result.user) {
                 clearProtectedE2eMfaMarker();
                 console.info('🛡️ [AUTH] Primary Admin credential accepted.');
+                verificationTimerRef.current = window.setTimeout(() => {
+                    verificationTimerRef.current = null;
+                    setLocalLoading(false);
+                    setLocalError(getFriendlyAuthError(timeoutError('ADMIN_VERIFICATION_TIMEOUT')));
+                    void signOut(auth).catch(() => undefined);
+                }, AUTH_VERIFICATION_TIMEOUT_MS);
             }
         } catch (err: any) {
+            clearVerificationTimer();
             if (err?.code === 'auth/multi-factor-auth-required') {
                 try {
                     const resolver = getMultiFactorResolver(auth, err);
@@ -110,6 +201,9 @@ export default function UnifiedLogin() {
                 }
             } else {
                 clearProtectedE2eMfaMarker();
+                if (err?.code === 'ADMIN_PERSISTENCE_TIMEOUT' || err?.code === 'ADMIN_SIGN_IN_TIMEOUT') {
+                    void signOut(auth).catch(() => undefined);
+                }
                 setLocalError(getFriendlyAuthError(err));
             }
             setLocalLoading(false);
@@ -125,7 +219,11 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         try {
-            await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+            await withTimeout(
+                sendPasswordResetEmail(auth, email.trim().toLowerCase()),
+                AUTH_SIGN_IN_TIMEOUT_MS,
+                'ADMIN_PASSWORD_RESET_TIMEOUT',
+            );
             setLocalError('Password reset email sent. Check your inbox.');
         } catch (err: any) {
             setLocalError(getFriendlyAuthError(err));
@@ -141,6 +239,16 @@ export default function UnifiedLogin() {
                 <p className="text-[#C6A75E] font-black uppercase tracking-[0.4em] text-sm text-center">
                     {t('common.auth_sync')}
                 </p>
+                <p className="mt-4 max-w-md text-center text-xs leading-relaxed text-[#64748b]">
+                    Secure sign-in is bounded and will return an error instead of remaining on this screen indefinitely.
+                </p>
+                <button
+                    type="button"
+                    onClick={() => void resetSecureSession()}
+                    className="mt-8 rounded-xl border border-[#C6A75E]/40 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-[#C6A75E] hover:bg-[#C6A75E]/10"
+                >
+                    Reset secure session
+                </button>
             </div>
         );
     }
@@ -189,12 +297,21 @@ export default function UnifiedLogin() {
                             resolver={mfaResolver}
                             onResolved={() => {
                                 clearProtectedE2eMfaMarker();
+                                clearVerificationTimer();
                                 setLocalLoading(true);
                                 setMfaResolver(null);
                                 setPassword('');
+                                verificationTimerRef.current = window.setTimeout(() => {
+                                    verificationTimerRef.current = null;
+                                    setLocalLoading(false);
+                                    setLocalError(getFriendlyAuthError(timeoutError('ADMIN_VERIFICATION_TIMEOUT')));
+                                    void signOut(auth).catch(() => undefined);
+                                }, AUTH_VERIFICATION_TIMEOUT_MS);
                             }}
                             onCancel={() => {
                                 clearProtectedE2eMfaMarker();
+                                clearVerificationTimer();
+                                setLocalLoading(false);
                                 setMfaResolver(null);
                                 setPassword('');
                                 setLocalError(null);
@@ -242,6 +359,14 @@ export default function UnifiedLogin() {
                                     className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
                                 >
                                     {t('login.forgot_password')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void resetSecureSession()}
+                                    disabled={loading}
+                                    className="w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors disabled:opacity-50"
+                                >
+                                    Reset secure session
                                 </button>
                             </form>
 
