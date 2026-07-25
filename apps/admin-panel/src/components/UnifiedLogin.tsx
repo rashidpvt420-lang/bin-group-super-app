@@ -10,6 +10,19 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
 import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
 
+const enableProtectedE2eMfaVerification = () => {
+    if (typeof window === 'undefined') return;
+    const webdriver = window.navigator.webdriver === true;
+    const marker = window.localStorage.getItem('bin-e2e-admin-mfa-test') === 'enabled';
+    const trustedHost = window.location.hostname === 'bin-group-admin-panel.web.app'
+        || window.location.hostname === 'bin-group-admin-panel.firebaseapp.com';
+    if (webdriver && marker && trustedHost) {
+        auth.settings.appVerificationDisabledForTesting = true;
+        window.localStorage.removeItem('bin-e2e-admin-mfa-test');
+        console.info('[AUTH] Protected fictional-phone verification enabled for this automated E2E browser only.');
+    }
+};
+
 export default function UnifiedLogin() {
     const { error: authError } = useAuth();
     const { t, isRTL } = useLanguage();
@@ -70,6 +83,7 @@ export default function UnifiedLogin() {
         setLocalError(null);
         setMfaResolver(null);
         try {
+            enableProtectedE2eMfaVerification();
             await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
             const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
             if (result.user) {

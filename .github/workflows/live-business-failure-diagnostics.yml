@@ -1,0 +1,192 @@
+name: Live Business Failure Diagnostics
+run-name: Live business diagnostics · ${{ github.event.pull_request.number }}
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, converted_to_draft]
+    paths:
+      - .github/live-business-diagnostics-request
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: live-business-failure-diagnostics-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Diagnose failed live business suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    env:
+      DEPLOYMENT_ENVIRONMENT: production
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      REQUEST_PR: ${{ github.event.pull_request.number }}
+      REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      E2E_BASE_URL: https://bin-group-57c60.web.app
+      E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+      E2E_STRICT_ROLES: 'true'
+      E2E_STRICT_LIVE: 'true'
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+      REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY }}
+      REACT_APP_FIREBASE_APP_ID: ${{ secrets.REACT_APP_ADMIN_FIREBASE_APP_ID || secrets.REACT_APP_FIREBASE_APP_ID }}
+      REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID }}
+      REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.REACT_APP_APP_CHECK_SITE_KEY }}
+
+    steps:
+      - name: Validate owner-only one-file diagnostic request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          draft="$(jq -r '.pull_request.draft' "$GITHUB_EVENT_PATH")"
+          base_ref="$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")"
+          head_repo="$(jq -r '.pull_request.head.repo.full_name' "$GITHUB_EVENT_PATH")"
+          requester="$(jq -r '.pull_request.user.login' "$GITHUB_EVENT_PATH")"
+          title="$(jq -r '.pull_request.title' "$GITHUB_EVENT_PATH")"
+          head_ref="$(jq -r '.pull_request.head.ref' "$GITHUB_EVENT_PATH")"
+
+          [[ "$draft" == 'true' ]]
+          [[ "$base_ref" == 'main' ]]
+          [[ "$head_repo" == "$REPOSITORY" ]]
+          [[ "$requester" == "$GITHUB_REPOSITORY_OWNER" ]]
+          [[ "$title" == 'Diagnose live business evidence failures' ]]
+          [[ "$head_ref" == ops/diagnose-live-business-* ]]
+
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/live-business-diagnostics-request' ]] || {
+            printf '::error::Request must change only .github/live-business-diagnostics-request. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/live-business-diagnostics-request?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          request="$(sed -n 's/^request=//p' <<<"$marker")"
+          deployed_sha="$(sed -n 's/^deployed_sha=//p' <<<"$marker")"
+          source_run_id="$(sed -n 's/^production_deploy_run_id=//p' <<<"$marker")"
+          hard_launch_claim="$(sed -n 's/^hard_launch_claim=//p' <<<"$marker")"
+          line_count="$(awk 'END{print NR}' <<<"$marker")"
+
+          [[ "$line_count" -eq 4 ]]
+          [[ "$request" == 'diagnose-live-business-evidence' ]]
+          [[ "$deployed_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$source_run_id" =~ ^[1-9][0-9]*$ ]]
+          [[ "$hard_launch_claim" == 'false' ]]
+
+          echo "deployed_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$source_run_id" >> "$GITHUB_OUTPUT"
+          echo "DIAGNOSTIC_DEPLOYED_SHA=$deployed_sha" >> "$GITHUB_ENV"
+          echo "DIAGNOSTIC_SOURCE_RUN_ID=$source_run_id" >> "$GITHUB_ENV"
+
+      - name: Validate source deployment and failed business step
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$DIAGNOSTIC_SOURCE_RUN_ID")"
+          jq -e --arg sha "$DIAGNOSTIC_DEPLOYED_SHA" '
+            .name == "Firebase Production Deploy" and
+            .event == "workflow_dispatch" and
+            .head_branch == "main" and
+            .head_sha == $sha and
+            .status == "completed" and
+            .conclusion == "failure"
+          ' <<<"$run_json" >/dev/null
+
+          jobs_json="$(gh api "repos/$REPOSITORY/actions/runs/$DIAGNOSTIC_SOURCE_RUN_ID/jobs?filter=latest&per_page=100")"
+          jq -e '
+            [.jobs[] | select(.name == "Deploy Firebase production stack")] as $deployJobs |
+            ($deployJobs | length) == 1 and
+            ($deployJobs[0].steps | any(.name == "Deploy and verify Firebase production stack" and .conclusion == "success")) and
+            ($deployJobs[0].steps | any(.name == "Run current-commit production deployment evidence" and .conclusion == "success")) and
+            ($deployJobs[0].steps | any(.name == "Run current-commit five-role business evidence" and .conclusion == "failure"))
+          ' <<<"$jobs_json" >/dev/null
+
+      - name: Checkout trusted diagnostic implementation
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify deployed application and targeted tests are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$DIAGNOSTIC_DEPLOYED_SHA^{commit}"
+          git merge-base --is-ancestor "$DIAGNOSTIC_DEPLOYED_SHA" HEAD
+          git diff --quiet "$DIAGNOSTIC_DEPLOYED_SHA" HEAD -- \
+            src \
+            apps/admin-panel/src \
+            functions \
+            firestore.rules \
+            storage.rules \
+            playwright.config.ts \
+            tests/e2e/business-admin.spec.ts \
+            tests/e2e/business-tenant.spec.ts \
+            tests/e2e/business-technician.spec.ts \
+            tests/e2e/helpers \
+            scripts/seed-e2e-auth.mjs \
+            scripts/seed-live-role-test-data.mjs \
+            scripts/e2e-admin-lifecycle.mjs \
+            scripts/manage-e2e-admin-mfa-test.mjs \
+            package.json \
+            package-lock.json
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud for protected E2E fixtures
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Install Chromium once
+        run: npx playwright install --with-deps chromium
+
+      - name: Run targeted redacted diagnostics
+        run: node scripts/run-live-business-failure-diagnostics.mjs
+
+      - name: Upload redacted live-business diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-business-failure-diagnostics-${{ steps.request.outputs.deployed_sha }}-${{ steps.request.outputs.source_run_id }}
+          path: diagnostics/live-business/summary.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Close completed diagnostic request without merge
+        if: always()
+        shell: bash
+        run: gh api --method PATCH "repos/$REPOSITORY/pulls/$REQUEST_PR" -f state=closed >/dev/null

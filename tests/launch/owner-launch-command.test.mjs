@@ -103,9 +103,12 @@ test('owner launch command cannot request public launch or hard clearance', () =
   assert.doesNotMatch(commandWorkflow, /live-role-smoke\.yml\/dispatches/);
 });
 
-test('production failure diagnostics are failure-only and preserve fail-closed authority', () => {
+test('production failure diagnostics remain failed-run-only and preserve fail-closed authority', () => {
   assert.match(diagnosticsWorkflow, /workflows:\s*\n\s*- Firebase Production Deploy/);
-  assert.match(diagnosticsWorkflow, /if: github\.event\.workflow_run\.conclusion == 'failure'/);
+  assert.match(diagnosticsWorkflow, /if: github\.event_name == 'pull_request' \|\| github\.event\.workflow_run\.conclusion == 'failure'/);
+  assert.match(diagnosticsWorkflow, /Diagnose failed Firebase production deployment/);
+  assert.match(diagnosticsWorkflow, /requester.*GITHUB_REPOSITORY_OWNER/);
+  assert.match(diagnosticsWorkflow, /hard_launch_claim/);
   assert.match(diagnosticsWorkflow, /Validate protected source run through GitHub API/);
   assert.match(diagnosticsWorkflow, /\.event == "workflow_dispatch"/);
   assert.match(diagnosticsWorkflow, /\.head_branch == "main"/);
@@ -117,7 +120,7 @@ test('production failure diagnostics are failure-only and preserve fail-closed a
   assert.match(diagnosticsWorkflow, /githubSecretMaskingApplied:\s*true/);
   assert.match(diagnosticsWorkflow, /secretValuesIntentionallyCollected:\s*false/);
   assert.match(diagnosticsWorkflow, /hardLaunchClaim:\s*false/);
-  assert.match(diagnosticsWorkflow, /actions\/upload-artifact@v7/);
+  assert.match(diagnosticsWorkflow, /actions\/upload-artifact@v4/);
   assert.match(diagnosticsWorkflow, /firebase-production-failure\.log/);
   assert.match(diagnosticsWorkflow, /issues\/\$ISSUE_NUMBER\/comments/);
   assert.doesNotMatch(diagnosticsWorkflow, /continue-on-error:\s*true/);
