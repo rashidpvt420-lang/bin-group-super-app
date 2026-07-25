@@ -1,0 +1,171 @@
+name: Close Protected Operation Request
+run-name: Close protected operation request · ${{ github.event.workflow_run.id }}
+
+on:
+  workflow_run:
+    workflows:
+      - Dispatch Protected Privileged Account Review
+      - Dispatch Protected Privileged Account Cleanup
+      - Dispatch Protected Bank Pilot
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: close-protected-operation-request-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  close-request:
+    name: Close successful protected request without merge
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      REPOSITORY_OWNER: ${{ github.repository_owner }}
+      SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - name: Resolve exact protected request contract
+        id: contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$SOURCE_WORKFLOW" in
+            'Dispatch Protected Privileged Account Review')
+              expected_title='Dispatch protected privileged account review workflow'
+              expected_prefix='ops/dispatch-privileged-review-workflow-'
+              expected_marker='.github/privileged-account-review-dispatch-request'
+              ;;
+            'Dispatch Protected Privileged Account Cleanup')
+              expected_title='Dispatch protected privileged account cleanup workflow'
+              expected_prefix='ops/dispatch-privileged-cleanup-workflow-'
+              expected_marker='.github/privileged-account-cleanup-dispatch-request'
+              ;;
+            'Dispatch Protected Bank Pilot')
+              expected_title='Dispatch protected bank pilot workflow'
+              expected_prefix='ops/dispatch-bank-pilot-workflow-'
+              expected_marker='.github/bank-pilot-dispatch-request'
+              ;;
+            *)
+              echo "::error::Unrecognized protected dispatcher: $SOURCE_WORKFLOW"
+              exit 1
+              ;;
+          esac
+
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_BRANCH" == "$expected_prefix"* ]] || {
+            echo "::error::Protected request branch does not match the expected dispatcher prefix."
+            exit 1
+          }
+
+          echo "title=$expected_title" >> "$GITHUB_OUTPUT"
+          echo "prefix=$expected_prefix" >> "$GITHUB_OUTPUT"
+          echo "marker=$expected_marker" >> "$GITHUB_OUTPUT"
+
+      - name: Locate and validate exact owner draft request
+        id: request
+        env:
+          EXPECTED_TITLE: ${{ steps.contract.outputs.title }}
+          EXPECTED_PREFIX: ${{ steps.contract.outputs.prefix }}
+          EXPECTED_MARKER: ${{ steps.contract.outputs.marker }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pulls="$({
+            gh api --method GET "repos/$REPOSITORY/pulls" \
+              -f state=all \
+              -f base=main \
+              -f head="$REPOSITORY_OWNER:$HEAD_BRANCH" \
+              -f per_page=100
+          })"
+
+          count="$(jq 'length' <<<"$pulls")"
+          [[ "$count" -eq 1 ]] || {
+            echo "::error::Expected exactly one protected request PR for $HEAD_BRANCH; found $count."
+            exit 1
+          }
+
+          pr_number="$(jq -r '.[0].number' <<<"$pulls")"
+          [[ "$pr_number" =~ ^[1-9][0-9]*$ ]]
+
+          jq -e \
+            --arg repository "$REPOSITORY" \
+            --arg owner "$REPOSITORY_OWNER" \
+            --arg title "$EXPECTED_TITLE" \
+            --arg branch "$HEAD_BRANCH" \
+            --arg sha "$HEAD_SHA" '
+              .[0].draft == true and
+              .[0].user.login == $owner and
+              .[0].head.repo.full_name == $repository and
+              .[0].head.ref == $branch and
+              .[0].head.sha == $sha and
+              .[0].base.ref == "main" and
+              .[0].title == $title
+            ' <<<"$pulls" >/dev/null || {
+              echo '::error::Protected request PR identity does not match the completed dispatcher run.'
+              exit 1
+            }
+
+          merged_at="$(jq -r '.[0].merged_at // empty' <<<"$pulls")"
+          [[ -z "$merged_at" ]] || {
+            echo "::error::Protected operation request PR #$pr_number was merged and cannot be treated as an operational request."
+            exit 1
+          }
+
+          mapfile -t files < <(
+            gh api --paginate "repos/$REPOSITORY/pulls/$pr_number/files" --jq '.[].filename'
+          )
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == "$EXPECTED_MARKER" ]] || {
+            printf '::error::Protected request PR must change only %s. Found: %s\n' "$EXPECTED_MARKER" "${files[*]:-none}"
+            exit 1
+          }
+
+          state="$(jq -r '.[0].state' <<<"$pulls")"
+          [[ "$state" == 'open' || "$state" == 'closed' ]]
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
+      - name: Close validated request PR without merge
+        env:
+          REQUEST_PR: ${{ steps.request.outputs.number }}
+          REQUEST_STATE: ${{ steps.request.outputs.state }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$REQUEST_STATE" == 'open' ]]; then
+            gh api --method PATCH "repos/$REPOSITORY/pulls/$REQUEST_PR" -f state=closed >/dev/null
+          fi
+
+          closed="$(gh api "repos/$REPOSITORY/pulls/$REQUEST_PR")"
+          jq -e '.state == "closed" and .merged_at == null' <<<"$closed" >/dev/null || {
+            echo "::error::Protected operation request PR #$REQUEST_PR was not closed safely without merge."
+            exit 1
+          }
+
+          echo "Closed protected request PR #$REQUEST_PR without merge after successful dispatcher run $SOURCE_RUN_ID."
+          {
+            echo '## Protected operation request closed'
+            echo
+            echo "- Dispatcher: \`$SOURCE_WORKFLOW\`"
+            echo "- Dispatcher run: $SOURCE_RUN_URL"
+            echo "- Request PR: \`#$REQUEST_PR\`"
+            echo "- Head SHA: \`$HEAD_SHA\`"
+            echo '- Merged: `false`'
+            echo '- Hard-launch claim: `false`'
+          } >> "$GITHUB_STEP_SUMMARY"
