@@ -10,13 +10,13 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
-    Clock, MapPin, Navigation, ArrowRight
+    Clock, Navigation, ArrowRight
 } from 'lucide-react';
-import { db, collection } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 
@@ -36,6 +36,8 @@ const STATUS_COLOR: Record<string, string> = {
     WAITING_PARTS: '#ef4444',
 };
 
+const ACTIVE_STATUS_SET = new Set(ALL_TECHNICIAN_ACTIVE_STATUSES.map((status) => String(status)));
+
 export default function TechnicianJobsPage() {
     const { user } = useRole();
     const navigate = useNavigate();
@@ -47,23 +49,35 @@ export default function TechnicianJobsPage() {
 
     useEffect(() => {
         if (!user?.uid) return;
-        const unsub = onSnapshotSplitIn(
+
+        // Query only the authenticated technician's assignments. Firestore
+        // authorization remains bound to assignedTechnicianId, while status
+        // normalization is handled client-side so legacy/lowercase and current
+        // uppercase lifecycle values cannot split or hide the same mission.
+        const assignedQuery = query(
             collection(db, 'maintenanceTickets'),
-            { field: 'assignedTechnicianId', value: user.uid },
-            'status',
-            ALL_TECHNICIAN_ACTIVE_STATUSES,
-            (jobs: SnapshotDoc[]) => {
+            where('assignedTechnicianId', '==', user.uid),
+        );
+
+        const unsub = onSnapshot(
+            assignedQuery,
+            (snap) => {
+                const jobs = snap.docs
+                    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as SnapshotDoc))
+                    .filter((job) => ACTIVE_STATUS_SET.has(String(job.status || '')));
                 setAssignedJobs(jobs);
                 setLoadError('');
                 setLoading(false);
             },
             () => {
+                setAssignedJobs([]);
                 setLoadError(tx('tech.jobs.load_error', 'Assigned jobs could not be loaded. Check your connection or contact dispatch.'));
                 setLoading(false);
             },
         );
+
         return () => unsub();
-    }, [user?.uid]);
+    }, [user?.uid, tx]);
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -80,7 +94,7 @@ export default function TechnicianJobsPage() {
         const eta = calculateEtaMinutes(dist);
 
         return (
-            <Paper key={job.id} sx={{
+            <Paper key={job.id} data-testid="technician-assigned-job-card" sx={{
                 p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6,
                 border: `1px solid ${isLive ? alpha(binThemeTokens.gold, 0.35) : 'rgba(255,255,255,0.05)'}`,
                 transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
@@ -114,7 +128,7 @@ export default function TechnicianJobsPage() {
                     </Stack>
                 </Stack>
 
-                    {isLive && (
+                {isLive && (
                     <Alert severity="info" icon={<Navigation size={16} />} sx={{ mb: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, color: binThemeTokens.gold }}>
                         {tx('tech.jobs.gps_active', 'GPS tracking ACTIVE — sharing location with requester')}
                     </Alert>
@@ -138,6 +152,7 @@ export default function TechnicianJobsPage() {
                 </Grid>
 
                 <Button
+                    data-testid="technician-open-job-card"
                     fullWidth variant="contained"
                     onClick={() => navigate(`/technician/job/${job.id}`)}
                     endIcon={<ArrowRight size={18} />}
@@ -151,7 +166,7 @@ export default function TechnicianJobsPage() {
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
+            {loadError && <Alert data-testid="technician-jobs-load-error" severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
                 {tx('tech.jobs.title', 'My Jobs')}
             </Typography>
@@ -164,7 +179,7 @@ export default function TechnicianJobsPage() {
             </Typography>
 
             {assignedJobs.length === 0 ? (
-                <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.1)', mb: 5 }}>
+                <Paper data-testid="technician-no-active-assignments" sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.1)', mb: 5 }}>
                     <Typography color="textSecondary" fontWeight="900">{tx('tech.jobs.no_active', 'NO ACTIVE ASSIGNMENTS')}</Typography>
                 </Paper>
             ) : (

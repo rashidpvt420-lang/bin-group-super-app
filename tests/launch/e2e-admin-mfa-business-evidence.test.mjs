@@ -63,7 +63,7 @@ test('Admin browser disables app verification only for webdriver, marker, and ca
   assert.match(login, /bin-group-admin-panel\.web\.app/);
   assert.match(login, /bin-group-admin-panel\.firebaseapp\.com/);
   assert.match(login, /auth\.settings\.appVerificationDisabledForTesting = true/);
-  assert.match(login, /localStorage\.removeItem\('bin-e2e-admin-mfa-test'\)/);
+  assert.match(login, /localStorage\.removeItem\(E2E_MFA_MARKER\)/);
 });
 
 test('Admin business evidence completes the actual Firebase MFA challenge', () => {

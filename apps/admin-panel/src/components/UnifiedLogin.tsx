@@ -10,17 +10,25 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
 import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
 
+const E2E_MFA_MARKER = 'bin-e2e-admin-mfa-test';
+
 const enableProtectedE2eMfaVerification = () => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return false;
     const webdriver = window.navigator.webdriver === true;
-    const marker = window.localStorage.getItem('bin-e2e-admin-mfa-test') === 'enabled';
+    const marker = window.localStorage.getItem(E2E_MFA_MARKER) === 'enabled';
     const trustedHost = window.location.hostname === 'bin-group-admin-panel.web.app'
         || window.location.hostname === 'bin-group-admin-panel.firebaseapp.com';
     if (webdriver && marker && trustedHost) {
         auth.settings.appVerificationDisabledForTesting = true;
-        window.localStorage.removeItem('bin-e2e-admin-mfa-test');
         console.info('[AUTH] Protected fictional-phone verification enabled for this automated E2E browser only.');
+        return true;
     }
+    return false;
+};
+
+const clearProtectedE2eMfaMarker = () => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(E2E_MFA_MARKER);
 };
 
 export default function UnifiedLogin() {
@@ -87,6 +95,7 @@ export default function UnifiedLogin() {
             await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
             const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
             if (result.user) {
+                clearProtectedE2eMfaMarker();
                 console.info('🛡️ [AUTH] Primary Admin credential accepted.');
             }
         } catch (err: any) {
@@ -96,9 +105,11 @@ export default function UnifiedLogin() {
                     setMfaResolver(resolver);
                     setLocalError(null);
                 } catch (resolverError) {
+                    clearProtectedE2eMfaMarker();
                     setLocalError(getFriendlyAuthError(resolverError));
                 }
             } else {
+                clearProtectedE2eMfaMarker();
                 setLocalError(getFriendlyAuthError(err));
             }
             setLocalLoading(false);
@@ -177,11 +188,13 @@ export default function UnifiedLogin() {
                         <AdminMfaSignInChallenge
                             resolver={mfaResolver}
                             onResolved={() => {
+                                clearProtectedE2eMfaMarker();
                                 setLocalLoading(true);
                                 setMfaResolver(null);
                                 setPassword('');
                             }}
                             onCancel={() => {
+                                clearProtectedE2eMfaMarker();
                                 setMfaResolver(null);
                                 setPassword('');
                                 setLocalError(null);
