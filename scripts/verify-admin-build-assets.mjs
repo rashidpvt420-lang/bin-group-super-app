@@ -89,8 +89,6 @@ if (productionAppCheckRequired) {
 }
 
 for (const marker of [
-  'REPLACE_ME',
-  'REPLACE_WITH',
   'e2e-admin-mfa-factor',
   'bin-e2e-admin-mfa-test',
   'appVerificationDisabledForTesting',
