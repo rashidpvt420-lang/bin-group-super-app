@@ -28,7 +28,7 @@ test('temporary E2E Admin MFA uses protected Identity Platform configuration and
   assert.match(manager, /hardLaunchClaim: false/);
 });
 
-test('business wrapper always removes the fictional phone configuration', () => {
+test('business wrapper binds the protected production sentinel to the exact deploy job and always cleans up', () => {
   const tryIndex = wrapper.indexOf('try {');
   const finallyIndex = wrapper.indexOf('} finally {');
   const prepareIndex = wrapper.indexOf("['--mode', 'prepare']");
@@ -38,6 +38,13 @@ test('business wrapper always removes the fictional phone configuration', () => 
   assert.ok(evidenceIndex > prepareIndex);
   assert.ok(finallyIndex > evidenceIndex);
   assert.ok(cleanupIndex > finallyIndex);
+  assert.match(wrapper, /DEPLOY_WORKFLOW = 'Firebase Production Deploy'/);
+  assert.match(wrapper, /DEPLOY_JOB = 'deploy-firebase-production-stack'/);
+  assert.match(wrapper, /env\.GITHUB_ACTIONS === 'true'/);
+  assert.match(wrapper, /env\.GITHUB_REF === 'refs\/heads\/main'/);
+  assert.match(wrapper, /\^\[0-9a-f\]\{40\}\$/);
+  assert.match(wrapper, /DEPLOYMENT_ENVIRONMENT: 'production'/);
+  assert.match(wrapper, /env: evidenceEnv/);
   assert.equal(packageJson.scripts['test:e2e:business'], 'node scripts/run-protected-business-evidence.mjs');
 });
 
