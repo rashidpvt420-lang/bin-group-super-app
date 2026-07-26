@@ -61,17 +61,21 @@ test('precise GPS retries use short-lived session storage with expiry and retry 
   assert.match(liveTracking, /MAX_RETRIES = 5/);
   assert.match(liveTracking, /entry\.expiresAtMs > nowMs/);
   assert.match(liveTracking, /entry\.retryCount < MAX_RETRIES/);
+  assert.match(liveTracking, /const stops = ordered\.filter\(\(entry\) => entry\.action === 'STOP'\)/);
   assert.match(liveTracking, /queueStorage: 'SESSION_ONLY'/);
   assert.match(sessionControls, /sessionStorage\.clear\(\)/);
 });
 
 test('pending STOP is replayed before a new session and is not silently discarded', () => {
-  ordered(liveTracking, [
+  const startSource = liveTracking.slice(liveTracking.indexOf('export const startLiveTracking'));
+  ordered(startSource, [
     'purgeLiveTrackingQueue(technicianUid)',
+    '_state.technicianUid = technicianUid',
     'flushTechnicianQueue(technicianUid)',
-    "action === 'STOP'",
+    'queueHasPendingStop(technicianUid)',
     'createTrackingSessionId()',
   ]);
+  assert.match(startSource, /PENDING_STOP_RECONCILIATION/);
   assert.match(liveTracking, /STOP_REQUEST_QUEUED/);
   assert.match(liveTracking, /STOP_REJECTED/);
   assert.match(liveTracking, /queueHasTechnicianEntries/);
