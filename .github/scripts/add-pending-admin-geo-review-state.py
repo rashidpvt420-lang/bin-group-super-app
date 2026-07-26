@@ -10,8 +10,8 @@ review_path.write_text(review.replace(old, new, 1), encoding='utf-8')
 
 page_path = Path('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx')
 page = page_path.read_text(encoding='utf-8')
-old = "const pendingStates = ['PENDING', 'PENDING REVIEW', 'PENDING APPROVAL', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'ONBOARDING'];"
-new = "const pendingStates = ['PENDING', 'PENDING REVIEW', 'PENDING APPROVAL', 'PENDING ADMIN APPROVAL', 'PENDING ADMIN REVIEW', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'ONBOARDING'];"
+old = "const pendingStates = ['PENDING', 'PENDING REVIEW', 'PENDING APPROVAL', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'ONBOARDING', 'UNKNOWN'];"
+new = "const pendingStates = ['PENDING', 'PENDING REVIEW', 'PENDING APPROVAL', 'PENDING ADMIN APPROVAL', 'PENDING ADMIN REVIEW', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'ONBOARDING', 'UNKNOWN'];"
 if page.count(old) != 1:
     raise SystemExit(f'Admin pending state marker count was {page.count(old)}, expected 1')
 page_path.write_text(page.replace(old, new, 1), encoding='utf-8')
