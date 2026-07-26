@@ -58,6 +58,15 @@ try {
     mfaManagerEnvironment,
   );
   if (cleanupStatus !== 0) exitCode = cleanupStatus;
+
+  if (prepared && cleanupStatus === 0) {
+    const retirementStatus = run(
+      'scripts/e2e-admin-lifecycle.mjs',
+      ['--phase=post-business-evidence'],
+      mfaManagerEnvironment,
+    );
+    if (retirementStatus !== 0) exitCode = retirementStatus;
+  }
   if (!prepared) console.error('[protected-business-evidence] cleanup executed after incomplete preparation.');
 }
 
