@@ -71,6 +71,52 @@ jobs:
             git show "refs/remotes/origin/property-tenant-authority-source:$file" > "$file"
           done
 
+      - name: Make ticket-create verification collection-scoped
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/apply-ticket-rule-binding.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = """for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+            const start = text.indexOf(marker);
+            const block = start < 0 ? '' : text.slice(start, start + 900);
+            if (!block.includes(canonicalCreate)) throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser creation outside Admin authority.`);
+          }
+          if (text.split(canonicalCreate).length - 1 !== 2) {
+            throw new Error('[ticket-rule-binding] Admin/server-only ticket create gate must exist exactly twice.');
+          }
+          """
+          new = """for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+            const start = text.indexOf(marker);
+            if (start < 0) throw new Error(`[ticket-rule-binding] Ticket rule block missing: ${marker}`);
+            const openingBrace = text.indexOf('{', start + marker.length - 1);
+            let depth = 0;
+            let end = -1;
+            for (let index = openingBrace; index < text.length; index += 1) {
+              if (text[index] === '{') depth += 1;
+              if (text[index] === '}') {
+                depth -= 1;
+                if (depth === 0) {
+                  end = index + 1;
+                  break;
+                }
+              }
+            }
+            if (end < 0) throw new Error(`[ticket-rule-binding] Could not parse ticket rule block: ${marker}`);
+            const block = text.slice(start, end);
+            const createGateCount = block.split(canonicalCreate).length - 1;
+            if (createGateCount !== 1) {
+              throw new Error(`[ticket-rule-binding] ${marker} must contain exactly one Admin/server-only create gate; found ${createGateCount}.`);
+            }
+          }
+          """
+          if source.count(old) != 1:
+            raise SystemExit(f'ticket-create verifier marker count: {source.count(old)}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Add current-main integration contract
         shell: bash
         run: |
@@ -95,6 +141,7 @@ jobs:
             assert.match(callable, /enforceAppCheck: true/);
             assert.match(callable, /resolveDispatchReadyPropertyGeo\(property\)/);
             assert.match(binding, /const canonicalCreate = '      allow create: if isAdmin\(\);'/);
+            assert.match(binding, /createGateCount !== 1/);
             assert.match(binding, /import '.\/harden-property-geo-authority\.mjs'/);
             assert.match(ruleTest, /denies direct Tenant creates in both ticket collections/);
             assert.match(ruleTest, /browser_forged/);
@@ -175,11 +222,13 @@ jobs:
             tests/launch/property-tenant-callable-authority.test.mjs
           git rm \
             .github/workflows/apply-property-tenant-authority-current-main.yml \
-            .github/workflows/retry-property-tenant-authority-current-main.yml
+            .github/workflows/retry-property-tenant-authority-current-main.yml \
+            .github/workflows/diagnose-property-tenant-rules.yml
           changed="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             .github/workflows/apply-property-tenant-authority-current-main.yml \
             .github/workflows/retry-property-tenant-authority-current-main.yml \
+            .github/workflows/diagnose-property-tenant-rules.yml \
             apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
             apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
             scripts/apply-ticket-rule-binding.mjs \
