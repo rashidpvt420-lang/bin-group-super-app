@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
 import { ArrowLeft, Wrench, ChevronRight, User } from 'lucide-react';
@@ -11,6 +11,8 @@ import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
 import PilotCompletionPage from '../components/PilotCompletionPage';
 import BinConnectInboxPage from '../components/BinConnectInboxPage';
+import { useRole } from '../context/RoleContext';
+import { resumeTechnicianTrackingQueue } from '../utils/liveTracking';
 
 import TechnicianSimpleDashboardPage from './pages/TechnicianSimpleDashboardPage';
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
@@ -38,10 +40,18 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isRTL, lang, t, tx } = useLanguage();
+    const { user } = useRole();
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
     const pathnames = location.pathname.split('/').filter(Boolean);
     const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
     const quickButtonSx = { color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900, display: { xs: 'none', md: 'inline-flex' }, whiteSpace: 'nowrap', textTransform: 'none' } as const;
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        void resumeTechnicianTrackingQueue(user.uid).catch((error) => {
+            console.warn('[TechnicianApp] Pending GPS reconciliation could not resume.', error);
+        });
+    }, [user?.uid]);
 
     return (
         <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
