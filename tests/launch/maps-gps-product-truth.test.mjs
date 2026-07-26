@@ -17,11 +17,11 @@ const packageJson = JSON.parse(read('package.json'));
 const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
 const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
 
-test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
+ test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
   assert.match(adminMap, /loadAdminGoogleMaps\(\)/);
   assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
   assert.match(adminMap, /data-testid="admin-live-google-map"/);
-  assert.match(adminMap, /No markers have been fabricated/);
+  assert.match(adminMap, /No markers have been fabricated|Recorded coordinates were not rendered as verified markers/);
   assert.match(adminMap, /onSnapshot\([\s\S]*setLocationsError/);
   assert.doesNotMatch(adminMap, /AI Autonomous|AI INTERCEPTING|Marina Bridges|DUBAI-HQ|Streaming live telemetry/i);
   assert.doesNotMatch(adminMap, /55\.12|55\.42|25\.3 - loc\.lat|const positions = \[/);
@@ -70,11 +70,17 @@ test('Owner and Tenant tracking card identifies schematic and freshness limitati
   assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
 });
 
-test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
+test('Technician GPS client uses the protected callable and a bounded session-only retry queue', () => {
   assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
-  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
+  assert.match(liveTracking, /QUEUE_KEY_PREFIX = 'bin-technician-gps-queue-v2:'/);
   assert.match(liveTracking, /MAX_QUEUE_SIZE = 25/);
+  assert.match(liveTracking, /window\.sessionStorage/);
+  assert.match(liveTracking, /crypto\.subtle\.digest\('SHA-256'/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
+  assert.match(liveTracking, /UPDATE_TTL_MS = 15 \* 60 \* 1000/);
+  assert.match(liveTracking, /STOP_TTL_MS = 24 \* 60 \* 60 \* 1000/);
+  assert.doesNotMatch(liveTracking, /localStorage\.setItem\(.*gps/i);
+  assert.doesNotMatch(liveTracking, /technicianUid:\s*technicianUid/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'technicians'/);
