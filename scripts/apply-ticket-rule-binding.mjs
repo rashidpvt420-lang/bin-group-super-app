@@ -120,8 +120,9 @@ if (text.includes(splitBlock)) {
 if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
   throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
 }
-if (text.split(canonicalUpdate).length - 1 !== 2) {
-  throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates before legacy retirement.');
+const operationalUpdateGateCount = text.split(canonicalUpdate).length - 1;
+if (![1, 2].includes(operationalUpdateGateCount)) {
+  throw new Error(`[ticket-rule-binding] Expected one canonical gate or two pre-retirement gates, found ${operationalUpdateGateCount}.`);
 }
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
