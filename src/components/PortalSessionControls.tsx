@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
+import { purgeTechnicianGpsQueue } from '../utils/technicianGpsQueue';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -43,6 +44,8 @@ export default function PortalSessionControls({
 
   const handleLogout = async () => {
     try {
+      const technicianUid = role === 'technician' ? auth.currentUser?.uid : null;
+      if (technicianUid) purgeTechnicianGpsQueue(technicianUid);
       await clearSessionAndPreserveLanguage();
       await signOut(auth);
     } catch (error) {
