@@ -1,46 +1,300 @@
-import React from 'react';
-import { Box, Button, Stack } from '@mui/material';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Banknote, Users } from 'lucide-react';
+import {
+    Container, Typography, Box, Paper, Grid, Stack, Button,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
+    IconButton
+} from '@mui/material';
+import {
+    DollarSign,
+    FileText, UserPlus, ChevronRight, Search as SearchIcon
+} from 'lucide-react';
+import { db, collection, query, onSnapshot, where } from '../../lib/firebase';
+import { binThemeTokens } from '../../theme/adminTheme';
+import { useAuth } from '../../context/AuthContext';
 import StaffAccessPage from './StaffAccessPage';
 
-/**
- * Canonical HR entrypoint.
- *
- * Staff creation used to write a pending Firestore request containing a
- * provisional password without creating a Firebase Auth identity. The HR route
- * now exposes the server-authoritative Staff Access workflow directly. Payroll
- * remains available through its dedicated protected route.
- */
 export default function HRManagementPage() {
+    const { user } = useAuth();
     const navigate = useNavigate();
+    const [tab, setTab] = useState(0);
+    const [staff, setStaff] = useState<any[]>([]);
+    const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const privilegedHRRoles = new Set(['super_admin', 'admin', 'ceo', 'hr_admin', 'hr_manager']);
+    const isHRManager = Boolean(user?.claims?.admin === true || user?.isAdmin === true || privilegedHRRoles.has(String(user?.role)));
+    const isHRStaff = Boolean(isHRManager || user?.role === 'hr_staff');
+
+    useEffect(() => {
+        // Load staff / technician records
+        const q = query(collection(db, 'users'), where('role', 'in', ['technician', 'hr_staff', 'hr_manager', 'hr_admin']));
+        const unsub = onSnapshot(q, (snap) => {
+            setStaff(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoading(false);
+        });
+        return () => unsub();
+    }, []);
+
+    useEffect(() => {
+        // Real payroll ledger, used by the Payroll Hub tab instead of placeholder rows
+        const q = query(collection(db, 'payroll'));
+        const unsub = onSnapshot(q, (snap) => {
+            setPayrollRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+    }, []);
+
+    const filteredStaff = staff.filter((member) => {
+        const haystack = [member.displayName, member.email, member.role, member.specialization, member.emirate]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return haystack.includes(searchTerm.trim().toLowerCase());
+    });
+
+    const treasuryLogsByMonth = Object.values(
+        payrollRecords.reduce((acc: Record<string, { month: string; total: number; allPaid: boolean }>, rec: any) => {
+            const key = rec.month || 'UNKNOWN';
+            if (!acc[key]) acc[key] = { month: key, total: 0, allPaid: true };
+            acc[key].total += Number(rec.amount) || 0;
+            if (rec.status !== 'paid') acc[key].allPaid = false;
+            return acc;
+        }, {})
+    ).sort((a: any, b: any) => b.month.localeCompare(a.month)).slice(0, 6);
+
+    const nextDispatchDate = (() => {
+        const now = new Date();
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        return next.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    })();
+
+    const getStatusColor = (status: string) => {
+        switch (status?.toUpperCase()) {
+            case 'ACTIVE': return '#10b981';
+            case 'ON_LEAVE': return '#f59e0b';
+            case 'INACTIVE': return '#ef4444';
+            default: return 'rgba(255,255,255,0.4)';
+        }
+    };
+
+    if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ minHeight: '100%', bgcolor: '#020617' }} data-testid="admin-staff-access-route">
-            <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1.5}
-                justifyContent="flex-end"
-                sx={{ px: 4, pt: 3 }}
-            >
-                <Button
-                    variant="outlined"
-                    startIcon={<Users size={17} />}
-                    onClick={() => navigate('/ops/staff-directory')}
-                    data-testid="admin-open-staff-directory"
-                >
-                    Staff Directory
-                </Button>
-                <Button
-                    variant="outlined"
-                    startIcon={<Banknote size={17} />}
-                    onClick={() => navigate('/financials/payroll')}
-                    data-testid="admin-open-payroll"
-                >
-                    Payroll Hub
-                </Button>
-            </Stack>
-            <StaffAccessPage />
+        <Box sx={{ height: '100%', overflowY: 'auto', bgcolor: '#020617', py: 4 }} data-testid="admin-staff-access-route">
+            <Container maxWidth="xl">
+                <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
+                            SOVEREIGN HUMAN CAPITAL
+                        </Typography>
+                        <Typography variant="h3" fontWeight="950" color="#FFF">
+                            HR <Box component="span" sx={{ color: binThemeTokens.gold }}>Command</Box>
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1, color: 'rgba(255,255,255,0.58)', maxWidth: 760 }}>
+                            Staff registry, technician personnel control, attendance, leave, HR documents, and payroll handoff for Admin and Super Admin.
+                        </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={2}>
+                        {isHRManager && (
+                            <Button
+                                variant="contained"
+                                startIcon={<UserPlus size={18} />}
+                                onClick={() => setTab(4)}
+                                data-testid="admin-open-secure-staff-access"
+                                sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+                            >
+                                REGISTER STAFF
+                            </Button>
+                        )}
+                    </Stack>
+                </Box>
+
+                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 4, '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 } }}>
+                    <Tab label="STAFF REGISTRY" />
+                    <Tab label="ATTENDANCE & LEAVE" disabled={!isHRStaff} />
+                    <Tab label="PAYROLL HUB" disabled={!isHRManager} />
+                    <Tab label="HR DOCUMENTS" disabled={!isHRStaff} />
+                    <Tab label="STAFF ACCESS" disabled={!isHRManager} />
+                </Tabs>
+
+                {tab === 0 && (
+                    <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <TextField
+                                placeholder="Search by name, role, ID..."
+                                size="small"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start"><SearchIcon size={18} color="rgba(255,255,255,0.3)" /></InputAdornment>,
+                                    sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 2 }
+                                }}
+                                sx={{ width: 400 }}
+                            />
+                            <Chip label={`${filteredStaff.length} TOTAL PERSONNEL`} sx={{ fontWeight: 900 }} />
+                        </Box>
+
+                        <TableContainer>
+                            <Table>
+                                <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
+                                    <TableRow>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>PERSONNEL</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ROLE / SPECIALIZATION</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ZONE</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>KPI</TableCell>
+                                        <TableCell align="right"></TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {filteredStaff.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} sx={{ color: 'rgba(255,255,255,0.45)', textAlign: 'center', py: 5 }}>
+                                                No HR personnel matched this filter. Register staff or check Firestore users roles.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : filteredStaff.map((s) => (
+                                        <TableRow key={s.id} hover>
+                                            <TableCell>
+                                                <Stack direction="row" spacing={2} alignItems="center">
+                                                    <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.2), color: binThemeTokens.gold, fontWeight: 900 }}>
+                                                        {(s.displayName || s.email || '?').charAt(0).toUpperCase()}
+                                                    </Avatar>
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight="900" color="#FFF">{s.displayName || 'Unnamed staff'}</Typography>
+                                                        <Typography variant="caption" color="textSecondary">{s.email || 'No email'}</Typography>
+                                                    </Box>
+                                                </Stack>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight="700" color="#FFF">{s.role?.toUpperCase()}</Typography>
+                                                <Typography variant="caption" color="textSecondary">{s.specialization || 'N/A'}</Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" color="#FFF">{s.emirate || 'Global'}</Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: getStatusColor(s.status || 'ACTIVE') }} />
+                                                    <Typography variant="caption" fontWeight="950" sx={{ color: getStatusColor(s.status || 'ACTIVE') }}>
+                                                        {(s.status || 'ACTIVE').toUpperCase()}
+                                                    </Typography>
+                                                </Stack>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight="900" color={s.performanceScore ? '#10b981' : 'rgba(255,255,255,0.3)'}>
+                                                    {s.performanceScore ? `${s.performanceScore}%` : 'N/A'}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell align="right">
+                                                <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                                                    {isHRManager && (
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
+                                                            startIcon={<FileText size={14} />}
+                                                            onClick={() => navigate('/financials/payroll')}
+                                                            title="Generate a server-authoritative payroll batch before settling and emailing a payslip."
+                                                            sx={{
+                                                                borderColor: alpha(binThemeTokens.gold, 0.3),
+                                                                color: binThemeTokens.gold,
+                                                                fontWeight: 900,
+                                                                fontSize: '0.7rem'
+                                                            }}
+                                                        >
+                                                            PAYSLIP
+                                                        </Button>
+                                                    )}
+                                                    <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                                                        <ChevronRight size={18} />
+                                                    </IconButton>
+                                                </Stack>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Paper>
+                )}
+
+                {tab === 1 && (
+                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">Attendance & Leave</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
+                            Attendance capture, leave approvals, sick leave, shift exceptions, and duty compliance are reserved here for the HR workflow. Current production source of truth remains staff user records and payroll ledger until attendance collections are activated.
+                        </Typography>
+                    </Paper>
+                )}
+
+                {tab === 2 && (
+                    <Box sx={{ py: 4 }}>
+                        <Grid container spacing={4}>
+                            <Grid item xs={12} md={4}>
+                                <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${binThemeTokens.gold}`, borderRadius: 4, textAlign: 'center' }}>
+                                    <DollarSign size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
+                                    <Typography variant="h5" fontWeight="950" color="#FFF">NEXT DISPATCH</Typography>
+                                    <Typography variant="h3" fontWeight="950" color={binThemeTokens.gold} sx={{ my: 2 }}>{nextDispatchDate}</Typography>
+                                    <Typography variant="body2" color="textSecondary">Start of next payroll cycle</Typography>
+                                    <Button fullWidth variant="contained" onClick={() => navigate('/financials/payroll')} sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                        GENERATE LEDGER
+                                    </Button>
+                                </Paper>
+                            </Grid>
+                            <Grid item xs={12} md={8}>
+                                <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
+                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 4 }}>TREASURY LOGS (STAFF)</Typography>
+                                    <Table size="small">
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>MONTH</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>GROSS PAYOUT</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.4)' }}>STATUS</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {treasuryLogsByMonth.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={3} sx={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', py: 4 }}>
+                                                        No payroll runs recorded yet.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : treasuryLogsByMonth.map((log: any) => (
+                                                <TableRow key={log.month}>
+                                                    <TableCell sx={{ fontWeight: 900 }}>{log.month}</TableCell>
+                                                    <TableCell>AED {log.total.toLocaleString('en-AE')}</TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={log.allPaid ? 'SETTLED' : 'PENDING'}
+                                                            size="small"
+                                                            color={log.allPaid ? 'success' : 'warning'}
+                                                            sx={{ fontWeight: 900, fontSize: 10 }}
+                                                        />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </Paper>
+                            </Grid>
+                        </Grid>
+                    </Box>
+                )}
+
+                {tab === 3 && (
+                    <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.66)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Typography variant="h6" fontWeight="950" color="#FFF">HR Documents</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
+                            Staff contracts, Emirates ID/passport copies, certifications, warning letters, leave files, and payroll documents should attach here after Storage rules and HR document collections are hardened.
+                        </Typography>
+                    </Paper>
+                )}
+
+                {tab === 4 && isHRManager && <StaffAccessPage />}
+            </Container>
         </Box>
     );
 }
