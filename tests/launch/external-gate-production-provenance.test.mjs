@@ -25,14 +25,17 @@ test('operational application evidence is bound to the exact production deployme
   assert.match(workflow, /validatedArtifactDigest/);
 
   ordered(workflow, [
+    'run-operational-application-evidence-paginated.mjs --prepare-in-place',
     'verify-operational-application-provenance.mjs',
-    'run-operational-application-evidence-paginated.mjs',
+    'verify-operational-application-evidence.mjs',
     'bind-operational-application-provenance.mjs',
     'publish-operational-application-evidence.mjs',
   ]);
   assert.match(paginatedRunner, /sourcePath = path\.join\(__dirname, 'verify-operational-application-evidence\.mjs'\)/);
+  assert.match(paginatedRunner, /--prepare-in-place/);
   assert.match(paginatedRunner, /replaceExactlyOnce/);
   assert.match(paginatedRunner, /readAllMatchingDocuments/);
+  assert.match(paginatedRunner, /renameSync\(temporaryPath, sourcePath\)/);
   assert.match(paginatedRunner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
 });
 
