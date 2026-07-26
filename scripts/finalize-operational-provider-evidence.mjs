@@ -11,6 +11,7 @@ const EVIDENCE_TYPES = Object.freeze({
   brandedEmailDelivery: 'workflow-artifact',
   stripeLiveBilling: 'production-transaction',
   appCheckEnforcement: 'workflow-artifact',
+  aiProviderHealth: 'workflow-artifact',
 });
 
 function fail(message) {

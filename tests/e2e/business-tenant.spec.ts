@@ -1,12 +1,16 @@
 ﻿/**
  * Authenticated production business proof for the Tenant role.
- * Verifies a real Storage-backed request and mandatory tenant closure approval.
+ *
+ * This suite deliberately does not seed a completed ticket. Every reviewable
+ * ticket is created by the real Tenant UI, assigned to the protected E2E
+ * Technician, completed through the real Technician UI, and then approved or
+ * disputed through the real Tenant UI.
  */
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import admin from 'firebase-admin';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
@@ -14,15 +18,32 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
-const EMAIL = process.env.E2E_TENANT_EMAIL ?? '';
-const PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
-const APPROVAL_TICKET_ID = 'e2e-tenant-approval-ticket';
-const REQUEST_DESCRIPTION = 'E2E water leakage production request with photo evidence.';
-const proofImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII=';
+const BASE_URL = (process.env.E2E_BASE_URL || 'https://bin-group-57c60.web.app').replace(/\/+$/, '');
+const TENANT_EMAIL = process.env.E2E_TENANT_EMAIL ?? '';
+const TENANT_PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
+const TECHNICIAN_EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
+const TECHNICIAN_PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
+const RUN_MARKER = `tenant-cross-role-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const IMAGE_BUFFER = Buffer.from(
+  '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
+  'hex',
+);
+
+const createdTicketIds = new Set<string>();
+const createdCorrectionValues = new Set<string>();
+const createdUnitLinkRequestIds = new Set<string>();
+let tenantUid = '';
+let technicianUid = '';
+let technicianName = 'E2E Technician';
+let technicianEmail = '';
+let linkedUnitBackup: { path: string; data: FirebaseFirestore.DocumentData } | null = null;
 
 function requireLaunchCredentials() {
-  if (!EMAIL || !PASSWORD) {
-    throw new Error('Missing E2E_TENANT_EMAIL/PASSWORD. Tenant launch validation cannot be skipped for public release.');
+  if (!TENANT_EMAIL || !TENANT_PASSWORD || !TECHNICIAN_EMAIL || !TECHNICIAN_PASSWORD) {
+    throw new Error(
+      'Missing E2E_TENANT_EMAIL/PASSWORD or E2E_TECHNICIAN_EMAIL/PASSWORD. '
+      + 'Tenant cross-role launch validation cannot be skipped for public release.',
+    );
   }
 }
 
@@ -35,75 +56,351 @@ function initializeAdminSdk() {
   admin.initializeApp({ projectId });
 }
 
-async function login(page: Page) {
-  requireLaunchCredentials();
+async function login(page: Page, role: 'tenant' | 'technician', email: string, password: string) {
   await page.context().clearCookies();
-  await page.goto(`/login?intendedRole=tenant&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
   });
-  await page.goto(`/login?intendedRole=tenant&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('body')).not.toContainText(/CONTINUE AS ADMIN|SOVEREIGN_FAILURE|System Interruption/i, { timeout: 10_000 });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
+  await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('body')).not.toContainText(
+    /CONTINUE AS ADMIN|SOVEREIGN_FAILURE|System Interruption|Minified React error/i,
+    { timeout: 10_000 },
+  );
+  await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
+  await page.locator('input[type="password"]').first().fill(password);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL('**/tenant/dashboard', { timeout: 25_000 });
+  await page.waitForURL(`**/${role}/dashboard`, { timeout: 30_000 });
   await expect(page.locator('body')).not.toContainText(
     /Network|SOVEREIGN_FAILURE|System Interruption|Minified React error|permission-denied/i,
     { timeout: 10_000 },
   );
 }
 
+async function firstVisible(page: Page, selectors: string[], timeout = 20_000): Promise<Locator> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    for (const selector of selectors) {
+      const target = page.locator(selector).first();
+      if (await target.isVisible({ timeout: 500 }).catch(() => false)) return target;
+    }
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`No visible target found for: ${selectors.join(' | ')}`);
+}
+
+async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 15_000) {
+  const target = await firstVisible(page, selectors);
+  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
+  await target.click();
+}
+
+function ticketCoordinates(data: FirebaseFirestore.DocumentData) {
+  const source = data.jobLocation || data.propertyLocation || data.geo || data.location || {};
+  const latitude = Number(source.lat ?? source.latitude ?? source._latitude);
+  const longitude = Number(source.lng ?? source.longitude ?? source._longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error(`Ticket ${data.ticketId || data.id || 'unknown'} has no valid production property coordinates.`);
+  }
+  return { latitude, longitude };
+}
+
+async function submitRealTenantRequest(page: Page, suffix: string) {
+  const description = `${RUN_MARKER} ${suffix}: water leakage with Tenant photo evidence.`;
+  await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/tenant\/request/, { timeout: 15_000 });
+  await expect(page.locator('body')).not.toContainText(
+    /SOVEREIGN_FAILURE|System Interruption|permission-denied|missing or insufficient permissions|no property assigned|RESIDENCE UNASSIGNED/i,
+    { timeout: 10_000 },
+  );
+
+  const category = page.getByTestId('tenant-request-category').or(page.getByTestId('tenant-request-category-input')).first();
+  await expect(category).toBeVisible({ timeout: 30_000 });
+  await category.click();
+  await page.getByRole('option').first().click();
+
+  const priority = page.getByTestId('tenant-request-priority').or(page.getByTestId('tenant-request-priority-input')).first();
+  await expect(priority).toBeVisible({ timeout: 10_000 });
+  await priority.click();
+  await page.getByRole('option').first().click();
+  await page.getByTestId('tenant-request-location').locator('input, textarea').first().fill('Kitchen sink');
+  await page.getByTestId('tenant-request-description').locator('input, textarea').first().fill(description);
+
+  const cameraInput = page.locator('input[type="file"][accept*="image"]').first();
+  await expect(cameraInput, 'Tenant request must expose an image-capable mobile camera/file input.').toBeAttached();
+  await expect(cameraInput).toHaveAttribute('accept', /image\/\*/i);
+  await cameraInput.setInputFiles({
+    name: `tenant-camera-${suffix}.png`,
+    mimeType: 'image/png',
+    buffer: IMAGE_BUFFER,
+  });
+
+  await page.getByTestId('tenant-request-submit').click();
+  await Promise.race([
+    page.waitForURL('**/tenant/tickets', { timeout: 35_000 }),
+    expect(page.locator('body')).toContainText(/success|created|submitted|ticket|request/i, { timeout: 35_000 }),
+  ]);
+  await expect(page.locator('body')).not.toContainText(
+    /Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i,
+    { timeout: 5_000 },
+  );
+
+  const db = admin.firestore();
+  let ticketId = '';
+  await expect.poll(async () => {
+    const result = await db.collection('maintenanceTickets').where('description', '==', description).get();
+    const exact = result.docs.find((docSnap) => docSnap.data()?.tenantId === tenantUid || docSnap.data()?.tenantUid === tenantUid);
+    ticketId = exact?.id || '';
+    return ticketId;
+  }, { timeout: 40_000 }).not.toBe('');
+
+  createdTicketIds.add(ticketId);
+  const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+  const data = ticketSnap.data() || {};
+  const tenantPhotos = data.photos || data.beforePhotos || data.tenantPhotos || [];
+  expect(Array.isArray(tenantPhotos) && tenantPhotos.length > 0, 'Firestore ticket must retain uploaded Tenant photo URLs.').toBe(true);
+  expect(String(tenantPhotos[0] || '')).toMatch(/^https:\/\//);
+  expect(String(data.status || '').toUpperCase()).toMatch(/OPEN|PENDING_ASSIGNMENT/);
+  return { ticketId, description, data };
+}
+
+async function assignToProtectedTechnician(ticketId: string) {
+  const db = admin.firestore();
+  await db.collection('maintenanceTickets').doc(ticketId).set({
+    assignedTechnicianId: technicianUid,
+    technicianId: technicianUid,
+    technicianName,
+    technicianEmail,
+    status: 'ASSIGNED',
+    dispatchStatus: 'ASSIGNED',
+    assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedBy: 'PROTECTED_E2E_DISPATCH_FIXTURE',
+    updatedByRole: 'system',
+    e2eRunMarker: RUN_MARKER,
+  }, { merge: true });
+
+  await expect.poll(async () => {
+    const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+    const data = snap.data() || {};
+    return `${data.status}|${data.assignedTechnicianId}`;
+  }, { timeout: 30_000 }).toBe(`ASSIGNED|${technicianUid}`);
+}
+
+async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
+  const db = admin.firestore();
+  const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+  if (!ticketSnap.exists) throw new Error(`Ticket ${ticketId} disappeared before Technician handoff.`);
+  const coordinates = ticketCoordinates({ id: ticketId, ...ticketSnap.data() });
+  const context: BrowserContext = await browser.newContext({
+    baseURL: BASE_URL,
+    geolocation: { longitude: coordinates.longitude, latitude: coordinates.latitude },
+    permissions: ['geolocation', 'notifications'],
+  });
+  const page = await context.newPage();
+  const monitor = await attachAuthenticatedAppCheckMonitor(page);
+  await monitor.assertTokenFingerprint();
+
+  try {
+    await login(page, 'technician', TECHNICIAN_EMAIL, TECHNICIAN_PASSWORD);
+    await page.goto(`/technician/job/${ticketId}`, { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(new RegExp(`/technician/job/${ticketId}`), { timeout: 20_000 });
+    await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 25_000 });
+
+    const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
+    if (await acceptMission.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
+      await acceptMission.click();
+      await expect(page.locator('body')).toContainText(/Mission accepted|ACCEPTED/i, { timeout: 20_000 });
+    }
+
+    await clickRequired(page, [
+      'button:has-text("On The Way")',
+      'button:has-text("Start Trip")',
+      'button:has-text("En Route")',
+    ], 'Start trip action');
+    await expect(page.locator('.MuiChip-label').filter({ hasText: /^EN ROUTE$/i }).first()).toBeVisible({ timeout: 40_000 });
+
+    await clickRequired(page, [
+      'button:has-text("Arrived")',
+      'button:has-text("I have arrived")',
+      'button:has-text("On Site")',
+    ], 'Arrival action', 40_000);
+    await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 25_000 });
+
+    const ppe = page.locator('#ppe');
+    const safety = page.locator('#safety');
+    await expect(ppe).toBeVisible({ timeout: 10_000 });
+    await expect(safety).toBeVisible({ timeout: 10_000 });
+    await ppe.check();
+    await safety.check();
+
+    await clickRequired(page, ['button:has-text("Start Work")'], 'Start work action');
+    await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated/i, { timeout: 25_000 });
+
+    const notes = page.getByLabel(/Resolution notes/i).first();
+    await expect(notes).toBeVisible({ timeout: 10_000 });
+    await notes.fill(`Cross-role completion ${RUN_MARKER}: inspected, repaired, tested, and left operational.`);
+
+    const materials = page.getByLabel(/Materials used|No parts required/i).first();
+    await expect(materials).toBeVisible({ timeout: 10_000 });
+    await materials.fill('No parts required');
+
+    const completionInput = await firstVisible(page, [
+      'input[type="file"][accept*="image"]',
+      'input[type="file"]',
+    ], 20_000);
+    await completionInput.setInputFiles({
+      name: `technician-after-${ticketId}.png`,
+      mimeType: 'image/png',
+      buffer: IMAGE_BUFFER,
+    });
+
+    const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback/i }).first();
+    await expect(complete).toBeEnabled({ timeout: 25_000 });
+    await complete.click();
+    await page.waitForURL('**/technician/jobs', { timeout: 40_000 });
+    await expect(page.locator('body')).not.toContainText(/failed|permission-denied|missing or insufficient permissions/i, { timeout: 5_000 });
+
+    await expect.poll(async () => {
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      const data = snap.data() || {};
+      return `${String(data.status || '').toUpperCase()}|${data.tenantApprovalStatus}`;
+    }, { timeout: 45_000 }).toMatch(/COMPLETED_PENDING_(APPROVAL|TENANT_APPROVAL)\|PENDING_TENANT_REVIEW/i);
+
+    monitor.assertClean(`Technician completion for ${ticketId}`);
+    monitor.assertAuthenticatedFirebaseRead(`Technician completion for ${ticketId}`);
+  } finally {
+    await context.close();
+  }
+}
+
+async function assertTenantDeliveryReceipt(ticketId: string) {
+  const db = admin.firestore();
+  let receipt: Record<string, unknown> = {};
+  await expect.poll(async () => {
+    const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+    const ticket = ticketSnap.data() || {};
+    const notificationId = String(ticket.tenantCompletionNotificationId || '');
+    const mailId = String(ticket.tenantCompletionMailId || '');
+    if (!notificationId) return false;
+
+    const [notificationSnap, mailSnap] = await Promise.all([
+      db.collection('notifications').doc(notificationId).get(),
+      mailId ? db.collection('mail').doc(mailId).get() : Promise.resolve(null),
+    ]);
+    const notification = notificationSnap.data() || {};
+    const mail = mailSnap?.data?.() || {};
+    const pushDelivered = notification.pushDeliveryState === 'SUCCESS'
+      && Number(notification.pushSuccessCount || 0) > 0
+      && Number(notification.pushFailureCount || 0) === 0;
+    const emailDelivered = mail?.delivery?.state === 'SUCCESS' && Boolean(mail?.delivery?.messageId);
+    receipt = {
+      ticketId,
+      notificationId,
+      mailId: mailId || null,
+      pushDeliveryState: notification.pushDeliveryState || null,
+      pushSuccessCount: notification.pushSuccessCount || 0,
+      pushFailureCount: notification.pushFailureCount || 0,
+      emailDeliveryState: mail?.delivery?.state || null,
+      emailMessageIdPresent: Boolean(mail?.delivery?.messageId),
+    };
+    return pushDelivered || emailDelivered;
+  }, {
+    timeout: 120_000,
+    intervals: [1_000, 2_000, 5_000, 10_000],
+    message: `Ticket ${ticketId} must produce a successful push or SMTP provider receipt for the Tenant.`,
+  }).toBe(true);
+
+  await test.info().attach(`tenant-delivery-receipt-${ticketId}`, {
+    body: Buffer.from(JSON.stringify(receipt, null, 2)),
+    contentType: 'application/json',
+  });
+}
+
+async function createAndComplete(browser: Browser, page: Page, suffix: string) {
+  const created = await submitRealTenantRequest(page, suffix);
+  await assignToProtectedTechnician(created.ticketId);
+  await completeThroughTechnicianUi(browser, created.ticketId);
+  await assertTenantDeliveryReceipt(created.ticketId);
+  return created.ticketId;
+}
+
+async function restoreLinkedUnit() {
+  if (!linkedUnitBackup || !admin.apps.length) return;
+  await admin.firestore().doc(linkedUnitBackup.path).set(linkedUnitBackup.data, { merge: false });
+}
+
+async function cleanupRunData() {
+  if (!admin.apps.length) return;
+  const db = admin.firestore();
+  await restoreLinkedUnit().catch(() => undefined);
+
+  for (const ticketId of createdTicketIds) {
+    const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get().catch(() => null);
+    const ticket = ticketSnap?.data?.() || {};
+    const notificationId = String(ticket.tenantCompletionNotificationId || '');
+    const mailId = String(ticket.tenantCompletionMailId || '');
+    if (notificationId) await db.collection('notifications').doc(notificationId).delete().catch(() => undefined);
+    if (mailId) await db.collection('mail').doc(mailId).delete().catch(() => undefined);
+    await db.collection('maintenanceTickets').doc(ticketId).delete().catch(() => undefined);
+  }
+
+  for (const value of createdCorrectionValues) {
+    const snapshot = await db.collection('tenant_correction_requests').where('requestedValue', '==', value).get().catch(() => null);
+    if (snapshot && !snapshot.empty) {
+      const batch = db.batch();
+      snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+      await batch.commit().catch(() => undefined);
+    }
+  }
+
+  for (const requestId of createdUnitLinkRequestIds) {
+    await db.collection('tenant_unit_link_requests').doc(requestId).delete().catch(() => undefined);
+  }
+}
+
 test.describe('Tenant Business Workflow', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeAll(async () => {
     requireLaunchCredentials();
     initializeAdminSdk();
-    const tenant = await admin.auth().getUserByEmail(EMAIL);
+    const [tenant, technician] = await Promise.all([
+      admin.auth().getUserByEmail(TENANT_EMAIL),
+      admin.auth().getUserByEmail(TECHNICIAN_EMAIL),
+    ]);
+    tenantUid = tenant.uid;
+    technicianUid = technician.uid;
+    technicianName = technician.displayName || 'E2E Technician';
+    technicianEmail = technician.email || TECHNICIAN_EMAIL;
+
     const db = admin.firestore();
-    await db.collection('maintenanceTickets').doc(APPROVAL_TICKET_ID).set({
-      id: APPROVAL_TICKET_ID,
-      ticketId: APPROVAL_TICKET_ID,
-      propertyId: 'e2e-live-role-property',
-      propertyName: 'E2E Live Role Tower',
-      unitId: `e2e-live-role-unit-${tenant.uid.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 80)}`,
-      unitNumber: 'E2E-101',
-      tenantId: tenant.uid,
-      tenantUid: tenant.uid,
-      tenantEmail: EMAIL.toLowerCase(),
-      category: 'HVAC / AC systems',
-      description: 'E2E completed work requiring mandatory tenant approval.',
-      status: 'COMPLETED_PENDING_TENANT_APPROVAL',
-      tenantApproved: false,
-      tenantApprovalStatus: 'PENDING',
-      beforePhotoUrl: proofImage,
-      afterPhotoUrl: proofImage,
-      beforePhotos: [proofImage],
-      afterPhotos: [proofImage],
-      technicianNotes: 'Production E2E repair completed and verified.',
-      e2eLaunchSeed: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: false });
+    const tenantProfile = await db.collection('users').doc(tenantUid).get();
+    const profileUnitId = String(tenantProfile.data()?.unitId || '');
+    let unitSnap = profileUnitId ? await db.collection('units').doc(profileUnitId).get() : null;
+    if (!unitSnap?.exists) {
+      const byUid = await db.collection('units').where('tenantId', '==', tenantUid).limit(1).get();
+      unitSnap = byUid.docs[0] || null;
+    }
+    if (!unitSnap?.exists) {
+      const byEmail = await db.collection('units').where('tenantEmail', '==', TENANT_EMAIL.toLowerCase()).limit(1).get();
+      unitSnap = byEmail.docs[0] || null;
+    }
+    if (!unitSnap?.exists) throw new Error('Protected Tenant fixture has no linked unit to exercise and restore.');
+    linkedUnitBackup = { path: unitSnap.ref.path, data: unitSnap.data() || {} };
   });
 
   test.afterAll(async () => {
-    if (!admin.apps.length) return;
-    const db = admin.firestore();
-    await db.collection('maintenanceTickets').doc(APPROVAL_TICKET_ID).delete().catch(() => undefined);
-    const created = await db.collection('maintenanceTickets').where('description', '==', REQUEST_DESCRIPTION).get().catch(() => null);
-    if (created) {
-      const batch = db.batch();
-      created.docs.forEach((docSnap) => batch.delete(docSnap.ref));
-      await batch.commit().catch(() => undefined);
-    }
+    await cleanupRunData();
   });
 
   test.beforeEach(async ({ page }) => {
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
     (page as any).__binAppCheckMonitor = monitor;
     await monitor.assertTokenFingerprint();
-    await login(page);
+    await login(page, 'tenant', TENANT_EMAIL, TENANT_PASSWORD);
   });
 
   test.afterEach(async ({ page }) => {
@@ -113,76 +410,135 @@ test.describe('Tenant Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-  test('Tenant creates a real service request with uploaded photo evidence', async ({ page }) => {
-    test.setTimeout(120_000);
-    await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/tenant\/request/, { timeout: 15_000 });
-    await expect(page.locator('body')).not.toContainText(
-      /SOVEREIGN_FAILURE|System Interruption|permission-denied|missing or insufficient permissions|no property assigned|RESIDENCE UNASSIGNED/i,
-      { timeout: 10_000 },
-    );
+  test('Tenant → Technician → Tenant approval closes one uninterrupted real ticket', async ({ browser, page }) => {
+    test.setTimeout(360_000);
+    const ticketId = await createAndComplete(browser, page, 'approval');
 
-    const category = page.getByTestId('tenant-request-category').or(page.getByTestId('tenant-request-category-input')).first();
-    await expect(category).toBeVisible({ timeout: 30_000 });
-    await category.click();
-    await page.getByRole('option').first().click();
-
-    const priority = page.getByTestId('tenant-request-priority').or(page.getByTestId('tenant-request-priority-input')).first();
-    await expect(priority).toBeVisible({ timeout: 10_000 });
-    await priority.click();
-    await page.getByRole('option').first().click();
-    await page.getByTestId('tenant-request-location').locator('input, textarea').first().fill('Kitchen sink');
-    await page.getByTestId('tenant-request-description').locator('input, textarea').first().fill(REQUEST_DESCRIPTION);
-
-    await page.locator('input[type="file"]').first().setInputFiles({
-      name: 'tenant-request-evidence.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(
-        '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
-        'hex',
-      ),
-    });
-
-    await page.getByTestId('tenant-request-submit').click();
-    await Promise.race([
-      page.waitForURL('**/tenant/tickets', { timeout: 30_000 }),
-      expect(page.locator('body')).toContainText(/success|created|submitted|ticket|request/i, { timeout: 30_000 }),
-    ]);
-    await expect(page.locator('body')).not.toContainText(
-      /Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i,
-      { timeout: 5_000 },
-    );
-
-    const db = admin.firestore();
-    await expect.poll(async () => {
-      const result = await db.collection('maintenanceTickets').where('description', '==', REQUEST_DESCRIPTION).get();
-      return result.size;
-    }, { timeout: 30_000 }).toBeGreaterThan(0);
-  });
-
-  test('Tenant approves completed work and the backend closes the ticket', async ({ page }) => {
-    test.setTimeout(90_000);
-    await page.goto(`/tenant/ticket/${APPROVAL_TICKET_ID}`, { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(new RegExp(`/tenant/ticket/${APPROVAL_TICKET_ID}`), { timeout: 15_000 });
-    await expect(page.getByText(/WORK COMPLETED — REVIEW REQUIRED/i)).toBeVisible({ timeout: 25_000 });
-
+    await page.goto(`/tenant/ticket/${ticketId}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/WORK COMPLETED — REVIEW REQUIRED/i)).toBeVisible({ timeout: 30_000 });
     const feedback = page.getByLabel(/Feedback/i);
     await expect(feedback).toBeVisible({ timeout: 10_000 });
-    await feedback.fill('E2E tenant verified the completed maintenance service.');
-
+    await feedback.fill(`Tenant approved cross-role production proof ${RUN_MARKER}.`);
     const approve = page.getByRole('button', { name: /APPROVE, RATE & CLOSE/i });
-    await expect(approve).toBeVisible({ timeout: 10_000 });
-    await expect(approve).toBeEnabled({ timeout: 10_000 });
+    await expect(approve).toBeEnabled({ timeout: 15_000 });
     await approve.click();
-
-    await expect(page.getByText(/SERVICE FINALIZED/i)).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('body')).not.toContainText(/Could not submit approval|permission-denied/i, { timeout: 5_000 });
+    await expect(page.getByText(/SERVICE FINALIZED/i)).toBeVisible({ timeout: 40_000 });
 
     const db = admin.firestore();
     await expect.poll(async () => {
-      const snap = await db.collection('maintenanceTickets').doc(APPROVAL_TICKET_ID).get();
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
-      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}`;
-    }, { timeout: 30_000 }).toMatch(/CLOSED\|true\|APPROVED/i);
+      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
+    }, { timeout: 40_000 }).toMatch(/CLOSED\|true\|APPROVED\|true/i);
+  });
+
+  test('Tenant dispute opens Admin review after real Technician completion', async ({ browser, page }) => {
+    test.setTimeout(360_000);
+    const ticketId = await createAndComplete(browser, page, 'dispute');
+
+    await page.goto(`/tenant/ticket/${ticketId}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/WORK COMPLETED — REVIEW REQUIRED/i)).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: /DISPUTE SERVICE/i }).click();
+    const reason = page.getByLabel(/Reason for disputing resolution/i);
+    await expect(reason).toBeVisible({ timeout: 10_000 });
+    const disputeReason = `Leak remains visible after Technician completion ${RUN_MARKER}.`;
+    await reason.fill(disputeReason);
+    const confirm = page.getByRole('button', { name: /CONFIRM DISPUTE/i });
+    await expect(confirm).toBeEnabled({ timeout: 10_000 });
+    await confirm.click();
+
+    const db = admin.firestore();
+    await expect.poll(async () => {
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      const data = snap.data() || {};
+      return `${data.status}|${data.tenantApprovalStatus}|${data.requiresAdminReview}|${data.adminReviewStatus}|${data.disputeReason}`;
+    }, { timeout: 40_000 }).toContain(`DISPUTED|DISPUTED|true|pending|${disputeReason}`);
+
+    await expect.poll(async () => {
+      const audit = await db.collection('audit_logs')
+        .where('targetId', '==', ticketId)
+        .where('action', '==', 'TENANT_DISPUTED_TICKET')
+        .limit(1)
+        .get();
+      return audit.size;
+    }, { timeout: 30_000 }).toBe(1);
+  });
+
+  test('Tenant correction submission and immutable history are part of the main business suite', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('/tenant/profile', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('tenant-correction-panel')).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByLabel(/Full Name|الاسم الكامل/i).first()).toBeDisabled();
+    await expect(page.getByLabel(/Phone Number|رقم الهاتف/i).first()).toBeDisabled();
+
+    const fieldControl = page.getByTestId('tenant-correction-field');
+    await fieldControl.getByRole('combobox').click();
+    await page.getByRole('option', { name: /Emergency contact name|اسم جهة اتصال الطوارئ/i }).click();
+    const requestedValue = `E2E Correction ${RUN_MARKER}`;
+    const reason = `Main Tenant business correction evidence ${RUN_MARKER}`;
+    createdCorrectionValues.add(requestedValue);
+    await page.getByTestId('tenant-correction-value').getByRole('textbox').fill(requestedValue);
+    await page.getByTestId('tenant-correction-reason').getByRole('textbox').fill(reason);
+    await page.getByTestId('tenant-correction-submit').click();
+    await expect(page.getByTestId('tenant-correction-success')).toContainText(/submitted|تم إرسال/i, { timeout: 30_000 });
+    const history = page.getByTestId('tenant-correction-history');
+    const requestCard = history.locator('[data-testid^="tenant-correction-request-"]').filter({ hasText: requestedValue }).first();
+    await expect(requestCard).toBeVisible({ timeout: 25_000 });
+    await expect(requestCard.getByTestId('tenant-correction-status')).toContainText(/PENDING ADMIN REVIEW/i);
+    await expect(requestCard.getByTestId('tenant-correction-events')).toContainText(/SUBMITTED/i);
+  });
+
+  test('Unassigned-residence fallback creates a secured unit-link recovery request', async ({ page }) => {
+    test.setTimeout(150_000);
+    if (!linkedUnitBackup) throw new Error('Tenant linked-unit backup was not prepared.');
+    const db = admin.firestore();
+    const unitRef = db.doc(linkedUnitBackup.path);
+    const propertyId = String(linkedUnitBackup.data.propertyId || '');
+    const propertySnap = propertyId ? await db.collection('properties').doc(propertyId).get() : null;
+    const propertyName = String(propertySnap?.data()?.name || linkedUnitBackup.data.propertyName || 'E2E Live Role Tower');
+    const unitNumber = String(linkedUnitBackup.data.unitNumber || linkedUnitBackup.data.number || 'E2E-101');
+    const notes = `Unassigned residence recovery ${RUN_MARKER}`;
+
+    try {
+      await unitRef.set({
+        tenantId: admin.firestore.FieldValue.delete(),
+        tenantUid: admin.firestore.FieldValue.delete(),
+        currentTenantId: admin.firestore.FieldValue.delete(),
+        tenantEmail: admin.firestore.FieldValue.delete(),
+        tenantName: admin.firestore.FieldValue.delete(),
+        tenantStatus: 'none',
+        occupancyStatus: 'vacant',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      await page.goto(`/tenant/request?recovery=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+      const fallback = page.getByTestId('tenant-unit-link-fallback');
+      await expect(fallback).toBeVisible({ timeout: 35_000 });
+      await page.getByTestId('tenant-unit-link-property').fill(propertyName);
+      await page.getByTestId('tenant-unit-link-unit').fill(unitNumber);
+      await page.getByTestId('tenant-unit-link-lease').fill(`LEASE-${RUN_MARKER}`);
+      await page.getByTestId('tenant-unit-link-code').fill(`VERIFY-${RUN_MARKER}`);
+      await page.getByTestId('tenant-unit-link-notes').fill(notes);
+      await page.getByTestId('tenant-unit-link-submit').click();
+      await expect(page.getByTestId('tenant-unit-link-notice')).toContainText(/submitted for admin verification/i, { timeout: 35_000 });
+
+      let requestId = '';
+      await expect.poll(async () => {
+        const snapshot = await db.collection('tenant_unit_link_requests').where('tenantUid', '==', tenantUid).get();
+        const requestDoc = snapshot.docs.find((docSnap) => docSnap.data()?.notes === notes);
+        requestId = requestDoc?.id || '';
+        return requestId;
+      }, { timeout: 35_000 }).not.toBe('');
+      createdUnitLinkRequestIds.add(requestId);
+
+      const requestSnap = await db.collection('tenant_unit_link_requests').doc(requestId).get();
+      const requestData = requestSnap.data() || {};
+      expect(requestData.status).toBe('PENDING_ADMIN_REVIEW');
+      expect(requestData.verificationState).toBe('ADMIN_OR_OWNER_VERIFICATION_REQUIRED');
+      expect(requestData.verificationCodeHash).toMatch(/^[a-f0-9]{64}$/i);
+      expect(requestData.verificationCode).toBeUndefined();
+    } finally {
+      await restoreLinkedUnit();
+    }
   });
 });

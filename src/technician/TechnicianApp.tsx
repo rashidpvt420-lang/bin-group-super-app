@@ -23,6 +23,8 @@ import TechnicianProfilePage from './pages/TechnicianProfilePage';
 import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
+import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvidence';
+import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import SupportPage from '../pages/public/SupportPage';
 
 const shell = { ink: '#111827', muted: '#667085', canvas: '#FFFFFF', soft: '#F8F9FB', border: '#E5E7EB', gold: binThemeTokens.gold };
@@ -73,9 +75,11 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         return <Typography key={`${value}-${index}`} sx={{ color: shell.gold, fontWeight: 900, fontSize: '0.75rem' }}><SafeIcon icon={ChevronRight} size={12} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /> {labelText}</Typography>;
                     })}
                 </Box>}
+                <TechnicianBeforeWorkEvidence />
                 <Box sx={{ animation: 'fadeIn 0.5s ease-out', maxWidth: isDashboard ? 1280 : 980, mx: 'auto' }}>{children}</Box>
             </Container>
 
+            <TechnicianOfflineSyncAgent />
             <BinConnectChatBox role="technician" />
             <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${shell.border}`, bgcolor: shell.soft, mt: 'auto', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: shell.muted, fontWeight: 800, letterSpacing: 1.5 }}>{lang === 'ar' ? '2026 منصة BIN GROUP للفنيين' : '2026 BIN GROUP FIELD NODE'}</Typography></Box>
         </Box>
