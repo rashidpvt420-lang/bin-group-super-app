@@ -25,14 +25,16 @@ test('Admin MFA bootstrap requires the protected exact marker and bank-pilot sco
 
 test('Admin MFA bootstrap deploys Admin Hosting and only the required remediation callables before MFA coverage enforcement', () => {
   const targetDefinition = source.indexOf('const adminBootstrapDeployTarget');
-  const bootstrapDeploy = source.indexOf("retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and remediation callables')");
+  const bootstrapDeploy = source.search(/retryFirebase\(\s*adminBootstrapDeployTarget,/);
   const mfaPreflight = source.indexOf('adminMfaEvidence = await verifyAdminMfaProduction');
-  const fullDeploy = source.indexOf("'functions,hosting,firestore:rules,firestore:indexes,storage'");
+  const functionBatches = source.indexOf('deployFunctionsInBatches();');
+  const nonFunctionServices = source.search(/retryFirebase\(\s*['"]firestore:rules,firestore:indexes,storage,hosting['"]/);
 
   assert.ok(targetDefinition >= 0, 'bootstrap target must be explicitly defined');
   assert.ok(bootstrapDeploy > targetDefinition, 'minimal bootstrap deployment must use the explicit target');
   assert.ok(mfaPreflight > bootstrapDeploy, 'real Admin MFA enforcement must run after the minimal bootstrap deployment');
-  assert.ok(fullDeploy > mfaPreflight, 'full stack deploy must remain behind real Admin MFA enforcement');
+  assert.ok(functionBatches > mfaPreflight, 'Function batches must remain behind real Admin MFA enforcement');
+  assert.ok(nonFunctionServices > functionBatches, 'Hosting/rules/storage must remain behind all Function batches');
   assert.match(source, /'hosting:admin'/);
   for (const functionName of requiredBootstrapFunctions) {
     assert.match(source, new RegExp(`'${functionName}'`), `${functionName} must be included in the bootstrap allowlist`);
