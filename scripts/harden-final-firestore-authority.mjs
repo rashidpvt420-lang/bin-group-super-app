@@ -24,6 +24,17 @@ const privateHrWriteList = `          'system_secrets',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const propertyAdminSecurityWriteList = `          'system_secrets',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',`;
+const propertyPrivateHrWriteList = `          'system_secrets',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
 const legacyLiveLocationWriteList = `          'system_secrets',
           'technician_live_locations',
           'users',
@@ -127,6 +138,10 @@ if (text.includes(liveLocationWriteList)) {
   // Already canonical.
 } else if (text.includes(legacyLiveLocationWriteList)) {
   text = text.replaceAll(legacyLiveLocationWriteList, liveLocationWriteList);
+} else if (text.includes(propertyPrivateHrWriteList)) {
+  text = text.replaceAll(propertyPrivateHrWriteList, liveLocationWriteList);
+} else if (text.includes(propertyAdminSecurityWriteList)) {
+  text = text.replaceAll(propertyAdminSecurityWriteList, liveLocationWriteList);
 } else if (text.includes(privateHrWriteList)) {
   text = text.replaceAll(privateHrWriteList, liveLocationWriteList);
 } else if (text.includes(adminSecurityWriteList)) {
@@ -224,6 +239,8 @@ const forbidden = [
   legacyReadCatchAll.trim(),
   legacyWriteList,
   privateHrWriteList,
+  propertyAdminSecurityWriteList,
+  propertyPrivateHrWriteList,
   legacyLiveLocationWriteList,
 ];
 

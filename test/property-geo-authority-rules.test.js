@@ -35,66 +35,46 @@ describe('Canonical property geo authority', () => {
   beforeEach(async () => testEnv.clearFirestore());
   after(async () => testEnv.cleanup());
 
-  it('Owner can submit unverified geo evidence but cannot create a verified canonical pin', async () => {
+  it('Owner and Admin browsers can submit unverified evidence but cannot create canonical geo', async () => {
     const ownerDb = testEnv.authenticatedContext('owner_geo', { role: 'owner' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_geo', { admin: true, role: 'admin' }).firestore();
     await assertSucceeds(setDoc(doc(ownerDb, 'properties/submitted'), {
-      ownerId: 'owner_geo',
-      status: 'pending_admin_approval',
-      name: 'Submitted Property',
-      submittedGeo,
+      ownerId: 'owner_geo', status: 'pending_admin_approval', name: 'Submitted Property', submittedGeo,
     }));
-    await assertFails(setDoc(doc(ownerDb, 'properties/forged-canonical'), {
-      ownerId: 'owner_geo',
-      status: 'pending_admin_approval',
-      name: 'Forged Property',
-      geo: { ...submittedGeo, verified: true, dispatchReady: true, requiresGeoReview: false, verifiedBy: 'owner_geo' },
+    await assertSucceeds(setDoc(doc(adminDb, 'properties/admin-submitted'), {
+      ownerId: 'owner_geo', status: 'pending_admin_approval', name: 'Admin Submitted Property', submittedGeo,
     }));
-    await assertFails(setDoc(doc(ownerDb, 'properties/forged-submission'), {
-      ownerId: 'owner_geo',
-      status: 'pending_admin_approval',
-      name: 'Forged Submission',
-      submittedGeo: { ...submittedGeo, verified: true, dispatchReady: true, requiresGeoReview: false },
+    await assertFails(setDoc(doc(ownerDb, 'properties/forged-owner'), {
+      ownerId: 'owner_geo', status: 'pending_admin_approval', geo: { ...submittedGeo, verified: true, dispatchReady: true },
+    }));
+    await assertFails(setDoc(doc(adminDb, 'properties/forged-admin'), {
+      ownerId: 'owner_geo', status: 'pending_admin_approval', geo: { ...submittedGeo, verified: true, dispatchReady: true },
     }));
   });
 
-  it('Owner and Admin browsers cannot mutate canonical geo, while ordinary fields remain usable', async () => {
+  it('Owner and Admin browsers cannot mutate canonical geo while ordinary fields remain usable', async () => {
     await seed('properties/canonical', {
-      ownerId: 'owner_geo',
-      ownerUid: 'owner_geo',
-      status: 'APPROVED',
-      name: 'Canonical Property',
-      submittedGeo,
-      geo: { ...submittedGeo, source: 'admin_manual', verified: true, dispatchReady: true, requiresGeoReview: false, verifiedBy: 'founder', verifiedAt: 'server-time' },
-      geoVerification: { state: 'VERIFIED', verifiedBy: 'founder' },
+      ownerId: 'owner_geo', ownerUid: 'owner_geo', status: 'APPROVED', name: 'Canonical Property', submittedGeo,
+      geo: { ...submittedGeo, source: 'admin_manual', verified: true, dispatchReady: true, requiresGeoReview: false, verifiedBy: 'founder', verifiedAt: 'server-time', verificationVersion: 1 },
+      geoVerification: { state: 'VERIFIED', source: 'FOUNDER_MFA_REVIEW', verifiedBy: 'founder', verifiedAt: 'server-time', verificationVersion: 1 },
     });
     const ownerDb = testEnv.authenticatedContext('owner_geo', { role: 'owner' }).firestore();
     const adminDb = testEnv.authenticatedContext('admin_geo', { admin: true, role: 'admin' }).firestore();
-    const refOwner = doc(ownerDb, 'properties/canonical');
-    const refAdmin = doc(adminDb, 'properties/canonical');
-
-    await assertFails(updateDoc(refOwner, { geo: { ...submittedGeo, verified: true, dispatchReady: true } }));
-    await assertFails(updateDoc(refOwner, { geoVerification: { state: 'VERIFIED', verifiedBy: 'owner_geo' } }));
-    await assertFails(updateDoc(refAdmin, { geo: { ...submittedGeo, verified: true, dispatchReady: true, verifiedBy: 'admin_geo' } }));
-    await assertSucceeds(updateDoc(refOwner, { name: 'Owner-updated ordinary property name' }));
-    await assertSucceeds(updateDoc(refAdmin, { adminReviewNote: 'Non-geo administrative correction.' }));
+    const ownerRef = doc(ownerDb, 'properties/canonical');
+    const adminRef = doc(adminDb, 'properties/canonical');
+    await assertFails(updateDoc(ownerRef, { geo: { ...submittedGeo, verified: true, dispatchReady: true } }));
+    await assertFails(updateDoc(adminRef, { geoVerification: { state: 'VERIFIED', verifiedBy: 'admin_geo' } }));
+    await assertSucceeds(updateDoc(ownerRef, { address: 'Owner ordinary correction, Al Ain' }));
+    await assertSucceeds(updateDoc(adminRef, { adminReviewNote: 'Non-geo administrative correction.' }));
   });
 
-  it('Owner can revise submitted evidence only while it remains explicitly unverified', async () => {
+  it('Owner may revise submitted evidence only while it remains explicitly unverified', async () => {
     await seed('properties/review-pending', {
-      ownerId: 'owner_geo',
-      ownerUid: 'owner_geo',
-      status: 'pending_admin_approval',
-      name: 'Review Pending',
-      submittedGeo,
+      ownerId: 'owner_geo', ownerUid: 'owner_geo', status: 'pending_admin_approval', name: 'Review Pending', submittedGeo,
     });
     const ownerDb = testEnv.authenticatedContext('owner_geo', { role: 'owner' }).firestore();
     const ref = doc(ownerDb, 'properties/review-pending');
-    await assertSucceeds(updateDoc(ref, {
-      submittedGeo: { ...submittedGeo, area: 'Updated owner evidence' },
-      address: 'Updated owner evidence, Al Ain',
-    }));
-    await assertFails(updateDoc(ref, {
-      submittedGeo: { ...submittedGeo, verified: true, dispatchReady: true, requiresGeoReview: false },
-    }));
+    await assertSucceeds(updateDoc(ref, { submittedGeo: { ...submittedGeo, area: 'Updated owner evidence' } }));
+    await assertFails(updateDoc(ref, { submittedGeo: { ...submittedGeo, verified: true, dispatchReady: true, requiresGeoReview: false } }));
   });
 });

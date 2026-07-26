@@ -93,11 +93,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area: resolvedArea,
                 placeId: payload.placeId || activeProperty?.googlePlaceId || (isManual ? 'MANUAL' : undefined),
                 source: payload.source || (isManual ? 'admin_manual' : 'google_maps'),
-                // Owner-selected coordinates are evidence for Founder review, never
-                // canonical dispatch authority in the browser.
                 verified: false,
                 requiresGeoReview: true,
-                dispatchReady: false,
+                dispatchReady: false
             });
 
             updateProperty(0, {
@@ -106,20 +104,23 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 city: geo.city,
                 area: geo.area,
                 googlePlaceId: geo.placeId || undefined,
+                geo: undefined,
                 submittedGeo: {
                     ...geo,
                     source: 'owner_submission',
+                    submittedSource: geo.source,
                     verified: false,
                     verifiedBy: null,
                     verifiedAt: null,
-                    requiresGeoReview: true,
                     dispatchReady: false,
+                    requiresGeoReview: true,
                 } as any,
                 location: {
                     lat: geo.lat,
                     lng: geo.lng,
                     quality: 'OWNER_SUBMITTED_REVIEW_REQUIRED',
                     source: 'owner_submission',
+                    submittedSource: geo.source,
                     verified: false,
                     dispatchReady: false,
                     requiresGeoReview: true,
@@ -249,7 +250,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         onNext();
     };
 
-    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.geo && !isManualMode) || (isManualMode && activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)));
+    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.submittedGeo && !isManualMode) || (isManualMode && activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)));
 
     return (
         <Box sx={{ py: 4 }}>
