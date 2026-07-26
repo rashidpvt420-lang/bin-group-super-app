@@ -23,6 +23,7 @@ const validTime = (value) => {
   const parsed = Date.parse(text(value));
   return Number.isFinite(parsed) ? new Date(parsed) : null;
 };
+const finite = (value) => Number.isFinite(Number(value));
 
 const manifests = {
   brandedEmailDelivery: {
@@ -151,24 +152,64 @@ const manifests = {
       for (const provider of ['gemini', 'openai']) {
         const sample = proof.providers?.[provider] || {};
         if (sample.provider !== provider || !text(sample.model)) errors.push(`${provider} live provider/model proof invalid`);
-        if (Number(sample.providerLatencyMs) > 20000 || Number(sample.roundTripMs) > 30000) errors.push(`${provider} latency SLO invalid`);
+        if (!finite(sample.providerLatencyMs) || !finite(sample.roundTripMs) || Number(sample.providerLatencyMs) < 0 || Number(sample.roundTripMs) < 0 || Number(sample.providerLatencyMs) > 20000 || Number(sample.roundTripMs) > 30000) errors.push(`${provider} latency SLO invalid`);
+        const usage = sample.usage || {};
+        if (
+          !finite(usage.inputTokens)
+          || !finite(usage.outputTokens)
+          || !finite(usage.totalTokens)
+          || !finite(usage.budgetEnvelopeAedMicros)
+          || Number(usage.inputTokens) < 1
+          || Number(usage.outputTokens) < 1
+          || Number(usage.totalTokens) < Number(usage.inputTokens)
+          || Number(usage.totalTokens) < Number(usage.outputTokens)
+          || Number(usage.outputTokens) > 700
+          || Number(usage.totalTokens) > 5000
+          || Number(usage.budgetEnvelopeAedMicros) > 200000
+        ) errors.push(`${provider} measured token/cost evidence invalid`);
         if (sample.advisoryOnly !== true || sample.clientContextAuthoritative !== false) errors.push(`${provider} authority boundary invalid`);
       }
       if (proof.privacy?.comprehensiveFreeTextRedactionVerified !== true || proof.privacy?.nestedInnocentKeyRedactionVerified !== true || proof.privacy?.protectedValuesNotEchoed !== true) errors.push('AI privacy proof invalid');
-      if (Number(proof.privacy?.minimumRedactionsObserved || 0) < 4) errors.push('AI privacy proof did not observe enough redactions');
+      if (!finite(proof.privacy?.minimumRedactionsObserved) || Number(proof.privacy.minimumRedactionsObserved) < 4) errors.push('AI privacy proof did not observe enough redactions');
       if (proof.authorityBoundary?.advisoryOnly !== true || proof.authorityBoundary?.clientContextAuthoritative !== false || proof.authorityBoundary?.operationalApprovalsDelegatedToAi !== false) errors.push('AI authority boundary proof invalid');
       if (proof.quota?.providerSuccessChargesVerified !== true || proof.quota?.boundaryRejected !== true || proof.quota?.rejectedAttemptUncharged !== true || proof.quota?.reservationsCleared !== true || proof.quota?.originalUsageRestored !== true) errors.push('AI quota proof invalid');
       if (Number(proof.quota?.exactBoundary) !== 50) errors.push('AI quota boundary mismatch');
       const observed = proof.slo?.observed || {};
       const thresholds = proof.slo?.thresholds || {};
+      const numericSloFields = [
+        ['providerSuccessRate', 'minProviderSuccessRate'],
+        ['fallbackRate', 'maxFallbackRate'],
+        ['invalidOutputRate', 'maxInvalidOutputRate'],
+        ['functionErrorRate', 'maxFunctionErrorRate'],
+        ['maxProviderLatencyMs', 'maxProviderLatencyMs'],
+        ['maxRoundTripMs', 'maxRoundTripMs'],
+        ['maxOutputTokens', 'maxOutputTokens'],
+        ['maxTotalTokens', 'maxTotalTokens'],
+        ['maxBudgetEnvelopeAedMicros', 'maxBudgetEnvelopeAedMicros'],
+      ];
       if (proof.slo?.passed !== true) errors.push('AI SLO proof not passed');
-      if (Number(observed.providerSuccessRate) < Number(thresholds.minProviderSuccessRate)) errors.push('AI provider success rate below SLO');
-      if (Number(observed.fallbackRate) > Number(thresholds.maxFallbackRate)) errors.push('AI fallback rate above SLO');
-      if (Number(observed.invalidOutputRate) > Number(thresholds.maxInvalidOutputRate)) errors.push('AI invalid-output rate above SLO');
-      if (Number(observed.functionErrorRate) > Number(thresholds.maxFunctionErrorRate)) errors.push('AI function-error rate above SLO');
-      if (Number(observed.maxProviderLatencyMs) > Number(thresholds.maxProviderLatencyMs)) errors.push('AI provider latency above SLO');
-      if (Number(observed.maxRoundTripMs) > Number(thresholds.maxRoundTripMs)) errors.push('AI round-trip latency above SLO');
-      if (Number(proof.tokenAndCostControls?.maxOutputTokensPerProviderResponse) !== 700 || Number(proof.tokenAndCostControls?.dailyChatRequestsPerUser) !== 50 || Number(proof.tokenAndCostControls?.dailyTotalAiUnitsPerUser) !== 75) errors.push('AI token/cost controls invalid');
+      for (const [observedKey, thresholdKey] of numericSloFields) {
+        if (!finite(observed[observedKey]) || !finite(thresholds[thresholdKey])) errors.push(`AI SLO ${observedKey}/${thresholdKey} is missing or non-numeric`);
+      }
+      if (finite(observed.providerSuccessRate) && finite(thresholds.minProviderSuccessRate) && Number(observed.providerSuccessRate) < Number(thresholds.minProviderSuccessRate)) errors.push('AI provider success rate below SLO');
+      if (finite(observed.fallbackRate) && finite(thresholds.maxFallbackRate) && Number(observed.fallbackRate) > Number(thresholds.maxFallbackRate)) errors.push('AI fallback rate above SLO');
+      if (finite(observed.invalidOutputRate) && finite(thresholds.maxInvalidOutputRate) && Number(observed.invalidOutputRate) > Number(thresholds.maxInvalidOutputRate)) errors.push('AI invalid-output rate above SLO');
+      if (finite(observed.functionErrorRate) && finite(thresholds.maxFunctionErrorRate) && Number(observed.functionErrorRate) > Number(thresholds.maxFunctionErrorRate)) errors.push('AI function-error rate above SLO');
+      if (finite(observed.maxProviderLatencyMs) && finite(thresholds.maxProviderLatencyMs) && Number(observed.maxProviderLatencyMs) > Number(thresholds.maxProviderLatencyMs)) errors.push('AI provider latency above SLO');
+      if (finite(observed.maxRoundTripMs) && finite(thresholds.maxRoundTripMs) && Number(observed.maxRoundTripMs) > Number(thresholds.maxRoundTripMs)) errors.push('AI round-trip latency above SLO');
+      if (finite(observed.maxOutputTokens) && finite(thresholds.maxOutputTokens) && Number(observed.maxOutputTokens) > Number(thresholds.maxOutputTokens)) errors.push('AI output-token usage above SLO');
+      if (finite(observed.maxTotalTokens) && finite(thresholds.maxTotalTokens) && Number(observed.maxTotalTokens) > Number(thresholds.maxTotalTokens)) errors.push('AI total-token usage above SLO');
+      if (finite(observed.maxBudgetEnvelopeAedMicros) && finite(thresholds.maxBudgetEnvelopeAedMicros) && Number(observed.maxBudgetEnvelopeAedMicros) > Number(thresholds.maxBudgetEnvelopeAedMicros)) errors.push('AI cost envelope above SLO');
+      if (!finite(observed.totalTokensObserved) || Number(observed.totalTokensObserved) < 1) errors.push('AI total observed token usage invalid');
+      if (
+        Number(proof.tokenAndCostControls?.maxOutputTokensPerProviderResponse) !== 700
+        || Number(proof.tokenAndCostControls?.maxTotalTokensPerChatRequest) !== 5000
+        || Number(proof.tokenAndCostControls?.budgetEnvelopeAedPerMillionTokens) !== 40
+        || Number(proof.tokenAndCostControls?.maxBudgetEnvelopeAedMicrosPerChatRequest) !== 200000
+        || proof.tokenAndCostControls?.measuredProviderUsageRequired !== true
+        || Number(proof.tokenAndCostControls?.dailyChatRequestsPerUser) !== 50
+        || Number(proof.tokenAndCostControls?.dailyTotalAiUnitsPerUser) !== 75
+      ) errors.push('AI token/cost controls invalid');
       if (proof.tokenAndCostControls?.aggregateTelemetryCollection !== 'ai_health_daily') errors.push('AI aggregate telemetry binding invalid');
       if (!validTime(proof.observedAt)) errors.push('AI observedAt invalid');
       return errors;
