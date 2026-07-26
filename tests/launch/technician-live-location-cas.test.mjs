@@ -40,9 +40,21 @@ test('delayed STOP from session A cannot terminate newer session B', () => {
   assert.equal(cas.classifyStopRequest(currentSessionB, 'ticket-1', 'session-A'), 'REJECT_SUPERSEDED');
 });
 
-test('STOP for another ticket or missing canonical state fails closed', () => {
+test('missing canonical STOP is applied so the transaction writes a stopped tombstone', () => {
   assert.equal(cas.classifyStopRequest(state(), 'ticket-2', 'session-A'), 'REJECT_SUPERSEDED');
-  assert.equal(cas.classifyStopRequest(state({ exists: false }), 'ticket-1', 'session-A'), 'REJECT_MISSING');
+  assert.equal(cas.classifyStopRequest(state({ exists: false }), 'ticket-1', 'session-A'), 'APPLY');
+});
+
+test('a stopped tombstone rejects a delayed UPDATE from the same ticket and session', () => {
+  const stopped = state({
+    isTracking: false,
+    activeTicketId: '',
+    lastStoppedTicketId: 'ticket-1',
+    expiresAtMs: 0,
+  });
+  assert.equal(cas.classifyUpdateRequest(stopped, 'ticket-1', 'session-A', 2_000), 'REJECT_SUPERSEDED');
+  assert.equal(cas.classifyUpdateRequest(stopped, 'ticket-1', 'session-B', 2_000), 'APPLY');
+  assert.equal(cas.classifyUpdateRequest(stopped, 'ticket-2', 'session-A', 2_000), 'APPLY');
 });
 
 test('unexpired active session rejects cross-tab UPDATE while expired session permits replacement', () => {
@@ -132,20 +144,15 @@ test('missing ticket cleanup remains explicit and never recreates a ghost ticket
   assert.doesNotMatch(callableSource, /if \(ticketId\) \{\s*tx\.set\(db\.collection\("maintenanceTickets"\)\.doc\(ticketId\)/);
 });
 
-
-test('missing canonical STOP is an audited acknowledged no-op instead of a terminal client lock', () => {
-  const branchStart = callableSource.indexOf('if (stopDecision === "REJECT_MISSING")');
-  const branchEnd = callableSource.indexOf('if (stopDecision === "REJECT_SUPERSEDED")', branchStart);
-  const branch = callableSource.slice(branchStart, branchEnd);
-  assert.match(branch, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
-  assert.match(branch, /reason: "REJECT_MISSING"/);
-  assert.match(branch, /missingSession: true/);
-  assert.match(branch, /alreadyStopped: true/);
-  assert.doesNotMatch(branch, /tx\.set\(liveRef/);
-  assert.doesNotMatch(branch, /throw new HttpsError/);
-
-  assert.match(clientSource, /missingSession: data\.missingSession === true/);
-  assert.match(clientSource, /stopMissingSession = response\.missingSession/);
-  assert.match(clientSource, /STOP_MISSING_SESSION_RECONCILED/);
-  assert.match(clientSource, /canonicalSessionAbsent: true/);
+test('missing canonical STOP reaches the standard transaction tombstone path', () => {
+  assert.match(helperSource, /if \(!current\.exists\) return "APPLY"/);
+  const standardStopStart = callableSource.indexOf('const ticketExists = ticketSnap.exists;');
+  const updateStart = callableSource.indexOf('if (!ticketSnap.exists)', standardStopStart);
+  const branch = callableSource.slice(standardStopStart, updateStart);
+  assert.ok(standardStopStart >= 0 && updateStart > standardStopStart);
+  assert.match(branch, /tx\.set\(liveRef/);
+  assert.match(branch, /isTracking: false/);
+  assert.match(branch, /trackingSessionId/);
+  assert.match(branch, /lastStoppedTicketId: ticketId/);
+  assert.match(branch, /expiresAt: now/);
 });
