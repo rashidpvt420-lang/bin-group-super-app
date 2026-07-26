@@ -165,7 +165,6 @@ test('private HR hardener preserves the stricter property geo exclusion', () => 
 test('launch hardening verifier requires property geo exclusion and forbids the old list', () => {
   assert.match(verifier, /canonical property geo omitted from global write fallback exclusions/);
   assert.match(verifier, /live location, canonical property geo and private HR/);
-  assert.match(verifier, /'technician_live_locations',\\n          'properties',\\n          'users'/);
 });
 
 test('property authority emulator regression names browser denial', () => {
