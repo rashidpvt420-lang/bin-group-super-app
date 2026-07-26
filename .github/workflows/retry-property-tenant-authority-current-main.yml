@@ -1,0 +1,207 @@
+name: Retry Property Tenant Authority on Current Main
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/retry-property-tenant-authority-current-main.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch-test-clean:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'fix/property-tenant-authority-after-dispatch' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/property-tenant-authority-after-dispatch
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Setup Java 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Import reviewed unique property and Tenant authority delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_source='28806cc2b488733067cef595d0cb5f040f2e0ee3'
+          git fetch --no-tags origin refs/heads/fix/property-tenant-authority-current-main:refs/remotes/origin/property-tenant-authority-source
+          [[ "$(git rev-parse refs/remotes/origin/property-tenant-authority-source)" == "$expected_source" ]]
+          files=(
+            apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx
+            apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx
+            scripts/apply-ticket-rule-binding.mjs
+            scripts/harden-final-firestore-authority.mjs
+            scripts/harden-private-hr-authority.mjs
+            scripts/harden-property-geo-authority.mjs
+            scripts/harden-technician-live-location-authority.mjs
+            scripts/normalize-security-rules-test.mjs
+            scripts/verify-firestore-launch-hardening.mjs
+            src/components/onboarding/PropertyLocationStep.tsx
+            src/tenant/pages/TenantRequestPage.tsx
+            test/property-geo-authority-rules.test.js
+            test/tenant-ticket-server-authority-rules.test.js
+            tests/launch/property-geo-authority.test.mjs
+            tests/launch/property-geo-catchall-authority.test.mjs
+          )
+          for file in "${files[@]}"; do
+            mkdir -p "$(dirname "$file")"
+            git show "refs/remotes/origin/property-tenant-authority-source:$file" > "$file"
+          done
+
+      - name: Add current-main integration contract
+        shell: bash
+        run: |
+          cat > tests/launch/property-tenant-callable-authority.test.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          import test from 'node:test';
+
+          const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+
+          test('Tenant browser creates operational tickets only through the protected callable', async () => {
+            const [page, callable, binding, ruleTest] = await Promise.all([
+              read('src/tenant/pages/TenantRequestPage.tsx'),
+              read('functions/tenantTicketOperations.ts'),
+              read('scripts/apply-ticket-rule-binding.mjs'),
+              read('test/tenant-ticket-server-authority-rules.test.js'),
+            ]);
+            assert.match(page, /httpsCallable\(functions, ['"]createTenantServiceTicket['"]\)/);
+            assert.match(page, /secureRequestId/);
+            assert.match(page, /hasCanonicalDispatchGeo/);
+            assert.doesNotMatch(page, /addDoc\s*\(/);
+            assert.match(callable, /enforceAppCheck: true/);
+            assert.match(callable, /resolveDispatchReadyPropertyGeo\(property\)/);
+            assert.match(binding, /const canonicalCreate = '      allow create: if isAdmin\(\);'/);
+            assert.match(binding, /import '.\/harden-property-geo-authority\.mjs'/);
+            assert.match(ruleTest, /denies direct Tenant creates in both ticket collections/);
+            assert.match(ruleTest, /browser_forged/);
+          });
+
+          test('Owner and Admin browser property writes remain evidence-only', async () => {
+            const [rootStep, ownerStep, adminPage, hardener] = await Promise.all([
+              read('src/components/onboarding/PropertyLocationStep.tsx'),
+              read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx'),
+              read('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx'),
+              read('scripts/harden-property-geo-authority.mjs'),
+            ]);
+            for (const step of [rootStep, ownerStep]) {
+              assert.match(step, /submittedGeo:/);
+              assert.match(step, /geo: undefined/);
+              assert.match(step, /source: 'owner_submission'/);
+              assert.match(step, /verified: false/);
+              assert.match(step, /dispatchReady: false/);
+              assert.match(step, /requiresGeoReview: true/);
+            }
+            assert.match(adminPage, /requiresLegacyGeoReview/);
+            assert.match(adminPage, /Verify geo/);
+            assert.match(hardener, /function propertyCreateHasNoCanonicalGeo/);
+            assert.match(hardener, /function safeManagedPropertyUpdate/);
+          });
+          EOF
+
+      - name: Prepare deterministic Firestore authority
+        run: |
+          npm run normalize:rule-tests
+          npm run prepare:rules
+          npm run verify:rules-hardening
+
+      - name: Validate focused source contracts
+        run: |
+          node --test \
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs \
+            tests/launch/property-geo-dispatch-authority.test.mjs \
+            tests/launch/property-tenant-callable-authority.test.mjs
+
+      - name: TypeScript check and builds
+        run: |
+          npm run typecheck
+          npm run build
+          npm run build:admin
+          npm run build:functions
+
+      - name: Validate focused and complete Firestore authority
+        run: >-
+          npx firebase emulators:exec --only firestore,storage --project bin-group-57c60
+          "node --test --test-concurrency=1
+          test/property-geo-authority-rules.test.js
+          test/tenant-ticket-server-authority-rules.test.js
+          test/security-rules.test.js
+          test/storage-rules.test.js"
+
+      - name: Commit permanent current-main repair and remove helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
+            apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
+            scripts/apply-ticket-rule-binding.mjs \
+            scripts/harden-final-firestore-authority.mjs \
+            scripts/harden-private-hr-authority.mjs \
+            scripts/harden-property-geo-authority.mjs \
+            scripts/harden-technician-live-location-authority.mjs \
+            scripts/normalize-security-rules-test.mjs \
+            scripts/verify-firestore-launch-hardening.mjs \
+            src/components/onboarding/PropertyLocationStep.tsx \
+            src/tenant/pages/TenantRequestPage.tsx \
+            test/property-geo-authority-rules.test.js \
+            test/tenant-ticket-server-authority-rules.test.js \
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs \
+            tests/launch/property-tenant-callable-authority.test.mjs
+          git rm \
+            .github/workflows/apply-property-tenant-authority-current-main.yml \
+            .github/workflows/retry-property-tenant-authority-current-main.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/apply-property-tenant-authority-current-main.yml \
+            .github/workflows/retry-property-tenant-authority-current-main.yml \
+            apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
+            apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
+            scripts/apply-ticket-rule-binding.mjs \
+            scripts/harden-final-firestore-authority.mjs \
+            scripts/harden-private-hr-authority.mjs \
+            scripts/harden-property-geo-authority.mjs \
+            scripts/harden-technician-live-location-authority.mjs \
+            scripts/normalize-security-rules-test.mjs \
+            scripts/verify-firestore-launch-hardening.mjs \
+            src/components/onboarding/PropertyLocationStep.tsx \
+            src/tenant/pages/TenantRequestPage.tsx \
+            test/property-geo-authority-rules.test.js \
+            test/tenant-ticket-server-authority-rules.test.js \
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs \
+            tests/launch/property-tenant-callable-authority.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Property/Tenant authority repair touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(properties): enforce callable-only Tenant ticket authority'
+          git push origin HEAD:fix/property-tenant-authority-after-dispatch
