@@ -16,14 +16,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
+          fetch-depth: 1
       - name: Apply canonical property geo authority
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          test "$(git rev-parse origin/main)" = '8ec73c7e8732508a3de8bda6daf45cacf01a1e98'
-          python .github/scripts/apply-property-geo-server-authority-final.py
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = '8ec73c7e8732508a3de8bda6daf45cacf01a1e98'
+          python .github/scripts/apply-property-geo-server-authority-final.py 2>&1 | tee /tmp/property-geo-patch.log
           rm -f \
             .github/scripts/apply-property-geo-server-authority-final.py \
             .github/workflows/apply-property-geo-server-authority-final.yml
