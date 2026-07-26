@@ -25,6 +25,21 @@ const canonicalBlock = `    await assertFails(updateDoc(doc(techADb, 'maintenanc
     }));
   `;
 
+const legacyTicketFixtureReplacements = [
+  [
+    "    await setDoc(doc(adminDb, 'tickets/open_ticket'), openTicket);",
+    "    await seedServerDocument('tickets/open_ticket', openTicket);",
+  ],
+  [
+    "    await setDoc(doc(adminDb, 'tickets/open_ticket_approved_tech'), openTicket);",
+    "    await seedServerDocument('tickets/open_ticket_approved_tech', openTicket);",
+  ],
+  [
+    "    await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));",
+    "    await assertFails(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));",
+  ],
+];
+
 const legacyUserSubcollectionStart =
   "  it('user subcollection restrictions: Operations and Finance can read top-level user directories but NOT subcollections', async () => {";
 const nextUserSubcollectionTest =
@@ -87,6 +102,19 @@ if (obsoleteCount === 1 && canonicalCount === 0) {
   );
 }
 
+for (const [legacy, canonical] of legacyTicketFixtureReplacements) {
+  const legacyCount = next.split(legacy).length - 1;
+  const canonicalCountForFixture = next.split(canonical).length - 1;
+  if (legacyCount === 1 && canonicalCountForFixture === 0) {
+    next = next.replace(legacy, canonical);
+  } else if (!(legacyCount === 0 && canonicalCountForFixture === 1)) {
+    throw new Error(
+      `[normalize-rule-tests] expected one legacy ticket fixture or one canonical fixture; ` +
+      `legacy=${legacyCount}, canonical=${canonicalCountForFixture}, marker=${legacy}`,
+    );
+  }
+}
+
 const legacyStartIndex = next.indexOf(legacyUserSubcollectionStart);
 const canonicalUserSubcollectionCount = next.split(canonicalUserSubcollectionMarker).length - 1;
 if (legacyStartIndex >= 0) {
@@ -109,9 +137,9 @@ for (const requiredImport of [...requiredImports].reverse()) {
 }
 
 if (next === source) {
-  console.log('[normalize-rule-tests] callable-only lifecycle, Broker KYC, five-profile, push-token and technician list tests already canonical');
+  console.log('[normalize-rule-tests] callable-only lifecycle, read-only legacy tickets, Broker KYC, five-profile, push-token and technician list tests already canonical');
   process.exit(0);
 }
 
 writeFileSync(file, next.replace(/\n/g, newline));
-console.log('[normalize-rule-tests] technician lifecycle/list, Broker KYC, five-profile and server-only push-token rules tests normalized');
+console.log('[normalize-rule-tests] technician lifecycle/list, read-only legacy tickets, Broker KYC, five-profile and server-only push-token rules tests normalized');
