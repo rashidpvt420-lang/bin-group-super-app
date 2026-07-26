@@ -1,0 +1,142 @@
+name: Finalize Tenant Canonical Ticket Authority
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/finalize-tenant-canonical-ticket-authority.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply-test-and-clean:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/tenant-canonical-ticket-authority-current-main-v2' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/tenant-canonical-ticket-authority-current-main-v2
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Apply exact-main authority patch
+        run: |
+          set +e
+          python .github/scripts/run-property-geo-current-main-finalizer.py > tenant-authority-apply.log 2>&1
+          status=$?
+          echo "$status" > tenant-authority-apply.exit
+          cat tenant-authority-apply.log
+          exit 0
+
+      - name: Upload apply diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tenant-authority-apply-${{ github.event.pull_request.head.sha }}
+          path: |
+            tenant-authority-apply.log
+            tenant-authority-apply.exit
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce apply result
+        run: test "$(cat tenant-authority-apply.exit)" = '0'
+
+      - name: Run focused authority tests
+        run: |
+          set +e
+          node --test \
+            tests/launch/property-geo-current-main-authority.test.mjs \
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs \
+            > tenant-authority-tests.log 2>&1
+          status=$?
+          echo "$status" > tenant-authority-tests.exit
+          cat tenant-authority-tests.log
+          exit 0
+
+      - name: Upload focused test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tenant-authority-tests-${{ github.event.pull_request.head.sha }}
+          path: |
+            tenant-authority-tests.log
+            tenant-authority-tests.exit
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce focused tests
+        run: test "$(cat tenant-authority-tests.exit)" = '0'
+
+      - name: TypeScript and Functions build
+        run: |
+          npm run typecheck
+          npm run build:functions
+
+      - name: Launch honesty
+        run: npm run test:launch-honesty
+
+      - name: Commit permanent source and remove one-shot machinery
+        run: |
+          set -euo pipefail
+          git add \
+            apps/admin-panel/src/lib/verifiedPropertyPin.ts \
+            apps/admin-panel/src/pages/map/LiveMapPage.tsx \
+            apps/owner-app/src/pages/TenantSOSPage.tsx \
+            firestore.rules \
+            functions/ownerMaintenanceOperations.ts \
+            functions/propertyGeoAuthority.ts \
+            functions/tenantTicketOperations.ts \
+            scripts/apply-ticket-rule-binding.mjs \
+            scripts/verify-firestore-launch-hardening.mjs \
+            src/tenant/pages/TenantRequestPage.tsx \
+            test/property-geo-authority-rules.test.js \
+            tests/launch/property-geo-current-main-authority.test.mjs
+          git rm \
+            .github/scripts/apply-property-geo-current-main.py \
+            .github/scripts/run-property-geo-current-main-finalizer.py \
+            .github/workflows/finalize-tenant-canonical-ticket-authority.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/scripts/apply-property-geo-current-main.py \
+            .github/scripts/run-property-geo-current-main-finalizer.py \
+            .github/workflows/finalize-tenant-canonical-ticket-authority.yml \
+            apps/admin-panel/src/lib/verifiedPropertyPin.ts \
+            apps/admin-panel/src/pages/map/LiveMapPage.tsx \
+            apps/owner-app/src/pages/TenantSOSPage.tsx \
+            firestore.rules \
+            functions/ownerMaintenanceOperations.ts \
+            functions/propertyGeoAuthority.ts \
+            functions/tenantTicketOperations.ts \
+            scripts/apply-ticket-rule-binding.mjs \
+            scripts/verify-firestore-launch-hardening.mjs \
+            src/tenant/pages/TenantRequestPage.tsx \
+            test/property-geo-authority-rules.test.js \
+            tests/launch/property-geo-current-main-authority.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Tenant authority finalizer touched unexpected paths.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(tickets): enforce canonical Tenant dispatch authority'
+          git push origin HEAD:fix/tenant-canonical-ticket-authority-current-main-v2
