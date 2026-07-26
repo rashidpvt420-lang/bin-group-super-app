@@ -37,7 +37,7 @@ jobs:
         run: bash scripts/npm-install-retry.sh
 
       - name: Apply canonical property authority
-        run: python .github/scripts/apply-property-geo-current-main.py
+        run: python .github/scripts/run-property-geo-current-main-finalizer.py
 
       - name: Focused property authority tests
         run: |
@@ -70,10 +70,12 @@ jobs:
             tests/launch/property-geo-current-main-authority.test.mjs
           git rm \
             .github/scripts/apply-property-geo-current-main.py \
+            .github/scripts/run-property-geo-current-main-finalizer.py \
             .github/workflows/finalize-property-geo-current-main.yml
           changed="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             .github/scripts/apply-property-geo-current-main.py \
+            .github/scripts/run-property-geo-current-main-finalizer.py \
             .github/workflows/finalize-property-geo-current-main.yml \
             apps/admin-panel/src/lib/verifiedPropertyPin.ts \
             apps/admin-panel/src/pages/map/LiveMapPage.tsx \
