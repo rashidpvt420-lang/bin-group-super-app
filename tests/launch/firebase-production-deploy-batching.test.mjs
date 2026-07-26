@@ -14,20 +14,25 @@ test('production deploy batches Cloud Functions below the regional mutation quot
   assert.match(source, /functions:\$\{name\}/);
   assert.match(source, /regional mutation quota/);
   assert.match(source, /strategy: 'sequential-batches'/);
-  assert.match(source, /quotaSafeFullStack === true/);
-  assert.match(source, /\{ quotaSafeFullStack: true \}/);
-  assert.match(source, /target !== completeFirebaseProductionTarget/);
+  assert.match(source, /batchSize: functionBatchSize/);
+  assert.match(source, /interBatchDelaySeconds: functionBatchDelaySeconds/);
+  assert.doesNotMatch(
+    source,
+    /retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/,
+  );
 });
 
-test('canonical full-stack deployment fans out before non-function Firebase services', async () => {
+test('non-function Firebase services deploy only after all Function batches', async () => {
   const source = await read('scripts/deploy-firebase-production.mjs');
-  const fullStackGuard = source.indexOf('if (options.quotaSafeFullStack === true)');
-  const functionsIndex = source.indexOf('deployFunctionsInBatches();', fullStackGuard);
-  const servicesIndex = source.indexOf("'Firestore, Storage and Hosting production services'", fullStackGuard);
-  const canonicalCall = source.indexOf("'complete Firebase production stack'");
+  const adminMfa = source.indexOf('adminMfaEvidence = await verifyAdminMfaProduction');
+  const functionsIndex = source.indexOf('deployFunctionsInBatches();');
+  const servicesIndex = source.search(
+    /retryFirebase\(\s*['"]firestore:rules,firestore:indexes,storage,hosting['"]/,
+  );
+  const metadataIndex = source.indexOf("'scripts/write-production-deployment-metadata.mjs'");
 
-  assert.ok(fullStackGuard >= 0, 'Quota-safe full-stack dispatch guard is missing');
-  assert.ok(functionsIndex > fullStackGuard, 'Function batches must execute inside the full-stack dispatch');
+  assert.ok(adminMfa >= 0, 'Admin MFA production preflight is missing');
+  assert.ok(functionsIndex > adminMfa, 'Function batches must remain behind Admin MFA verification');
   assert.ok(servicesIndex > functionsIndex, 'Hosting/rules/storage must deploy after all Function batches');
-  assert.ok(canonicalCall > functionsIndex, 'The protected canonical full-stack call must remain present');
+  assert.ok(metadataIndex > servicesIndex, 'deployment metadata must be written after every Firebase service succeeds');
 });
