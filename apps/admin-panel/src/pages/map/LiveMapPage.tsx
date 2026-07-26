@@ -24,6 +24,11 @@ import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import RoomIcon from '@mui/icons-material/Room';
 import { collection, limit, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import {
+  isUnresolvedMaintenanceTicketStatus,
+  normalizeMaintenanceTicketStatus,
+  unresolvedMaintenanceTicketStatusQueryChunks,
+} from '../../../../../functions/shared/maintenanceTicketLifecycle';
 import { db, functions } from '../../lib/firebase';
 import { googleMapsSearchUrl, loadAdminGoogleMaps } from '../../lib/googleMaps';
 import {
@@ -35,19 +40,7 @@ import {
   type VerifiedPropertyPin,
 } from '../../lib/verifiedPropertyPin';
 
-const ACTIVE_TICKET_STATUSES = [
-  'UNASSIGNED',
-  'OPEN',
-  'ASSIGNED',
-  'ACCEPTED',
-  'EN_ROUTE',
-  'ON_THE_WAY',
-  'ARRIVED',
-  'IN_PROGRESS',
-  'open',
-  'assigned',
-];
-
+const TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks();
 const UAE_CENTRE = { lat: 24.4009, lng: 54.6938 };
 const MAP_CLOCK_INTERVAL_MS = 15_000;
 
@@ -69,14 +62,24 @@ type TicketPinRow = {
 };
 
 const displayStatus = (ticket: any) => {
-  const status = String(ticket.status || '').trim().toUpperCase();
-  if (status === 'UNASSIGNED' || status === 'OPEN') return 'Awaiting assignment';
+  const status = normalizeMaintenanceTicketStatus(ticket.status);
+  if (['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(status)) return 'Awaiting assignment';
+  if (status === 'PENDING_SCHEDULING') return 'Pending scheduling';
+  if (status === 'SCHEDULED') return 'Scheduled';
+  if (status === 'QUOTE_REJECTED') return 'Quote rejected — revision required';
+  if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';
+  if (status === 'CANCELLATION_REQUESTED') return 'Cancellation requested — unresolved';
   if (status === 'EN_ROUTE' || status === 'ON_THE_WAY') return 'Technician en route';
   if (status === 'ARRIVED') return 'Technician arrived';
-  if (status === 'IN_PROGRESS') return 'Work in progress';
+  if (status === 'IN_PROGRESS' || status === 'WORK_STARTED') return 'Work in progress';
+  if (status === 'WAITING_PARTS') return 'Waiting for parts';
+  if (status === 'ESCALATED') return 'Escalated — action required';
+  if (status === 'REOPENED') return 'Reopened — action required';
+  if (status === 'ON_HOLD') return 'On hold — unresolved';
+  if (status === 'DISPUTED') return 'Disputed — resolution required';
   return ticket.assignedTechnicianName || ticket.assignedTechnicianId
     ? `Assigned to ${ticket.assignedTechnicianName || ticket.assignedTechnicianId}`
-    : status || 'Active';
+    : status || 'Unresolved';
 };
 
 const verificationDate = (verifiedAtMs: number) => {
@@ -90,9 +93,12 @@ const verificationDate = (verifiedAtMs: number) => {
 export default function LiveMapPage() {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
-  const markerRefs = useRef<any[]>([]);
+  const technicianMarkerRefs = useRef<Map<string, any>>(new Map());
+  const ticketMarkerRefs = useRef<Map<string, any>>(new Map());
+  const viewportInitializedRef = useRef(false);
 
   const [tickets, setTickets] = useState<any[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [properties, setProperties] = useState<any[]>([]);
   const [liveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
@@ -113,11 +119,49 @@ export default function LiveMapPage() {
   }, []);
 
   useEffect(() => {
-    const ticketQuery = query(
-      collection(db, 'maintenanceTickets'),
-      where('status', 'in', ACTIVE_TICKET_STATUSES),
-      limit(100),
-    );
+    let ticketListenerFailed = false;
+    const ticketSnapshots = new Map<number, any[]>();
+    setTicketsLoading(true);
+
+    const publishTickets = () => {
+      if (ticketListenerFailed || ticketSnapshots.size !== TICKET_STATUS_QUERY_CHUNKS.length) return;
+      const byId = new Map<string, any>();
+      for (let chunkIndex = 0; chunkIndex < TICKET_STATUS_QUERY_CHUNKS.length; chunkIndex += 1) {
+        for (const ticket of ticketSnapshots.get(chunkIndex) || []) {
+          if (!isUnresolvedMaintenanceTicketStatus(ticket.status)) continue;
+          byId.set(String(ticket.id), ticket);
+        }
+      }
+      const rows = [...byId.values()].sort((left, right) => String(left.id).localeCompare(String(right.id)));
+      setTickets(rows);
+      setTicketsError('');
+      setTicketsLoading(false);
+    };
+
+    const unsubscribeTickets = TICKET_STATUS_QUERY_CHUNKS.map((statuses, chunkIndex) => {
+      const ticketQuery = query(
+        collection(db, 'maintenanceTickets'),
+        where('status', 'in', statuses),
+      );
+      return onSnapshot(ticketQuery, (snapshot) => {
+        if (ticketListenerFailed) return;
+        ticketSnapshots.set(
+          chunkIndex,
+          snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+        );
+        publishTickets();
+      }, (error) => {
+        ticketListenerFailed = true;
+        console.error(`[AdminMap] Unresolved ticket listener ${chunkIndex + 1} failed:`, error);
+        setTickets([]);
+        setTicketsLoading(false);
+        setTicketsError(
+          `Unresolved ticket query ${chunkIndex + 1} of ${TICKET_STATUS_QUERY_CHUNKS.length} failed. ` +
+          'The operational feed is hidden until App Check, permissions, network and Firestore indexes recover.',
+        );
+      });
+    });
+
     const technicianQuery = query(collection(db, 'technicians'), limit(100));
     // This bounded canonical-property listener is deliberately fail-closed. A
     // ticket whose property is outside the returned set receives no verified
@@ -128,15 +172,6 @@ export default function LiveMapPage() {
       where('isTracking', '==', true),
       limit(200),
     );
-
-    const unsubscribeTickets = onSnapshot(ticketQuery, (snapshot) => {
-      setTickets(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-      setTicketsError('');
-    }, (error) => {
-      console.error('[AdminMap] Ticket listener failed:', error);
-      setTickets([]);
-      setTicketsError('Active tickets could not be loaded. Check App Check, permissions, network and Firestore indexes.');
-    });
 
     const unsubscribeTechnicians = onSnapshot(technicianQuery, (snapshot) => {
       const rows = snapshot.docs
@@ -169,7 +204,7 @@ export default function LiveMapPage() {
     });
 
     return () => {
-      unsubscribeTickets();
+      unsubscribeTickets.forEach((unsubscribe) => unsubscribe());
       unsubscribeTechnicians();
       unsubscribeProperties();
       unsubscribeLocations();
@@ -224,62 +259,103 @@ export default function LiveMapPage() {
     const maps = (window as any).google?.maps;
     if (!maps) return;
 
-    markerRefs.current.forEach((marker) => marker.setMap(null));
-    markerRefs.current = [];
-    const bounds = new maps.LatLngBounds();
-    let pointCount = 0;
+    const visibleTechnicianIds = new Set<string>();
+    const visibleTicketIds = new Set<string>();
+    const initialBounds = new maps.LatLngBounds();
+    let initialPointCount = 0;
 
     for (const location of freshLocations) {
       const point = mapCoordinate(location.location);
       if (!point) continue;
-      const marker = new maps.Marker({
-        map: mapRef.current,
-        position: point,
-        title: `${location.technicianName || 'Technician'} — fresh canonical GPS`,
-        icon: {
-          path: maps.SymbolPath.CIRCLE,
-          scale: 9,
-          fillColor: '#10b981',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        },
-      });
-      markerRefs.current.push(marker);
-      bounds.extend(point);
-      pointCount += 1;
+      visibleTechnicianIds.add(location.id);
+      initialBounds.extend(point);
+      initialPointCount += 1;
+      const title = `${location.technicianName || 'Technician'} — fresh canonical GPS`;
+      const existing = technicianMarkerRefs.current.get(location.id);
+      if (existing) {
+        existing.setPosition(point);
+        existing.setTitle(title);
+      } else {
+        technicianMarkerRefs.current.set(location.id, new maps.Marker({
+          map: mapRef.current,
+          position: point,
+          title,
+          icon: {
+            path: maps.SymbolPath.CIRCLE,
+            scale: 9,
+            fillColor: '#10b981',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          },
+        }));
+      }
     }
+    technicianMarkerRefs.current.forEach((marker, id) => {
+      if (!visibleTechnicianIds.has(id)) {
+        marker.setMap(null);
+        technicianMarkerRefs.current.delete(id);
+      }
+    });
 
     for (const { ticket, pin } of ticketsWithVerifiedPins) {
+      visibleTicketIds.add(ticket.id);
+      initialBounds.extend(pin.point);
+      initialPointCount += 1;
       const priority = String(ticket.priority || ticket.severity || '').toUpperCase();
-      const marker = new maps.Marker({
-        map: mapRef.current,
-        position: pin.point,
-        title: `${ticket.propertyName || ticket.unit || ticket.id} — verified canonical property pin — ${displayStatus(ticket)}`,
-        icon: {
-          path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-          scale: 6,
-          fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 1.5,
-        },
-      });
-      markerRefs.current.push(marker);
-      bounds.extend(pin.point);
-      pointCount += 1;
+      const title = `${ticket.propertyName || ticket.unit || ticket.id} — verified canonical property pin — ${displayStatus(ticket)}`;
+      const icon = {
+        path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+        scale: 6,
+        fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 1.5,
+      };
+      const existing = ticketMarkerRefs.current.get(ticket.id);
+      if (existing) {
+        existing.setPosition(pin.point);
+        existing.setTitle(title);
+        existing.setIcon(icon);
+      } else {
+        ticketMarkerRefs.current.set(ticket.id, new maps.Marker({
+          map: mapRef.current,
+          position: pin.point,
+          title,
+          icon,
+        }));
+      }
     }
+    ticketMarkerRefs.current.forEach((marker, id) => {
+      if (!visibleTicketIds.has(id)) {
+        marker.setMap(null);
+        ticketMarkerRefs.current.delete(id);
+      }
+    });
 
-    if (pointCount > 0) {
-      mapRef.current.fitBounds(bounds, 72);
-      if (pointCount === 1) mapRef.current.setZoom(15);
-    } else {
-      mapRef.current.setCenter(UAE_CENTRE);
-      mapRef.current.setZoom(7);
+    // Freshness ticks may remove markers, but they must never override an
+    // Admin's manual pan or zoom. Auto-fit is restricted to the first non-empty
+    // canonical source set after map initialisation.
+    if (!viewportInitializedRef.current && initialPointCount > 0) {
+      mapRef.current.fitBounds(initialBounds, 72);
+      if (initialPointCount === 1) mapRef.current.setZoom(15);
+      viewportInitializedRef.current = true;
     }
   }, [freshLocations, mapReady, ticketsWithVerifiedPins]);
 
-  const unassignedCount = tickets.filter((ticket) => ['UNASSIGNED', 'OPEN', 'open'].includes(String(ticket.status || ''))).length;
+  useEffect(() => () => {
+    technicianMarkerRefs.current.forEach((marker) => marker.setMap(null));
+    ticketMarkerRefs.current.forEach((marker) => marker.setMap(null));
+    technicianMarkerRefs.current.clear();
+    ticketMarkerRefs.current.clear();
+  }, []);
+
+  const unassignedCount = tickets.filter((ticket) => [
+    'UNASSIGNED',
+    'OPEN',
+    'PENDING',
+    'PENDING_ASSIGNMENT',
+  ].includes(normalizeMaintenanceTicketStatus(ticket.status))).length;
   const assignedCount = Math.max(0, tickets.length - unassignedCount);
 
   const dispatch = async (technician: any) => {
@@ -307,13 +383,13 @@ export default function LiveMapPage() {
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 900 }}>Operational Dispatch Map</Typography>
           <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-            Google Maps with canonical verified property pins and fresh Technician GPS. Legacy or unreviewed ticket coordinates are never labelled verified.
+            Google Maps with every canonical unresolved ticket state, verified property pins and fresh Technician GPS. Legacy or unreviewed ticket coordinates are never labelled verified.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Chip label={`${tickets.length} active tickets`} sx={{ color: '#fff', bgcolor: '#172033' }} />
+          <Chip label={`${tickets.length} unresolved tickets`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${unassignedCount} awaiting assignment`} sx={{ color: '#fff', bgcolor: '#172033' }} />
-          <Chip label={`${assignedCount} assigned`} sx={{ color: '#fff', bgcolor: '#172033' }} />
+          <Chip label={`${assignedCount} assigned / exceptional`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${ticketsWithVerifiedPins.length} verified property pins`} sx={{ color: '#fff', bgcolor: '#1e3a8a' }} />
           <Chip label={`${freshLocations.length} fresh GPS sessions`} sx={{ color: '#fff', bgcolor: '#064e3b' }} />
         </Stack>
@@ -327,14 +403,15 @@ export default function LiveMapPage() {
         <Grid item xs={12} lg={4}>
           <Paper sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', maxHeight: { lg: '76vh' }, overflow: 'auto' }}>
             <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <Typography sx={{ fontWeight: 900 }}>Active ticket feed</Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8' }}>Server states only. Verification labels come only from canonical property metadata.</Typography>
+              <Typography sx={{ fontWeight: 900 }}>Unresolved ticket feed</Typography>
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>All canonical unresolved lifecycle classes. Verification labels come only from canonical property metadata.</Typography>
             </Box>
             <List disablePadding>
               {tickets.map((ticket) => {
                 const verifiedPin = verifiedPinForTicket(ticket, propertiesById);
                 const recordedPoint = recordedTicketCoordinate(ticket);
-                const canAssign = ['UNASSIGNED', 'OPEN', 'open'].includes(String(ticket.status || ''));
+                const normalizedStatus = normalizeMaintenanceTicketStatus(ticket.status);
+                const canAssign = ['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(normalizedStatus);
                 const avatarColour = verifiedPin ? '#1d4ed8' : recordedPoint ? '#b45309' : '#475569';
                 return (
                   <ListItem key={ticket.id} alignItems="flex-start" divider secondaryAction={
@@ -392,8 +469,11 @@ export default function LiveMapPage() {
                   </ListItem>
                 );
               })}
-              {!tickets.length && !ticketsError && (
-                <ListItem><ListItemText primary="No active tickets returned by the bounded production query." /></ListItem>
+              {ticketsLoading && !ticketsError && (
+                <ListItem><ListItemText primary="Loading every bounded unresolved ticket-status query…" /></ListItem>
+              )}
+              {!ticketsLoading && !tickets.length && !ticketsError && (
+                <ListItem><ListItemText primary="No unresolved tickets returned by the complete bounded production query set." /></ListItem>
               )}
             </List>
           </Paper>

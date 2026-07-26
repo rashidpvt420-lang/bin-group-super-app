@@ -24,7 +24,7 @@ env:
   REQUEST_PR: ${{ github.event.pull_request.number }}
   REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   FOUNDER_NAME: Rashid Abdul Ghani Abdul Ghani
-  FOUNDER_EMAIL: ceo@bin-groups.com
+  FOUNDER_EMAIL: authorized-founder@protected.invalid
 
 jobs:
   dispatch:
@@ -241,6 +241,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          owner_request_reference="https://github.com/$REPOSITORY/pull/$REQUEST_PR"
+          incident_references="$INCIDENT_REFERENCE,$owner_request_reference"
 
           jq -n \
             --arg ref main \
@@ -249,7 +251,7 @@ jobs:
             --arg expectedSha "$RELEASE_SHA" \
             --arg founderName "$FOUNDER_NAME" \
             --arg founderEmail "$FOUNDER_EMAIL" \
-            --arg incidentReference "$INCIDENT_REFERENCE" \
+            --arg incidentReferences "$incident_references" \
             '{ref:$ref,inputs:{
               confirmation:$confirmation,
               hard_launch_confirmation:$hard,
@@ -261,7 +263,7 @@ jobs:
               incident_active_json:"[]",
               incident_requires_rollback:"false",
               incident_rollback_reason:"",
-              incident_evidence_refs:$incidentReference,
+              incident_evidence_refs:$incidentReferences,
               hard_clearance_run_id:"",
               stripe_live_checkout_session_id:"",
               stripe_live_webhook_event_id:""
@@ -315,7 +317,8 @@ jobs:
             --arg wrapperWorkflowRunUrl "$wrapper_run_url" \
             --arg productionWorkflowRunId "$production_run_id" \
             --arg productionWorkflowRunUrl "$production_run_url" \
-            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapperWorkflowRunId,wrapperWorkflowRunUrl:$wrapperWorkflowRunUrl,productionWorkflowRunId:$productionWorkflowRunId,productionWorkflowRunUrl:$productionWorkflowRunUrl,launchMode:"bank-pilot",publicReleaseGate:false,hardLaunchClaim:false}' \
+            --arg ownerRequestPullRequest "$REQUEST_PR" \
+            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapperWorkflowRunId,wrapperWorkflowRunUrl:$wrapperWorkflowRunUrl,productionWorkflowRunId:$productionWorkflowRunId,productionWorkflowRunUrl:$productionWorkflowRunUrl,ownerRequestPullRequest:$ownerRequestPullRequest,launchMode:"bank-pilot",publicReleaseGate:false,hardLaunchClaim:false}' \
             > bank-pilot-dispatch-evidence.json
 
           echo "wrapper_run_id=$wrapper_run_id" >> "$GITHUB_OUTPUT"
