@@ -189,13 +189,15 @@ test('Admin auth and protected routes restrict unenrolled or non-MFA sessions', 
   assert.match(route, /mfaFactorCount > 0 && !mfaVerified/);
 });
 
-test('production deploy requires single-founder verification before Firebase deployment', async () => {
+test('production deploy requires single-founder verification before both Firebase deployment stages', async () => {
   const deploy = await read('scripts/deploy-firebase-production.mjs');
   const phone = deploy.indexOf('await verifyFirebasePhoneAuthProduction');
   const accounts = deploy.indexOf('await verifyAdminMfaProduction');
-  const firebaseDeploy = deploy.search(/retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/);
+  const nonFunctionDeploy = deploy.indexOf("'hosting,firestore:rules,firestore:indexes,storage'");
+  const batchedFunctionDeploy = deploy.indexOf("'scripts/deploy-firebase-functions-batched.mjs'");
   assert.ok(accounts > phone);
-  assert.ok(firebaseDeploy > accounts);
+  assert.ok(nonFunctionDeploy > accounts);
+  assert.ok(batchedFunctionDeploy > nonFunctionDeploy);
 
   const preflight = await read('scripts/verify-admin-mfa-production.mjs');
   assert.match(preflight, /CANONICAL_FOUNDER_EMAIL/);
