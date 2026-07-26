@@ -134,7 +134,7 @@ async function collectDiagnostics(page: Page) {
     requestFailures: failedRequests.slice(0, 20),
     failedScriptUrl: failedScripts[0] || null,
     firebaseAuthStatus: authResponse?.status() || null,
-    firebaseAuthBody: authResponse ? (await authResponse.text().catch(() => '')).slice(0, 2_000) : null,
+    firebaseAuthEndpoint: authResponse ? 'identitytoolkit.accounts:signInWithPassword' : null,
   });
 }
 
@@ -158,7 +158,7 @@ async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<type
     await page.getByTestId('admin-login-password').fill(PASSWORD);
     await page.getByTestId('admin-login-submit').click();
     authResponse = await responsePromise;
-    expect(authResponse.status(), `Firebase Auth response: ${(await authResponse.text()).slice(0, 1_000)}`).toBeLessThan(400);
+    expect(authResponse.status(), 'Firebase Auth password endpoint returned an error status.').toBeLessThan(400);
 
     const challenge = page.getByTestId('admin-mfa-signin-challenge');
     await expect(challenge, 'the canonical Founder must receive the real enrolled Firebase MFA challenge').toBeVisible({ timeout: 30_000 });
