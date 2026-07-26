@@ -105,6 +105,9 @@ test('Technician GPS client uses protected callable with durable STOP and short-
   assert.match(liveTracking, /_state\.lastPushTime = now;[\s\S]*await replayForTechnician/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
   assert.match(liveTracking, /onError\?\.\(message\);\s*throw new Error\(message\);/);
+  assert.match(liveTracking, /stopSuperseded = response\.superseded/);
+  assert.match(liveTracking, /STOP_SUPERSEDED_RECONCILED/);
+  assert.match(liveTracking, /canonicalSessionUnchanged: true/);
   assert.doesNotMatch(liveTracking, /status: 'STOPPED'[\s\S]{0,300}catch/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
@@ -136,6 +139,8 @@ test('Canonical live-location callable validates assignment and uses session com
   assert.match(locationCallable, /sequence = previousSequence \+ 1/);
   assert.match(locationCallable, /lastStoppedTicketId: ticketId/);
   assert.match(locationCallable, /lastStoppedTicketId: null/);
+  assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
+  assert.match(locationCallable, /superseded: true/);
   assert.match(locationCallable, /tx\.set\(ticketRef/);
   assert.match(locationCallable, /tx\.set\(technicianRef/);
   assert.match(locationCallable, /tx\.set\(userRef/);
@@ -149,6 +154,8 @@ test('Server watchdog clears only the exact still-expired canonical tracking ses
   assert.match(locationCallable, /for \(const snapshot of stale\.docs\)[\s\S]*db\.runTransaction/);
   assert.match(locationCallable, /classifyWatchdogCandidate\(/);
   assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED/);
+  assert.match(locationCallable, /const ticketSnap = ticketRef \? await tx\.get\(ticketRef\) : null/);
+  assert.match(locationCallable, /ticketMissing: Boolean\(ticketId\) && ticketSnap\?\.exists !== true/);
   assert.match(locationCallable, /SERVER_EXPIRY_WATCHDOG/);
   assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRED/);
   assert.doesNotMatch(locationCallable, /const batch = db\.batch\(\)/);
