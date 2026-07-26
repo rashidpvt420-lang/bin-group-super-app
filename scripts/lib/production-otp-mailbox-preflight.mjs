@@ -52,7 +52,7 @@ async function jsonRequest(fetchImpl, url, options, label) {
 }
 
 async function verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl }) {
-  const token = await jsonRequest(fetchImpl, 'https://oauth2.googleapis.com/token', {
+  const tokenResponse = await jsonRequest(fetchImpl, 'https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -62,10 +62,10 @@ async function verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl })
       grant_type: 'refresh_token',
     }).toString(),
   }, `${mailbox.label} mailbox OAuth exchange`);
-  const accessToken = text(token.access_token);
-  if (!accessToken) throw new Error(`${mailbox.label} mailbox OAuth exchange returned no access token.`);
+  const bearerCredential = text(tokenResponse.access_token);
+  if (!bearerCredential) throw new Error(`${mailbox.label} mailbox OAuth exchange returned no access token.`);
 
-  const headers = { Authorization: `Bearer ${accessToken}` };
+  const headers = { Authorization: `Bearer ${bearerCredential}` };
   const profile = await jsonRequest(
     fetchImpl,
     'https://gmail.googleapis.com/gmail/v1/users/me/profile',
