@@ -21,18 +21,21 @@ const fail = (message) => {
 const children = Object.freeze([
   {
     key: 'provider',
+    workflowFile: 'postdeploy-operational-provider-evidence.yml',
     workflowPath: '.github/workflows/postdeploy-operational-provider-evidence.yml',
     workflowName: 'Operational Provider Evidence',
     confirmation: 'PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE',
   },
   {
     key: 'application',
+    workflowFile: 'postdeploy-operational-application-evidence.yml',
     workflowPath: '.github/workflows/postdeploy-operational-application-evidence.yml',
     workflowName: 'Operational Application Evidence',
     confirmation: 'PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE',
   },
   {
     key: 'rotation',
+    workflowFile: 'postdeploy-privileged-access-rotation-evidence.yml',
     workflowPath: '.github/workflows/postdeploy-privileged-access-rotation-evidence.yml',
     workflowName: 'Privileged Access Rotation Evidence',
     confirmation: 'VERIFY_PRIVILEGED_ACCESS_ROTATION',
@@ -105,17 +108,17 @@ async function verifySource(sourceRunId, sourceSha) {
   };
 }
 
-async function listWorkflowRuns(workflowPath) {
-  const encoded = encodeURIComponent(workflowPath);
+async function listWorkflowRuns(workflowFile) {
+  const encoded = encodeURIComponent(workflowFile);
   const payload = await github(`/actions/workflows/${encoded}/runs?branch=main&event=workflow_dispatch&per_page=100`);
   return Array.isArray(payload?.workflow_runs) ? payload.workflow_runs : [];
 }
 
 async function dispatchChild(definition, sourceRunId, sourceSha) {
-  const previousRuns = await listWorkflowRuns(definition.workflowPath);
+  const previousRuns = await listWorkflowRuns(definition.workflowFile);
   const previousIds = new Set(previousRuns.map((run) => String(run.id)));
   const marker = `source-deploy-${sourceRunId}`;
-  const encoded = encodeURIComponent(definition.workflowPath);
+  const encoded = encodeURIComponent(definition.workflowFile);
   await github(`/actions/workflows/${encoded}/dispatches`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -133,7 +136,7 @@ async function dispatchChild(definition, sourceRunId, sourceSha) {
   let childRun = null;
   while (Date.now() < discoveryDeadline) {
     await sleep(POLL_INTERVAL_MS);
-    const runs = await listWorkflowRuns(definition.workflowPath);
+    const runs = await listWorkflowRuns(definition.workflowFile);
     childRun = runs.find((run) => (
       !previousIds.has(String(run.id)) &&
       run.event === 'workflow_dispatch' &&
