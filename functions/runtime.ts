@@ -62,6 +62,7 @@ export { adminAssignTechnician } from "./secureAdminTechnicianAssignment";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
 export { submitBrokerKycProfile, getBrokerKycProfileSummary } from "./secureBrokerKycSubmission";
 export { adminReviewBrokerKyc } from "./secureBrokerKycReview";
+export { adminReviewBrokerPayoutRequest } from "./adminBrokerPayoutReview";
 export {
   requestBrokerPayoutOtp,
   verifyBrokerPayoutOtp,
