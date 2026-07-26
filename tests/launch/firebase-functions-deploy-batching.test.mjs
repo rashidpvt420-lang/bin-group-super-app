@@ -7,6 +7,7 @@ import {
   FUNCTIONS_DEPLOYMENT_STRATEGY,
   FUNCTIONS_RECONCILIATION_STRATEGY,
   buildFunctionReconciliationPlan,
+  parseCompiledFunctionIdentities,
   parseRemoteFunctionList,
   validateFunctionsDeploymentEvidence,
 } from '../../scripts/lib/functions-deployment-evidence.mjs';
@@ -48,6 +49,7 @@ const validEvidence = () => ({
     status: 'passed',
     projectId: 'bin-group-57c60',
     codebase: 'default',
+    compiledEndpointIdentities: remoteOwned,
     remoteBefore: remoteOwned,
     obsoleteDeleted: [],
     preservedUnowned: [],
@@ -59,6 +61,12 @@ const validEvidence = () => ({
     retryRecoveryMinimumSeconds: 120,
     observedAt: '2026-07-26T07:00:00.000Z',
   },
+});
+
+const currentIdentity = (name, region = 'europe-west3') => ({
+  name,
+  region,
+  codebase: 'default',
 });
 
 test('production deployment and verification scripts parse under the repository Node runtime', () => {
@@ -142,9 +150,30 @@ test('remote list parser accepts Firebase result payloads and rejects malformed 
   assert.throws(() => parseRemoteFunctionList('{"status":"success"}'), /function array/);
 });
 
+test('compiled identity parser requires full codebase, region and function name identity', () => {
+  assert.deepEqual(
+    parseCompiledFunctionIdentities(JSON.stringify([
+      currentIdentity('betaFunction'),
+      currentIdentity('alphaFunction'),
+      currentIdentity('multiRegionFunction', 'us-central1'),
+      currentIdentity('multiRegionFunction', 'europe-west3'),
+    ])),
+    [
+      currentIdentity('alphaFunction'),
+      currentIdentity('betaFunction'),
+      currentIdentity('multiRegionFunction'),
+      currentIdentity('multiRegionFunction', 'us-central1'),
+    ],
+  );
+  assert.throws(
+    () => parseCompiledFunctionIdentities(JSON.stringify([{ name: 'missingRegion', codebase: 'default' }])),
+    /invalid or missing region/,
+  );
+});
+
 test('reconciliation plans deletion for removed or renamed owned Functions only', () => {
   const plan = buildFunctionReconciliationPlan(
-    ['activeFunction', 'renamedFunction'],
+    [currentIdentity('activeFunction'), currentIdentity('renamedFunction')],
     [
       { name: 'activeFunction', region: 'europe-west3', codebase: 'default' },
       { name: 'oldFunctionName', region: 'europe-west3', codebase: 'default' },
@@ -163,15 +192,41 @@ test('reconciliation plans deletion for removed or renamed owned Functions only'
   assert.deepEqual(plan.currentMissing, []);
 });
 
-test('reconciliation no-op is deterministic when remote owned Functions match source', () => {
+test('region moves delete the stale regional copy and require the new regional identity', () => {
   const plan = buildFunctionReconciliationPlan(
-    ['alphaFunction', 'betaFunction'],
+    [currentIdentity('regionalFunction', 'europe-west3')],
+    [
+      { name: 'regionalFunction', region: 'us-central1', codebase: 'default' },
+      { name: 'regionalFunction', region: 'europe-west3', codebase: 'default' },
+    ],
+  );
+  assert.deepEqual(plan.obsoleteOwned, [
+    { name: 'regionalFunction', region: 'us-central1', codebase: 'default' },
+  ]);
+  assert.deepEqual(plan.currentMissing, []);
+
+  const wrongRegionOnly = buildFunctionReconciliationPlan(
+    [currentIdentity('regionalFunction', 'europe-west3')],
+    [{ name: 'regionalFunction', region: 'us-central1', codebase: 'default' }],
+  );
+  assert.deepEqual(wrongRegionOnly.currentMissing, [
+    'default|europe-west3|regionalFunction',
+  ]);
+});
+
+test('reconciliation no-op is deterministic when remote owned identities match source', () => {
+  const plan = buildFunctionReconciliationPlan(
+    [currentIdentity('alphaFunction'), currentIdentity('betaFunction')],
     [
       { name: 'betaFunction', region: 'europe-west3', codebase: 'default' },
       { name: 'alphaFunction', region: 'europe-west3', codebase: 'default' },
     ],
   );
   assert.deepEqual(plan.obsoleteOwned, []);
+  assert.deepEqual(plan.compiledEndpointIdentities, [
+    'default|europe-west3|alphaFunction',
+    'default|europe-west3|betaFunction',
+  ]);
   assert.deepEqual(plan.remoteBefore, [
     'default|europe-west3|alphaFunction',
     'default|europe-west3|betaFunction',
@@ -181,13 +236,13 @@ test('reconciliation no-op is deterministic when remote owned Functions match so
 test('obsolete owned Functions without region metadata fail closed', () => {
   assert.throws(
     () => buildFunctionReconciliationPlan(
-      ['activeFunction'],
+      [currentIdentity('activeFunction')],
       [
         { name: 'activeFunction', region: 'europe-west3', codebase: 'default' },
         { name: 'obsoleteFunction', region: '', codebase: 'default' },
       ],
     ),
-    /missing region metadata/,
+    /missing region metadata|invalid function names or regions/,
   );
 });
 
@@ -197,6 +252,7 @@ test('reconciliation deletion is explicit, batched, quota-safe and preserves uno
   assert.match(reconciliationSource, /--force/);
   assert.match(reconciliationSource, /FIREBASE_FUNCTION_DELETE_BATCH_SIZE/);
   assert.match(reconciliationSource, /FIREBASE_FUNCTION_DELETE_COOLDOWN_SECONDS/);
+  assert.match(reconciliationSource, /compiledEndpointIdentities/);
   assert.match(reconciliationSource, /preservedUnowned/);
   assert.match(reconciliationSource, /entry\.codebase === OWNED_CODEBASE/);
   assert.match(reconciliationSource, /MIN_RETRY_RECOVERY_SECONDS = 120/);
@@ -254,6 +310,15 @@ test('exact-SHA production verification requires valid batching and reconciliati
   }).join('\n');
   assert.match(missingReconciliation, /reconciliation evidence is missing/);
 
+  const mismatchedCompiledIdentities = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    reconciliation: {
+      ...validEvidence().reconciliation,
+      compiledEndpointIdentities: remoteOwned.slice(1),
+    },
+  }).join('\n');
+  assert.match(mismatchedCompiledIdentities, /do not match deployedFunctions/);
+
   const obsoleteRemaining = validateFunctionsDeploymentEvidence({
     ...validEvidence(),
     reconciliation: {
@@ -263,12 +328,14 @@ test('exact-SHA production verification requires valid batching and reconciliati
   }).join('\n');
   assert.match(obsoleteRemaining, /left obsolete owned Functions/);
 
-  const weakRecovery = validateFunctionsDeploymentEvidence({
-    ...validEvidence(),
-    reconciliation: {
-      ...validEvidence().reconciliation,
-      retryRecoveryMinimumSeconds: 60,
-    },
-  }).join('\n');
-  assert.match(weakRecovery, /at least 120 seconds/);
+  for (const retryRecoveryMinimumSeconds of [undefined, 'not-a-number', 60]) {
+    const invalidRecovery = validateFunctionsDeploymentEvidence({
+      ...validEvidence(),
+      reconciliation: {
+        ...validEvidence().reconciliation,
+        retryRecoveryMinimumSeconds,
+      },
+    }).join('\n');
+    assert.match(invalidRecovery, /integer of at least 120 seconds/);
+  }
 });
