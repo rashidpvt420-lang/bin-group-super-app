@@ -44,7 +44,7 @@ const sensitiveBrokerFields = [
 const range = functionRange(rules, 'safeUserSelfUpdate');
 let helper = rules.slice(range.start, range.end);
 for (const field of sensitiveBrokerFields) {
-  helper = helper.replace(new RegExp(`\n\s*'${field}',`, 'g'), '');
+  helper = helper.replace(new RegExp(`\\n\\s*'${field}',`, 'g'), '');
 }
 rules = `${rules.slice(0, range.start)}${helper}${rules.slice(range.end)}`;
 
