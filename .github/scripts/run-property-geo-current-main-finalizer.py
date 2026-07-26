@@ -8,10 +8,12 @@ old = '''text = replace_once(text,
     '{ cors: true, region: "europe-west3", enforceAppCheck: true },\\n  async (request) => {\\n    await assertOwnerRole(request.auth);',
     'owner App Check')
 '''
-new = '''text = replace_once(text,
-    'export const ownerCreateMaintenanceTicket = onCall(\\n  { cors: true, region: "europe-west3" },',
-    'export const ownerCreateMaintenanceTicket = onCall(\\n  { cors: true, region: "europe-west3", enforceAppCheck: true },',
-    'owner App Check')
+new = '''owner_insecure = 'export const ownerCreateMaintenanceTicket = onCall(\\n  { cors: true, region: "europe-west3" },'
+owner_secure = 'export const ownerCreateMaintenanceTicket = onCall(\\n  { cors: true, region: "europe-west3", enforceAppCheck: true },'
+if owner_insecure in text:
+    text = text.replace(owner_insecure, owner_secure, 1)
+elif owner_secure not in text:
+    raise SystemExit('owner App Check: neither reviewed insecure nor secure marker exists')
 '''
 if old not in text:
     raise SystemExit('Owner App Check patch definition was not found.')
