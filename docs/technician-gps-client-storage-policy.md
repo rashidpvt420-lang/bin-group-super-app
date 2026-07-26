@@ -19,9 +19,13 @@ The controlled pilot uses foreground browser geolocation. A Technician is shown 
 
 Before deleting the previous global v2 queue, the client validates every legacy entry and keeps only the newest STOP for each Technician, ticket and tracking-session identity. The coordinate property is removed entirely. The resulting STOP is written into the matching Technician’s UID-scoped v3 queue and read back for verification. Legacy keys are deleted only after every valid migrated STOP is confirmed. Legacy UPDATE coordinates and malformed records are deleted rather than trusted or migrated.
 
+## Secure logout ordering
+
+Technician logout first clears the active geolocation watch and submits the canonical STOP while authentication is still valid. Any durable STOP is replayed before local privacy disposal. Logout is paused with a visible recovery message when the STOP remains pending or terminal; authentication, navigation and queue deletion do not proceed in that state. The UID-scoped queue is purged only after the server has acknowledged the STOP or no unresolved STOP remains.
+
 ## Privacy boundaries
 
-Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout explicitly purges the authenticated UID queue in addition to the general portal storage cleanup.
+Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout explicitly purges the authenticated UID queue only after ordered tracking teardown and reconciliation, followed by the general portal storage cleanup.
 
 ## Admin map behavior
 
