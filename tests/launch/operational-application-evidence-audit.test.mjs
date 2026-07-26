@@ -45,6 +45,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /launch_package\/application-proofs/);
   assert.match(verifier, /const APPLICATION_PROOF_PATH = 'launch_package\/application-proof\.json';/);
   assert.match(verifier, /writeFileSync\(APPLICATION_PROOF_PATH,/);
+  assert.match(verifier, /requireAuthorizedApprover\(process\.env\.GITHUB_ACTOR\)/);
   assert.match(publisher, /readFileSync\('launch_package\/application-proof\.json'/);
   assert.match(publisher, /sha256File\('launch_package\/application-proof\.json'\)/);
   assert.doesNotMatch(workflow, /payment_id:|contract_id:|notification_id:|ticket_id:|tenant_uid:|staff_uid:|renewal_watch_id:/);
@@ -65,7 +66,7 @@ test('payment and commission evidence auto-discovers records, uses the real call
   assert.match(verifier, /cloudfunctions\.net\/adminApprovePayment/);
   assert.match(verifier, /payload\?\.idempotent !== true/);
   assert.match(verifier, /invoicesAfter\.length !== 1/);
-  assert.match(verifier, /approvalAuditsAfter\.length !== 1/);
+  assert.match(verifier, /(?:approvalAuditsAfter|auditsAfter)\.length !== 1/);
   assert.match(verifier, /JSON\.stringify\(before\) !== JSON\.stringify\(after\)/);
   assert.match(verifier, /`commission_\$\{contractId\}`/);
   assert.match(verifier, /commissionsAfterSnapshot\.size !== 1/);
@@ -102,7 +103,7 @@ test('staff evidence auto-discovers one audited technician with no privileged cl
   assert.match(verifier, /role !== 'technician'/);
   assert.match(verifier, /claims\.admin === true/);
   assert.match(verifier, /canManageSecurity/);
-  assert.match(verifier, /creationAudits\.length !== 1/);
+  assert.match(verifier, /creationAudits\.(?:length|size) !== 1/);
   assert.match(provisioning, /ADMIN_CREATE_STAFF_USER/);
   assert.match(provisioning, /staffAccess/);
   assert.match(provisioning, /hrProfiles/);
