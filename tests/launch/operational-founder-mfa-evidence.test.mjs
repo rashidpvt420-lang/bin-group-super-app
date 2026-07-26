@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { signInWithRequiredTotpMfa } from '../../scripts/lib/firebase-mfa-sign-in.mjs';
 
@@ -7,10 +8,28 @@ const workflow = readFileSync('.github/workflows/operational-application-evidenc
 const verifier = readFileSync('scripts/verify-operational-application-evidence.mjs', 'utf8');
 const provenance = readFileSync('scripts/verify-operational-application-provenance.mjs', 'utf8');
 const helper = readFileSync('scripts/lib/firebase-mfa-sign-in.mjs', 'utf8');
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function generatedFixtures() {
+  const nonce = randomUUID().replaceAll('-', '');
+  const totpSecret = Array.from(
+    { length: 32 },
+    (_, index) => BASE32_ALPHABET[(index * 7 + nonce.charCodeAt(index % nonce.length)) % BASE32_ALPHABET.length],
+  ).join('');
+  return {
+    apiKey: `test-api-${nonce}`,
+    password: `test-password-${nonce}`,
+    totpSecret,
+    pendingCredential: `test-pending-${randomUUID()}`,
+    enrollmentId: `test-factor-${randomUUID()}`,
+    uid: `test-user-${randomUUID()}`,
+    diagnosticMarker: `test-diagnostic-${randomUUID()}`,
+  };
+}
 
 function jwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.signature`;
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.test-signature`;
 }
 
 function response(body, status = 200) {
@@ -22,17 +41,18 @@ function response(body, status = 200) {
 }
 
 test('canonical Founder operational evidence completes a real Firebase TOTP challenge', async () => {
+  const fixture = generatedFixtures();
   const requests = [];
   const idToken = jwt({
-    user_id: 'founder-uid',
-    firebase: { sign_in_second_factor: 'totp-enrollment-id' },
+    user_id: fixture.uid,
+    firebase: { sign_in_second_factor: fixture.enrollmentId },
   });
   const fetchImpl = async (url, options) => {
     requests.push({ url: String(url), body: JSON.parse(String(options.body || '{}')) });
     if (String(url).includes('accounts:signInWithPassword')) {
       return response({
-        mfaPendingCredential: 'pending-credential',
-        mfaInfo: [{ mfaEnrollmentId: 'totp-enrollment-id', totpInfo: {} }],
+        mfaPendingCredential: fixture.pendingCredential,
+        mfaInfo: [{ mfaEnrollmentId: fixture.enrollmentId, totpInfo: {} }],
       });
     }
     if (String(url).includes('mfaSignIn:finalize')) return response({ idToken });
@@ -40,31 +60,32 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
   };
 
   const result = await signInWithRequiredTotpMfa({
-    apiKey: 'firebase-api-key',
+    apiKey: fixture.apiKey,
     email: 'ceo@bin-groups.com',
-    password: 'protected-password',
-    totpSecret: 'JBSWY3DPEHPK3PXP',
+    password: fixture.password,
+    totpSecret: fixture.totpSecret,
     fetchImpl,
   });
 
-  assert.equal(result.uid, 'founder-uid');
-  assert.equal(result.secondFactor, 'totp-enrollment-id');
+  assert.equal(result.uid, fixture.uid);
+  assert.equal(result.secondFactor, fixture.enrollmentId);
   assert.equal(result.idToken, idToken);
   assert.equal(requests.length, 2);
   assert.equal(requests[0].body.email, 'ceo@bin-groups.com');
-  assert.equal(requests[1].body.mfaPendingCredential, 'pending-credential');
-  assert.equal(requests[1].body.mfaEnrollmentId, 'totp-enrollment-id');
+  assert.equal(requests[1].body.mfaPendingCredential, fixture.pendingCredential);
+  assert.equal(requests[1].body.mfaEnrollmentId, fixture.enrollmentId);
   assert.match(requests[1].body.totpVerificationInfo.verificationCode, /^\d{6}$/);
 });
 
 test('Founder MFA helper refuses a direct token without a verified second factor', async () => {
-  const directToken = jwt({ user_id: 'founder-uid', firebase: {} });
+  const fixture = generatedFixtures();
+  const directToken = jwt({ user_id: fixture.uid, firebase: {} });
   await assert.rejects(
     signInWithRequiredTotpMfa({
-      apiKey: 'firebase-api-key',
+      apiKey: fixture.apiKey,
       email: 'ceo@bin-groups.com',
-      password: 'protected-password',
-      totpSecret: 'JBSWY3DPEHPK3PXP',
+      password: fixture.password,
+      totpSecret: fixture.totpSecret,
       fetchImpl: async () => response({ idToken: directToken }),
     }),
     /verified second-factor session/,
@@ -72,22 +93,23 @@ test('Founder MFA helper refuses a direct token without a verified second factor
 });
 
 test('malformed Firebase provider responses never enter error diagnostics', async () => {
+  const fixture = generatedFixtures();
   const malformed = {
     ok: false,
     status: 502,
-    async json() { throw new Error('sensitive-pending-credential'); },
+    async json() { throw new Error(fixture.diagnosticMarker); },
   };
   await assert.rejects(
     signInWithRequiredTotpMfa({
-      apiKey: 'firebase-api-key',
+      apiKey: fixture.apiKey,
       email: 'ceo@bin-groups.com',
-      password: 'protected-password',
-      totpSecret: 'JBSWY3DPEHPK3PXP',
+      password: fixture.password,
+      totpSecret: fixture.totpSecret,
       fetchImpl: async () => malformed,
     }),
     (error) => {
       assert.match(error.message, /HTTP 502/);
-      assert.doesNotMatch(error.message, /sensitive-pending-credential/);
+      assert.doesNotMatch(error.message, new RegExp(fixture.diagnosticMarker));
       return true;
     },
   );
