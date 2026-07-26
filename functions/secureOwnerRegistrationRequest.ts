@@ -1,12 +1,13 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import * as crypto from "crypto";
 import {
   previewOwnerOnboardingQuote,
-  previewOwnerOnboardingQuoteHandler,
   submitOwnerOnboardingPaymentPackageHandler,
   submitPendingOwnerRegistration,
 } from "./ownerRegistrationRequest";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { assertOwnerPortfolioQuoteRecord } from "./ownerPortfolioQuote";
+import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 
 const SUPPORTED_METHODS = new Set(["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"]);
 const MANUAL_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
@@ -348,18 +349,34 @@ async function assertServerQuote(request: any, data: ReturnType<typeof assertCan
     });
   }
 
-  const quote = await previewOwnerOnboardingQuoteHandler({
-    auth: request.auth,
-    data: {
-      properties: data.properties,
-      selectedAddOns: data.serviceDetails.selectedAddOns,
-    },
-  });
+  const quoteStartedAt = finiteNumber(data.quoteQuotedAtMs);
   if (
-    !quote ||
+    !Number.isFinite(quoteStartedAt) ||
+    quoteStartedAt <= 0 ||
+    quoteStartedAt > Date.now() + 60_000
+  ) {
+    throw new HttpsError("failed-precondition", "The accepted server quote timestamp is missing or invalid.");
+  }
+
+  let quote: ReturnType<typeof calculateOwnerOnboardingQuote>;
+  try {
+    quote = calculateOwnerOnboardingQuote(
+      data.properties,
+      data.serviceDetails.selectedAddOns,
+      quoteStartedAt,
+    );
+  } catch (error: any) {
+    throw new HttpsError("invalid-argument", error?.message || "The server could not revalidate the onboarding quote.");
+  }
+
+  const quoteHash = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(quote))
+    .digest("hex");
+  if (
     quote.currency !== "AED" ||
     Number(quote.expiresAtMs || 0) <= Date.now() ||
-    text(quote.quoteHash) !== text(data.quoteHash) ||
+    quoteHash !== text(data.quoteHash) ||
     money(quote.annualContractValue) !== money(data.annualContractValue) ||
     money(quote.activationDeposit) !== money(data.activationDeposit || data.amount)
   ) {
@@ -368,7 +385,7 @@ async function assertServerQuote(request: any, data: ReturnType<typeof assertCan
   return {
     valid: true,
     quoteId: null,
-    quoteHash: quote.quoteHash,
+    quoteHash,
     inputHash: null,
     portfolioAnnualTotal: money(quote.annualContractValue),
     mobilisationDeposit: money(quote.activationDeposit),
