@@ -48,10 +48,12 @@ const legacyMutationPatterns = [
   /batch\.(?:set|update|delete)\s*\(\s*doc\s*\(\s*db\s*,\s*['"]tickets['"]/, 
 ];
 
-test('TicketSystemService creates and mutates only canonical maintenance tickets', () => {
+test('TicketSystemService creates through the Tenant callable and mutates only canonical maintenance tickets', () => {
   assert.match(service, /CANONICAL_TICKET_COLLECTION = 'maintenanceTickets'/);
   assert.match(service, /LEGACY_TICKET_COLLECTION = 'tickets'/);
-  assert.match(service, /addDoc\(collection\(db, CANONICAL_TICKET_COLLECTION\)/);
+  assert.match(service, /httpsCallable\(functions, 'createTenantServiceTicket'\)/);
+  assert.match(service, /clientRequestId: secureClientRequestId\(\)/);
+  assert.doesNotMatch(service, /addDoc\(/);
   assert.match(service, /httpsCallable\(functions, 'adminAssignTechnician'\)/);
   assert.match(service, /httpsCallable\(functions, 'updateTicketLifecycle'\)/);
   assert.match(service, /httpsCallable\(functions, 'tenantReviewTicketCompletion'\)/);
@@ -70,7 +72,7 @@ test('No browser source directly mutates the legacy tickets collection', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('Ticket rule preparation repeatedly enforces read-only legacy compatibility', () => {
+test('Ticket rule preparation repeatedly enforces callable-only canonical creation and read-only legacy compatibility', () => {
   assert.equal(packageJson.scripts['harden:ticket-binding'], 'node scripts/apply-ticket-rule-binding.mjs');
   assert.match(packageJson.scripts['prepare:rules'], /harden:ticket-binding/);
   assert.match(ticketRuleBinding, /replaceMatchBlock\(legacyHeader, legacyReadOnlyBlock, 'legacy \/tickets'\)/);
@@ -95,7 +97,8 @@ test('Ticket rule preparation repeatedly enforces read-only legacy compatibility
     assert.match(legacy, /allow create, update, delete: if false;/);
     assert.doesNotMatch(legacy, /allow update: if safeTicketUpdateByActor\(\);/);
     const canonical = ticketBlock(hardened, 'maintenanceTickets');
-    assert.match(canonical, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+    assert.match(canonical, /allow create: if isAdmin\(\);/);
+    assert.doesNotMatch(canonical, /canCreateTenantBoundTicket/);
     assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
