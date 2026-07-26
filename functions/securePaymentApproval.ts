@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   adminApprovePayment as legacyAdminApprovePayment,
-  adminRejectPayment,
+  adminRejectPayment as legacyAdminRejectPayment,
 } from "./paymentTransactionApproval";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 
@@ -10,9 +10,11 @@ if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const MANUAL_PAYMENT_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
+const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
+const lower = (value: unknown) => text(value).toLowerCase();
 
 const isRentCollectionPayment = (payment: any) =>
   upper(payment?.recordType) === "OWNER_RENT_PAYMENT" ||
@@ -22,6 +24,29 @@ const isRentCollectionPayment = (payment: any) =>
   upper(payment?.paymentType) === "RENT_COLLECTION";
 
 const resolvePaymentId = (data: any) => text(data?.paymentId || data?.id);
+
+async function requireMfaFinanceAdmin(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
+  const token = auth.token || {};
+  const role = lower(token.role || token.userRole || token.primaryRole);
+  const authorized =
+    token.admin === true ||
+    token.isAdmin === true ||
+    token.superAdmin === true ||
+    token.super_admin === true ||
+    token.ceo === true ||
+    FINANCE_ADMIN_ROLES.has(role);
+  if (!authorized || token.suspended === true) {
+    throw new HttpsError("permission-denied", "Finance Admin authority is required.");
+  }
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required for payment decisions.");
+  }
+  const record = await admin.auth().getUser(auth.uid);
+  if (record.disabled || !record.emailVerified || !record.email) {
+    throw new HttpsError("permission-denied", "The Admin account is not active and verified.");
+  }
+}
 
 const isFiniteCoordinate = (value: unknown, minimum: number, maximum: number) => {
   const coordinate = Number(value);
@@ -115,6 +140,7 @@ async function assertOwnerActivationGate(paymentId: string) {
 export const adminApprovePayment = onCall(
   { cors: true, enforceAppCheck: true },
   async (request) => {
+    await requireMfaFinanceAdmin(request.auth);
     const paymentId = resolvePaymentId(request.data);
     if (!paymentId) throw new HttpsError("invalid-argument", "paymentId is required.");
 
@@ -128,4 +154,17 @@ export const adminApprovePayment = onCall(
   },
 );
 
-export { adminRejectPayment };
+export const adminRejectPayment = onCall(
+  { cors: true, enforceAppCheck: true },
+  async (request) => {
+    await requireMfaFinanceAdmin(request.auth);
+    const paymentId = resolvePaymentId(request.data);
+    if (!paymentId) throw new HttpsError("invalid-argument", "paymentId is required.");
+
+    const legacyRunner = (legacyAdminRejectPayment as any).run;
+    if (typeof legacyRunner !== "function") {
+      throw new HttpsError("internal", "The protected payment rejection handler is unavailable.");
+    }
+    return legacyRunner(request);
+  },
+);
