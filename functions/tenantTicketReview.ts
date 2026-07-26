@@ -15,6 +15,10 @@ const TENANT_REVIEW_STATUSES = new Set([
   "COMPLETED_PENDING_APPROVAL",
   "COMPLETED_PENDING_TENANT_APPROVAL",
 ]);
+const DEFINITIVE_AUTH_LOOKUP_ERRORS = new Set([
+  "auth/user-not-found",
+  "auth/invalid-uid",
+]);
 
 function normalizedStatus(value: unknown) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, "_");
@@ -28,8 +32,26 @@ function firstTenantId(data: FirebaseFirestore.DocumentData) {
   return cleanText(data.tenantId || data.tenantUid || data.userId || data.requesterId, 128);
 }
 
-function firstTenantEmail(data: FirebaseFirestore.DocumentData) {
-  return cleanText(data.tenantEmail || data.requesterEmail || data.reporterEmail || data.email, 320).toLowerCase();
+async function verifiedTenantEmail(tenantId: string) {
+  try {
+    const account = await admin.auth().getUser(tenantId);
+    if (account.disabled || !account.emailVerified) return "";
+    return cleanText(account.email, 320).toLowerCase();
+  } catch (error) {
+    const errorCode = (error as { code?: string })?.code || "unknown";
+    if (DEFINITIVE_AUTH_LOOKUP_ERRORS.has(errorCode)) {
+      console.error("[TenantCompletionNotification] Authoritative Tenant account is unavailable", {
+        tenantId,
+        errorCode,
+      });
+      return "";
+    }
+    console.error("[TenantCompletionNotification] Transient authoritative Tenant lookup failure; retrying event", {
+      tenantId,
+      errorCode,
+    });
+    throw error;
+  }
 }
 
 /**
@@ -40,7 +62,7 @@ function firstTenantEmail(data: FirebaseFirestore.DocumentData) {
  * to the source documents for protected production evidence.
  */
 export const onTenantCompletionReviewRequired = onDocumentUpdated(
-  { document: "maintenanceTickets/{ticketId}", region: "europe-west3" },
+  { document: "maintenanceTickets/{ticketId}", region: "europe-west3", retry: true },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
@@ -64,13 +86,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
     const mailRef = db.collection("mail").doc(packetId);
     const auditRef = db.collection("audit_logs").doc(`audit_${packetId}`.slice(0, 240));
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-
-    let tenantEmail = firstTenantEmail(after);
-    if (!tenantEmail) {
-      tenantEmail = await admin.auth().getUser(tenantId)
-        .then((record) => cleanText(record.email, 320).toLowerCase())
-        .catch(() => "");
-    }
+    const tenantEmail = await verifiedTenantEmail(tenantId);
 
     const propertyName = cleanText(after.propertyName || after.property?.name || "your property", 160);
     const category = cleanText(after.category || after.complaintCategory || after.trade || "maintenance request", 120);
@@ -117,6 +133,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
             tenantId,
             notificationId: notificationRef.id,
             completionVersion,
+            recipientSource: "firebase_auth_verified_email",
           },
           createdAt: ts(),
         });
@@ -133,6 +150,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
           mailId: tenantEmail ? mailRef.id : null,
           tenantId,
           tenantEmailPresent: Boolean(tenantEmail),
+          tenantEmailSource: tenantEmail ? "firebase_auth_verified_email" : "none",
           completionVersion,
         },
         createdAt: ts(),
