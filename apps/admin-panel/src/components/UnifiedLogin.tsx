@@ -11,11 +11,6 @@ const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
 const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
 const AUTH_VERIFICATION_TIMEOUT_MS = 15_000;
 const AUTH_RESET_TIMEOUT_MS = 5_000;
-const E2E_MFA_MARKER = 'bin-e2e-admin-mfa-test';
-const ADMIN_HOSTS = new Set([
-    'bin-group-admin-panel.web.app',
-    'bin-group-admin-panel.firebaseapp.com',
-]);
 
 const timeoutError = (code: string) => Object.assign(new Error(code), { code });
 
@@ -32,21 +27,6 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
         },
     );
 });
-
-const enableProtectedE2eMfaVerification = () => {
-    if (typeof window === 'undefined') return false;
-    const webdriver = window.navigator.webdriver === true;
-    const marker = window.localStorage.getItem(E2E_MFA_MARKER) === 'enabled';
-    const trustedHost = ADMIN_HOSTS.has(window.location.hostname);
-    if (!webdriver || !marker || !trustedHost) return false;
-    auth.settings.appVerificationDisabledForTesting = true;
-    return true;
-};
-
-const clearProtectedE2eMfaMarker = () => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.removeItem(E2E_MFA_MARKER);
-};
 
 export default function UnifiedLogin() {
     const { error: authError, isAuthenticated } = useAuth();
@@ -74,7 +54,6 @@ export default function UnifiedLogin() {
             verificationTimerRef.current = null;
             setLocalLoading(false);
             setLocalError('The primary credential was accepted, but Admin authorization did not finish. Reset the secure session and sign in again.');
-            clearProtectedE2eMfaMarker();
             void signOut(auth).catch(() => undefined);
         }, AUTH_VERIFICATION_TIMEOUT_MS);
     };
@@ -123,7 +102,6 @@ export default function UnifiedLogin() {
 
     const resetSecureSession = async () => {
         clearVerificationTimer();
-        clearProtectedE2eMfaMarker();
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
@@ -149,7 +127,6 @@ export default function UnifiedLogin() {
         setLocalError(null);
         setMfaResolver(null);
         try {
-            enableProtectedE2eMfaVerification();
             await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
             const result = await withTimeout(
                 signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
@@ -157,7 +134,6 @@ export default function UnifiedLogin() {
                 'ADMIN_SIGN_IN_TIMEOUT',
             );
             if (result.user) {
-                clearProtectedE2eMfaMarker();
                 console.info('[ADMIN-AUTH] Primary credential accepted.');
                 startAuthorizationTimer();
             }
@@ -168,11 +144,9 @@ export default function UnifiedLogin() {
                     setMfaResolver(getMultiFactorResolver(auth, err));
                     setLocalError(null);
                 } catch (resolverError) {
-                    clearProtectedE2eMfaMarker();
                     setLocalError(friendlyAuthError(resolverError));
                 }
             } else {
-                clearProtectedE2eMfaMarker();
                 if (err?.code === 'ADMIN_PERSISTENCE_TIMEOUT' || err?.code === 'ADMIN_SIGN_IN_TIMEOUT') {
                     void signOut(auth).catch(() => undefined);
                 }
@@ -233,7 +207,6 @@ export default function UnifiedLogin() {
                         <AdminMfaSignInChallenge
                             resolver={mfaResolver}
                             onResolved={() => {
-                                clearProtectedE2eMfaMarker();
                                 clearVerificationTimer();
                                 setLocalLoading(true);
                                 setMfaResolver(null);
@@ -241,7 +214,6 @@ export default function UnifiedLogin() {
                                 startAuthorizationTimer();
                             }}
                             onCancel={() => {
-                                clearProtectedE2eMfaMarker();
                                 clearVerificationTimer();
                                 setLocalLoading(false);
                                 setMfaResolver(null);
