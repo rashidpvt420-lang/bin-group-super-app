@@ -17,6 +17,8 @@ export * from "./securePaymentApproval";
 export * from "./paymentConfiguration";
 export * from "./mailDelivery";
 export * from "./notificationDelivery";
+export * from "./technicianDispatchNotifications";
+export * from "./technicianBeforeWorkEvidence";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./adminUserProvisioning";
