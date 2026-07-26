@@ -2,7 +2,7 @@
 
 ## Foreground tracking
 
-The controlled pilot uses foreground browser geolocation. A Technician is shown as live only while the mission page owns an active geolocation watch and the canonical server session remains fresh.
+The controlled pilot uses foreground browser geolocation. A Technician is shown as live only while the mission page owns an active geolocation watch and the canonical server session remains fresh. The client generates a candidate tracking-session ID first, but does not publish active ticket, Technician, session, or watch state until the browser successfully returns a watch ID. A synchronous watch-installation failure is recorded as `WATCH_INSTALL_FAILED` and rejects startup.
 
 ## Retry minimization
 
