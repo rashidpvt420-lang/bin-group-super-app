@@ -123,7 +123,7 @@ export async function reserveAiUsageQuota(
       throw new HttpsError("resource-exhausted", "Daily AI usage limit reached. Try again after the UTC quota reset.");
     }
 
-    transaction.set(ref, {
+    const next = {
       uid: caller.uid,
       day,
       counts,
@@ -135,8 +135,9 @@ export async function reserveAiUsageQuota(
       lastCapability: capability,
       reservationUpdatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-      ...(snap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-    }, { merge: true });
+    };
+    if (snap.exists) transaction.update(ref, next);
+    else transaction.set(ref, { ...next, createdAt: FieldValue.serverTimestamp() });
   });
 
   return { ...caller, capability, units: safeUnits, day, reservationId };
@@ -162,14 +163,14 @@ export async function settleAiUsageQuota(reservation: AiQuotaReservation, charge
       ? { ...counts, [reservation.capability]: capabilityUsed + reservation.units }
       : counts;
 
-    transaction.set(ref, {
+    transaction.update(ref, {
       counts: nextCounts,
       totalUnits: charge ? totalUsed + reservation.units : totalUsed,
       reservations,
       lastCapability: reservation.capability,
       lastSettlement: charge ? "charged" : "released",
       updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    });
     return { settled: true, charged: charge };
   });
 }
