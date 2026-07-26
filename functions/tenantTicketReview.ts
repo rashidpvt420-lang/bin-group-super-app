@@ -28,8 +28,18 @@ function firstTenantId(data: FirebaseFirestore.DocumentData) {
   return cleanText(data.tenantId || data.tenantUid || data.userId || data.requesterId, 128);
 }
 
-function firstTenantEmail(data: FirebaseFirestore.DocumentData) {
-  return cleanText(data.tenantEmail || data.requesterEmail || data.reporterEmail || data.email, 320).toLowerCase();
+async function verifiedTenantEmail(tenantId: string) {
+  try {
+    const account = await admin.auth().getUser(tenantId);
+    if (account.disabled || !account.emailVerified) return "";
+    return cleanText(account.email, 320).toLowerCase();
+  } catch (error) {
+    console.error("[TenantCompletionNotification] Could not resolve authoritative Tenant email", {
+      tenantId,
+      errorCode: (error as { code?: string })?.code || "unknown",
+    });
+    return "";
+  }
 }
 
 /**
@@ -64,13 +74,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
     const mailRef = db.collection("mail").doc(packetId);
     const auditRef = db.collection("audit_logs").doc(`audit_${packetId}`.slice(0, 240));
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-
-    let tenantEmail = firstTenantEmail(after);
-    if (!tenantEmail) {
-      tenantEmail = await admin.auth().getUser(tenantId)
-        .then((record) => cleanText(record.email, 320).toLowerCase())
-        .catch(() => "");
-    }
+    const tenantEmail = await verifiedTenantEmail(tenantId);
 
     const propertyName = cleanText(after.propertyName || after.property?.name || "your property", 160);
     const category = cleanText(after.category || after.complaintCategory || after.trade || "maintenance request", 120);
@@ -117,6 +121,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
             tenantId,
             notificationId: notificationRef.id,
             completionVersion,
+            recipientSource: "firebase_auth_verified_email",
           },
           createdAt: ts(),
         });
@@ -133,6 +138,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
           mailId: tenantEmail ? mailRef.id : null,
           tenantId,
           tenantEmailPresent: Boolean(tenantEmail),
+          tenantEmailSource: tenantEmail ? "firebase_auth_verified_email" : "none",
           completionVersion,
         },
         createdAt: ts(),
