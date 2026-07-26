@@ -31,12 +31,15 @@ test('production Admin MFA preflight requires exactly one canonical founder acco
 test('protected deployment embeds single-founder evidence before exact-SHA production verification', async () => {
   const source = await read('scripts/deploy-firebase-production.mjs');
   const preflight = source.indexOf('await verifyAdminMfaProduction');
-  const deploy = source.search(/retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/);
+  const functionBatches = source.indexOf('deployFunctionsInBatches();');
+  const nonFunctionServices = source.search(/retryFirebase\(\s*['"]firestore:rules,firestore:indexes,storage,hosting['"]/);
   const evidence = source.indexOf('deploymentMetadata.adminMfa = adminMfaEvidence');
   const verify = source.indexOf("'scripts/verify-production-deployment.mjs'");
-  assert.ok(preflight >= 0 && deploy > preflight, 'single-founder Admin MFA must run before deployment');
-  assert.ok(evidence > deploy, 'Admin MFA evidence must be embedded after successful deployment metadata creation');
+  assert.ok(preflight >= 0 && functionBatches > preflight, 'single-founder Admin MFA must run before Function deployment');
+  assert.ok(nonFunctionServices > functionBatches, 'non-Function Firebase services must remain behind all Function batches');
+  assert.ok(evidence > nonFunctionServices, 'Admin MFA evidence must be embedded after successful deployment metadata creation');
   assert.ok(verify > evidence, 'same-run production verification must validate embedded founder evidence');
+  assert.doesNotMatch(source, /retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/);
 });
 
 test('operator guidance states the canonical one-founder authority model', async () => {
