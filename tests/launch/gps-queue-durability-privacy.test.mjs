@@ -71,7 +71,9 @@ test('precise retry data is UID-scoped, session-only and purged on account chang
   assert.match(tracking, /window\.sessionStorage/);
   assert.match(tracking, /encodeURIComponent\(technicianUid\)/);
   assert.match(tracking, /function minimalPoint/);
-  assert.match(tracking, /toFixed\(6\)/);
+  assert.match(tracking, /value\.toFixed\(decimals\)/);
+  assert.match(tracking, /round\(Number\(point\.latitude \?\? point\.lat\), 6\)/);
+  assert.match(tracking, /round\(Number\(point\.longitude \?\? point\.lng\), 6\)/);
   assert.match(tracking, /purgeOtherTechnicianQueues/);
   assert.match(tracking, /export function purgeLiveTrackingQueue/);
   assert.doesNotMatch(tracking, /window\.localStorage/);
