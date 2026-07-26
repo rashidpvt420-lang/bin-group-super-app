@@ -15,6 +15,10 @@ const TENANT_REVIEW_STATUSES = new Set([
   "COMPLETED_PENDING_APPROVAL",
   "COMPLETED_PENDING_TENANT_APPROVAL",
 ]);
+const DEFINITIVE_AUTH_LOOKUP_ERRORS = new Set([
+  "auth/user-not-found",
+  "auth/invalid-uid",
+]);
 
 function normalizedStatus(value: unknown) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, "_");
@@ -34,11 +38,19 @@ async function verifiedTenantEmail(tenantId: string) {
     if (account.disabled || !account.emailVerified) return "";
     return cleanText(account.email, 320).toLowerCase();
   } catch (error) {
-    console.error("[TenantCompletionNotification] Could not resolve authoritative Tenant email", {
+    const errorCode = (error as { code?: string })?.code || "unknown";
+    if (DEFINITIVE_AUTH_LOOKUP_ERRORS.has(errorCode)) {
+      console.error("[TenantCompletionNotification] Authoritative Tenant account is unavailable", {
+        tenantId,
+        errorCode,
+      });
+      return "";
+    }
+    console.error("[TenantCompletionNotification] Transient authoritative Tenant lookup failure; retrying event", {
       tenantId,
-      errorCode: (error as { code?: string })?.code || "unknown",
+      errorCode,
     });
-    return "";
+    throw error;
   }
 }
 
@@ -50,7 +62,7 @@ async function verifiedTenantEmail(tenantId: string) {
  * to the source documents for protected production evidence.
  */
 export const onTenantCompletionReviewRequired = onDocumentUpdated(
-  { document: "maintenanceTickets/{ticketId}", region: "europe-west3" },
+  { document: "maintenanceTickets/{ticketId}", region: "europe-west3", retry: true },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
