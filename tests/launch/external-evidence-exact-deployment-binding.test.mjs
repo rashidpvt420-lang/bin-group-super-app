@@ -19,7 +19,7 @@ const workflows = [
   '.github/workflows/technician-physical-evidence.yml',
 ];
 
-test('all external production evidence requires an exact successful deployment run', () => {
+test('all direct external production evidence requires an exact successful deployment run', () => {
   for (const path of workflows) {
     const source = read(path);
     assert.match(source, /production_deploy_run_id:/, `${path} must request a deployment run`);
@@ -60,6 +60,20 @@ test('deployment binding runs before every external provider or operational proo
     'verify-exact-production-deployment-artifact.mjs',
     'Verify real physical technician mission',
     'Publish canonical technician operational evidence',
+  ]);
+});
+
+test('operational application evidence verifies the trusted deployment workflow before publication', () => {
+  const application = read('.github/workflows/operational-application-evidence.yml');
+  assert.match(application, /production_deploy_run_id:/);
+  assert.match(application, /verify-trusted-production-deploy-source\.mjs/);
+  assert.doesNotMatch(application, /GITHUB_ACTOR"?\s*==\s*"?github-actions\[bot\]/);
+  ordered(application, [
+    'verify-trusted-production-deploy-source.mjs',
+    'production-deployment-${{ inputs.expected_commit_sha }}',
+    'verify-operational-application-provenance.mjs',
+    'verify-operational-application-evidence-mfa.mjs',
+    'publish-operational-application-evidence.mjs',
   ]);
 });
 
