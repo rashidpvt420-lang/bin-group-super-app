@@ -43,6 +43,7 @@ test('dispatch assignment creates an idempotent technician notification with del
     /TECHNICIAN_JOB_ASSIGNED/,
     /transaction\.create\(notificationRef/,
     /assignmentNotificationId/,
+    /assignmentEventKey/,
     /recipientRole: "technician"/,
     /link: `\/technician\/job\/\$\{ticketId\}`/,
     /TECHNICIAN_ASSIGNMENT_NOTIFICATION_CREATED/,
@@ -96,10 +97,11 @@ test('before-work evidence is technician-owned, Storage-verified and required be
 });
 
 test('offline lifecycle actions replay automatically but arrival and completion stay foreground-only', async () => {
-  const [actions, agent, app] = await Promise.all([
+  const [actions, agent, app, offlinePage] = await Promise.all([
     read('src/technician/utils/offlineJobActions.ts'),
     read('src/technician/components/TechnicianOfflineSyncAgent.tsx'),
     read('src/technician/TechnicianApp.tsx'),
+    read('src/technician/pages/TechnicianOfflinePage.tsx'),
   ]);
 
   expectAll(actions, [
@@ -116,10 +118,16 @@ test('offline lifecycle actions replay automatically but arrival and completion 
     /replayEligibleOfflineJobActions/,
     /technician-offline-sync-agent/,
   ], 'automatic sync agent');
+  expectAll(offlinePage, [
+    /replayOfflineJobAction/,
+    /replayEligibleOfflineJobActions/,
+    /Arrival requires fresh foreground GPS/,
+    /Completion requires foreground evidence upload/,
+  ], 'manual queue UI');
   assert.match(app, /<TechnicianOfflineSyncAgent \/>/);
 });
 
-test('Storage uploads retry transient failures and protected E2E covers field failure modes', async () => {
+test('Storage uploads retry transient failures and protected E2E covers field failure modes honestly', async () => {
   const [firebase, e2e] = await Promise.all([
     read('src/lib/firebase.ts'),
     read('tests/e2e/business-technician.spec.ts'),
@@ -138,12 +146,12 @@ test('Storage uploads retry transient failures and protected E2E covers field fa
     /pushTokenCount/,
     /PROTECTED_E2E_DISPATCH/,
     /technician-before-work-file/,
-    /completionUploadRequests/,
-    /route\.abort\('failed'\)/,
+    /network-recovery-after-work-proof\.png/,
     /location permission denial keeps arrival fail-closed/,
     /poor GPS accuracy keeps arrival fail-closed/,
     /offline EN_ROUTE action automatically replays/,
     /context\.setOffline\(true\)/,
     /context\.setOffline\(false\)/,
   ], 'protected Technician E2E');
+  assert.doesNotMatch(e2e, /page\.route\(|route\.abort\(|route\.fulfill\(|route\.continue\(/);
 });
