@@ -20,6 +20,22 @@ function isAdmin(auth: any) {
   return token.admin === true || token.super_admin === true || token.superAdmin === true || ["admin", "super_admin", "operations_admin"].includes(role);
 }
 
+function assignedTechnicianId(data: FirebaseFirestore.DocumentData) {
+  return String(
+    data.assignedTechnicianId ||
+      data.technicianId ||
+      data.assignedTechId ||
+      data.technicianUid ||
+      data.techId ||
+      "",
+  ).trim();
+}
+
+function hasTechnicianBeforeWorkEvidence(data: FirebaseFirestore.DocumentData) {
+  return Boolean(String(data.technicianBeforePhotoUrl || "").trim()) ||
+    (Array.isArray(data.technicianBeforePhotos) && data.technicianBeforePhotos.length > 0);
+}
+
 export function technicianCredentialMillis(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "number") {
@@ -151,6 +167,26 @@ async function assertTechnicianReadiness(auth: any, action: TechnicianAction, no
   }
 }
 
+async function assertLifecycleEvidence(auth: any, data: any) {
+  if (!auth?.uid || isAdmin(auth)) return;
+  const nextStatus = String(data?.status || "").trim().toUpperCase();
+  if (!["IN_PROGRESS", "COMPLETED", "COMPLETED_PENDING_APPROVAL"].includes(nextStatus)) return;
+  const ticketId = String(data?.ticketId || "").trim();
+  if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
+  const ticketSnap = await db.collection("maintenanceTickets").doc(ticketId).get();
+  if (!ticketSnap.exists) throw new HttpsError("not-found", "Mission not found.");
+  const ticket = ticketSnap.data() || {};
+  if (assignedTechnicianId(ticket) !== auth.uid) {
+    throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+  }
+  if (!hasTechnicianBeforeWorkEvidence(ticket)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Capture and verify a technician before-work site photo after arrival before starting or completing work.",
+    );
+  }
+}
+
 export const getTechnicianOperationalReadiness = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
@@ -189,6 +225,7 @@ export const getTechnicianOperationalReadiness = onCall(
 
 async function runSecured(legacyCallable: any, request: any, action: TechnicianAction) {
   await assertTechnicianReadiness(request.auth, action);
+  if (action === "UPDATE_LIFECYCLE") await assertLifecycleEvidence(request.auth, request.data);
   if (typeof legacyCallable?.run !== "function") throw new HttpsError("internal", "Operational callable handler is unavailable.");
   return legacyCallable.run(request);
 }
