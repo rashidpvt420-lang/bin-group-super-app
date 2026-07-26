@@ -46,6 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp tests/launch/property-geo-authority.test.mjs /tmp/property-geo-authority.test.mjs
           expected_source='28806cc2b488733067cef595d0cb5f040f2e0ee3'
           git fetch --no-tags origin refs/heads/fix/property-tenant-authority-current-main:refs/remotes/origin/property-tenant-authority-source
           [[ "$(git rev-parse refs/remotes/origin/property-tenant-authority-source)" == "$expected_source" ]]
@@ -63,13 +64,13 @@ jobs:
             src/tenant/pages/TenantRequestPage.tsx
             test/property-geo-authority-rules.test.js
             test/tenant-ticket-server-authority-rules.test.js
-            tests/launch/property-geo-authority.test.mjs
             tests/launch/property-geo-catchall-authority.test.mjs
           )
           for file in "${files[@]}"; do
             mkdir -p "$(dirname "$file")"
             git show "refs/remotes/origin/property-tenant-authority-source:$file" > "$file"
           done
+          cp /tmp/property-geo-authority.test.mjs tests/launch/property-geo-authority.test.mjs
 
       - name: Make ticket-create verification collection-scoped
         shell: bash
@@ -175,13 +176,17 @@ jobs:
           npm run prepare:rules
           npm run verify:rules-hardening
 
-      - name: Validate focused source contracts
-        run: |
-          node --test \
-            tests/launch/property-geo-authority.test.mjs \
-            tests/launch/property-geo-catchall-authority.test.mjs \
-            tests/launch/property-geo-dispatch-authority.test.mjs \
-            tests/launch/property-tenant-callable-authority.test.mjs
+      - name: Validate property geo authority contract
+        run: node --test tests/launch/property-geo-authority.test.mjs
+
+      - name: Validate property geo catch-all contract
+        run: node --test tests/launch/property-geo-catchall-authority.test.mjs
+
+      - name: Validate property dispatch authority contract
+        run: node --test tests/launch/property-geo-dispatch-authority.test.mjs
+
+      - name: Validate Tenant callable integration contract
+        run: node --test tests/launch/property-tenant-callable-authority.test.mjs
 
       - name: TypeScript check and builds
         run: |
@@ -223,12 +228,16 @@ jobs:
           git rm \
             .github/workflows/apply-property-tenant-authority-current-main.yml \
             .github/workflows/retry-property-tenant-authority-current-main.yml \
-            .github/workflows/diagnose-property-tenant-rules.yml
+            .github/workflows/diagnose-property-tenant-rules.yml \
+            .github/workflows/diagnose-property-tenant-contracts.yml \
+            .github/workflows/diagnose-property-geo-contract-output.yml
           changed="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             .github/workflows/apply-property-tenant-authority-current-main.yml \
             .github/workflows/retry-property-tenant-authority-current-main.yml \
             .github/workflows/diagnose-property-tenant-rules.yml \
+            .github/workflows/diagnose-property-tenant-contracts.yml \
+            .github/workflows/diagnose-property-geo-contract-output.yml \
             apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
             apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
             scripts/apply-ticket-rule-binding.mjs \
