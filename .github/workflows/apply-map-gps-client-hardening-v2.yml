@@ -32,32 +32,17 @@ jobs:
           ref: fix/map-gps-client-hardening-v2
           fetch-depth: 0
 
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install declared repository dependencies
+        run: bash scripts/npm-install-retry.sh
+
       - name: Apply deterministic current-main reconciliation
         run: python .github/scripts/apply-map-gps-client-hardening-v2.py
-
-      - name: Capture verified property pin regression
-        id: verified-pin
-        continue-on-error: true
-        run: |
-          set +e
-          node --test --test-name-pattern="unverified or incomplete" tests/launch/map-gps-state-behavior.test.mjs > /tmp/verified-property-pin.log 2>&1
-          status=$?
-          cat /tmp/verified-property-pin.log
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit "$status"
-
-      - name: Upload verified property pin diagnostic
-        if: steps.verified-pin.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: verified-property-pin-diagnostic
-          path: /tmp/verified-property-pin.log
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Refuse reconciliation while verified pin regression fails
-        if: steps.verified-pin.outcome == 'failure'
-        run: exit 1
 
       - name: Run all focused lifecycle and GPS regressions
         run: |
