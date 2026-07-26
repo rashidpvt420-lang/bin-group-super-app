@@ -5,6 +5,7 @@ const source = fs.readFileSync(new URL('../../functions/secureOwnerRegistrationR
 const legacy = fs.readFileSync(new URL('../../functions/ownerRegistrationRequest.ts', import.meta.url), 'utf8');
 
 const required = [
+  'import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";',
   'const PAYMENT_PLANS = new Set(["annual", "quarterly", "monthly"])',
   'const CONTRACT_MODE_NAMES = new Map<ContractMode, string>',
   'function canonicalProperty',
@@ -28,7 +29,11 @@ const required = [
   'properties: properties.length',
   'const commercial = assertCanonicalCommercialTerms(request.data);',
   'const data = commercial.data;',
-  'const quote = await previewOwnerOnboardingQuoteHandler({',
+  'const quoteStartedAt = finiteNumber(data.quoteQuotedAtMs);',
+  'quoteStartedAt > Date.now() + 60_000',
+  'quote = calculateOwnerOnboardingQuote(',
+  '.update(JSON.stringify(quote))',
+  'The submitted onboarding quote is missing, expired or does not match the server calculation.',
   'return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });',
 ];
 
@@ -41,7 +46,10 @@ assert.ok(legacy.includes('export async function submitOwnerOnboardingPaymentPac
 assert.ok(legacy.includes('previewOwnerOnboardingQuoteHandler,'), 'preview callable must use the explicit handler');
 assert.ok(legacy.includes('submitOwnerOnboardingPaymentPackageHandler,'), 'payment callable must use the explicit handler');
 assert.ok(source.indexOf('const commercial = assertCanonicalCommercialTerms(request.data);') < source.indexOf('const quote = await assertServerQuote(request, data);'), 'commercial terms must be validated before quote acceptance');
+assert.ok(source.indexOf('const quoteStartedAt = finiteNumber(data.quoteQuotedAtMs);') < source.indexOf('quote = calculateOwnerOnboardingQuote('), 'accepted quote timestamp must be validated before deterministic recalculation');
+assert.ok(source.indexOf('quote = calculateOwnerOnboardingQuote(') < source.indexOf('.update(JSON.stringify(quote))'), 'deterministic server quote must be calculated before its hash is checked');
 assert.ok(source.indexOf('const quote = await assertServerQuote(request, data);') < source.indexOf('return submitOwnerOnboardingPaymentPackageHandler({ auth: request.auth, data });'), 'server quote must be validated before persistence');
+assert.ok(!source.includes('previewOwnerOnboardingQuoteHandler({'), 'secure submit must not regenerate a timestamped quote through the preview handler');
 assert.ok(!source.includes('CONTRACT_MODE_NAMES[contractMode]'), 'dynamic object indexing must not be used for contract mode resolution');
 assert.ok(!source.includes('Object.assign'), 'untrusted onboarding objects must not be broadly copied');
 assert.ok(!source.includes('data.serviceDetails ='), 'browser request data must not be mutated in place');
