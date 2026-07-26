@@ -12,13 +12,31 @@ const legacyWritePrefix = `          'system_secrets',
           'users',
           'audit_logs',
           'admin_security_sessions',`;
+const propertyLegacyWritePrefix = `          'system_secrets',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',`;
 const hardenedWritePrefix = `          'system_secrets',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const propertyHardenedWritePrefix = `          'system_secrets',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
 const liveLocationWritePrefix = `          'system_secrets',
           'technician_live_locations',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const propertyLiveLocationWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
@@ -36,14 +54,21 @@ if (!source.includes(hardenedRead) && !source.includes(liveLocationRead)) {
   throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
 }
 
-// Preserve a stricter canonical fallback if another authority hardener has also
-// excluded server-managed live locations. Never replace it with the shorter
-// private-HR-only list.
+// Preserve stricter property and live-location exclusions installed by other
+// authority hardeners. The Private-HR pass may run after the property hardener,
+// before the live-location hardener, or against an already canonical ruleset.
 let canonicalWritePrefix = hardenedWritePrefix;
-if (source.includes(liveLocationWritePrefix)) {
+if (source.includes(propertyLiveLocationWritePrefix)) {
+  canonicalWritePrefix = propertyLiveLocationWritePrefix;
+} else if (source.includes(liveLocationWritePrefix)) {
   canonicalWritePrefix = liveLocationWritePrefix;
+} else if (source.includes(propertyHardenedWritePrefix)) {
+  canonicalWritePrefix = propertyHardenedWritePrefix;
 } else if (source.includes(hardenedWritePrefix)) {
-  // Already private-HR canonical.
+  // Already private-HR canonical without property/live-location isolation.
+} else if (source.includes(propertyLegacyWritePrefix)) {
+  source = source.replaceAll(propertyLegacyWritePrefix, propertyHardenedWritePrefix);
+  canonicalWritePrefix = propertyHardenedWritePrefix;
 } else if (source.includes(legacyWritePrefix)) {
   source = source.replaceAll(legacyWritePrefix, hardenedWritePrefix);
 } else {
@@ -65,4 +90,4 @@ if (source.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) {
 }
 
 writeFileSync(rulesPath, source, 'utf8');
-console.log('[harden-private-hr-authority] private_hr_profiles is Admin-SDK-only and excluded from all browser fallbacks');
+console.log('[harden-private-hr-authority] private_hr_profiles is Admin-SDK-only and stricter property/live-location exclusions are preserved');
