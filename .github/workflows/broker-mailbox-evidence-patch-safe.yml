@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.actor == github.repository_owner
+    if: github.repository == 'rashidpvt420-lang/bin-group-super-app' && github.ref == 'refs/heads/fix/broker-otp-hmac-real-input'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact Broker hardening branch
