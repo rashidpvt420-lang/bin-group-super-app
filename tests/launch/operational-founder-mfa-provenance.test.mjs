@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const url = (path) => new URL(`../../${path}`, import.meta.url);
+const read = (path) => readFile(url(path), 'utf8');
+
+test('operational MFA evidence scripts parse under the repository Node runtime', () => {
+  for (const path of [
+    'scripts/lib/firebase-mfa-sign-in.mjs',
+    'scripts/verify-operational-application-evidence-mfa.mjs',
+    'scripts/verify-operational-application-provenance.mjs',
+  ]) {
+    const filename = fileURLToPath(url(path));
+    const result = spawnSync(process.execPath, ['--check', filename], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `${path} failed Node syntax validation:\n${result.stderr || result.stdout}`);
+  }
+});
 
 test('operational evidence injects canonical Founder credentials and uses the MFA-aware verifier', async () => {
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
