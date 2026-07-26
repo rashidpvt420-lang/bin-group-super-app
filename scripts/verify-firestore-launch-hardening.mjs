@@ -80,7 +80,7 @@ const requiredFragments = [
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
   ['private HR profiles are server-only', "match /private_hr_profiles/{profileId} {\n      allow read, write: if false;"],
-  ['canonical live locations are Admin-readable only', "match /technician_live_locations/{technicianId} {\n      allow read: if isAdmin();\n      allow create, update, delete: if false;"],
+  ['canonical live locations are suspension-aware dispatch-readable only', "match /technician_live_locations/{technicianId} {\n      allow read: if canDispatchJobs();\n      allow create, update, delete: if false;"],
 ];
 
 const failures = [];
