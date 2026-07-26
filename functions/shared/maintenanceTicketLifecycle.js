@@ -5,6 +5,8 @@ export const UNRESOLVED_MAINTENANCE_TICKET_STATUSES = Object.freeze([
   "OPEN",
   "PENDING",
   "PENDING_ASSIGNMENT",
+  "PENDING_SCHEDULING",
+  "SCHEDULED",
   "ASSIGNED",
   "AUTO_ASSIGNED",
   "ACCEPTED",
@@ -14,6 +16,9 @@ export const UNRESOLVED_MAINTENANCE_TICKET_STATUSES = Object.freeze([
   "IN_PROGRESS",
   "WORK_STARTED",
   "WAITING_PARTS",
+  "QUOTE_REJECTED",
+  "RESCHEDULE_REQUESTED",
+  "CANCELLATION_REQUESTED",
   "ESCALATED",
   "REOPENED",
   "ON_HOLD",
@@ -29,34 +34,41 @@ export const TERMINAL_MAINTENANCE_TICKET_STATUSES = Object.freeze([
   "REJECTED",
 ]);
 
-const LEGACY_UNRESOLVED_STATUS_VALUES = Object.freeze([
-  "new",
-  "pending",
-  "pending_assignment",
-  "dispatched",
-  "claimed",
-  "started",
-]);
+const LEGACY_UNRESOLVED_STATUS_ALIASES = Object.freeze({
+  NEW: "OPEN",
+  DISPATCHED: "ASSIGNED",
+  CLAIMED: "ACCEPTED",
+  STARTED: "WORK_STARTED",
+});
 
-const normalize = (value) => String(value || "")
+const normalizeRaw = (value) => String(value || "")
   .trim()
   .replace(/[\s-]+/g, "_")
   .toUpperCase();
+
+const canonicalize = (value) => {
+  const normalized = normalizeRaw(value);
+  return LEGACY_UNRESOLVED_STATUS_ALIASES[normalized] || normalized;
+};
 
 const unresolvedSet = new Set(UNRESOLVED_MAINTENANCE_TICKET_STATUSES);
 const terminalSet = new Set(TERMINAL_MAINTENANCE_TICKET_STATUSES);
 
 export function normalizeMaintenanceTicketStatus(value) {
-  return normalize(value);
+  return canonicalize(value);
 }
 
 export function isUnresolvedMaintenanceTicketStatus(value) {
-  return unresolvedSet.has(normalize(value));
+  return unresolvedSet.has(canonicalize(value));
 }
 
 export function isTerminalMaintenanceTicketStatus(value) {
-  return terminalSet.has(normalize(value));
+  return terminalSet.has(canonicalize(value));
 }
+
+const LEGACY_UNRESOLVED_STATUS_VALUES = Object.freeze(
+  Object.keys(LEGACY_UNRESOLVED_STATUS_ALIASES).map((status) => status.toLowerCase()),
+);
 
 export const UNRESOLVED_MAINTENANCE_TICKET_QUERY_VALUES = Object.freeze([
   ...UNRESOLVED_MAINTENANCE_TICKET_STATUSES,
