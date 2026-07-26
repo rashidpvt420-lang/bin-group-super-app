@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
+import { purgeLiveTrackingQueue } from '../utils/liveTracking';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -43,11 +44,13 @@ export default function PortalSessionControls({
 
   const handleLogout = async () => {
     try {
+      if (role === 'technician') purgeLiveTrackingQueue(auth.currentUser?.uid || undefined);
       await clearSessionAndPreserveLanguage();
       await signOut(auth);
     } catch (error) {
       console.warn(`[${role}] Secure logout fallback triggered.`, error);
       try {
+        if (role === 'technician') purgeLiveTrackingQueue(auth.currentUser?.uid || undefined);
         await signOut(auth);
       } catch {
         // Navigation below still terminates the local portal session.
