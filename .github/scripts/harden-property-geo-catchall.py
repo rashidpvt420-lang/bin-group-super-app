@@ -21,21 +21,28 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const hardening = await read('scripts/harden-final-firestore-authority.mjs');
+const rulesTest = await read('test/property-geo-authority-rules.test.js');
+const listStart = hardening.indexOf('const liveLocationWriteList');
+const listEnd = hardening.indexOf('`;', listStart);
+const listBlock = hardening.slice(listStart, listEnd);
 
-test('generic Admin browser catch-all cannot bypass canonical property geo authority', async () => {
-  const [hardening, rulesTest] = await Promise.all([
-    read('scripts/harden-final-firestore-authority.mjs'),
-    read('test/property-geo-authority-rules.test.js'),
-  ]);
-  const listStart = hardening.indexOf('const liveLocationWriteList');
-  const listEnd = hardening.indexOf('`;', listStart);
-  const listBlock = hardening.slice(listStart, listEnd);
+test('generic catch-all named list exists', () => {
+  assert.ok(listStart >= 0 && listEnd > listStart);
+});
+
+test('generic catch-all excludes properties between live locations and users', () => {
   const liveIndex = listBlock.indexOf("'technician_live_locations'");
   const propertyIndex = listBlock.indexOf("'properties'");
   const usersIndex = listBlock.indexOf("'users'");
-  assert.ok(listStart >= 0 && listEnd > listStart);
   assert.ok(liveIndex >= 0 && propertyIndex > liveIndex && usersIndex > propertyIndex);
+});
+
+test('property authority emulator regression names browser denial', () => {
   assert.match(rulesTest, /Owner and Admin browsers cannot mutate canonical geo/);
-  assert.match(rulesTest, /assertFails\(updateDoc\(refAdmin, \{ geo:/);
+});
+
+test('property authority emulator regression rejects Admin canonical geo mutation', () => {
+  assert.match(rulesTest, /assertFails\\(updateDoc\\(refAdmin, \\{ geo:/);
 });
 """, encoding='utf-8')
