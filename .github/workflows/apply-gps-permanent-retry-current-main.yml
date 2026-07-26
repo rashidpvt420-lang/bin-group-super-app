@@ -46,8 +46,23 @@ jobs:
           git show refs/remotes/origin/gps-permanent-source:src/utils/gpsRetryQueue.ts > src/utils/gpsRetryQueue.ts
           git show refs/remotes/origin/gps-permanent-source:tests/launch/gps-permanent-retry-policy.test.mjs > tests/launch/gps-permanent-retry-policy.test.mjs
 
-      - name: Validate permanent and transient retry policy
-        run: node --test tests/launch/gps-permanent-retry-policy.test.mjs
+      - name: Policy - permanent code classification
+        run: node --test --test-name-pattern="classified terminal immediately" tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Policy - permanent STOP tombstone
+        run: node --test --test-name-pattern="terminal tombstone on first attempt" tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Policy - transient retry backoff
+        run: node --test --test-name-pattern="transient callable failure" tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Policy - exact reconciliation proof
+        run: node --test --test-name-pattern="manual terminal STOP removal" tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Policy - mission disposal privacy
+        run: node --test --test-name-pattern="mission disposal removes" tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Policy - source contract
+        run: node --test --test-name-pattern="source contract never retries" tests/launch/gps-permanent-retry-policy.test.mjs
 
       - name: Validate map GPS state behavior
         run: node --test tests/launch/map-gps-state-behavior.test.mjs
