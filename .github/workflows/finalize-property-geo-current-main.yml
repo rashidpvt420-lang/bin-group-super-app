@@ -59,10 +59,41 @@ jobs:
       - name: Enforce apply result
         run: test "$(cat property-authority-apply.exit)" = '0'
 
-      - name: Focused property authority tests
+      - name: Run focused current-main authority test
         run: |
-          node --test tests/launch/property-geo-current-main-authority.test.mjs
-          node --test tests/launch/property-geo-authority.test.mjs tests/launch/property-geo-catchall-authority.test.mjs
+          set +e
+          node --test tests/launch/property-geo-current-main-authority.test.mjs > property-authority-current-main.log 2>&1
+          status=$?
+          echo "$status" > property-authority-current-main.exit
+          cat property-authority-current-main.log
+          exit 0
+
+      - name: Run existing property authority tests
+        run: |
+          set +e
+          node --test tests/launch/property-geo-authority.test.mjs tests/launch/property-geo-catchall-authority.test.mjs > property-authority-existing.log 2>&1
+          status=$?
+          echo "$status" > property-authority-existing.exit
+          cat property-authority-existing.log
+          exit 0
+
+      - name: Upload focused test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: property-authority-tests-${{ github.event.pull_request.head.sha }}
+          path: |
+            property-authority-current-main.log
+            property-authority-current-main.exit
+            property-authority-existing.log
+            property-authority-existing.exit
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce focused tests
+        run: |
+          test "$(cat property-authority-current-main.exit)" = '0'
+          test "$(cat property-authority-existing.exit)" = '0'
 
       - name: TypeScript and Functions build
         run: |
