@@ -35,15 +35,20 @@ jobs:
       - name: Apply deterministic current-main reconciliation
         run: python .github/scripts/apply-map-gps-client-hardening-v2.py
 
-      - name: Run focused lifecycle and GPS regressions
-        run: |
-          set -euo pipefail
-          node --test \
-            tests/launch/admin-map-ticket-lifecycle.test.mjs \
-            tests/launch/gps-stop-migration-source-contract.test.mjs \
-            tests/launch/map-gps-state-behavior.test.mjs \
-            tests/launch/maps-gps-product-truth.test.mjs \
-            tests/launch/technician-live-location-cas.test.mjs
+      - name: Test complete Admin ticket lifecycle
+        run: node --test tests/launch/admin-map-ticket-lifecycle.test.mjs
+
+      - name: Test GPS STOP migration source contract
+        run: node --test tests/launch/gps-stop-migration-source-contract.test.mjs
+
+      - name: Test map and GPS state behaviour
+        run: node --test tests/launch/map-gps-state-behavior.test.mjs
+
+      - name: Test map and GPS product truth
+        run: node --test tests/launch/maps-gps-product-truth.test.mjs
+
+      - name: Test server GPS session compare-and-set
+        run: node --test tests/launch/technician-live-location-cas.test.mjs
 
       - name: Commit only permanent product and test files
         run: |
