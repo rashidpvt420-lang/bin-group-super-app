@@ -96,22 +96,22 @@ test('server implementation binds STOP and watchdog changes to canonical transac
   assert.match(callableSource, /TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED/);
   assert.match(callableSource, /reason: decision/);
   assert.match(callableSource, /alreadyStopped: true/);
-  assert.match(callableSource, /TECHNICIAN_LIVE_LOCATION_STALE_STOP_IGNORED/);
-  assert.match(callableSource, /staleIgnored: true/);
-  assert.match(callableSource, /canonicalTrackingSessionId/);
+  assert.match(callableSource, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
+  assert.match(callableSource, /superseded: true/);
+  assert.match(callableSource, /currentTrackingSessionId/);
   assert.doesNotMatch(callableSource, /stopDecision === "REJECT_SUPERSEDED"[\s\S]{0,220}throw new HttpsError/);
   assert.doesNotMatch(callableSource, /const batch = db\.batch\(\)/);
 });
-
 
 test('superseded STOP is an audited acknowledged no-op so client reconciliation can finish', () => {
   const branchStart = callableSource.indexOf('if (stopDecision === "REJECT_SUPERSEDED")');
   const branchEnd = callableSource.indexOf('if (stopDecision === "ALREADY_STOPPED")', branchStart);
   const branch = callableSource.slice(branchStart, branchEnd);
-  assert.match(branch, /TECHNICIAN_LIVE_LOCATION_STALE_STOP_IGNORED/);
-  assert.match(branch, /staleIgnored: true/);
-  assert.match(branch, /canonicalTicketId/);
-  assert.match(branch, /canonicalTrackingSessionId/);
+  assert.match(branch, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
+  assert.match(branch, /superseded: true/);
+  assert.match(branch, /currentTicketId/);
+  assert.match(branch, /currentTrackingSessionId/);
+  assert.match(branch, /reason: "REJECT_SUPERSEDED"/);
   assert.doesNotMatch(branch, /tx\.set\(liveRef/);
   assert.doesNotMatch(branch, /throw new HttpsError/);
 });
