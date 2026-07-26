@@ -46,6 +46,55 @@ jobs:
           git show refs/remotes/origin/gps-permanent-source:src/utils/gpsRetryQueue.ts > src/utils/gpsRetryQueue.ts
           git show refs/remotes/origin/gps-permanent-source:tests/launch/gps-permanent-retry-policy.test.mjs > tests/launch/gps-permanent-retry-policy.test.mjs
 
+      - name: Use a current-epoch mission disposal fixture
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/launch/gps-permanent-retry-policy.test.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = """test('new mission disposal removes all precise UPDATE retries but preserves STOP intent', () => {
+            const selected = storage();
+            queue.enqueueGpsRetryAction(stopInput(), selected, 30_000);
+            queue.enqueueGpsRetryAction({
+              action: 'UPDATE',
+              ticketId: 'ticket-old',
+              technicianUid: 'tech-1',
+              trackingSessionId: 'session-old',
+              point: { latitude: 24.2, longitude: 55.7, accuracy: 8 },
+              queuedAtMs: 30_001,
+            }, selected, 30_001);
+            queue.discardAllQueuedUpdates('tech-1', selected);
+            const entries = queue.readGpsRetryQueue(selected, 30_002);
+            assert.equal(entries.length, 1);
+            assert.equal(entries[0].action, 'STOP');
+            assert.equal(entries[0].point, undefined);
+          });
+          """
+          new = """test('new mission disposal removes all precise UPDATE retries but preserves STOP intent', () => {
+            const selected = storage();
+            const nowMs = Date.now();
+            queue.enqueueGpsRetryAction(stopInput(), selected, nowMs);
+            queue.enqueueGpsRetryAction({
+              action: 'UPDATE',
+              ticketId: 'ticket-old',
+              technicianUid: 'tech-1',
+              trackingSessionId: 'session-old',
+              point: { latitude: 24.2, longitude: 55.7, accuracy: 8 },
+              queuedAtMs: nowMs + 1,
+            }, selected, nowMs + 1);
+            queue.discardAllQueuedUpdates('tech-1', selected);
+            const entries = queue.readGpsRetryQueue(selected, nowMs + 2);
+            assert.equal(entries.length, 1);
+            assert.equal(entries[0].action, 'STOP');
+            assert.equal(entries[0].point, undefined);
+          });
+          """
+          if source.count(old) != 1:
+            raise SystemExit(f'mission disposal fixture marker count: {source.count(old)}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Policy - permanent code classification
         run: node --test --test-name-pattern="classified terminal immediately" tests/launch/gps-permanent-retry-policy.test.mjs
 
