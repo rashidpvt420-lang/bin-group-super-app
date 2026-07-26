@@ -66,14 +66,18 @@ function requireLaunchCredentials() {
   }
 }
 
-function runOwnerLifecycleProof() {
-  requireLaunchCredentials();
-  execFileSync(process.execPath, ['scripts/run-owner-business-suite-evidence.mjs'], {
+function runOwnerSuiteCommand(mode: 'lifecycle' | 'restore-shared-fixtures') {
+  execFileSync(process.execPath, ['scripts/run-owner-business-suite-evidence.mjs', mode], {
     cwd: repositoryRoot,
     env: process.env,
     stdio: 'inherit',
     timeout: 12 * 60 * 1000,
   });
+}
+
+function runOwnerLifecycleProof() {
+  requireLaunchCredentials();
+  runOwnerSuiteCommand('lifecycle');
   if (!existsSync(evidencePath)) {
     throw new Error('Owner production lifecycle runner did not create its evidence artifact.');
   }
@@ -101,7 +105,7 @@ async function login(page: Page) {
 
 async function expectAcquiredOwnerData(page: Page, context: string) {
   await expect(page.locator('body'), `${context} must render the portfolio created by the production acquisition workflow`).toContainText(
-    new RegExp(`${ACQUIRED_PROPERTY}|MAINTENANCE|24`, 'i'),
+    new RegExp(ACQUIRED_PROPERTY, 'i'),
     { timeout: 30_000 },
   );
   await expect(page.locator('body')).not.toContainText(
@@ -116,6 +120,10 @@ test.describe('Owner Business Workflow', () => {
 
   test.beforeAll(() => {
     runOwnerLifecycleProof();
+  });
+
+  test.afterAll(() => {
+    runOwnerSuiteCommand('restore-shared-fixtures');
   });
 
   test.beforeEach(async ({ page }) => {
