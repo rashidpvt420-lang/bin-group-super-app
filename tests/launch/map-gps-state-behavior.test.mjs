@@ -54,7 +54,6 @@ const queue = loadTypeScriptModule('src/utils/gpsRetryQueue.ts');
 const pins = loadTypeScriptModule('apps/admin-panel/src/lib/verifiedPropertyPin.ts');
 const liveTrackingSource = readFileSync('src/utils/liveTracking.ts', 'utf8');
 const portalSessionSource = readFileSync('src/components/PortalSessionControls.tsx', 'utf8');
-const portalSessionSource = readFileSync('src/components/PortalSessionControls.tsx', 'utf8');
 
 const storage = () => ({ stop: new MemoryStorage(), update: new MemoryStorage() });
 const updateInput = (overrides = {}) => ({
