@@ -50,8 +50,28 @@ jobs:
       - name: Separate create-time canonical prohibition from update-time immutability
         run: python .github/scripts/fix-owner-verified-property-updates.py
 
-      - name: Validate canonical submission and promotion boundary
-        run: node --test --test-name-pattern="canonical property geo is server-authoritative" tests/launch/property-geo-authority.test.mjs
+      - name: Capture canonical submission and promotion contract
+        id: canonical_contract
+        continue-on-error: true
+        run: |
+          set +e
+          node --test --test-name-pattern="canonical property geo is server-authoritative" tests/launch/property-geo-authority.test.mjs > owner-geo-contract-output.txt 2>&1
+          status=$?
+          cat owner-geo-contract-output.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Upload canonical geo contract diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-geo-contract-${{ github.sha }}
+          path: owner-geo-contract-output.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Enforce canonical submission and promotion contract
+        run: test "${{ steps.canonical_contract.outputs.status }}" = "0"
 
       - name: Validate ordinary Owner updates after verification
         run: node --test --test-name-pattern="verified properties keep ordinary Owner updates" tests/launch/property-geo-authority.test.mjs
