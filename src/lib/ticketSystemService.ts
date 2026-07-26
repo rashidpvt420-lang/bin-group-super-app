@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   db,
   doc,
@@ -27,11 +26,7 @@ export interface Ticket {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: string;
   assignedTechnicianId?: string;
-  location?: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
+  location?: { lat: number; lng: number; address: string };
   photos?: Array<{ url: string; timestamp: string; description?: string }>;
   estimatedCost?: number;
   actualCost?: number;
@@ -42,21 +37,13 @@ export interface Ticket {
   updatedAt?: any;
   assignedAt?: any;
   completedAt?: any;
-  statusHistory?: Array<{
-    status: string;
-    timestamp?: any;
-    timestampIso?: string;
-    notes?: string;
-  }>;
+  statusHistory?: Array<{ status: string; timestamp?: any; timestampIso?: string; notes?: string }>;
   sourceCollection?: typeof CANONICAL_TICKET_COLLECTION | typeof LEGACY_TICKET_COLLECTION;
   legacyReadOnly?: boolean;
 }
 
 type TicketQuerySnapshot = {
-  docs: Array<{
-    id: string;
-    data: () => Record<string, unknown>;
-  }>;
+  docs: Array<{ id: string; data: () => Record<string, unknown> }>;
 };
 
 function timestampMillis(value: unknown): number {
@@ -73,6 +60,23 @@ function timestampMillis(value: unknown): number {
   }
   const parsed = Date.parse(String(value || ''));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function secureClientRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `ticket_service_${crypto.randomUUID()}`;
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return `ticket_service_${Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')}`;
+  }
+  throw new Error('Secure browser randomness is required to create a maintenance ticket.');
+}
+
+function callablePriority(priority: Ticket['priority']) {
+  if (priority === 'urgent' || priority === 'high') return 'urgent';
+  return 'normal';
 }
 
 function mapSnapshot(
@@ -119,36 +123,48 @@ async function readLegacyTickets(fieldNames: string[], value: string): Promise<T
 }
 
 class TicketSystemService {
-  /** Create every new request in the sole canonical operational collection. */
+  /** Create through the App Check-protected server authority only. */
   async createTicket(
     tenantId: string,
     ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<string> {
     const normalizedTenantId = String(tenantId || '').trim();
     if (!normalizedTenantId) throw new Error('Tenant ID is required.');
+    if (!ticket.unitId || !ticket.propertyId) throw new Error('Property and unit are required.');
 
-    const createdAtIso = new Date().toISOString();
-    const docRef = await addDoc(collection(db, CANONICAL_TICKET_COLLECTION), {
-      ...ticket,
-      tenantId: normalizedTenantId,
-      tenantUid: ticket.tenantUid || normalizedTenantId,
-      status: 'OPEN',
-      canonicalCollection: CANONICAL_TICKET_COLLECTION,
-      canonicalSchemaVersion: 2,
-      legacyReadOnly: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      statusHistory: [
-        {
-          status: 'OPEN',
-          timestampIso: createdAtIso,
-          notes: 'Ticket created by tenant in canonical maintenanceTickets.',
-        },
-      ],
+    const description = String(ticket.description || ticket.title || '').trim();
+    if (description.length < 8) throw new Error('A meaningful maintenance description is required.');
+
+    const createTenantServiceTicket = httpsCallable(functions, 'createTenantServiceTicket');
+    const response: any = await createTenantServiceTicket({
+      kind: 'AI_CONCIERGE',
+      unitId: ticket.unitId,
+      propertyId: ticket.propertyId,
+      clientRequestId: secureClientRequestId(),
+      details: {
+        category: ticket.category,
+        priority: callablePriority(ticket.priority),
+        description,
+        specificLocation: String(ticket.location?.address || ticket.title || '').trim(),
+        photoEvidenceExpected: true,
+      },
     });
+    const ticketId = String(response?.data?.ticketId || '').trim();
+    if (!ticketId) throw new Error('The server did not return a canonical ticket ID.');
 
-    console.info('[Ticket System] Canonical ticket created:', docRef.id);
-    return docRef.id;
+    const photoUrls = (ticket.photos || []).map((photo) => String(photo.url || '').trim()).filter(Boolean);
+    if (photoUrls.length > 0) {
+      await updateDoc(doc(db, CANONICAL_TICKET_COLLECTION, ticketId), {
+        photos: photoUrls,
+        primaryPhotoUrl: photoUrls[0],
+        evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
+        evidenceUploadedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    console.info('[Ticket System] Canonical ticket created through protected callable:', ticketId);
+    return ticketId;
   }
 
   /** Assignment is server-authoritative and audited by adminAssignTechnician. */
@@ -173,23 +189,13 @@ class TicketSystemService {
     console.info('[Ticket System] Canonical ticket started:', ticketId, technicianId);
   }
 
-  /**
-   * Proof fields remain on the canonical document; terminal lifecycle authority
-   * belongs to updateTicketLifecycle so the browser cannot close a legacy row.
-   */
   async completeTicket(
     ticketId: string,
     technicianId: string,
-    data: {
-      photos?: Array<{ url: string; description?: string }>;
-      notes?: string;
-      actualCost?: number;
-    },
+    data: { photos?: Array<{ url: string; description?: string }>; notes?: string; actualCost?: number },
   ): Promise<void> {
     const photoUrls = (data.photos || []).map((photo) => String(photo.url || '').trim()).filter(Boolean);
-    const proofUpdate: Record<string, unknown> = {
-      updatedAt: serverTimestamp(),
-    };
+    const proofUpdate: Record<string, unknown> = { updatedAt: serverTimestamp() };
     if (data.notes?.trim()) {
       proofUpdate.completionNotes = data.notes.trim();
       proofUpdate.technicianNotes = data.notes.trim();
@@ -216,12 +222,7 @@ class TicketSystemService {
   }
 
   /** Tenant approval/dispute is server-authoritative and participant-bound. */
-  async approveTicket(
-    ticketId: string,
-    tenantId: string,
-    approved: boolean,
-    rating?: number,
-  ): Promise<void> {
+  async approveTicket(ticketId: string, tenantId: string, approved: boolean, rating?: number): Promise<void> {
     const tenantReviewTicketCompletion = httpsCallable(functions, 'tenantReviewTicketCompletion');
     if (approved) {
       const safeRating = Math.max(1, Math.min(5, Number(rating || 5)));
