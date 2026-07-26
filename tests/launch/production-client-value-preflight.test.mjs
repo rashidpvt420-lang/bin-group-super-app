@@ -30,6 +30,7 @@ function validEnv() {
     E2E_ADMIN_BASE_URL: 'https://bin-group-admin-panel.web.app',
     E2E_ADMIN_EMAIL: 'admin-e2e@bin-groups.com',
     E2E_ADMIN_PASSWORD: 'admin-password',
+    E2E_ADMIN_REAL_MFA_CODE: '123456',
     E2E_OWNER_EMAIL: 'owner-e2e@bin-groups.com',
     E2E_OWNER_PASSWORD: 'owner-password',
     E2E_TENANT_EMAIL: 'tenant-e2e@bin-groups.com',
@@ -38,6 +39,9 @@ function validEnv() {
     E2E_TECHNICIAN_PASSWORD: 'technician-password',
     E2E_BROKER_EMAIL: 'broker-e2e@bin-groups.com',
     E2E_BROKER_PASSWORD: 'broker-password',
+    E2E_BROKER_GMAIL_CLIENT_ID: 'broker-gmail-client.apps.googleusercontent.com',
+    E2E_BROKER_GMAIL_CLIENT_SECRET: 'broker-gmail-client-secret',
+    E2E_BROKER_GMAIL_REFRESH_TOKEN: 'broker-gmail-refresh-token',
     E2E_TECHNICIAN_B_EMAIL: '',
     E2E_TECHNICIAN_B_PASSWORD: '',
     LAUNCH_MODE: 'public',
@@ -51,12 +55,16 @@ test('production client value preflight accepts exact, separated and well-formed
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_GOOGLE_MAPS_API_KEY'));
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_FIREBASE_VAPID_KEY'));
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_ENABLE_FIREBASE_APPCHECK'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_ADMIN_REAL_MFA_CODE'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_BROKER_GMAIL_REFRESH_TOKEN'));
   const summary = productionWorkflowEnvSummary(env);
   assert.equal(summary.projectIdMatched, true);
   assert.equal(summary.firebaseAppIdMatched, true);
   assert.equal(summary.mainUrlMatched, true);
   assert.equal(summary.adminUrlMatched, true);
   assert.equal(summary.appCheckEnabled, true);
+  assert.equal(summary.adminMfaConfigured, true);
+  assert.equal(summary.brokerMailboxConfigured, true);
   assert.equal(summary.firebaseAndMapsKeysSeparated, true);
   assert.equal(summary.sensitiveValuesExcluded, true);
 });
@@ -75,12 +83,16 @@ test('production client value preflight rejects missing, reused, malformed and p
   malformed.VITE_FIREBASE_MESSAGING_SENDER_ID = 'sender';
   malformed.VITE_FIREBASE_VAPID_KEY = 'YOUR_VAPID_KEY';
   malformed.VITE_APP_CHECK_SITE_KEY = 'short';
+  malformed.E2E_ADMIN_REAL_MFA_CODE = '12';
+  malformed.E2E_BROKER_GMAIL_CLIENT_SECRET = 'REPLACE_ME';
   const failures = validateProductionWorkflowEnv(malformed).join('\n');
   assert.match(failures, /VITE_FIREBASE_APP_ID must not contain a placeholder value/);
   assert.match(failures, /Firebase web App ID/);
   assert.match(failures, /numeric Firebase sender ID/);
   assert.match(failures, /VAPID public key/);
   assert.match(failures, /reCAPTCHA site key/);
+  assert.match(failures, /E2E_ADMIN_REAL_MFA_CODE must be the protected six-digit Admin MFA code/);
+  assert.match(failures, /E2E_BROKER_GMAIL_CLIENT_SECRET must not contain a placeholder value/);
 });
 
 test('production client value preflight binds exact project, app id, identities, URLs and launch mode', () => {
@@ -112,15 +124,20 @@ test('production client value failures never disclose supplied credentials', () 
   env.VITE_FIREBASE_API_KEY = firebaseSentinel;
   env.VITE_GOOGLE_MAPS_API_KEY = mapsSentinel;
   env.GCP_WORKLOAD_IDENTITY_PROVIDER = 'SECRET_PROVIDER_SENTINEL';
+  env.E2E_BROKER_GMAIL_CLIENT_SECRET = 'SECRET_GMAIL_SENTINEL';
   const output = validateProductionWorkflowEnv(env).join('\n');
-  assert.doesNotMatch(output, /SECRET_SENTINEL|MAPS_SECRET|SECRET_PROVIDER/);
-  assert.match(output, /VITE_FIREBASE_API_KEY|VITE_GOOGLE_MAPS_API_KEY|GCP_WORKLOAD_IDENTITY_PROVIDER/);
+  assert.doesNotMatch(output, /SECRET_SENTINEL|MAPS_SECRET|SECRET_PROVIDER|SECRET_GMAIL/);
+  assert.match(output, /VITE_FIREBASE_API_KEY|VITE_GOOGLE_MAPS_API_KEY|GCP_WORKLOAD_IDENTITY_PROVIDER|E2E_BROKER_GMAIL_CLIENT_SECRET/);
 });
 
-test('protected workflow injects Maps and Web Push values before named production verification', async () => {
+test('protected workflow injects Maps, Web Push, Admin MFA and Broker mailbox values before named production verification', async () => {
   const workflow = await read('.github/workflows/firebase-production-deploy.yml');
   assert.match(workflow, /VITE_GOOGLE_MAPS_API_KEY: \$\{\{ secrets\.VITE_GOOGLE_MAPS_API_KEY \}\}/);
   assert.match(workflow, /VITE_FIREBASE_VAPID_KEY: \$\{\{ secrets\.VITE_FIREBASE_VAPID_KEY \}\}/);
+  assert.match(workflow, /E2E_ADMIN_REAL_MFA_CODE: \$\{\{ secrets\.E2E_ADMIN_REAL_MFA_CODE \}\}/);
+  assert.match(workflow, /E2E_BROKER_GMAIL_CLIENT_ID: \$\{\{ secrets\.E2E_BROKER_GMAIL_CLIENT_ID \}\}/);
+  assert.match(workflow, /E2E_BROKER_GMAIL_CLIENT_SECRET: \$\{\{ secrets\.E2E_BROKER_GMAIL_CLIENT_SECRET \}\}/);
+  assert.match(workflow, /E2E_BROKER_GMAIL_REFRESH_TOKEN: \$\{\{ secrets\.E2E_BROKER_GMAIL_REFRESH_TOKEN \}\}/);
   const verifier = workflow.indexOf('node scripts/verify-production-workflow-env.mjs');
   const deploy = workflow.indexOf('node scripts/deploy-firebase-production.mjs');
   assert.ok(verifier >= 0 && deploy > verifier, 'named production values must be verified before deployment');
