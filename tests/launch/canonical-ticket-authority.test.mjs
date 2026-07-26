@@ -28,6 +28,14 @@ function sourceFiles(root) {
   return files;
 }
 
+function ticketBlock(rules, collectionName) {
+  const marker = `    match /${collectionName}/{ticketId} {`;
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${collectionName} ticket block must exist`);
+  const next = rules.indexOf('\n    match /', start + marker.length);
+  return rules.slice(start, next < 0 ? rules.length : next);
+}
+
 const browserSourceFiles = ['src', 'apps', 'packages']
   .flatMap((root) => sourceFiles(root))
   .filter((path) => !path.includes('/dist/') && !path.includes('/build/') && !path.includes('/node_modules/'));
@@ -82,9 +90,13 @@ test('Ticket rule preparation repeatedly enforces read-only legacy compatibility
       });
     }
     const hardened = read(rulesPath);
-    assert.match(hardened, /match \/tickets\/\{ticketId\} \{\s*allow read:[\s\S]*allow create, update, delete: if false;\s*\}/);
-    assert.doesNotMatch(hardened, /match \/tickets\/\{ticketId\} \{[\s\S]*?allow update: if safeTicketUpdateByActor\(\);[\s\S]*?\}/);
-    assert.match(hardened, /match \/maintenanceTickets\/\{ticketId\} \{[\s\S]*?allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+    const legacy = ticketBlock(hardened, 'tickets');
+    assert.match(legacy, /allow read:/);
+    assert.match(legacy, /allow create, update, delete: if false;/);
+    assert.doesNotMatch(legacy, /allow update: if safeTicketUpdateByActor\(\);/);
+    const canonical = ticketBlock(hardened, 'maintenanceTickets');
+    assert.match(canonical, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+    assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
