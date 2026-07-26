@@ -28,3 +28,16 @@ test('AI provider SDK retries are disabled and quota release remains fail closed
   assert.match(source, /operationalStatus: "degraded"/);
   assert.match(source, /No live AI answer was produced/);
 });
+
+test('provider credentials and raw provider failures cannot enter URLs or diagnostics', () => {
+  assert.match(source, /"x-goog-api-key": apiKey/);
+  assert.doesNotMatch(source, /generateContent\?key=/);
+  assert.match(source, /class ProviderAttemptError extends Error/);
+  assert.match(source, /function providerFailureCode\(error: unknown\)/);
+  assert.match(source, /failureCodes: failureCodes\.slice\(0, 2\)/);
+  assert.match(source, /failureCode: providerFailureCode\(error\)/);
+  assert.doesNotMatch(source, /json\?\.error\?\.message/);
+  assert.doesNotMatch(source, /error\?\.message/);
+  assert.doesNotMatch(source, /error instanceof Error \? error\.message/);
+  assert.doesNotMatch(source, /errors: errors\.slice/);
+});
