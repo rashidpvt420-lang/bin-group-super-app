@@ -86,6 +86,59 @@ jobs:
           project_id: bin-group-57c60
       - name: Bootstrap and verify Owner contract OTP pepper
         run: node scripts/bootstrap-owner-contract-otp-pepper.mjs
+      - name: Reverify exact main after protected mutation
+        if: always()
+        run: |
+          set -euo pipefail
+          evidence='launch_package/owner-contract-otp-pepper-bootstrap.json'
+          if [[ ! -f "$evidence" ]]; then
+            mkdir -p launch_package
+            jq -n \
+              --arg sha "$EXPECTED_COMMIT_SHA" \
+              --arg run_id "$GITHUB_RUN_ID" \
+              '{
+                schemaVersion: 1,
+                status: "failed",
+                projectId: "bin-group-57c60",
+                secretName: "OWNER_CONTRACT_OTP_PEPPER",
+                action: "none",
+                previousState: "unknown",
+                failureCode: "BOOTSTRAP_STEP_DID_NOT_PRODUCE_EVIDENCE",
+                exactCommitSha: $sha,
+                workflowRunId: $run_id,
+                protectedEnvironment: "production",
+                secretTransport: "stdin",
+                secretPersistedToRunnerDisk: false,
+                secretValueLogged: false,
+                hardLaunchClaim: false,
+                failedAt: (now | todateiso8601)
+              }' > "$evidence"
+            chmod 600 "$evidence"
+          fi
+
+          current_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$current_main" != "$EXPECTED_COMMIT_SHA" ]]; then
+            tmp="$(mktemp)"
+            jq \
+              '.status = "failed"
+               | .failureCode = "MAIN_ADVANCED_AFTER_SECRET_MUTATION"
+               | .hardLaunchClaim = false
+               | .verifiedAt = null
+               | .failedAt = (now | todateiso8601)' \
+              "$evidence" > "$tmp"
+            install -m 600 "$tmp" "$evidence"
+            rm -f "$tmp"
+            exit 1
+          fi
+
+          jq -e --arg sha "$EXPECTED_COMMIT_SHA" '
+            .status == "passed" and
+            .exactCommitSha == $sha and
+            .secretTransport == "stdin" and
+            .secretPersistedToRunnerDisk == false and
+            .secretValueLogged == false and
+            .hardLaunchClaim == false
+          ' "$evidence" >/dev/null
       - name: Upload sanitized evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
