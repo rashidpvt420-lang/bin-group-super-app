@@ -7,6 +7,10 @@ on:
         description: 'Full lowercase current production main SHA'
         required: true
         type: string
+      production_deploy_run_id:
+        description: 'Successful Firebase Production Deploy run ID for the same exact SHA'
+        required: true
+        type: string
       confirmation:
         description: 'Enter VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE'
         required: true
@@ -14,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -28,11 +33,13 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
 
     steps:
       - name: Enforce protected physical-evidence inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
@@ -54,6 +61,10 @@ jobs:
             echo "::error::expected_commit_sha must equal the current full main SHA."
             exit 1
           fi
+          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production_deploy_run_id must be numeric."
+            exit 1
+          fi
           if [[ "$CONFIRMATION" != "VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE" ]]; then
             echo "::error::Physical evidence confirmation phrase mismatch."
             exit 1
@@ -69,6 +80,28 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      - name: Download exact production deployment metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify exact production deployment binding
+        env:
+          EXPECTED_DEPLOYMENT_SHA: ${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          node scripts/verify-exact-production-deployment-artifact.mjs
 
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
@@ -91,6 +124,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: technician-physical-evidence-${{ inputs.expected_commit_sha }}
-          path: launch_package/operational-proof.json
+          path: |
+            launch_package/production-deployment.json
+            launch_package/operational-proof.json
           if-no-files-found: error
           retention-days: 365
