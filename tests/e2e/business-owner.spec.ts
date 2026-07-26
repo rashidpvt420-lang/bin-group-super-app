@@ -68,7 +68,7 @@ function requireLaunchCredentials() {
 
 function runOwnerLifecycleProof() {
   requireLaunchCredentials();
-  execFileSync(process.execPath, ['scripts/run-owner-onboarding-production-evidence.mjs'], {
+  execFileSync(process.execPath, ['scripts/run-owner-business-suite-evidence.mjs'], {
     cwd: repositoryRoot,
     env: process.env,
     stdio: 'inherit',
