@@ -49,6 +49,8 @@ for (const token of [
   'E2E_OWNER_MAILBOX_CLIENT_SECRET',
   'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
   'functions:secrets:access',
+  'gmail.googleapis.com/gmail/v1/users/me/profile',
+  'authenticatedMailboxEmail === ownerEmail',
   'gmail.googleapis.com/gmail/v1/users/me/messages',
   "subject !== 'BIN GROUP contract signature OTP'",
   'normalizeMailboxMessageId(providerMessageId) !== receivedMessageId',
