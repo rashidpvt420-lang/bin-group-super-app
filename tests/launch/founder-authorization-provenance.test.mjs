@@ -37,16 +37,17 @@ test('automated signer independently revalidates the canonical owner PR', () => 
   assert.match(signer, /owner request marker must not claim hard launch/);
 });
 
-test('GitHub provenance requests use one fixed host and tightly validated paths', () => {
-  assert.match(signer, /import \{ request \} from 'node:https'/);
-  assert.match(signer, /GITHUB_API_HOST = 'api\.github\.com'/);
-  assert.match(signer, /hostname: GITHUB_API_HOST/);
-  assert.match(signer, /allowedPrefix = `\/repos\/\$\{EXPECTED_REPOSITORY\}\//);
-  assert.match(signer, /apiPath\.includes\('\.\.'\)/);
+test('GitHub provenance lookup uses fixed URLs and argument-array curl execution', () => {
+  assert.match(signer, /import \{ spawnSync \} from 'node:child_process'/);
+  assert.match(signer, /GITHUB_API_ROOT = `https:\/\/api\.github\.com\/repos\/\$\{EXPECTED_REPOSITORY\}`/);
+  assert.match(signer, /spawnSync\('curl', \[/);
+  assert.match(signer, /'--max-time',\s*\n\s*'10'/);
+  assert.match(signer, /'--max-filesize'/);
   assert.match(signer, /MAX_GITHUB_RESPONSE_BYTES/);
-  assert.match(signer, /timeout: 10_000/);
-  assert.doesNotMatch(signer, /\bfetch\s*\(/);
-  assert.doesNotMatch(signer, /new URL\(/);
+  assert.match(signer, /url\.startsWith\(`\$\{GITHUB_API_ROOT\}\//);
+  assert.match(signer, /\^\[1-9\]\[0-9\]\*\$/);
+  assert.match(signer, /\^\[0-9a-f\]\{40\}\$/);
+  assert.doesNotMatch(signer, /\bfetch\s*\(|node:https|\beval\s*\(|execSync|shell:\s*true/);
 });
 
 test('automated email derives from exactly one protected allowlist entry', () => {
