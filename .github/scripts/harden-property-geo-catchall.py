@@ -29,7 +29,7 @@ test('generic Admin browser catch-all cannot bypass canonical property geo autho
   ]);
   assert.match(hardening, /'technician_live_locations',\n\s+'properties',\n\s+'users'/);
   assert.match(hardening, /const liveLocationWriteList/);
-  assert.match(rulesTest, /Admin browsers cannot mutate canonical geo/);
+  assert.match(rulesTest, /Owner and Admin browsers cannot mutate canonical geo/);
   assert.match(rulesTest, /assertFails\(updateDoc\(refAdmin, \{ geo:/);
 });
 """, encoding='utf-8')
