@@ -270,7 +270,8 @@ function readQueue(nowMs = Date.now()): QueuedTrackingAction[] {
     try {
         const value = JSON.parse(target.getItem(QUEUE_KEY) || '[]');
         const queue = Array.isArray(value) ? pruneTrackingQueue(value, nowMs) : [];
-        target.setItem(QUEUE_KEY, JSON.stringify(queue));
+        if (queue.length) target.setItem(QUEUE_KEY, JSON.stringify(queue));
+        else target.removeItem(QUEUE_KEY);
         return queue;
     } catch {
         target.removeItem(QUEUE_KEY);
@@ -278,10 +279,18 @@ function readQueue(nowMs = Date.now()): QueuedTrackingAction[] {
     }
 }
 
+function capQueue(queue: QueuedTrackingAction[]) {
+    const ordered = [...queue].sort((left, right) => left.queuedAtMs - right.queuedAtMs);
+    const stops = ordered.filter((entry) => entry.action === 'STOP').slice(-MAX_QUEUE_SIZE);
+    const remaining = Math.max(0, MAX_QUEUE_SIZE - stops.length);
+    const updates = ordered.filter((entry) => entry.action === 'UPDATE').slice(-remaining);
+    return [...stops, ...updates].sort((left, right) => left.queuedAtMs - right.queuedAtMs);
+}
+
 function writeQueue(queue: QueuedTrackingAction[], nowMs = Date.now()) {
     const target = storage();
     if (!target) return;
-    const pruned = pruneTrackingQueue(queue, nowMs).slice(-MAX_QUEUE_SIZE);
+    const pruned = capQueue(pruneTrackingQueue(queue, nowMs));
     if (pruned.length) target.setItem(QUEUE_KEY, JSON.stringify(pruned));
     else target.removeItem(QUEUE_KEY);
 }
@@ -324,6 +333,10 @@ function discardSessionUpdates(technicianUid: string, ticketId: string, tracking
 
 function queueHasTechnicianEntries(technicianUid: string) {
     return readQueue().some((entry) => entry.technicianUid === technicianUid);
+}
+
+function queueHasPendingStop(technicianUid: string) {
+    return readQueue().some((entry) => entry.technicianUid === technicianUid && entry.action === 'STOP');
 }
 
 const publishLiveLocation = httpsCallable(functions, 'updateTechnicianLiveLocation');
@@ -395,7 +408,15 @@ async function flushTechnicianQueue(technicianUid: string) {
         try {
             await sendAction(entry);
         } catch (error) {
-            if (isTerminalTrackingError(error)) continue;
+            if (isTerminalTrackingError(error)) {
+                await persistTrackingDiagnostic(entry.technicianUid, entry.ticketId, {
+                    status: entry.action === 'STOP' ? 'STOP_REJECTED' : 'LOCATION_SYNC_REJECTED',
+                    trackingSessionId: entry.trackingSessionId,
+                    errorCode: errorCode(error) || 'terminal',
+                    failedAt: serverTimestamp(),
+                });
+                continue;
+            }
             retained.push({
                 ...entry,
                 retryCount: entry.retryCount + 1,
@@ -444,11 +465,22 @@ export const startLiveTracking = async (
     removeOnlineHandler();
 
     purgeLiveTrackingQueue(technicianUid);
+    _state.technicianUid = technicianUid;
     installOnlineHandler(technicianUid);
     await flushTechnicianQueue(technicianUid);
 
+    if (queueHasPendingStop(technicianUid)) {
+        _state.technicianUid = null;
+        await persistTrackingDiagnostic(technicianUid, ticketId, {
+            status: 'PENDING_STOP_RECONCILIATION',
+            queueStorage: 'SESSION_ONLY',
+            failedAt: serverTimestamp(),
+        });
+        onError?.('A previous tracking stop is still waiting for server acknowledgement. Reconnect before starting a new GPS session.');
+        return;
+    }
+
     _state.activeTicketId = ticketId;
-    _state.technicianUid = technicianUid;
     _state.trackingSessionId = createTrackingSessionId();
     _state.lastPushTime = 0;
 
