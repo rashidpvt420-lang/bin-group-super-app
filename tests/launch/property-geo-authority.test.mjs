@@ -35,7 +35,9 @@ test('canonical property geo is server-authoritative and Owner submissions remai
   assert.match(backend, /buildFounderVerifiedPropertyGeo/);
   assert.match(backend, /update\.geo = canonicalGeo/);
   assert.match(backend, /geoDispatchReady/);
-  assert.match(authority, /new admin\.firestore\.GeoPoint/);
+  assert.match(authority, /const geo: CanonicalPropertyGeo = \{/);
+  assert.match(authority, /lat: lat!/);
+  assert.match(authority, /lng: lng!/);
   assert.match(authority, /source: "admin_manual"/);
   assert.match(authority, /verificationVersion: 1/);
   assert.match(authority, /state: "VERIFIED"/);
