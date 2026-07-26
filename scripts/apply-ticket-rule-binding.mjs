@@ -16,6 +16,18 @@ for (const legacyCreate of [
   }
 }
 
+function blockEnd(input, openingBrace, label) {
+  let depth = 0;
+  for (let index = openingBrace; index < input.length; index += 1) {
+    if (input[index] === '{') depth += 1;
+    if (input[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  throw new Error(`[ticket-rule-binding] Could not parse ${label}.`);
+}
+
 function removeRuleFunction(functionName) {
   const needle = `    function ${functionName}(`;
   let removed = 0;
@@ -25,26 +37,31 @@ function removeRuleFunction(functionName) {
     if (start < 0) break;
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
-
-    let depth = 0;
-    let end = -1;
-    for (let index = openingBrace; index < text.length; index += 1) {
-      if (text[index] === '{') depth += 1;
-      if (text[index] === '}') {
-        depth -= 1;
-        if (depth === 0) {
-          end = index + 1;
-          while (text[end] === '\r' || text[end] === '\n') end += 1;
-          break;
-        }
-      }
-    }
-    if (end < 0) throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
+    let end = blockEnd(text, openingBrace, functionName);
+    while (text[end] === '\r' || text[end] === '\n') end += 1;
     text = `${text.slice(0, start)}${text.slice(end)}`;
     removed += 1;
     changed = true;
   }
   return removed;
+}
+
+function readMatchBlock(header, label) {
+  const start = text.indexOf(header);
+  if (start < 0) throw new Error(`[ticket-rule-binding] Missing ${label} block.`);
+  if (text.indexOf(header, start + header.length) >= 0) {
+    throw new Error(`[ticket-rule-binding] Duplicate ${label} block.`);
+  }
+  const openingBrace = start + header.length - 1;
+  const end = blockEnd(text, openingBrace, label);
+  return { start, end, content: text.slice(start, end) };
+}
+
+function replaceMatchBlock(header, replacement, label) {
+  const current = readMatchBlock(header, label);
+  if (current.content === replacement) return;
+  text = `${text.slice(0, current.start)}${replacement}${text.slice(current.end)}`;
+  changed = true;
 }
 
 const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
@@ -163,31 +180,24 @@ if (!text.includes(canonicalCreate)) {
 // /maintenanceTickets is the sole operational collection. /tickets remains
 // readable during the measured compatibility period, but every browser write
 // is denied so no new split-brain records can be created or mutated.
-const legacyOperationalBlock = `    match /tickets/{ticketId} {
-      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
-      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if safeTicketUpdateByActor();
-      allow delete: if isAdmin();
-    }`;
+const legacyHeader = '    match /tickets/{ticketId} {';
 const legacyReadOnlyBlock = `    match /tickets/{ticketId} {
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create, update, delete: if false;
     }`;
-if (text.includes(legacyOperationalBlock)) {
-  text = text.replace(legacyOperationalBlock, legacyReadOnlyBlock);
-  changed = true;
-}
-if (text.split(legacyReadOnlyBlock).length - 1 !== 1) {
-  throw new Error('[ticket-rule-binding] Legacy /tickets must exist exactly once as read-only compatibility data.');
-}
+replaceMatchBlock(legacyHeader, legacyReadOnlyBlock, 'legacy /tickets');
 
-const maintenanceOperationalBlock = `    match /maintenanceTickets/{ticketId} {
-      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
-      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
-      allow update: if safeTicketUpdateByActor();
-      allow delete: if isAdmin();`;
-if (!text.includes(maintenanceOperationalBlock)) {
-  throw new Error('[ticket-rule-binding] Canonical /maintenanceTickets operational authority is missing.');
+const maintenanceHeader = '    match /maintenanceTickets/{ticketId} {';
+const maintenanceBlock = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets').content;
+for (const required of [
+  'allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());',
+  canonicalCreate.trim(),
+  canonicalUpdate.trim(),
+  'allow delete: if isAdmin();',
+]) {
+  if (!maintenanceBlock.includes(required)) {
+    throw new Error(`[ticket-rule-binding] Canonical /maintenanceTickets fragment is missing: ${required}`);
+  }
 }
 
 if (changed) writeFileSync(file, text);
