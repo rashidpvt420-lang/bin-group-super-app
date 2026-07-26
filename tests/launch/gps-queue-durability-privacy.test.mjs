@@ -18,6 +18,7 @@ const ordered = (source, fragments) => {
 test('pending STOP actions replay before a new tracking session can start', () => {
   ordered(tracking, [
     'purgeOtherTechnicianQueues(technicianUid);',
+    'discardAllQueuedUpdates(technicianUid);',
     'ensureQueueReplayListener(technicianUid);',
     'const replay = await flushLiveTrackingQueue(technicianUid);',
     'if (replay.pendingStopCount > 0 || replay.terminalStopCount > 0)',
@@ -28,6 +29,8 @@ test('pending STOP actions replay before a new tracking session can start', () =
   assert.match(tracking, /STOP_RECONCILIATION_REQUIRED/);
   assert.match(tracking, /onError\?\.\(message\);\s*throw new Error\(message\)/);
   assert.doesNotMatch(tracking, /if \(!isCurrentSession\) continue/);
+  assert.match(tracking, /const retainedStops = queue\.filter\(\(entry\) => entry\.action === 'STOP'\)/);
+  assert.match(tracking, /stale UPDATE actions before starting another ticket session/);
 });
 
 test('STOPPED is recorded only after the server acknowledges STOP', () => {

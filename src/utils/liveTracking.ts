@@ -423,6 +423,16 @@ function discardSessionUpdates(technicianUid: string, ticketId: string, tracking
     writeQueue(technicianUid, retained);
 }
 
+function discardAllQueuedUpdates(technicianUid: string) {
+    const queue = readQueue(technicianUid);
+    const retainedStops = queue.filter((entry) => entry.action === 'STOP');
+    const removedCount = queue.length - retainedStops.length;
+    if (removedCount > 0) {
+        console.info(`[Tracking] Explicitly disposed ${removedCount} stale UPDATE actions before starting another ticket session.`);
+    }
+    writeQueue(technicianUid, retainedStops);
+}
+
 export function purgeLiveTrackingQueue(technicianUid?: string) {
     purgeLegacyPersistentGpsQueue();
     const session = storage();
@@ -593,7 +603,7 @@ export const startLiveTracking = async (
         readiness,
         startedAt: serverTimestamp(),
         trackingMode: 'FOREGROUND_BROWSER',
-        retryStoragePolicy: 'SESSION_SCOPED_30_MINUTE_TTL',
+        retryStoragePolicy: 'MEMORY_UPDATES_COORDINATE_FREE_SESSION_STOPS',
     });
 
     if (!navigator.geolocation) {
@@ -611,6 +621,7 @@ export const startLiveTracking = async (
     }
 
     purgeOtherTechnicianQueues(technicianUid);
+    discardAllQueuedUpdates(technicianUid);
     ensureQueueReplayListener(technicianUid);
     const replay = await flushLiveTrackingQueue(technicianUid);
     if (replay.pendingStopCount > 0 || replay.terminalStopCount > 0) {
