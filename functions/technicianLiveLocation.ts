@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -104,6 +105,7 @@ export const updateTechnicianLiveLocation = onCall(
           activeTicketId: null,
           isTracking: false,
           trackingSessionId,
+          stopReason: "TECHNICIAN_REQUESTED",
           stoppedAt: now,
           serverUpdatedAt: now,
           expiresAt: now,
@@ -132,6 +134,7 @@ export const updateTechnicianLiveLocation = onCall(
         tx.set(diagnosticRef, {
           ticketId,
           status: "STOPPED",
+          stopReason: "TECHNICIAN_REQUESTED",
           trackingSessionId,
           stoppedAt: now,
           updatedAt: now,
@@ -197,6 +200,7 @@ export const updateTechnicianLiveLocation = onCall(
         location: point,
         serverUpdatedAt: now,
         expiresAt,
+        stopReason: null,
         source: "technician-callable",
       }, { merge: true });
 
@@ -248,5 +252,93 @@ export const updateTechnicianLiveLocation = onCall(
       ticketId,
       ...result,
     };
+  },
+);
+
+export const reconcileExpiredTechnicianLiveLocations = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "Etc/UTC",
+    region: "europe-west3",
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  },
+  async () => {
+    const now = admin.firestore.Timestamp.now();
+    const stale = await db.collection("technician_live_locations")
+      .where("isTracking", "==", true)
+      .where("expiresAt", "<=", now)
+      .limit(50)
+      .get();
+
+    if (stale.empty) {
+      console.log("[technician-live-location-watchdog] no expired tracking session");
+      return;
+    }
+
+    const batch = db.batch();
+    for (const snapshot of stale.docs) {
+      const data = snapshot.data() || {};
+      const technicianUid = String(data.technicianUid || snapshot.id).trim();
+      const ticketId = String(data.activeTicketId || "").trim();
+      const trackingSessionId = String(data.trackingSessionId || "").trim() || null;
+      const technicianRef = db.collection("technicians").doc(technicianUid);
+      const userRef = db.collection("users").doc(technicianUid);
+      const diagnosticRef = technicianRef.collection("deviceReadiness").doc("gps");
+      const auditRef = db.collection("audit_logs").doc();
+
+      batch.set(snapshot.ref, {
+        activeTicketId: null,
+        isTracking: false,
+        stopReason: "SERVER_EXPIRY_WATCHDOG",
+        stoppedAt: now,
+        reconciledAt: now,
+        serverUpdatedAt: now,
+        expiresAt: now,
+      }, { merge: true });
+      batch.set(technicianRef, {
+        activeTicketId: null,
+        isTracking: false,
+        locationUpdatedAt: now,
+        trackingReconciledAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      batch.set(userRef, {
+        activeTicketId: null,
+        isTracking: false,
+        locationUpdatedAt: now,
+        trackingReconciledAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      batch.set(diagnosticRef, {
+        ticketId: ticketId || null,
+        status: "STOPPED_STALE",
+        stopReason: "SERVER_EXPIRY_WATCHDOG",
+        trackingSessionId,
+        stoppedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      if (ticketId) {
+        batch.set(db.collection("maintenanceTickets").doc(ticketId), {
+          trackingStatus: "STOPPED_STALE",
+          technicianLocationExpiresAt: now,
+          trackingReconciledAt: now,
+          updatedAt: now,
+        }, { merge: true });
+      }
+      batch.set(auditRef, {
+        actorId: "system",
+        actorRole: "system",
+        action: "TECHNICIAN_LIVE_LOCATION_EXPIRED",
+        targetType: "maintenanceTickets",
+        targetId: ticketId || snapshot.id,
+        technicianUid,
+        trackingSessionId,
+        createdAt: now,
+      });
+    }
+
+    await batch.commit();
+    console.log(`[technician-live-location-watchdog] reconciled=${stale.size}`);
   },
 );
