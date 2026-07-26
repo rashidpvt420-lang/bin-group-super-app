@@ -11,6 +11,9 @@ const FUNCTION_NAME = 'runSovereignAI';
 const FUNCTION_URL = `https://europe-west3-${PROJECT_ID}.cloudfunctions.net/${FUNCTION_NAME}`;
 const MAX_PROVIDER_LATENCY_MS = 20_000;
 const MAX_ROUND_TRIP_MS = 30_000;
+const MAX_OUTPUT_TOKENS = 700;
+const MAX_TOTAL_TOKENS = 5_000;
+const MAX_BUDGET_ENVELOPE_AED_MICROS = 200_000;
 const MIN_PROVIDER_SUCCESS_RATE = 0.95;
 const MAX_FALLBACK_RATE = 0.05;
 const MAX_INVALID_OUTPUT_RATE = 0.01;
@@ -83,6 +86,12 @@ async function callSovereignAi({ idToken, appCheckToken, data }) {
   };
 }
 
+function finiteNumber(value, label) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) fail(`${label} is missing or non-numeric`);
+  return number;
+}
+
 function assertLiveProbe(result, expectedProvider) {
   const data = result.data || {};
   if (!result.response.ok || result.payload?.error) {
@@ -94,7 +103,8 @@ function assertLiveProbe(result, expectedProvider) {
   if (data.advisoryOnly !== true || data.clientContextAuthoritative !== false) {
     fail(`${expectedProvider} response did not preserve the advisory/non-authoritative contract`);
   }
-  if (!Number.isFinite(Number(data.latencyMs)) || Number(data.latencyMs) > MAX_PROVIDER_LATENCY_MS || data.sloLatencyMet !== true) {
+  const providerLatencyMs = finiteNumber(data.latencyMs, `${expectedProvider} provider latency`);
+  if (providerLatencyMs > MAX_PROVIDER_LATENCY_MS || data.sloLatencyMet !== true) {
     fail(`${expectedProvider} provider latency exceeded ${MAX_PROVIDER_LATENCY_MS}ms`);
   }
   if (result.roundTripMs > MAX_ROUND_TRIP_MS) {
@@ -103,6 +113,28 @@ function assertLiveProbe(result, expectedProvider) {
   if (Number(data.redactionsApplied || 0) < 4) {
     fail(`${expectedProvider} did not prove free-text and nested-value redaction`);
   }
+
+  const inputTokens = finiteNumber(data.usage?.inputTokens, `${expectedProvider} input token usage`);
+  const outputTokens = finiteNumber(data.usage?.outputTokens, `${expectedProvider} output token usage`);
+  const totalTokens = finiteNumber(data.usage?.totalTokens, `${expectedProvider} total token usage`);
+  const budgetEnvelopeAedMicros = finiteNumber(
+    data.usage?.budgetEnvelopeAedMicros,
+    `${expectedProvider} cost envelope`,
+  );
+  if (
+    inputTokens < 1
+    || outputTokens < 1
+    || totalTokens < inputTokens
+    || totalTokens < outputTokens
+    || outputTokens > MAX_OUTPUT_TOKENS
+    || totalTokens > MAX_TOTAL_TOKENS
+    || budgetEnvelopeAedMicros > MAX_BUDGET_ENVELOPE_AED_MICROS
+    || data.sloTokenBudgetMet !== true
+    || data.sloCostEnvelopeMet !== true
+  ) {
+    fail(`${expectedProvider} token or cost-envelope SLO failed`);
+  }
+
   const output = text(data.text).toLowerCase();
   for (const forbidden of ['proof.person@example.com', '+971501234567', 'ae070331234567890123456', '784-1990-1234567-1']) {
     if (output.includes(forbidden.toLowerCase())) fail(`${expectedProvider} echoed a protected test identifier`);
@@ -110,9 +142,10 @@ function assertLiveProbe(result, expectedProvider) {
   return {
     provider: data.provider,
     model: text(data.model),
-    providerLatencyMs: Number(data.latencyMs),
+    providerLatencyMs,
     roundTripMs: result.roundTripMs,
     redactionsApplied: Number(data.redactionsApplied || 0),
+    usage: { inputTokens, outputTokens, totalTokens, budgetEnvelopeAedMicros },
     advisoryOnly: data.advisoryOnly === true,
     clientContextAuthoritative: data.clientContextAuthoritative === false,
   };
@@ -128,15 +161,27 @@ function assertExactSourceControls() {
   if (!/chat:\s*50/.test(quota) || !/DAILY_TOTAL_LIMIT\s*=\s*75/.test(quota)) {
     fail('exact source does not enforce the approved daily AI quota envelope');
   }
-  if (!/ai_health_daily/.test(observability) || !/providerFailures/.test(observability) || !/invalidOutputs/.test(observability)) {
-    fail('exact source does not expose aggregate AI health, failure, and invalid-output telemetry');
+  if (
+    !/ai_health_daily/.test(observability)
+    || !/providerFailures/.test(observability)
+    || !/invalidOutputs/.test(observability)
+    || !/totalTokens/.test(observability)
+    || !/budgetEnvelopeAedMicros/.test(observability)
+    || !/tokenBudgetBreaches/.test(observability)
+    || !/costEnvelopeBreaches/.test(observability)
+  ) {
+    fail('exact source does not expose aggregate AI health, token, cost-envelope, failure, and invalid-output telemetry');
   }
   return {
-    maxOutputTokensPerProviderResponse: 700,
+    maxOutputTokensPerProviderResponse: MAX_OUTPUT_TOKENS,
+    maxTotalTokensPerChatRequest: MAX_TOTAL_TOKENS,
+    budgetEnvelopeAedPerMillionTokens: 40,
+    maxBudgetEnvelopeAedMicrosPerChatRequest: MAX_BUDGET_ENVELOPE_AED_MICROS,
+    measuredProviderUsageRequired: true,
     dailyChatRequestsPerUser: 50,
     dailyTotalAiUnitsPerUser: 75,
     aggregateTelemetryCollection: 'ai_health_daily',
-    costControlBasis: 'server-side provider secrets, bounded output tokens, per-user daily quotas, and aggregate usage counters',
+    costControlBasis: 'measured provider token usage, conservative AED budget envelope, bounded outputs, per-user daily quotas, and aggregate usage counters',
   };
 }
 
@@ -274,8 +319,15 @@ try {
   const functionErrorRate = 0;
   const maxProviderLatencyMs = Math.max(...liveSamples.map((sample) => sample.providerLatencyMs));
   const maxRoundTripMs = Math.max(...liveSamples.map((sample) => sample.roundTripMs));
+  const maxOutputTokens = Math.max(...liveSamples.map((sample) => sample.usage.outputTokens));
+  const maxTotalTokens = Math.max(...liveSamples.map((sample) => sample.usage.totalTokens));
+  const maxBudgetEnvelopeAedMicros = Math.max(...liveSamples.map((sample) => sample.usage.budgetEnvelopeAedMicros));
+  const totalTokensObserved = liveSamples.reduce((sum, sample) => sum + sample.usage.totalTokens, 0);
   if (providerSuccessRate < MIN_PROVIDER_SUCCESS_RATE || fallbackRate > MAX_FALLBACK_RATE) fail('AI provider success/fallback SLO failed');
   if (invalidOutputRate > MAX_INVALID_OUTPUT_RATE || functionErrorRate > MAX_FUNCTION_ERROR_RATE) fail('AI invalid-output/function-error SLO failed');
+  if (maxOutputTokens > MAX_OUTPUT_TOKENS || maxTotalTokens > MAX_TOTAL_TOKENS || maxBudgetEnvelopeAedMicros > MAX_BUDGET_ENVELOPE_AED_MICROS) {
+    fail('AI token or cost-envelope SLO failed');
+  }
 
   proofDraft = {
     schemaVersion: 1,
@@ -320,6 +372,9 @@ try {
         maxFallbackRate: MAX_FALLBACK_RATE,
         maxProviderLatencyMs: MAX_PROVIDER_LATENCY_MS,
         maxRoundTripMs: MAX_ROUND_TRIP_MS,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        maxTotalTokens: MAX_TOTAL_TOKENS,
+        maxBudgetEnvelopeAedMicros: MAX_BUDGET_ENVELOPE_AED_MICROS,
         maxInvalidOutputRate: MAX_INVALID_OUTPUT_RATE,
         maxFunctionErrorRate: MAX_FUNCTION_ERROR_RATE,
       },
@@ -329,6 +384,10 @@ try {
         fallbackRate,
         maxProviderLatencyMs,
         maxRoundTripMs,
+        maxOutputTokens,
+        maxTotalTokens,
+        maxBudgetEnvelopeAedMicros,
+        totalTokensObserved,
         invalidOutputRate,
         functionErrorRate,
       },
@@ -356,5 +415,5 @@ proofDraft.quota.originalUsageRestored = true;
 const outputPath = path.resolve('launch_package/ai-provider-health-proof.json');
 mkdirSync(path.dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${JSON.stringify(proofDraft, null, 2)}\n`, { mode: 0o600 });
-console.log(`[ai-live-evidence] PASS providers=gemini,openai maxLatency=${proofDraft.slo.observed.maxProviderLatencyMs}ms quotaBoundary=50`);
+console.log(`[ai-live-evidence] PASS providers=gemini,openai maxLatency=${proofDraft.slo.observed.maxProviderLatencyMs}ms maxTokens=${proofDraft.slo.observed.maxTotalTokens} quotaBoundary=50`);
 console.log(`[ai-live-evidence] wrote ${outputPath}`);
