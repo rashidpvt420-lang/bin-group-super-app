@@ -36,14 +36,6 @@ jobs:
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       SOURCE_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
       PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-      E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
-      E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
-      E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
-      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
 
     steps:
       - name: Checkout exact deployed commit
@@ -128,6 +120,13 @@ jobs:
           NODE
 
       - name: Auto-discover, verify, and publish all application evidence
+        env:
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
         run: |
           set -euo pipefail
           gates=(
