@@ -17,13 +17,14 @@ type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
 type OtpState = {
   open: boolean;
   challengeId: string;
+  correlationId: string;
   code: string;
   expiresAt: number;
   amount: number;
   commissionCount: number;
 };
 
-const emptyOtp: OtpState = { open: false, challengeId: '', code: '', expiresAt: 0, amount: 0, commissionCount: 0 };
+const emptyOtp: OtpState = { open: false, challengeId: '', correlationId: '', code: '', expiresAt: 0, amount: 0, commissionCount: 0 };
 
 export default function BrokerCommissionsPage() {
   const { user } = useRole();
@@ -81,7 +82,15 @@ export default function BrokerCommissionsPage() {
       const requestOtp = httpsCallable(functions, 'requestBrokerPayoutOtp');
       const result = await requestOtp({ commissionIds: payableIds });
       const data = result.data as any;
-      setOtp({ open: true, challengeId: String(data?.challengeId || ''), code: '', expiresAt: Number(data?.expiresAt || 0), amount: Number(data?.amount || 0), commissionCount: Number(data?.commissionCount || payableIds.length) });
+      setOtp({
+        open: true,
+        challengeId: String(data?.challengeId || ''),
+        correlationId: String(data?.correlationId || data?.challengeId || ''),
+        code: '',
+        expiresAt: Number(data?.expiresAt || 0),
+        amount: Number(data?.amount || 0),
+        commissionCount: Number(data?.commissionCount || payableIds.length),
+      });
       setNotice({ type: 'info', text: 'A six-digit payout verification code was sent to your verified Broker email.' });
     } catch (error: any) {
       setNotice({ type: 'error', text: error?.message || 'Unable to send payout verification code.' });
@@ -175,7 +184,7 @@ export default function BrokerCommissionsPage() {
 
       <Paper sx={{ mt: 4, p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.03) }}><Stack direction="row" spacing={2}><Info size={20} /><Typography variant="body2">Payments remain pending until Admin Finance approves and records the bank transfer.</Typography></Stack></Paper>
 
-      <Dialog data-testid="broker-payout-otp-dialog" open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
+      <Dialog data-testid="broker-payout-otp-dialog" data-correlation-id={otp.correlationId} open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle>Verify payout request</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>

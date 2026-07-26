@@ -2,7 +2,7 @@
  * business-broker.spec.ts
  * Deep E2E business flow for the Broker role.
  * Verifies: authenticated broker identity, lead attribution, commission visibility,
- * and request-only payout OTP challenge issuance without reading or consuming the code.
+ * and payout OTP challenge issuance, retrieval from the Gmail mailbox, and submission.
  */
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
@@ -16,13 +16,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
-// Owner and Broker authenticate using their dedicated OAuth-verified mailboxes.
-const EMAIL = process.env.E2E_BROKER_MAILBOX_EMAIL ?? '';
+const EMAIL = process.env.E2E_BROKER_EMAIL ?? '';
+const MAILBOX_EMAIL = process.env.E2E_BROKER_MAILBOX_EMAIL ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
 function requireLaunchCredentials() {
   if (!EMAIL || !PASSWORD) {
-    throw new Error('Missing E2E_BROKER_MAILBOX_EMAIL/PASSWORD. Broker launch validation cannot be skipped for public release.');
+    throw new Error('Missing E2E_BROKER_EMAIL/PASSWORD. Broker launch validation cannot be skipped for public release.');
   }
 }
 
@@ -47,6 +47,8 @@ async function login(page: Page) {
 }
 
 test.describe('Broker Business Workflow', () => {
+  test.use({ trace: 'off', video: 'off', screenshot: 'off' });
+
   test.beforeEach(async ({ page }) => {
     const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
     (page as any).__binAppCheckMonitor = appCheckMonitor;
@@ -98,6 +100,9 @@ test.describe('Broker Business Workflow', () => {
     await expect(requestOtp).toBeVisible({ timeout: 15_000 });
     await expect(requestOtp).toBeEnabled({ timeout: 15_000 });
     await expect(requestOtp).toContainText(/REQUEST PAYOUT \(1\)/i);
+
+    // Capture timestamp BEFORE the click so fast-arriving messages are not rejected.
+    const otpRequestedAtMs = Date.now();
     await requestOtp.click();
 
     await expect(page.getByText(/A six-digit payout verification code was sent to your verified Broker email/i)).toBeVisible({ timeout: 35_000 });
@@ -108,14 +113,21 @@ test.describe('Broker Business Workflow', () => {
     const otpCode = page.getByTestId('broker-payout-otp-code');
     await expect(otpCode).toHaveValue('');
     await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
+    const brokerCorrelationId = await otpDialog.getAttribute('data-correlation-id') || '';
+    if (!MAILBOX_EMAIL || !brokerCorrelationId) {
+      throw new Error('Missing E2E_BROKER_MAILBOX_EMAIL or backend payout OTP correlation ID.');
+    }
 
     // Retrieve the real OTP from the broker Gmail mailbox via OAuth2 / Gmail API.
-    // The code is sent immediately after requestOtp.click(); allow up to 90 s for delivery.
-    const otpStartMs = Date.now();
+    // afterMs is set to otpRequestedAtMs to ensure we only accept emails newer than
+    // the request; the -5000 ms skew allowance covers delivery latency.
     const otp = await getLatestOtp('broker', {
-      timeoutMs:   90_000,
-      afterMs:     otpStartMs - 10_000, // tolerate small clock skew
-      subjectHint: 'payout verification',
+      expectedSender:    process.env.E2E_OTP_EXPECTED_SENDER || 'ceo@bin-groups.com',
+      expectedRecipient: MAILBOX_EMAIL,
+      correlationId:     brokerCorrelationId,
+      timeoutMs:         90_000,
+      afterMs:           otpRequestedAtMs - 5_000,
+      subjectHint:       'payout verification',
     });
 
     await otpCode.fill(otp);

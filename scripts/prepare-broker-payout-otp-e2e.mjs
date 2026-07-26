@@ -16,8 +16,8 @@ for (const envPath of [
 }
 
 const projectId = resolveFirebaseAdminProjectId();
-const brokerEmail = String(process.env.E2E_BROKER_MAILBOX_EMAIL || process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
-if (!brokerEmail) throw new Error('E2E_BROKER_MAILBOX_EMAIL is required for Broker payout OTP evidence.');
+const brokerEmail = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
+if (!brokerEmail) throw new Error('E2E_BROKER_EMAIL is required for Broker payout OTP evidence.');
 
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();

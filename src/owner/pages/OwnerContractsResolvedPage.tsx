@@ -414,7 +414,7 @@ export default function OwnerContractsResolvedPage() {
           <Stack spacing={3}>
             <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> Contract Signature Required</Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)' }}>Type your full legal name and sign. Dashboard unlock still requires payment verification.</Typography>
-            <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
+            <TextField fullWidth data-testid="owner-contract-signature-name" label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
             <ContractSignatureOtpControl
               contractId={primaryContract.id}
               contractHash={String(primaryContract.quoteHash || primaryContract.contractHash || '')}

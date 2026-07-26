@@ -161,14 +161,14 @@ jobs:
           privileged_count="$(jq -r '.privilegedAccountCountBefore' "$report_path")"
 
           body="## Privileged-account review
-
-- Exact SHA: \`$RELEASE_SHA\`
-- Review run: $run_url
-- Privileged accounts: \`$privileged_count\`
-- Unexpected deletion targets: \`$target_count\`
-- Canonical Founder ready: \`$ready\`
-- Cleanup execution eligible: \`$eligible\`
-- Hard-launch claim: \`false\`"
+          
+          - Exact SHA: \`$RELEASE_SHA\`
+          - Review run: $run_url
+          - Privileged accounts: \`$privileged_count\`
+          - Unexpected deletion targets: \`$target_count\`
+          - Canonical Founder ready: \`$ready\`
+          - Cleanup execution eligible: \`$eligible\`
+          - Hard-launch claim: \`false\`"
           post_comment "$body"
 
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
@@ -305,16 +305,16 @@ jobs:
 
           deleted="$(jq -r '.deletedAccountCount' "$report_path")"
           body="## Privileged-account cleanup completed
-
-- Exact SHA: \`$RELEASE_SHA\`
-- Cleanup run: $run_url
-- Unexpected privileged accounts deleted: \`$deleted\`
-- Canonical Founder retained: \`true\`
-- Audit logs preserved: \`true\`
-- Non-privileged accounts untouched: \`true\`
-- Hard-launch claim: \`false\`
-
-Next protected action: run \`/bin-launch bank-pilot-after-mfa\`."
+          
+          - Exact SHA: \`$RELEASE_SHA\`
+          - Cleanup run: $run_url
+          - Unexpected privileged accounts deleted: \`$deleted\`
+          - Canonical Founder retained: \`true\`
+          - Audit logs preserved: \`true\`
+          - Non-privileged accounts untouched: \`true\`
+          - Hard-launch claim: \`false\`
+          
+          Next protected action: run \`/bin-launch bank-pilot-after-mfa\`."
           post_comment "$body"
 
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"

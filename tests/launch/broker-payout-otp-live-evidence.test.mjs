@@ -6,9 +6,11 @@ const fixture = readFileSync('scripts/prepare-broker-payout-otp-e2e.mjs', 'utf8'
 const runner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
+const brokerFunctions = readFileSync('functions/secureBrokerPayoutOperations.ts', 'utf8');
 
 test('Broker payout OTP fixture is restricted to the verified dedicated E2E Broker', () => {
-  assert.match(fixture, /E2E_BROKER_MAILBOX_EMAIL is required/);
+  assert.match(fixture, /E2E_BROKER_EMAIL is required/);
+  assert.doesNotMatch(fixture, /E2E_BROKER_MAILBOX_EMAIL\s*\|\|\s*process\.env\.E2E_BROKER_EMAIL/);
   assert.match(fixture, /brokerUser\.emailVerified/);
   assert.match(fixture, /profile\.e2eLaunchSeed !== true/);
   assert.match(fixture, /dedicated E2E Broker/);
@@ -44,8 +46,10 @@ test('Broker live evidence fetches a real OTP from Gmail and submits it — canc
   assert.match(brokerSpec, /gmail-otp-reader/);
   assert.match(brokerSpec, /getLatestOtp/);
 
-  // Must use the mailbox email env key
+  // Must sign in with app-login identity and read OTP from mailbox identity.
+  assert.match(brokerSpec, /E2E_BROKER_EMAIL/);
   assert.match(brokerSpec, /E2E_BROKER_MAILBOX_EMAIL/);
+  assert.doesNotMatch(brokerSpec, /const EMAIL = process\.env\.E2E_BROKER_MAILBOX_EMAIL/);
 
   // Must issue the OTP request
   assert.match(brokerSpec, /broker-payout-request-otp/);
@@ -63,6 +67,28 @@ test('Broker live evidence fetches a real OTP from Gmail and submits it — canc
 
   // Server-authoritative callable names must not appear in the client spec
   assert.doesNotMatch(brokerSpec, /verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
+
+  // OTP reader must receive the three required security parameters
+  assert.match(brokerSpec, /expectedSender/, 'getLatestOtp must specify expectedSender to filter by origin');
+  assert.match(brokerSpec, /expectedRecipient/, 'getLatestOtp must specify expectedRecipient to prevent cross-mailbox matches');
+  assert.match(brokerSpec, /correlationId/, 'getLatestOtp must specify correlationId to bind OTP to this specific request');
+  assert.match(brokerSpec, /test\.use\(\{\s*trace: 'off',\s*video: 'off',\s*screenshot: 'off'\s*\}\)/, 'OTP evidence must disable Playwright trace/video/screenshot artifacts');
+
+  // Timestamp must be captured BEFORE the OTP-request click, not after
+  const requestClickIndex   = brokerSpec.indexOf('await requestOtp.click()');
+  const timestampCaptureIndex = brokerSpec.indexOf('otpRequestedAtMs = Date.now()');
+  assert.ok(timestampCaptureIndex >= 0, 'otpRequestedAtMs must be captured before requestOtp.click()');
+  assert.ok(timestampCaptureIndex < requestClickIndex, 'timestamp capture must precede requestOtp.click()');
+});
+
+test('Broker payout OTP backend binds the request correlation id across storage and email content', () => {
+  assert.match(brokerFunctions, /const correlationId = ref\.id/);
+  assert.match(brokerFunctions, /subject: `BIN GROUP payout verification code \$\{correlationId\}`/);
+  assert.match(brokerFunctions, /Request reference: \$\{correlationId\}/);
+  assert.match(brokerFunctions, /correlationId,/);
+  assert.match(brokerFunctions, /return \{ status: "OTP_SENT"[\s\S]*correlationId/);
+  assert.match(page, /data-correlation-id=\{otp\.correlationId\}/);
+  assert.match(brokerSpec, /await otpDialog\.getAttribute\('data-correlation-id'\)/);
 });
 
 

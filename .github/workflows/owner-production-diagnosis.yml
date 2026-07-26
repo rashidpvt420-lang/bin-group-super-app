@@ -265,23 +265,23 @@ jobs:
           suites="$(jq -r 'if (.failedSuiteSignals | length) == 0 then "- No failed-suite signal was extracted; inspect the redacted artifact." else (.failedSuiteSignals | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
           artifact="firebase-production-manual-diagnosis-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
           body="## Latest Firebase production failure diagnosis
-
-- Resolved origin/main SHA: \`$RESOLVED_MAIN_SHA\`
-- Exact source SHA: \`$SOURCE_RUN_SHA\`
-- Source run: $SOURCE_RUN_URL
-- Source run matches resolved main SHA: \`$SOURCE_RUN_MATCHES_MAIN_SHA\`
-- Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
-- Source run is stale failure: \`$SOURCE_RUN_IS_STALE\`
-- Diagnostic artifact: \`$artifact\`
-- Full artifact log redacted: \`true\`
-- Raw job log uploaded: \`false\`
-- Hard-launch claim: \`false\`
-
-### Failed suite signals
-$suites
-
-### Normalized error lines
-$errors
-
-The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
+          
+          - Resolved origin/main SHA: \`$RESOLVED_MAIN_SHA\`
+          - Exact source SHA: \`$SOURCE_RUN_SHA\`
+          - Source run: $SOURCE_RUN_URL
+          - Source run matches resolved main SHA: \`$SOURCE_RUN_MATCHES_MAIN_SHA\`
+          - Source run age (seconds): \`$SOURCE_RUN_AGE_SECONDS\`
+          - Source run is stale failure: \`$SOURCE_RUN_IS_STALE\`
+          - Diagnostic artifact: \`$artifact\`
+          - Full artifact log redacted: \`true\`
+          - Raw job log uploaded: \`false\`
+          - Hard-launch claim: \`false\`
+          
+          ### Failed suite signals
+          $suites
+          
+          ### Normalized error lines
+          $errors
+          
+          The deployment remains fail-closed. Fix or complete the identified operational requirement before another protected bank-pilot dispatch."
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null

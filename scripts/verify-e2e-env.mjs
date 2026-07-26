@@ -25,10 +25,7 @@ for (const envPath of possibleConfigPaths) {
 }
 
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
-// Owner and Broker use dedicated OAuth-authenticated mailboxes; their login
-// email is stored as E2E_{ROLE}_MAILBOX_EMAIL, not E2E_{ROLE}_EMAIL.
-const EMAIL_KEY = (role) =>
-  role === 'OWNER' || role === 'BROKER' ? `E2E_${role}_MAILBOX_EMAIL` : `E2E_${role}_EMAIL`;
+const EMAIL_KEY = (role) => `E2E_${role}_EMAIL`;
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const keys = [
   'E2E_BASE_URL',
@@ -108,12 +105,16 @@ if (process.env.E2E_STRICT_LIVE === 'true') {
   // Verify all six mailbox OAuth secrets are present so the Gmail OTP helper
   // can actually exchange tokens during the OTP payout flow.
   const mailboxOauthKeys = [
+    'E2E_OWNER_MAILBOX_EMAIL',
     'E2E_OWNER_MAILBOX_CLIENT_ID',
     'E2E_OWNER_MAILBOX_CLIENT_SECRET',
     'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
+    'E2E_OWNER_MAILBOX_SENTINEL_MESSAGE_ID',
+    'E2E_BROKER_MAILBOX_EMAIL',
     'E2E_BROKER_MAILBOX_CLIENT_ID',
     'E2E_BROKER_MAILBOX_CLIENT_SECRET',
     'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
+    'E2E_BROKER_MAILBOX_SENTINEL_MESSAGE_ID',
   ];
   const missingOauth = mailboxOauthKeys.filter((k) => !String(process.env[k] || '').trim());
   if (missingOauth.length) {
