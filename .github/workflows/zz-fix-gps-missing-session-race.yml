@@ -1,0 +1,370 @@
+name: One-shot GPS Missing Session Race Fix
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'agent/gps-missing-session-stop-noop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/gps-missing-session-stop-noop
+          fetch-depth: 0
+      - name: Apply reviewed server tombstone repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, before, after, label):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(before)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              p.write_text(text.replace(before, after, 1))
+
+          replace_once(
+              'functions/technicianLiveLocationCas.ts',
+              '''export type UpdateDecision =
+  | "APPLY"
+  | "REJECT_SUPERSEDED";''',
+              '''export type UpdateDecision =
+  | "APPLY"
+  | "REJECT_STOPPED"
+  | "REJECT_SUPERSEDED";''',
+              'UpdateDecision type',
+          )
+          replace_once(
+              'functions/technicianLiveLocationCas.ts',
+              '''export function classifyUpdateRequest(
+  current: TechnicianLiveSessionState,
+  requestedTicketId: string,
+  requestedSessionId: string,
+  transactionNowMs: number,
+): UpdateDecision {
+  if (!current.exists || !current.isTracking) return "APPLY";
+  if (current.expiresAtMs !== null && current.expiresAtMs <= transactionNowMs) return "APPLY";
+  return current.activeTicketId === clean(requestedTicketId) &&
+    current.trackingSessionId === clean(requestedSessionId)
+    ? "APPLY"
+    : "REJECT_SUPERSEDED";
+}''',
+              '''export function classifyUpdateRequest(
+  current: TechnicianLiveSessionState,
+  requestedTicketId: string,
+  requestedSessionId: string,
+  transactionNowMs: number,
+): UpdateDecision {
+  const ticketId = clean(requestedTicketId);
+  const sessionId = clean(requestedSessionId);
+  if (
+    current.exists &&
+    !current.isTracking &&
+    current.trackingSessionId === sessionId &&
+    current.lastStoppedTicketId === ticketId
+  ) {
+    return "REJECT_STOPPED";
+  }
+  if (!current.exists || !current.isTracking) return "APPLY";
+  if (current.expiresAtMs !== null && current.expiresAtMs <= transactionNowMs) return "APPLY";
+  return current.activeTicketId === ticketId && current.trackingSessionId === sessionId
+    ? "APPLY"
+    : "REJECT_SUPERSEDED";
+}''',
+              'classifyUpdateRequest',
+          )
+
+          old_missing = '''        if (stopDecision === "REJECT_MISSING") {
+          tx.set(auditRef, {
+            actorId: technicianUid,
+            actorRole: "technician",
+            action: "TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED",
+            targetType: "technician_live_locations",
+            targetId: technicianUid,
+            requestedTicketId: ticketId,
+            requestedTrackingSessionId: trackingSessionId,
+            currentTicketId: null,
+            currentTrackingSessionId: null,
+            reason: "REJECT_MISSING",
+            createdAt: now,
+          });
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: now.toMillis(),
+            alreadyStopped: true,
+            superseded: false,
+            missingSession: true,
+          };
+        }
+'''
+          new_missing = '''        if (stopDecision === "REJECT_MISSING") {
+          const ticketExists = ticketSnap.exists;
+          if (ticketExists && assignedTechnicianId(ticket) !== technicianUid) {
+            throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+          }
+
+          // Record a non-live tombstone for this exact ticket/session pair. A
+          // position callback already in flight after clearWatch can then be
+          // rejected instead of recreating a canonical live session after logout.
+          tx.set(liveRef, {
+            technicianUid,
+            activeTicketId: null,
+            isTracking: false,
+            trackingSessionId,
+            lastStoppedTicketId: ticketId,
+            stopReason: "TECHNICIAN_REQUESTED_MISSING_SESSION",
+            stoppedAt: now,
+            serverUpdatedAt: now,
+            expiresAt: now,
+            sequence: previousSequence,
+            source: "technician-callable",
+            missingSessionTombstone: true,
+          }, { merge: false });
+          tx.set(technicianRef, {
+            activeTicketId: null,
+            isTracking: false,
+            liveLocationRef: liveRef.path,
+            locationUpdatedAt: now,
+            updatedAt: now,
+          }, { merge: true });
+          tx.set(userRef, {
+            activeTicketId: null,
+            isTracking: false,
+            liveLocationRef: liveRef.path,
+            locationUpdatedAt: now,
+            updatedAt: now,
+          }, { merge: true });
+          tx.set(diagnosticRef, {
+            ticketId,
+            status: "STOPPED_MISSING_SESSION",
+            stopReason: "TECHNICIAN_REQUESTED_MISSING_SESSION",
+            trackingSessionId,
+            canonicalSessionActive: false,
+            tombstoneRecorded: true,
+            stoppedAt: now,
+            updatedAt: now,
+          }, { merge: true });
+          tx.set(auditRef, {
+            actorId: technicianUid,
+            actorRole: "technician",
+            action: "TECHNICIAN_LIVE_LOCATION_STOP_TOMBSTONED",
+            targetType: "technician_live_locations",
+            targetId: technicianUid,
+            requestedTicketId: ticketId,
+            requestedTrackingSessionId: trackingSessionId,
+            currentTicketId: null,
+            currentTrackingSessionId: null,
+            reason: "REJECT_MISSING",
+            ticketMissing: !ticketExists,
+            tombstoneRecorded: true,
+            createdAt: now,
+          });
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: now.toMillis(),
+            alreadyStopped: true,
+            superseded: false,
+            missingSession: true,
+            tombstoneRecorded: true,
+          };
+        }
+'''
+          replace_once('functions/technicianLiveLocation.ts', old_missing, new_missing, 'missing STOP branch')
+          replace_once(
+              'functions/technicianLiveLocation.ts',
+              '''      if (updateDecision === "REJECT_SUPERSEDED") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Another unexpired tracking session is active; stale or cross-tab coordinates were rejected.",
+        );
+      }
+''',
+              '''      if (updateDecision === "REJECT_STOPPED") {
+        throw new HttpsError(
+          "failed-precondition",
+          "This tracking session was already stopped; a delayed coordinate was rejected.",
+        );
+      }
+      if (updateDecision === "REJECT_SUPERSEDED") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Another unexpired tracking session is active; stale or cross-tab coordinates were rejected.",
+        );
+      }
+''',
+              'stopped update rejection',
+          )
+
+          replace_once(
+              'src/utils/liveTracking.ts',
+              '''type LiveTrackingActionResult = {
+    superseded: boolean;
+    alreadyStopped: boolean;
+    missingSession: boolean;
+};''',
+              '''type LiveTrackingActionResult = {
+    superseded: boolean;
+    alreadyStopped: boolean;
+    missingSession: boolean;
+    tombstoneRecorded: boolean;
+};''',
+              'client result type',
+          )
+          replace_once(
+              'src/utils/liveTracking.ts',
+              '''        data?: { superseded?: unknown; alreadyStopped?: unknown; missingSession?: unknown };''',
+              '''        data?: { superseded?: unknown; alreadyStopped?: unknown; missingSession?: unknown; tombstoneRecorded?: unknown };''',
+              'client response shape',
+          )
+          replace_once(
+              'src/utils/liveTracking.ts',
+              '''        missingSession: data.missingSession === true,
+    };''',
+              '''        missingSession: data.missingSession === true,
+        tombstoneRecorded: data.tombstoneRecorded === true,
+    };''',
+              'client response parser',
+          )
+          replace_once(
+              'src/utils/liveTracking.ts',
+              '''    let stopMissingSession = false;
+    let stopQueued = false;''',
+              '''    let stopMissingSession = false;
+    let stopTombstoneRecorded = false;
+    let stopQueued = false;''',
+              'stop tombstone state',
+          )
+          replace_once(
+              'src/utils/liveTracking.ts',
+              '''            stopMissingSession = response.missingSession;
+            stopAcknowledged = !stopSuperseded;''',
+              '''            stopMissingSession = response.missingSession;
+            stopTombstoneRecorded = response.tombstoneRecorded;
+            stopAcknowledged = !stopSuperseded && (!stopMissingSession || stopTombstoneRecorded);''',
+              'stop acknowledgement binding',
+          )
+          replace_once(
+              'src/utils/liveTracking.ts',
+              '''            canonicalSessionAbsent: true,
+        } : stopAcknowledged ? {''',
+              '''            canonicalSessionActive: false,
+            tombstoneRecorded: stopTombstoneRecorded,
+        } : stopAcknowledged ? {''',
+              'truthful missing-session diagnostic',
+          )
+
+          Path('tests/launch/gps-missing-session-stop-contract.test.mjs').write_text('''import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+
+test('STOP before first canonical UPDATE records a tombstone and rejects late coordinates', async () => {
+  const [server, helper, client] = await Promise.all([
+    read('functions/technicianLiveLocation.ts'),
+    read('functions/technicianLiveLocationCas.ts'),
+    read('src/utils/liveTracking.ts'),
+  ]);
+  const missingStart = server.indexOf('if (stopDecision === "REJECT_MISSING")');
+  const supersededStart = server.indexOf('if (stopDecision === "REJECT_SUPERSEDED")', missingStart);
+  const missingBranch = server.slice(missingStart, supersededStart);
+  assert.ok(missingStart >= 0 && supersededStart > missingStart);
+  assert.match(missingBranch, /tx\.set\(liveRef/);
+  assert.match(missingBranch, /missingSessionTombstone: true/);
+  assert.match(missingBranch, /tombstoneRecorded: true/);
+  assert.match(missingBranch, /isTracking: false/);
+  assert.match(missingBranch, /lastStoppedTicketId: ticketId/);
+  assert.match(missingBranch, /missingSession: true/);
+  assert.match(server, /updateDecision === "REJECT_STOPPED"/);
+  assert.match(helper, /return "REJECT_STOPPED"/);
+
+  assert.match(client, /tombstoneRecorded: data\.tombstoneRecorded === true/);
+  assert.match(client, /STOP_MISSING_SESSION_RECONCILED/);
+  assert.match(client, /canonicalSessionActive: false/);
+  assert.match(client, /stopAcknowledged = !stopSuperseded && \(!stopMissingSession \|\| stopTombstoneRecorded\)/);
+});
+''')
+
+          cas_path = Path('tests/launch/technician-live-location-cas.test.mjs')
+          cas_test = cas_path.read_text()
+          cas_test = cas_test.replace(
+              """test('unexpired active session rejects cross-tab UPDATE while expired session permits replacement', () => {
+""",
+              """test('a stopped tombstone rejects a delayed UPDATE from the same session', () => {
+  const tombstone = state({
+    isTracking: false,
+    activeTicketId: '',
+    lastStoppedTicketId: 'ticket-1',
+    expiresAtMs: 0,
+  });
+  assert.equal(cas.classifyUpdateRequest(tombstone, 'ticket-1', 'session-A', 2_000), 'REJECT_STOPPED');
+  assert.equal(cas.classifyUpdateRequest(tombstone, 'ticket-1', 'session-B', 2_000), 'APPLY');
+});
+
+test('unexpired active session rejects cross-tab UPDATE while expired session permits replacement', () => {
+""",
+              1,
+          )
+          old = """test('missing canonical STOP is an audited acknowledged no-op instead of a terminal client lock', () => {
+  const branchStart = callableSource.indexOf('if (stopDecision === "REJECT_MISSING")');
+  const branchEnd = callableSource.indexOf('if (stopDecision === "REJECT_SUPERSEDED")', branchStart);
+  const branch = callableSource.slice(branchStart, branchEnd);
+  assert.match(branch, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
+  assert.match(branch, /reason: "REJECT_MISSING"/);
+  assert.match(branch, /missingSession: true/);
+  assert.match(branch, /alreadyStopped: true/);
+  assert.doesNotMatch(branch, /tx\.set\(liveRef/);
+  assert.doesNotMatch(branch, /throw new HttpsError/);
+
+  assert.match(clientSource, /missingSession: data\.missingSession === true/);
+  assert.match(clientSource, /stopMissingSession = response\.missingSession/);
+  assert.match(clientSource, /STOP_MISSING_SESSION_RECONCILED/);
+  assert.match(clientSource, /canonicalSessionAbsent: true/);
+});
+"""
+          new = """test('missing canonical STOP records a non-live tombstone instead of permitting a late UPDATE', () => {
+  const branchStart = callableSource.indexOf('if (stopDecision === "REJECT_MISSING")');
+  const branchEnd = callableSource.indexOf('if (stopDecision === "REJECT_SUPERSEDED")', branchStart);
+  const branch = callableSource.slice(branchStart, branchEnd);
+  assert.match(branch, /TECHNICIAN_LIVE_LOCATION_STOP_TOMBSTONED/);
+  assert.match(branch, /reason: "REJECT_MISSING"/);
+  assert.match(branch, /missingSession: true/);
+  assert.match(branch, /alreadyStopped: true/);
+  assert.match(branch, /tx\.set\(liveRef/);
+  assert.match(branch, /missingSessionTombstone: true/);
+  assert.match(branch, /tombstoneRecorded: true/);
+
+  assert.match(clientSource, /missingSession: data\.missingSession === true/);
+  assert.match(clientSource, /tombstoneRecorded: data\.tombstoneRecorded === true/);
+  assert.match(clientSource, /stopMissingSession = response\.missingSession/);
+  assert.match(clientSource, /STOP_MISSING_SESSION_RECONCILED/);
+  assert.match(clientSource, /canonicalSessionActive: false/);
+});
+"""
+          if old not in cas_test:
+              raise SystemExit('CAS missing-session test block not found')
+          cas_path.write_text(cas_test.replace(old, new, 1))
+
+          Path('.github/workflows/zz-fix-gps-missing-session-race.yml').unlink()
+          PY
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Reject late GPS updates after missing-session STOP'
+          git push origin HEAD:agent/gps-missing-session-stop-noop
