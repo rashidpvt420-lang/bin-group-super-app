@@ -55,8 +55,18 @@ jobs:
           npm run typecheck
           npm run build:functions
 
-      - name: Validate Firestore authority
-        run: npm run test:rules
+      - name: Prepare canonical Firestore rules
+        run: |
+          set -euo pipefail
+          npm run normalize:rule-tests
+          npm run prepare:rules
+          npm run verify:rules-hardening
+
+      - name: Validate focused property geo Firestore authority
+        run: firebase emulators:exec --only firestore --project bin-group-57c60 "node --test --test-concurrency=1 test/property-geo-authority-rules.test.js"
+
+      - name: Validate complete Firestore and Storage authority
+        run: firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
 
       - name: Commit product changes and remove one-off machinery
         run: |
