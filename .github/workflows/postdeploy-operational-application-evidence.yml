@@ -20,7 +20,6 @@ on:
 permissions:
   contents: read
   actions: read
-  id-token: write
 
 concurrency:
   group: postdeploy-operational-application-${{ inputs.source_deploy_run_id }}
@@ -32,6 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     environment: hard-public-launch
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       SOURCE_AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
@@ -39,10 +42,8 @@ jobs:
       PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
 
     steps:
-      - name: Checkout exact deployed commit
+      - name: Checkout current main evidence commit
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.expected_commit_sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
