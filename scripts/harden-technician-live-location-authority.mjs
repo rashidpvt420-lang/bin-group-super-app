@@ -46,6 +46,15 @@ if (!rules.includes(readReplacement)) {
   rules = rules.replace(candidate, readReplacement);
 }
 
+// The property-geo authority pass may already have inserted `properties`
+// immediately after `system_secrets`. Preserve that stricter exclusion while
+// adding live-location isolation to both global write fallbacks.
+const propertyProtectedCollectionAnchor = "          'system_secrets',\n          'properties',\n          'users',";
+const propertyProtectedCollectionReplacement = "          'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',";
+while (rules.includes(propertyProtectedCollectionAnchor)) {
+  rules = rules.replace(propertyProtectedCollectionAnchor, propertyProtectedCollectionReplacement);
+}
+
 const protectedCollectionAnchor = "          'system_secrets',\n          'users',";
 const protectedCollectionReplacement = "          'system_secrets',\n          'technician_live_locations',\n          'users',";
 while (rules.includes(protectedCollectionAnchor)) {
@@ -68,4 +77,4 @@ if (
 }
 
 writeFileSync(rulesPath, rules, 'utf8');
-console.log('Technician live-location Firestore authority hardened.');
+console.log('Technician live-location Firestore authority hardened without weakening property isolation.');
