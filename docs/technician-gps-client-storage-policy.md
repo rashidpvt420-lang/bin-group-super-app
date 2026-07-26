@@ -21,7 +21,7 @@ Before deleting the previous global v2 queue, the client validates every legacy 
 
 ## Privacy boundaries
 
-Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout first clears the foreground watch, submits the canonical STOP, and immediately replays any queued STOP while Firebase authentication is still available. The authenticated UID queue is purged only after reconciliation succeeds; otherwise logout and navigation remain blocked.
+Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout first clears the foreground watch, submits the canonical STOP, and immediately replays any queued STOP while Firebase authentication is still available. Direct server acknowledgement, superseded-session acknowledgement, or a successful queued replay permits logout. The authenticated UID queue is purged only after reconciliation succeeds; otherwise storage cleanup, sign-out and navigation remain blocked.
 
 ## Admin map behavior
 
