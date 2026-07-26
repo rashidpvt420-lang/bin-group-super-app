@@ -31,6 +31,7 @@ const forbiddenFragments = [
   ['unrestricted notification creation', '      allow create: if signedIn();'],
   ['open mission pool exposes private tickets before dispatch', 'function openMissionPoolRead(data)'],
   ['tenant ticket create without unit/property validation', "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);"],
+  ['direct Tenant browser ticket creation', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
   ['direct client-side technician mission claim helper', 'function safeOpenMissionClaim() {'],
   ['direct client-side mission assignment field helper', 'function missionClaimFieldsLookValid() {'],
   ['tickets update rule still permits direct technician claiming', '|| safeOpenMissionClaim()'],
@@ -51,8 +52,6 @@ const requiredFragments = [
   ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
   ['approved technician read helper', 'function isApprovedTechnician() {'],
   ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
-  ['tenant ticket unit/property binding helper', 'function canCreateTenantBoundTicket(data) {'],
-  ['tenant ticket create uses binding helper', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
   ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
@@ -87,6 +86,13 @@ const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
 
+for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+  const start = rules.indexOf(marker);
+  const block = start < 0 ? '' : rules.slice(start, start + 700);
+  if (!block.includes('allow create: if isAdmin();')) {
+    failures.push(`${marker} must require the server/Admin creation path.`);
+  }
+}
 if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
