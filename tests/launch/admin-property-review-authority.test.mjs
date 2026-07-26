@@ -6,9 +6,10 @@ import ts from 'typescript';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('Owner property approval and rejection are server-authoritative', async () => {
-  const [page, backend, runtime] = await Promise.all([
+  const [page, backend, authority, runtime] = await Promise.all([
     read('apps/admin-panel/src/pages/owners/OwnerManagementPage.tsx'),
     read('functions/adminPropertyReview.ts'),
+    read('functions/propertyGeoAuthority.ts'),
     read('functions/runtime.ts'),
   ]);
 
@@ -25,9 +26,13 @@ test('Owner property approval and rejection are server-authoritative', async () 
   assert.match(backend, /collection\("audit_logs"\)/);
   assert.match(backend, /collection\("notifications"\)/);
   assert.match(backend, /SERVER_AUTHORITATIVE/);
-  assert.match(backend, /canonicalVerifiedGeo/);
-  assert.match(backend, /update\.geo = canonicalGeo/);
+  assert.match(backend, /buildFounderVerifiedPropertyGeo\(property, actor\.uid, now\)/);
+  assert.match(backend, /update\.geo = canonical\.geo/);
+  assert.match(backend, /update\.geoVerification = canonical\.geoVerification/);
   assert.match(backend, /geoDispatchReady/);
+  assert.match(authority, /export function buildFounderVerifiedPropertyGeo/);
+  assert.match(authority, /source: "FOUNDER_MFA_REVIEW"/);
+  assert.match(authority, /verificationVersion: 1/);
   assert.match(runtime, /export \* from "\.\/adminPropertyReview"/);
 });
 
