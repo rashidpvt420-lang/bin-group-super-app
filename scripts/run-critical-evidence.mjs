@@ -56,23 +56,51 @@ if (mainUrl !== PRODUCTION.mainUrl) {
   process.exit(1);
 }
 
-function shouldRunE2eAdminLifecycle() {
-  return process.env.GITHUB_ACTIONS === 'true' &&
-    process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
+const PROTECTED_ADMIN_EVIDENCE_WORKFLOWS = new Map([
+  ['Firebase Production Deploy', new Set(['deploy-firebase-production-stack', 'public-release-clearance'])],
+  ['Live Role Smoke Tests', new Set(['live-evidence'])],
+  ['Live Business Failure Diagnostics', new Set(['diagnose-live-business-failures'])],
+]);
+
+function protectedAdminEvidenceEnvironment() {
+  const workflow = String(process.env.GITHUB_WORKFLOW || '');
+  const job = String(process.env.GITHUB_JOB || '');
+  const allowedJobs = PROTECTED_ADMIN_EVIDENCE_WORKFLOWS.get(workflow);
+  const exactProtectedJob =
+    process.env.GITHUB_ACTIONS === 'true' &&
+    process.env.GITHUB_REPOSITORY === 'rashidpvt420-lang/bin-group-super-app' &&
+    allowedJobs?.has(job) === true &&
     process.env.GITHUB_REF === 'refs/heads/main' &&
+    /^[0-9a-f]{40}$/.test(String(process.env.GITHUB_SHA || '').trim()) &&
     String(process.env.E2E_ADMIN_EMAIL || '').trim().length > 0;
+  return exactProtectedJob ? { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' } : null;
+}
+
+function runAdminMfaManager(mode) {
+  const env = protectedAdminEvidenceEnvironment();
+  if (!env) return 0;
+  const result = spawnSync(
+    process.execPath,
+    ['scripts/manage-e2e-admin-mfa-test.mjs', '--mode', mode],
+    { stdio: 'inherit', env },
+  );
+  const status = result.status ?? 1;
+  if (status !== 0) console.error(`[critical-evidence] Admin MFA ${mode} failed with exit code ${status}`);
+  return status;
+}
+
+function shouldRunE2eAdminLifecycle() {
+  return protectedAdminEvidenceEnvironment() !== null;
 }
 
 function retireEphemeralE2eAdmin(phase) {
-  if (!shouldRunE2eAdminLifecycle()) return 0;
+  const env = protectedAdminEvidenceEnvironment();
+  if (!env) return 0;
   console.log(`[critical-evidence] retiring ephemeral E2E Admin after ${phase}`);
   const result = spawnSync(
     process.execPath,
     ['scripts/e2e-admin-lifecycle.mjs', `--phase=${phase}`],
-    {
-      stdio: 'inherit',
-      env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' },
-    },
+    { stdio: 'inherit', env },
   );
   const status = result.status ?? 1;
   if (status !== 0) {
@@ -182,7 +210,7 @@ function runPlaywrightSuite(suiteKey, def) {
       exitCode: 0,
       commitSha,
       mainUrl,
-      adminUrl: def.requiresAdminUrl || evidenceKey === 'adminCredentialLogin' ? adminUrl : adminUrl,
+      adminUrl,
       startedAt,
       finishedAt,
       passed: parsed.passed,
@@ -262,6 +290,43 @@ async function runProductionDeployment() {
 
 const allBusiness = ['adminCredentialLogin', 'businessOwner', 'businessTenant', 'businessTechnician', 'businessBroker', 'businessGlobal'];
 
+async function runAdminBoundSuites(suites, includeDeployment) {
+  let failed = 0;
+  const externallyManaged = process.env.E2E_ADMIN_MFA_MANAGED_EXTERNALLY === 'true';
+  const protectedContext = protectedAdminEvidenceEnvironment() !== null;
+  let mfaPrepared = false;
+
+  try {
+    if (protectedContext && !externallyManaged) {
+      const prepareStatus = runAdminMfaManager('prepare');
+      if (prepareStatus !== 0) failed += 1;
+      else mfaPrepared = true;
+    }
+
+    if (failed === 0) {
+      for (const key of suites) {
+        const def = SUITE_SPECS[key];
+        const result = runPlaywrightSuite(key, def);
+        if (!result.ok) failed += 1;
+      }
+      if (includeDeployment) {
+        const deploy = await runProductionDeployment();
+        if (!deploy.ok) failed += 1;
+      }
+    }
+  } finally {
+    if (protectedContext && !externallyManaged) {
+      const cleanupStatus = runAdminMfaManager('cleanup');
+      if (cleanupStatus !== 0) failed += 1;
+      if (mfaPrepared || cleanupStatus === 0) {
+        const lifecycleStatus = retireEphemeralE2eAdmin('post-business-evidence');
+        if (lifecycleStatus !== 0) failed += 1;
+      }
+    }
+  }
+  return failed;
+}
+
 async function main() {
   if (suiteArg === 'productionDeployment') {
     const result = await runProductionDeployment();
@@ -269,30 +334,21 @@ async function main() {
   }
 
   if (suiteArg === 'all-business' || suiteArg === 'all-required') {
-    const suites = suiteArg === 'all-required'
-      ? [...allBusiness, 'launchAuditLive']
-      : allBusiness;
-    let failed = 0;
-    try {
-      for (const key of suites) {
-        const def = SUITE_SPECS[key];
-        const result = runPlaywrightSuite(key, def);
-        if (!result.ok) failed += 1;
-      }
-      if (suiteArg === 'all-required') {
-        const deploy = await runProductionDeployment();
-        if (!deploy.ok) failed += 1;
-      }
-    } finally {
-      const cleanupStatus = retireEphemeralE2eAdmin('post-business-evidence');
-      if (cleanupStatus !== 0) failed += 1;
-    }
+    const suites = suiteArg === 'all-required' ? [...allBusiness, 'launchAuditLive'] : allBusiness;
+    const failed = await runAdminBoundSuites(suites, suiteArg === 'all-required');
     console.log(`[critical-evidence] hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
     process.exit(failed === 0 ? 0 : 1);
   }
 
   const def = SUITE_SPECS[suiteArg];
   if (!def) usage();
+
+  if (suiteArg === 'adminCredentialLogin' && shouldRunE2eAdminLifecycle() && process.env.E2E_ADMIN_MFA_MANAGED_EXTERNALLY !== 'true') {
+    const failed = await runAdminBoundSuites([suiteArg], false);
+    console.log(`[critical-evidence] hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
+    process.exit(failed === 0 ? 0 : 1);
+  }
+
   const result = runPlaywrightSuite(suiteArg, def);
   console.log(`[critical-evidence] hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
   process.exit(result.ok ? 0 : result.exitCode || 1);
