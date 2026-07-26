@@ -32,14 +32,14 @@ jobs:
       - name: Apply deterministic mailbox evidence patch
         run: python .github/scripts/apply-broker-mailbox-evidence-patch.py
 
-      - name: Stage bounded mailbox-evidence files
+      - name: Stage non-workflow mailbox-evidence files
         run: |
           set -euo pipefail
-          git add scripts/run-broker-production-evidence.mjs .github/workflows/firebase-production-deploy.yml .github/workflows/live-role-smoke.yml tests/launch/broker-otp-hmac-evidence.test.mjs tests/launch/broker-payout-otp-live-evidence.test.mjs tests/launch/broker-mailbox-workflow-bindings.test.mjs
-          git diff --cached --quiet && { echo '::error::Mailbox patch produced no changes.'; exit 1; }
+          git add scripts/run-broker-production-evidence.mjs tests/launch/broker-otp-hmac-evidence.test.mjs tests/launch/broker-payout-otp-live-evidence.test.mjs
+          git diff --cached --quiet && { echo '::error::Mailbox patch produced no non-workflow changes.'; exit 1; }
           git diff --cached --name-only
 
-      - name: Commit bounded mailbox-evidence patch
+      - name: Commit non-workflow mailbox-evidence patch
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
