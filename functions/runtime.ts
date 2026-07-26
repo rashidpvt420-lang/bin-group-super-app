@@ -31,6 +31,7 @@ export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtp";
+export * from "./ownerOnboardingLifecycleEmail";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
 export * from "./profileP1Workflows";
