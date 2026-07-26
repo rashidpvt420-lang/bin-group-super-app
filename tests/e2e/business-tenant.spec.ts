@@ -508,8 +508,12 @@ test.describe('Tenant Business Workflow', () => {
     await expect.poll(async () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
-      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
-    }, { timeout: 40_000 }).toMatch(/CLOSED\|true\|APPROVED\|true/i);
+      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}`;
+    }, { timeout: 40_000 }).toMatch(/CLOSED\|true\|APPROVED/i);
+    await expect.poll(async () => {
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      return snap.data()?.finalApproval === true;
+    }, { timeout: 40_000 }).toBe(true);
   });
 
   test('Tenant dispute opens Admin review after real Technician completion', async ({ browser, page }) => {
