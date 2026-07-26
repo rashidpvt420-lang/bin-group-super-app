@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { request } from 'node:https';
 import path from 'node:path';
 import {
   AUTHORIZATION_KIND,
@@ -15,12 +16,15 @@ import {
 } from './lib/hard-launch-control.mjs';
 import { normalizeAuthorizedEmail } from './lib/identity-normalization.mjs';
 
+const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const AUTOMATION_ACTOR = 'github-actions[bot]';
 const AUTOMATION_EMAIL_SENTINEL = 'authorized-founder@protected.invalid';
 const OWNER_REQUEST_TITLE = 'Dispatch protected bank pilot workflow';
 const OWNER_REQUEST_BRANCH_PREFIX = 'ops/dispatch-bank-pilot-workflow-';
 const OWNER_REQUEST_MARKER = '.github/bank-pilot-dispatch-request';
-const REQUIRED_INCIDENT_REFERENCE = 'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434';
+const REQUIRED_INCIDENT_REFERENCE = `https://github.com/${EXPECTED_REPOSITORY}/issues/434`;
+const GITHUB_API_HOST = 'api.github.com';
+const MAX_GITHUB_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 function requiredEnv(name) {
   const value = String(process.env[name] || '').trim();
@@ -36,26 +40,82 @@ function readJson(filePath, label) {
   }
 }
 
-async function fetchGithubJson(url, label) {
-  let response;
-  try {
-    response = await fetch(url, {
+function requestGithubJson(apiPath, label) {
+  const allowedPrefix = `/repos/${EXPECTED_REPOSITORY}/`;
+  if (
+    typeof apiPath !== 'string' ||
+    !apiPath.startsWith(allowedPrefix) ||
+    apiPath.includes('..') ||
+    /[\r\n\\]/.test(apiPath)
+  ) {
+    return Promise.reject(new Error(`${label} path was refused`));
+  }
+
+  return new Promise((resolve, reject) => {
+    const requestHandle = request({
+      protocol: 'https:',
+      hostname: GITHUB_API_HOST,
+      port: 443,
+      method: 'GET',
+      path: apiPath,
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'bin-group-founder-authorization-verifier',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      redirect: 'error',
+      timeout: 10_000,
+    }, (response) => {
+      let body = '';
+      let size = 0;
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        size += Buffer.byteLength(chunk);
+        if (size > MAX_GITHUB_RESPONSE_BYTES) {
+          requestHandle.destroy(new Error(`${label} exceeded the response limit`));
+          return;
+        }
+        body += chunk;
+      });
+      response.on('end', () => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`${label} returned HTTP ${response.statusCode || 0}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          reject(new Error(`${label} returned malformed JSON`));
+        }
+      });
     });
-  } catch {
-    throw new Error(`${label} could not be fetched`);
+    requestHandle.on('timeout', () => requestHandle.destroy(new Error(`${label} timed out`)));
+    requestHandle.on('error', () => reject(new Error(`${label} could not be fetched`)));
+    requestHandle.end();
+  });
+}
+
+function fetchOwnerPullRequest(pullNumber) {
+  if (!/^[1-9][0-9]*$/.test(String(pullNumber || ''))) {
+    return Promise.reject(new Error('owner request PR number is invalid'));
   }
-  if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
-  try {
-    return await response.json();
-  } catch {
-    throw new Error(`${label} returned malformed JSON`);
+  return requestGithubJson(`/repos/${EXPECTED_REPOSITORY}/pulls/${pullNumber}`, 'owner request PR');
+}
+
+function fetchOwnerPullRequestFiles(pullNumber) {
+  if (!/^[1-9][0-9]*$/.test(String(pullNumber || ''))) {
+    return Promise.reject(new Error('owner request PR number is invalid'));
   }
+  return requestGithubJson(`/repos/${EXPECTED_REPOSITORY}/pulls/${pullNumber}/files?per_page=100`, 'owner request file list');
+}
+
+function fetchOwnerMarker(headSha) {
+  if (!/^[0-9a-f]{40}$/.test(String(headSha || ''))) {
+    return Promise.reject(new Error('owner request head SHA is invalid'));
+  }
+  return requestGithubJson(
+    `/repos/${EXPECTED_REPOSITORY}/contents/${OWNER_REQUEST_MARKER}?ref=${headSha}`,
+    'owner request marker',
+  );
 }
 
 function parseMarker(content) {
@@ -87,7 +147,7 @@ function parseMarker(content) {
   }
 }
 
-async function resolveAutomatedFounder({ repository, commitSha, workflowActor, authorizedActors, authorizedEmails }) {
+async function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, authorizedEmails }) {
   if (workflowActor !== AUTOMATION_ACTOR) {
     throw new Error('automated Founder identity may only be resolved for github-actions[bot]');
   }
@@ -103,8 +163,7 @@ async function resolveAutomatedFounder({ repository, commitSha, workflowActor, a
     'production-incidents.json',
   );
   const references = Array.isArray(incidents.evidenceReferences) ? incidents.evidenceReferences : [];
-  const escapedRepository = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const requestPattern = new RegExp(`^https://github\\.com/${escapedRepository}/pull/([1-9][0-9]*)$`);
+  const requestPattern = new RegExp(`^https://github\\.com/${EXPECTED_REPOSITORY.replaceAll('/', '\\/')}/pull/([1-9][0-9]*)$`);
   const matches = references
     .map((reference) => requestPattern.exec(String(reference || '').trim()))
     .filter(Boolean);
@@ -113,9 +172,8 @@ async function resolveAutomatedFounder({ repository, commitSha, workflowActor, a
   }
 
   const pullNumber = matches[0][1];
-  const apiRoot = `https://api.github.com/repos/${repository}`;
-  const pull = await fetchGithubJson(`${apiRoot}/pulls/${pullNumber}`, 'owner request PR');
-  const repositoryOwner = repository.split('/')[0].toLowerCase();
+  const pull = await fetchOwnerPullRequest(pullNumber);
+  const repositoryOwner = EXPECTED_REPOSITORY.split('/')[0].toLowerCase();
   const founderActor = String(pull?.user?.login || '').trim().toLowerCase();
 
   if (pull?.state !== 'open' || pull?.draft !== true) throw new Error('owner request PR must remain open and draft');
@@ -123,7 +181,7 @@ async function resolveAutomatedFounder({ repository, commitSha, workflowActor, a
   if (pull?.base?.ref !== 'main' || pull?.base?.sha !== commitSha) {
     throw new Error('owner request PR is not bound to this exact main SHA');
   }
-  if (pull?.head?.repo?.full_name !== repository) throw new Error('owner request PR must use the same repository');
+  if (pull?.head?.repo?.full_name !== EXPECTED_REPOSITORY) throw new Error('owner request PR must use the same repository');
   if (!String(pull?.head?.ref || '').startsWith(OWNER_REQUEST_BRANCH_PREFIX)) {
     throw new Error('owner request PR branch is invalid');
   }
@@ -132,14 +190,11 @@ async function resolveAutomatedFounder({ repository, commitSha, workflowActor, a
     throw new Error('owner request PR Founder actor is not authorized');
   }
 
-  const files = await fetchGithubJson(`${apiRoot}/pulls/${pullNumber}/files?per_page=100`, 'owner request file list');
+  const files = await fetchOwnerPullRequestFiles(pullNumber);
   if (!Array.isArray(files) || files.length !== 1 || files[0]?.filename !== OWNER_REQUEST_MARKER) {
     throw new Error('owner request PR must change only the canonical marker');
   }
-  const marker = await fetchGithubJson(
-    `${apiRoot}/contents/${OWNER_REQUEST_MARKER}?ref=${encodeURIComponent(String(pull.head.sha || ''))}`,
-    'owner request marker',
-  );
+  const marker = await fetchOwnerMarker(String(pull?.head?.sha || ''));
   if (marker?.encoding !== 'base64' || typeof marker?.content !== 'string') {
     throw new Error('owner request marker response is invalid');
   }
@@ -167,6 +222,7 @@ try {
   const authorizedActorsRaw = requiredEnv('AUTHORIZED_FOUNDER_ACTORS');
   const authorizedEmailsRaw = requiredEnv('AUTHORIZED_FOUNDER_EMAILS');
 
+  if (repository !== EXPECTED_REPOSITORY) throw new Error(`GITHUB_REPOSITORY must equal ${EXPECTED_REPOSITORY}`);
   if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error('GITHUB_SHA must be a lowercase 40-character SHA');
   if (ref !== 'refs/heads/main') throw new Error('hard-launch authorization may only be created for refs/heads/main');
   if (deployConfirmation !== DEPLOY_CONFIRMATION_PHRASE) throw new Error('production deployment confirmation phrase mismatch');
@@ -182,7 +238,6 @@ try {
 
   if (requestedFounderEmail === AUTOMATION_EMAIL_SENTINEL) {
     const automated = await resolveAutomatedFounder({
-      repository,
       commitSha,
       workflowActor,
       authorizedActors,
@@ -239,8 +294,6 @@ try {
   const outputPath = path.resolve('launch_package/hard-launch-authorization.json');
   mkdirSync(path.dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
-  const githubEnv = String(process.env.GITHUB_ENV || '').trim();
-  if (githubEnv) appendFileSync(githubEnv, `AUTHORIZATION_ACTOR=${workflowActor}\n`, 'utf8');
   console.log(`[hard-launch-auth] wrote ${outputPath}`);
   console.log(`[hard-launch-auth] commitSha=${commitSha}`);
   console.log(`[hard-launch-auth] workflowActor=${workflowActor}`);
