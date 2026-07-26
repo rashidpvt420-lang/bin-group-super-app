@@ -50,7 +50,6 @@ export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
 export * from "./ownerProfileReadiness";
-export * from "./adminBrokerPayoutReview";
 
 export {
   resumeTechnicianDuty,
@@ -73,6 +72,7 @@ export {
   verifyBrokerPayoutOtp,
   submitBrokerPayoutRequest,
 } from "./secureBrokerPayoutOperations";
+export { adminReviewBrokerPayoutRequest } from "./adminBrokerPayoutReview";
 export {
   submitTenantCorrectionRequest,
   listTenantCorrectionRequests,
