@@ -47,6 +47,7 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   );
   const [selectedUid, setSelectedUid] = React.useState(defaultHint?.uid || '');
   const [verificationId, setVerificationId] = React.useState('');
+  const [totpReady, setTotpReady] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -76,6 +77,7 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   const clearChallenge = () => {
     clearVerifier();
     setVerificationId('');
+    setTotpReady(false);
     setCode('');
     setError('');
     setNotice('');
@@ -95,9 +97,17 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
     return 'Admin MFA verification failed.';
   };
 
-  const sendCode = async () => {
-    if (!selectedHint || !isPhone) {
-      setError('Select an enrolled phone MFA factor before requesting an SMS code.');
+  const prepareCodeEntry = async () => {
+    if (!selectedHint) return;
+    if (isTotp) {
+      setError('');
+      setNotice('Enter the current code from the enrolled authenticator app.');
+      setTotpReady(true);
+      setCode('');
+      return;
+    }
+    if (!isPhone) {
+      setError('Select a supported MFA factor.');
       return;
     }
     setBusy(true);
@@ -158,7 +168,7 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
     );
   }
 
-  const showCodeInput = isTotp || Boolean(verificationId);
+  const showCodeInput = (isTotp && totpReady) || Boolean(verificationId);
 
   return (
     <div data-testid="admin-mfa-signin-challenge" className="space-y-4">
@@ -194,22 +204,26 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
 
       {isTotp && (
         <div data-testid="admin-mfa-totp-selected" className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-[#94a3b8]">
-          Enter the current 6-digit code from the enrolled authenticator app.
+          Use the enrolled authenticator app. No SMS or test-factor path is used.
         </div>
       )}
 
       {error && <div data-testid="admin-mfa-signin-error" className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-bold">{error}</div>}
       {notice && <div data-testid="admin-mfa-signin-notice" className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs font-bold">{notice}</div>}
 
-      {isPhone && !verificationId && (
+      {!showCodeInput && (
         <button
           data-testid="admin-mfa-send-signin-code"
           type="button"
-          onClick={sendCode}
+          onClick={prepareCodeEntry}
           disabled={busy}
           className="w-full flex items-center justify-center gap-2 bg-[#C6A75E] text-black font-black py-4 rounded-xl disabled:opacity-50"
         >
-          {busy ? 'Sending…' : <><MessageSquareText className="w-5 h-5" /> Send MFA code</>}
+          {busy
+            ? 'Preparing…'
+            : isTotp
+              ? <><KeyRound className="w-5 h-5" /> Enter authenticator code</>
+              : <><MessageSquareText className="w-5 h-5" /> Send MFA code</>}
         </button>
       )}
 
