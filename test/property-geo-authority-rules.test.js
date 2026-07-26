@@ -77,4 +77,22 @@ describe('Canonical property geo authority', () => {
     await assertSucceeds(updateDoc(ref, { submittedGeo: { ...submittedGeo, area: 'Updated owner evidence' } }));
     await assertFails(updateDoc(ref, { submittedGeo: { ...submittedGeo, verified: true, dispatchReady: true, requiresGeoReview: false } }));
   });
+
+  it('Tenant browsers cannot create direct tickets or inject forged dispatch coordinates', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_geo', { role: 'tenant' }).firestore();
+    const directTicket = {
+      tenantId: 'tenant_geo',
+      tenantUid: 'tenant_geo',
+      unitId: 'unit_geo',
+      propertyId: 'property_geo',
+      status: 'OPEN',
+      source: 'TENANT_PORTAL',
+      evidenceStatus: 'PENDING_TENANT_UPLOAD',
+      assignedTechnicianId: null,
+      technicianId: null,
+      jobLocation: { lat: 24.999, lng: 55.999, source: 'browser_forged' },
+    };
+    await assertFails(setDoc(doc(tenantDb, 'maintenanceTickets/direct-maintenance'), directTicket));
+    await assertFails(setDoc(doc(tenantDb, 'tickets/direct-legacy'), directTicket));
+  });
 });
