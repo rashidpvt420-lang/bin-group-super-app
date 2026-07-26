@@ -75,10 +75,11 @@ test('Broker protected runner requires mailbox OTP verification and completed pa
   assert.match(productionRunner, /broker-production-evidence\.json/);
   assert.match(productionRunner, /hardLaunchClaim: false/);
 
-  const evidenceStart = productionRunner.indexOf('const evidence =');
+  const evidenceStart = productionRunner.lastIndexOf('const evidence = {');
   assert.ok(evidenceStart >= 0, 'Broker production evidence object is missing');
   const evidenceBlock = productionRunner.slice(evidenceStart);
-  assert.doesNotMatch(evidenceBlock, /providerMessageId:\s*otpDelivery\.providerMessageId/);
+  assert.doesNotMatch(evidenceBlock, /\n\s+providerMessageId\s*:/);
+  assert.match(evidenceBlock, /providerMessageIdHash/);
 });
 
 test('Broker browser proof creates the lead and requires the protected lifecycle artifact', () => {
