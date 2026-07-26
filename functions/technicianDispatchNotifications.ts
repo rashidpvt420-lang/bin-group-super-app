@@ -22,10 +22,33 @@ function assignedTechnicianId(data: FirebaseFirestore.DocumentData | undefined) 
   );
 }
 
-function assignmentNotificationId(ticketId: string, technicianId: string) {
+function timestampKey(value: unknown) {
+  if (!value) return "missing-time";
+  if (typeof (value as any)?.toMillis === "function") {
+    return String((value as any).toMillis());
+  }
+  const seconds = Number((value as any)?.seconds ?? (value as any)?._seconds);
+  const nanos = Number((value as any)?.nanoseconds ?? (value as any)?._nanoseconds ?? 0);
+  if (Number.isFinite(seconds)) return `${seconds}:${Number.isFinite(nanos) ? nanos : 0}`;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? String(parsed) : clean(value, 120) || "missing-time";
+}
+
+function assignmentEventKey(data: FirebaseFirestore.DocumentData | undefined) {
+  if (!data) return "missing-event";
+  return timestampKey(
+    data.assignedAt ||
+      data.assignmentUpdatedAt ||
+      data.dispatchedAt ||
+      data.updatedAt ||
+      data.createdAt,
+  );
+}
+
+function assignmentNotificationId(ticketId: string, technicianId: string, eventKey: string) {
   const digest = crypto
     .createHash("sha256")
-    .update(`${ticketId}|${technicianId}`, "utf8")
+    .update(`${ticketId}|${technicianId}|${eventKey}`, "utf8")
     .digest("hex")
     .slice(0, 40);
   return `tech_assignment_${digest}`;
@@ -39,9 +62,10 @@ async function createAssignmentNotification(
   const technicianId = assignedTechnicianId(data);
   if (!technicianId || technicianId === previousTechnicianId) return null;
 
+  const eventKey = assignmentEventKey(data);
   const notificationRef = db
     .collection("notifications")
-    .doc(assignmentNotificationId(ticketId, technicianId));
+    .doc(assignmentNotificationId(ticketId, technicianId, eventKey));
   const propertyName = clean(data?.propertyName || data?.property?.name || "the assigned property", 120);
   const category = clean(data?.category || data?.complaintCategory || "maintenance", 100);
   const unit = clean(data?.unitNumber || data?.unitLabel || "", 40);
@@ -49,6 +73,10 @@ async function createAssignmentNotification(
     ? `${category} mission assigned at ${propertyName}, unit ${unit}.`
     : `${category} mission assigned at ${propertyName}.`;
   const now = FieldValue.serverTimestamp();
+  const assignmentFingerprint = crypto
+    .createHash("sha256")
+    .update(`${ticketId}|${technicianId}|${eventKey}`, "utf8")
+    .digest("hex");
 
   const created = await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(notificationRef);
@@ -66,15 +94,13 @@ async function createAssignmentNotification(
         propertyId: clean(data?.propertyId, 128) || null,
         unitId: clean(data?.unitId, 128) || null,
         priority: clean(data?.priority || data?.severity || "normal", 40),
+        assignmentEventKey: eventKey,
       },
       read: false,
       createdAt: now,
       createdByUid: "SYSTEM_DISPATCH",
       deliverySource: "trigger:technicianDispatchNotifications",
-      assignmentFingerprint: crypto
-        .createHash("sha256")
-        .update(`${ticketId}|${technicianId}|${clean(data?.assignedAt || data?.updatedAt)}`, "utf8")
-        .digest("hex"),
+      assignmentFingerprint,
     });
     return true;
   });
@@ -90,6 +116,7 @@ async function createAssignmentNotification(
     metadata: {
       technicianId,
       notificationId: notificationRef.id,
+      assignmentFingerprint,
       sensitiveValuesExcluded: true,
     },
     createdAt: now,
