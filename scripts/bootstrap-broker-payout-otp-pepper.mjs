@@ -7,31 +7,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_ID = 'bin-group-57c60';
-const DEFAULT_SECRET_NAME = 'BROKER_PAYOUT_OTP_PEPPER';
+const SECRET_NAME = 'BROKER_PAYOUT_OTP_PEPPER';
+const OUTPUT_PATH = path.resolve('launch_package/broker-payout-otp-pepper-bootstrap.json');
 const MINIMUM_LENGTH = 32;
-const SECRET_CONFIGS = Object.freeze({
-  BROKER_PAYOUT_OTP_PEPPER: Object.freeze({
-    label: 'Broker payout OTP pepper',
-    outputPath: 'launch_package/broker-payout-otp-pepper-bootstrap.json',
-  }),
-  OWNER_CONTRACT_OTP_PEPPER: Object.freeze({
-    label: 'Owner contract OTP pepper',
-    outputPath: 'launch_package/owner-contract-otp-pepper-bootstrap.json',
-  }),
-});
 
 const text = (value) => String(value ?? '').trim();
-
-function resolveSecretConfiguration(env = process.env) {
-  const secretName = text(env.OTP_PEPPER_SECRET_NAME || DEFAULT_SECRET_NAME);
-  const configuration = SECRET_CONFIGS[secretName];
-  if (!configuration) throw new Error('UNSUPPORTED_OTP_PEPPER_SECRET');
-  return {
-    secretName,
-    label: configuration.label,
-    outputPath: path.resolve(configuration.outputPath),
-  };
-}
 
 export function isValidPepper(value) {
   return text(value).length >= MINIMUM_LENGTH;
@@ -41,14 +21,6 @@ export function classifyAccessFailure(output) {
   const safe = text(output).toLowerCase();
   if (/not[_ -]?found|does not exist|could not find|404/.test(safe)) return 'missing';
   return 'inaccessible';
-}
-
-export function chooseBootstrapAction({ secretExists, accessStatus, currentValue }) {
-  if (accessStatus === 'inaccessible') return 'fail-inaccessible';
-  if (accessStatus === 'available' && isValidPepper(currentValue)) return 'unchanged';
-  if (!secretExists) return 'created';
-  if (accessStatus === 'available') return 'rotated-invalid-value';
-  return 'added-missing-version';
 }
 
 function gcloudCommand(args, { env = process.env, input } = {}) {
@@ -61,11 +33,11 @@ function gcloudCommand(args, { env = process.env, input } = {}) {
   });
 }
 
-function describeSecret(secretName, { env = process.env } = {}) {
+function describeSecret({ env = process.env } = {}) {
   const result = gcloudCommand([
     'secrets',
     'describe',
-    secretName,
+    SECRET_NAME,
     '--project',
     PROJECT_ID,
     '--format=json',
@@ -76,14 +48,14 @@ function describeSecret(secretName, { env = process.env } = {}) {
   return classifyAccessFailure(`${result.stderr || ''}\n${result.stdout || ''}`);
 }
 
-function accessSecret(secretName, { env = process.env } = {}) {
+function accessSecret({ env = process.env } = {}) {
   const result = gcloudCommand([
     'secrets',
     'versions',
     'access',
     'latest',
     '--secret',
-    secretName,
+    SECRET_NAME,
     '--project',
     PROJECT_ID,
     '--quiet',
@@ -99,11 +71,11 @@ function accessSecret(secretName, { env = process.env } = {}) {
   };
 }
 
-function createSecret(secretName, secretValue, { env = process.env } = {}) {
+function createSecret(secretValue, { env = process.env } = {}) {
   const result = gcloudCommand([
     'secrets',
     'create',
-    secretName,
+    SECRET_NAME,
     '--replication-policy=automatic',
     '--data-file=-',
     '--project',
@@ -114,12 +86,12 @@ function createSecret(secretName, secretValue, { env = process.env } = {}) {
   if (result.status !== 0) throw new Error('SECRET_CREATE_FAILED');
 }
 
-function addSecretVersion(secretName, secretValue, { env = process.env } = {}) {
+function addSecretVersion(secretValue, { env = process.env } = {}) {
   const result = gcloudCommand([
     'secrets',
     'versions',
     'add',
-    secretName,
+    SECRET_NAME,
     '--data-file=-',
     '--project',
     PROJECT_ID,
@@ -129,9 +101,9 @@ function addSecretVersion(secretName, secretValue, { env = process.env } = {}) {
   if (result.status !== 0) throw new Error('SECRET_VERSION_ADD_FAILED');
 }
 
-function writeReport(outputPath, report) {
-  mkdirSync(path.dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+function writeReport(report) {
+  mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
+  writeFileSync(OUTPUT_PATH, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
 }
 
 function requireProtectedContext(env) {
@@ -147,45 +119,37 @@ function requireProtectedContext(env) {
   return expectedSha;
 }
 
-export async function bootstrapOtpPepper({ env = process.env } = {}) {
-  const configuration = resolveSecretConfiguration(env);
-  const { secretName, outputPath } = configuration;
+export async function bootstrapBrokerPayoutOtpPepper({ env = process.env } = {}) {
   const startedAt = new Date().toISOString();
   const expectedSha = requireProtectedContext(env);
   let action = 'none';
   let previousState = 'unknown';
 
   try {
-    const describedState = describeSecret(secretName, { env });
-    const secretExists = describedState === 'available';
+    const describedState = describeSecret({ env });
     previousState = describedState;
 
     let existing = { status: describedState, value: '' };
-    if (secretExists) {
-      existing = accessSecret(secretName, { env });
+    if (describedState === 'available') {
+      existing = accessSecret({ env });
       previousState = existing.status;
     }
 
-    const selectedAction = chooseBootstrapAction({
-      secretExists,
-      accessStatus: existing.status,
-      currentValue: existing.value,
-    });
+    if (existing.status === 'available' && isValidPepper(existing.value)) {
+      action = 'unchanged';
+    } else {
+      if (existing.status === 'inaccessible') {
+        throw new Error('SECRET_ACCESS_DENIED_OR_UNAVAILABLE');
+      }
 
-    if (selectedAction === 'fail-inaccessible') {
-      throw new Error('SECRET_ACCESS_DENIED_OR_UNAVAILABLE');
-    }
-    if (selectedAction === 'unchanged') action = 'unchanged';
-    else action = selectedAction;
-
-    if (action !== 'unchanged') {
+      action = existing.status === 'available' ? 'rotated-invalid-value' : 'created';
       const generated = randomBytes(48).toString('base64url');
       if (!isValidPepper(generated)) throw new Error('GENERATED_SECRET_TOO_SHORT');
 
-      if (action === 'created') createSecret(secretName, generated, { env });
-      else addSecretVersion(secretName, generated, { env });
+      if (action === 'created') createSecret(generated, { env });
+      else addSecretVersion(generated, { env });
 
-      const verified = accessSecret(secretName, { env });
+      const verified = accessSecret({ env });
       if (verified.status !== 'available' || verified.value !== generated || !isValidPepper(verified.value)) {
         throw new Error('SECRET_WRITE_VERIFICATION_FAILED');
       }
@@ -195,7 +159,7 @@ export async function bootstrapOtpPepper({ env = process.env } = {}) {
       schemaVersion: 1,
       status: 'passed',
       projectId: PROJECT_ID,
-      secretName,
+      secretName: SECRET_NAME,
       action,
       previousState,
       minimumLengthSatisfied: true,
@@ -212,14 +176,14 @@ export async function bootstrapOtpPepper({ env = process.env } = {}) {
       startedAt,
       verifiedAt: new Date().toISOString(),
     };
-    writeReport(outputPath, report);
+    writeReport(report);
     return report;
   } catch (error) {
     const report = {
       schemaVersion: 1,
       status: 'failed',
       projectId: PROJECT_ID,
-      secretName,
+      secretName: SECRET_NAME,
       action,
       previousState,
       failureCode: error instanceof Error ? error.message : 'UNKNOWN_FAILURE',
@@ -234,26 +198,21 @@ export async function bootstrapOtpPepper({ env = process.env } = {}) {
       startedAt,
       failedAt: new Date().toISOString(),
     };
-    writeReport(outputPath, report);
+    writeReport(report);
     throw error;
   }
-}
-
-export async function bootstrapBrokerPayoutOtpPepper(options = {}) {
-  return bootstrapOtpPepper(options);
 }
 
 const isDirectRun = process.argv[1]
   && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (isDirectRun) {
-  const configuration = resolveSecretConfiguration(process.env);
-  bootstrapOtpPepper()
+  bootstrapBrokerPayoutOtpPepper()
     .then((report) => {
-      console.log(`${configuration.label} bootstrap ${report.status}; action=${report.action}; secret value was not logged.`);
+      console.log(`Broker payout OTP pepper bootstrap ${report.status}; action=${report.action}; secret value was not logged.`);
     })
     .catch((error) => {
-      console.error(`${configuration.label} bootstrap failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`Broker payout OTP pepper bootstrap failed: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     });
 }
