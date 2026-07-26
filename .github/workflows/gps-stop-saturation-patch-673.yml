@@ -1,0 +1,38 @@
+name: Apply GPS STOP Saturation Patch 673
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/gps-stop-saturation-patch-673.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.number == 678 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/gps-queue-durability-privacy-673' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/gps-queue-durability-privacy-673
+          fetch-depth: 0
+      - name: Apply deterministic STOP saturation patch
+        run: python .github/scripts/apply-gps-stop-saturation-673.py
+      - name: Commit bounded GPS changes
+        run: |
+          set -euo pipefail
+          git add src/utils/liveTracking.ts tests/launch/gps-queue-durability-privacy.test.mjs
+          git diff --cached --quiet && { echo '::error::STOP saturation patch produced no changes.'; exit 1; }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): never evict queued STOP intent under saturation'
+          git push origin HEAD:fix/gps-queue-durability-privacy-673
