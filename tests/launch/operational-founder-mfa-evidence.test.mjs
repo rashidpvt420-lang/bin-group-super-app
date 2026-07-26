@@ -41,16 +41,28 @@ function response(body, status = 200) {
   };
 }
 
-test('canonical Founder operational evidence completes a real Firebase TOTP challenge', async () => {
-  const fixture = generatedFixtures();
-  const requests = [];
-  const idToken = jwt({
-    user_id: fixture.uid,
+function verifiedFounderClaims(fixture, overrides = {}) {
+  return {
+    uid: fixture.uid,
+    sub: fixture.uid,
+    email: 'ceo@bin-groups.com',
+    email_verified: true,
+    role: 'ceo',
+    ceo: true,
     firebase: {
       sign_in_second_factor: 'totp',
       second_factor_identifier: fixture.enrollmentId,
     },
-  });
+    ...overrides,
+  };
+}
+
+function verificationStub(fixture, overrides = {}) {
+  return async () => verifiedFounderClaims(fixture, overrides);
+}
+
+function totpFlow(fixture, idToken) {
+  const requests = [];
   const fetchImpl = async (url, options) => {
     requests.push({ url: String(url), body: JSON.parse(String(options.body || '{}')) });
     if (String(url).includes('accounts:signInWithPassword')) {
@@ -62,6 +74,13 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
     if (String(url).includes('mfaSignIn:finalize')) return response({ idToken });
     return response({}, 404);
   };
+  return { requests, fetchImpl };
+}
+
+test('canonical Founder operational evidence completes a real Firebase TOTP challenge', async () => {
+  const fixture = generatedFixtures();
+  const idToken = jwt({ sub: fixture.uid });
+  const { requests, fetchImpl } = totpFlow(fixture, idToken);
 
   const result = await signInWithRequiredTotpMfa({
     apiKey: fixture.apiKey,
@@ -69,11 +88,13 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
     password: fixture.password,
     totpSecret: fixture.totpSecret,
     fetchImpl,
+    verifyIdTokenImpl: verificationStub(fixture),
   });
 
   assert.equal(result.uid, fixture.uid);
   assert.equal(result.secondFactorType, 'totp');
   assert.equal(result.secondFactorIdentifier, fixture.enrollmentId);
+  assert.equal(result.secondFactor, fixture.enrollmentId);
   assert.equal(result.idToken, idToken);
   assert.equal(requests.length, 2);
   assert.equal(requests[0].body.email, 'ceo@bin-groups.com');
@@ -84,7 +105,7 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
 
 test('Founder MFA helper refuses a direct token without a verified TOTP factor', async () => {
   const fixture = generatedFixtures();
-  const directToken = jwt({ user_id: fixture.uid, firebase: {} });
+  const directToken = jwt({ sub: fixture.uid });
   await assert.rejects(
     signInWithRequiredTotpMfa({
       apiKey: fixture.apiKey,
@@ -92,6 +113,7 @@ test('Founder MFA helper refuses a direct token without a verified TOTP factor',
       password: fixture.password,
       totpSecret: fixture.totpSecret,
       fetchImpl: async () => response({ idToken: directToken }),
+      verifyIdTokenImpl: verificationStub(fixture, { firebase: {} }),
     }),
     /verified TOTP second-factor session/,
   );
@@ -99,22 +121,8 @@ test('Founder MFA helper refuses a direct token without a verified TOTP factor',
 
 test('Founder MFA helper rejects a mismatched TOTP factor identifier', async () => {
   const fixture = generatedFixtures();
-  const idToken = jwt({
-    user_id: fixture.uid,
-    firebase: {
-      sign_in_second_factor: 'totp',
-      second_factor_identifier: `other-${fixture.enrollmentId}`,
-    },
-  });
-  const fetchImpl = async (url) => {
-    if (String(url).includes('accounts:signInWithPassword')) {
-      return response({
-        mfaPendingCredential: fixture.pendingCredential,
-        mfaInfo: [{ mfaEnrollmentId: fixture.enrollmentId, totpInfo: {} }],
-      });
-    }
-    return response({ idToken });
-  };
+  const idToken = jwt({ sub: fixture.uid });
+  const { fetchImpl } = totpFlow(fixture, idToken);
   await assert.rejects(
     signInWithRequiredTotpMfa({
       apiKey: fixture.apiKey,
@@ -122,9 +130,55 @@ test('Founder MFA helper rejects a mismatched TOTP factor identifier', async () 
       password: fixture.password,
       totpSecret: fixture.totpSecret,
       fetchImpl,
+      verifyIdTokenImpl: verificationStub(fixture, {
+        firebase: {
+          sign_in_second_factor: 'totp',
+          second_factor_identifier: `other-${fixture.enrollmentId}`,
+        },
+      }),
     }),
     /factor identifier does not match/,
   );
+});
+
+test('Founder MFA helper fails closed when Firebase Admin SDK rejects the token', async () => {
+  const fixture = generatedFixtures();
+  const idToken = jwt({ sub: fixture.uid });
+  const { fetchImpl } = totpFlow(fixture, idToken);
+  await assert.rejects(
+    signInWithRequiredTotpMfa({
+      apiKey: fixture.apiKey,
+      email: 'ceo@bin-groups.com',
+      password: fixture.password,
+      totpSecret: fixture.totpSecret,
+      fetchImpl,
+      verifyIdTokenImpl: async () => { throw new Error('invalid signature'); },
+    }),
+    /Admin SDK rejected/,
+  );
+});
+
+test('Founder MFA helper rejects non-canonical or non-Founder verified identities', async () => {
+  const fixture = generatedFixtures();
+  const idToken = jwt({ sub: fixture.uid });
+  const { fetchImpl } = totpFlow(fixture, idToken);
+  for (const [overrides, pattern] of [
+    [{ email: 'other@bin-groups.com' }, /canonical Founder email/],
+    [{ email_verified: false }, /canonical Founder email/],
+    [{ role: 'admin', ceo: false }, /CEO or Super Admin Founder authority/],
+  ]) {
+    await assert.rejects(
+      signInWithRequiredTotpMfa({
+        apiKey: fixture.apiKey,
+        email: 'ceo@bin-groups.com',
+        password: fixture.password,
+        totpSecret: fixture.totpSecret,
+        fetchImpl,
+        verifyIdTokenImpl: verificationStub(fixture, overrides),
+      }),
+      pattern,
+    );
+  }
 });
 
 test('malformed Firebase provider responses never enter error diagnostics', async () => {
@@ -141,6 +195,7 @@ test('malformed Firebase provider responses never enter error diagnostics', asyn
       password: fixture.password,
       totpSecret: fixture.totpSecret,
       fetchImpl: async () => malformed,
+      verifyIdTokenImpl: verificationStub(fixture),
     }),
     (error) => {
       assert.match(error.message, /HTTP 502/);
@@ -170,9 +225,13 @@ test('Founder password and TOTP are scoped only to the protected replay-verifier
   assert.match(workflow, /production_deploy_run_id/);
 });
 
-test('operational payment and commission replays are bound to the verified TOTP identifier', () => {
+test('operational payment and commission replays are bound to the server-verified TOTP identifier', () => {
   assert.match(verifier, /signInWithRequiredTotpMfa/);
   assert.match(verifier, /email !== 'ceo@bin-groups\.com'/);
+  assert.match(helper, /verifyIdToken\(idToken, true\)/);
+  assert.match(helper, /second_factor_identifier/);
+  assert.match(helper, /email_verified !== true/);
+  assert.match(helper, /CEO or Super Admin Founder authority/);
   assert.match(paginatedRunner, /secondFactorIdentifier: founderAuth\.secondFactorIdentifier/);
   assert.match(paginatedRunner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
   assert.doesNotMatch(verifier, /E2E_ADMIN_EMAIL\)\.toLowerCase\(\)/);
@@ -197,9 +256,10 @@ test('provenance and application evidence both scan every matching Firestore pag
   assert.doesNotMatch(workflow, /node scripts\/verify-operational-application-evidence\.mjs/);
 });
 
-test('Founder MFA helper never serializes raw provider response bodies', () => {
+test('Founder MFA helper never serializes raw provider response bodies or token values', () => {
   assert.doesNotMatch(helper, /response\.text\(\)/);
   assert.doesNotMatch(helper, /raw:\s*raw/);
   assert.doesNotMatch(helper, /console\.(?:log|error|warn)/);
+  assert.doesNotMatch(helper, /invalid signature/);
   assert.match(helper, /providerError/);
 });
