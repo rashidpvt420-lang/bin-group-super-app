@@ -8,7 +8,7 @@ const productionRunner = readFileSync('scripts/run-broker-production-evidence.mj
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 
- test('Broker fixture is restricted to the verified dedicated E2E Broker and does not seed a commission', () => {
+test('Broker fixture is restricted to the verified dedicated E2E Broker and does not seed a commission', () => {
   assert.match(fixture, /E2E_BROKER_EMAIL is required/);
   assert.match(fixture, /brokerUser\.emailVerified/);
   assert.match(fixture, /profile\.e2eLaunchSeed !== true/);
@@ -79,7 +79,7 @@ test('Broker browser proof creates the lead and requires the protected lifecycle
   assert.match(brokerSpec, /otpConsumed: true/);
   assert.match(brokerSpec, /PENDING_ADMIN_REVIEW/);
   assert.match(brokerSpec, /replayRejected: true/);
-  assert.doesNotMatch(brokerSpec, /broker-payout-otp-cancel/);
+  assert.doesNotMatch(brokerSpec, /request-only|broker-payout-otp-cancel/i);
 });
 
 test('Broker payout UI retains server-authoritative request, verify, and submit order', () => {
