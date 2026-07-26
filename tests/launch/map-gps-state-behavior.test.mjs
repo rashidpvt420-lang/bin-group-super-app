@@ -315,3 +315,14 @@ test('current server supersession acknowledgement remains intact after privacy h
   assert.match(liveTrackingSource, /STOP_SUPERSEDED_RECONCILED/);
   assert.match(liveTrackingSource, /canonicalSessionUnchanged: true/);
 });
+
+
+test('tracking state is published only after browser watch installation succeeds', () => {
+  const installIndex = liveTrackingSource.indexOf('installedWatchId = navigator.geolocation.watchPosition');
+  const publishIndex = liveTrackingSource.indexOf('_state.activeTicketId = ticketId', installIndex);
+  const failureIndex = liveTrackingSource.indexOf("status: 'WATCH_INSTALL_FAILED'", installIndex);
+  assert.ok(installIndex >= 0 && failureIndex > installIndex && publishIndex > failureIndex);
+  assert.match(liveTrackingSource, /const trackingSessionId = createTrackingSessionId\(\)/);
+  assert.match(liveTrackingSource, /const sessionId = trackingSessionId/);
+  assert.match(liveTrackingSource, /_state\.watchId = installedWatchId/);
+});

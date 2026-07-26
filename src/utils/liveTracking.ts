@@ -381,15 +381,15 @@ export const startLiveTracking = async (
         throw new Error(message);
     }
 
-    _state.activeTicketId = ticketId;
-    _state.technicianUid = technicianUid;
-    _state.trackingSessionId = createTrackingSessionId();
-    _state.lastPushTime = 0;
+    const trackingSessionId = createTrackingSessionId();
+    let captureLastPushTime = 0;
+    let installedWatchId: number;
 
-    _state.watchId = navigator.geolocation.watchPosition(
+    try {
+      installedWatchId = navigator.geolocation.watchPosition(
         async (position) => {
             const now = Date.now();
-            if (now - _state.lastPushTime < CAPTURE_INTERVAL_MS) return;
+            if (now - captureLastPushTime < CAPTURE_INTERVAL_MS) return;
 
             if (position.coords.accuracy <= 0 || position.coords.accuracy > 100) {
                 await persistTrackingDiagnostic(technicianUid, ticketId, {
@@ -400,9 +400,9 @@ export const startLiveTracking = async (
                 return;
             }
 
+            captureLastPushTime = now;
             _state.lastPushTime = now;
-            const sessionId = _state.trackingSessionId;
-            if (!sessionId) return;
+            const sessionId = trackingSessionId;
 
             const point: GeoPoint = {
                 lat: position.coords.latitude,
@@ -474,6 +474,24 @@ export const startLiveTracking = async (
             timeout: 27_000,
         },
     );
+    } catch (error) {
+      detachOnlineRecovery();
+      const message = 'Unable to start the browser GPS watch.';
+      await persistTrackingDiagnostic(technicianUid, ticketId, {
+        status: 'WATCH_INSTALL_FAILED',
+        error: message,
+        errorCode: String((error as any)?.code || 'WATCH_INSTALL_FAILED').slice(0, 80),
+        failedAt: serverTimestamp(),
+      });
+      onError?.(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
+
+    _state.activeTicketId = ticketId;
+    _state.technicianUid = technicianUid;
+    _state.trackingSessionId = trackingSessionId;
+    _state.lastPushTime = captureLastPushTime;
+    _state.watchId = installedWatchId;
 };
 
 export const stopLiveTracking = async (
