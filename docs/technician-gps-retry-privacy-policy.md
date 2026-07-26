@@ -10,25 +10,27 @@ The browser may temporarily retain failed GPS actions so a short network interru
 
 - STOP and reconciliation storage: UID-scoped `sessionStorage`; coordinate-free.
 - UPDATE retry storage: memory only; precise coordinates are never written to Web Storage.
-- Legacy migration: the persistent `bin-technician-gps-queue-v1` localStorage record is deleted during startup and secure logout.
-- Scope: one key per authenticated Technician UID.
-- Lifetime: maximum 30 minutes per action.
-- Capacity: maximum 25 actions per Technician session.
-- UPDATE data: ticket ID, tracking-session ID, timestamp, rounded latitude/longitude, accuracy, heading and speed only.
+- Legacy migration: the persistent `bin-technician-gps-queue-v1` localStorage record is deleted during startup, account change and secure logout.
+- Scope: one coordinate-free STOP key per authenticated Technician UID; UPDATEs remain only in the active page memory.
+- Lifetime: non-terminal actions expire after 30 minutes. A terminal STOP remains as a coordinate-free reconciliation tombstone until secure purge or successful operational reconciliation.
+- Capacity: maximum 25 active retry actions. Queue pressure may dispose UPDATEs but never silently evicts STOP intent.
+- UPDATE data: ticket ID, tracking-session ID, timestamp, rounded latitude/longitude, accuracy, heading and speed; memory only.
 - STOP data: ticket ID, tracking-session ID, requested final state and timestamps; no coordinates.
 - Excluded data: names, email addresses, phone numbers, Firebase tokens, App Check tokens and device identifiers.
 
-`sessionStorage` survives an application reload in the same browser tab but is removed when the tab/session ends. Secure Technician logout explicitly purges the current UID queue. Starting tracking under another Technician account purges prior-account queues in that tab.
+`sessionStorage` survives an application reload in the same browser tab, so coordinate-free STOP reconciliation remains available after a reload. Memory-only UPDATEs are intentionally discarded on reload. Secure Technician logout explicitly purges the current UID queue. Starting tracking under another Technician account purges prior-account queues in that tab.
 
 ## Retry semantics
 
-1. Pending STOP actions are replayed before a new tracking session may begin.
-2. A server-acknowledged STOP records `STOPPED`.
-3. A failed STOP records `STOP_REQUEST_QUEUED`; it is never reported as stopped.
-4. Retryable failures use bounded exponential backoff.
-5. Permission, authentication, invalid-argument and failed-precondition responses become terminal reconciliation records.
-6. Expired or capacity-disposed actions are removed only through the explicit disposal policy and are logged without coordinates.
-7. The server watchdog may expire abandoned canonical sessions, but a terminal STOP still requires operational review.
+1. Stale UPDATEs are explicitly discarded before another ticket session begins.
+2. Pending STOP actions are replayed before a new tracking session may begin.
+3. A server-acknowledged STOP records `STOPPED`.
+4. A failed STOP records `STOP_REQUEST_QUEUED`; it is never reported as stopped.
+5. Retryable failures use bounded exponential backoff.
+6. Permission, authentication, invalid-argument and failed-precondition responses become terminal reconciliation records.
+7. Expired or capacity-disposed UPDATEs are removed only through the explicit disposal policy and are logged without coordinates.
+8. A terminal STOP remains blocking beyond the ordinary retry TTL and cannot be evicted by UPDATE saturation.
+9. The server watchdog may expire abandoned canonical sessions, but a terminal STOP still requires operational review.
 
 ## Physical acceptance evidence
 
@@ -40,6 +42,7 @@ The controlled pilot must prove on real Android and iPhone devices:
 - app reload in the same tab/session;
 - account change and logout purge;
 - browser/tab close and server-watchdog expiry;
+- no cross-ticket UPDATE replay;
 - no false `STOPPED` diagnostic before server acknowledgement.
 
 This document does not claim native background-location support.
