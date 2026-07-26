@@ -27,8 +27,14 @@ test('generic Admin browser catch-all cannot bypass canonical property geo autho
     read('scripts/harden-final-firestore-authority.mjs'),
     read('test/property-geo-authority-rules.test.js'),
   ]);
-  assert.match(hardening, /'technician_live_locations',\n\s+'properties',\n\s+'users'/);
-  assert.match(hardening, /const liveLocationWriteList/);
+  const listStart = hardening.indexOf('const liveLocationWriteList');
+  const listEnd = hardening.indexOf('`;', listStart);
+  const listBlock = hardening.slice(listStart, listEnd);
+  const liveIndex = listBlock.indexOf("'technician_live_locations'");
+  const propertyIndex = listBlock.indexOf("'properties'");
+  const usersIndex = listBlock.indexOf("'users'");
+  assert.ok(listStart >= 0 && listEnd > listStart);
+  assert.ok(liveIndex >= 0 && propertyIndex > liveIndex && usersIndex > propertyIndex);
   assert.match(rulesTest, /Owner and Admin browsers cannot mutate canonical geo/);
   assert.match(rulesTest, /assertFails\(updateDoc\(refAdmin, \{ geo:/);
 });
