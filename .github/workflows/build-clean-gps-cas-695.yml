@@ -30,6 +30,13 @@ jobs:
         with:
           ref: fix/technician-gps-session-cas-current-main
           fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
       - name: Fetch pinned reviewed server source
         run: git fetch origin fix/technician-gps-session-cas
       - name: Build deterministic four-file CAS diff
