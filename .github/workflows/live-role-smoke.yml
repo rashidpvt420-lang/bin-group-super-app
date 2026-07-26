@@ -130,6 +130,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'live-evidence'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    environment: hard-public-launch
     permissions:
       contents: read
       actions: read
@@ -211,6 +212,15 @@ jobs:
           node scripts/seed-live-role-test-data.mjs
 
       - name: Run every required live evidence suite
+        env:
+          E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: node scripts/run-critical-evidence.mjs --suite all-required
 
       - name: Verify controlled-pilot eligibility
