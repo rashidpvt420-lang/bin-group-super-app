@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ needs.authorize-owner-command.outputs.commit_sha }}
+          ref: main
           persist-credentials: false
       - name: Verify exact checkout binding
         run: |
