@@ -360,6 +360,17 @@ service cloud.firestore {
       return canDispatchJobs();
     }
 
+    function canListAssignedTechnicianTicket(data) {
+      // This narrow predicate is intentionally separate from participantCanRead.
+      // Firestore can prove the assignment equality from the client query without
+      // evaluating every Owner, Tenant, Broker and dispatcher branch per result.
+      return signedIn() &&
+        claimedRole() in ['technician', 'tech'] &&
+        data.get('assignedTechnicianId', null) == request.auth.uid &&
+        hasApprovedTechnicianRecord() &&
+        isNotSuspended();
+    }
+
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
 
     function staffRequestCreate(data) {
@@ -452,11 +463,64 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
+    function ownerCannotSupplyCanonicalPropertyGeo(data) {
+      return !data.keys().hasAny([
+        'geo',
+        'geoAnchor',
+        'verifiedGeo',
+        'geoVerification',
+        'verified',
+        'verifiedBy',
+        'verifiedAt',
+        'dispatchReady',
+        'requiresGeoReview',
+        'geoReviewStatus',
+        'geoVerifiedAt',
+        'geoVerifiedBy'
+      ]);
+    }
+
+    function ownerSubmittedPropertyGeoIsUnverified(data) {
+      return !('submittedGeo' in data) || (
+        data.submittedGeo is map &&
+        data.submittedGeo.get('verified', false) == false &&
+        data.submittedGeo.get('dispatchReady', false) == false &&
+        data.submittedGeo.get('requiresGeoReview', true) == true &&
+        data.submittedGeo.get('verifiedBy', null) == null &&
+        data.submittedGeo.get('verifiedAt', null) == null
+      );
+    }
+
+    function canonicalPropertyGeoUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'geo',
+        'geoAnchor',
+        'verifiedGeo',
+        'geoVerification',
+        'verified',
+        'verifiedBy',
+        'verifiedAt',
+        'dispatchReady',
+        'requiresGeoReview',
+        'geoReviewStatus',
+        'geoVerifiedAt',
+        'geoVerifiedBy'
+      ]);
+    }
+
+    function safeOwnerPropertyCreate(data) {
+      return ownerDraftCreate(data) &&
+        ownerCannotSupplyCanonicalPropertyGeo(data) &&
+        ownerSubmittedPropertyGeoIsUnverified(data);
+    }
+
     function safeOwnerPropertyUpdate() {
       return signedIn() &&
         owns(resource.data) &&
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
+        canonicalPropertyGeoUnchanged() &&
+        ownerSubmittedPropertyGeoIsUnverified(request.resource.data) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status',
           'activationStatus',
@@ -1034,8 +1098,14 @@ service cloud.firestore {
     match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
       allow read: if isNotSuspended() && (canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
-      allow create: if isNotSuspended() && (canManageProperties() || ownerDraftCreate(request.resource.data));
-      allow update: if isNotSuspended() && (canManageProperties() || safeOwnerPropertyUpdate());
+      allow create: if isNotSuspended() && (
+        (canManageProperties() && ownerSubmittedPropertyGeoIsUnverified(request.resource.data)) ||
+        safeOwnerPropertyCreate(request.resource.data)
+      );
+      allow update: if isNotSuspended() && (
+        (canManageProperties() && canonicalPropertyGeoUnchanged()) ||
+        safeOwnerPropertyUpdate()
+      );
       allow delete: if isNotSuspended() && isAdmin();
     }
 
@@ -1086,6 +1156,7 @@ service cloud.firestore {
     }
 
     match /tickets/{ticketId} {
+      allow list: if canListAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
       allow update: if safeTicketUpdateByActor();
@@ -1093,6 +1164,7 @@ service cloud.firestore {
     }
 
     match /maintenanceTickets/{ticketId} {
+      allow list: if canListAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
       allow update: if safeTicketUpdateByActor();
@@ -1194,10 +1266,12 @@ service cloud.firestore {
     }
 
     match /hrProfiles/{profileId} {
-      allow read: if isHr() || isFinance() || isOps() || (signedIn() && request.auth.uid == profileId) || staffCanRead(resource.data);
-      allow create: if isHr();
-      allow update: if isHr();
-      allow delete: if isHr();
+      // Private HR records can include Emirates ID, salary package and employment terms.
+      // Operations/Finance/user-directory readers must not receive this full document.
+      allow read: if isHrManagerTier() || (signedIn() && request.auth.uid == profileId);
+      allow create: if isHrManagerTier();
+      allow update: if isHrManagerTier();
+      allow delete: if isHrManagerTier();
     }
 
     match /attendanceLogs/{logId} {
@@ -1932,14 +2006,26 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+
+    // Canonical live GPS is written only by the App Check-protected Admin SDK callable.
+    // Suspended-safe dispatch authority may observe active locations but browsers
+    // cannot create, update or delete canonical location documents.
+    match /technician_live_locations/{technicianId} {
+      allow read: if canDispatchJobs();
+      allow create, update, delete: if false;
+    }
+
     match /{collection}/{document=**} {
-      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
+          'technician_live_locations',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
+          'private_hr_profiles',
           'auditLogs',
           'analytics_events',
           'security_audit_logs',
@@ -1966,9 +2052,12 @@ service cloud.firestore {
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
+          'technician_live_locations',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
+          'private_hr_profiles',
           'auditLogs',
           'analytics_events',
           'security_audit_logs',

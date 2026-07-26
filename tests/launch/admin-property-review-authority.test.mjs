@@ -25,6 +25,9 @@ test('Owner property approval and rejection are server-authoritative', async () 
   assert.match(backend, /collection\("audit_logs"\)/);
   assert.match(backend, /collection\("notifications"\)/);
   assert.match(backend, /SERVER_AUTHORITATIVE/);
+  assert.match(backend, /canonicalVerifiedGeo/);
+  assert.match(backend, /update\.geo = canonicalGeo/);
+  assert.match(backend, /geoDispatchReady/);
   assert.match(runtime, /export \* from "\.\/adminPropertyReview"/);
 });
 

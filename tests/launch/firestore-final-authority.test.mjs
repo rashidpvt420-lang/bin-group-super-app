@@ -52,7 +52,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /match \/admin_security_sessions\/\{sessionId\} \{\n\s*allow read, write: if false;/);
     assert.match(rules, /match \/private_hr_profiles\/\{profileId\} \{\n\s*allow read, write: if false;/);
     assert.match(rules, /match \/technician_live_locations\/\{technicianId\} \{\n\s*allow read: if canDispatchJobs\(\);\n\s*allow create, update, delete: if false;/);
-    assert.match(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
+    assert.match(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'properties',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
+    assert.doesNotMatch(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
     for (const legacy of [
       'allow update: if isAdmin() && isNotSuspended();',

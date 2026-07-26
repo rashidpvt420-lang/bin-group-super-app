@@ -23,6 +23,13 @@ const liveLocationWritePrefix = `          'system_secrets',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const propertyGeoWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
 
 const privateBlock = `    // Sensitive employment, Emirates ID and salary data. Admin SDK callables only.
     match /private_hr_profiles/{profileId} {
@@ -40,8 +47,11 @@ if (!source.includes(hardenedRead) && !source.includes(liveLocationRead)) {
 // excluded server-managed live locations. Never replace it with the shorter
 // private-HR-only list.
 let canonicalWritePrefix = hardenedWritePrefix;
-if (source.includes(liveLocationWritePrefix)) {
-  canonicalWritePrefix = liveLocationWritePrefix;
+if (source.includes(propertyGeoWritePrefix)) {
+  canonicalWritePrefix = propertyGeoWritePrefix;
+} else if (source.includes(liveLocationWritePrefix)) {
+  source = source.replaceAll(liveLocationWritePrefix, propertyGeoWritePrefix);
+  canonicalWritePrefix = propertyGeoWritePrefix;
 } else if (source.includes(hardenedWritePrefix)) {
   // Already private-HR canonical.
 } else if (source.includes(legacyWritePrefix)) {

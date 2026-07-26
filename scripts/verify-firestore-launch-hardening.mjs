@@ -41,6 +41,7 @@ const forbiddenFragments = [
   ['private HR omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();"],
   ['canonical live location omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
   ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
+  ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
 
@@ -75,7 +76,7 @@ const requiredFragments = [
   ['ticket, Broker rate-limit, Admin-session, private-HR and live-location read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies, live location and private HR', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],

@@ -93,9 +93,11 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area: resolvedArea,
                 placeId: payload.placeId || activeProperty?.googlePlaceId || (isManual ? 'MANUAL' : undefined),
                 source: payload.source || (isManual ? 'admin_manual' : 'google_maps'),
-                verified: payload.verified ?? !isManual,
-                requiresGeoReview: isManual ? true : Boolean(payload.requiresGeoReview),
-                dispatchReady: isManual ? false : payload.dispatchReady ?? true
+                // Owner-selected coordinates are evidence for Founder review, never
+                // canonical dispatch authority in the browser.
+                verified: false,
+                requiresGeoReview: true,
+                dispatchReady: false,
             });
 
             updateProperty(0, {
@@ -104,8 +106,24 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 city: geo.city,
                 area: geo.area,
                 googlePlaceId: geo.placeId || undefined,
-                geo: geo as any,
-                location: { lat: geo.lat, lng: geo.lng }
+                submittedGeo: {
+                    ...geo,
+                    source: 'owner_submission',
+                    verified: false,
+                    verifiedBy: null,
+                    verifiedAt: null,
+                    requiresGeoReview: true,
+                    dispatchReady: false,
+                } as any,
+                location: {
+                    lat: geo.lat,
+                    lng: geo.lng,
+                    quality: 'OWNER_SUBMITTED_REVIEW_REQUIRED',
+                    source: 'owner_submission',
+                    verified: false,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
+                }
             });
             setManualLat(String(geo.lat));
             setManualLng(String(geo.lng));
