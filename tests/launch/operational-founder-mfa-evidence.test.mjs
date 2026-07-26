@@ -6,6 +6,7 @@ import { signInWithRequiredTotpMfa } from '../../scripts/lib/firebase-mfa-sign-i
 
 const workflow = readFileSync('.github/workflows/operational-application-evidence.yml', 'utf8');
 const verifier = readFileSync('scripts/verify-operational-application-evidence.mjs', 'utf8');
+const paginatedRunner = readFileSync('scripts/run-operational-application-evidence-paginated.mjs', 'utf8');
 const provenance = readFileSync('scripts/verify-operational-application-provenance.mjs', 'utf8');
 const helper = readFileSync('scripts/lib/firebase-mfa-sign-in.mjs', 'utf8');
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -115,13 +116,21 @@ test('malformed Firebase provider responses never enter error diagnostics', asyn
   );
 });
 
-test('operational evidence workflow injects only protected canonical Founder MFA credentials', () => {
+test('Founder password and TOTP are scoped only to the protected replay-verifier step', () => {
+  const stepsIndex = workflow.indexOf('\n    steps:');
+  const replayStepIndex = workflow.indexOf('- name: Auto-discover, verify, and publish application evidence');
+  const uploadStepIndex = workflow.indexOf('- name: Upload application proof batch');
+  assert.ok(stepsIndex >= 0 && replayStepIndex > stepsIndex && uploadStepIndex > replayStepIndex);
+
+  const jobScope = workflow.slice(0, stepsIndex);
+  const replayStep = workflow.slice(replayStepIndex, uploadStepIndex);
   for (const name of [
     'E2E_FOUNDER_EMAIL',
     'E2E_FOUNDER_PASSWORD',
     'E2E_FOUNDER_TOTP_SECRET',
   ]) {
-    assert.match(workflow, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+    assert.doesNotMatch(jobScope, new RegExp(`${name}:`));
+    assert.match(replayStep, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
   }
   assert.match(workflow, /environment:\s*hard-public-launch/);
   assert.match(workflow, /production_deploy_run_id/);
@@ -134,13 +143,23 @@ test('operational payment and commission replays are bound to the verified secon
   assert.doesNotMatch(verifier, /E2E_ADMIN_EMAIL\)\.toLowerCase\(\)/);
 });
 
-test('operational provenance scans every matching page instead of silently stopping at 100 records', () => {
-  assert.match(provenance, /const PAGE_SIZE = 250/);
-  assert.match(provenance, /readAllMatchingDocuments/);
-  assert.match(provenance, /FieldPath\.documentId\(\)/);
-  assert.match(provenance, /startAfter\(cursor\)/);
+test('provenance and application evidence both scan every matching Firestore page', () => {
+  for (const source of [provenance, paginatedRunner]) {
+    assert.match(source, /const PAGE_SIZE = 250/);
+    assert.match(source, /readAllMatchingDocuments/);
+    assert.match(source, /FieldPath\.documentId\(\)/);
+    assert.match(source, /startAfter\(cursor\)/);
+  }
   assert.match(provenance, /scannedDocumentCount/);
   assert.doesNotMatch(provenance, /query\.limit\(100\)/);
+  assert.match(paginatedRunner, /replaceExactlyOnce/);
+  assert.match(paginatedRunner, /approved-payment selector/);
+  assert.match(paginatedRunner, /notification selector/);
+  assert.match(paginatedRunner, /Broker commission selector/);
+  assert.match(paginatedRunner, /staff-audit selector/);
+  assert.match(paginatedRunner, /renewal-watch selector/);
+  assert.match(workflow, /node scripts\/run-operational-application-evidence-paginated\.mjs/);
+  assert.doesNotMatch(workflow, /node scripts\/verify-operational-application-evidence\.mjs/);
 });
 
 test('Founder MFA helper never serializes raw provider response bodies', () => {
