@@ -41,6 +41,10 @@ const ACTIVE_TICKET_STATUSES = [
 ];
 
 const UAE_CENTRE = { lat: 24.4009, lng: 54.6938 };
+const LIVE_LOCATION_MAX_AGE_MS = 120_000;
+const MAP_CLOCK_INTERVAL_MS = 1_000;
+const MAX_VERIFICATION_FUTURE_SKEW_MS = 5 * 60_000;
+const NON_AUTHORITATIVE_PIN_SOURCE = /(TEST|E2E|SEED|SIMULAT|ADDRESS_ONLY|APPROX)/i;
 
 type Coordinate = { lat: number; lng: number };
 
@@ -56,6 +60,17 @@ type LiveLocation = {
   accuracy?: number;
 };
 
+type VerifiedTicketPin = {
+  point: Coordinate;
+  verifiedAtMs: number;
+  verifiedBy: string;
+  captureSource: string;
+  accuracyMeters: number | null;
+  confidence: string;
+};
+
+const text = (value: unknown) => String(value ?? '').trim();
+
 const timestampMillis = (value: any): number | null => {
   if (!value) return null;
   if (typeof value.toMillis === 'function') return value.toMillis();
@@ -67,7 +82,7 @@ const timestampMillis = (value: any): number | null => {
 
 const coordinate = (value: any): Coordinate | null => {
   if (!value) return null;
-  const source = value.location || value;
+  const source = value.location || value.pin || value.coordinate || value;
   const lat = Number(source.lat ?? source.latitude);
   const lng = Number(source.lng ?? source.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -76,23 +91,72 @@ const coordinate = (value: any): Coordinate | null => {
   return { lat, lng };
 };
 
-const ticketCoordinate = (ticket: any): Coordinate | null =>
-  coordinate(ticket.jobLocation) ||
-  coordinate(ticket.propertyLocation) ||
-  coordinate(ticket.location) ||
+const recordedTicketCoordinate = (ticket: any): Coordinate | null =>
+  coordinate(ticket?.dispatchGeoSnapshot?.location) ||
+  coordinate(ticket?.jobLocation) ||
+  coordinate(ticket?.propertyLocation) ||
+  coordinate(ticket?.location) ||
   null;
 
-const liveLocationIsFresh = (location: LiveLocation) => {
+const verificationMetadata = (ticket: any) =>
+  ticket?.dispatchGeoSnapshot?.verification ||
+  ticket?.propertyPinVerification ||
+  ticket?.geoVerification ||
+  ticket?.jobLocationVerification ||
+  null;
+
+/**
+ * Authoritative Admin-map pin contract.
+ *
+ * A numeric coordinate is never enough. A marker is rendered only when the
+ * ticket contains an immutable dispatch snapshot or a canonical property
+ * binding, explicit verified/dispatch-ready state, verifier identity,
+ * verification time, capture provenance, and measured accuracy/confidence.
+ */
+export const verifiedTicketPin = (ticket: any, nowMs = Date.now()): VerifiedTicketPin | null => {
+  const point = recordedTicketCoordinate(ticket);
+  const metadata = verificationMetadata(ticket);
+  if (!point || !metadata) return null;
+
+  const status = text(metadata.status).toUpperCase();
+  const verified = metadata.verified === true || status === 'VERIFIED';
+  const dispatchReady = metadata.dispatchReady === true || ticket?.dispatchGeoReady === true;
+  const verifiedBy = text(metadata.verifiedByUid || metadata.verifiedBy || metadata.verifierUid);
+  const verifiedAtMs = timestampMillis(metadata.verifiedAt || metadata.verificationTimestamp || metadata.reviewedAt);
+  const captureSource = text(metadata.captureSource || metadata.source || metadata.captureMethod).toUpperCase();
+  const confidence = text(metadata.confidence || metadata.verificationConfidence).toUpperCase();
+  const accuracyMeters = Number(metadata.accuracyMeters ?? metadata.accuracy ?? metadata.horizontalAccuracyMeters);
+  const accuracyIsMeasured = Number.isFinite(accuracyMeters) && accuracyMeters > 0 && accuracyMeters <= 100;
+  const confidenceIsAuthoritative = ['HIGH', 'VERIFIED', 'SURVEYED'].includes(confidence);
+  const immutableSnapshot = metadata.immutableSnapshot === true ||
+    Boolean(text(metadata.canonicalPropertyId) && text(metadata.canonicalPropertyId) === text(ticket?.propertyId));
+
+  if (!verified || !dispatchReady || !verifiedBy || !verifiedAtMs || !captureSource || !immutableSnapshot) return null;
+  if (verifiedAtMs > nowMs + MAX_VERIFICATION_FUTURE_SKEW_MS) return null;
+  if (NON_AUTHORITATIVE_PIN_SOURCE.test(captureSource)) return null;
+  if (!accuracyIsMeasured && !confidenceIsAuthoritative) return null;
+
+  return {
+    point,
+    verifiedAtMs,
+    verifiedBy,
+    captureSource,
+    accuracyMeters: accuracyIsMeasured ? accuracyMeters : null,
+    confidence,
+  };
+};
+
+const liveLocationIsFresh = (location: LiveLocation, nowMs: number) => {
   if (location.isTracking !== true) return false;
   const expiresAt = timestampMillis(location.expiresAt);
   const updatedAt = timestampMillis(location.serverUpdatedAt || location.location?.serverUpdatedAt);
-  if (expiresAt !== null && expiresAt <= Date.now()) return false;
-  if (updatedAt === null || Date.now() - updatedAt > 120_000) return false;
+  if (expiresAt !== null && expiresAt <= nowMs) return false;
+  if (updatedAt === null || nowMs - updatedAt > LIVE_LOCATION_MAX_AGE_MS) return false;
   return Boolean(coordinate(location.location));
 };
 
 const displayStatus = (ticket: any) => {
-  const status = String(ticket.status || '').trim().toUpperCase();
+  const status = text(ticket.status).toUpperCase();
   if (status === 'UNASSIGNED' || status === 'OPEN') return 'Awaiting assignment';
   if (status === 'EN_ROUTE' || status === 'ON_THE_WAY') return 'Technician en route';
   if (status === 'ARRIVED') return 'Technician arrived';
@@ -118,6 +182,12 @@ export default function LiveMapPage() {
   const [dispatchBusy, setDispatchBusy] = useState(false);
   const [dispatchError, setDispatchError] = useState('');
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), MAP_CLOCK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const ticketQuery = query(
@@ -144,7 +214,7 @@ export default function LiveMapPage() {
     const unsubscribeTechnicians = onSnapshot(technicianQuery, (snapshot) => {
       const rows = snapshot.docs
         .map((item) => ({ id: item.id, ...item.data() } as any))
-        .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase()));
+        .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(text(item.status).toUpperCase()));
       setTechnicians(rows);
       setTechniciansError('');
     }, (error) => {
@@ -196,13 +266,15 @@ export default function LiveMapPage() {
   }, []);
 
   const freshLocations = useMemo(
-    () => liveLocations.filter(liveLocationIsFresh),
-    [liveLocations],
+    () => liveLocations.filter((location) => liveLocationIsFresh(location, nowMs)),
+    [liveLocations, nowMs],
   );
 
-  const ticketsWithCoordinates = useMemo(
-    () => tickets.map((ticket) => ({ ticket, point: ticketCoordinate(ticket) })).filter((item) => item.point),
-    [tickets],
+  const ticketsWithVerifiedPins = useMemo(
+    () => tickets
+      .map((ticket) => ({ ticket, verifiedPin: verifiedTicketPin(ticket, nowMs) }))
+      .filter((item) => item.verifiedPin),
+    [tickets, nowMs],
   );
 
   useEffect(() => {
@@ -221,7 +293,7 @@ export default function LiveMapPage() {
       const marker = new maps.Marker({
         map: mapRef.current,
         position: point,
-        title: `${location.technicianName || 'Technician'} — live GPS`,
+        title: `${location.technicianName || 'Technician'} — fresh foreground GPS`,
         icon: {
           path: maps.SymbolPath.CIRCLE,
           scale: 9,
@@ -236,12 +308,12 @@ export default function LiveMapPage() {
       pointCount += 1;
     }
 
-    for (const { ticket, point } of ticketsWithCoordinates as Array<{ ticket: any; point: Coordinate }>) {
-      const priority = String(ticket.priority || ticket.severity || '').toUpperCase();
+    for (const { ticket, verifiedPin } of ticketsWithVerifiedPins as Array<{ ticket: any; verifiedPin: VerifiedTicketPin }>) {
+      const priority = text(ticket.priority || ticket.severity).toUpperCase();
       const marker = new maps.Marker({
         map: mapRef.current,
-        position: point,
-        title: `${ticket.propertyName || ticket.unit || ticket.id} — ${displayStatus(ticket)}`,
+        position: verifiedPin.point,
+        title: `${ticket.propertyName || ticket.unit || ticket.id} — verified property pin — ${displayStatus(ticket)}`,
         icon: {
           path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
           scale: 6,
@@ -252,7 +324,7 @@ export default function LiveMapPage() {
         },
       });
       markerRefs.current.push(marker);
-      bounds.extend(point);
+      bounds.extend(verifiedPin.point);
       pointCount += 1;
     }
 
@@ -263,10 +335,11 @@ export default function LiveMapPage() {
       mapRef.current.setCenter(UAE_CENTRE);
       mapRef.current.setZoom(7);
     }
-  }, [freshLocations, mapReady, ticketsWithCoordinates]);
+  }, [freshLocations, mapReady, ticketsWithVerifiedPins]);
 
-  const unassignedCount = tickets.filter((ticket) => ['UNASSIGNED', 'OPEN', 'open'].includes(String(ticket.status || ''))).length;
+  const unassignedCount = tickets.filter((ticket) => ['UNASSIGNED', 'OPEN', 'open'].includes(text(ticket.status))).length;
   const assignedCount = Math.max(0, tickets.length - unassignedCount);
+  const unverifiedCoordinateCount = tickets.filter((ticket) => recordedTicketCoordinate(ticket) && !verifiedTicketPin(ticket, nowMs)).length;
 
   const dispatch = async (technician: any) => {
     if (!selectedTicket || dispatchBusy || techniciansError) return;
@@ -293,7 +366,7 @@ export default function LiveMapPage() {
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 900 }}>Operational Dispatch Map</Typography>
           <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-            Google Maps with verified Firebase ticket pins and canonical Technician GPS. Missing coordinates are shown as missing—not simulated.
+            Google Maps with contract-verified property pins and canonical Technician GPS. Recorded or legacy coordinates remain visible in the feed but are excluded from map and distance claims.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -301,6 +374,10 @@ export default function LiveMapPage() {
           <Chip label={`${unassignedCount} awaiting assignment`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${assignedCount} assigned`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${freshLocations.length} fresh GPS sessions`} sx={{ color: '#fff', bgcolor: '#064e3b' }} />
+          <Chip label={`${ticketsWithVerifiedPins.length} verified property pins`} sx={{ color: '#fff', bgcolor: '#1e3a8a' }} />
+          {unverifiedCoordinateCount > 0 && (
+            <Chip label={`${unverifiedCoordinateCount} recorded coordinates unverified`} sx={{ color: '#fff', bgcolor: '#92400e' }} />
+          )}
         </Stack>
       </Stack>
 
@@ -313,12 +390,13 @@ export default function LiveMapPage() {
           <Paper sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', maxHeight: { lg: '76vh' }, overflow: 'auto' }}>
             <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <Typography sx={{ fontWeight: 900 }}>Active ticket feed</Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8' }}>Server states only. No AI or notification provider claim is inferred.</Typography>
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>Server states only. Coordinate verification is fail-closed.</Typography>
             </Box>
             <List disablePadding>
               {tickets.map((ticket) => {
-                const point = ticketCoordinate(ticket);
-                const canAssign = ['UNASSIGNED', 'OPEN', 'open'].includes(String(ticket.status || ''));
+                const verifiedPin = verifiedTicketPin(ticket, nowMs);
+                const recordedPoint = recordedTicketCoordinate(ticket);
+                const canAssign = ['UNASSIGNED', 'OPEN', 'open'].includes(text(ticket.status));
                 return (
                   <ListItem key={ticket.id} alignItems="flex-start" divider secondaryAction={
                     canAssign ? (
@@ -328,7 +406,7 @@ export default function LiveMapPage() {
                     ) : undefined
                   }>
                     <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: point ? '#1d4ed8' : '#475569' }}><RoomIcon /></Avatar>
+                      <Avatar sx={{ bgcolor: verifiedPin ? '#1d4ed8' : recordedPoint ? '#b45309' : '#475569' }}><RoomIcon /></Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={ticket.propertyName || ticket.unit || ticket.id}
@@ -336,17 +414,32 @@ export default function LiveMapPage() {
                         <Box component="span" sx={{ display: 'block', color: '#94a3b8', pr: canAssign ? 8 : 0 }}>
                           {displayStatus(ticket)}<br />
                           {ticket.issueDescription || ticket.issue || 'Maintenance request'}<br />
-                          {point ? (
+                          {verifiedPin ? (
                             <Button
+                              data-testid={`verified-property-pin-${ticket.id}`}
                               size="small"
                               endIcon={<OpenInNewIcon />}
-                              href={googleMapsSearchUrl(point.lat, point.lng)}
+                              href={googleMapsSearchUrl(verifiedPin.point.lat, verifiedPin.point.lng)}
                               target="_blank"
                               rel="noreferrer"
                               sx={{ px: 0, mt: 0.5 }}
                             >
-                              Open verified pin
+                              Open verified property pin
                             </Button>
+                          ) : recordedPoint ? (
+                            <Box component="span" data-testid={`unverified-recorded-coordinate-${ticket.id}`} sx={{ display: 'block', color: '#f59e0b', mt: 0.5 }}>
+                              Recorded coordinate is unverified and excluded from map and dispatch-distance claims.
+                              <Button
+                                size="small"
+                                endIcon={<OpenInNewIcon />}
+                                href={googleMapsSearchUrl(recordedPoint.lat, recordedPoint.lng)}
+                                target="_blank"
+                                rel="noreferrer"
+                                sx={{ px: 0, ml: 1, color: '#fbbf24' }}
+                              >
+                                Inspect recorded coordinate
+                              </Button>
+                            </Box>
                           ) : 'Exact property pin missing — dispatch distance cannot be verified.'}
                         </Box>
                       }
@@ -375,17 +468,18 @@ export default function LiveMapPage() {
                 {mapError} Check the Maps key, billing, enabled APIs and production referrer restrictions.
               </Alert>
             )}
-            {mapReady && freshLocations.length === 0 && ticketsWithCoordinates.length === 0 && (
+            {mapReady && freshLocations.length === 0 && ticketsWithVerifiedPins.length === 0 && (
               <Alert severity="warning" sx={{ position: 'absolute', bottom: 16, left: 16, right: 16, zIndex: 5 }}>
-                No fresh canonical GPS session or verified ticket coordinate is available. No markers have been fabricated.
+                No fresh canonical GPS session or contract-verified property pin is available. Recorded coordinates were not rendered as verified markers.
               </Alert>
             )}
             {mapReady && (
               <Paper sx={{ position: 'absolute', top: 16, right: 16, zIndex: 4, p: 1.5, bgcolor: 'rgba(15,23,42,0.92)', color: '#fff' }}>
                 <Stack spacing={0.5}>
                   <Typography variant="caption"><Box component="span" sx={{ color: '#10b981' }}>●</Box> Fresh Technician GPS</Typography>
-                  <Typography variant="caption"><Box component="span" sx={{ color: '#3b82f6' }}>◆</Box> Verified ticket/property pin</Typography>
-                  <Typography variant="caption"><Box component="span" sx={{ color: '#ef4444' }}>◆</Box> Critical verified ticket pin</Typography>
+                  <Typography variant="caption"><Box component="span" sx={{ color: '#3b82f6' }}>◆</Box> Contract-verified property pin</Typography>
+                  <Typography variant="caption"><Box component="span" sx={{ color: '#ef4444' }}>◆</Box> Critical ticket at verified property pin</Typography>
+                  <Typography variant="caption"><Box component="span" sx={{ color: '#f59e0b' }}>●</Box> Recorded/unverified coordinates are feed-only</Typography>
                 </Stack>
               </Paper>
             )}
