@@ -53,19 +53,33 @@ test('Broker protected runner binds one UI lead to contract activation and one d
   assert.match(productionRunner, /deterministic commission ID/);
 });
 
-test('Broker protected runner completes provider-confirmed OTP verification and payout submission', () => {
+test('Broker protected runner requires mailbox OTP verification and completed payout submission', () => {
+  assert.match(productionRunner, /E2E_BROKER_MAILBOX_CLIENT_ID/);
+  assert.match(productionRunner, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/profile/);
+  assert.match(productionRunner, /mailboxProfile\.emailAddress/);
+  assert.match(productionRunner, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
   assert.match(productionRunner, /requestBrokerPayoutOtp/);
   assert.match(productionRunner, /verifyBrokerPayoutOtp/);
   assert.match(productionRunner, /submitBrokerPayoutRequest/);
   assert.match(productionRunner, /delivery\?\.messageId/);
-  assert.match(productionRunner, /otpHash/);
-  assert.match(productionRunner, /sha256\(`\$\{code\}:\$\{salt\}`\)/);
+  assert.match(productionRunner, /otpHashVersion/);
+  assert.match(productionRunner, /HMAC_SHA256_V1/);
+  assert.match(productionRunner, /mailboxReceiptVerified: true/);
+  assert.match(productionRunner, /providerMessageIdHash/);
+  assert.match(productionRunner, /mailboxMessageIdHash/);
+  assert.doesNotMatch(productionRunner, /deriveOtp|value\.otpHash\b|value\.salt\b|number\s*<=\s*999999/);
   assert.match(productionRunner, /EMAIL_OTP_SINGLE_USE_PRIVATE_KYC/);
   assert.match(productionRunner, /status\) === 'CONSUMED'/);
   assert.match(productionRunner, /payoutStatus\) === 'REQUESTED'/);
   assert.match(productionRunner, /callFunctionExpectingFailure/);
   assert.match(productionRunner, /broker-production-evidence\.json/);
   assert.match(productionRunner, /hardLaunchClaim: false/);
+
+  const evidenceStart = productionRunner.lastIndexOf('const evidence = {');
+  assert.ok(evidenceStart >= 0, 'Broker production evidence object is missing');
+  const evidenceBlock = productionRunner.slice(evidenceStart);
+  assert.doesNotMatch(evidenceBlock, /\n\s+providerMessageId\s*:/);
+  assert.match(evidenceBlock, /providerMessageIdHash/);
 });
 
 test('Broker browser proof creates the lead and requires the protected lifecycle artifact', () => {
