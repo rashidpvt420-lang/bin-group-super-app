@@ -13,6 +13,7 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const EVIDENCE_TTL_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const MAX_REQUESTS_PER_HOUR = 5;
+const BRANDED_FROM = "BIN GROUP <ceo@bin-groups.com>";
 const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
 const money = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -116,14 +117,24 @@ async function deliverOtp(email: string, otp: string, amount: number, count: num
   const nodemailer = await import("nodemailer");
   const port = Number(process.env.SMTP_PORT || 465);
   const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST || "smtp.sendgrid.net", port, secure: port === 465, auth: { user, pass } });
+  const from = process.env.MAIL_FROM || process.env.SMTP_FROM || BRANDED_FROM;
+  if (from !== BRANDED_FROM) {
+    throw new HttpsError("failed-precondition", "Broker payout email sender must use the approved BIN GROUP identity.");
+  }
   const info = await transport.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_FROM || "BIN GROUP <ceo@bin-groups.com>",
+    from,
     to: email,
     subject: "BIN GROUP payout verification code",
     text: `Your payout code is ${otp}. It authorizes AED ${amount.toFixed(2)} across ${count} commission(s) and expires in 10 minutes.`,
   });
-  if (!text(info.messageId)) throw new HttpsError("internal", "OTP provider did not confirm delivery.");
-  return text(info.messageId);
+  const messageId = text(info.messageId);
+  const accepted = Array.isArray(info.accepted) ? info.accepted.map((entry) => lower(entry)).filter(Boolean) : [];
+  const rejected = Array.isArray(info.rejected) ? info.rejected.map((entry) => lower(entry)).filter(Boolean) : [];
+  if (!messageId) throw new HttpsError("internal", "OTP provider did not confirm delivery.");
+  if (!accepted.includes(lower(email)) || rejected.length > 0) {
+    throw new HttpsError("internal", "OTP provider did not accept the verified Broker mailbox.");
+  }
+  return { messageId, accepted, rejected, from, recipient: lower(email), providerAccepted: true };
 }
 
 export const requestBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true, secrets: [smtpUser, smtpPass] }, async (request) => {
@@ -134,11 +145,45 @@ export const requestBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3
   const salt = crypto.randomBytes(18).toString("hex");
   const ref = db.collection("broker_payout_otps").doc();
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
-  const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length);
+  const delivery = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length);
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS);
-  await ref.set({ uid: broker.uid, email: broker.email, commissionIds: commissions.ids, amount: commissions.amount, currency: "AED", bindingHash, kycSubmissionHash: broker.approvedSubmissionHash, otpHash: hashOtp(otp, salt), salt, attempts: 0, status: "PENDING", expiresAt, delivery: { messageId, sentAt: FieldValue.serverTimestamp() }, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  await db.collection("audit_logs").add({ action: "BROKER_PAYOUT_OTP_SENT", actorId: broker.uid, challengeId: ref.id, bindingHash, kycSubmissionHash: broker.approvedSubmissionHash, createdAt: FieldValue.serverTimestamp() });
-  return { status: "OTP_SENT", challengeId: ref.id, expiresAt: expiresAt.toMillis(), amount: commissions.amount, commissionCount: commissions.ids.length };
+  await ref.set({
+    uid: broker.uid,
+    email: broker.email,
+    commissionIds: commissions.ids,
+    amount: commissions.amount,
+    currency: "AED",
+    bindingHash,
+    kycSubmissionHash: broker.approvedSubmissionHash,
+    otpHash: hashOtp(otp, salt),
+    salt,
+    attempts: 0,
+    status: "PENDING",
+    expiresAt,
+    delivery: { ...delivery, sentAt: FieldValue.serverTimestamp() },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("audit_logs").add({
+    action: "BROKER_PAYOUT_OTP_SENT",
+    actorId: broker.uid,
+    challengeId: ref.id,
+    bindingHash,
+    kycSubmissionHash: broker.approvedSubmissionHash,
+    deliveryMessageId: delivery.messageId,
+    brandedSenderVerified: delivery.from === BRANDED_FROM,
+    providerAccepted: delivery.providerAccepted,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {
+    status: "OTP_SENT",
+    challengeId: ref.id,
+    expiresAt: expiresAt.toMillis(),
+    amount: commissions.amount,
+    commissionCount: commissions.ids.length,
+    deliveryConfirmed: delivery.providerAccepted,
+    brandedSenderVerified: delivery.from === BRANDED_FROM,
+  };
 });
 
 export const verifyBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
