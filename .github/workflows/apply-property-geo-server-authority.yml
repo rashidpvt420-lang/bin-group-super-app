@@ -51,15 +51,20 @@ jobs:
       - name: Exclude properties from generic Admin catch-all writes
         run: python .github/scripts/harden-property-geo-catchall.py
 
-      - name: Validate focused source contracts
-        run: |
-          set -euo pipefail
-          node --test \
-            tests/launch/property-geo-authority.test.mjs \
-            tests/launch/property-geo-catchall-authority.test.mjs \
-            tests/launch/admin-property-review-authority.test.mjs
-          npm run typecheck
-          npm run build:functions
+      - name: Validate canonical property geo source contract
+        run: node --test tests/launch/property-geo-authority.test.mjs
+
+      - name: Validate generic Admin catch-all exclusion
+        run: node --test tests/launch/property-geo-catchall-authority.test.mjs
+
+      - name: Validate Admin property review callable authority
+        run: node --test tests/launch/admin-property-review-authority.test.mjs
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Build Cloud Functions
+        run: npm run build:functions
 
       - name: Prepare canonical Firestore rules
         run: |
@@ -80,7 +85,7 @@ jobs:
           exit 0
 
       - name: Upload focused property geo diagnostics
-        if: always()
+        if: always() && steps.focused_geo_rules.outcome != 'skipped'
         uses: actions/upload-artifact@v4
         with:
           name: property-geo-rules-diagnostics-${{ github.sha }}
