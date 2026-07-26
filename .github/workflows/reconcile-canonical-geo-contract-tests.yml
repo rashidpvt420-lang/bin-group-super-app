@@ -1,0 +1,196 @@
+name: Reconcile Canonical Geo Contract Tests
+
+on:
+  push:
+    branches:
+      - fix/property-geo-dispatch-authority-main
+    paths:
+      - .github/workflows/reconcile-canonical-geo-contract-tests.yml
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/reconcile-canonical-geo-contract-tests.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch-test-clean:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.actor == github.repository_owner &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/fix/property-geo-dispatch-authority-main') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/property-geo-dispatch-authority-main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact dispatch authority branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/property-geo-dispatch-authority-main
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Reconcile strict versioned property-pin tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          behavior_path = Path('tests/launch/map-gps-state-behavior.test.mjs')
+          behavior = behavior_path.read_text(encoding='utf-8')
+          old = """test('unverified or incomplete property geography never resolves as a verified pin', () => {
+            const base = {
+              id: 'property-1',
+              geo: {
+                lat: 24.2,
+                lng: 55.3,
+                verified: true,
+                dispatchReady: true,
+                requiresGeoReview: false,
+                verifiedBy: 'founder-uid',
+                verifiedAt: '2026-07-26T10:00:00.000Z',
+                source: 'admin_manual',
+              },
+            };
+            assert.deepEqual(plain(pins.resolveVerifiedPropertyPin(base)), {
+              point: { lat: 24.2, lng: 55.3 },
+              propertyId: 'property-1',
+              verifiedBy: 'founder-uid',
+              verifiedAtMs: Date.parse('2026-07-26T10:00:00.000Z'),
+              source: 'admin_manual',
+            });
+            for (const mutation of [
+              { verified: false },
+              { dispatchReady: false },
+              { requiresGeoReview: true },
+              { verifiedBy: '' },
+              { verifiedAt: null },
+              { source: 'legacy_import' },
+            ]) {
+              assert.equal(pins.resolveVerifiedPropertyPin({ ...base, geo: { ...base.geo, ...mutation } }), null);
+            }
+            assert.equal(pins.verifiedPinForTicket({ propertyId: 'missing' }, new Map()), null);
+          });
+          """
+          new = """test('unverified or incomplete property geography never resolves as a verified pin', () => {
+            const verifiedAt = '2026-07-26T10:00:00.000Z';
+            const base = {
+              id: 'property-1',
+              geo: {
+                lat: 24.2,
+                lng: 55.3,
+                verified: true,
+                dispatchReady: true,
+                requiresGeoReview: false,
+                verifiedBy: 'founder-uid',
+                verifiedAt,
+                source: 'admin_manual',
+                verificationVersion: 1,
+              },
+              geoVerification: {
+                state: 'VERIFIED',
+                source: 'FOUNDER_MFA_REVIEW',
+                verifiedBy: 'founder-uid',
+                verifiedAt,
+                verificationVersion: 1,
+              },
+            };
+            assert.deepEqual(plain(pins.resolveVerifiedPropertyPin(base)), {
+              point: { lat: 24.2, lng: 55.3 },
+              propertyId: 'property-1',
+              verifiedBy: 'founder-uid',
+              verifiedAtMs: Date.parse(verifiedAt),
+              source: 'admin_manual',
+              verificationVersion: 1,
+            });
+            for (const mutation of [
+              { verified: false },
+              { dispatchReady: false },
+              { requiresGeoReview: true },
+              { verifiedBy: '' },
+              { verifiedAt: null },
+              { source: 'legacy_import' },
+              { verificationVersion: 2 },
+            ]) {
+              assert.equal(pins.resolveVerifiedPropertyPin({ ...base, geo: { ...base.geo, ...mutation } }), null);
+            }
+            for (const mutation of [
+              { state: 'PENDING' },
+              { source: 'LEGACY_REVIEW' },
+              { verifiedBy: 'other-founder' },
+              { verifiedAt: '2026-07-26T10:00:01.000Z' },
+              { verificationVersion: 2 },
+            ]) {
+              assert.equal(pins.resolveVerifiedPropertyPin({ ...base, geoVerification: { ...base.geoVerification, ...mutation } }), null);
+            }
+            assert.equal(pins.verifiedPinForTicket({ propertyId: 'missing' }, new Map()), null);
+          });
+          """
+          if behavior.count(old) != 1:
+            raise SystemExit(f'map behavior marker count: {behavior.count(old)}')
+          behavior_path.write_text(behavior.replace(old, new, 1), encoding='utf-8')
+
+          truth_path = Path('tests/launch/maps-gps-product-truth.test.mjs')
+          truth = truth_path.read_text(encoding='utf-8')
+          old_truth = """  assert.match(verifiedPinContract, /geo\.verifiedBy/);
+            assert.match(verifiedPinContract, /timestampMillis\(geo\.verifiedAt\)/);
+            assert.match(verifiedPinContract, /ALLOWED_VERIFICATION_SOURCES/);
+            assert.match(verifiedPinContract, /propertiesById\.get\(propertyId\)/);
+          """
+          new_truth = """  assert.match(verifiedPinContract, /geo\.verifiedBy/);
+            assert.match(verifiedPinContract, /timestampMillis\(geo\.verifiedAt\)/);
+            assert.match(verifiedPinContract, /geo\.source !== 'admin_manual'/);
+            assert.match(verifiedPinContract, /verification\.source !== 'FOUNDER_MFA_REVIEW'/);
+            assert.match(verifiedPinContract, /Number\(verification\.verificationVersion\) !== 1/);
+            assert.match(verifiedPinContract, /verifiedBy !== verificationActor/);
+            assert.match(verifiedPinContract, /verifiedAtMs !== verificationAtMs/);
+            assert.match(verifiedPinContract, /propertiesById\.get\(propertyId\)/);
+          """
+          if truth.count(old_truth) != 1:
+            raise SystemExit(f'product truth marker count: {truth.count(old_truth)}')
+          truth_path.write_text(truth.replace(old_truth, new_truth, 1), encoding='utf-8')
+          PY
+
+      - name: Run focused canonical geo contracts
+        run: |
+          node --test \
+            tests/launch/admin-property-review-authority.test.mjs \
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-dispatch-authority.test.mjs \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs
+
+      - name: Build Cloud Functions
+        run: npm run build:functions
+
+      - name: Commit permanent test migrations and remove helper
+        run: |
+          set -euo pipefail
+          git add \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs
+          git rm .github/workflows/reconcile-canonical-geo-contract-tests.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/reconcile-canonical-geo-contract-tests.yml \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Canonical geo test migration touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'test(properties): require versioned Founder geo evidence'
+          git push origin HEAD:fix/property-geo-dispatch-authority-main
