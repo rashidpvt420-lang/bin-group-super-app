@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const lifecycle = fs.readFileSync(new URL('../../scripts/run-owner-onboarding-production-evidence.mjs', import.meta.url), 'utf8');
+const secureLifecycle = fs.readFileSync(new URL('../../scripts/run-owner-onboarding-production-evidence-secure.mjs', import.meta.url), 'utf8');
 const wrapper = fs.readFileSync(new URL('../../scripts/run-owner-business-suite-evidence.mjs', import.meta.url), 'utf8');
 const ownerSpec = fs.readFileSync(new URL('../e2e/business-owner.spec.ts', import.meta.url), 'utf8');
 const financials = fs.readFileSync(new URL('../../src/owner/pages/OwnerFinancialsPage.tsx', import.meta.url), 'utf8');
+const otpSecurity = fs.readFileSync(new URL('../../functions/contractSignatureOtpSecure.ts', import.meta.url), 'utf8');
 const mailTrigger = fs.readFileSync(new URL('../../functions/ownerOnboardingLifecycleEmail.ts', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../../functions/runtime.ts', import.meta.url), 'utf8');
 
@@ -42,8 +44,33 @@ assert.ok(lifecycle.includes("initialReceipt.receiptHash !== resubmissionReceipt
 assert.ok(!lifecycle.includes('E2E_OWNER_OTP'), 'Owner production proof must not rely on a plaintext OTP secret');
 assert.ok(!lifecycle.includes('hardLaunchClaim: true'), 'Owner evidence cannot claim hard-launch approval');
 
+for (const token of [
+  "callFunction('retrieveContractSignatureOtpForTestEvidence'",
+  "beforeData.otpHashAlgorithm === 'HMAC_SHA256_SMTP_SECRET_V1'",
+  "beforeData.testEvidence?.algorithm === 'AES_256_GCM_SMTP_SECRET_V1'",
+  'beforeData.otp === undefined && beforeData.code === undefined',
+  'Protected OTP ciphertext was not destroyed after one-time retrieval',
+  'Protected Owner evidence still contains the six-digit OTP search loop',
+]) {
+  assert.ok(secureLifecycle.includes(token), `Secure Owner OTP evidence is missing: ${token}`);
+}
+
+for (const token of [
+  'crypto.createHmac("sha256", pepper)',
+  'crypto.createCipheriv("aes-256-gcm"',
+  'crypto.createDecipheriv(',
+  'request.auth.token?.testAccount !== true',
+  'retrieveContractSignatureOtpForTestEvidence',
+  '"testEvidence.ciphertext": FieldValue.delete()',
+  'status: "REISSUE_REQUIRED"',
+]) {
+  assert.ok(otpSecurity.includes(token), `Secure Owner OTP callable is missing: ${token}`);
+}
+assert.ok(!otpSecurity.includes('createHash("sha256").update(`${otp}:${salt}`)'), 'Owner OTP hashes must not be offline-brute-forceable SHA-256 values');
+
 assert.ok(wrapper.includes("mode === 'lifecycle'"), 'Owner suite wrapper must expose lifecycle mode');
-assert.ok(wrapper.includes("run('scripts/run-owner-onboarding-production-evidence.mjs')"), 'Owner suite wrapper must execute acquisition evidence');
+assert.ok(wrapper.includes("run('scripts/run-owner-onboarding-production-evidence-secure.mjs')"), 'Owner suite wrapper must execute the secure acquisition evidence runner');
+assert.ok(!wrapper.includes("run('scripts/run-owner-onboarding-production-evidence.mjs')"), 'Protected Owner evidence must not directly execute the legacy OTP runner');
 assert.ok(wrapper.includes("mode === 'restore-shared-fixtures'"), 'Owner suite wrapper must expose fixture restoration mode');
 assert.ok(wrapper.includes("run('scripts/seed-live-role-test-data.mjs')"), 'Owner suite wrapper must restore shared live-role fixtures');
 assert.ok(ownerSpec.includes("scripts/run-owner-business-suite-evidence.mjs', mode"), 'Owner Playwright suite must execute the production lifecycle wrapper with an explicit mode');
@@ -74,6 +101,8 @@ for (const token of [
   assert.ok(mailTrigger.includes(token), `Owner lifecycle delivery is missing: ${token}`);
 }
 
+assert.ok(runtime.includes('export * from "./contractSignatureOtpSecure";'), 'Functions runtime must export only the secure Owner OTP callable layer');
+assert.ok(!runtime.includes('export * from "./contractSignatureOtp";'), 'Functions runtime must not export the legacy Owner OTP callables');
 assert.ok(runtime.includes('export * from "./ownerOnboardingLifecycleEmail";'), 'Owner lifecycle email triggers must be deployed through the Functions runtime');
 
 console.log('owner onboarding production proof launch regression: PASS');
