@@ -1,0 +1,79 @@
+name: Apply Technician Logout STOP Authority
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/apply-technician-logout-stop-authority.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch-test-clean:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'agent/technician-logout-stop-authority' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: agent/technician-logout-stop-authority
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Apply ordered Technician logout repair
+        run: python .github/scripts/apply-technician-logout-stop-authority.py
+
+      - name: Validate STOP authority and portal ordering
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs
+          npm run typecheck
+          npm run lint
+          npm run build
+
+      - name: Commit product changes and remove one-off machinery
+        run: |
+          set -euo pipefail
+          git add \
+            docs/technician-gps-client-storage-policy.md \
+            src/components/PortalSessionControls.tsx \
+            src/utils/liveTracking.ts \
+            tests/launch/map-gps-state-behavior.test.mjs
+          git rm \
+            .github/scripts/apply-technician-logout-stop-authority.py \
+            .github/workflows/apply-technician-logout-stop-authority.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/scripts/apply-technician-logout-stop-authority.py \
+            .github/workflows/apply-technician-logout-stop-authority.yml \
+            docs/technician-gps-client-storage-policy.md \
+            src/components/PortalSessionControls.tsx \
+            src/utils/liveTracking.ts \
+            tests/launch/map-gps-state-behavior.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Technician logout repair touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): preserve STOP authority through logout'
+          git push origin HEAD:agent/technician-logout-stop-authority
