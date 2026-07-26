@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 const read = (path) => readFileSync(path, 'utf8');
 
 const adminMap = read('apps/admin-panel/src/pages/map/LiveMapPage.tsx');
+const verifiedPinContract = read('apps/admin-panel/src/lib/verifiedPropertyPin.ts');
 const adminMapsLoader = read('apps/admin-panel/src/lib/googleMaps.ts');
 const technicianCommandCenter = read('apps/admin-panel/src/components/ops/TechnicianCommandCenter.tsx');
 const technicianMap = read('src/technician/pages/TechnicianMapPage.tsx');
 const trackingSummary = read('src/components/tracking/LiveTechnicianTrackingCard.tsx');
 const liveTracking = read('src/utils/liveTracking.ts');
+const gpsRetryQueue = read('src/utils/gpsRetryQueue.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
 const indexes = JSON.parse(read('firestore.indexes.json'));
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
@@ -17,15 +19,39 @@ const packageJson = JSON.parse(read('package.json'));
 const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
 const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
 
-test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
+test('Admin operational map renders only canonical verified property pins', () => {
   assert.match(adminMap, /loadAdminGoogleMaps\(\)/);
   assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
-  assert.match(adminMap, /data-testid="admin-live-google-map"/);
+  assert.match(adminMap, /collection\(db, 'properties'\)/);
+  assert.match(adminMap, /verifiedPinForTicket\(ticket, propertiesById\)/);
+  assert.match(adminMap, /Recorded coordinate is unverified and is not rendered as an operational map marker/);
+  assert.match(adminMap, /Open recorded coordinate \(unverified\)/);
   assert.match(adminMap, /No markers have been fabricated/);
-  assert.match(adminMap, /onSnapshot\([\s\S]*setLocationsError/);
+  assert.match(adminMap, /data-testid="admin-live-google-map"/);
+  assert.doesNotMatch(adminMap, /ticketCoordinate\(ticket\)/);
+  assert.doesNotMatch(adminMap, /Open verified pin/);
   assert.doesNotMatch(adminMap, /AI Autonomous|AI INTERCEPTING|Marina Bridges|DUBAI-HQ|Streaming live telemetry/i);
   assert.doesNotMatch(adminMap, /55\.12|55\.42|25\.3 - loc\.lat|const positions = \[/);
   assert.doesNotMatch(adminMap, /Auto-SMS Triggered/);
+});
+
+test('Canonical property verification contract is fail-closed and metadata-complete', () => {
+  assert.match(verifiedPinContract, /geo\.verified !== true/);
+  assert.match(verifiedPinContract, /geo\.dispatchReady !== true/);
+  assert.match(verifiedPinContract, /geo\.requiresGeoReview === true/);
+  assert.match(verifiedPinContract, /geo\.verifiedBy/);
+  assert.match(verifiedPinContract, /timestampMillis\(geo\.verifiedAt\)/);
+  assert.match(verifiedPinContract, /ALLOWED_VERIFICATION_SOURCES/);
+  assert.match(verifiedPinContract, /propertiesById\.get\(propertyId\)/);
+  assert.doesNotMatch(verifiedPinContract, /return recordedTicketCoordinate/);
+});
+
+test('Admin live-location freshness re-evaluates when time passes without Firestore changes', () => {
+  assert.match(adminMap, /MAP_CLOCK_INTERVAL_MS = 15_000/);
+  assert.match(adminMap, /setInterval\(\(\) => setNowMs\(Date\.now\(\)\)/);
+  assert.match(adminMap, /liveLocationIsFreshAt\(location, nowMs\)/);
+  assert.match(verifiedPinContract, /expiresAt <= nowMs/);
+  assert.match(verifiedPinContract, /nowMs - updatedAt > 120_000/);
 });
 
 test('Admin Maps loader fails closed on missing key, provider auth and script failure', () => {
@@ -70,14 +96,29 @@ test('Owner and Tenant tracking card identifies schematic and freshness limitati
   assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
 });
 
-test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
+test('Technician GPS client uses protected callable with durable STOP and short-lived UPDATE queues', () => {
   assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
-  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
-  assert.match(liveTracking, /MAX_QUEUE_SIZE = 25/);
+  assert.match(liveTracking, /purgeGpsQueuesExceptTechnician\(technicianUid\)/);
+  assert.match(liveTracking, /replay\.pendingStops > 0/);
+  assert.match(liveTracking, /STOP_REQUEST_QUEUED/);
+  assert.match(liveTracking, /serverAcknowledged: false/);
+  assert.match(liveTracking, /_state\.lastPushTime = now;[\s\S]*await replayForTechnician/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
+  assert.doesNotMatch(liveTracking, /status: 'STOPPED'[\s\S]{0,300}catch/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'technicians'/);
+
+  assert.match(gpsRetryQueue, /STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v2'/);
+  assert.match(gpsRetryQueue, /UPDATE_QUEUE_KEY = 'bin-technician-gps-update-queue-v2'/);
+  assert.match(gpsRetryQueue, /stop: safeStorage\('localStorage'\)/);
+  assert.match(gpsRetryQueue, /update: safeStorage\('sessionStorage'\)/);
+  assert.match(gpsRetryQueue, /UPDATE_TTL_MS = 5 \* 60 \* 1000/);
+  assert.match(gpsRetryQueue, /STOP_TTL_MS = 24 \* 60 \* 60 \* 1000/);
+  assert.match(gpsRetryQueue, /retryCount >= MAX_RETRY_COUNT/);
+  assert.match(gpsRetryQueue, /entry\.action === 'STOP'\) break/);
+  assert.match(gpsRetryQueue, /Number\(latitude\.toFixed\(6\)\)/);
+  assert.doesNotMatch(gpsRetryQueue, /heading|speed/);
 });
 
 test('Canonical live-location callable atomically validates assignment and updates all mirrors', () => {
