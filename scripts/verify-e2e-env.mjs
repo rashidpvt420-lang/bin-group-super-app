@@ -26,11 +26,12 @@ for (const envPath of possibleConfigPaths) {
 
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
+const founderEvidenceRequired = process.env.E2E_REQUIRE_FOUNDER_MFA === 'true';
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
   ...roles.flatMap((role) => [`E2E_${role}_EMAIL`, `E2E_${role}_PASSWORD`]),
-  ...(strictRoles ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
+  ...(founderEvidenceRequired ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
@@ -77,7 +78,7 @@ function validateAppCheckToken() {
 }
 
 function validateFounderEvidence() {
-  if (!strictRoles) return [];
+  if (!founderEvidenceRequired) return [];
   const founderEmail = String(process.env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase();
   const founderPassword = String(process.env.E2E_FOUNDER_PASSWORD || '').trim();
   const founderTotp = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').trim().toUpperCase().replace(/[\s=-]/g, '');
@@ -98,6 +99,7 @@ function validateFounderEvidence() {
 
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
+console.log('[E2E_ENV_GUARD] founder_evidence=' + (founderEvidenceRequired ? 'required' : 'not-required'));
 for (const role of roles) {
   console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[`E2E_${role}_EMAIL`] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
 }
