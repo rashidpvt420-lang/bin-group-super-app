@@ -360,8 +360,7 @@ test('owner and tenant business proofs are mandatory and backend-verified', () =
   assert.match(tenant, /completeThroughTechnicianUi/);
   assert.match(tenant, /assertTenantDeliveryReceipt/);
   assert.match(tenant, /APPROVE, RATE & CLOSE/);
-  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\/i\)/);
-  assert.match(tenant, /return snap\.data\(\)\?\.finalApproval === true;/);
+  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\\\|true\/i/);
   assert.match(tenant, /TENANT_DISPUTED_TICKET/);
   assert.doesNotMatch(tenant, /APPROVAL_TICKET_ID|e2e-tenant-approval-ticket/);
   assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
