@@ -35,6 +35,10 @@ const legacyTicketFixtureReplacements = [
     "    await seedServerDocument('tickets/open_ticket_approved_tech', openTicket);",
   ],
   [
+    "    await setDoc(doc(adminDb, 'tickets/suspended_tenant_existing'), existingTenantTicket);",
+    "    await seedServerDocument('tickets/suspended_tenant_existing', existingTenantTicket);",
+  ],
+  [
     "    await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));",
     "    await assertFails(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));",
   ],
