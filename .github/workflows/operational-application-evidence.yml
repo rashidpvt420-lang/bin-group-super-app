@@ -19,6 +19,10 @@ on:
         description: 'Full lowercase current production main SHA'
         required: true
         type: string
+      production_deploy_run_id:
+        description: 'Successful Firebase Production Deploy run ID for the same exact SHA'
+        required: true
+        type: string
       confirmation:
         description: 'Enter PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE'
         required: true
@@ -26,6 +30,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -46,6 +51,7 @@ jobs:
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
 
     steps:
       - name: Enforce protected application evidence inputs
@@ -53,6 +59,7 @@ jobs:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           SELECTED_GATE: ${{ inputs.gate }}
           CONFIRMATION: ${{ inputs.confirmation }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
@@ -71,6 +78,10 @@ jobs:
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
             echo "::error::expected_commit_sha must equal the current full main SHA."
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production_deploy_run_id must be numeric."
             exit 1
           fi
           if [[ "$CONFIRMATION" != "PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE" ]]; then
@@ -107,6 +118,48 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
+      - name: Download exact production deployment metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore and validate production deployment binding
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+        run: |
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const doc = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
+          const expectedSha = process.env.TARGET_SHA;
+          const deployRunId = process.env.DEPLOY_RUN_ID;
+          const failures = [];
+          if (doc.status !== 'passed') failures.push('deployment status is not passed');
+          if (doc.projectId !== 'bin-group-57c60') failures.push('deployment project mismatch');
+          if (doc.deployedCommitSha !== expectedSha) failures.push('deployment commit mismatch');
+          if (String(doc.workflowRunId || '') !== deployRunId) failures.push('deployment run mismatch');
+          if (doc.workflowRef !== 'refs/heads/main') failures.push('deployment ref mismatch');
+          if (doc.repository !== 'rashidpvt420-lang/bin-group-super-app') failures.push('deployment repository mismatch');
+          if (!/^sha256:[a-f0-9]{64}$/.test(String(doc.validatedArtifactDigest || '').toLowerCase())) failures.push('validated artifact digest is invalid');
+          const deployedAt = Date.parse(String(doc.deployedAt || ''));
+          if (!Number.isFinite(deployedAt)) failures.push('deployment timestamp is invalid');
+          if (failures.length) {
+            for (const failure of failures) console.error(`::error::${failure}`);
+            process.exit(1);
+          }
+          NODE
+
       - name: Auto-discover, verify, and publish application evidence
         env:
           SELECTED_GATE: ${{ inputs.gate }}
@@ -125,12 +178,15 @@ jobs:
             gates=("$SELECTED_GATE")
           fi
 
-          mkdir -p launch_package/application-proofs
+          mkdir -p launch_package/application-proofs launch_package/application-provenance
           for gate in "${gates[@]}"; do
             echo "::group::Verify and publish ${gate}"
+            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-provenance.mjs
             OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence.mjs
+            OPERATIONAL_GATE="$gate" node scripts/bind-operational-application-provenance.mjs
             OPERATIONAL_GATE="$gate" node scripts/publish-operational-application-evidence.mjs
             cp launch_package/application-proof.json "launch_package/application-proofs/${gate}.json"
+            cp launch_package/application-provenance.json "launch_package/application-provenance/${gate}.json"
             echo "::endgroup::"
           done
 
@@ -140,7 +196,10 @@ jobs:
         with:
           name: operational-application-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
           path: |
+            launch_package/production-deployment.json
             launch_package/application-proof.json
+            launch_package/application-provenance.json
             launch_package/application-proofs
+            launch_package/application-provenance
           if-no-files-found: error
           retention-days: 365
