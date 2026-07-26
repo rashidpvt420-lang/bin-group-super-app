@@ -183,6 +183,13 @@ marker_effect = r'''  useEffect(() => {
   }, []);'''
 source = source[:marker_start] + marker_effect + source[marker_end:]
 
+old_warning = 'No fresh canonical GPS session or contract-verified property pin is available. Recorded coordinates were not rendered as verified markers.'
+new_warning = f'{old_warning} No markers have been fabricated.'
+if new_warning not in source:
+    if old_warning not in source:
+        raise SystemExit('no-marker warning anchor no longer matches reviewed source')
+    source = source.replace(old_warning, new_warning, 1)
+
 for forbidden in [
     'const point = recordedTicketCoordinate(ticket);\n  const metadata = verificationMetadata(ticket);',
     'metadata.dispatchReady === true || ticket?.dispatchGeoReady === true',
@@ -198,6 +205,7 @@ for required in [
     'const upsertMarker =',
     'if (!hasAutoFittedViewportRef.current && pointCount > 0)',
     'markerRefs.current.delete(key)',
+    'No markers have been fabricated.',
 ]:
     if required not in source:
         raise SystemExit(f'required map control missing: {required}')
