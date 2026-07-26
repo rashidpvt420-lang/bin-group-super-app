@@ -1,554 +1,427 @@
-import React, { useState, useEffect } from 'react';
-import { db, functions } from '../../lib/firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { 
-  Brain, 
-  Activity, 
-  Radio, 
-  Zap, 
-  ShieldAlert, 
-  Layers, 
-  Cpu,
-  Waves
-} from 'lucide-react';
-
-import { 
-  Box, 
-  Grid, 
-  Paper, 
-  Typography, 
-  Button, 
-  IconButton, 
-  Avatar, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  List, 
-  ListItem, 
-  ListItemAvatar, 
-  ListItemText, 
-  FormControlLabel, 
-  Checkbox,
-  LinearProgress
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Paper,
+  Stack,
+  Typography,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import RoomIcon from '@mui/icons-material/Room';
+import { collection, limit, onSnapshot, query, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../lib/firebase';
+import { googleMapsSearchUrl, loadAdminGoogleMaps } from '../../lib/googleMaps';
 
-// Helper for type-safe icons in React 18
-const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (
-    <IconComponent size={size} className={className} color={color} />
-);
+const ACTIVE_TICKET_STATUSES = [
+  'UNASSIGNED',
+  'OPEN',
+  'ASSIGNED',
+  'ACCEPTED',
+  'EN_ROUTE',
+  'ON_THE_WAY',
+  'ARRIVED',
+  'IN_PROGRESS',
+  'open',
+  'assigned',
+];
 
+const UAE_CENTRE = { lat: 24.4009, lng: 54.6938 };
 
+type Coordinate = { lat: number; lng: number };
+
+type LiveLocation = {
+  id: string;
+  technicianUid?: string;
+  technicianName?: string;
+  activeTicketId?: string;
+  location?: any;
+  serverUpdatedAt?: any;
+  expiresAt?: any;
+  isTracking?: boolean;
+  accuracy?: number;
+};
+
+const timestampMillis = (value: any): number | null => {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (Number.isFinite(value.seconds)) return Number(value.seconds) * 1000;
+  if (Number.isFinite(value)) return Number(value);
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const coordinate = (value: any): Coordinate | null => {
+  if (!value) return null;
+  const source = value.location || value;
+  const lat = Number(source.lat ?? source.latitude);
+  const lng = Number(source.lng ?? source.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+};
+
+const ticketCoordinate = (ticket: any): Coordinate | null =>
+  coordinate(ticket.jobLocation) ||
+  coordinate(ticket.propertyLocation) ||
+  coordinate(ticket.location) ||
+  null;
+
+const liveLocationIsFresh = (location: LiveLocation) => {
+  if (location.isTracking !== true) return false;
+  const expiresAt = timestampMillis(location.expiresAt);
+  const updatedAt = timestampMillis(location.serverUpdatedAt || location.location?.serverUpdatedAt);
+  if (expiresAt !== null && expiresAt <= Date.now()) return false;
+  if (updatedAt === null || Date.now() - updatedAt > 120_000) return false;
+  return Boolean(coordinate(location.location));
+};
+
+const displayStatus = (ticket: any) => {
+  const status = String(ticket.status || '').trim().toUpperCase();
+  if (status === 'UNASSIGNED' || status === 'OPEN') return 'Awaiting assignment';
+  if (status === 'EN_ROUTE' || status === 'ON_THE_WAY') return 'Technician en route';
+  if (status === 'ARRIVED') return 'Technician arrived';
+  if (status === 'IN_PROGRESS') return 'Work in progress';
+  return ticket.assignedTechnicianName || ticket.assignedTechnicianId
+    ? `Assigned to ${ticket.assignedTechnicianName || ticket.assignedTechnicianId}`
+    : status || 'Active';
+};
 
 export default function LiveMapPage() {
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const markerRefs = useRef<any[]>([]);
+
   const [tickets, setTickets] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
-  const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<any>(null);
-  const [generatePass, setGeneratePass] = useState(true);
+  const [liveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
+  const [ticketsError, setTicketsError] = useState('');
+  const [techniciansError, setTechniciansError] = useState('');
+  const [locationsError, setLocationsError] = useState('');
+  const [mapError, setMapError] = useState('');
+  const [mapReady, setMapReady] = useState(false);
+  const [dispatchBusy, setDispatchBusy] = useState(false);
+  const [dispatchError, setDispatchError] = useState('');
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, "maintenanceTickets"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (querySnapshot: any) => {
-      const ticketData: any[] = [];
-      querySnapshot.forEach((doc: any) => {
-        const data = doc.data();
-        ticketData.push({
-          id: doc.id,
-          ...data,
-          // Format timestamp for UI (simplified)
-          timestamp: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleTimeString() : 'Just now'
-        });
-      });
-      setTickets(ticketData);
+    const ticketQuery = query(
+      collection(db, 'maintenanceTickets'),
+      where('status', 'in', ACTIVE_TICKET_STATUSES),
+      limit(100),
+    );
+    const technicianQuery = query(collection(db, 'technicians'), limit(100));
+    const locationQuery = query(
+      collection(db, 'technician_live_locations'),
+      where('isTracking', '==', true),
+      limit(200),
+    );
+
+    const unsubscribeTickets = onSnapshot(ticketQuery, (snapshot) => {
+      setTickets(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+      setTicketsError('');
+    }, (error) => {
+      console.error('[AdminMap] Ticket listener failed:', error);
+      setTickets([]);
+      setTicketsError('Active tickets could not be loaded. Check App Check, permissions, network and Firestore indexes.');
     });
 
-    const qTech = query(collection(db, "users"), orderBy("createdAt", "desc"));
-    const unsubscribeTech = onSnapshot(qTech, (querySnapshot: any) => {
-      const techData: any[] = [];
-      querySnapshot.forEach((doc: any) => {
-        const data = doc.data();
-        if (data.role === 'technician') {
-          techData.push({
-            id: doc.id,
-            name: data.displayName || 'Technician',
-            distance: 'N/A', // Can be calculated if coordinates exist
-            rating: data.rating || 5.0,
-            avatar: (data.displayName || 'T').charAt(0).toUpperCase(),
-            status: data.isOffDuty ? 'Busy' : 'Available',
-            ...data
-          });
-        }
-      });
-      setTechnicians(techData);
+    const unsubscribeTechnicians = onSnapshot(technicianQuery, (snapshot) => {
+      const rows = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() } as any))
+        .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase()));
+      setTechnicians(rows);
+      setTechniciansError('');
+    }, (error) => {
+      console.error('[AdminMap] Technician listener failed:', error);
+      setTechnicians([]);
+      setTechniciansError('Technician readiness data could not be loaded. Dispatch is disabled until the data source recovers.');
+    });
+
+    const unsubscribeLocations = onSnapshot(locationQuery, (snapshot) => {
+      setLiveLocations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as LiveLocation)));
+      setLocationsError('');
+    }, (error) => {
+      console.error('[AdminMap] Canonical location listener failed:', error);
+      setLiveLocations([]);
+      setLocationsError('Canonical live GPS data could not be loaded. The map will not simulate or infer technician positions.');
     });
 
     return () => {
-      unsubscribe();
-      unsubscribeTech();
+      unsubscribeTickets();
+      unsubscribeTechnicians();
+      unsubscribeLocations();
     };
   }, []);
 
-  const handleAssignClick = (ticket: any) => {
-    setSelectedTicket(ticket);
-    setDispatchDialogOpen(true);
-  };
-
-  const handleDispatch = async (tech: any) => {
-    if (selectedTicket) {
-      try {
-        const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
-        await assignTechnician({
-          ticketId: selectedTicket.id,
-          technicianId: tech.id,
+  useEffect(() => {
+    let cancelled = false;
+    loadAdminGoogleMaps()
+      .then((maps) => {
+        if (cancelled || !mapElementRef.current) return;
+        mapRef.current = new maps.Map(mapElementRef.current, {
+          center: UAE_CENTRE,
+          zoom: 7,
+          mapTypeControl: true,
+          streetViewControl: false,
+          fullscreenControl: true,
+          gestureHandling: 'greedy',
         });
-      } catch (error: any) {
-        console.error('Dispatch failed:', error);
-        window.alert(error?.message || 'Dispatch could not assign this mission.');
-        return;
-      }
-
-      // --- 3. Mock Automated SMS/Push Triggers ---
-      // Fire a browser notification to alert the Technician
-      if ("Notification" in window) {
-        Notification.requestPermission().then(permission => {
-          if (permission === "granted") {
-            new Notification("BIN Group Server", {
-              body: `Auto-SMS Triggered: Technician ${tech.name} has been dispatched to ${selectedTicket.unit}.`
-            });
-          }
-        });
-      }
-    }
-
-    setDispatchDialogOpen(false);
-    setSelectedTicket(null);
-
-    if (generatePass && selectedTicket) {
-      generateGatePass(selectedTicket, tech);
-    }
-  };
-
-  const generateGatePass = async (ticket: any, tech: any) => {
-    if (!(window as any).jspdf) {
-      await new Promise<void>((resolve) => {
-        const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-        script.onload = () => resolve(undefined);
-        document.body.appendChild(script);
+        setMapReady(true);
+        setMapError('');
+      })
+      .catch((error) => {
+        console.error('[AdminMap] Google Maps failed to initialise:', error);
+        if (!cancelled) {
+          setMapReady(false);
+          setMapError(`Google Maps is unavailable: ${String(error?.message || error)}.`);
+        }
       });
+    return () => { cancelled = true; };
+  }, []);
+
+  const freshLocations = useMemo(
+    () => liveLocations.filter(liveLocationIsFresh),
+    [liveLocations],
+  );
+
+  const ticketsWithCoordinates = useMemo(
+    () => tickets.map((ticket) => ({ ticket, point: ticketCoordinate(ticket) })).filter((item) => item.point),
+    [tickets],
+  );
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const maps = (window as any).google?.maps;
+    if (!maps) return;
+
+    markerRefs.current.forEach((marker) => marker.setMap(null));
+    markerRefs.current = [];
+    const bounds = new maps.LatLngBounds();
+    let pointCount = 0;
+
+    for (const location of freshLocations) {
+      const point = coordinate(location.location);
+      if (!point) continue;
+      const marker = new maps.Marker({
+        map: mapRef.current,
+        position: point,
+        title: `${location.technicianName || 'Technician'} — live GPS`,
+        icon: {
+          path: maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#10b981',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+        },
+      });
+      markerRefs.current.push(marker);
+      bounds.extend(point);
+      pointCount += 1;
     }
 
-    const { jsPDF } = (window as any).jspdf;
-    const doc = new jsPDF();
+    for (const { ticket, point } of ticketsWithCoordinates as Array<{ ticket: any; point: Coordinate }>) {
+      const priority = String(ticket.priority || ticket.severity || '').toUpperCase();
+      const marker = new maps.Marker({
+        map: mapRef.current,
+        position: point,
+        title: `${ticket.propertyName || ticket.unit || ticket.id} — ${displayStatus(ticket)}`,
+        icon: {
+          path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+          scale: 6,
+          fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 1.5,
+        },
+      });
+      markerRefs.current.push(marker);
+      bounds.extend(point);
+      pointCount += 1;
+    }
 
-    let cairoBase64 = null;
+    if (pointCount > 0) {
+      mapRef.current.fitBounds(bounds, 72);
+      if (pointCount === 1) mapRef.current.setZoom(15);
+    } else {
+      mapRef.current.setCenter(UAE_CENTRE);
+      mapRef.current.setZoom(7);
+    }
+  }, [freshLocations, mapReady, ticketsWithCoordinates]);
+
+  const unassignedCount = tickets.filter((ticket) => ['UNASSIGNED', 'OPEN', 'open'].includes(String(ticket.status || ''))).length;
+  const assignedCount = Math.max(0, tickets.length - unassignedCount);
+
+  const dispatch = async (technician: any) => {
+    if (!selectedTicket || dispatchBusy || techniciansError) return;
+    setDispatchBusy(true);
+    setDispatchError('');
     try {
-      const res = await fetch('https://fonts.gstatic.com/s/cairo/v20/SLXQ1O5tq8QA3r565Uq13w.ttf');
-      const buffer = await res.arrayBuffer();
-      let binary = '';
-      const bytes = new Uint8Array(buffer);
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      cairoBase64 = btoa(binary);
-    } catch (err) {
-      console.error("Failed to load Cairo font, falling back to default:", err);
+      const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
+      await assignTechnician({
+        ticketId: selectedTicket.id,
+        technicianId: technician.id,
+      });
+      setSelectedTicket(null);
+    } catch (error: any) {
+      console.error('[AdminMap] Dispatch failed:', error);
+      setDispatchError(error?.message || 'Dispatch failed. No assignment state was claimed.');
+    } finally {
+      setDispatchBusy(false);
     }
-
-    if (cairoBase64) {
-      doc.addFileToVFS('Cairo-Regular.ttf', cairoBase64);
-      doc.addFont('Cairo-Regular.ttf', 'Cairo', 'normal');
-      doc.setFont('Cairo');
-    }
-
-    doc.setDrawColor(212, 175, 55);
-    doc.setLineWidth(1.5);
-    doc.rect(10, 10, 190, 277);
-    doc.rect(12, 12, 186, 273);
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(15, 15, 180, 40, "F");
-
-    doc.setTextColor(212, 175, 55);
-    doc.setFontSize(22);
-    doc.text("BIN GROUP MAINTENANCE", 105, 30, { align: "center" });
-    doc.setFontSize(14);
-    doc.setTextColor(255, 255, 255);
-    doc.text("SECURITY GATE PASS  •  تصريح دخول أمني", 105, 45, { align: "center" });
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(12);
-
-    doc.text(`Ticket ID: ${ticket.id}`, 20, 80);
-    doc.text(`Date of Entry: ${new Date().toLocaleDateString()}`, 20, 95);
-    doc.text(`Assigned Technician: ${tech.name}`, 20, 110);
-    doc.text(`Contact: ${tech.phone || tech.phoneNumber || tech.mobile || '+971 50 XXXXXXX'}`, 20, 125);
-    doc.text(`Location: ${ticket.unit || 'UAE Portfolio Asset'}`, 20, 140);
-    
-    doc.text(`معرف التذكرة: ${ticket.id}`, 190, 80, { align: 'right' });
-    doc.text(`تاريخ الدخول: ${new Date().toLocaleDateString()}`, 190, 95, { align: 'right' });
-    doc.text(`الفني المعين: ${tech.name}`, 190, 110, { align: 'right' });
-    doc.text(`رقم الهاتف: ${tech.phone || tech.phoneNumber || tech.mobile || '+971 50 XXXXXXX'}`, 190, 125, { align: 'right' });
-    doc.text(`الموقع: ${ticket.unit || 'أصل المحفظة العقارية'}`, 190, 140, { align: 'right' });
-
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.5);
-    doc.line(15, 155, 195, 155);
-
-    doc.setFontSize(14);
-    doc.text("APPROVED WORK DETAILS / تفاصيل العمل المعتمد", 105, 170, { align: "center" });
-    
-    doc.setFontSize(11);
-    const descText = ticket.issueDescription || ticket.issue || "General Maintenance and Inspection Ops.";
-    const descTextAr = "أعمال الصيانة العامة والفحص التشغيلي المعتمدة.";
-    
-    doc.text(descText, 20, 185);
-    doc.text(descTextAr, 190, 200, { align: 'right' });
-
-    doc.setDrawColor(212, 175, 55);
-    doc.rect(20, 220, 170, 50);
-
-    doc.setFontSize(12);
-    doc.text("Authorized by / معتمد من:", 25, 235);
-    doc.text("Rashid AbdulGhani - CEO / راشد عبد الغني - الرئيس التنفيذي", 25, 245);
-    
-    doc.setTextColor(220, 38, 38);
-    doc.setFontSize(10);
-    doc.text("[ BIN GROUP DIGITAL SECURITY STAMP  •  ختم مجموعة بن الرقمي الأمني ]", 105, 262, { align: "center" });
-
-    doc.save(`GatePass_${ticket.id}_${tech.name}.pdf`);
   };
-
-  const openTicketsCount = (tickets || []).filter((t) => t.status === 'UNASSIGNED').length;
-  const dispatchedTicketsCount = (tickets || []).filter((t) => t.status && t.status !== 'UNASSIGNED').length;
-  const availableTechniciansCount = (technicians || []).filter((t) => t.status === 'Available').length;
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#020617', overflow: 'hidden' }}>
-      
-      {/* 🟢 TOP HEADER: REAL-TIME PORTFOLIO STATS */}
-      <Box sx={{ 
-        height: 80, borderBottom: '1px solid rgba(255,255,255,0.05)', 
-        display: 'flex', alignItems: 'center', px: 4, justifyContent: 'space-between',
-        background: 'linear-gradient(to right, #020617, #0f172a)' 
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-             <Icon icon={Cpu} className="text-emerald-500 animate-pulse" size={24} />
-          </div>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff', lineHeight: 1, letterSpacing: -1 }}>
-              BIN-GROUP <Box component="span" sx={{ color: '#10b981' }}>MISSION CONTROL</Box>
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold' }}>VERSION 3.0 • DUBAI-HQ PORTFOLIO</Typography>
-          </Box>
+    <Box sx={{ minHeight: '100%', bgcolor: '#020617', color: '#fff', p: { xs: 2, md: 3 } }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 900 }}>Operational Dispatch Map</Typography>
+          <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+            Google Maps with verified Firebase ticket pins and canonical Technician GPS. Missing coordinates are shown as missing—not simulated.
+          </Typography>
         </Box>
+        <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Chip label={`${tickets.length} active tickets`} sx={{ color: '#fff', bgcolor: '#172033' }} />
+          <Chip label={`${unassignedCount} awaiting assignment`} sx={{ color: '#fff', bgcolor: '#172033' }} />
+          <Chip label={`${assignedCount} assigned`} sx={{ color: '#fff', bgcolor: '#172033' }} />
+          <Chip label={`${freshLocations.length} fresh GPS sessions`} sx={{ color: '#fff', bgcolor: '#064e3b' }} />
+        </Stack>
+      </Stack>
 
-        <Box sx={{ display: 'flex', gap: 6 }}>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>OPEN TICKETS</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#10b981' }}>{openTicketsCount}</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>DISPATCHED TICKETS</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#3b82f6' }}>{dispatchedTicketsCount}</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', display: 'block' }}>TECHNICIANS AVAILABLE</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#fff' }}>{availableTechniciansCount}/{(technicians || []).length}</Typography>
-          </Box>
-        </Box>
-      </Box>
+      {[ticketsError, techniciansError, locationsError].filter(Boolean).map((message) => (
+        <Alert key={message} severity="error" sx={{ mb: 1 }}>{message}</Alert>
+      ))}
 
-      {/* Split Screen Container */}
-      <Grid container sx={{ flexGrow: 1, overflow: 'hidden' }}>
-
-        {/* Left Panel: AI Dispatch Feed */}
-        <Grid item xs={12} md={4} sx={{
-          borderRight: '1px solid rgba(255,255,255,0.05)',
-          height: '100%',
-          overflowY: 'auto',
-          p: 0,
-          bgcolor: '#020617'
-        }}>
-          <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'sticky', top: 0, bgcolor: '#020617', zIndex: 10 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-              <Icon icon={Radio} className="text-emerald-500 animate-ping" size={16} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#fff', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-                AI Autonomous <Box component="span" sx={{ color: '#10b981' }}>Dispatch Feed</Box>
-              </Typography>
+      <Grid container spacing={2}>
+        <Grid item xs={12} lg={4}>
+          <Paper sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', maxHeight: { lg: '76vh' }, overflow: 'auto' }}>
+            <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <Typography sx={{ fontWeight: 900 }}>Active ticket feed</Typography>
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>Server states only. No AI or notification provider claim is inferred.</Typography>
             </Box>
-            <Typography variant="caption" sx={{ color: '#64748b' }}>Streaming live telemetry from Dubai Residential Clusters...</Typography>
-          </Box>
-
-          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {(tickets || []).map((ticket) => (
-              <Box
-                key={ticket.id}
-                sx={{
-                  p: 2,
-                  bgcolor: '#0f172a80',
-                  border: '1px solid rgba(255,255,255,0.03)',
-                  borderRadius: 3,
-                  position: 'relative',
-                  overflow: 'hidden',
-                  transition: 'background 0.2s',
-                  '&:hover': { bgcolor: '#0f172a' }
-                }}
-              >
-                {/* AI Progress Bar (Simulation) */}
-                <LinearProgress 
-                  variant="determinate" 
-                  value={ticket.status === 'UNASSIGNED' ? 45 : 100} 
-                  sx={{ 
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-                    bgcolor: 'transparent',
-                    '& .MuiLinearProgress-bar': { bgcolor: ticket.status === 'UNASSIGNED' ? '#3b82f6' : '#10b981' }
-                  }} 
-                />
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <div className="bg-slate-800 p-1.5 rounded-lg">
-                       {ticket.status === 'UNASSIGNED' ? <Icon icon={Zap} className="text-blue-400" size={12} /> : <Icon icon={Brain} className="text-emerald-500" size={12} />}
-                    </div>
-                    <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black' }}>
-                      {ticket.status === 'UNASSIGNED' ? "AI INTERCEPTING..." : `AI DISPATCHED: ${ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'Technician'}`}
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ color: '#334155', fontWeight: 'bold' }}>{ticket.timestamp}</Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                   <Box>
-                      <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 900, lineHeight: 1.2 }}>{ticket.unit}</Typography>
-                      <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', mt: 0.5 }}>{ticket.issueDescription || ticket.issue}</Typography>
-                   </Box>
-                   {ticket.status === 'UNASSIGNED' && (
-                     <Button 
-                       size="small" 
-                       onClick={() => handleAssignClick(ticket)}
-                       sx={{ bgcolor: '#fff', color: '#000', borderRadius: '8px', fontSize: '9px', fontWeight: 900, '&:hover': { bgcolor: '#cbd5e1' } }}>
-                        MANUAL OVERRIDE
-                     </Button>
-                   )}
-                </Box>
-              </Box>
-            ))}
-          </Box>
+            <List disablePadding>
+              {tickets.map((ticket) => {
+                const point = ticketCoordinate(ticket);
+                const canAssign = ['UNASSIGNED', 'OPEN', 'open'].includes(String(ticket.status || ''));
+                return (
+                  <ListItem key={ticket.id} alignItems="flex-start" divider secondaryAction={
+                    canAssign ? (
+                      <Button size="small" variant="contained" onClick={() => setSelectedTicket(ticket)} disabled={Boolean(techniciansError)}>
+                        Assign
+                      </Button>
+                    ) : undefined
+                  }>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: point ? '#1d4ed8' : '#475569' }}><RoomIcon /></Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={ticket.propertyName || ticket.unit || ticket.id}
+                      secondary={
+                        <Box component="span" sx={{ display: 'block', color: '#94a3b8', pr: canAssign ? 8 : 0 }}>
+                          {displayStatus(ticket)}<br />
+                          {ticket.issueDescription || ticket.issue || 'Maintenance request'}<br />
+                          {point ? (
+                            <Button
+                              size="small"
+                              endIcon={<OpenInNewIcon />}
+                              href={googleMapsSearchUrl(point.lat, point.lng)}
+                              target="_blank"
+                              rel="noreferrer"
+                              sx={{ px: 0, mt: 0.5 }}
+                            >
+                              Open verified pin
+                            </Button>
+                          ) : 'Exact property pin missing — dispatch distance cannot be verified.'}
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                );
+              })}
+              {!tickets.length && !ticketsError && (
+                <ListItem><ListItemText primary="No active tickets returned by the bounded production query." /></ListItem>
+              )}
+            </List>
+          </Paper>
         </Grid>
 
-        {/* Right Panel: Live Map & Risk Profile */}
-        <Grid item xs={12} md={8} sx={{ height: '100%', position: 'relative', bgcolor: '#020617' }}>
-          {/* Map Controls Floating Header */}
-          <Box sx={{ position: 'absolute', top: 24, left: 24, right: 24, zIndex: 100, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-             <Paper sx={{ p: 1, display: 'flex', gap: 1, bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <Button startIcon={<Icon icon={Layers} size={16}/>} sx={{ color: '#fff', textTransform: 'none', fontWeight: 900 }}>Portfolio Risk Heatmap</Button>
-                <Button startIcon={<Icon icon={Activity} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>Tech Locations</Button>
-                <Button startIcon={<Icon icon={Waves} size={16} />} sx={{ color: '#64748b', textTransform: 'none' }}>Unit Telemetry</Button>
-             </Paper>
-
-             <Paper sx={{ p: 1, display: 'flex', gap: 1, bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'black', alignSelf: 'center', ml: 1, mr: 1 }}>VERTICAL DEPTH:</Typography>
-                <Button size="small" sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 1.5, fontSize: 10, fontWeight: 900 }}>ALL</Button>
-                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>F1-40</Button>
-                <Button size="small" sx={{ color: '#94a3b8', fontSize: 10 }}>F41-80</Button>
-                <Button size="small" sx={{ color: '#10b981', fontSize: 10, fontWeight: 900 }}>MEGA (120+)</Button>
-             </Paper>
-
-             <Paper sx={{ px: 2, py: 1, ml: 'auto', bgcolor: 'rgba(15,23,42,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                   <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'bold' }}>LIVE TICKETS: {(tickets || []).length}</Typography>
-                </Box>
-                <Box sx={{ width: 1, height: 20, bgcolor: 'rgba(255,255,255,0.1)' }} />
-                <Typography variant="caption" sx={{ color: '#64748b' }}>LIVE CLUSTER: MARINA BRIDGES</Typography>
-             </Paper>
-          </Box>
-
-          {/* Map Overlay Canvas */}
-          <Box sx={{
-            position: 'absolute', inset: 0,
-            backgroundImage: `radial-gradient(circle at 2px 2px, rgba(255,255,255,0.02) 1px, transparent 0)`,
-            backgroundSize: '40px 40px',
-            '&::after': {
-              content: '""',
-              position: 'absolute',
-              inset: 0,
-              background: 'radial-gradient(circle at 50% 50%, transparent 20%, #020617 100%)'
-            }
-          }} />
-
-          {/* Map Pins & Telemetry Labels */}
-          <Box sx={{ position: 'relative', zIndex: 1, height: '100%', pointerEvents: 'none' }}>
-                      {/* DYNAMIC TECH MARKERS */}
-             {tickets.filter(t => t.status === 'EN_ROUTE' && t.technicianLocation).map((ticket) => {
-                const loc = ticket.technicianLocation;
-                // Simple projection for Dubai Marina / Downtown area
-                // Mapping Lat [25.0, 25.3] -> [100% to 0%] (Top is North)
-                // Mapping Lng [55.12, 55.42] -> [0% to 100%]
-                const top = ((25.3 - loc.lat) / 0.3) * 100;
-                const left = ((loc.lng - 55.12) / 0.3) * 100;
-
-                return (
-                  <Box 
-                    key={ticket.id} 
-                    sx={{ 
-                      position: 'absolute', 
-                      top: `${Math.min(Math.max(top, 5), 95)}%`, 
-                      left: `${Math.min(Math.max(left, 5), 95)}%`, 
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      transition: 'all 0.5s ease-in-out' // Smooth movement
-                    }}
-                  >
-                    <Box sx={{ 
-                      bgcolor: '#10b981', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
-                      boxShadow: '0 10px 30px rgba(16,185,129,0.3)', border: '1px solid rgba(255,255,255,0.2)',
-                      display: 'flex', alignItems: 'center', gap: 1, whiteSpace: 'nowrap'
-                    }}>
-                      <div className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      <Typography sx={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>
-                        {ticket.assignedTechnicianName || ticket.assignedTechnicianId || 'TEC'} • {ticket.unit || 'LOC'}
-                      </Typography>
-                    </Box>
-                    <div className="p-1 rounded-full bg-emerald-500 shadow-2xl">
-                      <PersonPinCircleIcon sx={{ color: '#fff', fontSize: 32 }} />
-                    </div>
-                  </Box>
-                );
-             })}
-
-             {/* CLUSTER MARKERS FOR PENDING JOBS */}
-             {tickets.filter(t => t.status === 'OPEN' || t.status === 'assigned').slice(0, 3).map((ticket, i) => {
-                 // Place at random or semi-fixed locations if no unit coords
-                 const positions = [
-                     { top: '55%', left: '42%' },
-                     { top: '35%', left: '75%' },
-                     { top: '20%', left: '80%' }
-                 ];
-                 const pos = positions[i] || { top: '50%', left: '50%' };
-                 return (
-                    <Box key={ticket.id} sx={{ position: 'absolute', top: pos.top, left: pos.left, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <Box sx={{ 
-                        bgcolor: i === 1 ? '#ef4444' : 'rgba(59, 130, 246, 0.95)', color: '#fff', px: 2, py: 1, borderRadius: 2, mb: 1.5,
-                        boxShadow: i === 1 ? '0 10px 30px rgba(239,68,68,0.3)' : '0 0 40px rgba(59, 130, 246, 0.4)', 
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1
-                        }}>
-                        <Typography sx={{ fontSize: '10px', fontWeight: 900 }}>
-                            {i === 1 ? 'CRITICAL RISK' : 'PENDING DISPATCH'}
-                        </Typography>
-                        </Box>
-                        {i === 1 ? (
-                            <Icon icon={ShieldAlert} className="text-red-500 drop-shadow-2xl animate-pulse" size={40} />
-                        ) : (
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center text-blue-500 font-black text-xs">
-                                {i + 1}
-                            </div>
-                        )}
-                    </Box>
-                    );
-                    })}
-
-                    </Box>
-          {/* Dynamic Map Indicators */}
-          <Paper sx={{
-            position: 'absolute', bottom: 32, left: 32, right: 32, p: 2.5,
-            bgcolor: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(30px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
-            display: 'flex', justifyContent: 'space-around', alignItems: 'center'
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <div className="bg-emerald-500 w-3 h-3 rounded-full shadow-[0_0_10px_#10b981]" />
-               <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>AUTO-DISPATCH ACTIVE</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>AI identifying and routing faults</Typography>
-               </Box>
-            </Box>
-            <div className="w-[1px] h-8 bg-slate-800" />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <div className="bg-blue-500 w-3 h-3 rounded-full shadow-[0_0_10px_#3b82f6]" />
-               <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>FORENSIC SYNC PENDING</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>Specialists uploading offline data</Typography>
-               </Box>
-            </Box>
-            <div className="w-[1px] h-8 bg-slate-800" />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <div className="bg-red-500 w-3 h-3 rounded-full shadow-[0_0_10px_#ef4444]" />
-               <Box>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 'black', display: 'block', lineHeight: 1 }}>SLA VIOLATION RISK</Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: 9 }}>Response time exceeds 30m target</Typography>
-               </Box>
-            </Box>
+        <Grid item xs={12} lg={8}>
+          <Paper sx={{ position: 'relative', minHeight: { xs: 520, lg: '76vh' }, overflow: 'hidden', bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <Box ref={mapElementRef} data-testid="admin-live-google-map" sx={{ position: 'absolute', inset: 0 }} />
+            {!mapReady && !mapError && (
+              <Stack alignItems="center" justifyContent="center" sx={{ position: 'absolute', inset: 0, bgcolor: '#0f172a' }}>
+                <CircularProgress />
+                <Typography sx={{ mt: 2 }}>Loading Google Maps…</Typography>
+              </Stack>
+            )}
+            {mapError && (
+              <Alert data-testid="admin-live-map-error" severity="error" sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 5 }}>
+                {mapError} Check the Maps key, billing, enabled APIs and production referrer restrictions.
+              </Alert>
+            )}
+            {mapReady && freshLocations.length === 0 && ticketsWithCoordinates.length === 0 && (
+              <Alert severity="warning" sx={{ position: 'absolute', bottom: 16, left: 16, right: 16, zIndex: 5 }}>
+                No fresh canonical GPS session or verified ticket coordinate is available. No markers have been fabricated.
+              </Alert>
+            )}
+            {mapReady && (
+              <Paper sx={{ position: 'absolute', top: 16, right: 16, zIndex: 4, p: 1.5, bgcolor: 'rgba(15,23,42,0.92)', color: '#fff' }}>
+                <Stack spacing={0.5}>
+                  <Typography variant="caption"><Box component="span" sx={{ color: '#10b981' }}>●</Box> Fresh Technician GPS</Typography>
+                  <Typography variant="caption"><Box component="span" sx={{ color: '#3b82f6' }}>◆</Box> Verified ticket/property pin</Typography>
+                  <Typography variant="caption"><Box component="span" sx={{ color: '#ef4444' }}>◆</Box> Critical verified ticket pin</Typography>
+                </Stack>
+              </Paper>
+            )}
           </Paper>
-
         </Grid>
       </Grid>
 
-      {/* Dispatch Modal */}
-      <Dialog
-        open={dispatchDialogOpen}
-        onClose={() => setDispatchDialogOpen(false)}
-        PaperProps={{
-          sx: { bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, minWidth: 400 }
-        }}
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6" fontWeight={900}>DISPATCH TECHNICIAN</Typography>
-          <IconButton onClick={() => setDispatchDialogOpen(false)} sx={{ color: '#64748b' }}><CloseIcon /></IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mb: 3, p: 2, bgcolor: '#020617', borderRadius: 2 }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>Selected Ticket</Typography>
-            <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{selectedTicket?.unit} - {selectedTicket?.issue}</Typography>
-          </Box>
-
-          <Box sx={{ mb: 3, p: 2, bgcolor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 2 }}>
-            <FormControlLabel
-              control={<Checkbox checked={generatePass} onChange={(e) => setGeneratePass(e.target.checked)} sx={{ color: '#10b981', '&.Mui-checked': { color: '#10b981' } }} />}
-              label={<Typography sx={{ fontWeight: 'bold', color: '#10b981' }}>Generate Security Gate Pass PDF</Typography>}
-            />
-            <Typography variant="caption" sx={{ display: 'block', pl: 4, color: '#64748b' }}>Automatically generates a stamped PDF for immediate WhatsApp delivery to Tenant/Security.</Typography>
-          </Box>
-
-          <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, mb: 1, display: 'block' }}>Available Near Property</Typography>
+      <Dialog open={Boolean(selectedTicket)} onClose={() => !dispatchBusy && setSelectedTicket(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Assign Technician</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Ticket: {selectedTicket?.propertyName || selectedTicket?.unit || selectedTicket?.id}
+          </Typography>
+          {dispatchError && <Alert severity="error" sx={{ mb: 2 }}>{dispatchError}</Alert>}
           <List>
-            {(technicians || []).filter(tech => tech.status === 'Available').map((tech) => (
-              <ListItem
-                key={tech.id}
-                sx={{
-                  mb: 1, bgcolor: '#020617', borderRadius: 3,
-                  '&:hover': { bgcolor: '#1e293b' },
-                  cursor: 'pointer'
-                }}
-                onClick={() => handleDispatch(tech)}
-              >
+            {technicians.map((technician) => (
+              <ListItem key={technician.id} divider secondaryAction={
+                <Button onClick={() => dispatch(technician)} disabled={dispatchBusy}>Assign</Button>
+              }>
                 <ListItemAvatar>
-                  <Avatar sx={{ bgcolor: '#3b82f6', fontWeight: 'bold' }}>{tech.avatar}</Avatar>
+                  <Avatar><PersonPinCircleIcon /></Avatar>
                 </ListItemAvatar>
                 <ListItemText
-                  primary={tech.name}
-                  secondary={
-                    <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <AccessTimeIcon sx={{ fontSize: 12, color: '#10b981' }} />
-                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 'bold' }}>{tech.distance}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: '#94a3b8' }}>Rating: {tech.rating}</Typography>
-                      </Box>
-                    </Box>
-                  }
+                  primary={technician.displayName || technician.name || technician.id}
+                  secondary={`${technician.onDuty === true ? 'On duty' : 'Duty state not verified'} · ${technician.isAvailable === false ? 'Unavailable' : 'Availability requires server validation'}`}
                 />
-                <Button size="small" variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>Dispatch</Button>
               </ListItem>
             ))}
+            {!technicians.length && !techniciansError && (
+              <ListItem><ListItemText primary="No eligible Technician records are available." /></ListItem>
+            )}
           </List>
         </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedTicket(null)} disabled={dispatchBusy}>Cancel</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );
