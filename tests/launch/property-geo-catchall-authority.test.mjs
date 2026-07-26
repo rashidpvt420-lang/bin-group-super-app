@@ -14,6 +14,8 @@ test('generic Admin browser fallback excludes properties for create and update',
 });
 
 test('canonical Firestore hardener migrates and forbids the prior properties-writable list', () => {
+  assert.match(hardener, /const propertyAdminSecurityWriteList/);
+  assert.match(hardener, /const propertyPrivateHrWriteList/);
   assert.match(hardener, /const legacyLiveLocationWriteList/);
   assert.match(hardener, /text\.replaceAll\(legacyLiveLocationWriteList, liveLocationWriteList\)/);
   assert.match(hardener, /forbidden = \[[\s\S]*legacyLiveLocationWriteList/);
