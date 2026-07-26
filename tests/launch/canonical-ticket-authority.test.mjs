@@ -62,7 +62,7 @@ test('No browser source directly mutates the legacy tickets collection', () => {
   assert.deepEqual(offenders, []);
 });
 
-test('Ticket rule preparation converts legacy tickets into read-only compatibility data', () => {
+test('Ticket rule preparation repeatedly enforces read-only legacy compatibility', () => {
   assert.equal(packageJson.scripts['harden:ticket-binding'], 'node scripts/apply-ticket-rule-binding.mjs');
   assert.match(packageJson.scripts['prepare:rules'], /harden:ticket-binding/);
   assert.match(ticketRuleBinding, /Legacy \/tickets must exist exactly once as read-only compatibility data/);
@@ -70,13 +70,17 @@ test('Ticket rule preparation converts legacy tickets into read-only compatibili
   assert.match(ticketRuleBinding, /Canonical \/maintenanceTickets operational authority is missing/);
 
   const directory = mkdtempSync(join(tmpdir(), 'bin-ticket-rules-'));
+  const scriptPath = resolve('scripts/apply-ticket-rule-binding.mjs');
+  const rulesPath = join(directory, 'firestore.rules');
   try {
-    copyFileSync('firestore.rules', join(directory, 'firestore.rules'));
-    execFileSync(process.execPath, [resolve('scripts/apply-ticket-rule-binding.mjs')], {
-      cwd: directory,
-      stdio: 'pipe',
-    });
-    const hardened = read(join(directory, 'firestore.rules'));
+    copyFileSync('firestore.rules', rulesPath);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      execFileSync(process.execPath, [scriptPath], {
+        cwd: directory,
+        stdio: 'pipe',
+      });
+    }
+    const hardened = read(rulesPath);
     assert.match(hardened, /match \/tickets\/\{ticketId\} \{\s*allow read:[\s\S]*allow create, update, delete: if false;\s*\}/);
     assert.doesNotMatch(hardened, /match \/tickets\/\{ticketId\} \{[\s\S]*?allow update: if safeTicketUpdateByActor\(\);[\s\S]*?\}/);
     assert.match(hardened, /match \/maintenanceTickets\/\{ticketId\} \{[\s\S]*?allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
