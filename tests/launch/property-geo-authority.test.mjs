@@ -5,9 +5,10 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('canonical property geo is server-authoritative and Owner submissions remain unverified', async () => {
-  const [rules, backend, rootLocation, ownerLocation, legacyAdminPage, pinResolver] = await Promise.all([
+  const [rules, backend, authority, rootLocation, ownerLocation, legacyAdminPage, pinResolver] = await Promise.all([
     read('firestore.rules'),
     read('functions/adminPropertyReview.ts'),
+    read('functions/propertyGeoAuthority.ts'),
     read('src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx'),
@@ -31,20 +32,21 @@ test('canonical property geo is server-authoritative and Owner submissions remai
   }
 
   assert.match(backend, /canonicalVerifiedGeo/);
-  assert.match(backend, /new admin\.firestore\.GeoPoint/);
+  assert.match(backend, /buildFounderVerifiedPropertyGeo/);
   assert.match(backend, /update\.geo = canonicalGeo/);
-  assert.match(backend, /source: "admin_manual"/);
-  assert.match(backend, /verified: true/);
-  assert.match(backend, /dispatchReady: true/);
-  assert.match(backend, /requiresGeoReview: false/);
   assert.match(backend, /geoDispatchReady/);
+  assert.match(authority, /new admin\.firestore\.GeoPoint/);
+  assert.match(authority, /source: "admin_manual"/);
+  assert.match(authority, /verificationVersion: 1/);
+  assert.match(authority, /state: "VERIFIED"/);
+  assert.match(authority, /source: "FOUNDER_MFA_REVIEW"/);
 
   assert.match(legacyAdminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
   assert.doesNotMatch(legacyAdminPage, /updateDoc\s*\(/);
   assert.doesNotMatch(legacyAdminPage, /addDoc\s*\(/);
   assert.doesNotMatch(pinResolver, /owner_submission/);
+  assert.match(pinResolver, /geoVerification/);
 });
-
 
 test('verified properties keep ordinary Owner updates while canonical geo stays immutable', async () => {
   const [rules, emulatorTest] = await Promise.all([
