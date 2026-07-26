@@ -70,11 +70,18 @@ test('Owner and Tenant tracking card identifies schematic and freshness limitati
   assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
 });
 
-test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
+test('Technician GPS client uses the protected callable and a private bounded retry queue', () => {
   assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
-  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
+  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v2'/);
   assert.match(liveTracking, /MAX_QUEUE_SIZE = 25/);
+  assert.match(liveTracking, /MAX_RETRIES = 5/);
+  assert.match(liveTracking, /UPDATE_TTL_MS = 10 \* 60 \* 1000/);
+  assert.match(liveTracking, /STOP_TTL_MS = 30 \* 60 \* 1000/);
+  assert.match(liveTracking, /window\.sessionStorage/);
+  assert.doesNotMatch(liveTracking, /window\.localStorage/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
+  assert.match(liveTracking, /STOP_REQUEST_QUEUED/);
+  assert.match(liveTracking, /PENDING_STOP_RECONCILIATION/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'technicians'/);
