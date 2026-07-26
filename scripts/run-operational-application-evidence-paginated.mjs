@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -253,7 +254,7 @@ for (const fragment of forbidden) {
   if (source.includes(fragment)) fail(`a reviewed obsolete evidence path survived hardening: ${fragment}`);
 }
 for (const required of [
-  "signInWithRequiredTotpMfa",
+  'signInWithRequiredTotpMfa',
   "email !== 'ceo@bin-groups.com'",
   'const PAGE_SIZE = 250;',
   'async function readAllMatchingDocuments(baseQuery)',
@@ -278,6 +279,10 @@ for (const required of [
 
 try {
   writeFileSync(temporaryPath, source, { mode: 0o600 });
+  const syntax = spawnSync(process.execPath, ['--check', temporaryPath], { encoding: 'utf8' });
+  if ((syntax.status ?? 1) !== 0) {
+    fail(`transformed verifier failed Node syntax validation: ${String(syntax.stderr || syntax.stdout || '').slice(0, 1000)}`);
+  }
   renameSync(temporaryPath, sourcePath);
 } finally {
   rmSync(temporaryPath, { force: true });
