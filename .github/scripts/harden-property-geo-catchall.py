@@ -107,18 +107,18 @@ private_hr_path.write_text(private_hr, encoding='utf-8')
 
 verifier_path = Path('scripts/verify-firestore-launch-hardening.mjs')
 verifier = verifier_path.read_text(encoding='utf-8')
-old_required = """  ['ticket write fallback excludes explicit ticket hierarchies, live location and private HR', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+old_required = r"""  ['ticket write fallback excludes explicit ticket hierarchies, live location and private HR', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
 """
-new_required = """  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+new_required = r"""  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
 """
 count = verifier.count(old_required)
 if count != 1:
     raise SystemExit(f'Firestore verifier required catch-all: expected one marker, found {count}')
 verifier = verifier.replace(old_required, new_required, 1)
 
-old_forbidden_anchor = """  ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
+old_forbidden_anchor = r"""  ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
 """
-new_forbidden_anchor = old_forbidden_anchor + """  ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+new_forbidden_anchor = old_forbidden_anchor + r"""  ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
 """
 count = verifier.count(old_forbidden_anchor)
 if count != 1:
