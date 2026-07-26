@@ -23,6 +23,8 @@ Before deleting the previous global v2 queue, the client validates every legacy 
 
 Technician logout clears the active geolocation watch and submits the canonical STOP while authentication is still valid. Any durable STOP is replayed before privacy disposal. Logout is paused visibly when STOP reconciliation remains pending or terminal; authentication and navigation do not proceed. The UID-scoped queue is purged only after the STOP is acknowledged, safely superseded, or no unresolved session exists.
 
+A logout redirect is therefore evidence only that authenticated STOP teardown completed or that no canonical session required teardown. The client never treats the server expiry watchdog as a successful logout acknowledgement.
+
 ## Privacy boundaries
 
 Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout purges the authenticated UID queue only after ordered STOP teardown and reconciliation, followed by the general portal storage cleanup.
