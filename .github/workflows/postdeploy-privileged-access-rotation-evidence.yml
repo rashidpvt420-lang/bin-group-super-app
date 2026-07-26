@@ -1,0 +1,107 @@
+name: Privileged Access Rotation Evidence
+run-name: Privileged Access Rotation Evidence source-deploy-${{ inputs.source_deploy_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Exact successful Firebase Production Deploy main SHA'
+        required: true
+        type: string
+      source_deploy_run_id:
+        description: 'Successful Firebase Production Deploy workflow run ID'
+        required: true
+        type: string
+      confirmation:
+        description: 'Enter VERIFY_PRIVILEGED_ACCESS_ROTATION'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: postdeploy-privileged-rotation-${{ inputs.source_deploy_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify-rotation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: hard-launch-operations
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      SOURCE_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+
+    steps:
+      - name: Checkout exact deployed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify trusted parent production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-trusted-production-deploy-source.mjs
+
+      - name: Enforce deployment-triggered rotation evidence inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGET_SHA" == "$GITHUB_SHA" ]]
+          [[ "$SOURCE_DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TRUSTED_PRODUCTION_DEPLOY_EVIDENCE" == "true" ]]
+          [[ "$TRUSTED_PRODUCTION_DEPLOY_RUN_ID" == "$SOURCE_DEPLOY_RUN_ID" ]]
+          [[ "$CONFIRMATION" == "VERIFY_PRIVILEGED_ACCESS_ROTATION" ]]
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Prove rotated Admin credential is accepted by Firebase Auth
+        run: node scripts/verify-admin-credential-login.mjs
+
+      - name: Verify provider-backed credential rotation
+        run: node scripts/verify-privileged-access-rotation.mjs
+
+      - name: Bind Admin login proof to the rotation record
+        run: node scripts/bind-admin-credential-rotation-proof.mjs
+
+      - name: Publish canonical privileged-rotation evidence
+        run: node scripts/publish-direct-operational-proof.mjs
+
+      - name: Upload deployment-triggered rotation proof
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postdeploy-privileged-access-rotation-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/trusted-production-deploy-source.json
+            launch_package/operational-proof.json
+            launch_package/admin-credential-login-proof.json
+          if-no-files-found: error
+          retention-days: 365
