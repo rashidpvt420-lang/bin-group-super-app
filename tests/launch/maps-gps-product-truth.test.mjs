@@ -7,8 +7,11 @@ const read = (path) => readFileSync(path, 'utf8');
 const adminMap = read('apps/admin-panel/src/pages/map/LiveMapPage.tsx');
 const adminMapsLoader = read('apps/admin-panel/src/lib/googleMaps.ts');
 const technicianCommandCenter = read('apps/admin-panel/src/components/ops/TechnicianCommandCenter.tsx');
+const technicianMap = read('src/technician/pages/TechnicianMapPage.tsx');
+const trackingSummary = read('src/components/tracking/LiveTechnicianTrackingCard.tsx');
 const liveTracking = read('src/utils/liveTracking.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
+const indexes = JSON.parse(read('firestore.indexes.json'));
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
 const packageJson = JSON.parse(read('package.json'));
 const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
@@ -44,6 +47,29 @@ test('Technician Command Center uses measured records and exposes missing data t
   assert.doesNotMatch(technicianCommandCenter, /evidence_sync[\s\S]*tech\.stable/);
 });
 
+test('Technician mission map distinguishes data failure from an empty authenticated result', () => {
+  assert.match(technicianMap, /const \[jobsError, setJobsError\]/);
+  assert.match(technicianMap, /data-testid="technician-map-jobs-error"/);
+  assert.match(technicianMap, /Mission Control will not report an empty healthy queue/);
+  assert.match(technicianMap, /!jobsError && jobs\.length === 0/);
+  assert.match(technicianMap, /The authenticated production query returned no active assigned mission/);
+  assert.match(technicianMap, /Straight-line estimate/);
+  assert.match(technicianMap, /traffic not included/);
+  assert.match(technicianMap, /FOREGROUND GPS FRESH/);
+  assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*\}\);/);
+});
+
+test('Owner and Tenant tracking card identifies schematic and freshness limitations', () => {
+  assert.match(trackingSummary, /TRACKING SUMMARY — NOT A STREET MAP/);
+  assert.match(trackingSummary, /FRESH FOREGROUND GPS/);
+  assert.match(trackingSummary, /GPS STALE/);
+  assert.match(trackingSummary, /straight-line estimate/i);
+  assert.match(trackingSummary, /Traffic and road routing are available only in Google Maps/);
+  assert.match(trackingSummary, /Open Traffic-Aware Google Maps/);
+  assert.doesNotMatch(trackingSummary, />\s*LIVE\s*</);
+  assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
+});
+
 test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
   assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
   assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
@@ -65,6 +91,20 @@ test('Canonical live-location callable atomically validates assignment and updat
   assert.match(locationCallable, /tx\.set\(ticketRef/);
   assert.match(locationCallable, /tx\.set\(technicianRef/);
   assert.match(locationCallable, /tx\.set\(userRef/);
+});
+
+test('Server watchdog clears abandoned foreground tracking sessions', () => {
+  assert.match(locationCallable, /reconcileExpiredTechnicianLiveLocations = onSchedule/);
+  assert.match(locationCallable, /schedule: "every 5 minutes"/);
+  assert.match(locationCallable, /where\("isTracking", "==", true\)/);
+  assert.match(locationCallable, /where\("expiresAt", "<=", now\)/);
+  assert.match(locationCallable, /SERVER_EXPIRY_WATCHDOG/);
+  assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRED/);
+  const watchdogIndex = indexes.indexes.find((entry) => entry.collectionGroup === 'technician_live_locations');
+  assert.deepEqual(watchdogIndex?.fields, [
+    { fieldPath: 'isTracking', order: 'ASCENDING' },
+    { fieldPath: 'expiresAt', order: 'ASCENDING' },
+  ]);
 });
 
 test('Canonical location rules are generated as Admin-read and browser-write denied', () => {
