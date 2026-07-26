@@ -18,6 +18,14 @@ function runNode(script, cwd = root) {
   });
 }
 
+function ticketBlock(rules, collectionName) {
+  const marker = `    match /${collectionName}/{ticketId} {`;
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${collectionName} block must exist`);
+  const next = rules.indexOf('\n    match /', start + marker.length);
+  return rules.slice(start, next < 0 ? rules.length : next);
+}
+
 test('checked-in rules become server-authoritative under the final prepare:rules transform', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-ticket-rules-'));
   try {
@@ -34,7 +42,13 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /function\s+openMissionPoolRead\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
     assert.match(preparedRules, /function safeTicketUpdateByActor\(\)/);
-    assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+    assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);
+    const legacy = ticketBlock(preparedRules, 'tickets');
+    const canonical = ticketBlock(preparedRules, 'maintenanceTickets');
+    assert.match(legacy, /allow create, update, delete: if false;/);
+    assert.doesNotMatch(legacy, /safeTicketUpdateByActor/);
+    assert.match(canonical, /allow create: if isAdmin\(\);/);
+    assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
     assert.match(preparedRules, /let authenticated = signedIn\(\);/);
     assert.match(preparedRules, /let role = authenticated/);
     assert.match(preparedRules, /let admin = authenticated && \(/);
@@ -86,7 +100,8 @@ test('launch-hardening verifier explicitly rejects direct assignment and overlap
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /overlapping ticket update authorization/);
   assert.match(verifierSource, /bounded ticket update router/);
-  assert.match(verifierSource, /Single ticket update gate must exist exactly twice/);
+  assert.match(verifierSource, /Exactly one canonical ticket update gate is required/);
+  assert.match(verifierSource, /Legacy \/tickets must deny every browser write/);
   assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, tenant, technician order/);
   assert.match(verifierSource, /Technician append-only proof guard missing/);
 });
