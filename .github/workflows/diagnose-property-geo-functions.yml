@@ -1,5 +1,6 @@
 name: Diagnose Property Geo Functions Build
 
+# Triggered only on the exact repair branch and removed after diagnosis.
 on:
   push:
     branches:
