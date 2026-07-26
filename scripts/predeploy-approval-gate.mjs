@@ -20,6 +20,7 @@ import {
   validateRecentTimestamp,
 } from './lib/launch-gate-common.mjs';
 import { HARD_LAUNCH_CLAIM } from './lib/launch-honesty.mjs';
+import { runProductionOtpMailboxPreflight } from './lib/production-otp-mailbox-preflight.mjs';
 
 export function runPredeployApprovalGate({
   root = process.cwd(),
@@ -148,6 +149,14 @@ const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === path.re
 if (isDirectRun) {
   console.log('\n=== Pre-deployment approval gate ===\n');
   console.log(`hardLaunchClaim=${HARD_LAUNCH_CLAIM} (never claimed by this gate)`);
+  try {
+    const secretPreflight = await runProductionOtpMailboxPreflight();
+    console.log(`PASS — OTP peppers=${secretPreflight.peppersVerified} verified mailboxes=${secretPreflight.mailboxesVerified}; secret values were not logged.`);
+  } catch (error) {
+    console.error(`FAIL — protected OTP/mailbox preflight blocked deployment: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
+    process.exit(1);
+  }
   const result = runPredeployApprovalGate();
   if (result.ok) {
     console.log('PASS — protected-environment predeploy checks succeeded.');
