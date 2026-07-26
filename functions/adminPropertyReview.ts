@@ -5,14 +5,8 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const REVIEW_ROLES = new Set([
-  "admin",
-  "super_admin",
-  "ceo",
-  "manager",
-  "operations_admin",
-  "account_manager",
-]);
+const CANONICAL_FOUNDER_EMAIL = "ceo@bin-groups.com";
+const FOUNDER_ROLES = new Set(["ceo", "super_admin"]);
 const REVIEWABLE_STATUSES = new Set([
   "pending",
   "pending_approval",
@@ -29,36 +23,32 @@ function roleOf(token: Record<string, unknown> = {}) {
   if (role) return role;
   if (token.ceo === true) return "ceo";
   if (token.super_admin === true || token.superAdmin === true) return "super_admin";
-  if (token.admin === true || token.isAdmin === true) return "admin";
   return "";
 }
 
-async function requireVerifiedPrivilegedSession(auth: any) {
-  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication is required.");
+async function requireVerifiedFounderSession(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Founder authentication is required.");
   const token = auth.token || {};
-  const role = roleOf(token);
-  const privileged = token.admin === true || token.isAdmin === true || token.superAdmin === true || token.ceo === true || REVIEW_ROLES.has(role);
-  if (!privileged || token.suspended === true) {
-    throw new HttpsError("permission-denied", "Privileged Owner/property review authority is required.");
+  if (lower(token.email, 320) !== CANONICAL_FOUNDER_EMAIL || !FOUNDER_ROLES.has(roleOf(token))) {
+    throw new HttpsError("permission-denied", "The canonical BIN GROUP founder account is required.");
   }
   if (token.email_verified !== true) {
-    throw new HttpsError("permission-denied", "A verified Admin email is required.");
+    throw new HttpsError("permission-denied", "Verified founder email is required.");
   }
   if (!token.firebase?.sign_in_second_factor) {
-    throw new HttpsError("permission-denied", "A verified Admin MFA session is required.");
+    throw new HttpsError("permission-denied", "A verified founder MFA session is required.");
   }
-
   const user = await admin.auth().getUser(auth.uid);
-  if (user.disabled || !user.emailVerified || !user.email) {
-    throw new HttpsError("permission-denied", "The Admin account is not active and verified.");
+  if (user.disabled || !user.emailVerified || lower(user.email, 320) !== CANONICAL_FOUNDER_EMAIL) {
+    throw new HttpsError("permission-denied", "The canonical founder account is not active and verified.");
   }
-  return { uid: auth.uid, role, email: lower(user.email, 320) };
+  return { uid: auth.uid, role: roleOf(token) };
 }
 
 export const adminReviewOwnerProperty = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    const actor = await requireVerifiedPrivilegedSession(request.auth);
+    const actor = await requireVerifiedFounderSession(request.auth);
     const propertyId = text(request.data?.propertyId, 240);
     const decision = text(request.data?.decision, 20).toUpperCase();
     const rejectionReason = text(request.data?.reason, 1000);
@@ -82,7 +72,7 @@ export const adminReviewOwnerProperty = onCall(
       const property = propertySnap.data() || {};
       const currentStatus = lower(property.status, 80);
       if (!REVIEWABLE_STATUSES.has(currentStatus)) {
-        throw new HttpsError("failed-precondition", "Property is no longer pending Admin review.");
+        throw new HttpsError("failed-precondition", "Property is no longer pending founder review.");
       }
 
       const propertyName = text(property.name || property.propertyName || property.address, 240) || "Property";
@@ -93,7 +83,6 @@ export const adminReviewOwnerProperty = onCall(
         updatedAt: now,
         reviewedAt: now,
         reviewedBy: actor.uid,
-        reviewedByEmail: actor.email,
         reviewedByRole: actor.role,
       };
       if (decision === "APPROVE") {
@@ -109,7 +98,6 @@ export const adminReviewOwnerProperty = onCall(
 
       transaction.set(auditRef, {
         actorId: actor.uid,
-        actorEmail: actor.email,
         actorRole: actor.role,
         action: decision === "APPROVE" ? "APPROVE_PROPERTY" : "REJECT_PROPERTY",
         targetType: "PROPERTY",
@@ -140,7 +128,7 @@ export const adminReviewOwnerProperty = onCall(
         });
       }
 
-      return { nextStatus, notificationCreated: Boolean(recipientId) };
+      return { propertyName, nextStatus, notificationCreated: Boolean(recipientId) };
     });
 
     return {
