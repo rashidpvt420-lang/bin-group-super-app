@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/admin-map-pin-source-patch-672.yml
+      - .github/scripts/apply-admin-map-pin-source-binding-672.py
 
 permissions:
   contents: write
@@ -25,9 +26,9 @@ jobs:
         with:
           ref: fix/admin-map-pin-truth-672
           fetch-depth: 0
-      - name: Apply deterministic authoritative-source and viewport patch
+      - name: Apply deterministic authoritative-source, viewport and disclosure patch
         run: python .github/scripts/apply-admin-map-pin-source-binding-672.py
-      - name: Commit only the map source and viewport correction
+      - name: Commit only the reviewed Admin map correction
         run: |
           set -euo pipefail
           git add apps/admin-panel/src/pages/map/LiveMapPage.tsx
