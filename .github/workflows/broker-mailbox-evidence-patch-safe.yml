@@ -29,22 +29,22 @@ jobs:
           ref: fix/broker-otp-hmac-real-input
           fetch-depth: 0
 
-      - name: Apply deterministic mailbox evidence patch
-        run: python .github/scripts/apply-broker-mailbox-evidence-patch.py
+      - name: Apply Google Secret Manager mailbox fallback
+        run: python .github/scripts/apply-broker-secret-manager-fallback.py
 
-      - name: Stage non-workflow mailbox-evidence files
+      - name: Stage Broker Secret Manager evidence files
         run: |
           set -euo pipefail
           git add scripts/run-broker-production-evidence.mjs tests/launch/broker-otp-hmac-evidence.test.mjs tests/launch/broker-payout-otp-live-evidence.test.mjs
-          git diff --cached --quiet && { echo '::error::Mailbox patch produced no non-workflow changes.'; exit 1; }
+          git diff --cached --quiet && { echo '::error::Secret Manager patch produced no changes.'; exit 1; }
           git diff --cached --name-only
 
-      - name: Commit non-workflow mailbox-evidence patch
+      - name: Commit Broker Secret Manager evidence patch
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m "test(broker): verify OTP through the real mailbox"
+          git commit -m "test(broker): read mailbox OAuth from Secret Manager"
 
       - name: Push bounded patch to exact Broker branch
         run: git push origin HEAD:fix/broker-otp-hmac-real-input
