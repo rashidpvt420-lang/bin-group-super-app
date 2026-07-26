@@ -67,7 +67,7 @@ test('finance replay requires MFA only for replay gates and serializes only veri
   assert.doesNotMatch(wrapper, /proof\.evidence\.idToken\s*=/);
 });
 
-test('application selectors and provenance both paginate before selecting production records', async () => {
+test('application selectors and provenance paginate without generated executable code', async () => {
   const [wrapper, provenance] = await Promise.all([
     read('scripts/verify-operational-application-evidence-mfa.mjs'),
     read('scripts/verify-operational-application-provenance.mjs'),
@@ -79,13 +79,18 @@ test('application selectors and provenance both paginate before selecting produc
     assert.match(source, /FieldPath\.documentId\(\)/);
     assert.match(source, /startAfter\(cursor\)/);
   }
-  for (const label of [
-    'approved-payment selector',
-    'notification selector',
-    'Broker commission selector',
-    'staff-audit selector',
-    'renewal-watch selector',
-  ]) assert.match(wrapper, new RegExp(label));
+  assert.match(wrapper, /function installPaginatedCollectionProxy/);
+  assert.match(wrapper, /new Proxy\(query/);
+  assert.match(wrapper, /requested === 100/);
+  assert.match(wrapper, /Object\.freeze\(\{ get: \(\) => readAllMatchingDocuments\(target\) \}\)/);
+  assert.match(wrapper, /const restoreCollection = installPaginatedCollectionProxy\(\)/);
+  assert.match(wrapper, /restoreCollection\(\)/);
+  assert.match(wrapper, /selectorPaginationVerified = true/);
+  assert.doesNotMatch(wrapper, /writeFileSync\(temporaryPath/);
+  assert.doesNotMatch(wrapper, /randomUUID/);
+  assert.doesNotMatch(wrapper, /\.verify-operational-application-evidence-/);
+  assert.doesNotMatch(wrapper, /pathToFileURL/);
+
   assert.match(provenance, /const documents = await readAllMatchingDocuments\(query\)/);
   assert.match(provenance, /scannedDocumentCount: documents\.length/);
   assert.match(provenance, /entry\.observedMs >= deployedAt\.getTime\(\)/);
