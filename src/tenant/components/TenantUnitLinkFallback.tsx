@@ -49,7 +49,10 @@ export default function TenantUnitLinkFallback({ message, compact = false }: Ten
   };
 
   return (
-    <Paper sx={{ p: compact ? 3 : { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 5 }}>
+    <Paper
+      data-testid="tenant-unit-link-fallback"
+      sx={{ p: compact ? 3 : { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 5 }}
+    >
       <Stack spacing={2.5}>
         <Stack direction="row" spacing={2} alignItems="center">
           <Box sx={{ width: 48, height: 48, display: 'grid', placeItems: 'center', borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}>
@@ -65,18 +68,18 @@ export default function TenantUnitLinkFallback({ message, compact = false }: Ten
           This creates a pending verification request only. BIN GROUP or the property owner must verify the tenancy before unit access is granted.
         </Alert>
 
-        {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
+        {notice && <Alert data-testid="tenant-unit-link-notice" severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
         <Stack direction={{ xs: 'column', md: compact ? 'column' : 'row' }} spacing={2}>
-          <TextField label="Property / building name" value={propertyName} onChange={(event) => setPropertyName(event.target.value)} fullWidth required />
-          <TextField label="Unit number" value={unitNumber} onChange={(event) => setUnitNumber(event.target.value)} fullWidth required />
+          <TextField inputProps={{ 'data-testid': 'tenant-unit-link-property' }} label="Property / building name" value={propertyName} onChange={(event) => setPropertyName(event.target.value)} fullWidth required />
+          <TextField inputProps={{ 'data-testid': 'tenant-unit-link-unit' }} label="Unit number" value={unitNumber} onChange={(event) => setUnitNumber(event.target.value)} fullWidth required />
         </Stack>
         <Stack direction={{ xs: 'column', md: compact ? 'column' : 'row' }} spacing={2}>
-          <TextField label="Lease / contract reference" value={leaseReference} onChange={(event) => setLeaseReference(event.target.value)} fullWidth />
-          <TextField label="Invite or verification code" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} fullWidth helperText="Optional; stored hashed for admin verification." />
+          <TextField inputProps={{ 'data-testid': 'tenant-unit-link-lease' }} label="Lease / contract reference" value={leaseReference} onChange={(event) => setLeaseReference(event.target.value)} fullWidth />
+          <TextField inputProps={{ 'data-testid': 'tenant-unit-link-code' }} label="Invite or verification code" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} fullWidth helperText="Optional; stored hashed for admin verification." />
         </Stack>
-        <TextField label="Notes for verification" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={compact ? 2 : 3} fullWidth placeholder={`Signed in as ${user?.email || 'tenant account'}`} />
-        <Button disabled={saving || !propertyName.trim() || !unitNumber.trim()} onClick={submit} variant="contained" sx={{ alignSelf: 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+        <TextField inputProps={{ 'data-testid': 'tenant-unit-link-notes' }} label="Notes for verification" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={compact ? 2 : 3} fullWidth placeholder={`Signed in as ${user?.email || 'tenant account'}`} />
+        <Button data-testid="tenant-unit-link-submit" disabled={saving || !propertyName.trim() || !unitNumber.trim()} onClick={submit} variant="contained" sx={{ alignSelf: 'flex-start', bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
           {saving ? 'Submitting...' : 'Submit link request'}
         </Button>
       </Stack>
