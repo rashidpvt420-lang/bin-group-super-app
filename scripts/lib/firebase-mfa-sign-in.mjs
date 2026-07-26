@@ -38,7 +38,14 @@ function requireTotpMfaToken(token) {
   if (!secondFactorIdentifier) {
     throw new Error('Firebase TOTP session did not include the verified factor identifier.');
   }
-  return { uid, secondFactorType, secondFactorIdentifier };
+  return {
+    uid,
+    secondFactorType,
+    secondFactorIdentifier,
+    // Compatibility alias for existing evidence consumers. This is the exact
+    // verified Firebase factor identifier, not a factor type or user input.
+    secondFactor: secondFactorIdentifier,
+  };
 }
 
 export async function signInWithRequiredTotpMfa({
