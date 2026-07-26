@@ -222,10 +222,25 @@ const checks = [
   {
     path: 'scripts/deploy-firebase-production.mjs',
     required: [
-      "'functions,hosting,firestore:rules,firestore:indexes,storage'",
-      "'complete Firebase production stack'",
+      "'hosting,firestore:rules,firestore:indexes,storage'",
+      "'scripts/deploy-firebase-functions-batched.mjs'",
       "'hosting,firestoreRules,firestoreIndexes,storageRules,functions'",
       "'scripts/verify-production-deployment.mjs'",
+    ],
+    forbidden: [
+      "'functions,hosting,firestore:rules,firestore:indexes,storage'",
+    ],
+  },
+  {
+    path: 'scripts/deploy-firebase-functions-batched.mjs',
+    required: [
+      'const BATCH_SIZE = 8',
+      'const INTER_BATCH_DELAY_SECONDS = 75',
+      'Boolean(value.__endpoint || value.__trigger)',
+      '`functions:${name}`',
+      'functions-deployment-plan.json',
+      "process.env.DEPLOYMENT_ENVIRONMENT !== 'production'",
+      "process.env.GITHUB_REF !== 'refs/heads/main'",
     ],
   },
   {
@@ -255,4 +270,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, protected full-stack deployment, and retired parallel deploy path verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, staged rate-limited protected full-stack deployment, and retired parallel deploy path verified)`);
