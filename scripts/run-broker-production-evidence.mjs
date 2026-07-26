@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -15,6 +14,7 @@ const APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const FUNCTIONS_BASE = `https://europe-west3-${PROJECT_ID}.cloudfunctions.net`;
 const OUTPUT_PATH = path.resolve('launch_package/artifacts/broker-production-evidence.json');
 const EVIDENCE_TYPE = 'broker-contract-to-payout-production-proof';
+const OTP_HASH_VERSION = 'HMAC_SHA256_V1';
 
 for (const envPath of [
   path.resolve(process.cwd(), '.env.e2e'),
@@ -29,7 +29,6 @@ for (const envPath of [
 const text = (value) => String(value ?? '').trim();
 const upper = (value) => text(value).toUpperCase();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const assert = (condition, message) => {
   if (!condition) throw new Error(message);
 };
@@ -40,6 +39,7 @@ const safeId = (value, fallback = 'evidence') => text(value)
 
 const brokerEmail = text(process.env.E2E_BROKER_EMAIL).toLowerCase();
 const brokerPassword = text(process.env.E2E_BROKER_PASSWORD);
+const brokerRealPayoutOtp = text(process.env.E2E_BROKER_REAL_PAYOUT_OTP);
 const leadName = text(process.env.E2E_BROKER_LEAD_NAME);
 const appCheckDebugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 const commitSha = text(process.env.GITHUB_SHA) || (() => {
@@ -53,14 +53,16 @@ const commitSha = text(process.env.GITHUB_SHA) || (() => {
 for (const [name, value] of Object.entries({
   E2E_BROKER_EMAIL: brokerEmail,
   E2E_BROKER_PASSWORD: brokerPassword,
+  E2E_BROKER_REAL_PAYOUT_OTP: brokerRealPayoutOtp,
   E2E_BROKER_LEAD_NAME: leadName,
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: appCheckDebugToken,
   GITHUB_SHA: commitSha,
 })) {
   assert(value, `${name} is required for Broker production evidence.`);
 }
+assert(/^\d{6}$/.test(brokerRealPayoutOtp), 'E2E_BROKER_REAL_PAYOUT_OTP must be the current six-digit code read from the verified Broker mailbox.');
 assert(/^[0-9a-f-]{36}$/i.test(appCheckDebugToken), 'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN must be a registered debug UUID.');
-assert(/^[a-f0-9]{40}$/i.test(commitSha), 'Broker production evidence must be bound to an exact 40-character commit SHA.');
+assert(/^[a-f0-9]{40}$/.test(commitSha), 'Broker production evidence must be bound to an exact lowercase 40-character commit SHA.');
 
 const projectId = resolveFirebaseAdminProjectId();
 assert(projectId === PROJECT_ID, `Broker evidence must run against ${PROJECT_ID}; got ${projectId}.`);
@@ -76,10 +78,10 @@ async function jsonRequest(url, options, label) {
   try {
     body = bodyText ? JSON.parse(bodyText) : {};
   } catch {
-    body = { raw: bodyText };
+    body = { parseError: true };
   }
   if (!response.ok) {
-    throw new Error(`${label} failed HTTP ${response.status}: ${JSON.stringify(body)}`);
+    throw new Error(`${label} failed HTTP ${response.status}.`);
   }
   return body;
 }
@@ -103,9 +105,9 @@ async function signIn(email, password) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
-    `Firebase Auth sign-in for ${email}`,
+    'Firebase Auth sign-in',
   );
-  assert(text(body.idToken) && text(body.localId), `Firebase Auth did not return an ID token for ${email}.`);
+  assert(text(body.idToken) && text(body.localId), 'Firebase Auth did not return an ID token for the protected Broker.');
   return { idToken: text(body.idToken), uid: text(body.localId), email: text(body.email).toLowerCase() };
 }
 
@@ -119,7 +121,7 @@ async function callFunction(name, data, appCheckToken, idToken) {
     },
     body: JSON.stringify({ data }),
   }, `Callable ${name}`);
-  if (body.error) throw new Error(`Callable ${name} error: ${JSON.stringify(body.error)}`);
+  if (body.error) throw new Error(`Callable ${name} returned an application error.`);
   return body.result ?? body.data ?? body;
 }
 
@@ -138,9 +140,9 @@ async function callFunctionExpectingFailure(name, data, appCheckToken, idToken) 
   try {
     body = bodyText ? JSON.parse(bodyText) : {};
   } catch {
-    body = { raw: bodyText };
+    body = { parseError: true };
   }
-  assert(!response.ok || body.error, `${name} unexpectedly accepted a replayed single-use OTP submission.`);
+  assert(!response.ok || body.error, `${name} unexpectedly accepted replayed single-use OTP evidence.`);
   return { status: response.status, body };
 }
 
@@ -181,7 +183,8 @@ async function cleanupPreviousEvidence(brokerUid) {
 
   await deleteQuery(
     db.collection('broker_payout_requests').where('brokerId', '==', brokerUid),
-    (value) => value.e2eEvidenceType === EVIDENCE_TYPE || (Array.isArray(value.commissionIds) && value.commissionIds.some((id) => text(id).startsWith('commission_e2e_broker_contract_'))),
+    (value) => value.e2eEvidenceType === EVIDENCE_TYPE ||
+      (Array.isArray(value.commissionIds) && value.commissionIds.some((id) => text(id).startsWith('commission_e2e_broker_contract_'))),
   );
   await deleteQuery(
     db.collection('broker_payout_otps').where('uid', '==', brokerUid),
@@ -189,23 +192,16 @@ async function cleanupPreviousEvidence(brokerUid) {
   );
 }
 
-async function deriveOtp(challengeId) {
+async function inspectOtpDelivery(challengeId) {
   const snapshot = await db.collection('broker_payout_otps').doc(challengeId).get();
   assert(snapshot.exists, `Broker payout OTP ${challengeId} was not persisted.`);
   const value = snapshot.data() || {};
-  const expectedHash = text(value.otpHash);
-  const salt = text(value.salt);
+  assert(text(value.otpHashVersion) === OTP_HASH_VERSION, 'Broker payout OTP is not protected by the required HMAC hash version.');
   const providerMessageId = text(value.delivery?.messageId);
-  assert(/^[a-f0-9]{64}$/.test(expectedHash) && salt, 'Broker payout OTP evidence is missing its protected hash and salt.');
+  const bindingHash = text(value.bindingHash);
   assert(providerMessageId, 'Broker payout OTP provider did not return a delivery message ID.');
-
-  for (let number = 0; number <= 999999; number += 1) {
-    const code = String(number).padStart(6, '0');
-    if (sha256(`${code}:${salt}`) === expectedHash) {
-      return { code, providerMessageId, bindingHash: text(value.bindingHash) };
-    }
-  }
-  throw new Error(`Unable to derive the six-digit OTP for protected Broker evidence ${challengeId}.`);
+  assert(/^[a-f0-9]{64}$/.test(bindingHash), 'Broker payout OTP binding hash is missing.');
+  return { providerMessageId, bindingHash, otpHashVersion: text(value.otpHashVersion) };
 }
 
 async function main() {
@@ -314,11 +310,12 @@ async function main() {
   assert(requested.status === 'OTP_SENT' && challengeId, 'Broker payout OTP request did not return a challenge.');
   assert(Number(requested.amount) === expectedCommissionAmount && Number(requested.commissionCount) === 1, 'Broker payout OTP binding amount/count is incorrect.');
 
-  const derivedOtp = await deriveOtp(challengeId);
-  assert(/^[a-f0-9]{64}$/.test(derivedOtp.bindingHash), 'Broker payout OTP binding hash is missing.');
-
-  const verified = await callFunction('verifyBrokerPayoutOtp', { challengeId, otp: derivedOtp.code }, appCheckToken, brokerSession.idToken);
-  assert(verified.status === 'VERIFIED' && text(verified.challengeId) === challengeId, 'Broker payout OTP verification did not complete.');
+  const otpDelivery = await inspectOtpDelivery(challengeId);
+  const verified = await callFunction('verifyBrokerPayoutOtp', {
+    challengeId,
+    otp: brokerRealPayoutOtp,
+  }, appCheckToken, brokerSession.idToken);
+  assert(verified.status === 'VERIFIED' && text(verified.challengeId) === challengeId, 'Broker payout OTP verification did not complete with the mailbox-read code.');
 
   const submitted = await callFunction('submitBrokerPayoutRequest', {
     challengeId,
@@ -352,11 +349,12 @@ async function main() {
   assert(text(payoutRequest.mfaChallengeId) === challengeId, 'Payout request is not bound to the verified OTP challenge.');
   assert(upper(payoutRequest.verificationState) === 'EMAIL_OTP_SINGLE_USE_PRIVATE_KYC', 'Payout request verification state is incorrect.');
   assert(upper(challenge.status) === 'CONSUMED', 'Payout OTP was not consumed exactly once.');
+  assert(text(challenge.otpHashVersion) === OTP_HASH_VERSION, 'Consumed payout OTP does not retain the HMAC protection version.');
   assert(upper(commissionAfterPayout.payoutStatus) === 'REQUESTED', 'Commission was not locked to the submitted payout request.');
   assert(convertedLead.contractId === contractId && activeContract.brokerId === brokerUid, 'Lead-to-contract attribution chain is incomplete.');
 
   const evidence = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'passed',
     source: 'run-broker-production-evidence',
     projectId,
@@ -393,8 +391,10 @@ async function main() {
     },
     payout: {
       challengeId,
-      providerMessageId: derivedOtp.providerMessageId,
-      bindingHash: derivedOtp.bindingHash,
+      providerMessageId: otpDelivery.providerMessageId,
+      bindingHash: otpDelivery.bindingHash,
+      otpHashVersion: otpDelivery.otpHashVersion,
+      realMailboxCodeUsed: true,
       otpVerified: true,
       otpConsumed: upper(challenge.status) === 'CONSUMED',
       payoutRequestId,
