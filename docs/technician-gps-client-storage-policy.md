@@ -17,11 +17,11 @@ The controlled pilot uses foreground browser geolocation. A Technician is shown 
 
 ## Legacy migration
 
-Before deleting the previous global v2 queue, the client validates every legacy entry and migrates only coordinate-free STOP intent into the matching Technician’s UID-scoped v3 queue. Duplicate ticket/session STOP records are ignored. Legacy UPDATE coordinates and malformed records are deleted rather than trusted or migrated.
+Before deleting the previous global v2 queue, the client validates every legacy entry and keeps only the newest STOP for each Technician, ticket and tracking-session identity. The coordinate property is removed entirely. The resulting STOP is written into the matching Technician’s UID-scoped v3 queue and read back for verification. Legacy keys are deleted only after every valid migrated STOP is confirmed. Legacy UPDATE coordinates and malformed records are deleted rather than trusted or migrated.
 
 ## Privacy boundaries
 
-Legacy global queue keys are deleted after STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout explicitly purges the authenticated UID queue in addition to the general portal storage cleanup.
+Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout explicitly purges the authenticated UID queue in addition to the general portal storage cleanup.
 
 ## Admin map behavior
 
