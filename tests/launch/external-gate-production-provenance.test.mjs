@@ -25,7 +25,7 @@ test('operational application evidence is bound to the exact production deployme
 
   ordered(workflow, [
     'verify-operational-application-provenance.mjs',
-    'verify-operational-application-evidence.mjs',
+    'verify-operational-application-evidence-mfa.mjs',
     'bind-operational-application-provenance.mjs',
     'publish-operational-application-evidence.mjs',
   ]);
