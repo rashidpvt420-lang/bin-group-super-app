@@ -1,0 +1,78 @@
+name: Apply GPS Permanent Retry Policy on Current Main
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/apply-gps-permanent-retry-current-main.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch-test-clean:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'fix/gps-permanent-retry-current-main' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/gps-permanent-retry-current-main
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Import reviewed GPS retry policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_source='0eec02d62094baf08f37d33aeded375abb475f9e'
+          git fetch --no-tags origin refs/heads/agent/gps-permanent-retry-classification:refs/remotes/origin/gps-permanent-source
+          [[ "$(git rev-parse refs/remotes/origin/gps-permanent-source)" == "$expected_source" ]]
+          git show refs/remotes/origin/gps-permanent-source:src/utils/gpsRetryQueue.ts > src/utils/gpsRetryQueue.ts
+          git show refs/remotes/origin/gps-permanent-source:tests/launch/gps-permanent-retry-policy.test.mjs > tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Validate permanent and transient retry policy
+        run: |
+          node --test tests/launch/gps-permanent-retry-policy.test.mjs
+          node --test tests/launch/map-gps-state-behavior.test.mjs tests/launch/technician-gps-logout-watch-final.test.mjs
+
+      - name: TypeScript and production build
+        run: |
+          npm run typecheck
+          npm run build
+
+      - name: Commit permanent repair and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/utils/gpsRetryQueue.ts tests/launch/gps-permanent-retry-policy.test.mjs
+          git rm .github/workflows/apply-gps-permanent-retry-current-main.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/apply-gps-permanent-retry-current-main.yml \
+            src/utils/gpsRetryQueue.ts \
+            tests/launch/gps-permanent-retry-policy.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::GPS retry repair touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): fail permanent callable retries closed'
+          git push origin HEAD:fix/gps-permanent-retry-current-main
