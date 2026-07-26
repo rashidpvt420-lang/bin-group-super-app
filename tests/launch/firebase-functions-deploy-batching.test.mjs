@@ -1,11 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {
+  FUNCTIONS_DEPLOYMENT_STRATEGY,
+  validateFunctionsDeploymentEvidence,
+} from '../../scripts/lib/functions-deployment-evidence.mjs';
 
 const deploySource = await readFile(
   new URL('../../scripts/deploy-firebase-production.mjs', import.meta.url),
   'utf8',
 );
+const verifierSource = await readFile(
+  new URL('../../scripts/verify-production-deployment.mjs', import.meta.url),
+  'utf8',
+);
+
+const validEvidence = () => ({
+  strategy: FUNCTIONS_DEPLOYMENT_STRATEGY,
+  functionCount: 7,
+  batchCount: 2,
+  batchSize: 4,
+  cooldownSeconds: 75,
+  deployedFunctions: [
+    'adminCreateUser',
+    'dailyHrComplianceSweep',
+    'getAdminSecurityProfile',
+    'onScheduledServiceUpdated',
+    'requestBrokerPayoutOtp',
+    'scheduledServiceReminderCron',
+    'verifyBrokerPayoutOtp',
+  ],
+});
 
 test('production deployment never updates the entire Functions estate in one Firebase mutation burst', () => {
   assert.doesNotMatch(
@@ -51,4 +76,50 @@ test('deployment metadata records the batching strategy used for the exact SHA',
     deploySource,
     /deploymentMetadata\.functionsDeployment = functionDeploymentEvidence/,
   );
+});
+
+test('exact-SHA production verification requires valid batching evidence', () => {
+  assert.deepEqual(validateFunctionsDeploymentEvidence(validEvidence()), []);
+  assert.match(verifierSource, /validateFunctionsDeploymentEvidence\(existing\.functionsDeployment\)/);
+  assert.match(verifierSource, /functionsDeployment: existing\?\.functionsDeployment \?\? null/);
+
+  const missing = validateFunctionsDeploymentEvidence(null).join('\n');
+  assert.match(missing, /missing or malformed/);
+
+  const wrongStrategy = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    strategy: 'monolithic',
+  }).join('\n');
+  assert.match(wrongStrategy, /strategy/);
+
+  const wrongCount = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    functionCount: 8,
+  }).join('\n');
+  assert.match(wrongCount, /functionCount/);
+
+  const wrongBatches = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    batchCount: 3,
+  }).join('\n');
+  assert.match(wrongBatches, /batchCount/);
+
+  const unsafeBatch = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    batchSize: 10,
+  }).join('\n');
+  assert.match(unsafeBatch, /batchSize/);
+
+  const unsafeCooldown = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    cooldownSeconds: 30,
+  }).join('\n');
+  assert.match(unsafeCooldown, /cooldownSeconds/);
+
+  const duplicateNames = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    functionCount: 8,
+    deployedFunctions: [...validEvidence().deployedFunctions, 'adminCreateUser'],
+  }).join('\n');
+  assert.match(duplicateNames, /duplicates/);
 });
