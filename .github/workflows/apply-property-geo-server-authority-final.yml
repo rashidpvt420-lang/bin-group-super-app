@@ -33,3 +33,11 @@ jobs:
           git diff --cached --quiet && { echo '::error::No property geo authority changes were produced.'; exit 1; }
           git commit -m 'Make canonical property geo server authoritative'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
+      - name: Upload patch diagnostic
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: property-geo-patch-diagnostic
+          path: /tmp/property-geo-patch.log
+          if-no-files-found: error
+          retention-days: 1
