@@ -13,6 +13,7 @@ const trackingSummary = read('src/components/tracking/LiveTechnicianTrackingCard
 const liveTracking = read('src/utils/liveTracking.ts');
 const gpsRetryQueue = read('src/utils/gpsRetryQueue.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
+const liveSessionCas = read('functions/technicianLiveLocationCas.ts');
 const indexes = JSON.parse(read('firestore.indexes.json'));
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
 const packageJson = JSON.parse(read('package.json'));
@@ -125,7 +126,7 @@ test('Technician GPS client uses protected callable with durable STOP and short-
   assert.doesNotMatch(gpsRetryQueue, /heading|speed/);
 });
 
-test('Canonical live-location callable atomically validates assignment and updates all mirrors', () => {
+test('Canonical live-location callable atomically validates assignment, session authority and mirrors', () => {
   assert.match(locationCallable, /enforceAppCheck: true/);
   assert.match(locationCallable, /db\.runTransaction/);
   assert.match(locationCallable, /collection\("technician_live_locations"\)/);
@@ -133,18 +134,29 @@ test('Canonical live-location callable atomically validates assignment and updat
   assert.match(locationCallable, /accuracy > 100/);
   assert.match(locationCallable, /expiresAt/);
   assert.match(locationCallable, /sequence = previousSequence \+ 1/);
+  assert.match(locationCallable, /classifyStopRequest\(/);
+  assert.match(locationCallable, /classifyUpdateRequest\(/);
+  assert.match(locationCallable, /lastStoppedTicketId: ticketId,/);
+  assert.match(locationCallable, /lastStoppedTicketId: null/);
   assert.match(locationCallable, /tx\.set\(ticketRef/);
   assert.match(locationCallable, /tx\.set\(technicianRef/);
   assert.match(locationCallable, /tx\.set\(userRef/);
+  assert.match(liveSessionCas, /REJECT_SUPERSEDED/);
+  assert.match(liveSessionCas, /lastStoppedTicketId === ticketId/);
 });
 
-test('Server watchdog clears abandoned foreground tracking sessions', () => {
+test('Server watchdog reconciles only an exact still-expired session', () => {
   assert.match(locationCallable, /reconcileExpiredTechnicianLiveLocations = onSchedule/);
   assert.match(locationCallable, /schedule: "every 5 minutes"/);
   assert.match(locationCallable, /where\("isTracking", "==", true\)/);
-  assert.match(locationCallable, /where\("expiresAt", "<=", now\)/);
+  assert.match(locationCallable, /where\("expiresAt", "<=", queryNow\)/);
+  assert.match(locationCallable, /for \(const snapshot of stale\.docs\)[\s\S]*db\.runTransaction/);
+  assert.match(locationCallable, /classifyWatchdogCandidate\(/);
+  assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED/);
+  assert.match(locationCallable, /lastStoppedTicketId: ticketId \|\| null/);
   assert.match(locationCallable, /SERVER_EXPIRY_WATCHDOG/);
   assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRED/);
+  assert.doesNotMatch(locationCallable, /const batch = db\.batch\(\)/);
   const watchdogIndex = indexes.indexes.find((entry) => entry.collectionGroup === 'technician_live_locations');
   assert.deepEqual(watchdogIndex?.fields, [
     { fieldPath: 'isTracking', order: 'ASCENDING' },
