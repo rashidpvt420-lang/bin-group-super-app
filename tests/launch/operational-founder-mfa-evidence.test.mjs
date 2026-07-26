@@ -237,7 +237,7 @@ test('operational payment and commission replays are bound to the server-verifie
   assert.doesNotMatch(verifier, /E2E_ADMIN_EMAIL\)\.toLowerCase\(\)/);
 });
 
-test('provenance and application evidence both scan every matching Firestore page', () => {
+test('pagination hardening prepares the canonical verifier once before direct execution', () => {
   for (const source of [provenance, paginatedRunner]) {
     assert.match(source, /const PAGE_SIZE = 250/);
     assert.match(source, /readAllMatchingDocuments/);
@@ -247,13 +247,19 @@ test('provenance and application evidence both scan every matching Firestore pag
   assert.match(provenance, /scannedDocumentCount/);
   assert.doesNotMatch(provenance, /query\.limit\(100\)/);
   assert.match(paginatedRunner, /replaceExactlyOnce/);
+  assert.match(paginatedRunner, /--prepare-in-place/);
+  assert.match(paginatedRunner, /GITHUB_WORKFLOW !== 'Operational Application Evidence'/);
+  assert.match(paginatedRunner, /renameSync\(temporaryPath, sourcePath\)/);
   assert.match(paginatedRunner, /approved-payment selector/);
   assert.match(paginatedRunner, /notification selector/);
   assert.match(paginatedRunner, /Broker commission selector/);
   assert.match(paginatedRunner, /staff-audit selector/);
   assert.match(paginatedRunner, /renewal-watch selector/);
-  assert.match(workflow, /node scripts\/run-operational-application-evidence-paginated\.mjs/);
-  assert.doesNotMatch(workflow, /node scripts\/verify-operational-application-evidence\.mjs/);
+
+  const preparation = workflow.indexOf('node scripts/run-operational-application-evidence-paginated.mjs --prepare-in-place');
+  const directVerifier = workflow.indexOf('OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence.mjs');
+  assert.ok(preparation >= 0 && directVerifier > preparation);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
 });
 
 test('Founder MFA helper never serializes raw provider response bodies or token values', () => {
