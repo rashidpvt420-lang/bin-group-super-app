@@ -6,6 +6,7 @@ const mailDelivery = readFileSync('functions/mailDelivery.ts', 'utf8');
 const contractOtp = readFileSync('functions/contractSignatureOtpMailbox.ts', 'utf8');
 const brokerPayoutOtp = readFileSync('functions/secureBrokerPayoutOperations.ts', 'utf8');
 const runtime = readFileSync('functions/runtime.ts', 'utf8');
+const productionSecretPreflight = readFileSync('scripts/verify-firebase-production-secrets.mjs', 'utf8');
 
 for (const [label, source] of [
   ['mailDelivery', mailDelivery],
@@ -44,6 +45,15 @@ test('Owner contract OTP callables separate SMTP delivery from the HMAC pepper',
   assert.match(verifyBlock, /secrets:\s*\[\s*ownerContractOtpPepper\s*\]/);
   assert.doesNotMatch(contractOtp, /retrieveContractSignatureOtpForTestEvidence/);
   assert.doesNotMatch(contractOtp, /testEvidence/);
+});
+
+test('production secret preflight requires the Owner OTP pepper for every launch mode', () => {
+  const bankPilotBlock = productionSecretPreflight.slice(
+    productionSecretPreflight.indexOf('requiredFirebaseBankPilotSecrets'),
+    productionSecretPreflight.indexOf('requiredFirebasePublicSecrets'),
+  );
+  assert.match(bankPilotBlock, /OWNER_CONTRACT_OTP_PEPPER/);
+  assert.match(productionSecretPreflight, /\.\.\.requiredFirebaseBankPilotSecrets/);
 });
 
 test('Broker payout OTP request binds SMTP secrets and its dedicated HMAC pepper', () => {
