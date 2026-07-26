@@ -170,28 +170,26 @@ export const updateTechnicianLiveLocation = onCall(
           throw new HttpsError("failed-precondition", "No canonical live tracking session exists for this STOP request.");
         }
         if (stopDecision === "REJECT_SUPERSEDED") {
-          // The canonical session is newer or belongs to another ticket. Preserve
-          // it unchanged, but acknowledge the stale STOP so an offline client can
-          // remove its queue entry instead of becoming permanently blocked.
+          const previousExpiryMs = previous.expiresAt?.toMillis?.();
           tx.set(auditRef, {
             actorId: technicianUid,
             actorRole: "technician",
-            action: "TECHNICIAN_LIVE_LOCATION_STALE_STOP_IGNORED",
+            action: "TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED",
             targetType: "technician_live_locations",
             targetId: technicianUid,
             requestedTicketId: ticketId,
             requestedTrackingSessionId: trackingSessionId,
-            canonicalTicketId: String(previous.activeTicketId || "") || null,
-            canonicalTrackingSessionId: String(previous.trackingSessionId || "") || null,
+            currentTicketId: String(previous.activeTicketId || "") || null,
+            currentTrackingSessionId: String(previous.trackingSessionId || "") || null,
+            reason: "REJECT_SUPERSEDED",
             createdAt: now,
           });
-          const previousExpiryMs = previous.expiresAt?.toMillis?.();
           return {
             action,
             sequence: previousSequence,
             expiresAtMs: Number.isFinite(previousExpiryMs) ? previousExpiryMs : now.toMillis(),
             alreadyStopped: false,
-            staleIgnored: true,
+            superseded: true,
           };
         }
         if (stopDecision === "ALREADY_STOPPED") {
@@ -201,6 +199,7 @@ export const updateTechnicianLiveLocation = onCall(
             sequence: previousSequence,
             expiresAtMs: Number.isFinite(previousExpiryMs) ? previousExpiryMs : now.toMillis(),
             alreadyStopped: true,
+            superseded: false,
           };
         }
 
@@ -263,7 +262,13 @@ export const updateTechnicianLiveLocation = onCall(
           trackingSessionId,
           createdAt: now,
         });
-        return { action, sequence: previousSequence, expiresAtMs: now.toMillis(), alreadyStopped: false };
+        return {
+          action,
+          sequence: previousSequence,
+          expiresAtMs: now.toMillis(),
+          alreadyStopped: false,
+          superseded: false,
+        };
       }
 
       if (!ticketSnap.exists) throw new HttpsError("not-found", "Assigned mission not found.");
@@ -379,7 +384,13 @@ export const updateTechnicianLiveLocation = onCall(
         updatedAt: now,
       }, { merge: true });
 
-      return { action, sequence, expiresAtMs: expiresAt.toMillis() };
+      return {
+        action,
+        sequence,
+        expiresAtMs: expiresAt.toMillis(),
+        alreadyStopped: false,
+        superseded: false,
+      };
     });
 
     return {
@@ -452,6 +463,8 @@ export const reconcileExpiredTechnicianLiveLocations = onSchedule(
 
         const ticketId = currentState.activeTicketId;
         const trackingSessionId = currentState.trackingSessionId || null;
+        const ticketRef = ticketId ? db.collection("maintenanceTickets").doc(ticketId) : null;
+        const ticketSnap = ticketRef ? await tx.get(ticketRef) : null;
         const technicianRef = db.collection("technicians").doc(technicianUid);
         const userRef = db.collection("users").doc(technicianUid);
         const diagnosticRef = technicianRef.collection("deviceReadiness").doc("gps");
@@ -488,8 +501,8 @@ export const reconcileExpiredTechnicianLiveLocations = onSchedule(
           stoppedAt: transactionNow,
           updatedAt: transactionNow,
         }, { merge: true });
-        if (ticketId) {
-          tx.set(db.collection("maintenanceTickets").doc(ticketId), {
+        if (ticketRef && ticketSnap?.exists) {
+          tx.set(ticketRef, {
             trackingStatus: "STOPPED_STALE",
             technicianLocationExpiresAt: transactionNow,
             trackingReconciledAt: transactionNow,
@@ -500,8 +513,10 @@ export const reconcileExpiredTechnicianLiveLocations = onSchedule(
           actorId: "system",
           actorRole: "system",
           action: "TECHNICIAN_LIVE_LOCATION_EXPIRED",
-          targetType: "maintenanceTickets",
-          targetId: ticketId || snapshot.id,
+          targetType: ticketSnap?.exists ? "maintenanceTickets" : "technician_live_locations",
+          targetId: ticketSnap?.exists ? ticketId : snapshot.id,
+          requestedTicketId: ticketId || null,
+          ticketMissing: Boolean(ticketId) && ticketSnap?.exists !== true,
           technicianUid,
           trackingSessionId,
           createdAt: transactionNow,
