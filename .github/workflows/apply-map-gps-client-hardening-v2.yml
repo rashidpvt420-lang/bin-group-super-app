@@ -6,6 +6,10 @@ on:
       - fix/map-gps-client-hardening-v2
     paths:
       - .github/workflows/apply-map-gps-client-hardening-v2.yml
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -16,7 +20,10 @@ concurrency:
 
 jobs:
   patch:
-    if: github.repository == 'rashidpvt420-lang/bin-group-super-app'
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/fix/map-gps-client-hardening-v2') ||
+       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/map-gps-client-hardening-v2'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact hardening branch
@@ -54,5 +61,3 @@ jobs:
           git diff --cached --quiet && { echo '::error::Expected map/GPS reconciliation changes were not produced.'; exit 1; }
           git commit -m 'Reconcile Admin map lifecycle with GPS client privacy'
           git push origin HEAD:fix/map-gps-client-hardening-v2
-
-# A second user-authored push is required because GitHub does not execute a workflow on the commit that first introduces it.
