@@ -59,7 +59,7 @@ export const legacyStopEntriesForMigration = (
   for (const input of inputs) {
     const entry = sanitizeEntry(input, nowMs);
     if (!entry || entry.action !== 'STOP') continue;
-    const coordinateFree = { ...entry, point: undefined };
+    const { point: _legacyPoint, ...coordinateFree } = entry;
     const key = legacyEntryIdentity(coordinateFree);
     const previous = newest.get(key);
     if (!previous || coordinateFree.queuedAtMs >= previous.queuedAtMs) newest.set(key, coordinateFree);
