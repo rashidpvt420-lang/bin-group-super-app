@@ -65,7 +65,7 @@ test('dispatcher verifies each child workflow, job, exact SHA and artifact and w
   assert.match(dispatcher, /completed\?\.actor\?\.login/);
   assert.match(dispatcher, /requiredJob\.conclusion !== 'success'/);
   assert.match(dispatcher, /verifyChildArtifacts/);
-  assert.match(dispatcher, /artifact\?\.expired !== true/);
+  assert.match(dispatcher, /candidate\?\.expired !== true/);
   assert.match(dispatcher, /requireCurrentMain\(sourceSha, `\$\{definition\.key\} completion`\)/);
   assert.match(dispatcher, /status: 'failed'/);
   assert.match(dispatcher, /failureReason: sanitizeReason/);
