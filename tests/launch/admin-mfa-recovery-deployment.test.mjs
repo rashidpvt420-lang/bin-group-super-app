@@ -41,9 +41,12 @@ test('authorized-domain repair is bound to canonical exact-SHA approval context'
 
   const secretsCall = canonicalDeploy.indexOf('await verifyFirebaseProductionSecrets');
   const phoneCall = canonicalDeploy.indexOf('await verifyFirebasePhoneAuthProduction');
+  const nonFunctionDeploy = canonicalDeploy.indexOf("'hosting,firestore:rules,firestore:indexes,storage'");
+  const batchedFunctionDeploy = canonicalDeploy.indexOf("'scripts/deploy-firebase-functions-batched.mjs'");
   assert.ok(secretsCall >= 0 && phoneCall > secretsCall, 'canonical secret/domain preflight must occur before Phone Auth verification');
+  assert.ok(nonFunctionDeploy > phoneCall, 'non-Functions deployment must remain behind the identity preflights');
+  assert.ok(batchedFunctionDeploy > nonFunctionDeploy, 'rate-limited Functions deployment must follow the non-Functions stage');
   assert.match(canonicalDeploy, /ADMIN_MFA_BOOTSTRAP_HOSTING/);
-  assert.match(canonicalDeploy, /complete Firebase production stack/);
 });
 
 test('authorized-domain repair preserves existing domains and adds both Admin Hosting domains', () => {
