@@ -107,9 +107,9 @@ test('Server watchdog clears abandoned foreground tracking sessions', () => {
   ]);
 });
 
-test('Canonical location rules are generated as Admin-read and browser-write denied', () => {
+test('Canonical location rules are suspension-aware dispatch-read and browser-write denied', () => {
   assert.match(ruleHardener, /match \/technician_live_locations\/\{technicianId\} \{/);
-  assert.match(ruleHardener, /allow read: if isAdmin\(\);/);
+  assert.match(ruleHardener, /allow read: if canDispatchJobs\(\);/);
   assert.match(ruleHardener, /allow create, update, delete: if false;/);
   assert.match(ruleHardener, /technician_live_locations'\]/);
   assert.equal(packageJson.scripts['harden:live-location-authority'], 'node scripts/harden-technician-live-location-authority.mjs');
