@@ -31,7 +31,12 @@ test('Admin map resolves ticket markers only through authoritative canonical pro
   assert.match(mapTruth, /verifiedAtMs/);
   assert.match(mapTruth, /adminApproved/);
   assert.match(mapTruth, /trustedSource/);
-  assert.doesNotMatch(mapTruth, /resolveVerifiedTicketPin[\s\S]*recordedTicketCoordinate\(ticket\)/);
+  const resolverStart = mapTruth.indexOf('export function resolveVerifiedTicketPin');
+  const resolverEnd = mapTruth.indexOf('export const recordedTicketCoordinate', resolverStart);
+  const resolver = mapTruth.slice(resolverStart, resolverEnd);
+  assert.match(resolver, /propertiesById\.get\(propertyId\)/);
+  assert.match(resolver, /verifiedPropertyPin\(property\)/);
+  assert.doesNotMatch(resolver, /jobLocation|propertyLocation|ticket\?\.location/);
 });
 
 test('unverified recorded coordinates are labelled honestly and never rendered as verified markers', () => {
