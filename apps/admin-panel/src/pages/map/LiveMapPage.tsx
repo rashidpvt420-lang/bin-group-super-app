@@ -64,6 +64,11 @@ type TicketPinRow = {
 const displayStatus = (ticket: any) => {
   const status = normalizeMaintenanceTicketStatus(ticket.status);
   if (['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(status)) return 'Awaiting assignment';
+  if (status === 'PENDING_SCHEDULING') return 'Pending scheduling';
+  if (status === 'SCHEDULED') return 'Scheduled';
+  if (status === 'QUOTE_REJECTED') return 'Quote rejected — revision required';
+  if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';
+  if (status === 'CANCELLATION_REQUESTED') return 'Cancellation requested — unresolved';
   if (status === 'EN_ROUTE' || status === 'ON_THE_WAY') return 'Technician en route';
   if (status === 'ARRIVED') return 'Technician arrived';
   if (status === 'IN_PROGRESS' || status === 'WORK_STARTED') return 'Work in progress';
@@ -135,7 +140,6 @@ export default function LiveMapPage() {
       const ticketQuery = query(
         collection(db, 'maintenanceTickets'),
         where('status', 'in', statuses),
-        limit(100),
       );
       return onSnapshot(ticketQuery, (snapshot) => {
         if (ticketListenerFailed) return;

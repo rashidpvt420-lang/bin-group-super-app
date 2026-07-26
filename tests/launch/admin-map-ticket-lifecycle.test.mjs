@@ -8,10 +8,30 @@ const functionSource = readFileSync('functions/ticketNormalization.ts', 'utf8');
 const lifecycle = await import(`data:text/javascript;base64,${Buffer.from(lifecycleSource).toString('base64')}`);
 
 test('canonical lifecycle keeps every exceptional unresolved class visible', () => {
-  for (const status of ['ESCALATED', 'REOPENED', 'ON_HOLD', 'WAITING_PARTS', 'DISPUTED']) {
+  for (const status of [
+    'ESCALATED',
+    'REOPENED',
+    'ON_HOLD',
+    'WAITING_PARTS',
+    'DISPUTED',
+    'PENDING_SCHEDULING',
+    'SCHEDULED',
+    'QUOTE_REJECTED',
+    'RESCHEDULE_REQUESTED',
+    'CANCELLATION_REQUESTED',
+  ]) {
     assert.equal(lifecycle.isUnresolvedMaintenanceTicketStatus(status), true, status);
     assert.ok(lifecycle.UNRESOLVED_MAINTENANCE_TICKET_QUERY_VALUES.includes(status));
     assert.ok(lifecycle.UNRESOLVED_MAINTENANCE_TICKET_QUERY_VALUES.includes(status.toLowerCase()));
+  }
+});
+
+test('legacy unresolved aliases normalize to canonical unresolved states', () => {
+  const aliases = { new: 'OPEN', dispatched: 'ASSIGNED', claimed: 'ACCEPTED', started: 'WORK_STARTED' };
+  for (const [alias, canonical] of Object.entries(aliases)) {
+    assert.equal(lifecycle.normalizeMaintenanceTicketStatus(alias), canonical, alias);
+    assert.equal(lifecycle.isUnresolvedMaintenanceTicketStatus(alias), true, alias);
+    assert.ok(lifecycle.UNRESOLVED_MAINTENANCE_TICKET_QUERY_VALUES.includes(alias));
   }
 });
 
@@ -43,7 +63,7 @@ test('Admin map deterministically merges every bounded listener chunk', () => {
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks\(\)/);
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS\.map\(\(statuses, chunkIndex\)/);
   assert.match(adminMapSource, /where\('status', 'in', statuses\)/);
-  assert.match(adminMapSource, /limit\(100\)/);
+  assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\),\s*limit\(100\)/);
   assert.match(adminMapSource, /ticketSnapshots\.size !== TICKET_STATUS_QUERY_CHUNKS\.length/);
   assert.match(adminMapSource, /byId\.set\(String\(ticket\.id\), ticket\)/);
   assert.match(adminMapSource, /localeCompare\(String\(right\.id\)\)/);
