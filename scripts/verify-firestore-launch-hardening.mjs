@@ -39,6 +39,7 @@ const forbiddenFragments = [
   ['broad user-subcollection authorization', 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));'],
   ['unbounded ticket read fallback', "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();"],
   ['private HR omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();"],
+  ['canonical live location omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
   ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
@@ -71,14 +72,15 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket, Broker rate-limit, Admin-session and private-HR read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
+  ['ticket, Broker rate-limit, Admin-session, private-HR and live-location read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies and private HR', "'system_secrets',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['ticket write fallback excludes explicit ticket hierarchies, live location and private HR', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
   ['private HR profiles are server-only', "match /private_hr_profiles/{profileId} {\n      allow read, write: if false;"],
+  ['canonical live locations are Admin-readable only', "match /technician_live_locations/{technicianId} {\n      allow read: if isAdmin();\n      allow create, update, delete: if false;"],
 ];
 
 const failures = [];
@@ -89,6 +91,7 @@ if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2)
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
 if (rules.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) failures.push('Private HR profile rule must exist exactly once.');
+if (rules.split('match /technician_live_locations/{technicianId}').length - 1 !== 1) failures.push('Canonical live-location rule must exist exactly once.');
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
