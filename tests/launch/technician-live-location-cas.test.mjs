@@ -131,3 +131,21 @@ test('missing ticket cleanup remains explicit and never recreates a ghost ticket
   assert.match(callableSource, /targetType: ticketSnap\?\.exists \? "maintenanceTickets" : "technician_live_locations"/);
   assert.doesNotMatch(callableSource, /if \(ticketId\) \{\s*tx\.set\(db\.collection\("maintenanceTickets"\)\.doc\(ticketId\)/);
 });
+
+
+test('missing canonical STOP is an audited acknowledged no-op instead of a terminal client lock', () => {
+  const branchStart = callableSource.indexOf('if (stopDecision === "REJECT_MISSING")');
+  const branchEnd = callableSource.indexOf('if (stopDecision === "REJECT_SUPERSEDED")', branchStart);
+  const branch = callableSource.slice(branchStart, branchEnd);
+  assert.match(branch, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
+  assert.match(branch, /reason: "REJECT_MISSING"/);
+  assert.match(branch, /missingSession: true/);
+  assert.match(branch, /alreadyStopped: true/);
+  assert.doesNotMatch(branch, /tx\.set\(liveRef/);
+  assert.doesNotMatch(branch, /throw new HttpsError/);
+
+  assert.match(clientSource, /missingSession: data\.missingSession === true/);
+  assert.match(clientSource, /stopMissingSession = response\.missingSession/);
+  assert.match(clientSource, /STOP_MISSING_SESSION_RECONCILED/);
+  assert.match(clientSource, /canonicalSessionAbsent: true/);
+});

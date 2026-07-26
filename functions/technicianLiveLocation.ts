@@ -167,7 +167,27 @@ export const updateTechnicianLiveLocation = onCall(
         );
 
         if (stopDecision === "REJECT_MISSING") {
-          throw new HttpsError("failed-precondition", "No canonical live tracking session exists for this STOP request.");
+          tx.set(auditRef, {
+            actorId: technicianUid,
+            actorRole: "technician",
+            action: "TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED",
+            targetType: "technician_live_locations",
+            targetId: technicianUid,
+            requestedTicketId: ticketId,
+            requestedTrackingSessionId: trackingSessionId,
+            currentTicketId: null,
+            currentTrackingSessionId: null,
+            reason: "REJECT_MISSING",
+            createdAt: now,
+          });
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: now.toMillis(),
+            alreadyStopped: true,
+            superseded: false,
+            missingSession: true,
+          };
         }
         if (stopDecision === "REJECT_SUPERSEDED") {
           const previousExpiryMs = previous.expiresAt?.toMillis?.();
