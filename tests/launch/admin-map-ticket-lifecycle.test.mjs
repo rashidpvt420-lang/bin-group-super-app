@@ -1,17 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import ts from 'typescript';
 
-const lifecycleSource = readFileSync('functions/shared/maintenanceTicketLifecycle.ts', 'utf8');
+const lifecycleSource = readFileSync('functions/shared/maintenanceTicketLifecycle.js', 'utf8');
 const adminMapSource = readFileSync('apps/admin-panel/src/pages/map/LiveMapPage.tsx', 'utf8');
-const transpiled = ts.transpileModule(lifecycleSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2022,
-    target: ts.ScriptTarget.ES2021,
-  },
-}).outputText;
-const lifecycle = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`);
+const functionSource = readFileSync('functions/ticketNormalization.ts', 'utf8');
+const lifecycle = await import(`data:text/javascript;base64,${Buffer.from(lifecycleSource).toString('base64')}`);
 
 test('canonical lifecycle keeps every exceptional unresolved class visible', () => {
   for (const status of ['ESCALATED', 'REOPENED', 'ON_HOLD', 'WAITING_PARTS', 'DISPUTED']) {
@@ -39,8 +33,13 @@ test('Firestore status queries are bounded and cover the complete canonical quer
   assert.equal(new Set(flattened).size, flattened.length);
 });
 
-test('Admin map imports the Functions-owned contract and deterministically merges every listener chunk', () => {
+test('Admin and Functions consume the same executable lifecycle module', () => {
   assert.match(adminMapSource, /functions\/shared\/maintenanceTicketLifecycle/);
+  assert.match(functionSource, /\.\/shared\/maintenanceTicketLifecycle/);
+  assert.doesNotMatch(lifecycleSource, /\bas const\b|:\s*readonly\b|:\s*string\b/);
+});
+
+test('Admin map deterministically merges every bounded listener chunk', () => {
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks\(\)/);
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS\.map\(\(statuses, chunkIndex\)/);
   assert.match(adminMapSource, /where\('status', 'in', statuses\)/);
