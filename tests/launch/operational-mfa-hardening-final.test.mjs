@@ -12,8 +12,8 @@ const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 function fixture() {
   const nonce = randomUUID().replaceAll('-', '');
   return {
-    apiKey: `api-${nonce}`,
-    password: `password-${nonce}`,
+    apiKey: randomUUID(),
+    firstFactorSecret: Buffer.from(randomUUID()).toString('base64url'),
     pending: `pending-${nonce}`,
     factorId: `factor-${nonce}`,
     uid: `uid-${nonce}`,
@@ -24,7 +24,8 @@ function fixture() {
 
 function jwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.test-signature`;
+  const fixtureSignature = Buffer.from(randomUUID()).toString('base64url');
+  return `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode(payload)}.${fixtureSignature}`;
 }
 
 function response(body, status = 200) {
@@ -75,7 +76,7 @@ test('Founder sign-in proves a server-verified TOTP factor and exact enrollment 
   const result = await signInWithRequiredTotpMfa({
     apiKey: value.apiKey,
     email: 'ceo@bin-groups.com',
-    password: value.password,
+    password: value.firstFactorSecret,
     totpSecret: value.totpSecret,
     fetchImpl,
     verifyIdTokenImpl: async () => verifiedClaims(value),
@@ -99,7 +100,7 @@ test('Founder sign-in rejects unverified, non-TOTP, mismatched, or non-Founder t
     return signInWithRequiredTotpMfa({
       apiKey: value.apiKey,
       email: 'ceo@bin-groups.com',
-      password: value.password,
+      password: value.firstFactorSecret,
       totpSecret: value.totpSecret,
       fetchImpl,
       verifyIdTokenImpl: claimsVerifier,
@@ -138,7 +139,7 @@ test('Firebase provider response bodies never enter Founder authentication diagn
     signInWithRequiredTotpMfa({
       apiKey: value.apiKey,
       email: 'ceo@bin-groups.com',
-      password: value.password,
+      password: value.firstFactorSecret,
       totpSecret: value.totpSecret,
       fetchImpl: async () => ({
         ok: false,
@@ -198,7 +199,8 @@ test('Founder credentials are scoped only to the protected replay step', () => {
   const replayStep = workflow.slice(replayStepIndex, uploadStepIndex);
   for (const name of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET']) {
     assert.doesNotMatch(jobScope, new RegExp(`${name}:`));
-    assert.match(replayStep, new RegExp(`${name}: \$\{\{ secrets\.${name} \}\}`));
+    const expectedBinding = `${name}: ` + '${{ secrets.' + name + ' }}';
+    assert.ok(replayStep.includes(expectedBinding), `${name} must be scoped to the protected replay step`);
   }
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\./);
   assert.doesNotMatch(workflow, /E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\./);
