@@ -18,13 +18,25 @@ const state = (overrides = {}) => ({
   isTracking: true,
   trackingSessionId: 'session-A',
   activeTicketId: 'ticket-1',
+  lastStoppedTicketId: 'ticket-1',
   expiresAtMs: 1_000,
   ...overrides,
 });
 
 test('matching active STOP applies and a duplicate matching STOP is idempotent', () => {
   assert.equal(cas.classifyStopRequest(state(), 'ticket-1', 'session-A'), 'APPLY');
-  assert.equal(cas.classifyStopRequest(state({ isTracking: false, activeTicketId: '' }), 'ticket-1', 'session-A'), 'ALREADY_STOPPED');
+  assert.equal(
+    cas.classifyStopRequest(state({ isTracking: false, activeTicketId: '' }), 'ticket-1', 'session-A'),
+    'ALREADY_STOPPED',
+  );
+  assert.equal(
+    cas.classifyStopRequest(
+      state({ isTracking: false, activeTicketId: '', lastStoppedTicketId: 'ticket-2' }),
+      'ticket-1',
+      'session-A',
+    ),
+    'REJECT_SUPERSEDED',
+  );
 });
 
 test('delayed STOP from session A cannot terminate newer session B', () => {
@@ -73,7 +85,7 @@ test('watchdog cannot clear a superseding session or changed ticket', () => {
   );
 });
 
-test('server implementation performs STOP and watchdog comparison inside transactions', () => {
+test('server implementation performs STOP, UPDATE and watchdog comparison inside transactions', () => {
   assert.match(callableSource, /classifyStopRequest\(/);
   assert.match(callableSource, /classifyUpdateRequest\(/);
   assert.match(callableSource, /classifyWatchdogCandidate\(/);
@@ -82,6 +94,8 @@ test('server implementation performs STOP and watchdog comparison inside transac
   assert.match(callableSource, /TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED/);
   assert.match(callableSource, /reason: decision/);
   assert.match(callableSource, /alreadyStopped: true/);
+  assert.match(callableSource, /lastStoppedTicketId: ticketId/);
+  assert.match(callableSource, /lastStoppedTicketId: null/);
   const idempotentIndex = callableSource.indexOf('stopDecision === "ALREADY_STOPPED"');
   const stopTicketCheckIndex = callableSource.indexOf('if (!ticketSnap.exists)', idempotentIndex);
   assert.ok(idempotentIndex >= 0 && stopTicketCheckIndex > idempotentIndex, 'duplicate STOP must succeed before ticket assignment is rechecked');
