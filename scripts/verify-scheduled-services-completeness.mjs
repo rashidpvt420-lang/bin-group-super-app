@@ -222,10 +222,19 @@ const checks = [
   {
     path: 'scripts/deploy-firebase-production.mjs',
     required: [
+      'function deployFunctionsQuotaSafe()',
+      'value && (value.__endpoint || value.__trigger)',
+      'FIREBASE_FUNCTION_DEPLOY_BATCH_SIZE',
+      'FIREBASE_FUNCTION_DEPLOY_COOLDOWN_SECONDS',
+      "strategy: 'sequential-export-batches'",
+      "'non-Functions Firebase production stack'",
+      "'hosting,firestoreRules,firestoreIndexes,storageRules,functions'",
+      'deploymentMetadata.functionsDeployment = functionDeploymentEvidence',
+      "'scripts/verify-production-deployment.mjs'",
+    ],
+    forbidden: [
       "'functions,hosting,firestore:rules,firestore:indexes,storage'",
       "'complete Firebase production stack'",
-      "'hosting,firestoreRules,firestoreIndexes,storageRules,functions'",
-      "'scripts/verify-production-deployment.mjs'",
     ],
   },
   {
@@ -255,4 +264,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, protected full-stack deployment, and retired parallel deploy path verified)`);
+console.log(`[scheduled-services-completeness] PASS (${checks.length} files, secure key lifecycle, exports, protected quota-safe deployment, and retired parallel deploy path verified)`);

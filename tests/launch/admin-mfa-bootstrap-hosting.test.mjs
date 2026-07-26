@@ -27,12 +27,15 @@ test('Admin MFA bootstrap deploys Admin Hosting and only the required remediatio
   const targetDefinition = source.indexOf('const adminBootstrapDeployTarget');
   const bootstrapDeploy = source.indexOf("retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and remediation callables')");
   const mfaPreflight = source.indexOf('adminMfaEvidence = await verifyAdminMfaProduction');
-  const fullDeploy = source.indexOf("'functions,hosting,firestore:rules,firestore:indexes,storage'");
+  const batchedFunctionsDeploy = source.indexOf('const functionDeploymentEvidence = deployFunctionsQuotaSafe()');
+  const nonFunctionsDeploy = source.indexOf("'non-Functions Firebase production stack'");
 
   assert.ok(targetDefinition >= 0, 'bootstrap target must be explicitly defined');
   assert.ok(bootstrapDeploy > targetDefinition, 'minimal bootstrap deployment must use the explicit target');
   assert.ok(mfaPreflight > bootstrapDeploy, 'real Admin MFA enforcement must run after the minimal bootstrap deployment');
-  assert.ok(fullDeploy > mfaPreflight, 'full stack deploy must remain behind real Admin MFA enforcement');
+  assert.ok(batchedFunctionsDeploy > mfaPreflight, 'quota-safe Functions deployment must remain behind real Admin MFA enforcement');
+  assert.ok(nonFunctionsDeploy > batchedFunctionsDeploy, 'Hosting, rules and Storage must deploy after the sequential Functions batches');
+  assert.doesNotMatch(source, /functions,hosting,firestore:rules,firestore:indexes,storage/);
   assert.match(source, /'hosting:admin'/);
   for (const functionName of requiredBootstrapFunctions) {
     assert.match(source, new RegExp(`'${functionName}'`), `${functionName} must be included in the bootstrap allowlist`);

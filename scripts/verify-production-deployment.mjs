@@ -13,6 +13,7 @@ import {
   readJsonSafe,
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
+import { validateFunctionsDeploymentEvidence } from './lib/functions-deployment-evidence.mjs';
 import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
 import { validateAdminMfaEvidence } from './verify-admin-mfa-production.mjs';
 import {
@@ -198,6 +199,10 @@ if (!existing) {
   }
   if (!existing.deployedAt) fail('metadata missing deployedAt timestamp');
 
+  for (const deploymentFailure of validateFunctionsDeploymentEvidence(existing.functionsDeployment)) {
+    fail(deploymentFailure);
+  }
+
   for (const phoneAuthFailure of validateFirebasePhoneAuthEvidence(existing.firebasePhoneAuth, {
     commitSha,
     repository: existing.repository,
@@ -238,6 +243,7 @@ const doc = {
   httpChecksOk,
   bundleVerified,
   clientRuntimeConfig,
+  functionsDeployment: existing?.functionsDeployment ?? null,
   hardLaunchClaim: HARD_LAUNCH_CLAIM,
   workflowRunId: existing?.workflowRunId ?? null,
   workflowRunAttempt: existing?.workflowRunAttempt ?? null,
@@ -267,6 +273,7 @@ if (writeEvidence && canPass) {
     httpChecksOk: true,
     bundleVerified: true,
     clientRuntimeConfig,
+    functionsDeployment: existing.functionsDeployment,
     hardLaunchClaim: false,
   };
   mkdirSync(path.dirname(deploymentEvidencePath()), { recursive: true });
@@ -282,6 +289,6 @@ if (!canPass || failures.length || validationErrors.length) {
   process.exit(1);
 }
 
-console.log('[deploy-verify] PASS — production main + admin hosting and client configuration verified');
+console.log('[deploy-verify] PASS — production main + admin hosting, client configuration and quota-safe Functions deployment verified');
 console.log(`hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
 process.exit(0);

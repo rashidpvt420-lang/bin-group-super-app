@@ -124,15 +124,18 @@ test('production deploy checks and embeds Phone Auth before Firebase deployment 
   const deploy = (await readFile(new URL('../../scripts/deploy-firebase-production.mjs', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n');
   const secretsCall = deploy.indexOf('await verifyFirebaseProductionSecrets');
   const phoneCall = deploy.indexOf('await verifyFirebasePhoneAuthProduction');
-  const deployCall = deploy.indexOf("retryFirebase(\n  'functions,hosting,firestore:rules,firestore:indexes,storage'");
+  const functionsDeployCall = deploy.indexOf('const functionDeploymentEvidence = deployFunctionsQuotaSafe()');
+  const nonFunctionsDeployCall = deploy.indexOf("'non-Functions Firebase production stack'");
   const metadataCall = deploy.indexOf("'scripts/write-production-deployment-metadata.mjs'");
   const embedCall = deploy.indexOf('deploymentMetadata.firebasePhoneAuth = phoneAuthEvidence');
   const verifyCall = deploy.indexOf("'scripts/verify-production-deployment.mjs'");
   assert.ok(phoneCall > secretsCall);
-  assert.ok(deployCall > phoneCall);
-  assert.ok(metadataCall > deployCall);
+  assert.ok(functionsDeployCall > phoneCall);
+  assert.ok(nonFunctionsDeployCall > functionsDeployCall);
+  assert.ok(metadataCall > nonFunctionsDeployCall);
   assert.ok(embedCall > metadataCall);
   assert.ok(verifyCall > embedCall);
+  assert.doesNotMatch(deploy, /functions,hosting,firestore:rules,firestore:indexes,storage/);
 });
 
 test('deployment verifier requires nested Phone Auth evidence', async () => {
