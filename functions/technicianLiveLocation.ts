@@ -14,6 +14,16 @@ const ACTIVE_TRACKING_STATUSES = new Set([
   "IN_PROGRESS",
   "WORK_STARTED",
 ]);
+const APPROVED_PROFILE_STATUSES = new Set(["active", "approved"]);
+const BLOCKED_PROFILE_STATUSES = new Set([
+  "blocked",
+  "disabled",
+  "inactive",
+  "rejected",
+  "revoked",
+  "suspended",
+  "terminated",
+]);
 
 const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
 const upper = (value: unknown) => String(value || "").trim().toUpperCase();
@@ -28,6 +38,55 @@ function requireTechnician(auth: any) {
   const role = technicianRole(auth);
   if (role !== "technician" && role !== "tech" && auth.token?.technician !== true) {
     throw new HttpsError("permission-denied", "Only a Technician account can publish live location.");
+  }
+}
+
+function profileStatus(data: FirebaseFirestore.DocumentData) {
+  return normalize(data.status || data.accountStatus || data.profileStatus);
+}
+
+function approvedTechnicianProfile(data: FirebaseFirestore.DocumentData) {
+  const status = profileStatus(data);
+  const approvalStatus = normalize(data.approvalStatus || data.verificationStatus);
+  if (
+    data.suspended === true ||
+    data.disabled === true ||
+    data.isDisabled === true ||
+    BLOCKED_PROFILE_STATUSES.has(status) ||
+    BLOCKED_PROFILE_STATUSES.has(approvalStatus)
+  ) {
+    return false;
+  }
+  return APPROVED_PROFILE_STATUSES.has(status) || approvalStatus === "approved";
+}
+
+function profileAllowsIdentityAccess(data: FirebaseFirestore.DocumentData) {
+  const status = profileStatus(data);
+  return data.suspended !== true &&
+    data.disabled !== true &&
+    data.isDisabled !== true &&
+    !BLOCKED_PROFILE_STATUSES.has(status);
+}
+
+async function assertTechnicianLiveLocationEligibility(uid: string) {
+  const [authUser, technicianSnap, userSnap] = await Promise.all([
+    admin.auth().getUser(uid),
+    db.collection("technicians").doc(uid).get(),
+    db.collection("users").doc(uid).get(),
+  ]);
+
+  if (
+    authUser.disabled ||
+    authUser.customClaims?.suspended === true ||
+    authUser.customClaims?.disabled === true
+  ) {
+    throw new HttpsError("permission-denied", "This Technician account is disabled or suspended.");
+  }
+  if (!technicianSnap.exists || !approvedTechnicianProfile(technicianSnap.data() || {})) {
+    throw new HttpsError("permission-denied", "An active approved Technician profile is required for live GPS.");
+  }
+  if (userSnap.exists && !profileAllowsIdentityAccess(userSnap.data() || {})) {
+    throw new HttpsError("permission-denied", "This Technician identity profile is disabled or suspended.");
   }
 }
 
@@ -77,6 +136,7 @@ export const updateTechnicianLiveLocation = onCall(
     if (action !== "UPDATE" && action !== "STOP") {
       throw new HttpsError("invalid-argument", "Action must be UPDATE or STOP.");
     }
+    await assertTechnicianLiveLocationEligibility(technicianUid);
 
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
     const liveRef = db.collection("technician_live_locations").doc(technicianUid);
@@ -173,6 +233,14 @@ export const updateTechnicianLiveLocation = onCall(
       }
 
       const deviceTimestampMs = Math.max(0, finiteNumber(request.data?.deviceTimestampMs || Date.now(), "deviceTimestampMs"));
+      const previousDeviceTimestampMs = Math.max(0, Number(previous.location?.deviceTimestampMs || 0));
+      if (
+        previous.isTracking === true &&
+        previous.trackingSessionId === trackingSessionId &&
+        deviceTimestampMs <= previousDeviceTimestampMs
+      ) {
+        throw new HttpsError("failed-precondition", "This GPS coordinate is older than the current canonical location.");
+      }
       const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + 90_000);
       const sequence = previousSequence + 1;
       const point = {
