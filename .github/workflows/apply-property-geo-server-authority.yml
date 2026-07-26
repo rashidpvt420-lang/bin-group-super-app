@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          firebase emulators:exec --only firestore --project bin-group-57c60 "node --test --test-concurrency=1 test/property-geo-authority-rules.test.js" > property-geo-rules-output.txt 2>&1
+          npx firebase emulators:exec --only firestore --project bin-group-57c60 "node --test --test-concurrency=1 test/property-geo-authority-rules.test.js" > property-geo-rules-output.txt 2>&1
           status=$?
           cat property-geo-rules-output.txt
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -86,7 +86,7 @@ jobs:
         run: test "${{ steps.focused_geo_rules.outputs.status }}" = "0"
 
       - name: Validate complete Firestore and Storage authority
-        run: firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
+        run: npx firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
 
       - name: Commit product changes and remove one-off machinery
         run: |
