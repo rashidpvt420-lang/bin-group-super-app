@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const mailDelivery = readFileSync('functions/mailDelivery.ts', 'utf8');
-const contractOtp = readFileSync('functions/contractSignatureOtp.ts', 'utf8');
+const contractOtp = readFileSync('functions/contractSignatureOtpSecure.ts', 'utf8');
 const brokerPayoutOtp = readFileSync('functions/secureBrokerPayoutOperations.ts', 'utf8');
 const runtime = readFileSync('functions/runtime.ts', 'utf8');
 
 for (const [label, source] of [
   ['mailDelivery', mailDelivery],
-  ['contractSignatureOtp', contractOtp],
+  ['contractSignatureOtpSecure', contractOtp],
   ['secureBrokerPayoutOperations', brokerPayoutOtp],
 ]) {
   test(`${label} imports Firebase Secret Manager parameters`, () => {
@@ -33,12 +33,19 @@ test('admin retry callable binds both SMTP secrets at deployment', () => {
   assert.match(callableBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*\]/);
 });
 
-test('contract signature OTP request binds both SMTP secrets at deployment', () => {
+test('secure contract signature OTP callables bind required SMTP secrets', () => {
   const requestBlock = contractOtp.slice(
     contractOtp.indexOf('export const requestContractSignatureOtp'),
     contractOtp.indexOf('export const verifyContractSignatureOtp'),
   );
+  const verifyBlock = contractOtp.slice(
+    contractOtp.indexOf('export const verifyContractSignatureOtp'),
+    contractOtp.indexOf('export const retrieveContractSignatureOtpForTestEvidence'),
+  );
+  const evidenceBlock = contractOtp.slice(contractOtp.indexOf('export const retrieveContractSignatureOtpForTestEvidence'));
   assert.match(requestBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*\]/);
+  assert.match(verifyBlock, /secrets:\s*\[\s*smtpPass\s*\]/);
+  assert.match(evidenceBlock, /secrets:\s*\[\s*smtpPass\s*\]/);
 });
 
 test('Broker payout OTP request binds both SMTP secrets at deployment', () => {
@@ -51,7 +58,8 @@ test('Broker payout OTP request binds both SMTP secrets at deployment', () => {
 
 test('corrected mail and OTP functions are exported by the deployed runtime', () => {
   assert.match(runtime, /export\s+\*\s+from\s+["']\.\/mailDelivery["']/);
-  assert.match(runtime, /export\s+\*\s+from\s+["']\.\/contractSignatureOtp["']/);
+  assert.match(runtime, /export\s+\*\s+from\s+["']\.\/contractSignatureOtpSecure["']/);
+  assert.doesNotMatch(runtime, /export\s+\*\s+from\s+["']\.\/contractSignatureOtp["']/);
   assert.match(runtime, /requestBrokerPayoutOtp/);
   assert.match(runtime, /from\s+["']\.\/secureBrokerPayoutOperations["']/);
 });
