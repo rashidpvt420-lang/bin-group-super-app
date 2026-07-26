@@ -6,6 +6,7 @@ const read = (path) => readFileSync(path, 'utf8');
 
 const adminMap = read('apps/admin-panel/src/pages/map/LiveMapPage.tsx');
 const adminMapsLoader = read('apps/admin-panel/src/lib/googleMaps.ts');
+const technicianCommandCenter = read('apps/admin-panel/src/components/ops/TechnicianCommandCenter.tsx');
 const liveTracking = read('src/utils/liveTracking.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
@@ -28,6 +29,18 @@ test('Admin Maps loader fails closed on missing key, provider auth and script fa
   assert.match(adminMapsLoader, /GOOGLE_MAPS_AUTH_FAILED/);
   assert.match(adminMapsLoader, /GOOGLE_MAPS_SCRIPT_LOAD_FAILED/);
   assert.match(adminMapsLoader, /REACT_APP_GOOGLE_MAPS_API_KEY/);
+});
+
+test('Technician Command Center uses measured records and exposes missing data truthfully', () => {
+  assert.match(technicianCommandCenter, /collection\(db, 'technician_live_locations'\)/);
+  assert.match(technicianCommandCenter, /Not measured/);
+  assert.match(technicianCommandCenter, /Not reported/);
+  assert.match(technicianCommandCenter, /Average GPS accuracy/);
+  assert.match(technicianCommandCenter, /Completed jobs with before\/after proof/);
+  assert.doesNotMatch(technicianCommandCenter, /reliability:\s*96|compliance:\s*100/);
+  assert.doesNotMatch(technicianCommandCenter, /\{n:'Marina'|\{n:'DT'|\{n:'Palm'|\{n:'Bay'/);
+  assert.doesNotMatch(technicianCommandCenter, /±\s*5m|tech\.reliability \|\| 95|tech\.battery \|\| 100/);
+  assert.doesNotMatch(technicianCommandCenter, /evidence_sync[\s\S]*tech\.stable/);
 });
 
 test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
