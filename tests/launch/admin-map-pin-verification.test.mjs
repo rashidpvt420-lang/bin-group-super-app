@@ -58,6 +58,8 @@ test('clock ticks update marker membership without resetting the Admin viewport'
   assert.match(source, /markerRefs\.current\.delete\(key\)/);
   assert.match(source, /if \(!hasAutoFittedViewportRef\.current && pointCount > 0\)/);
   assert.match(source, /hasAutoFittedViewportRef\.current = true/);
+  assert.match(source, /for \(const marker of markerRefs\.current\.values\(\)\) marker\.setMap\(null\)/);
+  assert.match(source, /markerRefs\.current\.clear\(\)/);
   assert.doesNotMatch(source, /markerRefs\.current\.forEach\(\(marker\) => marker\.setMap\(null\)\)/);
   assert.doesNotMatch(source, /mapRef\.current\.setCenter\(UAE_CENTRE\)/);
 });
