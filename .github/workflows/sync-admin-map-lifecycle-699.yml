@@ -31,11 +31,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           git fetch origin main
           main_sha="$(git rev-parse origin/main)"
-          test "$main_sha" = 'a770dd5b545881c4bd9422450f4ebf16c3a004e5'
+          test "$main_sha" = 'a7efbf5ffd961adae3a93a545b5a0c2430c40e65'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git merge --no-commit --no-ff origin/main
           rm .github/workflows/sync-admin-map-lifecycle-699.yml
           git add -A
-          git commit -m 'Sync Admin map lifecycle with canonical GPS authority'
+          git commit -m 'Sync Admin map lifecycle with canonical launch authority'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
