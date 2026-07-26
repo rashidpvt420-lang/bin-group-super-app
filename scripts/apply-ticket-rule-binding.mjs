@@ -1,3 +1,4 @@
+import './harden-property-geo-authority.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'firestore.rules';
@@ -22,13 +23,11 @@ for (const legacyCreate of [
 function removeRuleFunction(functionName) {
   const needle = `    function ${functionName}(`;
   let removed = 0;
-
   while (true) {
     const start = text.indexOf(needle);
     if (start < 0) break;
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
-
     let depth = 0;
     let end = -1;
     for (let index = openingBrace; index < text.length; index += 1) {
@@ -109,7 +108,6 @@ const splitRules = [
   '      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
 const canonicalUpdate = '      allow update: if safeTicketUpdateByActor();';
-
 if (text.includes(monolithicUpdate)) {
   text = text.split(monolithicUpdate).join(canonicalUpdate);
   changed = true;
@@ -129,7 +127,6 @@ if (text.split(canonicalUpdate).length - 1 !== 2) {
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 }
-
 for (const required of [
   'let authenticated = signedIn();',
   'let role = authenticated',
@@ -142,7 +139,6 @@ for (const required of [
 ]) {
   if (!text.includes(required)) throw new Error(`[ticket-rule-binding] Bounded router fragment missing: ${required}`);
 }
-
 for (const forbidden of [
   'function safeOpenMissionClaim(',
   'function missionClaimFieldsLookValid(',
@@ -154,17 +150,12 @@ for (const forbidden of [
   ...splitRules.map((rule) => rule.trim()),
   'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
 ]) {
-  if (text.includes(forbidden)) {
-    throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
-  }
+  if (text.includes(forbidden)) throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
 }
-
 for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
   const start = text.indexOf(marker);
   const block = start < 0 ? '' : text.slice(start, start + 900);
-  if (!block.includes(canonicalCreate)) {
-    throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser creation outside Admin authority.`);
-  }
+  if (!block.includes(canonicalCreate)) throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser creation outside Admin authority.`);
 }
 if (text.split(canonicalCreate).length - 1 !== 2) {
   throw new Error('[ticket-rule-binding] Admin/server-only ticket create gate must exist exactly twice.');
