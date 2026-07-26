@@ -9,6 +9,8 @@ const requiredImports = [
   "import './five-profile-protected-fields-rules.test.js';",
   "import './push-token-security-rules.test.js';",
   "import './technician-assigned-list-security-rules.test.js';",
+  "import './property-geo-authority-rules.test.js';",
+  "import './tenant-ticket-server-authority-rules.test.js';",
 ];
 const obsoleteBlock = `    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
@@ -24,6 +26,9 @@ const canonicalBlock = `    await assertFails(updateDoc(doc(techADb, 'maintenanc
       updatedAt: new Date().toISOString(),
     }));
   `;
+
+const legacyTenantCreate = "    await assertSucceeds(setDoc(doc(tenantADb, 'maintenanceTickets/tenant_valid_ticket'), {";
+const canonicalTenantCreate = "    await assertFails(setDoc(doc(tenantADb, 'maintenanceTickets/tenant_valid_ticket'), {";
 
 const legacyUserSubcollectionStart =
   "  it('user subcollection restrictions: Operations and Finance can read top-level user directories but NOT subcollections', async () => {";
@@ -87,6 +92,17 @@ if (obsoleteCount === 1 && canonicalCount === 0) {
   );
 }
 
+const legacyTenantCount = next.split(legacyTenantCreate).length - 1;
+const canonicalTenantCount = next.split(canonicalTenantCreate).length - 1;
+if (legacyTenantCount === 1 && canonicalTenantCount === 0) {
+  next = next.replace(legacyTenantCreate, canonicalTenantCreate);
+} else if (!(legacyTenantCount === 0 && canonicalTenantCount === 1)) {
+  throw new Error(
+    `[normalize-rule-tests] expected one legacy Tenant direct-create success or one canonical denial; ` +
+    `found legacy=${legacyTenantCount}, canonical=${canonicalTenantCount}`,
+  );
+}
+
 const legacyStartIndex = next.indexOf(legacyUserSubcollectionStart);
 const canonicalUserSubcollectionCount = next.split(canonicalUserSubcollectionMarker).length - 1;
 if (legacyStartIndex >= 0) {
@@ -103,15 +119,13 @@ if (legacyStartIndex >= 0) {
 }
 
 for (const requiredImport of [...requiredImports].reverse()) {
-  if (!next.includes(requiredImport)) {
-    next = `${requiredImport}\n${next}`;
-  }
+  if (!next.includes(requiredImport)) next = `${requiredImport}\n${next}`;
 }
 
 if (next === source) {
-  console.log('[normalize-rule-tests] callable-only lifecycle, Broker KYC, five-profile, push-token and technician list tests already canonical');
+  console.log('[normalize-rule-tests] callable-only lifecycle/Tenant tickets, Broker KYC, five-profile, push-token and technician list tests already canonical');
   process.exit(0);
 }
 
 writeFileSync(file, next.replace(/\n/g, newline));
-console.log('[normalize-rule-tests] technician lifecycle/list, Broker KYC, five-profile and server-only push-token rules tests normalized');
+console.log('[normalize-rule-tests] Tenant ticket creation and protected role rules tests normalized');
