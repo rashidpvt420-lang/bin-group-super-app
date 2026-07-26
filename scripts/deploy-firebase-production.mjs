@@ -25,9 +25,6 @@ const functionBatchDelaySeconds = boundedInteger(
   60,
   300,
 );
-const completeFirebaseProductionTarget =
-  'functions,hosting,firestore:rules,firestore:indexes,storage';
-const nonFunctionProductionTarget = 'firestore:rules,firestore:indexes,storage,hosting';
 const adminBootstrapFunctions = Object.freeze([
   'registerAdminSecuritySession',
   'getAdminSecurityProfile',
@@ -174,21 +171,6 @@ function sleepSeconds(seconds, reason) {
 }
 
 function retryFirebase(target, label, options = {}) {
-  if (options.quotaSafeFullStack === true) {
-    if (target !== completeFirebaseProductionTarget) {
-      console.error('[production-deploy] Quota-safe full-stack strategy received an unexpected target');
-      process.exit(1);
-    }
-    console.log('[production-deploy] complete Firebase production stack uses quota-safe sequential Function batches');
-    deployFunctionsInBatches();
-    retryFirebase(
-      nonFunctionProductionTarget,
-      'Firestore, Storage and Hosting production services',
-      { attempts: 3, retryDelaySeconds: 30 },
-    );
-    return;
-  }
-
   const attempts = boundedInteger(options.attempts, 4, 1, 6);
   const retryDelaySeconds = boundedInteger(options.retryDelaySeconds, 90, 30, 300);
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -394,7 +376,11 @@ if (adminBootstrapRequested) {
   console.log(
     `[production-deploy] Protected Admin MFA bootstrap requested; deploying ${adminBootstrapDeployTarget} before account-coverage enforcement`,
   );
-  retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and remediation callables');
+  retryFirebase(
+    adminBootstrapDeployTarget,
+    'Admin MFA bootstrap hosting and remediation callables',
+    { attempts: 4, retryDelaySeconds: functionBatchDelaySeconds },
+  );
   writeFileSync(adminBootstrapMetadataPath, `${JSON.stringify({
     schemaVersion: 2,
     status: 'deployed',
@@ -437,10 +423,12 @@ if (adminBootstrapRequested) {
   );
 }
 
+deployFunctionsInBatches();
+
 retryFirebase(
-  'functions,hosting,firestore:rules,firestore:indexes,storage',
-  'complete Firebase production stack',
-  { quotaSafeFullStack: true },
+  'firestore:rules,firestore:indexes,storage,hosting',
+  'Firestore, Storage and Hosting production services',
+  { attempts: 3, retryDelaySeconds: 30 },
 );
 
 const metadataStatus = run(process.execPath, [
