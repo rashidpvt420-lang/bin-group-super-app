@@ -8,9 +8,10 @@ const collectionName = 'technician_live_locations';
 
 const explicitBlock = `
     // Canonical live GPS is written only by the App Check-protected Admin SDK callable.
-    // Admin browsers may observe active locations but cannot create, update or delete them.
+    // Suspended-safe dispatch authority may observe active locations but browsers
+    // cannot create, update or delete canonical location documents.
     match /technician_live_locations/{technicianId} {
-      allow read: if isAdmin();
+      allow read: if canDispatchJobs();
       allow create, update, delete: if false;
     }
 
@@ -22,6 +23,14 @@ if (!rules.includes('match /technician_live_locations/{technicianId} {')) {
     throw new Error('Generic Firestore fallback marker is missing; refusing to place live-location authority rules.');
   }
   rules = rules.replace(genericMarker, `${explicitBlock}${genericMarker}`);
+} else {
+  rules = rules.replace(
+    /match \/technician_live_locations\/\{technicianId\} \{\n\s*allow read: if (?:isAdmin|canDispatchJobs)\(\);\n\s*allow create, update, delete: if false;\n\s*\}/,
+    `match /technician_live_locations/{technicianId} {
+      allow read: if canDispatchJobs();
+      allow create, update, delete: if false;
+    }`,
+  );
 }
 
 const readCandidates = [
@@ -49,10 +58,10 @@ if (protectedOccurrences !== 3) {
 }
 
 const blockStart = rules.indexOf('match /technician_live_locations/{technicianId} {');
-const block = rules.slice(blockStart, blockStart + 260);
+const block = rules.slice(blockStart, blockStart + 280);
 if (
   blockStart < 0 ||
-  !block.includes('allow read: if isAdmin();') ||
+  !block.includes('allow read: if canDispatchJobs();') ||
   !block.includes('allow create, update, delete: if false;')
 ) {
   throw new Error('Canonical live-location rule block is malformed.');
