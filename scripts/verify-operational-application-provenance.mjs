@@ -14,6 +14,7 @@ const DEPLOYMENT_PATH = 'launch_package/production-deployment.json';
 const OUTPUT_PATH = 'launch_package/application-provenance.json';
 const MAX_DEPLOYMENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const FUTURE_SKEW_MS = 5 * 60 * 1000;
+const PAGE_SIZE = 250;
 
 const text = (value) => String(value ?? '').trim();
 const sha256 = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -117,10 +118,26 @@ const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PROJECT_ID) fail(`unexpected Firebase project: ${projectId}`);
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
+
+async function readAllMatchingDocuments(baseQuery) {
+  const documents = [];
+  let cursor = null;
+  for (;;) {
+    let pageQuery = baseQuery
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(PAGE_SIZE);
+    if (cursor) pageQuery = pageQuery.startAfter(cursor);
+    const page = await pageQuery.get();
+    documents.push(...page.docs);
+    if (page.size < PAGE_SIZE) return documents;
+    cursor = page.docs[page.docs.length - 1];
+  }
+}
+
 let query = db.collection(definition.collection);
 if (definition.where) query = query.where(...definition.where);
-const snapshot = await query.limit(100).get();
-const candidates = snapshot.docs
+const documents = await readAllMatchingDocuments(query);
+const candidates = documents
   .map(docResult)
   .filter(definition.matches)
   .map((entry) => ({ ...entry, observedMs: latestTimestamp(entry.data, definition.timestampFields) }))
@@ -153,10 +170,11 @@ const proof = {
   subjectHash: sha256(subject),
   selectedObservedAt: new Date(selected.observedMs).toISOString(),
   collection: definition.collection,
+  scannedDocumentCount: documents.length,
   releaseBindingPresent: declaredShas.length > 0 || declaredRunIds.length > 0,
   observedAt: new Date().toISOString(),
   hardLaunchClaim: false,
 };
 mkdirSync('launch_package', { recursive: true });
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
-console.log(`[operational-application-provenance] PASS gate=${gate} deployRun=${expectedDeployRunId}`);
+console.log(`[operational-application-provenance] PASS gate=${gate} deployRun=${expectedDeployRunId} scanned=${documents.length}`);
