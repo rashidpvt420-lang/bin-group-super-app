@@ -48,18 +48,35 @@ jobs:
           set -euo pipefail
           git rm .github/scripts/build-clean-gps-cas-695.py .github/workflows/build-clean-gps-cas-695.yml
           git add functions/technicianLiveLocation.ts functions/technicianLiveLocationCas.ts tests/launch/technician-live-location-cas.test.mjs tests/launch/maps-gps-product-truth.test.mjs
-          changed="$(git diff --cached --name-only | sort)"
-          expected="$(printf '%s\n' \
+
+          staged="$(git diff --cached --name-only | sort)"
+          expected_staged="$(printf '%s\n' \
+            .github/scripts/build-clean-gps-cas-695.py \
+            .github/workflows/build-clean-gps-cas-695.yml \
             functions/technicianLiveLocation.ts \
             functions/technicianLiveLocationCas.ts \
             tests/launch/maps-gps-product-truth.test.mjs \
             tests/launch/technician-live-location-cas.test.mjs | sort)"
-          [[ "$changed" == "$expected" ]] || {
-            echo '::error::Clean GPS CAS builder produced an unexpected final diff.'
-            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+          [[ "$staged" == "$expected_staged" ]] || {
+            echo '::error::Clean GPS CAS builder staged an unexpected path.'
+            printf 'Staged:\n%s\nExpected:\n%s\n' "$staged" "$expected_staged"
             exit 1
           }
+
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m 'fix(gps): enforce session CAS for STOP UPDATE and watchdog'
+
+          final_changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected_final="$(printf '%s\n' \
+            functions/technicianLiveLocation.ts \
+            functions/technicianLiveLocationCas.ts \
+            tests/launch/maps-gps-product-truth.test.mjs \
+            tests/launch/technician-live-location-cas.test.mjs | sort)"
+          [[ "$final_changed" == "$expected_final" ]] || {
+            echo '::error::Final GPS CAS PR diff is not restricted to the four intended files.'
+            printf 'Final diff:\n%s\nExpected:\n%s\n' "$final_changed" "$expected_final"
+            exit 1
+          }
+
           git push origin HEAD:fix/technician-gps-session-cas-current-main
