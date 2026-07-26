@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -22,7 +23,7 @@ async function assertOwnerRole(auth: any) {
 }
 
 export const ownerCreateMaintenanceTicket = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     await assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;
@@ -53,11 +54,13 @@ export const ownerCreateMaintenanceTicket = onCall(
       unit = unitSnap.data() || {};
     }
 
-    const sourceLocation = property.location || property.propertyLocation || property.geoPoint || property.geo || {};
-    const lat = Number(sourceLocation.lat ?? sourceLocation.latitude);
-    const lng = Number(sourceLocation.lng ?? sourceLocation.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
-      throw new HttpsError("failed-precondition", "Verified property GPS coordinates are required before dispatch.");
+    let canonicalGeo;
+    try {
+      canonicalGeo = resolveDispatchReadyPropertyGeo(property);
+    } catch (error) {
+      throw error instanceof PropertyGeoAuthorityError
+        ? new HttpsError("failed-precondition", error.message)
+        : error;
     }
 
     const ticketRef = db.collection("maintenanceTickets").doc();
@@ -81,12 +84,14 @@ export const ownerCreateMaintenanceTicket = onCall(
       specificLocation,
       photos: [],
       jobLocation: {
-        lat,
-        lng,
-        latitude: lat,
-        longitude: lng,
-        address: text(property.address || property.addressLine, 500),
-        source: "SERVER_PROPERTY_RECORD",
+        lat: canonicalGeo.lat,
+        lng: canonicalGeo.lng,
+        latitude: canonicalGeo.lat,
+        longitude: canonicalGeo.lng,
+        address: canonicalGeo.address,
+        source: "SERVER_VERIFIED_PROPERTY_GEO",
+        verificationVersion: canonicalGeo.verificationVersion,
+        verifiedBy: canonicalGeo.verifiedBy,
       },
       source: "OWNER_PORTAL_CALLABLE",
       status: "OPEN",
