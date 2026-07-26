@@ -1,0 +1,55 @@
+name: Postdeploy External Evidence Chain
+run-name: Postdeploy External Evidence Chain source-deploy-${{ github.event.workflow_run.id }}
+
+on:
+  workflow_run:
+    workflows:
+      - Firebase Production Deploy
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: postdeploy-external-evidence-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch-and-wait:
+    name: Dispatch and await canonical external evidence
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      SOURCE_DEPLOY_RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - name: Checkout exact deployed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Dispatch and await canonical external evidence workflows
+        run: node scripts/dispatch-postdeploy-external-evidence.mjs
+
+      - name: Upload postdeploy external evidence chain
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postdeploy-external-evidence-chain-${{ github.event.workflow_run.head_sha }}
+          path: launch_package/postdeploy-external-evidence-chain.json
+          if-no-files-found: error
+          retention-days: 365
