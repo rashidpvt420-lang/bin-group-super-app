@@ -1,0 +1,89 @@
+name: Diagnose Property Tenant Rules
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/diagnose-property-tenant-rules.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'fix/property-tenant-authority-after-dispatch' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/property-tenant-authority-after-dispatch
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies quietly
+        shell: bash
+        run: |
+          set +e
+          bash scripts/npm-install-retry.sh > install.txt 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then tail -100 install.txt; fi
+          exit "$status"
+
+      - name: Import exact reviewed rule hardeners
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_source='28806cc2b488733067cef595d0cb5f040f2e0ee3'
+          git fetch --no-tags origin refs/heads/fix/property-tenant-authority-current-main:refs/remotes/origin/property-tenant-authority-source
+          [[ "$(git rev-parse refs/remotes/origin/property-tenant-authority-source)" == "$expected_source" ]]
+          files=(
+            scripts/apply-ticket-rule-binding.mjs
+            scripts/harden-final-firestore-authority.mjs
+            scripts/harden-private-hr-authority.mjs
+            scripts/harden-property-geo-authority.mjs
+            scripts/harden-technician-live-location-authority.mjs
+            scripts/normalize-security-rules-test.mjs
+            scripts/verify-firestore-launch-hardening.mjs
+          )
+          for file in "${files[@]}"; do
+            git show "refs/remotes/origin/property-tenant-authority-source:$file" > "$file"
+          done
+
+      - name: Capture deterministic rule preparation
+        id: prepare
+        shell: bash
+        run: |
+          set +e
+          {
+            npm run normalize:rule-tests
+            npm run prepare:rules
+            npm run verify:rules-hardening
+          } > property-tenant-rules.txt 2>&1
+          status=$?
+          cat property-tenant-rules.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload rule diagnostic
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: property-tenant-rules-${{ github.sha }}
+          path: property-tenant-rules.txt
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Enforce rule preparation
+        run: test "${{ steps.prepare.outputs.status }}" = "0"
