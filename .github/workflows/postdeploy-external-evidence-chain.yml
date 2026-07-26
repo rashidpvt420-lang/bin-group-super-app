@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: postdeploy-external-evidence-${{ github.event.workflow_run.id }}
@@ -25,6 +24,9 @@ jobs:
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
@@ -32,10 +34,8 @@ jobs:
       SOURCE_DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
-      - name: Checkout exact deployed commit
+      - name: Checkout current main orchestration commit
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
