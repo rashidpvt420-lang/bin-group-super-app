@@ -16,6 +16,7 @@
 import { db, doc, functions, httpsCallable, serverTimestamp, setDoc } from '../lib/firebase';
 import {
     browserGpsQueueStorage,
+    discardAllQueuedUpdates,
     discardQueuedSessionUpdates,
     enqueueGpsRetryAction,
     hasPendingGpsStop,
@@ -308,7 +309,8 @@ function installOnlineRecovery(technicianUid: string, ticketIdForDiagnostic?: st
     detachOnlineRecovery();
     const handler = () => {
         void replayForTechnician(technicianUid, ticketIdForDiagnostic).then((result) => {
-            const stillQueued = readGpsRetryQueue().some((entry) => entry.technicianUid === technicianUid);
+            const stillQueued = readGpsRetryQueue(browserGpsQueueStorage(technicianUid))
+                .some((entry) => entry.technicianUid === technicianUid);
             if (!stillQueued && _state.watchId === null) detachOnlineRecovery();
             if (result.terminal > 0 && ticketIdForDiagnostic) {
                 void persistTrackingDiagnostic(technicianUid, ticketIdForDiagnostic, {
@@ -325,7 +327,7 @@ function installOnlineRecovery(technicianUid: string, ticketIdForDiagnostic?: st
 }
 
 export function purgeTechnicianGpsRetryQueue(technicianUid: string) {
-    purgeGpsQueueForTechnician(technicianUid, browserGpsQueueStorage());
+    purgeGpsQueueForTechnician(technicianUid, browserGpsQueueStorage(technicianUid));
     if (_state.recoveryUid === technicianUid) detachOnlineRecovery();
 }
 
@@ -341,7 +343,7 @@ export const startLiveTracking = async (
         readiness,
         startedAt: serverTimestamp(),
         trackingMode: 'FOREGROUND_BROWSER',
-        retryStoragePolicy: 'STOP_LOCAL_NO_COORDINATES_UPDATE_SESSION_5_MINUTES',
+        retryStoragePolicy: 'UID_SCOPED_STOP_LOCAL_NO_COORDINATES_UPDATE_MEMORY_ONLY',
     });
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -362,6 +364,8 @@ export const startLiveTracking = async (
     detachOnlineRecovery();
     removeLegacyGpsQueue();
     purgeGpsQueuesExceptTechnician(technicianUid);
+    // Precise UPDATE coordinates are memory-only and cannot cross ticket or session authority.
+    discardAllQueuedUpdates(technicianUid);
     installOnlineRecovery(technicianUid, ticketId);
 
     const replay = await replayForTechnician(technicianUid, ticketId);

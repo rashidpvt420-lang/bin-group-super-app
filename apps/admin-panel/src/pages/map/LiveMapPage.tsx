@@ -93,7 +93,9 @@ const verificationDate = (verifiedAtMs: number) => {
 export default function LiveMapPage() {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
-  const markerRefs = useRef<any[]>([]);
+  const technicianMarkerRefs = useRef<Map<string, any>>(new Map());
+  const ticketMarkerRefs = useRef<Map<string, any>>(new Map());
+  const viewportInitializedRef = useRef(false);
 
   const [tickets, setTickets] = useState<any[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
@@ -257,60 +259,96 @@ export default function LiveMapPage() {
     const maps = (window as any).google?.maps;
     if (!maps) return;
 
-    markerRefs.current.forEach((marker) => marker.setMap(null));
-    markerRefs.current = [];
-    const bounds = new maps.LatLngBounds();
-    let pointCount = 0;
+    const visibleTechnicianIds = new Set<string>();
+    const visibleTicketIds = new Set<string>();
+    const initialBounds = new maps.LatLngBounds();
+    let initialPointCount = 0;
 
     for (const location of freshLocations) {
       const point = mapCoordinate(location.location);
       if (!point) continue;
-      const marker = new maps.Marker({
-        map: mapRef.current,
-        position: point,
-        title: `${location.technicianName || 'Technician'} — fresh canonical GPS`,
-        icon: {
-          path: maps.SymbolPath.CIRCLE,
-          scale: 9,
-          fillColor: '#10b981',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        },
-      });
-      markerRefs.current.push(marker);
-      bounds.extend(point);
-      pointCount += 1;
+      visibleTechnicianIds.add(location.id);
+      initialBounds.extend(point);
+      initialPointCount += 1;
+      const title = `${location.technicianName || 'Technician'} — fresh canonical GPS`;
+      const existing = technicianMarkerRefs.current.get(location.id);
+      if (existing) {
+        existing.setPosition(point);
+        existing.setTitle(title);
+      } else {
+        technicianMarkerRefs.current.set(location.id, new maps.Marker({
+          map: mapRef.current,
+          position: point,
+          title,
+          icon: {
+            path: maps.SymbolPath.CIRCLE,
+            scale: 9,
+            fillColor: '#10b981',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          },
+        }));
+      }
     }
+    technicianMarkerRefs.current.forEach((marker, id) => {
+      if (!visibleTechnicianIds.has(id)) {
+        marker.setMap(null);
+        technicianMarkerRefs.current.delete(id);
+      }
+    });
 
     for (const { ticket, pin } of ticketsWithVerifiedPins) {
+      visibleTicketIds.add(ticket.id);
+      initialBounds.extend(pin.point);
+      initialPointCount += 1;
       const priority = String(ticket.priority || ticket.severity || '').toUpperCase();
-      const marker = new maps.Marker({
-        map: mapRef.current,
-        position: pin.point,
-        title: `${ticket.propertyName || ticket.unit || ticket.id} — verified canonical property pin — ${displayStatus(ticket)}`,
-        icon: {
-          path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-          scale: 6,
-          fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 1.5,
-        },
-      });
-      markerRefs.current.push(marker);
-      bounds.extend(pin.point);
-      pointCount += 1;
+      const title = `${ticket.propertyName || ticket.unit || ticket.id} — verified canonical property pin — ${displayStatus(ticket)}`;
+      const icon = {
+        path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+        scale: 6,
+        fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 1.5,
+      };
+      const existing = ticketMarkerRefs.current.get(ticket.id);
+      if (existing) {
+        existing.setPosition(pin.point);
+        existing.setTitle(title);
+        existing.setIcon(icon);
+      } else {
+        ticketMarkerRefs.current.set(ticket.id, new maps.Marker({
+          map: mapRef.current,
+          position: pin.point,
+          title,
+          icon,
+        }));
+      }
     }
+    ticketMarkerRefs.current.forEach((marker, id) => {
+      if (!visibleTicketIds.has(id)) {
+        marker.setMap(null);
+        ticketMarkerRefs.current.delete(id);
+      }
+    });
 
-    if (pointCount > 0) {
-      mapRef.current.fitBounds(bounds, 72);
-      if (pointCount === 1) mapRef.current.setZoom(15);
-    } else {
-      mapRef.current.setCenter(UAE_CENTRE);
-      mapRef.current.setZoom(7);
+    // Freshness ticks may remove markers, but they must never override an
+    // Admin's manual pan or zoom. Auto-fit is restricted to the first non-empty
+    // canonical source set after map initialisation.
+    if (!viewportInitializedRef.current && initialPointCount > 0) {
+      mapRef.current.fitBounds(initialBounds, 72);
+      if (initialPointCount === 1) mapRef.current.setZoom(15);
+      viewportInitializedRef.current = true;
     }
   }, [freshLocations, mapReady, ticketsWithVerifiedPins]);
+
+  useEffect(() => () => {
+    technicianMarkerRefs.current.forEach((marker) => marker.setMap(null));
+    ticketMarkerRefs.current.forEach((marker) => marker.setMap(null));
+    technicianMarkerRefs.current.clear();
+    ticketMarkerRefs.current.clear();
+  }, []);
 
   const unassignedCount = tickets.filter((ticket) => [
     'UNASSIGNED',
