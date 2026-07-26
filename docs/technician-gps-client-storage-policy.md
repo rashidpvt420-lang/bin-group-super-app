@@ -15,6 +15,10 @@ The controlled pilot uses foreground browser geolocation. A Technician is shown 
 - Terminal STOP tombstones remain blocking until secure purge or successful server reconciliation.
 - STOP queue saturation fails closed rather than silently deleting stop intent.
 
+## Retry classification
+
+Firebase callable failures are normalized by code. `permission-denied`, `unauthenticated`, `invalid-argument`, and `not-found` are permanent failures and become terminal on the first replay attempt; they are not repeatedly sent until the generic retry cap. Transient transport or availability failures retain bounded exponential backoff. A terminal STOP may be removed manually only when the caller provides exact Technician, ticket and tracking-session identity together with explicit server-reconciliation proof.
+
 ## STOP acknowledgement truth
 
 A STOP can arrive before the first accepted coordinate creates a canonical server session. In that case, the App Check-protected callable records an audited missing-session no-op and returns `missingSession=true`; it does not create or mutate a live-location record. The client records `STOP_MISSING_SESSION_RECONCILED` with `canonicalSessionAbsent=true`, clears the retry safely, and does not falsely claim that an active canonical session was stopped.
