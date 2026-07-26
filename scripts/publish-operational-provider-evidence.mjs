@@ -116,6 +116,64 @@ const manifests = {
       return errors;
     },
   },
+  aiProviderHealth: {
+    path: 'launch_package/ai-provider-health-proof.json',
+    evidenceType: 'workflow-artifact',
+    sourceSystem: 'Firebase Sovereign AI callable with Gemini and OpenAI',
+    reference: (proof) => `firebase-ai://projects/${proof.projectId}/locations/${proof.functionRegion}/functions/${proof.functionName}#gemini-openai`,
+    sourceProof: (proof) => ({
+      source: proof.source,
+      productionDeployRunId: proof.productionDeployRunId,
+      validatedArtifactDigest: proof.validatedArtifactDigest,
+      functionName: proof.functionName,
+      functionRegion: proof.functionRegion,
+      authenticatedUidHash: proof.authenticatedUidHash,
+      appCheck: proof.appCheck,
+      providers: proof.providers,
+      privacy: proof.privacy,
+      authorityBoundary: proof.authorityBoundary,
+      quota: proof.quota,
+      slo: proof.slo,
+      tokenAndCostControls: proof.tokenAndCostControls,
+      observedAt: proof.observedAt,
+    }),
+    validate: (proof, context) => {
+      const errors = [];
+      if (proof.schemaVersion !== 1 || proof.status !== 'passed') errors.push('AI proof must be schemaVersion 1 and passed');
+      if (proof.source !== 'sovereign-ai-live-verifier') errors.push('AI proof source mismatch');
+      if (proof.commitSha !== context.commitSha || proof.projectId !== PRODUCTION.projectId) errors.push('AI proof commit/project mismatch');
+      if (text(proof.workflowRunId) !== context.runId) errors.push('AI proof workflow run mismatch');
+      if (!/^\d+$/.test(text(proof.productionDeployRunId))) errors.push('AI proof production deployment run ID invalid');
+      if (!/^sha256:[a-f0-9]{64}$/.test(text(proof.validatedArtifactDigest).toLowerCase())) errors.push('AI proof deployment digest invalid');
+      if (proof.functionName !== 'runSovereignAI' || proof.functionRegion !== 'europe-west3') errors.push('AI function identity mismatch');
+      if (!/^[a-f0-9]{64}$/.test(text(proof.authenticatedUidHash))) errors.push('AI authenticated UID hash invalid');
+      if (proof.appCheck?.invalidTokenRejected !== true || proof.appCheck?.validTokenAccepted !== true) errors.push('AI App Check acceptance/rejection proof invalid');
+      for (const provider of ['gemini', 'openai']) {
+        const sample = proof.providers?.[provider] || {};
+        if (sample.provider !== provider || !text(sample.model)) errors.push(`${provider} live provider/model proof invalid`);
+        if (Number(sample.providerLatencyMs) > 20000 || Number(sample.roundTripMs) > 30000) errors.push(`${provider} latency SLO invalid`);
+        if (sample.advisoryOnly !== true || sample.clientContextAuthoritative !== false) errors.push(`${provider} authority boundary invalid`);
+      }
+      if (proof.privacy?.comprehensiveFreeTextRedactionVerified !== true || proof.privacy?.nestedInnocentKeyRedactionVerified !== true || proof.privacy?.protectedValuesNotEchoed !== true) errors.push('AI privacy proof invalid');
+      if (Number(proof.privacy?.minimumRedactionsObserved || 0) < 4) errors.push('AI privacy proof did not observe enough redactions');
+      if (proof.authorityBoundary?.advisoryOnly !== true || proof.authorityBoundary?.clientContextAuthoritative !== false || proof.authorityBoundary?.operationalApprovalsDelegatedToAi !== false) errors.push('AI authority boundary proof invalid');
+      if (proof.quota?.providerSuccessChargesVerified !== true || proof.quota?.boundaryRejected !== true || proof.quota?.rejectedAttemptUncharged !== true || proof.quota?.reservationsCleared !== true || proof.quota?.originalUsageRestored !== true) errors.push('AI quota proof invalid');
+      if (Number(proof.quota?.exactBoundary) !== 50) errors.push('AI quota boundary mismatch');
+      const observed = proof.slo?.observed || {};
+      const thresholds = proof.slo?.thresholds || {};
+      if (proof.slo?.passed !== true) errors.push('AI SLO proof not passed');
+      if (Number(observed.providerSuccessRate) < Number(thresholds.minProviderSuccessRate)) errors.push('AI provider success rate below SLO');
+      if (Number(observed.fallbackRate) > Number(thresholds.maxFallbackRate)) errors.push('AI fallback rate above SLO');
+      if (Number(observed.invalidOutputRate) > Number(thresholds.maxInvalidOutputRate)) errors.push('AI invalid-output rate above SLO');
+      if (Number(observed.functionErrorRate) > Number(thresholds.maxFunctionErrorRate)) errors.push('AI function-error rate above SLO');
+      if (Number(observed.maxProviderLatencyMs) > Number(thresholds.maxProviderLatencyMs)) errors.push('AI provider latency above SLO');
+      if (Number(observed.maxRoundTripMs) > Number(thresholds.maxRoundTripMs)) errors.push('AI round-trip latency above SLO');
+      if (Number(proof.tokenAndCostControls?.maxOutputTokensPerProviderResponse) !== 700 || Number(proof.tokenAndCostControls?.dailyChatRequestsPerUser) !== 50 || Number(proof.tokenAndCostControls?.dailyTotalAiUnitsPerUser) !== 75) errors.push('AI token/cost controls invalid');
+      if (proof.tokenAndCostControls?.aggregateTelemetryCollection !== 'ai_health_daily') errors.push('AI aggregate telemetry binding invalid');
+      if (!validTime(proof.observedAt)) errors.push('AI observedAt invalid');
+      return errors;
+    },
+  },
 };
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('publisher may only run in GitHub Actions');
