@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,6 +17,15 @@ const fail = (message) => {
   process.exit(1);
 };
 
+if (
+  !process.argv.includes('--prepare-in-place') ||
+  process.env.GITHUB_ACTIONS !== 'true' ||
+  process.env.GITHUB_REF !== 'refs/heads/main' ||
+  process.env.GITHUB_WORKFLOW !== 'Operational Application Evidence' ||
+  process.env.GITHUB_JOB !== 'verify-and-publish'
+) {
+  fail('in-place evidence preparation requires the protected exact-main operational evidence workflow');
+}
 if (!existsSync(sourcePath)) fail(`source verifier is missing: ${sourcePath}`);
 let source = readFileSync(sourcePath, 'utf8');
 
@@ -128,13 +136,5 @@ for (const required of [
 }
 
 writeFileSync(temporaryPath, source, { mode: 0o600 });
-try {
-  const result = spawnSync(process.execPath, [temporaryPath], {
-    cwd: process.cwd(),
-    env: process.env,
-    stdio: 'inherit',
-  });
-  process.exitCode = result.status ?? 1;
-} finally {
-  rmSync(temporaryPath, { force: true });
-}
+renameSync(temporaryPath, sourcePath);
+console.log('[operational-application-evidence-pagination] PASS — canonical verifier prepared in place');
