@@ -15,6 +15,9 @@ const adminPage = readFileSync('apps/admin-panel/src/pages/admin/AdminPropertyAp
 const pinResolver = readFileSync('apps/admin-panel/src/lib/verifiedPropertyPin.ts', 'utf8');
 const tenantTickets = readFileSync('functions/tenantTicketOperations.ts', 'utf8');
 const ownerTickets = readFileSync('functions/ownerMaintenanceOperations.ts', 'utf8');
+const rootFirebase = readFileSync('src/lib/firebase.ts', 'utf8');
+const ticketRuleBinding = readFileSync('scripts/apply-ticket-rule-binding.mjs', 'utf8');
+
 
 test('Founder review builds a versioned canonical geo contract and dispatch resolver rejects browser evidence', () => {
   const now = 1_720_000_000_000;
@@ -64,6 +67,26 @@ test('Founder callable and Admin page are the only browser review path', () => {
   assert.match(adminReview, /geoDispatchReady/);
   assert.match(adminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
   assert.doesNotMatch(adminPage, /updateDoc\(|addDoc\(|serverTimestamp\(/);
+});
+
+test('normal Tenant maintenance addDoc is converted to the canonical App Check callable', () => {
+  assert.match(rootFirebase, /const createLegacyTenantTicket = async/);
+  assert.match(rootFirebase, /httpsCallable\(functions, 'createTenantServiceTicket'\)/);
+  assert.match(rootFirebase, /kind: 'AI_CONCIERGE'/);
+  assert.match(rootFirebase, /if \(isLegacyTenantTicket\) return createLegacyTenantTicket\(reference, data\)/);
+  assert.match(rootFirebase, /Never forward jobLocation, propertyLocation, latitude, longitude/);
+  assert.doesNotMatch(rootFirebase, /createTenantServiceTicket\([\s\S]{0,800}jobLocation/);
+});
+
+test('both ticket collections deny direct Tenant browser creation after canonical hardening', () => {
+  assert.match(ticketRuleBinding, /const canonicalCreate = "      allow create: if isAdmin\(\);"/);
+  assert.match(ticketRuleBinding, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+  assert.doesNotMatch(rules, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+  for (const marker of ['match /tickets/{ticketId} {', 'match /maintenanceTickets/{ticketId} {']) {
+    const start = rules.indexOf(marker);
+    assert.ok(start >= 0, `${marker} missing`);
+    assert.match(rules.slice(start, start + 700), /allow create: if isAdmin\(\);/);
+  }
 });
 
 test('Admin map and all ticket callables require the same canonical verification', () => {
