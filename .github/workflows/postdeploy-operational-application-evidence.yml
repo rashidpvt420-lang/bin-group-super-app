@@ -1,0 +1,166 @@
+name: Operational Application Evidence
+run-name: Operational Application Evidence source-deploy-${{ inputs.source_deploy_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Exact successful Firebase Production Deploy main SHA'
+        required: true
+        type: string
+      source_deploy_run_id:
+        description: 'Successful Firebase Production Deploy workflow run ID'
+        required: true
+        type: string
+      confirmation:
+        description: 'Enter PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: postdeploy-operational-application-${{ inputs.source_deploy_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    name: Verify and publish application evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: hard-public-launch
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      SOURCE_AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      SOURCE_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
+      PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
+
+    steps:
+      - name: Checkout current main evidence commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify trusted parent production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-trusted-production-deploy-source.mjs
+
+      - name: Enforce deployment-triggered application evidence inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGET_SHA" == "$GITHUB_SHA" ]]
+          [[ "$SOURCE_DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$PRODUCTION_DEPLOY_RUN_ID" == "$SOURCE_DEPLOY_RUN_ID" ]]
+          [[ "$TRUSTED_PRODUCTION_DEPLOY_EVIDENCE" == "true" ]]
+          [[ "$TRUSTED_PRODUCTION_DEPLOY_RUN_ID" == "$SOURCE_DEPLOY_RUN_ID" ]]
+          [[ "$AUTHORIZED_FOUNDER_ACTORS" == *"github-actions[bot]"* ]]
+          [[ "$CONFIRMATION" == "PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE" ]]
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download exact production deployment metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.source_deploy_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Restore and validate production deployment binding
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const doc = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
+          const failures = [];
+          if (doc.status !== 'passed') failures.push('deployment status is not passed');
+          if (doc.projectId !== 'bin-group-57c60') failures.push('deployment project mismatch');
+          if (doc.deployedCommitSha !== process.env.TARGET_SHA) failures.push('deployment commit mismatch');
+          if (String(doc.workflowRunId || '') !== process.env.SOURCE_DEPLOY_RUN_ID) failures.push('deployment run mismatch');
+          if (doc.workflowRef !== 'refs/heads/main') failures.push('deployment ref mismatch');
+          if (doc.repository !== process.env.GITHUB_REPOSITORY) failures.push('deployment repository mismatch');
+          if (!/^sha256:[a-f0-9]{64}$/.test(String(doc.validatedArtifactDigest || '').toLowerCase())) failures.push('validated artifact digest is invalid');
+          if (!doc.functionsDeployment?.reconciliation || doc.functionsDeployment.reconciliation.status !== 'passed') failures.push('Function reconciliation evidence is missing');
+          if (failures.length) {
+            for (const failure of failures) console.error(`::error::${failure}`);
+            process.exit(1);
+          }
+          NODE
+
+      - name: Auto-discover, verify, and publish all application evidence
+        env:
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+        run: |
+          set -euo pipefail
+          gates=(
+            ownerPaymentActivation
+            paymentUnlockExactlyOnce
+            tenantNotificationDelivery
+            brokerCommissionLockExactlyOnce
+            adminStaffClaims
+            renewalScheduler
+          )
+          mkdir -p launch_package/application-proofs launch_package/application-provenance
+          for gate in "${gates[@]}"; do
+            echo "::group::Verify and publish ${gate}"
+            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-provenance.mjs
+            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence-mfa.mjs
+            OPERATIONAL_GATE="$gate" node scripts/bind-operational-application-provenance.mjs
+            OPERATIONAL_GATE="$gate" node scripts/publish-operational-application-evidence.mjs
+            cp launch_package/application-proof.json "launch_package/application-proofs/${gate}.json"
+            cp launch_package/application-provenance.json "launch_package/application-provenance/${gate}.json"
+            echo "::endgroup::"
+          done
+
+      - name: Upload deployment-triggered application proof batch
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: postdeploy-operational-application-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/trusted-production-deploy-source.json
+            launch_package/production-deployment.json
+            launch_package/application-proofs
+            launch_package/application-provenance
+          if-no-files-found: error
+          retention-days: 365
