@@ -25,5 +25,5 @@ for (const suite of postDeployBusinessSuites) {
   if (suiteExit !== 0) exitCode = suiteExit;
 }
 
-console.log(`[protected-business-evidence] deployment_suites=${postDeployBusinessSuites.join(',')} admin_proof=post-deploy-real-mfa exit_code=${exitCode} hardLaunchClaim=false`);
+console.log(`[protected-business-evidence] deployment_suites=${postDeployBusinessSuites.join(',')} admin_proof=post-deploy-real-mfa real_firebase_mfa_only=true exit_code=${exitCode} hardLaunchClaim=false`);
 process.exit(exitCode);
