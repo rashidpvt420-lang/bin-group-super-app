@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   patch:
+    # One-time exact-head patch; both helper files self-delete in the result commit.
     if: github.event.pull_request.head.ref == 'fix/property-geo-server-authority-final'
     runs-on: ubuntu-latest
     steps:
