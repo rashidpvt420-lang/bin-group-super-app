@@ -12,6 +12,10 @@ export type StopDecision =
   | "REJECT_MISSING"
   | "REJECT_SUPERSEDED";
 
+export type UpdateDecision =
+  | "APPLY"
+  | "REJECT_SUPERSEDED";
+
 export type WatchdogDecision =
   | "RECONCILE"
   | "SKIP_MISSING"
@@ -59,6 +63,20 @@ export function classifyStopRequest(
 
   return current.trackingSessionId === sessionId && !current.activeTicketId
     ? "ALREADY_STOPPED"
+    : "REJECT_SUPERSEDED";
+}
+
+export function classifyUpdateRequest(
+  current: TechnicianLiveSessionState,
+  requestedTicketId: string,
+  requestedSessionId: string,
+  transactionNowMs: number,
+): UpdateDecision {
+  if (!current.exists || !current.isTracking) return "APPLY";
+  if (current.expiresAtMs !== null && current.expiresAtMs <= transactionNowMs) return "APPLY";
+  return current.activeTicketId === clean(requestedTicketId) &&
+    current.trackingSessionId === clean(requestedSessionId)
+    ? "APPLY"
     : "REJECT_SUPERSEDED";
 }
 
