@@ -62,6 +62,7 @@ jobs:
       GCP_PROJECT_ID: bin-group-57c60
       EXPECTED_COMMIT_SHA: ${{ needs.authorize-owner-command.outputs.commit_sha }}
       DEPLOYMENT_ENVIRONMENT: production
+      OTP_PEPPER_SECRET_NAME: OWNER_CONTRACT_OTP_PEPPER
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: '434'
@@ -108,7 +109,7 @@ jobs:
           project_id: bin-group-57c60
 
       - name: Bootstrap and verify Owner contract OTP pepper without disk persistence
-        run: node scripts/bootstrap-owner-contract-otp-pepper.mjs
+        run: node scripts/bootstrap-broker-payout-otp-pepper.mjs
 
       - name: Reverify exact main after protected mutation
         if: always()
@@ -158,6 +159,7 @@ jobs:
 
           jq -e --arg sha "$EXPECTED_COMMIT_SHA" '
             .status == "passed" and
+            .secretName == "OWNER_CONTRACT_OTP_PEPPER" and
             .exactCommitSha == $sha and
             .minimumLengthSatisfied == true and
             .secretTransport == "stdin" and
