@@ -22,11 +22,16 @@ test('failed STOP remains queued and never produces a false STOPPED diagnostic',
   assert.match(tracking, /status: 'STOP_REQUEST_QUEUED'/);
   assert.match(tracking, /status: 'STOP_RECONCILIATION_FAILED'/);
   assert.match(tracking, /await enqueueAction\(uid, stopAction\)/);
-  assert.match(tracking, /status: 'STOPPED'[\s\S]*await sendAction\(stopAction\)/s);
-  const failedStopBlock = tracking.slice(
-    tracking.indexOf("} catch (error) {\n                try {\n                    await enqueueAction(uid, stopAction)"),
+  const stopFunction = tracking.slice(tracking.indexOf('export const stopLiveTracking'));
+  const sendIndex = stopFunction.indexOf('await sendAction(stopAction);');
+  const stoppedIndex = stopFunction.indexOf("status: 'STOPPED'");
+  const queuedIndex = stopFunction.indexOf("status: 'STOP_REQUEST_QUEUED'");
+  assert.ok(sendIndex > 0 && stoppedIndex > sendIndex && queuedIndex > stoppedIndex);
+  const failedStopBlock = stopFunction.slice(
+    stopFunction.indexOf('await enqueueAction(uid, stopAction);'),
+    stopFunction.indexOf('} finally {'),
   );
-  assert.doesNotMatch(failedStopBlock.slice(0, failedStopBlock.indexOf('} finally {')), /status: 'STOPPED'/);
+  assert.doesNotMatch(failedStopBlock, /status: 'STOPPED'/);
 });
 
 test('capture throttle advances before network work and UPDATEs are coalesced', () => {
@@ -43,7 +48,7 @@ test('queue has explicit retry, expiry and terminal-error handling', () => {
   assert.match(tracking, /MAX_RETRY_ATTEMPTS = 6/);
   assert.match(tracking, /UPDATE_TTL_MS = 15 \* 60 \* 1000/);
   assert.match(tracking, /STOP_TTL_MS = 24 \* 60 \* 60 \* 1000/);
-  assert.match(tracking, /attempts: entry\.attempts \+ 1|const attempts = entry\.attempts \+ 1/);
+  assert.match(tracking, /const attempts = entry\.attempts \+ 1/);
   assert.match(tracking, /TERMINAL_CALLABLE_CODES/);
   assert.match(tracking, /retry-limit-exceeded/);
   assert.match(tracking, /entry\.expiresAtMs > nowMs/);
@@ -59,7 +64,11 @@ test('precise retry data is session-only, UID-hashed and purged on account chang
   assert.match(sessionControls, /role === 'technician'/);
   assert.match(sessionControls, /purgeTechnicianTrackingQueue\(auth\.currentUser\?\.uid \|\| undefined\)/);
   assert.doesNotMatch(tracking, /localStorage\.setItem/);
-  assert.doesNotMatch(tracking, /type QueuedTrackingAction = \{[\s\S]*technicianUid:/);
+  const queueType = tracking.slice(
+    tracking.indexOf('type QueuedTrackingAction ='),
+    tracking.indexOf('type QueueEnvelope ='),
+  );
+  assert.doesNotMatch(queueType, /technicianUid/);
   assert.match(privacyDoc, /sessionStorage/);
   assert.match(privacyDoc, /15 minutes/);
   assert.match(privacyDoc, /24 hours/);
