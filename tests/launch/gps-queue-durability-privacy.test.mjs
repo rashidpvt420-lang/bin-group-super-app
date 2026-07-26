@@ -26,6 +26,7 @@ test('pending STOP actions replay before a new tracking session can start', () =
   ]);
   assert.match(tracking, /A previous GPS STOP is still queued/);
   assert.match(tracking, /STOP_RECONCILIATION_REQUIRED/);
+  assert.match(tracking, /onError\?\.\(message\);\s*throw new Error\(message\)/);
   assert.doesNotMatch(tracking, /if \(!isCurrentSession\) continue/);
 });
 
@@ -65,12 +66,19 @@ test('queue has retry, expiry, terminal and explicit saturation disposal policy'
   assert.match(tracking, /entry\.status === 'TERMINAL'/);
   assert.match(tracking, /entry\.action === 'UPDATE'/);
   assert.match(tracking, /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/);
+  assert.match(tracking, /GPS_TERMINAL_STOP_TOMBSTONE_LOST/);
+  assert.doesNotMatch(tracking, /if \(index < 0\) index = 0/);
+  assert.match(tracking, /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/);
   assert.doesNotMatch(tracking, /if \(index < 0\) index = 0/);
 });
 
 test('precise retry data is UID-scoped, session-only and purged on account change/logout', () => {
   assert.match(tracking, /QUEUE_KEY_PREFIX = 'bin-technician-gps-queue-v2:'/);
   assert.match(tracking, /window\.sessionStorage/);
+  assert.match(tracking, /window\.localStorage\.removeItem\(LEGACY_QUEUE_KEY\)/);
+  assert.match(tracking, /memoryUpdateQueues/);
+  assert.match(tracking, /persistentStops/);
+  assert.match(tracking, /map\(\(\{ point: _discardedPoint, \.\.\.entry \}\) => entry\)/);
   assert.match(tracking, /encodeURIComponent\(technicianUid\)/);
   assert.match(tracking, /function minimalPoint/);
   assert.match(tracking, /value\.toFixed\(decimals\)/);

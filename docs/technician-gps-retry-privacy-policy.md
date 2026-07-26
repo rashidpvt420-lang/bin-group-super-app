@@ -8,7 +8,9 @@ BIN GROUP uses **foreground-browser GPS** for the controlled pilot. Tracking is 
 
 The browser may temporarily retain failed GPS actions so a short network interruption does not leave the canonical server state inconsistent.
 
-- Storage: `sessionStorage` only.
+- STOP and reconciliation storage: UID-scoped `sessionStorage`; coordinate-free.
+- UPDATE retry storage: memory only; precise coordinates are never written to Web Storage.
+- Legacy migration: the persistent `bin-technician-gps-queue-v1` localStorage record is deleted during startup and secure logout.
 - Scope: one key per authenticated Technician UID.
 - Lifetime: maximum 30 minutes per action.
 - Capacity: maximum 25 actions per Technician session.

@@ -80,6 +80,7 @@ type QueueFlushResult = {
 };
 
 const QUEUE_KEY_PREFIX = 'bin-technician-gps-queue-v2:';
+const LEGACY_QUEUE_KEY = 'bin-technician-gps-queue-v1';
 const MAX_QUEUE_SIZE = 25;
 const QUEUE_TTL_MS = 30 * 60_000;
 const MAX_RETRY_ATTEMPTS = 5;
@@ -97,6 +98,7 @@ const _state: TrackingState = {
 };
 
 const queueFlushes = new Map<string, Promise<QueueFlushResult>>();
+const memoryUpdateQueues = new Map<string, QueuedTrackingAction[]>();
 
 async function readGpsPermissionState(): Promise<PermissionState | 'unsupported' | 'unknown'> {
     try {
@@ -269,6 +271,15 @@ function storage(): Storage | null {
     }
 }
 
+function purgeLegacyPersistentGpsQueue() {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.removeItem(LEGACY_QUEUE_KEY);
+    } catch {
+        // Storage restrictions must not prevent secure startup or logout.
+    }
+}
+
 function errorCode(error: any): string {
     const raw = String(error?.code || error?.name || 'retryable').toLowerCase();
     return raw.replace(/[^a-z0-9_/-]/g, '').slice(0, 80) || 'retryable';
@@ -310,31 +321,42 @@ function validQueueEntry(value: any): value is QueuedTrackingAction {
 }
 
 function readQueue(technicianUid: string): QueuedTrackingAction[] {
+    if (!technicianUid) return [];
     const session = storage();
-    if (!session || !technicianUid) return [];
-    try {
-        const parsed = JSON.parse(session.getItem(queueKey(technicianUid)) || '[]');
-        return Array.isArray(parsed) ? parsed.filter(validQueueEntry) : [];
-    } catch {
-        return [];
+    let persistentStops: QueuedTrackingAction[] = [];
+    if (session) {
+        try {
+            const parsed = JSON.parse(session.getItem(queueKey(technicianUid)) || '[]');
+            persistentStops = Array.isArray(parsed)
+                ? parsed.filter(validQueueEntry).filter((entry) => entry.action === 'STOP')
+                : [];
+        } catch {
+            persistentStops = [];
+        }
     }
+    return [...persistentStops, ...(memoryUpdateQueues.get(technicianUid) || [])];
 }
 
 function compactQueue(queue: QueuedTrackingAction[], nowMs = Date.now()) {
-    const expired = queue.filter((entry) => entry.expiresAtMs <= nowMs);
+    const terminalStopTombstones = queue.filter((entry) => entry.action === 'STOP' && entry.status === 'TERMINAL');
+    const expired = queue.filter((entry) =>
+        entry.expiresAtMs <= nowMs && !(entry.action === 'STOP' && entry.status === 'TERMINAL'),
+    );
     const active = queue
-        .filter((entry) => entry.expiresAtMs > nowMs)
+        .filter((entry) => entry.expiresAtMs > nowMs || (entry.action === 'STOP' && entry.status === 'TERMINAL'))
         .sort((left, right) => left.queuedAtMs - right.queuedAtMs || left.id.localeCompare(right.id));
     const disposed: QueuedTrackingAction[] = [...expired];
 
     while (active.length > MAX_QUEUE_SIZE) {
         let index = active.findIndex((entry) => entry.status === 'TERMINAL' && entry.action === 'UPDATE');
         if (index < 0) index = active.findIndex((entry) => entry.action === 'UPDATE');
-        if (index < 0) {
-            throw new Error('GPS_STOP_QUEUE_CAPACITY_EXCEEDED');
-        }
+        if (index < 0) throw new Error('GPS_STOP_QUEUE_CAPACITY_EXCEEDED');
         const [removed] = active.splice(index, 1);
         if (removed) disposed.push(removed);
+    }
+
+    if (terminalStopTombstones.length > 0 && !active.some((entry) => entry.action === 'STOP' && entry.status === 'TERMINAL')) {
+        throw new Error('GPS_TERMINAL_STOP_TOMBSTONE_LOST');
     }
 
     if (disposed.length > 0) {
@@ -346,11 +368,19 @@ function compactQueue(queue: QueuedTrackingAction[], nowMs = Date.now()) {
 }
 
 function writeQueue(technicianUid: string, queue: QueuedTrackingAction[]) {
-    const session = storage();
-    if (!session || !technicianUid) return;
+    if (!technicianUid) return;
     const compacted = compactQueue(queue);
-    if (compacted.length === 0) session.removeItem(queueKey(technicianUid));
-    else session.setItem(queueKey(technicianUid), JSON.stringify(compacted));
+    const persistentStops = compacted
+        .filter((entry) => entry.action === 'STOP')
+        .map(({ point: _discardedPoint, ...entry }) => entry);
+    const memoryUpdates = compacted.filter((entry) => entry.action === 'UPDATE');
+    const session = storage();
+    if (session) {
+        if (persistentStops.length === 0) session.removeItem(queueKey(technicianUid));
+        else session.setItem(queueKey(technicianUid), JSON.stringify(persistentStops));
+    }
+    if (memoryUpdates.length === 0) memoryUpdateQueues.delete(technicianUid);
+    else memoryUpdateQueues.set(technicianUid, memoryUpdates);
 }
 
 function createQueuedAction(
@@ -394,28 +424,43 @@ function discardSessionUpdates(technicianUid: string, ticketId: string, tracking
 }
 
 export function purgeLiveTrackingQueue(technicianUid?: string) {
+    purgeLegacyPersistentGpsQueue();
     const session = storage();
-    if (!session) return;
     const exactKey = technicianUid ? queueKey(technicianUid) : null;
-    const keys: string[] = [];
-    for (let index = 0; index < session.length; index += 1) {
-        const key = session.key(index);
-        if (key?.startsWith(QUEUE_KEY_PREFIX) && (!exactKey || key === exactKey)) keys.push(key);
+    if (session) {
+        const keys: string[] = [];
+        for (let index = 0; index < session.length; index += 1) {
+            const key = session.key(index);
+            if (key?.startsWith(QUEUE_KEY_PREFIX) && (!exactKey || key === exactKey)) keys.push(key);
+        }
+        keys.forEach((key) => session.removeItem(key));
     }
-    keys.forEach((key) => session.removeItem(key));
+    if (technicianUid) memoryUpdateQueues.delete(technicianUid);
+    else memoryUpdateQueues.clear();
 }
 
 function purgeOtherTechnicianQueues(technicianUid: string) {
+    purgeLegacyPersistentGpsQueue();
     const session = storage();
-    if (!session) return;
     const currentKey = queueKey(technicianUid);
     const staleKeys: string[] = [];
-    for (let index = 0; index < session.length; index += 1) {
-        const key = session.key(index);
-        if (key?.startsWith(QUEUE_KEY_PREFIX) && key !== currentKey) staleKeys.push(key);
+    if (session) {
+        for (let index = 0; index < session.length; index += 1) {
+            const key = session.key(index);
+            if (key?.startsWith(QUEUE_KEY_PREFIX) && key !== currentKey) staleKeys.push(key);
+        }
+        staleKeys.forEach((key) => session.removeItem(key));
     }
-    staleKeys.forEach((key) => session.removeItem(key));
-    if (staleKeys.length > 0) console.info(`[Tracking] Purged ${staleKeys.length} GPS queues after Technician account change.`);
+    let memoryPurges = 0;
+    for (const uid of memoryUpdateQueues.keys()) {
+        if (uid !== technicianUid) {
+            memoryUpdateQueues.delete(uid);
+            memoryPurges += 1;
+        }
+    }
+    if (staleKeys.length + memoryPurges > 0) {
+        console.info(`[Tracking] Purged ${staleKeys.length + memoryPurges} GPS queues after Technician account change.`);
+    }
 }
 
 const publishLiveLocation = httpsCallable(functions, 'updateTechnicianLiveLocation');
@@ -579,7 +624,7 @@ export const startLiveTracking = async (
             blockedNewSessionAt: serverTimestamp(),
         });
         onError?.(message);
-        return;
+        throw new Error(message);
     }
 
     if (_state.watchId !== null) navigator.geolocation.clearWatch(_state.watchId);

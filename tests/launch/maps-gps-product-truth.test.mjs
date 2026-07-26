@@ -74,8 +74,11 @@ test('Owner and Tenant tracking card identifies schematic and freshness limitati
 
 test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
   assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
-  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
+  assert.match(liveTracking, /QUEUE_KEY_PREFIX = 'bin-technician-gps-queue-v2:'/);
   assert.match(liveTracking, /MAX_QUEUE_SIZE = 25/);
+  assert.match(liveTracking, /window\.sessionStorage/);
+  assert.match(liveTracking, /window\.localStorage\.removeItem\(LEGACY_QUEUE_KEY\)/);
+  assert.doesNotMatch(liveTracking, /window\.localStorage\.(?:getItem|setItem)/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
