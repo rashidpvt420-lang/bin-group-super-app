@@ -34,8 +34,9 @@ test('Broker production evidence requires a real mailbox code and cannot derive 
   assert.doesNotMatch(source, /number\s*<=\s*999999/);
   assert.doesNotMatch(source, /padStart\(6, ['"]0['"]\)/);
 
-  const evidenceStart = source.indexOf('const evidence =');
+  const evidenceStart = source.lastIndexOf('const evidence = {');
   assert.ok(evidenceStart >= 0, 'Broker production evidence object is missing');
   const evidenceBlock = source.slice(evidenceStart);
-  assert.doesNotMatch(evidenceBlock, /providerMessageId:\s*otpDelivery\.providerMessageId/);
+  assert.doesNotMatch(evidenceBlock, /\n\s+providerMessageId\s*:/);
+  assert.match(evidenceBlock, /providerMessageIdHash/);
 });
