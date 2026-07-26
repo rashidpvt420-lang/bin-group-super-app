@@ -19,6 +19,8 @@ test('Broker payout OTP hashes use a protected server-side HMAC pepper', async (
 test('Broker production evidence requires a real mailbox code and cannot derive it from Firestore', async () => {
   const source = await read('scripts/run-broker-production-evidence.mjs');
   assert.match(source, /E2E_BROKER_MAILBOX_CLIENT_ID/);
+  assert.match(source, /functions:secrets:access/);
+  assert.match(source, /Firebase Secret Manager secret/);
   assert.match(source, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
   assert.match(source, /mailboxReceiptVerified:\s*true/);
   assert.match(source, /mailboxMessageIdHash/);

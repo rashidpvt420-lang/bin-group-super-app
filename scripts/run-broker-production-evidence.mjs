@@ -40,9 +40,23 @@ const safeId = (value, fallback = 'evidence') => text(value)
 
 const brokerEmail = text(process.env.E2E_BROKER_EMAIL).toLowerCase();
 const brokerPassword = text(process.env.E2E_BROKER_PASSWORD);
-const mailboxClientId = text(process.env.E2E_BROKER_MAILBOX_CLIENT_ID);
-const mailboxClientSecret = text(process.env.E2E_BROKER_MAILBOX_CLIENT_SECRET);
-const mailboxRefreshToken = text(process.env.E2E_BROKER_MAILBOX_REFRESH_TOKEN);
+function resolveBrokerMailboxSecret(name) {
+  const configured = text(process.env[name]);
+  if (configured) return configured;
+  try {
+    return text(execFileSync(
+      'npx',
+      ['firebase', 'functions:secrets:access', name, '--project', PROJECT_ID],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ));
+  } catch {
+    throw new Error(`${name} is required as an environment value or Firebase Secret Manager secret for verified Broker mailbox evidence.`);
+  }
+}
+
+const mailboxClientId = resolveBrokerMailboxSecret('E2E_BROKER_MAILBOX_CLIENT_ID');
+const mailboxClientSecret = resolveBrokerMailboxSecret('E2E_BROKER_MAILBOX_CLIENT_SECRET');
+const mailboxRefreshToken = resolveBrokerMailboxSecret('E2E_BROKER_MAILBOX_REFRESH_TOKEN');
 const leadName = text(process.env.E2E_BROKER_LEAD_NAME);
 const appCheckDebugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 const commitSha = text(process.env.GITHUB_SHA) || (() => {
