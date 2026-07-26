@@ -36,7 +36,11 @@ export function liveSessionState(
   let expiresAtMs: number | null = null;
   if (typeof expiresAt === "number" && Number.isFinite(expiresAt)) {
     expiresAtMs = expiresAt;
-  } else if (expiresAt && typeof expiresAt.toMillis === "function") {
+  } else if (
+    expiresAt !== null &&
+    typeof expiresAt === "object" &&
+    typeof expiresAt.toMillis === "function"
+  ) {
     const parsed = expiresAt.toMillis();
     expiresAtMs = Number.isFinite(parsed) ? parsed : null;
   }
