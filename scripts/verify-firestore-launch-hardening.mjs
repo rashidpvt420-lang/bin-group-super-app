@@ -18,6 +18,14 @@ function readFunction(name) {
   return null;
 }
 
+function readTicketMatch(collectionName) {
+  const needle = `    match /${collectionName}/{ticketId} {`;
+  const start = rules.indexOf(needle);
+  if (start < 0) return null;
+  const nextMatch = rules.indexOf('\n    match /', start + needle.length);
+  return rules.slice(start, nextMatch < 0 ? rules.length : nextMatch);
+}
+
 const legacyTicketUpdates = [
   'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
   'allow update: if isAdmin() && isNotSuspended();',
@@ -56,7 +64,7 @@ const requiredFragments = [
   ['tenant ticket create uses binding helper', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
-  ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
+  ['single canonical ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
   ['router caches authentication once', 'let authenticated = signedIn();'],
   ['router caches canonical role once', 'let role = authenticated'],
   ['router caches admin authority once', 'let admin = authenticated && ('],
@@ -88,11 +96,26 @@ const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
 
-if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
+if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 1) failures.push('Canonical ticket update gate must exist exactly once.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
 if (rules.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) failures.push('Private HR profile rule must exist exactly once.');
 if (rules.split('match /technician_live_locations/{technicianId}').length - 1 !== 1) failures.push('Canonical live-location rule must exist exactly once.');
+
+const legacyTicketBlock = readTicketMatch('tickets');
+if (!legacyTicketBlock) {
+  failures.push('Legacy tickets compatibility block is missing.');
+} else {
+  if (!legacyTicketBlock.includes('allow create, update, delete: if false;')) failures.push('Legacy tickets are not read-only.');
+  if (legacyTicketBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Legacy tickets retain the operational update gate.');
+}
+const canonicalTicketBlock = readTicketMatch('maintenanceTickets');
+if (!canonicalTicketBlock) {
+  failures.push('Canonical maintenanceTickets block is missing.');
+} else {
+  if (!canonicalTicketBlock.includes('allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);')) failures.push('Canonical maintenanceTickets creation authority is missing.');
+  if (!canonicalTicketBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Canonical maintenanceTickets update authority is missing.');
+}
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
