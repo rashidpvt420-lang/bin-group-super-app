@@ -121,7 +121,7 @@ if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
   throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
 }
 if (text.split(canonicalUpdate).length - 1 !== 2) {
-  throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates.');
+  throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates before legacy retirement.');
 }
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
@@ -159,5 +159,35 @@ if (!text.includes(canonicalCreate)) {
   throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
 }
 
+// /maintenanceTickets is the sole operational collection. /tickets remains
+// readable during the measured compatibility period, but every browser write
+// is denied so no new split-brain records can be created or mutated.
+const legacyOperationalBlock = `    match /tickets/{ticketId} {
+      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
+      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
+      allow update: if safeTicketUpdateByActor();
+      allow delete: if isAdmin();
+    }`;
+const legacyReadOnlyBlock = `    match /tickets/{ticketId} {
+      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
+      allow create, update, delete: if false;
+    }`;
+if (text.includes(legacyOperationalBlock)) {
+  text = text.replace(legacyOperationalBlock, legacyReadOnlyBlock);
+  changed = true;
+}
+if (text.split(legacyReadOnlyBlock).length - 1 !== 1) {
+  throw new Error('[ticket-rule-binding] Legacy /tickets must exist exactly once as read-only compatibility data.');
+}
+
+const maintenanceOperationalBlock = `    match /maintenanceTickets/{ticketId} {
+      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
+      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);
+      allow update: if safeTicketUpdateByActor();
+      allow delete: if isAdmin();`;
+if (!text.includes(maintenanceOperationalBlock)) {
+  throw new Error('[ticket-rule-binding] Canonical /maintenanceTickets operational authority is missing.');
+}
+
 if (changed) writeFileSync(file, text);
-console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
+console.log(`Applied canonical maintenanceTickets authority and read-only legacy tickets (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
