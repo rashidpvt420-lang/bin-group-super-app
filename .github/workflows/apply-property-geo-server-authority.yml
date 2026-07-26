@@ -60,6 +60,9 @@ jobs:
       - name: Catch-all - properties exclusion order
         run: node --test --test-name-pattern="excludes properties between" tests/launch/property-geo-catchall-authority.test.mjs
 
+      - name: Catch-all - private HR compatibility
+        run: node --test --test-name-pattern="private HR hardener preserves" tests/launch/property-geo-catchall-authority.test.mjs
+
       - name: Catch-all - browser denial regression
         run: node --test --test-name-pattern="names browser denial" tests/launch/property-geo-catchall-authority.test.mjs
 
@@ -137,6 +140,7 @@ jobs:
             firestore.rules \
             functions/adminPropertyReview.ts \
             scripts/harden-final-firestore-authority.mjs \
+            scripts/harden-private-hr-authority.mjs \
             src/components/onboarding/PropertyLocationStep.tsx \
             apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
             apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
@@ -161,6 +165,7 @@ jobs:
             firestore.rules \
             functions/adminPropertyReview.ts \
             scripts/harden-final-firestore-authority.mjs \
+            scripts/harden-private-hr-authority.mjs \
             src/components/onboarding/PropertyLocationStep.tsx \
             test/property-geo-authority-rules.test.js \
             test/security-rules.test.js \
