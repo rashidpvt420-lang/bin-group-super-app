@@ -1,0 +1,117 @@
+name: Finalize Admin Map Lifecycle 699
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-admin-map-lifecycle-699
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: >-
+      github.event.pull_request.number == 699 &&
+      github.event.pull_request.head.ref == 'fix/admin-map-unresolved-ticket-lifecycle'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Refuse branch drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Apply bounded lifecycle completeness fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label} marker count was {count}, expected 1')
+              return source.replace(old, new, 1)
+
+          map_path = Path('apps/admin-panel/src/pages/map/LiveMapPage.tsx')
+          source = map_path.read_text(encoding='utf-8')
+          source = replace_once(
+              source,
+              "  if (['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(status)) return 'Awaiting assignment';\n",
+              "  if (['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(status)) return 'Awaiting assignment';\n"
+              "  if (status === 'PENDING_SCHEDULING') return 'Pending scheduling';\n"
+              "  if (status === 'SCHEDULED') return 'Scheduled';\n"
+              "  if (status === 'QUOTE_REJECTED') return 'Quote rejected — revision required';\n"
+              "  if (status === 'RESCHEDULE_REQUESTED') return 'Reschedule requested';\n"
+              "  if (status === 'CANCELLATION_REQUESTED') return 'Cancellation requested — unresolved';\n",
+              'display status coverage',
+          )
+          source = replace_once(
+              source,
+              "        where('status', 'in', statuses),\n        limit(100),\n",
+              "        where('status', 'in', statuses),\n",
+              'ticket query truncation limit',
+          )
+          map_path.write_text(source, encoding='utf-8')
+
+          test_path = Path('tests/launch/admin-map-ticket-lifecycle.test.mjs')
+          tests = test_path.read_text(encoding='utf-8')
+          tests = replace_once(
+              tests,
+              "  for (const status of ['ESCALATED', 'REOPENED', 'ON_HOLD', 'WAITING_PARTS', 'DISPUTED']) {\n",
+              "  for (const status of [\n"
+              "    'ESCALATED',\n"
+              "    'REOPENED',\n"
+              "    'ON_HOLD',\n"
+              "    'WAITING_PARTS',\n"
+              "    'DISPUTED',\n"
+              "    'PENDING_SCHEDULING',\n"
+              "    'SCHEDULED',\n"
+              "    'QUOTE_REJECTED',\n"
+              "    'RESCHEDULE_REQUESTED',\n"
+              "    'CANCELLATION_REQUESTED',\n"
+              "  ]) {\n",
+              'scheduled lifecycle test coverage',
+          )
+          tests = replace_once(
+              tests,
+              "test('terminal lifecycle classes cannot enter unresolved map queries', () => {\n",
+              "test('legacy unresolved aliases normalize to canonical unresolved states', () => {\n"
+              "  const aliases = { new: 'OPEN', dispatched: 'ASSIGNED', claimed: 'ACCEPTED', started: 'WORK_STARTED' };\n"
+              "  for (const [alias, canonical] of Object.entries(aliases)) {\n"
+              "    assert.equal(lifecycle.normalizeMaintenanceTicketStatus(alias), canonical, alias);\n"
+              "    assert.equal(lifecycle.isUnresolvedMaintenanceTicketStatus(alias), true, alias);\n"
+              "    assert.ok(lifecycle.UNRESOLVED_MAINTENANCE_TICKET_QUERY_VALUES.includes(alias));\n"
+              "  }\n"
+              "});\n\n"
+              "test('terminal lifecycle classes cannot enter unresolved map queries', () => {\n",
+              'legacy alias regression test',
+          )
+          tests = replace_once(
+              tests,
+              "  assert.match(adminMapSource, /limit\\(100\\)/);\n",
+              "  assert.doesNotMatch(adminMapSource, /where\\('status', 'in', statuses\\),\\s*limit\\(100\\)/);\n",
+              'complete ticket listener assertion',
+          )
+          test_path.write_text(tests, encoding='utf-8')
+          PY
+          rm .github/workflows/finalize-admin-map-lifecycle-699.yml
+      - name: Commit permanent product and test changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/admin-panel/src/pages/map/LiveMapPage.tsx tests/launch/admin-map-ticket-lifecycle.test.mjs .github/workflows/finalize-admin-map-lifecycle-699.yml
+          git diff --cached --quiet && { echo '::error::Expected lifecycle changes were not produced.'; exit 1; }
+          git commit -m 'Complete Admin map unresolved lifecycle feed'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
