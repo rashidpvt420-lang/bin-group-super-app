@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Stack, Chip, CircularProgress, 
+import {
+    Box, Typography, Paper, Stack, Chip, CircularProgress,
     Grid, alpha, Button, Divider,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
-import { 
-    DollarSign, CreditCard, Download, 
+import {
+    DollarSign, CreditCard, Download,
     Clock, CheckCircle2,
-    Shield, TrendingUp, AlertCircle
+    Shield, TrendingUp, AlertCircle, FileText
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -15,6 +15,20 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const MANAGEMENT_FEE_RATE = 0.05;
+
+const timestampMs = (value: any) => {
+    if (typeof value?.toMillis === 'function') return value.toMillis();
+    if (Number.isFinite(Number(value?.seconds))) return Number(value.seconds) * 1000;
+    const parsed = Date.parse(String(value || ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatInvoiceDate = (value: any) => {
+    const ms = timestampMs(value);
+    return ms > 0
+        ? new Date(ms).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: '2-digit' })
+        : 'Pending';
+};
 
 export default function OwnerFinancialsPage() {
     const { user } = useRole();
@@ -28,12 +42,13 @@ export default function OwnerFinancialsPage() {
         maintenanceDeductions: 0
     });
     const [transactions, setTransactions] = useState<any[]>([]);
+    const [invoices, setInvoices] = useState<any[]>([]);
 
     useEffect(() => {
-        if (!user?.email) return;
+        if (!user?.email || !user?.uid) return;
 
         const email = user.email.toLowerCase();
-        
+
         const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
         const unsubscribePassports = onSnapshot(passportQ, (snap) => {
             let rev = 0, maint = 0, pending = 0;
@@ -43,7 +58,7 @@ export default function OwnerFinancialsPage() {
                 maint += Number(data.maintenanceCostTotal || data.outstandingMaintenanceInvoices || data.maintenanceDeductions || 0);
                 pending += Number(data.pendingRentVerification || data.pendingVerification || 0);
             });
-            
+
             const fees = rev * MANAGEMENT_FEE_RATE;
             setSummary({
                 totalRevenue: rev,
@@ -60,11 +75,21 @@ export default function OwnerFinancialsPage() {
             setLoading(false);
         });
 
+        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(20));
+        const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
+            setInvoices(
+                snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
+            );
+        });
+
         return () => {
             unsubscribePassports();
             unsubscribeTrans();
+            unsubscribeInvoices();
         };
-    }, [user?.email]);
+    }, [user?.email, user?.uid]);
 
     const FINANCIAL_KPIs = [
         { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
@@ -89,7 +114,6 @@ export default function OwnerFinancialsPage() {
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Button variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>{tx('owner.fin.export_txn', 'Export TXN')}</Button>
-                    {/* <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>{tx('owner.fin.withdraw', 'Withdraw Funds')}</Button> */}
                 </Stack>
             </Box>
 
@@ -107,6 +131,47 @@ export default function OwnerFinancialsPage() {
                     </Grid>
                 ))}
             </Grid>
+
+            <Paper sx={{ mb: 4, bgcolor: 'rgba(15, 23, 42, 0.4)', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 6, overflow: 'hidden' }}>
+                <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="subtitle1" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <FileText size={18} color={binThemeTokens.gold} /> {tx('owner.fin.invoices', 'ONBOARDING & SERVICE INVOICES')}
+                    </Typography>
+                    <Chip label={`${invoices.length} RECORD${invoices.length === 1 ? '' : 'S'}`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
+                </Box>
+                {invoices.length === 0 ? (
+                    <Box sx={{ py: 7, textAlign: 'center' }}>
+                        <AlertCircle size={42} color="rgba(255,255,255,0.07)" style={{ margin: '0 auto 14px' }} />
+                        <Typography sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>{tx('owner.fin.no_invoices', 'NO INVOICE RECORDS FOUND')}</Typography>
+                    </Box>
+                ) : (
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>INVOICE</TableCell>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>TYPE</TableCell>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>AMOUNT</TableCell>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>STATUS</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {invoices.map(invoice => (
+                                    <TableRow key={invoice.id} hover>
+                                        <TableCell>
+                                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.invoiceId || invoice.id}</Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>{formatInvoiceDate(invoice.issuedAt || invoice.createdAt)}</Typography>
+                                        </TableCell>
+                                        <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>{String(invoice.feeType || invoice.type || 'SERVICE_INVOICE').replace(/_/g, ' ')}</TableCell>
+                                        <TableCell sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.currency || 'AED'} {Number(invoice.amount || invoice.amountPaid || 0).toLocaleString()}</TableCell>
+                                        <TableCell><Chip label={String(invoice.status || 'PENDING').toUpperCase()} size="small" sx={{ bgcolor: alpha(invoice.status === 'PAID' ? '#10b981' : '#f59e0b', 0.12), color: invoice.status === 'PAID' ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
+            </Paper>
 
             <Grid container spacing={4}>
                 <Grid item xs={12} lg={8}>
@@ -146,10 +211,10 @@ export default function OwnerFinancialsPage() {
                                                     <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>AED {txn.amount?.toLocaleString()}</Typography>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Chip 
-                                                        label={txn.status?.toUpperCase() || 'COMPLETED'} 
-                                                        size="small" 
-                                                        sx={{ height: 18, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha('#10b981', 0.1), color: '#10b981' }} 
+                                                    <Chip
+                                                        label={txn.status?.toUpperCase() || 'COMPLETED'}
+                                                        size="small"
+                                                        sx={{ height: 18, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha('#10b981', 0.1), color: '#10b981' }}
                                                     />
                                                 </TableCell>
                                             </TableRow>
@@ -181,7 +246,7 @@ export default function OwnerFinancialsPage() {
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{tx('owner.fin.next_payout', 'NEXT PROJECTED PAYOUT')}</Typography>
                                 <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {summary.netPayout.toLocaleString()}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'block' }}>{tx('owner.fin.payout_desc', 'Gross rent minus 5% management fee and maintenance deductions')}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'block' }}>{tx('owner.fin.payout_desc', 'Gross rent minus 5% management fee and maintenance deductions, then net owner payout.')}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
