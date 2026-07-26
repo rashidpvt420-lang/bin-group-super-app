@@ -39,14 +39,17 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   const verifierRef = React.useRef<RecaptchaVerifier | null>(null);
   const recaptchaId = 'admin-mfa-signin-recaptcha';
 
-  React.useEffect(() => () => {
+  const clearVerifier = () => {
     verifierRef.current?.clear();
     verifierRef.current = null;
+  };
+
+  React.useEffect(() => () => {
+    clearVerifier();
   }, []);
 
   const clearChallenge = () => {
-    verifierRef.current?.clear();
-    verifierRef.current = null;
+    clearVerifier();
     setVerificationId('');
     setCode('');
     setError('');
@@ -60,6 +63,10 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
     if (codeValue === 'auth/invalid-verification-code') return 'The MFA verification code is incorrect.';
     if (codeValue === 'auth/code-expired') return 'The MFA verification code expired. Request another code.';
     if (codeValue === 'auth/too-many-requests') return 'Too many MFA attempts. Try again later.';
+    if (codeValue === 'auth/captcha-check-failed' || codeValue === 'auth/invalid-app-credential') {
+      return 'Admin MFA app verification could not be completed. Request another code.';
+    }
+    if (codeValue === 'auth/network-request-failed') return 'The MFA network request failed. Try again.';
     return 'Admin MFA verification failed.';
   };
 
@@ -73,22 +80,27 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
     setError('');
     setNotice('');
     try {
-      verifierRef.current?.clear();
-      verifierRef.current = new RecaptchaVerifier(auth, recaptchaId, { size: 'invisible' });
+      clearVerifier();
+      const verifier = new RecaptchaVerifier(auth, recaptchaId, { size: 'invisible' });
+      verifierRef.current = verifier;
       const provider = new PhoneAuthProvider(auth);
       const id = await provider.verifyPhoneNumber({
         multiFactorHint: hint,
         session: resolver.session,
-      }, verifierRef.current);
+      }, verifier);
       setVerificationId(id);
       setCode('');
       setNotice('Firebase sent an MFA code to the enrolled Admin phone.');
+      // Keep the verifier alive until the challenge is resolved, reset or
+      // unmounted. Clearing it in this finally block can invalidate the
+      // asynchronous phone challenge before React exposes the code field.
     } catch (mfaError) {
-      clearChallenge();
+      clearVerifier();
+      setVerificationId('');
+      setCode('');
+      setNotice('');
       setError(friendlyError(mfaError));
     } finally {
-      verifierRef.current?.clear();
-      verifierRef.current = null;
       setBusy(false);
     }
   };
@@ -101,6 +113,7 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       const credential = PhoneAuthProvider.credential(verificationId, code);
       const assertion = PhoneMultiFactorGenerator.assertion(credential);
       await resolver.resolveSignIn(assertion);
+      clearVerifier();
       onResolved();
     } catch (mfaError) {
       setError(friendlyError(mfaError));
@@ -149,8 +162,8 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
         </label>
       )}
 
-      {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-bold">{error}</div>}
-      {notice && <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs font-bold">{notice}</div>}
+      {error && <div data-testid="admin-mfa-signin-error" className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-bold">{error}</div>}
+      {notice && <div data-testid="admin-mfa-signin-notice" className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs font-bold">{notice}</div>}
 
       {!verificationId ? (
         <button
@@ -207,7 +220,7 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       >
         Cancel and return to credential login
       </button>
-      <div id={recaptchaId} />
+      <div id={recaptchaId} data-testid="admin-mfa-recaptcha-container" />
     </div>
   );
 }

@@ -8,6 +8,7 @@ const requiredImports = [
   "import './broker-kyc-security-rules.test.js';",
   "import './five-profile-protected-fields-rules.test.js';",
   "import './push-token-security-rules.test.js';",
+  "import './technician-assigned-list-security-rules.test.js';",
 ];
 const obsoleteBlock = `    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
@@ -108,9 +109,9 @@ for (const requiredImport of [...requiredImports].reverse()) {
 }
 
 if (next === source) {
-  console.log('[normalize-rule-tests] callable-only lifecycle, Broker KYC, five-profile and push-token rules tests already canonical');
+  console.log('[normalize-rule-tests] callable-only lifecycle, Broker KYC, five-profile, push-token and technician list tests already canonical');
   process.exit(0);
 }
 
 writeFileSync(file, next.replace(/\n/g, newline));
-console.log('[normalize-rule-tests] technician lifecycle, Broker KYC, five-profile and server-only push-token rules tests normalized');
+console.log('[normalize-rule-tests] technician lifecycle/list, Broker KYC, five-profile and server-only push-token rules tests normalized');
