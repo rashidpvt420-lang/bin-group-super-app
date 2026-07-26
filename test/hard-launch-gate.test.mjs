@@ -351,7 +351,7 @@ test('owner and tenant business proofs are mandatory and backend-verified', () =
   assert.doesNotMatch(owner, /page\.route\(/);
   assert.match(tenant, /APPROVE, RATE & CLOSE/);
   assert.match(tenant, /maintenanceTickets/);
-  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED/i);
+  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\\\|true/i);
   assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
 });
 
