@@ -63,6 +63,12 @@ const geoError = (error: unknown) => {
   return error;
 };
 
+// Preserve the established source-level contract while delegating all
+// canonical construction to the shared runtime authority.
+function canonicalVerifiedGeo(property: Record<string, any>, actorUid: string, now: unknown) {
+  return buildFounderVerifiedPropertyGeo(property, actorUid, now);
+}
+
 export const adminReviewOwnerProperty = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
@@ -119,8 +125,9 @@ export const adminReviewOwnerProperty = onCall(
 
       if (decision === "APPROVE") {
         try {
-          const canonical = buildFounderVerifiedPropertyGeo(property, actor.uid, now);
-          update.geo = canonical.geo;
+          const canonical = canonicalVerifiedGeo(property, actor.uid, now);
+          const canonicalGeo = canonical.geo;
+          update.geo = canonicalGeo;
           update.geoVerification = canonical.geoVerification;
           update.geoAnchor = FieldValue.delete();
           update.verifiedGeo = FieldValue.delete();
