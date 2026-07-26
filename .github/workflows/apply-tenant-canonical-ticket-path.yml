@@ -1,0 +1,35 @@
+name: Apply Canonical Tenant Ticket Path
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'fix/property-geo-server-authority-final'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+      - name: Route Tenant ticket creation through canonical callable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = '8ec73c7e8732508a3de8bda6daf45cacf01a1e98'
+          python .github/scripts/apply-tenant-canonical-ticket-path.py
+          rm -f \
+            .github/scripts/apply-tenant-canonical-ticket-path.py \
+            .github/workflows/apply-tenant-canonical-ticket-path.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && { echo '::error::No Tenant ticket authority changes were produced.'; exit 1; }
+          git commit -m 'Route Tenant ticket creation through canonical geo callable'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
