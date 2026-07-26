@@ -382,15 +382,15 @@ export const startLiveTracking = async (
         throw new Error(message);
     }
 
-    _state.activeTicketId = ticketId;
-    _state.technicianUid = technicianUid;
-    _state.trackingSessionId = createTrackingSessionId();
-    _state.lastPushTime = 0;
+    const trackingSessionId = createTrackingSessionId();
+    let captureLastPushTime = 0;
+    let installedWatchId: number;
 
-    _state.watchId = navigator.geolocation.watchPosition(
+    try {
+        installedWatchId = navigator.geolocation.watchPosition(
         async (position) => {
             const now = Date.now();
-            if (now - _state.lastPushTime < CAPTURE_INTERVAL_MS) return;
+            if (now - captureLastPushTime < CAPTURE_INTERVAL_MS) return;
 
             if (position.coords.accuracy <= 0 || position.coords.accuracy > 100) {
                 await persistTrackingDiagnostic(technicianUid, ticketId, {
@@ -401,9 +401,9 @@ export const startLiveTracking = async (
                 return;
             }
 
+            captureLastPushTime = now;
             _state.lastPushTime = now;
-            const sessionId = _state.trackingSessionId;
-            if (!sessionId) return;
+            const sessionId = trackingSessionId;
 
             const point: GeoPoint = {
                 lat: position.coords.latitude,
@@ -474,22 +474,49 @@ export const startLiveTracking = async (
             maximumAge: 15_000,
             timeout: 27_000,
         },
-    );
+        );
+    } catch (error) {
+        detachOnlineRecovery();
+        const message = 'Unable to start the browser GPS watch.';
+        await persistTrackingDiagnostic(technicianUid, ticketId, {
+            status: 'WATCH_INSTALL_FAILED',
+            error: message,
+            errorCode: String((error as any)?.code || 'WATCH_INSTALL_FAILED').slice(0, 80),
+            failedAt: serverTimestamp(),
+        });
+        onError?.(message);
+        throw error instanceof Error ? error : new Error(message);
+    }
+
+    _state.activeTicketId = ticketId;
+    _state.technicianUid = technicianUid;
+    _state.trackingSessionId = trackingSessionId;
+    _state.lastPushTime = captureLastPushTime;
+    _state.watchId = installedWatchId;
+};
+
+export type StopLiveTrackingResult = {
+    hadActiveSession: boolean;
+    serverAcknowledged: boolean;
+    superseded: boolean;
+    stopQueued: boolean;
 };
 
 export const stopLiveTracking = async (
     technicianUid?: string,
     ticketId?: string,
     finalStatus: StopTrackingStatus = 'PRESERVE',
-): Promise<void> => {
+): Promise<StopLiveTrackingResult> => {
     const uid = technicianUid || _state.technicianUid;
     const activeTicketId = ticketId || _state.activeTicketId;
     const sessionId = _state.trackingSessionId;
 
     if (_state.watchId !== null && typeof navigator !== 'undefined') navigator.geolocation.clearWatch(_state.watchId);
 
+    const hadActiveSession = Boolean(uid && activeTicketId && sessionId);
     let stopAcknowledged = false;
     let stopSuperseded = false;
+    let stopQueued = false;
     if (uid && activeTicketId && sessionId) {
         discardQueuedSessionUpdates(uid, activeTicketId, sessionId);
         const stopAction: LiveTrackingAction = {
@@ -511,6 +538,7 @@ export const stopLiveTracking = async (
                 trackingSessionId: sessionId,
                 queuedAtMs: Date.now(),
             });
+            stopQueued = hasPendingGpsStop(uid);
             installOnlineRecovery(uid, activeTicketId);
             console.error('[Tracking] Stop state queued for server reconciliation:', error);
         }
@@ -545,4 +573,31 @@ export const stopLiveTracking = async (
     _state.technicianUid = null;
     _state.trackingSessionId = null;
     if (stopAcknowledged || stopSuperseded || !uid) detachOnlineRecovery();
+    return {
+        hadActiveSession,
+        serverAcknowledged: stopAcknowledged || stopSuperseded,
+        superseded: stopSuperseded,
+        stopQueued,
+    };
+};
+
+export const prepareTechnicianTrackingLogout = async (technicianUid: string): Promise<void> => {
+    const uid = String(technicianUid || '').trim();
+    if (!uid) return;
+
+    const stopResult = await stopLiveTracking(uid, undefined, 'PRESERVE');
+    const replay = await replayForTechnician(uid);
+    const replayReconciled = stopResult.stopQueued && replay.succeeded > 0 && replay.pendingStops === 0;
+    const stopSafe = !stopResult.hadActiveSession || stopResult.serverAcknowledged || replayReconciled;
+    if (!stopSafe || replay.pendingStops > 0) {
+        const error = new Error(
+            replay.terminal > 0
+                ? 'Logout paused because a GPS STOP requires operations reconciliation.'
+                : 'Logout paused until the active GPS session is stopped on the server. Reconnect and retry.',
+        );
+        (error as Error & { code?: string }).code = 'GPS_LOGOUT_STOP_PENDING';
+        throw error;
+    }
+
+    purgeTechnicianGpsRetryQueue(uid);
 };

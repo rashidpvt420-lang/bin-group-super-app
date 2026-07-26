@@ -53,6 +53,7 @@ class MemoryStorage {
 const queue = loadTypeScriptModule('src/utils/gpsRetryQueue.ts');
 const pins = loadTypeScriptModule('apps/admin-panel/src/lib/verifiedPropertyPin.ts');
 const liveTrackingSource = readFileSync('src/utils/liveTracking.ts', 'utf8');
+const portalSessionSource = readFileSync('src/components/PortalSessionControls.tsx', 'utf8');
 
 const storage = () => ({ stop: new MemoryStorage(), update: new MemoryStorage() });
 const updateInput = (overrides = {}) => ({
@@ -277,4 +278,36 @@ test('legacy keys are deleted only after scoped STOP write verification', () => 
   assert.ok(writeIndex >= 0 && verifyIndex > writeIndex && deleteIndex > verifyIndex);
   assert.match(queueSource, /for \(const storage of sources\)/);
   assert.match(queueSource, /Legacy UPDATE coordinates are[\s\S]*never migrated/);
+});
+
+
+test('tracking state is published only after browser watch installation succeeds', () => {
+  const installIndex = liveTrackingSource.indexOf('installedWatchId = navigator.geolocation.watchPosition');
+  const failureIndex = liveTrackingSource.indexOf("status: 'WATCH_INSTALL_FAILED'", installIndex);
+  const publishIndex = liveTrackingSource.indexOf('_state.activeTicketId = ticketId', failureIndex);
+  assert.ok(installIndex >= 0 && failureIndex > installIndex && publishIndex > failureIndex);
+  assert.match(liveTrackingSource, /const trackingSessionId = createTrackingSessionId\(\)/);
+  assert.match(liveTrackingSource, /const sessionId = trackingSessionId/);
+  assert.match(liveTrackingSource, /_state\.watchId = installedWatchId/);
+});
+
+test('Technician logout reconciles canonical STOP before purge and authentication removal', () => {
+  const helperIndex = liveTrackingSource.indexOf('export const prepareTechnicianTrackingLogout');
+  const stopIndex = liveTrackingSource.indexOf("await stopLiveTracking(uid, undefined, 'PRESERVE')", helperIndex);
+  const replayIndex = liveTrackingSource.indexOf('await replayForTechnician(uid)', stopIndex);
+  const safeIndex = liveTrackingSource.indexOf('const stopSafe =', replayIndex);
+  const pendingIndex = liveTrackingSource.indexOf('GPS_LOGOUT_STOP_PENDING', safeIndex);
+  const purgeIndex = liveTrackingSource.indexOf('purgeTechnicianGpsRetryQueue(uid)', pendingIndex);
+  assert.ok(helperIndex >= 0 && stopIndex > helperIndex && replayIndex > stopIndex && safeIndex > replayIndex && pendingIndex > safeIndex && purgeIndex > pendingIndex);
+  assert.match(liveTrackingSource, /Promise<StopLiveTrackingResult>/);
+  assert.match(liveTrackingSource, /stopQueued = hasPendingGpsStop\(uid\)/);
+  assert.match(liveTrackingSource, /const replayReconciled = stopResult\.stopQueued && replay\.succeeded > 0 && replay\.pendingStops === 0/);
+
+  const prepareIndex = portalSessionSource.indexOf('await prepareTechnicianTrackingLogout(technicianUid)');
+  const clearIndex = portalSessionSource.indexOf('await clearSessionAndPreserveLanguage()', prepareIndex);
+  const signOutIndex = portalSessionSource.indexOf('await signOut(auth)', clearIndex);
+  assert.ok(prepareIndex >= 0 && clearIndex > prepareIndex && signOutIndex > clearIndex);
+  assert.match(portalSessionSource, /error\?\.code === 'GPS_LOGOUT_STOP_PENDING'/);
+  assert.match(portalSessionSource, /if \(shouldRedirect\)/);
+  assert.doesNotMatch(portalSessionSource, /purgeTechnicianGpsRetryQueue\(auth\.currentUser/);
 });
