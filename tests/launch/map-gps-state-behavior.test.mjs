@@ -75,6 +75,7 @@ const stopInput = (overrides = {}) => ({
 });
 
 test('unverified or incomplete property geography never resolves as a verified pin', () => {
+  const verifiedAt = '2026-07-26T10:00:00.000Z';
   const base = {
     id: 'property-1',
     geo: {
@@ -84,16 +85,25 @@ test('unverified or incomplete property geography never resolves as a verified p
       dispatchReady: true,
       requiresGeoReview: false,
       verifiedBy: 'founder-uid',
-      verifiedAt: '2026-07-26T10:00:00.000Z',
+      verifiedAt,
       source: 'admin_manual',
+      verificationVersion: 1,
+    },
+    geoVerification: {
+      state: 'VERIFIED',
+      source: 'FOUNDER_MFA_REVIEW',
+      verifiedBy: 'founder-uid',
+      verifiedAt,
+      verificationVersion: 1,
     },
   };
   assert.deepEqual(plain(pins.resolveVerifiedPropertyPin(base)), {
     point: { lat: 24.2, lng: 55.3 },
     propertyId: 'property-1',
     verifiedBy: 'founder-uid',
-    verifiedAtMs: Date.parse('2026-07-26T10:00:00.000Z'),
+    verifiedAtMs: Date.parse(verifiedAt),
     source: 'admin_manual',
+    verificationVersion: 1,
   });
   for (const mutation of [
     { verified: false },
@@ -102,9 +112,23 @@ test('unverified or incomplete property geography never resolves as a verified p
     { verifiedBy: '' },
     { verifiedAt: null },
     { source: 'legacy_import' },
+    { verificationVersion: 2 },
   ]) {
     assert.equal(pins.resolveVerifiedPropertyPin({ ...base, geo: { ...base.geo, ...mutation } }), null);
   }
+  for (const verificationMutation of [
+    { state: 'PENDING' },
+    { source: 'OWNER_SUBMISSION' },
+    { verifiedBy: 'other-founder' },
+    { verifiedAt: '2026-07-26T10:00:01.000Z' },
+    { verificationVersion: 2 },
+  ]) {
+    assert.equal(pins.resolveVerifiedPropertyPin({
+      ...base,
+      geoVerification: { ...base.geoVerification, ...verificationMutation },
+    }), null);
+  }
+  assert.equal(pins.resolveVerifiedPropertyPin({ ...base, geoVerification: undefined }), null);
   assert.equal(pins.verifiedPinForTicket({ propertyId: 'missing' }, new Map()), null);
 });
 
