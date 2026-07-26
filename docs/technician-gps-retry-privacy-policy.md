@@ -4,6 +4,8 @@
 
 BIN GROUP uses **foreground-browser GPS** for the controlled pilot. Tracking is active only while the Technician mission page remains open and the browser continues delivering geolocation callbacks. The server expiry watchdog is a safety fallback; it is not evidence that the browser successfully stopped a session.
 
+The Technician interface may show **Live GPS active** only after the browser confirms that a geolocation watch was installed. Unsupported devices, insecure contexts and unresolved prior STOP actions must remain visibly not tracking.
+
 ## Retry storage
 
 The browser may temporarily retain failed GPS actions so a short network interruption does not leave the canonical server state inconsistent.
@@ -43,6 +45,7 @@ The controlled pilot must prove on real Android and iPhone devices:
 - account change and logout purge;
 - browser/tab close and server-watchdog expiry;
 - no cross-ticket UPDATE replay;
-- no false `STOPPED` diagnostic before server acknowledgement.
+- no false `STOPPED` diagnostic before server acknowledgement;
+- no false **Live GPS active** state when a watch was not installed.
 
 This document does not claim native background-location support.
