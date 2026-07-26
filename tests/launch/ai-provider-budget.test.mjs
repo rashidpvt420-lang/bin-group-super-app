@@ -16,7 +16,7 @@ test('complete provider retry chain is bounded below the live latency SLO', () =
   assert.match(source, /LIVE_PROVIDER_BUDGET_MS = Math\.min\(18_000, AI_OPERATIONAL_SLO\.maxLiveLatencyMs - 1_000\)/);
   assert.match(source, /PER_MODEL_TIMEOUT_MS = 6_000/);
   assert.match(source, /providerDeadlineMs = startedAt \+ LIVE_PROVIDER_BUDGET_MS/);
-  assert.match(source, /attemptTimeoutMs\(providerDeadlineMs\)/);
+  assert.match(source, /attemptTimeoutMs\(deadlineMs\)/);
   assert.match(source, /remainingBudgetMs\(providerDeadlineMs\) >= MIN_PROVIDER_ATTEMPT_MS/);
   assert.doesNotMatch(source, /setTimeout\(\(\) => controller\.abort\(\), 8_000\)/);
   assert.doesNotMatch(source, /new OpenAI\(\{ apiKey, timeout: 8_000 \}\)/);
