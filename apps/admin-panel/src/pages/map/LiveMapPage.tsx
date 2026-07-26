@@ -22,7 +22,7 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import RoomIcon from '@mui/icons-material/Room';
-import { collection, limit, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, documentId, limit, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   isUnresolvedMaintenanceTicketStatus,
@@ -31,6 +31,11 @@ import {
 } from '../../../../../functions/shared/maintenanceTicketLifecycle';
 import { db, functions } from '../../lib/firebase';
 import { googleMapsSearchUrl, loadAdminGoogleMaps } from '../../lib/googleMaps';
+import {
+  missingReferencedPropertyIds,
+  propertyIdQueryChunks,
+  ticketReferencedPropertyIds,
+} from '../../lib/ticketReferencedPropertyQuery';
 import {
   liveLocationIsFreshAt,
   mapCoordinate,
@@ -163,10 +168,6 @@ export default function LiveMapPage() {
     });
 
     const technicianQuery = query(collection(db, 'technicians'), limit(100));
-    // This bounded canonical-property listener is deliberately fail-closed. A
-    // ticket whose property is outside the returned set receives no verified
-    // marker rather than falling back to an unreviewed ticket coordinate.
-    const propertyQuery = query(collection(db, 'properties'), limit(500));
     const locationQuery = query(
       collection(db, 'technician_live_locations'),
       where('isTracking', '==', true),
@@ -185,15 +186,6 @@ export default function LiveMapPage() {
       setTechniciansError('Technician readiness data could not be loaded. Dispatch is disabled until the data source recovers.');
     });
 
-    const unsubscribeProperties = onSnapshot(propertyQuery, (snapshot) => {
-      setProperties(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-      setPropertiesError('');
-    }, (error) => {
-      console.error('[AdminMap] Canonical property listener failed:', error);
-      setProperties([]);
-      setPropertiesError('Canonical property verification records could not be loaded. Ticket/property markers are hidden until the source recovers.');
-    });
-
     const unsubscribeLocations = onSnapshot(locationQuery, (snapshot) => {
       setLiveLocations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as LiveLocation)));
       setLocationsError('');
@@ -206,10 +198,78 @@ export default function LiveMapPage() {
     return () => {
       unsubscribeTickets.forEach((unsubscribe) => unsubscribe());
       unsubscribeTechnicians();
-      unsubscribeProperties();
       unsubscribeLocations();
     };
   }, []);
+
+  const referencedPropertyIds = useMemo(
+    () => ticketReferencedPropertyIds(tickets),
+    [tickets],
+  );
+
+  useEffect(() => {
+    const chunks = propertyIdQueryChunks(referencedPropertyIds);
+    if (chunks.length === 0) {
+      setProperties([]);
+      setPropertiesError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    let propertyListenerFailed = false;
+    const propertySnapshots = new Map<number, any[]>();
+    setProperties([]);
+    setPropertiesError('');
+
+    const publishProperties = () => {
+      if (cancelled || propertyListenerFailed || propertySnapshots.size !== chunks.length) return;
+      const byId = new Map<string, any>();
+      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+        for (const property of propertySnapshots.get(chunkIndex) || []) {
+          byId.set(String(property.id), property);
+        }
+      }
+      const rows = [...byId.values()].sort((left, right) => String(left.id).localeCompare(String(right.id)));
+      const missingIds = missingReferencedPropertyIds(
+        referencedPropertyIds,
+        rows.map((property) => String(property.id)),
+      );
+      setProperties(rows);
+      setPropertiesError(missingIds.length > 0
+        ? `${missingIds.length} unresolved ticket property record${missingIds.length === 1 ? ' is' : 's are'} missing. ` +
+          'Those tickets remain visible but receive no verified operational marker.'
+        : '');
+    };
+
+    const unsubscribeProperties = chunks.map((propertyIds, chunkIndex) => {
+      const propertyQuery = query(
+        collection(db, 'properties'),
+        where(documentId(), 'in', propertyIds),
+      );
+      return onSnapshot(propertyQuery, (snapshot) => {
+        if (cancelled || propertyListenerFailed) return;
+        propertySnapshots.set(
+          chunkIndex,
+          snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+        );
+        publishProperties();
+      }, (error) => {
+        if (cancelled) return;
+        propertyListenerFailed = true;
+        console.error(`[AdminMap] Referenced property listener ${chunkIndex + 1} failed:`, error);
+        setProperties([]);
+        setPropertiesError(
+          `Referenced property query ${chunkIndex + 1} of ${chunks.length} failed. ` +
+          'All ticket/property markers are hidden until the exact canonical records can be loaded.',
+        );
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeProperties.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [referencedPropertyIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,7 +443,7 @@ export default function LiveMapPage() {
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 900 }}>Operational Dispatch Map</Typography>
           <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-            Google Maps with every canonical unresolved ticket state, verified property pins and fresh Technician GPS. Legacy or unreviewed ticket coordinates are never labelled verified.
+            Google Maps with every canonical unresolved ticket state, exact ticket-referenced property records and fresh Technician GPS. Legacy or unreviewed ticket coordinates are never labelled verified.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -404,7 +464,7 @@ export default function LiveMapPage() {
           <Paper sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', maxHeight: { lg: '76vh' }, overflow: 'auto' }}>
             <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <Typography sx={{ fontWeight: 900 }}>Unresolved ticket feed</Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8' }}>All canonical unresolved lifecycle classes. Verification labels come only from canonical property metadata.</Typography>
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>All canonical unresolved lifecycle classes. Verification labels come only from the exact canonical property records referenced by those tickets.</Typography>
             </Box>
             <List disablePadding>
               {tickets.map((ticket) => {
