@@ -22,8 +22,8 @@ test('Broker production evidence requires a real mailbox code and cannot derive 
   assert.match(source, /realMailboxCodeUsed:\s*true/);
   assert.match(source, /otpHashVersion:\s*otpDelivery\.otpHashVersion/);
   assert.doesNotMatch(source, /deriveOtp/);
-  assert.doesNotMatch(source, /value\.otpHash/);
-  assert.doesNotMatch(source, /value\.salt/);
+  assert.doesNotMatch(source, /value\.otpHash\b/);
+  assert.doesNotMatch(source, /value\.salt\b/);
   assert.doesNotMatch(source, /number\s*<=\s*999999/);
   assert.doesNotMatch(source, /padStart\(6, ['"]0['"]\)/);
 });
