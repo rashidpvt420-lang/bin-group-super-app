@@ -30,7 +30,7 @@ export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
-export * from "./contractSignatureOtp";
+export * from "./contractSignatureOtpSecure";
 export * from "./ownerOnboardingLifecycleEmail";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";

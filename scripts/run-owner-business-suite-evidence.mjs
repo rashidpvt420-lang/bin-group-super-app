@@ -11,7 +11,7 @@ const run = (script) => execFileSync(process.execPath, [script], {
 
 const mode = String(process.argv[2] || 'lifecycle').trim().toLowerCase();
 if (mode === 'lifecycle') {
-  run('scripts/run-owner-onboarding-production-evidence.mjs');
+  run('scripts/run-owner-onboarding-production-evidence-secure.mjs');
 } else if (mode === 'restore-shared-fixtures') {
   // The Owner proof intentionally replaces the dedicated Owner Auth account and
   // removes its prior role fixtures. Restore tenant/technician fixtures only
