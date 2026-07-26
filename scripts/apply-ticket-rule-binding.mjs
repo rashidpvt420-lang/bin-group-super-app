@@ -4,8 +4,11 @@ const file = 'firestore.rules';
 let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
-const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
+// Tenant and Owner browser applications create tickets through App Check
+// callables. Direct Firestore creates are reserved for server/Admin operations.
+const canonicalCreate = '      allow create: if isAdmin();';
 for (const legacyCreate of [
+  "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
   "      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if canDispatchJobs() || canCreateTenantBoundTicket(request.resource.data);",
@@ -149,15 +152,23 @@ for (const forbidden of [
   'openMissionPoolRead(resource.data)',
   monolithicUpdate.trim(),
   ...splitRules.map((rule) => rule.trim()),
+  'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
 ]) {
   if (text.includes(forbidden)) {
     throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
   }
 }
 
-if (!text.includes(canonicalCreate)) {
-  throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
+for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+  const start = text.indexOf(marker);
+  const block = start < 0 ? '' : text.slice(start, start + 900);
+  if (!block.includes(canonicalCreate)) {
+    throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser creation outside Admin authority.`);
+  }
+}
+if (text.split(canonicalCreate).length - 1 !== 2) {
+  throw new Error('[ticket-rule-binding] Admin/server-only ticket create gate must exist exactly twice.');
 }
 
 if (changed) writeFileSync(file, text);
-console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
+console.log(`Applied server-only ticket create and bounded update gates (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
