@@ -185,8 +185,11 @@ export const updateTechnicianLiveLocation = onCall(
           };
         }
 
-        if (!ticketSnap.exists) throw new HttpsError("not-found", "Assigned mission not found.");
-        if (assignedTechnicianId(ticket) !== technicianUid) {
+        // The canonical live document is keyed by the authenticated Technician
+        // and the exact ticket/session CAS has already passed. A deleted ticket
+        // must not strand that canonical session forever. Assignment is checked
+        // whenever the ticket still exists; missing ticket mirrors are skipped.
+        if (ticketSnap.exists && assignedTechnicianId(ticket) !== technicianUid) {
           throw new HttpsError("permission-denied", "You are not assigned to this mission.");
         }
 
@@ -217,11 +220,13 @@ export const updateTechnicianLiveLocation = onCall(
           locationUpdatedAt: now,
           updatedAt: now,
         }, { merge: true });
-        tx.set(ticketRef, {
-          trackingStatus: "STOPPED",
-          technicianLocationExpiresAt: now,
-          updatedAt: now,
-        }, { merge: true });
+        if (ticketSnap.exists) {
+          tx.set(ticketRef, {
+            trackingStatus: "STOPPED",
+            technicianLocationExpiresAt: now,
+            updatedAt: now,
+          }, { merge: true });
+        }
         tx.set(diagnosticRef, {
           ticketId,
           status: "STOPPED",

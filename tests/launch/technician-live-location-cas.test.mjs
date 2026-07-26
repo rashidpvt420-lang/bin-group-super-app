@@ -113,3 +113,11 @@ test('server implementation performs STOP, UPDATE and watchdog comparisons insid
   assert.ok(idempotentIndex >= 0 && stopTicketCheckIndex > idempotentIndex, 'duplicate STOP must succeed before ticket assignment is rechecked');
   assert.match(callableSource, /Another unexpired tracking session is active; stale or cross-tab coordinates were rejected/);
 });
+
+
+test('exact canonical STOP can reconcile when its ticket document is missing', () => {
+  assert.match(callableSource, /if \(ticketSnap\.exists && assignedTechnicianId\(ticket\) !== technicianUid\)/);
+  assert.match(callableSource, /if \(ticketSnap\.exists\) \{\s*tx\.set\(ticketRef/);
+  const stopBranch = callableSource.slice(callableSource.indexOf('if (action === "STOP")'), callableSource.indexOf('if (!ticketSnap.exists)', callableSource.indexOf('if (action === "STOP")'));
+  assert.doesNotMatch(stopBranch, /Assigned mission not found/);
+});
