@@ -5,9 +5,10 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('canonical property geo is server-authoritative and Owner submissions remain unverified', async () => {
-  const [rules, backend, rootLocation, ownerLocation, legacyAdminPage, pinResolver] = await Promise.all([
+  const [rules, backend, authority, rootLocation, ownerLocation, legacyAdminPage, pinResolver] = await Promise.all([
     read('firestore.rules'),
     read('functions/adminPropertyReview.ts'),
+    read('functions/propertyGeoAuthority.ts'),
     read('src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx'),
@@ -30,13 +31,15 @@ test('canonical property geo is server-authoritative and Owner submissions remai
     assert.doesNotMatch(component, /geo: geo as any/);
   }
 
-  assert.match(backend, /canonicalVerifiedGeo/);
-  assert.match(backend, /new admin\.firestore\.GeoPoint/);
-  assert.match(backend, /update\.geo = canonicalGeo/);
-  assert.match(backend, /source: "admin_manual"/);
-  assert.match(backend, /verified: true/);
-  assert.match(backend, /dispatchReady: true/);
-  assert.match(backend, /requiresGeoReview: false/);
+  assert.match(authority, /export function buildFounderVerifiedPropertyGeo/);
+  assert.match(authority, /source: "admin_manual"/);
+  assert.match(authority, /verified: true/);
+  assert.match(authority, /dispatchReady: true/);
+  assert.match(authority, /requiresGeoReview: false/);
+  assert.match(authority, /verificationVersion: 1/);
+  assert.match(backend, /buildFounderVerifiedPropertyGeo\(property, actor\.uid, now\)/);
+  assert.match(backend, /update\.geo = canonical\.geo/);
+  assert.match(backend, /update\.geoVerification = canonical\.geoVerification/);
   assert.match(backend, /geoDispatchReady/);
 
   assert.match(legacyAdminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
@@ -44,7 +47,6 @@ test('canonical property geo is server-authoritative and Owner submissions remai
   assert.doesNotMatch(legacyAdminPage, /addDoc\s*\(/);
   assert.doesNotMatch(pinResolver, /owner_submission/);
 });
-
 
 test('verified properties keep ordinary Owner updates while canonical geo stays immutable', async () => {
   const [rules, emulatorTest] = await Promise.all([
