@@ -1,14 +1,19 @@
 import { generateTotp } from './totp.mjs';
 
 const text = (value) => String(value ?? '').trim();
+const lower = (value) => text(value).toLowerCase();
 
 async function parseJson(response) {
-  const raw = await response.text();
   try {
-    return raw ? JSON.parse(raw) : null;
+    return await response.json();
   } catch {
-    return { raw: raw.slice(0, 500) };
+    return null;
   }
+}
+
+function providerError(payload, fallback) {
+  const code = text(payload?.error?.message || payload?.error?.status);
+  return code ? code.slice(0, 180) : fallback;
 }
 
 function decodeJwtPayload(token) {
@@ -21,16 +26,19 @@ function decodeJwtPayload(token) {
   }
 }
 
-function requireMfaToken(token) {
+function requireTotpMfaToken(token) {
   const payload = decodeJwtPayload(token);
-  const secondFactor = text(payload?.firebase?.sign_in_second_factor);
-  if (!secondFactor) {
-    throw new Error('Firebase sign-in did not produce a verified second-factor session.');
+  const uid = text(payload.user_id || payload.sub);
+  const secondFactorType = lower(payload?.firebase?.sign_in_second_factor);
+  const secondFactorIdentifier = text(payload?.firebase?.second_factor_identifier);
+  if (!uid) throw new Error('Firebase MFA ID token has no authenticated user identifier.');
+  if (secondFactorType !== 'totp') {
+    throw new Error('Firebase sign-in did not produce a verified TOTP second-factor session.');
   }
-  return {
-    uid: text(payload.user_id || payload.sub),
-    secondFactor,
-  };
+  if (!secondFactorIdentifier) {
+    throw new Error('Firebase TOTP session did not include the verified factor identifier.');
+  }
+  return { uid, secondFactorType, secondFactorIdentifier };
 }
 
 export async function signInWithRequiredTotpMfa({
@@ -65,20 +73,21 @@ export async function signInWithRequiredTotpMfa({
   });
   const signInPayload = await parseJson(signInResponse);
   if (!signInResponse.ok) {
-    const providerMessage = text(signInPayload?.error?.message || signInPayload?.raw || `HTTP ${signInResponse.status}`);
-    throw new Error(`Firebase first-factor sign-in failed: ${providerMessage.slice(0, 180)}`);
+    throw new Error(
+      `Firebase first-factor sign-in failed: ${providerError(signInPayload, `HTTP ${signInResponse.status}`)}`,
+    );
   }
 
   const directToken = text(signInPayload?.idToken);
   if (directToken) {
-    const verified = requireMfaToken(directToken);
-    return { idToken: directToken, uid: verified.uid, secondFactor: verified.secondFactor };
+    const verified = requireTotpMfaToken(directToken);
+    return { idToken: directToken, ...verified };
   }
 
   const pendingCredential = text(signInPayload?.mfaPendingCredential);
   const factors = Array.isArray(signInPayload?.mfaInfo) ? signInPayload.mfaInfo : [];
   const totpFactor = factors.find((factor) =>
-    Boolean(factor?.totpInfo) || text(factor?.factorId).toLowerCase() === 'totp',
+    Boolean(factor?.totpInfo) || lower(factor?.factorId) === 'totp',
   );
   const enrollmentId = text(totpFactor?.mfaEnrollmentId);
   if (!pendingCredential || !enrollmentId) {
@@ -104,14 +113,14 @@ export async function signInWithRequiredTotpMfa({
   const finalizePayload = await parseJson(finalizeResponse);
   const idToken = text(finalizePayload?.idToken);
   if (!finalizeResponse.ok || !idToken) {
-    const providerMessage = text(finalizePayload?.error?.message || finalizePayload?.raw || `HTTP ${finalizeResponse.status}`);
-    throw new Error(`Firebase TOTP sign-in failed: ${providerMessage.slice(0, 180)}`);
+    throw new Error(
+      `Firebase TOTP sign-in failed: ${providerError(finalizePayload, `HTTP ${finalizeResponse.status}`)}`,
+    );
   }
 
-  const verified = requireMfaToken(idToken);
-  return {
-    idToken,
-    uid: verified.uid,
-    secondFactor: verified.secondFactor,
-  };
+  const verified = requireTotpMfaToken(idToken);
+  if (verified.secondFactorIdentifier !== enrollmentId) {
+    throw new Error('Firebase TOTP token factor identifier does not match the completed challenge.');
+  }
+  return { idToken, ...verified };
 }
