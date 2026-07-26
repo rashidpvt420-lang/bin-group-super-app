@@ -9,6 +9,14 @@ const root = process.cwd();
 const liveLocationHardener = path.join(root, 'scripts/harden-technician-live-location-authority.mjs');
 const hardener = path.join(root, 'scripts/harden-final-firestore-authority.mjs');
 
+const ticketBlock = (rules, collectionName) => {
+  const marker = `    match /${collectionName}/{ticketId} {`;
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${collectionName} ticket block must exist`);
+  const next = rules.indexOf('\n    match /', start + marker.length);
+  return rules.slice(start, next < 0 ? rules.length : next);
+};
+
 test('final Firestore authority hardener is status-aware, explicit, bounded and idempotent', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-final-firestore-authority-'));
   try {
@@ -27,7 +35,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /function hasNonAdminDispatchClaimOnly\(\)/);
     assert.match(rules, /return hasDispatchAuthorityClaimOnly\(\) && isNotSuspended\(\);/);
     assert.match(rules, /function safeTicketUpdateByActor\(\)/);
-    assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+    assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);
     assert.match(rules, /let authenticated = signedIn\(\);/);
     assert.match(rules, /let role = authenticated/);
     assert.match(rules, /let admin = authenticated && \(/);
@@ -39,6 +47,13 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
     assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
     assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\n\s*allow read, write: if false;/);
+
+    const legacy = ticketBlock(rules, 'tickets');
+    assert.match(legacy, /allow create, update, delete: if false;/);
+    assert.doesNotMatch(legacy, /allow update: if safeTicketUpdateByActor\(\);/);
+    const canonical = ticketBlock(rules, 'maintenanceTickets');
+    assert.match(canonical, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+    assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
 
     assert.match(
       rules,
@@ -55,7 +70,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'properties',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.doesNotMatch(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
-    for (const legacy of [
+    for (const oldRule of [
       'allow update: if isAdmin() && isNotSuspended();',
       'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
       'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
@@ -63,7 +78,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
       "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();",
       "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();",
       "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();",
-    ]) assert.equal(rules.includes(legacy), false);
+    ]) assert.equal(rules.includes(oldRule), false);
 
     const routerStart = rules.indexOf('    function safeTicketUpdateByActor() {');
     const routerEnd = rules.indexOf('\n    }', routerStart) + '\n    }'.length;
