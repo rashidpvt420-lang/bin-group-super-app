@@ -24,7 +24,7 @@ jobs:
         with:
           ref: fix/technician-gps-durable-queue-673
           fetch-depth: 0
-      - name: Apply deterministic tracking state-machine patch
+      - name: Apply narrowed deterministic tracking state-machine patch
         run: python .github/scripts/apply-technician-gps-queue-673.py
       - name: Commit only the patched tracking utility
         run: |
