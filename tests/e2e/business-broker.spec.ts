@@ -10,17 +10,19 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { getLatestOtp } from './helpers/gmail-otp-reader';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
-const EMAIL = process.env.E2E_BROKER_EMAIL ?? '';
+// Owner and Broker authenticate using their dedicated OAuth-verified mailboxes.
+const EMAIL = process.env.E2E_BROKER_MAILBOX_EMAIL ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
 function requireLaunchCredentials() {
   if (!EMAIL || !PASSWORD) {
-    throw new Error('Missing E2E_BROKER_EMAIL/PASSWORD. Broker launch validation cannot be skipped for public release.');
+    throw new Error('Missing E2E_BROKER_MAILBOX_EMAIL/PASSWORD. Broker launch validation cannot be skipped for public release.');
   }
 }
 
@@ -107,8 +109,23 @@ test.describe('Broker Business Workflow', () => {
     await expect(otpCode).toHaveValue('');
     await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
 
-    await page.getByTestId('broker-payout-otp-cancel').click();
-    await expect(otpDialog).toBeHidden({ timeout: 10_000 });
+    // Retrieve the real OTP from the broker Gmail mailbox via OAuth2 / Gmail API.
+    // The code is sent immediately after requestOtp.click(); allow up to 90 s for delivery.
+    const otpStartMs = Date.now();
+    const otp = await getLatestOtp('broker', {
+      timeoutMs:   90_000,
+      afterMs:     otpStartMs - 10_000, // tolerate small clock skew
+      subjectHint: 'payout verification',
+    });
+
+    await otpCode.fill(otp);
+    const submitOtp = page.getByTestId('broker-payout-otp-submit');
+    await expect(submitOtp).toBeEnabled({ timeout: 5_000 });
+    await submitOtp.click();
+
+    // Verify payout was accepted by the app
+    await expect(page.getByText(/Payout request submitted|Payout approved|payout successfully/i)).toBeVisible({ timeout: 30_000 });
+    await expect(otpDialog).toBeHidden({ timeout: 15_000 });
     await expect(page.locator('body')).not.toContainText(/Unable to send payout verification code|payout verification or submission failed/i);
   });
 });

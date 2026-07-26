@@ -24,12 +24,16 @@ for (const envPath of possibleConfigPaths) {
   }
 }
 
-const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
+// Owner and Broker use dedicated OAuth-authenticated mailboxes; their login
+// email is stored as E2E_{ROLE}_MAILBOX_EMAIL, not E2E_{ROLE}_EMAIL.
+const EMAIL_KEY = (role) =>
+  role === 'OWNER' || role === 'BROKER' ? `E2E_${role}_MAILBOX_EMAIL` : `E2E_${role}_EMAIL`;
+const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
-  ...roles.flatMap((role) => [`E2E_${role}_EMAIL`, `E2E_${role}_PASSWORD`]),
+  ...roles.flatMap((role) => [EMAIL_KEY(role), `E2E_${role}_PASSWORD`]),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
@@ -78,7 +82,7 @@ function validateAppCheckToken() {
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
-  console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[`E2E_${role}_EMAIL`] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
+  console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[EMAIL_KEY(role)] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
 }
 
 const appCheckMissing = validateAppCheckToken();
@@ -100,6 +104,24 @@ if (process.env.E2E_STRICT_LIVE === 'true') {
     process.exit(1);
   }
   console.log('[E2E_ENV_GUARD] live_build_site_key=set');
+
+  // Verify all six mailbox OAuth secrets are present so the Gmail OTP helper
+  // can actually exchange tokens during the OTP payout flow.
+  const mailboxOauthKeys = [
+    'E2E_OWNER_MAILBOX_CLIENT_ID',
+    'E2E_OWNER_MAILBOX_CLIENT_SECRET',
+    'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
+    'E2E_BROKER_MAILBOX_CLIENT_ID',
+    'E2E_BROKER_MAILBOX_CLIENT_SECRET',
+    'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
+  ];
+  const missingOauth = mailboxOauthKeys.filter((k) => !String(process.env[k] || '').trim());
+  if (missingOauth.length) {
+    console.error('[E2E_ENV_GUARD] Missing mailbox OAuth secrets: ' + missingOauth.join(', '));
+    console.error('[E2E_ENV_GUARD] These GitHub Actions secrets are required in the production environment for real OTP verification.');
+    process.exit(1);
+  }
+  console.log('[E2E_ENV_GUARD] mailbox_oauth_secrets=set (owner+broker)');
 }
 
 if (process.env.E2E_STRICT_BUSINESS === 'true') {

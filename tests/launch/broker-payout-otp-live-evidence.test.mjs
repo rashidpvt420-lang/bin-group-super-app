@@ -8,7 +8,7 @@ const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 
 test('Broker payout OTP fixture is restricted to the verified dedicated E2E Broker', () => {
-  assert.match(fixture, /E2E_BROKER_EMAIL is required/);
+  assert.match(fixture, /E2E_BROKER_MAILBOX_EMAIL is required/);
   assert.match(fixture, /brokerUser\.emailVerified/);
   assert.match(fixture, /profile\.e2eLaunchSeed !== true/);
   assert.match(fixture, /dedicated E2E Broker/);
@@ -39,18 +39,32 @@ test('critical evidence prepares the Broker payout fixture before browser execut
   assert.ok(playwrightExecution > fixtureFailure, 'fixture preparation must happen before browser execution');
 });
 
-test('Broker live evidence requests and cancels an OTP challenge without consuming it', () => {
+test('Broker live evidence fetches a real OTP from Gmail and submits it — cancel path is forbidden', () => {
+  // Must import the Gmail OAuth2 reader
+  assert.match(brokerSpec, /gmail-otp-reader/);
+  assert.match(brokerSpec, /getLatestOtp/);
+
+  // Must use the mailbox email env key
+  assert.match(brokerSpec, /E2E_BROKER_MAILBOX_EMAIL/);
+
+  // Must issue the OTP request
   assert.match(brokerSpec, /broker-payout-request-otp/);
   assert.ok(brokerSpec.includes('REQUEST PAYOUT \\(1\\)'), 'live evidence must require exactly one prepared commission');
   assert.match(brokerSpec, /broker-payout-otp-dialog/);
   assert.match(brokerSpec, /broker-payout-otp-code/);
-  assert.match(brokerSpec, /toHaveValue\(''\)/);
+
+  // Must fill and submit the real code
+  assert.match(brokerSpec, /otpCode\.fill\(otp\)/);
   assert.match(brokerSpec, /broker-payout-otp-submit/);
-  assert.match(brokerSpec, /toBeDisabled\(\)/);
-  assert.match(brokerSpec, /broker-payout-otp-cancel/);
-  assert.doesNotMatch(brokerSpec, /getByTestId\('broker-payout-otp-code'\)\.fill/);
+  assert.match(brokerSpec, /submitOtp\.click\(\)/);
+
+  // Cancel path must NOT be used — that was the false-pass escape hatch
+  assert.doesNotMatch(brokerSpec, /broker-payout-otp-cancel/);
+
+  // Server-authoritative callable names must not appear in the client spec
   assert.doesNotMatch(brokerSpec, /verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });
+
 
 test('Broker payout UI exposes stable evidence selectors while retaining server-authoritative order', () => {
   assert.match(page, /data-testid="broker-payout-request-otp"/);
