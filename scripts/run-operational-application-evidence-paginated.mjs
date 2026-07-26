@@ -61,6 +61,16 @@ async function readAllMatchingDocuments(baseQuery) {
 }`,
   'paginated Firestore reader',
 );
+replaceExactlyOnce(
+  'secondFactor: founderAuth.secondFactor,',
+  'secondFactorIdentifier: founderAuth.secondFactorIdentifier,',
+  'verified TOTP factor propagation',
+);
+replaceExactlyOnce(
+  'secondFactorHash: sha256(auth.secondFactor),',
+  'secondFactorHash: sha256(auth.secondFactorIdentifier),',
+  'verified TOTP factor evidence hash',
+);
 
 const selectorReplacements = [
   [
@@ -94,21 +104,27 @@ for (const [before, after, label] of selectorReplacements) {
   replaceExactlyOnce(before, after, label);
 }
 
-for (const forbidden of selectorReplacements.map(([before]) => before)) {
-  if (source.includes(forbidden)) fail('a reviewed limit(100) selector survived pagination hardening');
+for (const forbidden of [
+  ...selectorReplacements.map(([before]) => before),
+  'secondFactor: founderAuth.secondFactor,',
+  'secondFactorHash: sha256(auth.secondFactor),',
+]) {
+  if (source.includes(forbidden)) fail(`a reviewed obsolete evidence path survived hardening: ${forbidden}`);
 }
 for (const required of [
   'const PAGE_SIZE = 250;',
   'async function readAllMatchingDocuments(baseQuery)',
   'FieldPath.documentId()',
   'startAfter(cursor)',
+  'secondFactorIdentifier: founderAuth.secondFactorIdentifier,',
+  'secondFactorHash: sha256(auth.secondFactorIdentifier),',
   "readAllMatchingDocuments(db.collection('payment_transactions')",
   "readAllMatchingDocuments(db.collection('notifications')",
   "readAllMatchingDocuments(db.collection('broker_commissions')",
   "readAllMatchingDocuments(db.collection('audit_logs')",
   "readAllMatchingDocuments(db.collection('contract_renewal_watch')",
 ]) {
-  if (!source.includes(required)) fail(`transformed verifier is missing required pagination control: ${required}`);
+  if (!source.includes(required)) fail(`transformed verifier is missing required control: ${required}`);
 }
 
 writeFileSync(temporaryPath, source, { mode: 0o600 });
