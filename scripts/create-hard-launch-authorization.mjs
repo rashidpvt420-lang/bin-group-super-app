@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { request } from 'node:https';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   AUTHORIZATION_KIND,
   AUTHORIZATION_MAX_AGE_MS,
@@ -17,13 +17,13 @@ import {
 import { normalizeAuthorizedEmail } from './lib/identity-normalization.mjs';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
+const GITHUB_API_ROOT = `https://api.github.com/repos/${EXPECTED_REPOSITORY}`;
 const AUTOMATION_ACTOR = 'github-actions[bot]';
 const AUTOMATION_EMAIL_SENTINEL = 'authorized-founder@protected.invalid';
 const OWNER_REQUEST_TITLE = 'Dispatch protected bank pilot workflow';
 const OWNER_REQUEST_BRANCH_PREFIX = 'ops/dispatch-bank-pilot-workflow-';
 const OWNER_REQUEST_MARKER = '.github/bank-pilot-dispatch-request';
 const REQUIRED_INCIDENT_REFERENCE = `https://github.com/${EXPECTED_REPOSITORY}/issues/434`;
-const GITHUB_API_HOST = 'api.github.com';
 const MAX_GITHUB_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 function requiredEnv(name) {
@@ -40,80 +40,64 @@ function readJson(filePath, label) {
   }
 }
 
-function requestGithubJson(apiPath, label) {
-  const allowedPrefix = `/repos/${EXPECTED_REPOSITORY}/`;
-  if (
-    typeof apiPath !== 'string' ||
-    !apiPath.startsWith(allowedPrefix) ||
-    apiPath.includes('..') ||
-    /[\r\n\\]/.test(apiPath)
-  ) {
-    return Promise.reject(new Error(`${label} path was refused`));
+function parseCurlJson(result, label) {
+  if (result.error || result.status !== 0) throw new Error(`${label} could not be fetched`);
+  if (Buffer.byteLength(result.stdout || '') > MAX_GITHUB_RESPONSE_BYTES) {
+    throw new Error(`${label} exceeded the response limit`);
   }
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error(`${label} returned malformed JSON`);
+  }
+}
 
-  return new Promise((resolve, reject) => {
-    const requestHandle = request({
-      protocol: 'https:',
-      hostname: GITHUB_API_HOST,
-      port: 443,
-      method: 'GET',
-      path: apiPath,
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'bin-group-founder-authorization-verifier',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      timeout: 10_000,
-    }, (response) => {
-      let body = '';
-      let size = 0;
-      response.setEncoding('utf8');
-      response.on('data', (chunk) => {
-        size += Buffer.byteLength(chunk);
-        if (size > MAX_GITHUB_RESPONSE_BYTES) {
-          requestHandle.destroy(new Error(`${label} exceeded the response limit`));
-          return;
-        }
-        body += chunk;
-      });
-      response.on('end', () => {
-        if (response.statusCode !== 200) {
-          reject(new Error(`${label} returned HTTP ${response.statusCode || 0}`));
-          return;
-        }
-        try {
-          resolve(JSON.parse(body));
-        } catch {
-          reject(new Error(`${label} returned malformed JSON`));
-        }
-      });
-    });
-    requestHandle.on('timeout', () => requestHandle.destroy(new Error(`${label} timed out`)));
-    requestHandle.on('error', () => reject(new Error(`${label} could not be fetched`)));
-    requestHandle.end();
+function curlGithubJson(url, label) {
+  if (typeof url !== 'string' || !url.startsWith(`${GITHUB_API_ROOT}/`) || /[\r\n]/.test(url)) {
+    throw new Error(`${label} URL was refused`);
+  }
+  const result = spawnSync('curl', [
+    '--fail',
+    '--silent',
+    '--show-error',
+    '--location',
+    '--max-time',
+    '10',
+    '--max-filesize',
+    String(MAX_GITHUB_RESPONSE_BYTES),
+    '--header',
+    'Accept: application/vnd.github+json',
+    '--header',
+    'User-Agent: bin-group-founder-authorization-verifier',
+    '--header',
+    'X-GitHub-Api-Version: 2022-11-28',
+    url,
+  ], {
+    encoding: 'utf8',
+    timeout: 12_000,
+    maxBuffer: MAX_GITHUB_RESPONSE_BYTES + 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  return parseCurlJson(result, label);
 }
 
 function fetchOwnerPullRequest(pullNumber) {
-  if (!/^[1-9][0-9]*$/.test(String(pullNumber || ''))) {
-    return Promise.reject(new Error('owner request PR number is invalid'));
-  }
-  return requestGithubJson(`/repos/${EXPECTED_REPOSITORY}/pulls/${pullNumber}`, 'owner request PR');
+  const value = String(pullNumber || '');
+  if (!/^[1-9][0-9]*$/.test(value)) throw new Error('owner request PR number is invalid');
+  return curlGithubJson(`${GITHUB_API_ROOT}/pulls/${value}`, 'owner request PR');
 }
 
 function fetchOwnerPullRequestFiles(pullNumber) {
-  if (!/^[1-9][0-9]*$/.test(String(pullNumber || ''))) {
-    return Promise.reject(new Error('owner request PR number is invalid'));
-  }
-  return requestGithubJson(`/repos/${EXPECTED_REPOSITORY}/pulls/${pullNumber}/files?per_page=100`, 'owner request file list');
+  const value = String(pullNumber || '');
+  if (!/^[1-9][0-9]*$/.test(value)) throw new Error('owner request PR number is invalid');
+  return curlGithubJson(`${GITHUB_API_ROOT}/pulls/${value}/files?per_page=100`, 'owner request file list');
 }
 
 function fetchOwnerMarker(headSha) {
-  if (!/^[0-9a-f]{40}$/.test(String(headSha || ''))) {
-    return Promise.reject(new Error('owner request head SHA is invalid'));
-  }
-  return requestGithubJson(
-    `/repos/${EXPECTED_REPOSITORY}/contents/${OWNER_REQUEST_MARKER}?ref=${headSha}`,
+  const value = String(headSha || '');
+  if (!/^[0-9a-f]{40}$/.test(value)) throw new Error('owner request head SHA is invalid');
+  return curlGithubJson(
+    `${GITHUB_API_ROOT}/contents/${OWNER_REQUEST_MARKER}?ref=${value}`,
     'owner request marker',
   );
 }
@@ -147,7 +131,7 @@ function parseMarker(content) {
   }
 }
 
-async function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, authorizedEmails }) {
+function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, authorizedEmails }) {
   if (workflowActor !== AUTOMATION_ACTOR) {
     throw new Error('automated Founder identity may only be resolved for github-actions[bot]');
   }
@@ -172,7 +156,7 @@ async function resolveAutomatedFounder({ commitSha, workflowActor, authorizedAct
   }
 
   const pullNumber = matches[0][1];
-  const pull = await fetchOwnerPullRequest(pullNumber);
+  const pull = fetchOwnerPullRequest(pullNumber);
   const repositoryOwner = EXPECTED_REPOSITORY.split('/')[0].toLowerCase();
   const founderActor = String(pull?.user?.login || '').trim().toLowerCase();
 
@@ -190,11 +174,11 @@ async function resolveAutomatedFounder({ commitSha, workflowActor, authorizedAct
     throw new Error('owner request PR Founder actor is not authorized');
   }
 
-  const files = await fetchOwnerPullRequestFiles(pullNumber);
+  const files = fetchOwnerPullRequestFiles(pullNumber);
   if (!Array.isArray(files) || files.length !== 1 || files[0]?.filename !== OWNER_REQUEST_MARKER) {
     throw new Error('owner request PR must change only the canonical marker');
   }
-  const marker = await fetchOwnerMarker(String(pull?.head?.sha || ''));
+  const marker = fetchOwnerMarker(String(pull?.head?.sha || ''));
   if (marker?.encoding !== 'base64' || typeof marker?.content !== 'string') {
     throw new Error('owner request marker response is invalid');
   }
@@ -237,7 +221,7 @@ try {
   let ownerRequestPullRequest = null;
 
   if (requestedFounderEmail === AUTOMATION_EMAIL_SENTINEL) {
-    const automated = await resolveAutomatedFounder({
+    const automated = resolveAutomatedFounder({
       commitSha,
       workflowActor,
       authorizedActors,
