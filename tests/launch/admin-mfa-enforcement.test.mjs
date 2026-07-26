@@ -193,9 +193,12 @@ test('production deploy requires single-founder verification before Firebase dep
   const deploy = await read('scripts/deploy-firebase-production.mjs');
   const phone = deploy.indexOf('await verifyFirebasePhoneAuthProduction');
   const accounts = deploy.indexOf('await verifyAdminMfaProduction');
-  const firebaseDeploy = deploy.search(/retryFirebase\(\s*['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/);
+  const functionsDeploy = deploy.indexOf('const functionDeploymentEvidence = deployFunctionsQuotaSafe()');
+  const nonFunctionsDeploy = deploy.indexOf("'non-Functions Firebase production stack'");
   assert.ok(accounts > phone);
-  assert.ok(firebaseDeploy > accounts);
+  assert.ok(functionsDeploy > accounts);
+  assert.ok(nonFunctionsDeploy > functionsDeploy);
+  assert.doesNotMatch(deploy, /functions,hosting,firestore:rules,firestore:indexes,storage/);
 
   const preflight = await read('scripts/verify-admin-mfa-production.mjs');
   assert.match(preflight, /CANONICAL_FOUNDER_EMAIL/);

@@ -74,7 +74,10 @@ test('scheduled-service verifier follows the centralized protected production li
   assert.doesNotMatch(retiredWorkflow, /firebase deploy/);
   assert.match(protectedWorkflow, /environment: production/);
   assert.match(protectedWorkflow, /node scripts\/deploy-firebase-production\.mjs/);
-  assert.match(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
+  assert.match(deployRunner, /function deployFunctionsQuotaSafe\(\)/);
+  assert.match(deployRunner, /'non-Functions Firebase production stack'/);
+  assert.match(deployRunner, /deploymentMetadata\.functionsDeployment = functionDeploymentEvidence/);
+  assert.doesNotMatch(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
 });
 
 test('launch-hardening verifier explicitly rejects direct assignment and overlapping ticket gates', () => {
