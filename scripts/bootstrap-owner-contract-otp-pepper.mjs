@@ -23,6 +23,14 @@ export function classifyAccessFailure(output) {
   return 'inaccessible';
 }
 
+export function chooseBootstrapAction({ secretExists, accessStatus, currentValue }) {
+  if (accessStatus === 'inaccessible') return 'fail-inaccessible';
+  if (accessStatus === 'available' && isValidPepper(currentValue)) return 'unchanged';
+  if (!secretExists) return 'created';
+  if (accessStatus === 'available') return 'rotated-invalid-value';
+  return 'added-missing-version';
+}
+
 function gcloudCommand(args, { env = process.env, input } = {}) {
   return spawnSync('gcloud', args, {
     encoding: 'utf8',
@@ -127,22 +135,26 @@ export async function bootstrapOwnerContractOtpPepper({ env = process.env } = {}
 
   try {
     const describedState = describeSecret({ env });
+    const secretExists = describedState === 'available';
     previousState = describedState;
 
     let existing = { status: describedState, value: '' };
-    if (describedState === 'available') {
+    if (secretExists) {
       existing = accessSecret({ env });
       previousState = existing.status;
     }
 
-    if (existing.status === 'available' && isValidPepper(existing.value)) {
-      action = 'unchanged';
-    } else {
-      if (existing.status === 'inaccessible') {
-        throw new Error('SECRET_ACCESS_DENIED_OR_UNAVAILABLE');
-      }
+    action = chooseBootstrapAction({
+      secretExists,
+      accessStatus: existing.status,
+      currentValue: existing.value,
+    });
 
-      action = existing.status === 'available' ? 'rotated-invalid-value' : 'created';
+    if (action === 'fail-inaccessible') {
+      throw new Error('SECRET_ACCESS_DENIED_OR_UNAVAILABLE');
+    }
+
+    if (action !== 'unchanged') {
       const generated = randomBytes(48).toString('base64url');
       if (!isValidPepper(generated)) throw new Error('GENERATED_SECRET_TOO_SHORT');
 
