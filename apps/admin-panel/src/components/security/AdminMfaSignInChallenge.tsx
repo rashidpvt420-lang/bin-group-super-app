@@ -14,6 +14,12 @@ type Props = {
   onCancel: () => void;
 };
 
+const E2E_MFA_MARKER = 'bin-e2e-admin-mfa-test';
+const ADMIN_HOSTS = new Set([
+  'bin-group-admin-panel.web.app',
+  'bin-group-admin-panel.firebaseapp.com',
+]);
+
 const maskPhone = (value: string) => {
   const phone = String(value || '').trim();
   if (phone.length < 7) return '••••';
@@ -23,6 +29,16 @@ const maskPhone = (value: string) => {
 const phoneValue = (hint: MultiFactorInfo) => {
   const candidate = hint as MultiFactorInfo & { phoneNumber?: string };
   return candidate.phoneNumber || '';
+};
+
+const enableProtectedE2eVerification = () => {
+  if (typeof window === 'undefined') return false;
+  const webdriver = window.navigator.webdriver === true;
+  const marker = window.localStorage.getItem(E2E_MFA_MARKER) === 'enabled';
+  const trustedHost = ADMIN_HOSTS.has(window.location.hostname);
+  if (!webdriver || !marker || !trustedHost) return false;
+  auth.settings.appVerificationDisabledForTesting = true;
+  return true;
 };
 
 export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel }: Props) {
@@ -42,6 +58,9 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   const clearVerifier = () => {
     verifierRef.current?.clear();
     verifierRef.current = null;
+    if (typeof document !== 'undefined') {
+      document.getElementById(recaptchaId)?.replaceChildren();
+    }
   };
 
   React.useEffect(() => () => {
@@ -81,8 +100,10 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
     setNotice('');
     try {
       clearVerifier();
+      enableProtectedE2eVerification();
       const verifier = new RecaptchaVerifier(auth, recaptchaId, { size: 'invisible' });
       verifierRef.current = verifier;
+      await verifier.render();
       const provider = new PhoneAuthProvider(auth);
       const id = await provider.verifyPhoneNumber({
         multiFactorHint: hint,
@@ -91,9 +112,6 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       setVerificationId(id);
       setCode('');
       setNotice('Firebase sent an MFA code to the enrolled Admin phone.');
-      // Keep the verifier alive until the challenge is resolved, reset or
-      // unmounted. Clearing it in this finally block can invalidate the
-      // asynchronous phone challenge before React exposes the code field.
     } catch (mfaError) {
       clearVerifier();
       setVerificationId('');
@@ -101,6 +119,7 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       setNotice('');
       setError(friendlyError(mfaError));
     } finally {
+      clearVerifier();
       setBusy(false);
     }
   };
