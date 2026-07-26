@@ -166,15 +166,16 @@ test('failed STOP remains pending and blocks newer actions until reconciliation'
 });
 
 test('account change is an explicit queue disposal boundary and expiry removes stale coordinates', () => {
+  const now = Date.now();
   const stores = storage();
-  queue.enqueueGpsRetryAction(updateInput(), stores, 1000);
-  queue.enqueueGpsRetryAction(stopInput({ technicianUid: 'tech-2', ticketId: 'ticket-2', trackingSessionId: 'session-2' }), stores, 1000);
+  queue.enqueueGpsRetryAction(updateInput({ queuedAtMs: now }), stores, now);
+  queue.enqueueGpsRetryAction(stopInput({ technicianUid: 'tech-2', ticketId: 'ticket-2', trackingSessionId: 'session-2', queuedAtMs: now }), stores, now);
   queue.purgeGpsQueuesExceptTechnician('tech-2', stores);
-  const scoped = queue.readGpsRetryQueue(stores, 1000);
+  const scoped = queue.readGpsRetryQueue(stores, now);
   assert.equal(scoped.length, 1);
   assert.equal(scoped[0].technicianUid, 'tech-2');
 
   const expiring = storage();
-  queue.enqueueGpsRetryAction(updateInput(), expiring, 1000);
-  assert.equal(queue.readGpsRetryQueue(expiring, 1000 + (5 * 60 * 1000) + 1).length, 0);
+  queue.enqueueGpsRetryAction(updateInput({ queuedAtMs: now }), expiring, now);
+  assert.equal(queue.readGpsRetryQueue(expiring, now + (5 * 60 * 1000) + 1).length, 0);
 });
