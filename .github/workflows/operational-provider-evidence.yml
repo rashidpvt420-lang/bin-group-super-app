@@ -126,6 +126,12 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Verify trusted production deployment workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_DEPLOYMENT_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/verify-trusted-production-deploy-source.mjs
+
       - name: Download exact production deployment metadata
         uses: actions/download-artifact@v4
         with:
@@ -220,6 +226,7 @@ jobs:
         with:
           name: operational-provider-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
           path: |
+            launch_package/trusted-production-deploy-source.json
             launch_package/production-deployment.json
             launch_package/smtp-live-proof.json
             launch_package/appcheck-enforcement-proof.json
