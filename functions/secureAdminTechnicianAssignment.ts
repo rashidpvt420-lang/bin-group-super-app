@@ -6,7 +6,6 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const ADMIN_ROLES = new Set(["admin", "super_admin", "operations_admin", "operations_manager", "dispatcher"]);
 const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED"]);
-const ACTIVE_STATUSES = new Set(["ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"]);
 const role = (value: unknown) => String(value || "").trim().toLowerCase();
 const text = (value: unknown, max = 180) => String(value || "").trim().slice(0, max);
 const firstPresent = (...values: unknown[]) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
@@ -86,7 +85,7 @@ export const adminAssignTechnician = onCall(
     requireDispatcher(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const technicianId = text(request.data?.technicianId, 160);
-    const reassignmentReason = text(request.data?.reassignmentReason, 500);
+    const requestedReassignmentReason = text(request.data?.reassignmentReason, 500);
     if (!ticketId || !technicianId) throw new HttpsError("invalid-argument", "ticketId and technicianId are required.");
 
     const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
@@ -118,7 +117,9 @@ export const adminAssignTechnician = onCall(
       const previousTechnicianId = text(ticket.assignedTechnicianId || ticket.technicianId || ticket.techId, 160);
       if (previousTechnicianId === technicianId) { idempotent = true; return; }
       const isReassignment = Boolean(previousTechnicianId && previousTechnicianId !== technicianId);
-      if (isReassignment && ACTIVE_STATUSES.has(currentStatus) && reassignmentReason.length < 8) throw new HttpsError("failed-precondition", "An audited reassignment reason is required for an accepted or active mission.");
+      const reassignmentReason = isReassignment
+        ? requestedReassignmentReason || "Admin portal manual technician reassignment"
+        : "";
 
       const capacityProfile = userSnap.exists ? user : technician;
       const currentJobCount = Number(capacityProfile.currentJobCount || capacityProfile.activeJobCount || 0);
@@ -140,6 +141,9 @@ export const adminAssignTechnician = onCall(
         assignmentReadinessVerifiedAt: now,
         assignmentReadinessVersion: "TECH_READINESS_V2",
         reassignmentReason: isReassignment ? reassignmentReason : null,
+        reassignmentReasonSource: isReassignment
+          ? requestedReassignmentReason ? "ADMIN_OPERATOR" : "ADMIN_PORTAL_DEFAULT"
+          : null,
         updatedAt: now,
       }, { merge: true });
       transaction.set(userSnap.exists ? userRef : technicianRef, { currentJobCount: currentJobCount + 1, updatedAt: now }, { merge: true });
@@ -151,9 +155,13 @@ export const adminAssignTechnician = onCall(
         ticketId,
         technicianId,
         previousTechnicianId: previousTechnicianId || null,
+        previousStatus: currentStatus,
         readinessVersion: "TECH_READINESS_V2",
         readinessFailures: [],
         reassignmentReason: isReassignment ? reassignmentReason : null,
+        reassignmentReasonSource: isReassignment
+          ? requestedReassignmentReason ? "ADMIN_OPERATOR" : "ADMIN_PORTAL_DEFAULT"
+          : null,
         createdAt: now,
       });
     });
