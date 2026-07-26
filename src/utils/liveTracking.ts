@@ -477,19 +477,28 @@ export const startLiveTracking = async (
     );
 };
 
+export type StopLiveTrackingResult = {
+    hadActiveSession: boolean;
+    serverAcknowledged: boolean;
+    superseded: boolean;
+    stopQueued: boolean;
+};
+
 export const stopLiveTracking = async (
     technicianUid?: string,
     ticketId?: string,
     finalStatus: StopTrackingStatus = 'PRESERVE',
-): Promise<void> => {
+): Promise<StopLiveTrackingResult> => {
     const uid = technicianUid || _state.technicianUid;
     const activeTicketId = ticketId || _state.activeTicketId;
     const sessionId = _state.trackingSessionId;
 
     if (_state.watchId !== null && typeof navigator !== 'undefined') navigator.geolocation.clearWatch(_state.watchId);
 
+    const hadActiveSession = Boolean(uid && activeTicketId && sessionId);
     let stopAcknowledged = false;
     let stopSuperseded = false;
+    let stopQueued = false;
     if (uid && activeTicketId && sessionId) {
         discardQueuedSessionUpdates(uid, activeTicketId, sessionId);
         const stopAction: LiveTrackingAction = {
@@ -504,6 +513,7 @@ export const stopLiveTracking = async (
             stopSuperseded = response.superseded;
             stopAcknowledged = !stopSuperseded;
         } catch (error) {
+            stopQueued = true;
             enqueueGpsRetryAction({
                 action: 'STOP',
                 ticketId: activeTicketId,
@@ -545,4 +555,31 @@ export const stopLiveTracking = async (
     _state.technicianUid = null;
     _state.trackingSessionId = null;
     if (stopAcknowledged || stopSuperseded || !uid) detachOnlineRecovery();
+    return {
+        hadActiveSession,
+        serverAcknowledged: stopAcknowledged || stopSuperseded,
+        superseded: stopSuperseded,
+        stopQueued,
+    };
+};
+
+export const prepareTechnicianTrackingLogout = async (technicianUid: string): Promise<void> => {
+    const uid = String(technicianUid || '').trim();
+    if (!uid) return;
+
+    const stopResult = await stopLiveTracking(uid, undefined, 'PRESERVE');
+    const replay = await replayForTechnician(uid);
+    if ((stopResult.hadActiveSession && !stopResult.serverAcknowledged) || replay.pendingStops > 0) {
+        const error = new Error(
+            replay.terminal > 0
+                ? 'Logout paused because a GPS STOP requires operations reconciliation.'
+                : 'Logout paused until the active GPS session is stopped on the server. Reconnect and retry.',
+        );
+        (error as Error & { code?: string }).code = 'GPS_LOGOUT_STOP_PENDING';
+        throw error;
+    }
+
+    // Privacy disposal is last. The STOP was acknowledged, superseded safely,
+    // or no unresolved canonical session exists.
+    purgeTechnicianGpsRetryQueue(uid);
 };

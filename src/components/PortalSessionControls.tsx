@@ -5,7 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
-import { purgeTechnicianGpsRetryQueue } from '../utils/liveTracking';
+import { prepareTechnicianTrackingLogout } from '../utils/liveTracking';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -43,24 +43,31 @@ export default function PortalSessionControls({
   const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
 
   const handleLogout = async () => {
+    let shouldRedirect = false;
+    const technicianUid = role === 'technician' ? auth.currentUser?.uid || '' : '';
     try {
-      if (role === 'technician' && auth.currentUser?.uid) {
-        purgeTechnicianGpsRetryQueue(auth.currentUser.uid);
+      if (technicianUid) {
+        await prepareTechnicianTrackingLogout(technicianUid);
       }
       await clearSessionAndPreserveLanguage();
       await signOut(auth);
-    } catch (error) {
+      shouldRedirect = true;
+    } catch (error: any) {
       console.warn(`[${role}] Secure logout fallback triggered.`, error);
+      if (technicianUid && error?.code === 'GPS_LOGOUT_STOP_PENDING') {
+        window.alert(error?.message || 'Logout paused until live GPS is stopped safely. Reconnect and retry.');
+        return;
+      }
       try {
-        if (role === 'technician' && auth.currentUser?.uid) {
-          purgeTechnicianGpsRetryQueue(auth.currentUser.uid);
-        }
         await signOut(auth);
+        shouldRedirect = true;
       } catch {
-        // Navigation below still terminates the local portal session.
+        // Navigation remains disabled when authentication could not be terminated.
       }
     } finally {
-      window.location.replace(logoutRedirect || `/login?intendedRole=${role}&logout=1`);
+      if (shouldRedirect) {
+        window.location.replace(logoutRedirect || `/login?intendedRole=${role}&logout=1`);
+      }
     }
   };
 
