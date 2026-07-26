@@ -14,6 +14,7 @@ export const requiredFirebaseAiSecrets = Object.freeze([
 export const requiredFirebaseBankPilotSecrets = Object.freeze([
   'SMTP_USER',
   'SMTP_PASS',
+  'OWNER_CONTRACT_OTP_PEPPER',
   ...requiredFirebaseAiSecrets,
 ]);
 
