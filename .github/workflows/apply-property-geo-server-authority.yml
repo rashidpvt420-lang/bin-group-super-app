@@ -62,8 +62,28 @@ jobs:
           npm run prepare:rules
           npm run verify:rules-hardening
 
-      - name: Validate focused property geo Firestore authority
-        run: firebase emulators:exec --only firestore --project bin-group-57c60 "node --test --test-concurrency=1 test/property-geo-authority-rules.test.js"
+      - name: Run focused property geo Firestore authority
+        id: focused_geo_rules
+        shell: bash
+        run: |
+          set +e
+          firebase emulators:exec --only firestore --project bin-group-57c60 "node --test --test-concurrency=1 test/property-geo-authority-rules.test.js" > property-geo-rules-output.txt 2>&1
+          status=$?
+          cat property-geo-rules-output.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload focused property geo diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: property-geo-rules-diagnostics-${{ github.sha }}
+          path: property-geo-rules-output.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce focused property geo authority
+        run: test "${{ steps.focused_geo_rules.outputs.status }}" = "0"
 
       - name: Validate complete Firestore and Storage authority
         run: firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
