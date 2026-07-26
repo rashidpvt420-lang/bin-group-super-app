@@ -69,6 +69,7 @@ test('Admin map deterministically merges every bounded listener chunk', () => {
   assert.match(adminMapSource, /byId\.set\(String\(ticket\.id\), ticket\)/);
   assert.match(adminMapSource, /localeCompare\(String\(right\.id\)\)/);
   assert.match(adminMapSource, /isUnresolvedMaintenanceTicketStatus\(ticket\.status\)/);
+  assert.match(adminMapSource, /unsubscribeTickets\.forEach\(\(unsubscribe\) => unsubscribe\(\)\)/);
 });
 
 test('Admin map fails closed on any chunk error and distinguishes loading, empty and error states', () => {
