@@ -1,29 +1,31 @@
 /**
  * BIN GROUP — Live Technician GPS Tracking Utility
  *
- * Browser geolocation remains foreground-only. Every accepted coordinate is
- * sent to an App-Check protected callable that atomically updates the canonical
- * technician_live_locations document and its compatibility mirrors.
+ * Browser geolocation remains foreground-only. Coordinates are sent to an
+ * App-Check protected callable that owns canonical tracking state.
  *
  * Retry policy:
- * - STOP actions contain no coordinates and are durable in localStorage until
- *   acknowledged, expired, or explicitly purged on account change/logout.
- * - UPDATE actions contain only the latest minimum coordinate for one session,
- *   live in sessionStorage, and expire after five minutes.
- * - a pending STOP is replayed before a new tracking session can start.
+ * - STOP contains no coordinates and is durable in localStorage.
+ * - UPDATE coordinates are memory-only and expire after five minutes.
+ * - mission/account boundaries delete every queued UPDATE before replaying a
+ *   prior STOP, so a coordinate from another ticket/session cannot leak.
  */
 
 import { db, doc, functions, httpsCallable, serverTimestamp, setDoc } from '../lib/firebase';
 import {
     browserGpsQueueStorage,
     discardQueuedSessionUpdates,
+    discardQueuedUpdatesForTechnician,
     enqueueGpsRetryAction,
     hasPendingGpsStop,
+    isPermanentGpsCallableError,
     purgeGpsQueueForTechnician,
     purgeGpsQueuesExceptTechnician,
     readGpsRetryQueue,
     removeLegacyGpsQueue,
     replayGpsRetryQueue,
+    resolveTerminalGpsStop,
+    terminalGpsStops,
     type QueuedGpsAction,
 } from './gpsRetryQueue';
 
@@ -64,6 +66,15 @@ export type GpsReadiness = {
     permissionState: PermissionState | 'unsupported' | 'unknown';
     userAgent: string;
     platform: string;
+};
+
+export type LiveTrackingStartResult = {
+    watchInstalled: true;
+    watchId: number;
+    trackingSessionId: string;
+    ticketId: string;
+    technicianUid: string;
+    readiness: GpsReadiness;
 };
 
 type StopTrackingStatus = TrackingStatus | 'PRESERVE';
@@ -112,7 +123,6 @@ export async function getGpsReadiness(): Promise<GpsReadiness> {
             platform: 'server',
         };
     }
-
     return {
         supported: 'geolocation' in navigator,
         secureContext: window.isSecureContext === true,
@@ -129,8 +139,8 @@ async function persistTrackingDiagnostic(technicianUid: string, ticketId: string
             ...payload,
             updatedAt: serverTimestamp(),
         }, { merge: true });
-    } catch (err) {
-        console.warn('[Tracking] Failed to persist GPS readiness diagnostic:', err);
+    } catch (error) {
+        console.warn('[Tracking] Failed to persist GPS readiness diagnostic:', error);
     }
 }
 
@@ -154,10 +164,8 @@ export function calculateDistanceKm(origin: any, destination: any): number | nul
     const dLng = ((b.lng - a.lng) * Math.PI) / 180;
     const lat1 = (a.lat * Math.PI) / 180;
     const lat2 = (b.lat * Math.PI) / 180;
-    const haversine =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1) * Math.cos(lat2) *
-        Math.sin(dLng / 2) ** 2;
+    const haversine = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
     return 2 * radiusKm * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
@@ -169,12 +177,10 @@ export function calculateEtaMinutes(distanceKm: number | null, averageSpeedKmh =
 
 export function getTicketJobLocation(ticket: any): { lat: number; lng: number; latitude: number; longitude: number } | null {
     if (!ticket) return null;
-    return (
-        normalizeLocation(ticket.jobLocation) ||
+    return normalizeLocation(ticket.jobLocation) ||
         normalizeLocation(ticket.propertyLocation) ||
         normalizeLocation(ticket.location) ||
-        null
-    );
+        null;
 }
 
 export function getTechnicianLocation(ticket: any): { lat: number; lng: number; latitude: number; longitude: number } | null {
@@ -286,17 +292,26 @@ function detachOnlineRecovery() {
 
 async function replayForTechnician(technicianUid: string, ticketIdForDiagnostic?: string) {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        return { attempted: 0, succeeded: 0, failed: 0, terminal: 0, pendingStops: hasPendingGpsStop(technicianUid) ? 1 : 0 };
+        return {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+            terminal: terminalGpsStops(technicianUid).length,
+            discardedPermanentUpdates: 0,
+            pendingStops: hasPendingGpsStop(technicianUid) ? 1 : 0,
+        };
     }
     const result = await replayGpsRetryQueue(technicianUid, async (entry) => {
         await sendAction(entry);
     });
-    if (ticketIdForDiagnostic && result.succeeded > 0) {
+    if (ticketIdForDiagnostic && (result.succeeded > 0 || result.discardedPermanentUpdates > 0 || result.terminal > 0)) {
         await persistTrackingDiagnostic(technicianUid, ticketIdForDiagnostic, {
             status: result.pendingStops > 0 ? 'STOP_RECONCILIATION_PENDING' : 'QUEUED_ACTIONS_RECONCILED',
             replayedActionCount: result.succeeded,
+            discardedPermanentUpdateCount: result.discardedPermanentUpdates,
             failedReplayCount: result.failed,
             terminalReplayCount: result.terminal,
+            requiresManualReconciliation: result.terminal > 0,
             reconciledAt: serverTimestamp(),
         });
     }
@@ -312,11 +327,13 @@ function installOnlineRecovery(technicianUid: string, ticketIdForDiagnostic?: st
             if (!stillQueued && _state.watchId === null) detachOnlineRecovery();
             if (result.terminal > 0 && ticketIdForDiagnostic) {
                 void persistTrackingDiagnostic(technicianUid, ticketIdForDiagnostic, {
-                    status: 'GPS_RETRY_TERMINAL',
+                    status: 'GPS_STOP_RECONCILIATION_TERMINAL',
                     terminalReplayCount: result.terminal,
                     requiresManualReconciliation: true,
                 });
             }
+        }).catch((error) => {
+            console.warn('[Tracking] Online GPS recovery failed safely:', error);
         });
     };
     _state.onlineHandler = handler;
@@ -329,45 +346,62 @@ export function purgeTechnicianGpsRetryQueue(technicianUid: string) {
     if (_state.recoveryUid === technicianUid) detachOnlineRecovery();
 }
 
+export async function reconcileTerminalGpsStopTombstone(
+    technicianUid: string,
+    ticketId: string,
+    trackingSessionId: string,
+) {
+    resolveTerminalGpsStop(technicianUid, ticketId, trackingSessionId, browserGpsQueueStorage());
+    await persistTrackingDiagnostic(technicianUid, ticketId, {
+        status: 'GPS_STOP_TOMBSTONE_MANUALLY_RECONCILED',
+        trackingSessionId,
+        manuallyReconciledAt: serverTimestamp(),
+        requiresManualReconciliation: false,
+    });
+}
+
 export const startLiveTracking = async (
     ticketId: string,
     technicianUid: string,
     onLocationUpdate?: (loc: GeoPoint) => void,
     onError?: (msg: string) => void,
-): Promise<void> => {
+): Promise<LiveTrackingStartResult> => {
     const readiness = await getGpsReadiness();
     await persistTrackingDiagnostic(technicianUid, ticketId, {
         status: readiness.supported ? 'READY' : 'UNSUPPORTED',
         readiness,
         startedAt: serverTimestamp(),
         trackingMode: 'FOREGROUND_BROWSER',
-        retryStoragePolicy: 'STOP_LOCAL_NO_COORDINATES_UPDATE_SESSION_5_MINUTES',
+        retryStoragePolicy: 'STOP_LOCAL_NO_COORDINATES_UPDATE_MEMORY_ONLY_5_MINUTES',
     });
 
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        const message = 'Geolocation is not supported by this browser.';
-        await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'UNSUPPORTED', error: message, readiness });
+    const failStart = async (status: string, message: string) => {
+        await persistTrackingDiagnostic(technicianUid, ticketId, { status, error: message, readiness });
         onError?.(message);
         throw new Error(message);
-    }
+    };
 
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        return failStart('UNSUPPORTED', 'Geolocation is not supported by this browser.');
+    }
     if (!readiness.secureContext) {
-        const message = 'GPS requires a secure HTTPS context.';
-        await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'INSECURE_CONTEXT', error: message, readiness });
-        onError?.(message);
-        throw new Error(message);
+        return failStart('INSECURE_CONTEXT', 'GPS requires a secure HTTPS context.');
+    }
+    if (readiness.permissionState === 'denied') {
+        return failStart('PERMISSION_DENIED', 'GPS permission is denied. Enable location access before starting the mission.');
     }
 
     if (_state.watchId !== null) navigator.geolocation.clearWatch(_state.watchId);
     detachOnlineRecovery();
     removeLegacyGpsQueue();
     purgeGpsQueuesExceptTechnician(technicianUid);
+    discardQueuedUpdatesForTechnician(technicianUid);
     installOnlineRecovery(technicianUid, ticketId);
 
     const replay = await replayForTechnician(technicianUid, ticketId);
     if (replay.pendingStops > 0) {
         const message = replay.terminal > 0
-            ? 'A previous GPS stop could not be reconciled automatically. Contact operations before starting another mission.'
+            ? 'A previous GPS stop requires explicit operations reconciliation before another mission can start.'
             : 'A previous GPS stop is still waiting for server acknowledgement. Reconnect and retry.';
         await persistTrackingDiagnostic(technicianUid, ticketId, {
             status: replay.terminal > 0 ? 'STOP_RECONCILIATION_TERMINAL' : 'STOP_RECONCILIATION_PENDING',
@@ -378,99 +412,142 @@ export const startLiveTracking = async (
         throw new Error(message);
     }
 
+    const trackingSessionId = createTrackingSessionId();
     _state.activeTicketId = ticketId;
     _state.technicianUid = technicianUid;
-    _state.trackingSessionId = createTrackingSessionId();
+    _state.trackingSessionId = trackingSessionId;
     _state.lastPushTime = 0;
 
-    _state.watchId = navigator.geolocation.watchPosition(
-        async (position) => {
-            const now = Date.now();
-            if (now - _state.lastPushTime < CAPTURE_INTERVAL_MS) return;
+    let watchId: number;
+    try {
+        watchId = navigator.geolocation.watchPosition(
+            async (position) => {
+                const now = Date.now();
+                // Throttle before any replay, callable or diagnostic network work.
+                if (now - _state.lastPushTime < CAPTURE_INTERVAL_MS) return;
+                _state.lastPushTime = now;
 
-            if (position.coords.accuracy <= 0 || position.coords.accuracy > 100) {
-                await persistTrackingDiagnostic(technicianUid, ticketId, {
-                    status: 'WEAK_SIGNAL',
+                if (position.coords.accuracy <= 0 || position.coords.accuracy > 100) {
+                    await persistTrackingDiagnostic(technicianUid, ticketId, {
+                        status: 'WEAK_SIGNAL',
+                        accuracy: position.coords.accuracy,
+                        lastWeakSignalAt: serverTimestamp(),
+                    });
+                    return;
+                }
+
+                const sessionId = _state.trackingSessionId;
+                if (!sessionId || sessionId !== trackingSessionId) return;
+                const point: GeoPoint = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
                     accuracy: position.coords.accuracy,
-                    lastWeakSignalAt: serverTimestamp(),
-                });
-                return;
-            }
-
-            _state.lastPushTime = now;
-            const sessionId = _state.trackingSessionId;
-            if (!sessionId) return;
-
-            const point: GeoPoint = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy,
-                heading: position.coords.heading,
-                speed: position.coords.speed,
-                deviceTimestampMs: position.timestamp || now,
-                updatedAt: new Date(now).toISOString(),
-            };
-            const action: LiveTrackingAction = {
-                action: 'UPDATE',
-                ticketId,
-                technicianUid,
-                trackingSessionId: sessionId,
-                point,
-                queuedAtMs: now,
-            };
-
-            try {
-                await replayForTechnician(technicianUid, ticketId);
-                await sendAction(action);
-                onLocationUpdate?.(point);
-            } catch (error) {
-                enqueueGpsRetryAction({
+                    heading: position.coords.heading,
+                    speed: position.coords.speed,
+                    deviceTimestampMs: position.timestamp || now,
+                    updatedAt: new Date(now).toISOString(),
+                };
+                const action: LiveTrackingAction = {
                     action: 'UPDATE',
                     ticketId,
                     technicianUid,
                     trackingSessionId: sessionId,
                     point,
                     queuedAtMs: now,
-                });
+                };
+
+                try {
+                    await replayForTechnician(technicianUid, ticketId);
+                    await sendAction(action);
+                    onLocationUpdate?.(point);
+                } catch (error) {
+                    if (isPermanentGpsCallableError(error)) {
+                        await persistTrackingDiagnostic(technicianUid, ticketId, {
+                            status: 'LOCATION_SYNC_REJECTED_PERMANENT',
+                            errorCode: String((error as any)?.code || 'PERMANENT_CALLABLE_ERROR').slice(0, 80),
+                            failedAt: serverTimestamp(),
+                            coordinateRetainedInBrowserStorage: false,
+                        });
+                        onError?.('The server permanently rejected this GPS update. No coordinate was retained for retry.');
+                        return;
+                    }
+                    enqueueGpsRetryAction({
+                        action: 'UPDATE',
+                        ticketId,
+                        technicianUid,
+                        trackingSessionId: sessionId,
+                        point,
+                        queuedAtMs: now,
+                    });
+                    await persistTrackingDiagnostic(technicianUid, ticketId, {
+                        status: 'LOCATION_SYNC_QUEUED_MEMORY_ONLY',
+                        accuracy: position.coords.accuracy,
+                        errorCode: String((error as any)?.code || 'NETWORK_OR_CALLABLE_ERROR').slice(0, 80),
+                        failedAt: serverTimestamp(),
+                        queueExpiresWithinMinutes: 5,
+                        coordinateRetainedInBrowserStorage: false,
+                    });
+                    onError?.('Location captured in memory and waiting for a transient network-safe server sync.');
+                }
+            },
+            async (error) => {
+                let message = 'Unknown GPS error.';
+                let status = 'GPS_ERROR';
+                if (error.code === error.PERMISSION_DENIED) {
+                    message = 'GPS permission denied. Enable location in your browser or device settings.';
+                    status = 'PERMISSION_DENIED';
+                    if (_state.watchId !== null) navigator.geolocation.clearWatch(_state.watchId);
+                    _state.watchId = null;
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                    message = 'GPS position unavailable. Check the device GPS signal.';
+                    status = 'POSITION_UNAVAILABLE';
+                } else if (error.code === error.TIMEOUT) {
+                    message = 'GPS timed out. Move to an open area and retry.';
+                    status = 'TIMEOUT';
+                }
                 await persistTrackingDiagnostic(technicianUid, ticketId, {
-                    status: 'LOCATION_SYNC_QUEUED',
-                    accuracy: position.coords.accuracy,
-                    errorCode: String((error as any)?.code || 'NETWORK_OR_CALLABLE_ERROR').slice(0, 80),
+                    status,
+                    error: message,
+                    errorCode: error.code,
                     failedAt: serverTimestamp(),
-                    queueExpiresWithinMinutes: 5,
                 });
-                onError?.('Location captured but waiting for a network-safe server sync.');
-            }
-        },
-        async (error) => {
-            let message = 'Unknown GPS error.';
-            let status = 'GPS_ERROR';
-            if (error.code === error.PERMISSION_DENIED) {
-                message = 'GPS permission denied. Enable location in your browser or device settings.';
-                status = 'PERMISSION_DENIED';
-            } else if (error.code === error.POSITION_UNAVAILABLE) {
-                message = 'GPS position unavailable. Check the device GPS signal.';
-                status = 'POSITION_UNAVAILABLE';
-            } else if (error.code === error.TIMEOUT) {
-                message = 'GPS timed out. Move to an open area and retry.';
-                status = 'TIMEOUT';
-            }
-            await persistTrackingDiagnostic(technicianUid, ticketId, {
-                status,
-                error: message,
-                errorCode: error.code,
-                failedAt: serverTimestamp(),
-            });
-            onError?.(message);
-        },
-        {
-            enableHighAccuracy: true,
-            maximumAge: 15_000,
-            timeout: 27_000,
-        },
-    );
+                onError?.(message);
+            },
+            { enableHighAccuracy: true, maximumAge: 15_000, timeout: 27_000 },
+        );
+    } catch (error) {
+        _state.watchId = null;
+        _state.activeTicketId = null;
+        _state.technicianUid = null;
+        _state.trackingSessionId = null;
+        detachOnlineRecovery();
+        const message = `GPS watch could not be installed: ${String((error as any)?.message || error)}`;
+        await persistTrackingDiagnostic(technicianUid, ticketId, {
+            status: 'WATCH_INSTALL_FAILED',
+            error: message,
+            failedAt: serverTimestamp(),
+        });
+        onError?.(message);
+        throw new Error(message);
+    }
+
+    if (!Number.isFinite(watchId)) {
+        const message = 'GPS watch did not return a valid watch identifier.';
+        await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'WATCH_INSTALL_FAILED', error: message });
+        onError?.(message);
+        throw new Error(message);
+    }
+
+    _state.watchId = watchId;
+    await persistTrackingDiagnostic(technicianUid, ticketId, {
+        status: 'WATCH_INSTALLED',
+        watchInstalled: true,
+        trackingSessionId,
+        installedAt: serverTimestamp(),
+    });
+    return { watchInstalled: true, watchId, trackingSessionId, ticketId, technicianUid, readiness };
 };
 
 export const stopLiveTracking = async (
@@ -481,11 +558,11 @@ export const stopLiveTracking = async (
     const uid = technicianUid || _state.technicianUid;
     const activeTicketId = ticketId || _state.activeTicketId;
     const sessionId = _state.trackingSessionId;
-
     if (_state.watchId !== null && typeof navigator !== 'undefined') navigator.geolocation.clearWatch(_state.watchId);
 
     let stopAcknowledged = false;
     let stopSuperseded = false;
+    let stopTerminal = false;
     if (uid && activeTicketId && sessionId) {
         discardQueuedSessionUpdates(uid, activeTicketId, sessionId);
         const stopAction: LiveTrackingAction = {
@@ -500,15 +577,14 @@ export const stopLiveTracking = async (
             stopSuperseded = response.superseded;
             stopAcknowledged = !stopSuperseded;
         } catch (error) {
-            enqueueGpsRetryAction({
-                action: 'STOP',
-                ticketId: activeTicketId,
-                technicianUid: uid,
-                trackingSessionId: sessionId,
-                queuedAtMs: Date.now(),
-            });
-            installOnlineRecovery(uid, activeTicketId);
-            console.error('[Tracking] Stop state queued for server reconciliation:', error);
+            enqueueGpsRetryAction(stopAction);
+            if (isPermanentGpsCallableError(error)) {
+                const terminalResult = await replayGpsRetryQueue(uid, async () => { throw error; });
+                stopTerminal = terminalResult.terminal > 0;
+            } else {
+                installOnlineRecovery(uid, activeTicketId);
+            }
+            console.error('[Tracking] Stop state retained for explicit server reconciliation:', error);
         }
 
         const diagnostic = stopSuperseded ? {
@@ -524,6 +600,13 @@ export const stopLiveTracking = async (
             trackingSessionId: sessionId,
             stoppedAt: serverTimestamp(),
             serverAcknowledged: true,
+        } : stopTerminal ? {
+            status: 'STOP_RECONCILIATION_TERMINAL',
+            finalStatus,
+            trackingSessionId: sessionId,
+            stopRequestedAt: serverTimestamp(),
+            serverAcknowledged: false,
+            requiresManualReconciliation: true,
         } : {
             status: 'STOP_REQUEST_QUEUED',
             finalStatus,
@@ -540,5 +623,5 @@ export const stopLiveTracking = async (
     _state.activeTicketId = null;
     _state.technicianUid = null;
     _state.trackingSessionId = null;
-    if (stopAcknowledged || stopSuperseded || !uid) detachOnlineRecovery();
+    if (stopAcknowledged || stopSuperseded || stopTerminal || !uid) detachOnlineRecovery();
 };
