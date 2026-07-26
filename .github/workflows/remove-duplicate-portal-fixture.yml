@@ -1,0 +1,38 @@
+name: Remove Duplicate Portal Fixture
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'fix/map-gps-client-hardening-final'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Remove duplicate test fixture and self
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/launch/map-gps-state-behavior.test.mjs')
+          source = path.read_text(encoding='utf-8')
+          duplicate = "const portalSessionSource = readFileSync('src/components/PortalSessionControls.tsx', 'utf8');\n" * 2
+          if source.count(duplicate) != 1:
+              raise SystemExit('duplicate portal fixture marker was not unique')
+          path.write_text(source.replace(duplicate, duplicate.splitlines(keepends=True)[0], 1), encoding='utf-8')
+          PY
+          rm .github/workflows/remove-duplicate-portal-fixture.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove duplicate GPS behavior fixture'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
