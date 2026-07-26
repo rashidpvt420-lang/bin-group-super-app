@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+// This guard intentionally runs against the PR merge ref so post-merge source drift fails CI.
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('merged main retains the Owner acquisition evidence runner and lifecycle mail runtime export', async () => {
