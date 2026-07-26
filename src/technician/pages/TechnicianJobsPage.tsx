@@ -74,11 +74,12 @@ export default function TechnicianJobsPage() {
             collection(db, 'maintenanceTickets'),
             where('assignedTechnicianId', '==', user.uid),
         );
+        // Keep this query constrained only by the recipient identity so the live
+        // portal never depends on a new composite index during dispatch. Role
+        // and event-type filtering stay client-side after the identity-bound read.
         const receiptQuery = query(
             collection(db, 'notifications'),
             where('recipientId', '==', user.uid),
-            where('recipientRole', '==', 'technician'),
-            where('type', '==', 'TECHNICIAN_JOB_ASSIGNED'),
         );
 
         const unsubAssigned = onSnapshot(
@@ -102,6 +103,8 @@ export default function TechnicianJobsPage() {
             const latest: Record<string, AssignmentReceipt> = {};
             snap.docs.forEach((docSnap) => {
                 const data = docSnap.data() as Record<string, any>;
+                if (String(data.recipientRole || '').toLowerCase() !== 'technician') return;
+                if (String(data.type || '') !== 'TECHNICIAN_JOB_ASSIGNED') return;
                 const ticketId = String(data.ticketId || '');
                 if (!ticketId) return;
                 const receipt: AssignmentReceipt = {
