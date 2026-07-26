@@ -96,12 +96,25 @@ assertNotContains(legacyOwnerPath, legacyOwner, 'DashboardPage from', 'legacy ow
 try {
   const launchRegister = JSON.parse(launchRegisterRaw);
   const gates = Array.isArray(launchRegister.hardLaunchGates) ? launchRegister.hardLaunchGates : [];
-  const externallyPending = gates.filter((gate) => gate.required !== false && gate.status === 'external_verification_required');
-  if (externallyPending.length > 0 && launchRegister.decision === 'PUBLIC_LAUNCH_READY') {
-    failures.push(`${launchRegisterPath}: decision cannot be PUBLIC_LAUNCH_READY while ${externallyPending.length} required external gates still need production proof`);
+  const gateIds = new Set(gates.map((gate) => String(gate?.id || '')));
+  if (launchRegister.decision !== 'NON_AUTHORITATIVE_GATE_CATALOGUE') {
+    failures.push(`${launchRegisterPath}: static launch register must identify itself as NON_AUTHORITATIVE_GATE_CATALOGUE`);
   }
-  notes.push(`[route-consolidation] Launch decision: ${launchRegister.decision || 'MISSING'}`);
-  notes.push(`[route-consolidation] External production gates still pending: ${externallyPending.length}`);
+  if (launchRegister.authority?.authoritative !== false) {
+    failures.push(`${launchRegisterPath}: static launch register must not claim runtime authority`);
+  }
+  if (launchRegister.authority?.canonicalRuntimeRecord !== 'system_health/admin_summaries') {
+    failures.push(`${launchRegisterPath}: canonical runtime record must remain system_health/admin_summaries`);
+  }
+  if ('scores' in launchRegister || 'profileScores' in launchRegister) {
+    failures.push(`${launchRegisterPath}: static numeric readiness scores are prohibited`);
+  }
+  for (const requiredGate of ['fiveProfileSmoke', 'technicianGpsStorageProof', 'aiProviderHealth', 'controlledPilot', 'signedFinalDecision']) {
+    if (!gateIds.has(requiredGate)) failures.push(`${launchRegisterPath}: missing runtime evidence gate ${requiredGate}`);
+  }
+  notes.push(`[route-consolidation] Static launch file: ${launchRegister.decision || 'MISSING'}`);
+  notes.push(`[route-consolidation] Runtime evidence gates catalogued: ${gates.length}`);
+  notes.push('[route-consolidation] Current launch decision must be read from protected runtime evidence and the signed final decision.');
 } catch (error) {
   failures.push(`${launchRegisterPath}: invalid JSON (${error.message})`);
 }
@@ -124,4 +137,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('\n[route-consolidation] Result: PASS — route ownership is explicit and duplicate ownership is blocked.');
+console.log('\n[route-consolidation] Result: PASS — route ownership is explicit and runtime launch authority is fail closed.');

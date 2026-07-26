@@ -77,13 +77,15 @@ const hardenedAdminRead = "allow read: if !(collection in ['system_secrets', 'us
 const boundedAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 const adminSecurityAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
 const privateHrAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
+const liveLocationAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
 if (rules.includes(legacyAdminRead)) {
   rules = rules.replace(legacyAdminRead, hardenedAdminRead);
 } else if (
   !rules.includes(hardenedAdminRead) &&
   !rules.includes(boundedAdminRead) &&
   !rules.includes(adminSecurityAdminRead) &&
-  !rules.includes(privateHrAdminRead)
+  !rules.includes(privateHrAdminRead) &&
+  !rules.includes(liveLocationAdminRead)
 ) {
   throw new Error('Unable to harden generic admin read fallback for Broker KYC rate limits.');
 }

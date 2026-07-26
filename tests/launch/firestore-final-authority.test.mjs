@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
+const liveLocationHardener = path.join(root, 'scripts/harden-technician-live-location-authority.mjs');
 const hardener = path.join(root, 'scripts/harden-final-firestore-authority.mjs');
 
 test('final Firestore authority hardener is status-aware, explicit, bounded and idempotent', () => {
@@ -14,6 +15,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     const target = path.join(directory, 'firestore.rules');
     writeFileSync(target, readFileSync(path.join(root, 'firestore.rules')));
 
+    const liveLocation = spawnSync(process.execPath, [liveLocationHardener], { cwd: directory, encoding: 'utf8' });
+    assert.equal(liveLocation.status, 0, liveLocation.stderr || liveLocation.stdout);
     const first = spawnSync(process.execPath, [hardener], { cwd: directory, encoding: 'utf8' });
     assert.equal(first.status, 0, first.stderr || first.stdout);
 
@@ -39,7 +42,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
 
     assert.match(
       rules,
-      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles'\]\) && hasAdminClaim\(\);/,
+      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations'\]\) && hasAdminClaim\(\);/,
     );
     assert.match(rules, /allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
@@ -48,7 +51,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /match \/broker_kyc_submission_limits\/\{brokerId\} \{\n\s*allow read, write: if false;/);
     assert.match(rules, /match \/admin_security_sessions\/\{sessionId\} \{\n\s*allow read, write: if false;/);
     assert.match(rules, /match \/private_hr_profiles\/\{profileId\} \{\n\s*allow read, write: if false;/);
-    assert.match(rules, /'system_secrets',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
+    assert.match(rules, /match \/technician_live_locations\/\{technicianId\} \{\n\s*allow read: if canDispatchJobs\(\);\n\s*allow create, update, delete: if false;/);
+    assert.match(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
     for (const legacy of [
       'allow update: if isAdmin() && isNotSuspended();',
@@ -57,6 +61,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
       'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
       "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();",
       "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();",
+      "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();",
     ]) assert.equal(rules.includes(legacy), false);
 
     const routerStart = rules.indexOf('    function safeTicketUpdateByActor() {');
@@ -67,6 +72,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     }
 
     const beforeSecond = readFileSync(target);
+    const liveLocationSecond = spawnSync(process.execPath, [liveLocationHardener], { cwd: directory, encoding: 'utf8' });
+    assert.equal(liveLocationSecond.status, 0, liveLocationSecond.stderr || liveLocationSecond.stdout);
     const second = spawnSync(process.execPath, [hardener], { cwd: directory, encoding: 'utf8' });
     assert.equal(second.status, 0, second.stderr || second.stdout);
     assert.deepEqual(readFileSync(target), beforeSecond);

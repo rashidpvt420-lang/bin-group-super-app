@@ -1,0 +1,139 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = (path) => readFileSync(path, 'utf8');
+
+const adminMap = read('apps/admin-panel/src/pages/map/LiveMapPage.tsx');
+const adminMapsLoader = read('apps/admin-panel/src/lib/googleMaps.ts');
+const technicianCommandCenter = read('apps/admin-panel/src/components/ops/TechnicianCommandCenter.tsx');
+const technicianMap = read('src/technician/pages/TechnicianMapPage.tsx');
+const trackingSummary = read('src/components/tracking/LiveTechnicianTrackingCard.tsx');
+const liveTracking = read('src/utils/liveTracking.ts');
+const locationCallable = read('functions/technicianLiveLocation.ts');
+const indexes = JSON.parse(read('firestore.indexes.json'));
+const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
+const packageJson = JSON.parse(read('package.json'));
+const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
+const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
+
+test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
+  assert.match(adminMap, /loadAdminGoogleMaps\(\)/);
+  assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
+  assert.match(adminMap, /data-testid="admin-live-google-map"/);
+  assert.match(adminMap, /No markers have been fabricated/);
+  assert.match(adminMap, /onSnapshot\([\s\S]*setLocationsError/);
+  assert.doesNotMatch(adminMap, /AI Autonomous|AI INTERCEPTING|Marina Bridges|DUBAI-HQ|Streaming live telemetry/i);
+  assert.doesNotMatch(adminMap, /55\.12|55\.42|25\.3 - loc\.lat|const positions = \[/);
+  assert.doesNotMatch(adminMap, /Auto-SMS Triggered/);
+});
+
+test('Admin Maps loader fails closed on missing key, provider auth and script failure', () => {
+  assert.match(adminMapsLoader, /GOOGLE_MAPS_API_KEY_MISSING/);
+  assert.match(adminMapsLoader, /GOOGLE_MAPS_AUTH_FAILED/);
+  assert.match(adminMapsLoader, /GOOGLE_MAPS_SCRIPT_LOAD_FAILED/);
+  assert.match(adminMapsLoader, /REACT_APP_GOOGLE_MAPS_API_KEY/);
+});
+
+test('Technician Command Center uses measured records and exposes missing data truthfully', () => {
+  assert.match(technicianCommandCenter, /collection\(db, 'technician_live_locations'\)/);
+  assert.match(technicianCommandCenter, /Not measured/);
+  assert.match(technicianCommandCenter, /Not reported/);
+  assert.match(technicianCommandCenter, /Average GPS accuracy/);
+  assert.match(technicianCommandCenter, /Completed jobs with before\/after proof/);
+  assert.doesNotMatch(technicianCommandCenter, /reliability:\s*96|compliance:\s*100/);
+  assert.doesNotMatch(technicianCommandCenter, /\{n:'Marina'|\{n:'DT'|\{n:'Palm'|\{n:'Bay'/);
+  assert.doesNotMatch(technicianCommandCenter, /±\s*5m|tech\.reliability \|\| 95|tech\.battery \|\| 100/);
+  assert.doesNotMatch(technicianCommandCenter, /evidence_sync[\s\S]*tech\.stable/);
+});
+
+test('Technician mission map distinguishes data failure from an empty authenticated result', () => {
+  assert.match(technicianMap, /const \[jobsError, setJobsError\]/);
+  assert.match(technicianMap, /data-testid="technician-map-jobs-error"/);
+  assert.match(technicianMap, /Mission Control will not report an empty healthy queue/);
+  assert.match(technicianMap, /!jobsError && jobs\.length === 0/);
+  assert.match(technicianMap, /The authenticated production query returned no active assigned mission/);
+  assert.match(technicianMap, /Straight-line estimate/);
+  assert.match(technicianMap, /traffic not included/);
+  assert.match(technicianMap, /FOREGROUND GPS FRESH/);
+  assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*\}\);/);
+});
+
+test('Owner and Tenant tracking card identifies schematic and freshness limitations', () => {
+  assert.match(trackingSummary, /TRACKING SUMMARY — NOT A STREET MAP/);
+  assert.match(trackingSummary, /FRESH FOREGROUND GPS/);
+  assert.match(trackingSummary, /GPS STALE/);
+  assert.match(trackingSummary, /straight-line estimate/i);
+  assert.match(trackingSummary, /Traffic and road routing are available only in Google Maps/);
+  assert.match(trackingSummary, /Open Traffic-Aware Google Maps/);
+  assert.doesNotMatch(trackingSummary, />\s*LIVE\s*</);
+  assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
+});
+
+test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
+  assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
+  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
+  assert.match(liveTracking, /MAX_QUEUE_SIZE = 25/);
+  assert.match(liveTracking, /window\.addEventListener\('online'/);
+  assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
+  assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
+  assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'technicians'/);
+});
+
+test('Canonical live-location callable atomically validates assignment and updates all mirrors', () => {
+  assert.match(locationCallable, /enforceAppCheck: true/);
+  assert.match(locationCallable, /db\.runTransaction/);
+  assert.match(locationCallable, /collection\("technician_live_locations"\)/);
+  assert.match(locationCallable, /assignedTechnicianId\(ticket\) !== technicianUid/);
+  assert.match(locationCallable, /accuracy > 100/);
+  assert.match(locationCallable, /expiresAt/);
+  assert.match(locationCallable, /sequence = previousSequence \+ 1/);
+  assert.match(locationCallable, /tx\.set\(ticketRef/);
+  assert.match(locationCallable, /tx\.set\(technicianRef/);
+  assert.match(locationCallable, /tx\.set\(userRef/);
+});
+
+test('Server watchdog clears abandoned foreground tracking sessions', () => {
+  assert.match(locationCallable, /reconcileExpiredTechnicianLiveLocations = onSchedule/);
+  assert.match(locationCallable, /schedule: "every 5 minutes"/);
+  assert.match(locationCallable, /where\("isTracking", "==", true\)/);
+  assert.match(locationCallable, /where\("expiresAt", "<=", now\)/);
+  assert.match(locationCallable, /SERVER_EXPIRY_WATCHDOG/);
+  assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRED/);
+  const watchdogIndex = indexes.indexes.find((entry) => entry.collectionGroup === 'technician_live_locations');
+  assert.deepEqual(watchdogIndex?.fields, [
+    { fieldPath: 'isTracking', order: 'ASCENDING' },
+    { fieldPath: 'expiresAt', order: 'ASCENDING' },
+  ]);
+});
+
+test('Canonical location rules are suspension-aware dispatch-read and browser-write denied', () => {
+  assert.match(ruleHardener, /match \/technician_live_locations\/\{technicianId\} \{/);
+  assert.match(ruleHardener, /allow read: if canDispatchJobs\(\);/);
+  assert.match(ruleHardener, /allow create, update, delete: if false;/);
+  assert.match(ruleHardener, /technician_live_locations'\]/);
+  assert.equal(packageJson.scripts['harden:live-location-authority'], 'node scripts/harden-technician-live-location-authority.mjs');
+  assert.match(packageJson.scripts['prepare:rules'], /harden:live-location-authority/);
+});
+
+test('Static readiness file is a catalogue and cannot claim live launch readiness', () => {
+  assert.equal(readinessCatalogue.decision, 'NON_AUTHORITATIVE_GATE_CATALOGUE');
+  assert.equal(readinessCatalogue.authority?.authoritative, false);
+  assert.equal(readinessCatalogue.authority?.canonicalRuntimeRecord, 'system_health/admin_summaries');
+  assert.equal(readinessCatalogue.authority?.staticScoresAccepted, false);
+  assert.equal('scores' in readinessCatalogue, false);
+  assert.equal('profileScores' in readinessCatalogue, false);
+  assert.equal(readinessCatalogue.paymentPolicy?.controlledPilot?.mode, 'bank-pilot');
+  assert.equal(readinessCatalogue.paymentPolicy?.controlledPilot?.stripeRequired, false);
+  assert.equal(readinessCatalogue.paymentPolicy?.unrestrictedPublicLaunch?.stripeRequiredByCurrentRuntimeGate, true);
+  assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'aiProviderHealth'));
+  assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'signedFinalDecision'));
+});
+
+test('Global production evidence cannot bypass the language UI or pass without a map', () => {
+  assert.match(globalBusinessEvidence, /language control is required and must be visible/i);
+  assert.match(globalBusinessEvidence, /production map UI/);
+  assert.match(globalBusinessEvidence, /toBeVisible\(\{ timeout: 15_000 \}\)/);
+  assert.doesNotMatch(globalBusinessEvidence, /localStorage\.setItem/);
+  assert.doesNotMatch(globalBusinessEvidence, /if \(await mapContainer\.isVisible/);
+});

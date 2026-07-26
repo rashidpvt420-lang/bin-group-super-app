@@ -1,14 +1,13 @@
 /**
  * BIN GROUP — TechnicianMapPage
- * Mission navigation center with live GPS status.
- * No static Google API placeholder is used. If VITE_GOOGLE_MAPS_API_KEY is absent,
- * the UI falls back to Google Maps direction links only.
+ * Mission navigation centre with foreground GPS status.
+ * Static Maps is a visual preview only; Google Maps opens the actual route.
  */
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, CircularProgress, Stack, Button, alpha, Grid, Divider, Chip } from '@mui/material';
+import { Alert, Box, Typography, Paper, CircularProgress, Stack, Button, alpha, Grid, Divider, Chip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Navigation, Compass, Info, ExternalLink, LocateFixed, ShieldAlert, Wifi, WifiOff, Clock } from 'lucide-react';
-import { collection, doc, onSnapshot, query, where, db } from '../../lib/firebase';
+import { collection, doc, limit, onSnapshot, query, where, db } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
@@ -16,7 +15,7 @@ import { calculateDistanceKm, calculateEtaMinutes, getStaleLabel, getTechnicianL
 
 const ACTIVE_STATUSES = [
   'accepted', 'on_the_way', 'arrived', 'in_progress', 'waiting_parts',
-  'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS'
+  'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS',
 ];
 
 function buildDirectionsUrl(techLoc: any, jobLoc: any) {
@@ -33,40 +32,55 @@ function buildSafeStaticMapUrl(jobLoc: any, techLoc: any) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${jobLoc.lat},${jobLoc.lng}&zoom=15&size=500x280&maptype=roadmap&markers=color:red%7C${jobLoc.lat},${jobLoc.lng}${techLoc ? `&markers=color:blue%7C${techLoc.lat},${techLoc.lng}` : ''}&key=${key}`;
 }
 
+function locationTimestamp(location: any, fallback?: any) {
+  return location?.serverUpdatedAt || location?.updatedAt || location?.timestamp || fallback || null;
+}
+
 export default function TechnicianMapPage() {
   const { user } = useRole();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<any[]>([]);
   const [techProfile, setTechProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [jobsError, setJobsError] = useState('');
+  const [profileError, setProfileError] = useState('');
 
   useEffect(() => {
     if (!user?.uid) {
       setLoading(false);
+      setJobsError('Technician identity is unavailable. Sign in again before using Mission Control.');
       return;
     }
-    const q = query(
+    const activeJobsQuery = query(
       collection(db, 'maintenanceTickets'),
       where('assignedTechnicianId', '==', user.uid),
-      where('status', 'in', ACTIVE_STATUSES.slice(0, 10))
+      where('status', 'in', ACTIVE_STATUSES),
+      limit(50),
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setJobs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubscribe = onSnapshot(activeJobsQuery, (snapshot) => {
+      setJobs(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+      setJobsError('');
       setLoading(false);
     }, (error) => {
       console.error('[TechnicianMap] Active mission listener failed:', error);
       setJobs([]);
+      setJobsError('Active missions could not be loaded. This may indicate a network, App Check, permission or Firestore index failure. Mission Control will not report an empty healthy queue.');
       setLoading(false);
     });
-    return () => unsub();
+    return () => unsubscribe();
   }, [user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) return;
-    const unsub = onSnapshot(doc(db, 'technicians', user.uid), (snap) => {
-      if (snap.exists()) setTechProfile({ id: snap.id, ...snap.data() });
+    const unsubscribe = onSnapshot(doc(db, 'technicians', user.uid), (snapshot) => {
+      setTechProfile(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+      setProfileError(snapshot.exists() ? '' : 'Technician operational profile is missing. GPS readiness cannot be verified.');
+    }, (error) => {
+      console.error('[TechnicianMap] Technician profile listener failed:', error);
+      setTechProfile(null);
+      setProfileError('Technician GPS profile could not be loaded. Location status is unavailable.');
     });
-    return () => unsub();
+    return () => unsubscribe();
   }, [user?.uid]);
 
   const openMap = (job: any) => {
@@ -80,11 +94,15 @@ export default function TechnicianMapPage() {
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 20 }}>
         <CircularProgress sx={{ color: binThemeTokens.gold, mb: 2 }} />
         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-          INITIALIZING GPS DATA...
+          INITIALISING MISSION DATA…
         </Typography>
       </Box>
     );
   }
+
+  const profileLocationTimestamp = locationTimestamp(techProfile?.currentLocation, techProfile?.locationUpdatedAt);
+  const profileLocationStale = isLocationStale(profileLocationTimestamp, 2);
+  const profileTrackingFresh = techProfile?.isTracking === true && techProfile?.currentLocation && !profileLocationStale;
 
   return (
     <Box>
@@ -95,40 +113,43 @@ export default function TechnicianMapPage() {
         <Typography variant="h4" fontWeight="950" color="#FFF">
           Mission Control & Navigation
         </Typography>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.46)', mt: 1, maxWidth: 720 }}>
-          Live GPS tracking is active only when you press ON THE WAY. Your location is only shared with the requester of your assigned ticket.
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.46)', mt: 1, maxWidth: 760 }}>
+          GPS sharing is foreground-only and starts when you press ON THE WAY. The in-app time and distance figures are straight-line estimates, not traffic-aware navigation.
         </Typography>
       </Box>
+
+      {jobsError && <Alert severity="error" data-testid="technician-map-jobs-error" sx={{ mb: 3 }}>{jobsError}</Alert>}
+      {profileError && <Alert severity="warning" data-testid="technician-map-profile-error" sx={{ mb: 3 }}>{profileError}</Alert>}
 
       {techProfile?.currentLocation && (
         <Paper sx={{ p: 3, mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 5 }}>
           <Stack direction="row" spacing={2} alignItems="center">
-            {isLocationStale(techProfile.currentLocation?.updatedAt) ? <WifiOff size={22} color="#f87171" /> : <Wifi size={22} color="#4ade80" />}
+            {profileTrackingFresh ? <Wifi size={22} color="#4ade80" /> : <WifiOff size={22} color="#f87171" />}
             <Box>
               <Typography variant="body2" fontWeight="900" color="#FFF">
-                Your GPS: {isLocationStale(techProfile.currentLocation?.updatedAt) ? 'Stale / Offline' : 'Live'}
+                Your GPS: {profileTrackingFresh ? 'Foreground tracking fresh' : profileLocationStale ? 'Stale / offline' : 'Tracking not active'}
               </Typography>
               <Typography variant="caption" color="textSecondary">
-                {techProfile.currentLocation?.lat?.toFixed?.(5)}, {techProfile.currentLocation?.lng?.toFixed?.(5)} · {getStaleLabel(techProfile.currentLocation?.updatedAt)}
+                {techProfile.currentLocation?.lat?.toFixed?.(5)}, {techProfile.currentLocation?.lng?.toFixed?.(5)} · {getStaleLabel(profileLocationTimestamp)}
               </Typography>
             </Box>
-            {techProfile.isTracking && <Chip size="small" label="TRACKING ON" sx={{ ml: 'auto', bgcolor: alpha('#10b981', 0.15), color: '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
+            {profileTrackingFresh && <Chip size="small" label="FOREGROUND GPS ON" sx={{ ml: 'auto', bgcolor: alpha('#10b981', 0.15), color: '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
           </Stack>
         </Paper>
       )}
 
-      {jobs.length === 0 ? (
+      {!jobsError && jobs.length === 0 ? (
         <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.1)' }}>
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}><Compass size={64} color="rgba(255,255,255,0.1)" /></Box>
           <Typography color="#FFF" variant="h6" fontWeight="950">NO ACTIVE MISSIONS REQUIRING NAVIGATION</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1, maxWidth: 400, mx: 'auto' }}>
-            Accept a job from the Mission Pool or your Active Queue to begin a new operation.
+            The authenticated production query returned no active assigned mission.
           </Typography>
           <Button variant="outlined" onClick={() => navigate('/technician/jobs')} sx={{ mt: 4, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
             GO TO JOB LIST
           </Button>
         </Paper>
-      ) : (
+      ) : jobs.length > 0 ? (
         <Grid container spacing={4}>
           {jobs.map((job) => {
             const resolved = resolvePropertyLocation(job);
@@ -137,7 +158,8 @@ export default function TechnicianMapPage() {
             const dist = calculateDistanceKm(techLoc, jobLoc);
             const eta = calculateEtaMinutes(dist);
             const isOnTheWay = ['on_the_way', 'EN_ROUTE'].includes(String(job.status));
-            const locationStale = isLocationStale(job.technicianLocation?.updatedAt);
+            const jobLocationTimestamp = locationTimestamp(job.technicianLocation, job.technicianLocationUpdatedAt);
+            const locationStale = isLocationStale(jobLocationTimestamp, 2);
             const staticMapUrl = buildSafeStaticMapUrl(jobLoc, techLoc);
 
             return (
@@ -147,15 +169,15 @@ export default function TechnicianMapPage() {
                     <Grid item xs={12} lg={5}>
                       <Box sx={{ minHeight: 240, bgcolor: '#0f172a', display: 'grid', placeItems: 'center', p: 3, position: 'relative', overflow: 'hidden' }}>
                         {staticMapUrl ? (
-                          <Box component="img" src={staticMapUrl} alt="Job location map" sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.45 }} />
+                          <Box component="img" src={staticMapUrl} alt="Static road-map preview of the verified job pin" sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.45 }} />
                         ) : null}
                         <Stack spacing={1.5} alignItems="center" sx={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
                           {resolved.hasExactCoordinates ? <Navigation size={44} color={binThemeTokens.gold} /> : <ShieldAlert size={44} color="#ef4444" />}
-                          <Typography variant="h6" fontWeight="950" color="#FFF">{resolved.hasExactCoordinates ? 'Navigation Ready' : 'GPS Location Warning'}</Typography>
-                          {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={`Arrives in ~${eta} min`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#000', fontWeight: 950, '& .MuiChip-icon': { color: '#000' } }} />}
-                          {dist !== null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{dist.toFixed(1)} km away</Typography>}
+                          <Typography variant="h6" fontWeight="950" color="#FFF">{resolved.hasExactCoordinates ? 'Verified pin available' : 'Exact GPS pin missing'}</Typography>
+                          {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={`Straight-line estimate ~${eta} min`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#000', fontWeight: 950, '& .MuiChip-icon': { color: '#000' } }} />}
+                          {dist !== null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{dist.toFixed(1)} km straight-line · traffic not included</Typography>}
                           <Button variant="contained" onClick={() => openMap(job)} startIcon={<Navigation size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
-                            OPEN IN GOOGLE MAPS
+                            OPEN TRAFFIC-AWARE GOOGLE MAPS
                           </Button>
                         </Stack>
                       </Box>
@@ -169,7 +191,7 @@ export default function TechnicianMapPage() {
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
                               <Chip size="small" label={String(job.status || 'MISSION').replace(/_/g, ' ').toUpperCase()} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, fontSize: '0.65rem' }} />
-                              {isOnTheWay && <Chip size="small" icon={locationStale ? <WifiOff size={11} /> : <Wifi size={11} />} label={locationStale ? 'GPS STALE' : 'GPS LIVE'} sx={{ bgcolor: locationStale ? alpha('#ef4444', 0.1) : alpha('#10b981', 0.1), color: locationStale ? '#f87171' : '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
+                              {isOnTheWay && <Chip size="small" icon={locationStale ? <WifiOff size={11} /> : <Wifi size={11} />} label={locationStale ? 'GPS STALE' : 'FOREGROUND GPS FRESH'} sx={{ bgcolor: locationStale ? alpha('#ef4444', 0.1) : alpha('#10b981', 0.1), color: locationStale ? '#f87171' : '#4ade80', fontWeight: 950, fontSize: '0.65rem' }} />}
                             </Stack>
                             <Typography variant="h5" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{job.propertyName || 'Assigned Property'}</Typography>
                             <Typography variant="body1" color="textSecondary" sx={{ mt: 0.5, fontWeight: 600 }}>Unit {job.unitNumber || 'N/A'} · {job.category || job.complaintCategory || 'Maintenance'}</Typography>
@@ -179,7 +201,7 @@ export default function TechnicianMapPage() {
                         <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.06)' }} />
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                           <Button fullWidth variant="outlined" onClick={() => navigate(`/technician/job/${job.id}`)} startIcon={<Info size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 950, borderRadius: 4 }}>JOB DETAILS</Button>
-                          <Button fullWidth variant="contained" onClick={() => openMap(job)} startIcon={<ExternalLink size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>OPEN MAP</Button>
+                          <Button fullWidth variant="contained" onClick={() => openMap(job)} startIcon={<ExternalLink size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>OPEN GOOGLE MAPS</Button>
                         </Stack>
                       </Box>
                     </Grid>
@@ -189,7 +211,7 @@ export default function TechnicianMapPage() {
             );
           })}
         </Grid>
-      )}
+      ) : null}
     </Box>
   );
 }

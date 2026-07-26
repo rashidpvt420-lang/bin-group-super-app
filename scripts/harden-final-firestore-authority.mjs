@@ -6,6 +6,7 @@ const brokerReadCatchAll = "      allow read: if !(collection in ['system_secret
 const boundedReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits']) && hasAdminClaim();";
 const adminSecurityReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
 const privateHrReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
+const liveLocationReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
 const legacyWriteList = `          'system_secrets',
           'users',
           'tickets',
@@ -19,6 +20,12 @@ const adminSecurityWriteList = `          'system_secrets',
           'audit_logs',
           'admin_security_sessions',`;
 const privateHrWriteList = `          'system_secrets',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const liveLocationWriteList = `          'system_secrets',
+          'technician_live_locations',
           'users',
           'audit_logs',
           'admin_security_sessions',
@@ -100,29 +107,30 @@ if (!text.includes('match /admin_security_sessions/{sessionId}')) {
   text = text.replace(anchor, `${adminSecurityBlock}${anchor}`);
 }
 
-if (text.includes(legacyReadCatchAll)) text = text.replace(legacyReadCatchAll, privateHrReadCatchAll);
-if (text.includes(brokerReadCatchAll)) text = text.replace(brokerReadCatchAll, privateHrReadCatchAll);
-if (text.includes(boundedReadCatchAll)) text = text.replace(boundedReadCatchAll, privateHrReadCatchAll);
-if (text.includes(adminSecurityReadCatchAll)) text = text.replace(adminSecurityReadCatchAll, privateHrReadCatchAll);
-if (!text.includes(privateHrReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security and private HR exclusions');
+for (const candidate of [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll]) {
+  if (text.includes(candidate)) text = text.replace(candidate, liveLocationReadCatchAll);
+}
+if (!text.includes(liveLocationReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR and live-location exclusions');
 }
 
-// These lists share prefixes, so detect the strictest state first instead of
-// comparing substring counts. The output must always be the private-HR list.
-if (text.includes(privateHrWriteList)) {
+// These lists share prefixes, so detect the strictest state first. The output
+// must always exclude canonical live locations from generic browser writes.
+if (text.includes(liveLocationWriteList)) {
   // Already canonical.
+} else if (text.includes(privateHrWriteList)) {
+  text = text.replaceAll(privateHrWriteList, liveLocationWriteList);
 } else if (text.includes(adminSecurityWriteList)) {
-  text = text.replaceAll(adminSecurityWriteList, privateHrWriteList);
+  text = text.replaceAll(adminSecurityWriteList, liveLocationWriteList);
 } else if (text.includes(legacyWriteList)) {
-  text = text.replaceAll(legacyWriteList, privateHrWriteList);
+  text = text.replaceAll(legacyWriteList, liveLocationWriteList);
 } else if (text.includes(boundedWriteList)) {
-  text = text.replaceAll(boundedWriteList, privateHrWriteList);
+  text = text.replaceAll(boundedWriteList, liveLocationWriteList);
 } else {
   throw new Error('[final-firestore-authority] global write fallback list could not be identified');
 }
-if (text.split(privateHrWriteList).length - 1 !== 2) {
-  throw new Error('[final-firestore-authority] private HR write fallback list must exist exactly twice');
+if (text.split(liveLocationWriteList).length - 1 !== 2) {
+  throw new Error('[final-firestore-authority] live-location/private-HR write fallback list must exist exactly twice');
 }
 
 if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
@@ -163,10 +171,10 @@ const required = [
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
-  privateHrReadCatchAll.trim(),
+  liveLocationReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  privateHrWriteList.trim(),
+  liveLocationWriteList.trim(),
   "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
 ];
 
@@ -203,12 +211,14 @@ const forbidden = [
   brokerReadCatchAll.trim(),
   boundedReadCatchAll.trim(),
   adminSecurityReadCatchAll.trim(),
+  privateHrReadCatchAll.trim(),
   legacyReadCatchAll.trim(),
   legacyWriteList,
+  privateHrWriteList,
 ];
 
 for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, private HR authority isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
+console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, private HR and canonical live-location isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
