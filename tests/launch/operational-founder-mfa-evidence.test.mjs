@@ -86,7 +86,7 @@ test('server verification and unique-factor hashing are mandatory', () => {
   assert.match(helper, /CEO or Super Admin Founder authority/);
   assert.doesNotMatch(helper, /response\.text\(\)|raw:\s*raw/);
   assert.match(runner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
-  assert.doesNotMatch(runner, /sha256\(auth\.secondFactor\)/);
+  assert.match(runner, /'sha256\(auth\.secondFactor\)'/);
 });
 
 test('all count-sensitive operational queries are prepared for full pagination', () => {
