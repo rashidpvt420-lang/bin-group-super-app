@@ -4,7 +4,7 @@
  * Verifies: Arabic/English language toggle (RTL/LTR switching) and Google Maps rendering.
  */
 import { test, expect } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 test.describe('Global Platform Mechanics', () => {
   test.beforeEach(async ({ page }) => {
@@ -12,6 +12,7 @@ test.describe('Global Platform Mechanics', () => {
     (page as any).__binAppCheckMonitor = __appCheckMonitor;
     await __appCheckMonitor.assertTokenFingerprint();
   });
+
   test.afterEach(async ({ page }) => {
     const monitor = (page as any).__binAppCheckMonitor;
     if (!monitor) return;
@@ -23,7 +24,7 @@ test.describe('Global Platform Mechanics', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('body', { timeout: 20_000 });
 
-    // Dismiss any modal/overlay that might be intercepting clicks (cookie banner, legal modal, etc.)
+    // Dismiss a known optional overlay, but never bypass the language UI itself.
     const dismissSelectors = [
       'button:has-text("Accept")',
       'button:has-text("Close")',
@@ -32,61 +33,50 @@ test.describe('Global Platform Mechanics', () => {
       '[aria-label="Close"]',
       '[data-testid="modal-close"]',
     ];
-    for (const sel of dismissSelectors) {
-      const btn = page.locator(sel).first();
-      if (await btn.isVisible({ timeout: 1500 }).catch(() => false)) {
-        await btn.click().catch(() => undefined);
+    for (const selector of dismissSelectors) {
+      const button = page.locator(selector).first();
+      if (await button.isVisible({ timeout: 1_500 }).catch(() => false)) {
+        await button.click();
         await page.waitForTimeout(300);
         break;
       }
     }
 
-    const langToggleBtn = page.locator('button:has-text("AR"), button:has-text("العربية"), [data-testid="language-toggle"]').first();
+    const languageToggle = page
+      .locator('[data-testid="language-toggle"], button:has-text("AR"), button:has-text("العربية")')
+      .first();
+    await expect(languageToggle, 'The public language control is required and must be visible.').toBeVisible({ timeout: 10_000 });
 
-    if (await langToggleBtn.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      // Use force:true in case a transparent overlay remains above the button
-      await langToggleBtn.click({ force: true });
-      await expect.poll(async () => {
-        const htmlDir = await page.locator('html').getAttribute('dir');
-        const bodyDir = await page.locator('body').getAttribute('dir');
-        return htmlDir === 'rtl' || bodyDir === 'rtl';
-      }, { timeout: 10_000 }).toBeTruthy();
+    await languageToggle.click();
+    await expect.poll(async () => {
+      const htmlDir = await page.locator('html').getAttribute('dir');
+      const bodyDir = await page.locator('body').getAttribute('dir');
+      return htmlDir === 'rtl' || bodyDir === 'rtl';
+    }, { timeout: 10_000, message: 'Selecting Arabic must switch the rendered document to RTL.' }).toBeTruthy();
 
-      const enToggleBtn = page.locator('button:has-text("EN"), button:has-text("English"), [data-testid="language-toggle"]').first();
-      await enToggleBtn.click({ force: true });
-      await expect.poll(async () => {
-        const htmlDir = await page.locator('html').getAttribute('dir');
-        const bodyDir = await page.locator('body').getAttribute('dir');
-        return htmlDir === 'ltr' || bodyDir === 'ltr' || (!htmlDir && !bodyDir);
-      }, { timeout: 10_000 }).toBeTruthy();
-      return;
-    }
+    const englishToggle = page
+      .locator('[data-testid="language-toggle"], button:has-text("EN"), button:has-text("English")')
+      .first();
+    await expect(englishToggle, 'The English language control must remain reachable after switching to Arabic.').toBeVisible({ timeout: 10_000 });
+    await englishToggle.click();
 
-    // Fallback: directly drive via localStorage and verify HTML dir attribute
-    await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
-    const dirAfterAr = await page.locator('html').getAttribute('dir');
-    const bodyDirAr = await page.locator('body').getAttribute('dir');
-    expect(dirAfterAr === 'rtl' || bodyDirAr === 'rtl').toBeTruthy();
-
-    await page.evaluate(() => localStorage.setItem('bin_language', 'en'));
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
-    const dirAfterEn = await page.locator('html').getAttribute('dir');
-    expect(dirAfterEn === 'ltr' || dirAfterEn === null).toBeTruthy();
+    await expect.poll(async () => {
+      const htmlDir = await page.locator('html').getAttribute('dir');
+      const bodyDir = await page.locator('body').getAttribute('dir');
+      return htmlDir === 'ltr' || bodyDir === 'ltr' || (!htmlDir && !bodyDir);
+    }, { timeout: 10_000, message: 'Selecting English must restore LTR rendering.' }).toBeTruthy();
   });
-
 
   test('Google Maps integration loads successfully', async ({ page }) => {
     await page.goto('/contact', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/contact(?:[/?#]|$)/);
 
-    const mapContainer = page.locator('.gm-style, iframe[src*="google.com/maps"], [aria-roledescription="map"]').first();
+    const mapContainer = page
+      .locator('.gm-style, iframe[src*="google.com/maps"], iframe[src*="maps.google"], [aria-roledescription="map"], [data-testid="contact-map"]')
+      .first();
+    await expect(mapContainer, 'The Contact page must render the production map UI.').toBeVisible({ timeout: 15_000 });
 
-    if (await mapContainer.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await expect(mapContainer).toBeVisible({ timeout: 5000 });
-      const mapError = page.locator('.dismissButton, .gm-err-container');
-      await expect(mapError).not.toBeVisible();
-    }
+    const mapError = page.locator('.dismissButton, .gm-err-container, [data-testid="map-error"]');
+    await expect(mapError, 'Google Maps must load without a visible provider or configuration error.').toHaveCount(0);
   });
 });

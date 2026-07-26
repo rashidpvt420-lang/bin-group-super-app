@@ -16,7 +16,7 @@ test('Tenant main business evidence cannot regress to an Admin-seeded completion
   assert.doesNotMatch(source, /E2E completed work requiring mandatory tenant approval/);
 });
 
-test('Tenant main business evidence requires provider delivery, dispute, correction, and unit recovery', () => {
+test('Tenant main business evidence requires provider delivery, dispute, correction, and non-destructive unit recovery', () => {
   const source = read('tests/e2e/business-tenant.spec.ts');
   assert.match(source, /assertTenantDeliveryReceipt/);
   assert.match(source, /pushDeliveryState === 'SUCCESS'/);
@@ -24,8 +24,13 @@ test('Tenant main business evidence requires provider delivery, dispute, correct
   assert.match(source, /Tenant dispute opens Admin review/);
   assert.match(source, /TENANT_DISPUTED_TICKET/);
   assert.match(source, /Tenant correction submission and immutable history/);
-  assert.match(source, /Unassigned-residence fallback creates a secured unit-link recovery request/);
+  assert.match(source, /without mutating an occupied unit/);
+  assert.match(source, /createRecoveryTenant/);
+  assert.match(source, /e2eTenantRecovery: true/);
   assert.match(source, /verificationCodeHash/);
+  assert.doesNotMatch(source, /tenantId:\s*admin\.firestore\.FieldValue\.delete/);
+  assert.doesNotMatch(source, /occupancyStatus:\s*'vacant'/);
+  assert.doesNotMatch(source, /restoreLinkedUnit/);
 });
 
 test('Tenant completion notification and review are server authoritative and App Check protected', () => {
@@ -37,6 +42,10 @@ test('Tenant completion notification and review are server authoritative and App
   assert.match(source, /enforceAppCheck: true/);
   assert.match(source, /MIN_DISPUTE_REASON = 8/);
   assert.match(source, /TENANT_DISPUTED_TICKET/);
+  assert.match(source, /admin\.auth\(\)\.getUser\(tenantId\)/);
+  assert.match(source, /firebase_auth_verified_email/);
+  assert.doesNotMatch(source, /firstTenantEmail/);
+  assert.doesNotMatch(source, /data\.tenantEmail \|\| data\.requesterEmail/);
 });
 
 test('Tenant unit-link request and Admin decision are protected and retain rejection evidence', () => {
