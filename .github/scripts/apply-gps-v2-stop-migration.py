@@ -10,9 +10,36 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
 
 queue_path = Path('src/utils/gpsRetryQueue.ts')
 queue = queue_path.read_text(encoding='utf-8')
-queue = replace_once(
-    queue,
-    """export const removeLegacyGpsQueue = () => {
+old_migration = """const migrateLegacyV2Stops = (nowMs = Date.now()) => {
+  const local = safeStorage('localStorage');
+  if (!local) return;
+  try {
+    const raw = JSON.parse(local.getItem(LEGACY_QUEUE_KEYS[1]) || '[]');
+    if (!Array.isArray(raw)) return;
+    const validStops = raw
+      .map((entry) => sanitizeEntry(entry, nowMs))
+      .filter((entry): entry is QueuedGpsAction => Boolean(entry && entry.action === 'STOP'));
+    for (const entry of validStops) {
+      const selected = browserGpsQueueStorage(entry.technicianUid);
+      const existing = readGpsRetryQueue(selected, nowMs);
+      const duplicate = existing.some((candidate) =>
+        candidate.action === 'STOP' &&
+        candidate.technicianUid === entry.technicianUid &&
+        candidate.ticketId === entry.ticketId &&
+        candidate.trackingSessionId === entry.trackingSessionId,
+      );
+      if (!duplicate) writeQueues(selected, [...existing, { ...entry, point: undefined }]);
+    }
+  } catch {
+    // Malformed legacy data is deleted below and is never allowed to start a
+    // new session as trusted reconciliation evidence.
+  }
+};
+
+export const removeLegacyGpsQueue = () => {
+  // Preserve coordinate-free pending STOP authority before deleting the old
+  // global key. Legacy UPDATE coordinates are intentionally not migrated.
+  migrateLegacyV2Stops();
   for (const storage of [safeStorage('localStorage'), safeStorage('sessionStorage')]) {
     if (!storage) continue;
     for (const key of LEGACY_QUEUE_KEYS) {
@@ -20,8 +47,8 @@ queue = replace_once(
     }
   }
 };
-""",
-    """const legacyEntryIdentity = (entry: QueuedGpsAction) =>
+"""
+new_migration = """const legacyEntryIdentity = (entry: QueuedGpsAction) =>
   `${entry.technicianUid}|${entry.ticketId}|${entry.trackingSessionId}`;
 
 export const legacyStopEntriesForMigration = (
@@ -106,40 +133,36 @@ export const migrateAndRemoveLegacyGpsQueue = (nowMs = Date.now()) => {
 export const removeLegacyGpsQueue = () => {
   migrateAndRemoveLegacyGpsQueue();
 };
-""",
-    'legacy STOP migration',
-)
+"""
+queue = replace_once(queue, old_migration, new_migration, 'intermediate legacy STOP migration')
 queue_path.write_text(queue, encoding='utf-8')
 
 maps_test_path = Path('tests/launch/maps-gps-product-truth.test.mjs')
 maps = maps_test_path.read_text(encoding='utf-8')
-maps = replace_once(
-    maps,
-    """  assert.match(gpsRetryQueue, /STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v2'/);
-  assert.match(gpsRetryQueue, /UPDATE_QUEUE_KEY = 'bin-technician-gps-update-queue-v2'/);
-  assert.match(gpsRetryQueue, /stop: safeStorage\('localStorage'\)/);
-  assert.match(gpsRetryQueue, /update: safeStorage\('sessionStorage'\)/);
-""",
-    """  assert.match(gpsRetryQueue, /STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v3'/);
-  assert.match(gpsRetryQueue, /UPDATE_QUEUE_KEY = 'bin-technician-gps-update-memory-v3'/);
-  assert.match(gpsRetryQueue, /stop: scopedStorage\(safeStorage\('localStorage'\), technicianUid\)/);
-  assert.match(gpsRetryQueue, /update: scopedStorage\(memoryStorage, technicianUid\)/);
-  assert.match(gpsRetryQueue, /migrateAndRemoveLegacyGpsQueue/);
+old_assertions = """  assert.match(gpsRetryQueue, /migrateLegacyV2Stops/);
+  assert.match(gpsRetryQueue, /Legacy UPDATE coordinates are intentionally not migrated/);
+"""
+new_assertions = """  assert.match(gpsRetryQueue, /migrateAndRemoveLegacyGpsQueue/);
   assert.match(gpsRetryQueue, /GPS_STOP_MIGRATION_VERIFICATION_FAILED/);
-  assert.match(gpsRetryQueue, /Legacy UPDATE coordinates are[\s\S]*never migrated/);
-  assert.doesNotMatch(gpsRetryQueue, /update: safeStorage\('sessionStorage'\)/);
-""",
-    'v3 launch assertions',
-)
+  assert.match(gpsRetryQueue, /Legacy UPDATE coordinates are[\\s\\S]*never migrated/);
+  assert.doesNotMatch(gpsRetryQueue, /update: safeStorage\\('sessionStorage'\\)/);
+"""
+maps = replace_once(maps, old_assertions, new_assertions, 'robust v3 launch assertions')
 maps_test_path.write_text(maps, encoding='utf-8')
 
 behavior_path = Path('tests/launch/map-gps-state-behavior.test.mjs')
 behavior = behavior_path.read_text(encoding='utf-8')
-marker = "test('legacy v2 STOP migration keeps only coordinate-free STOP authority'"
-if marker not in behavior:
-    behavior += """
-
-test('legacy v2 STOP migration keeps only coordinate-free STOP authority', () => {
+old_behavior = """test('legacy v2 STOP authority migrates before global queue deletion', () => {
+  const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
+  const migrationIndex = queueSource.indexOf('migrateLegacyV2Stops();');
+  const deletionIndex = queueSource.indexOf('storage.removeItem(key)', migrationIndex);
+  assert.ok(migrationIndex >= 0 && deletionIndex > migrationIndex);
+  assert.match(queueSource, /entry\\.action === 'STOP'/);
+  assert.match(queueSource, /point: undefined/);
+  assert.match(queueSource, /candidate\\.trackingSessionId === entry\\.trackingSessionId/);
+});
+"""
+new_behavior = """test('legacy v2 STOP migration keeps only coordinate-free newest STOP authority', () => {
   const now = 20_000;
   const migrated = queue.legacyStopEntriesForMigration([
     { ...stopInput(), id: 'older-stop', queuedAtMs: 1_000, expiresAtMs: 30_000, retryCount: 0, nextAttemptAtMs: 1_000, terminal: false, point: { latitude: 24.2, longitude: 55.3 } },
@@ -158,8 +181,9 @@ test('legacy keys are deleted only after scoped STOP write verification', () => 
   const verifyIndex = queueSource.indexOf("throw new Error('GPS_STOP_MIGRATION_VERIFICATION_FAILED')", writeIndex);
   const deleteIndex = queueSource.indexOf('storage.removeItem(key)', verifyIndex);
   assert.ok(writeIndex >= 0 && verifyIndex > writeIndex && deleteIndex > verifyIndex);
-  assert.match(queueSource, /for \(const storage of sources\)/);
-  assert.match(queueSource, /Legacy UPDATE coordinates are[\s\S]*never migrated/);
+  assert.match(queueSource, /for \\(const storage of sources\\)/);
+  assert.match(queueSource, /Legacy UPDATE coordinates are[\\s\\S]*never migrated/);
 });
 """
+behavior = replace_once(behavior, old_behavior, new_behavior, 'legacy migration behavior tests')
 behavior_path.write_text(behavior, encoding='utf-8')
