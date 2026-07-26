@@ -50,8 +50,11 @@ jobs:
       - name: Separate create-time canonical prohibition from update-time immutability
         run: python .github/scripts/fix-owner-verified-property-updates.py
 
-      - name: Validate property geo authority contract
-        run: node --test tests/launch/property-geo-authority.test.mjs
+      - name: Validate canonical submission and promotion boundary
+        run: node --test --test-name-pattern="canonical property geo is server-authoritative" tests/launch/property-geo-authority.test.mjs
+
+      - name: Validate ordinary Owner updates after verification
+        run: node --test --test-name-pattern="verified properties keep ordinary Owner updates" tests/launch/property-geo-authority.test.mjs
 
       - name: Validate property geo catch-all contract
         run: node --test tests/launch/property-geo-catchall-authority.test.mjs
