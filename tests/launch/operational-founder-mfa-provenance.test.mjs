@@ -30,7 +30,7 @@ test('operational evidence scopes canonical Founder credentials to the MFA-aware
 
   for (const name of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET']) {
     assert.doesNotMatch(jobScope, new RegExp(`${name}:`));
-    assert.match(replayStep, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+    assert.match(replayStep, new RegExp(`${name}: \$\{\{ secrets\.${name} \}\}`));
   }
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\./);
   assert.doesNotMatch(workflow, /E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\./);
@@ -38,16 +38,22 @@ test('operational evidence scopes canonical Founder credentials to the MFA-aware
   assert.doesNotMatch(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
 });
 
-test('Firebase operational replay requires TOTP and the exact verified factor identifier', async () => {
+test('Firebase operational replay requires server-verified Founder TOTP and the exact factor identifier', async () => {
   const helper = await read('scripts/lib/firebase-mfa-sign-in.mjs');
 
   assert.match(helper, /accounts\/mfaSignIn:finalize/);
   assert.match(helper, /totpVerificationInfo: \{ verificationCode \}/);
+  assert.match(helper, /verifyIdToken\(idToken, true\)/);
+  assert.match(helper, /EXPECTED_PROJECT_ID = 'bin-group-57c60'/);
+  assert.match(helper, /CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups\.com'/);
+  assert.match(helper, /email_verified !== true/);
+  assert.match(helper, /CEO or Super Admin Founder authority/);
   assert.match(helper, /secondFactorType !== 'totp'/);
   assert.match(helper, /firebase\?\.second_factor_identifier/);
-  assert.match(helper, /const verified = requireTotpMfaToken\(directToken\)/);
+  assert.match(helper, /requireVerifiedTotpMfaToken\(directToken, verifyIdTokenImpl\)/);
   assert.match(helper, /verified\.secondFactorIdentifier !== enrollmentId/);
   assert.match(helper, /verified TOTP second-factor session/);
+  assert.doesNotMatch(helper, /decodeJwtPayload/);
   assert.doesNotMatch(helper, /response\.text\(\)/);
   assert.doesNotMatch(helper, /raw:\s*raw/);
 });
