@@ -18,7 +18,15 @@ function runNode(script, cwd = root) {
   });
 }
 
-test('checked-in rules become server-authoritative under the final prepare:rules transform', () => {
+function ticketBlock(rules, collectionName) {
+  const marker = `    match /${collectionName}/{ticketId} {`;
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${collectionName} ticket block must exist`);
+  const next = rules.indexOf('\n    match /', start + marker.length);
+  return rules.slice(start, next < 0 ? rules.length : next);
+}
+
+test('checked-in rules become canonical-only under the ticket binding transform', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-ticket-rules-'));
   try {
     const sourceRules = readFileSync(path.join(root, 'firestore.rules'), 'utf8');
@@ -34,13 +42,20 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     assert.doesNotMatch(preparedRules, /function\s+openMissionPoolRead\s*\(/);
     assert.doesNotMatch(preparedRules, /function\s+openMissionAvailable\s*\(/);
     assert.match(preparedRules, /function safeTicketUpdateByActor\(\)/);
-    assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+    assert.equal(preparedRules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);
     assert.match(preparedRules, /let authenticated = signedIn\(\);/);
     assert.match(preparedRules, /let role = authenticated/);
     assert.match(preparedRules, /let admin = authenticated && \(/);
     assert.match(preparedRules, /let dispatcher = authenticated && \(/);
     assert.match(preparedRules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
     assert.match(preparedRules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
+
+    const legacy = ticketBlock(preparedRules, 'tickets');
+    assert.match(legacy, /allow create, update, delete: if false;/);
+    assert.doesNotMatch(legacy, /allow update: if safeTicketUpdateByActor\(\);/);
+    const canonical = ticketBlock(preparedRules, 'maintenanceTickets');
+    assert.match(canonical, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+    assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
 
     const verification = runNode(rulesVerifier, directory);
     assert.equal(verification.status, 0, verification.stderr || verification.stdout);
@@ -80,13 +95,15 @@ test('scheduled-service verifier follows the centralized protected production li
   assert.doesNotMatch(deployRunner, /'functions,hosting,firestore:rules,firestore:indexes,storage'/);
 });
 
-test('launch-hardening verifier explicitly rejects direct assignment and overlapping ticket gates', () => {
+test('launch-hardening verifier rejects assignment overlap and dual ticket authority', () => {
   const verifierSource = readFileSync(rulesVerifier, 'utf8');
   assert.match(verifierSource, /direct client-side technician mission claim helper/);
   assert.match(verifierSource, /tickets update rule still permits direct technician claiming/);
   assert.match(verifierSource, /overlapping ticket update authorization/);
   assert.match(verifierSource, /bounded ticket update router/);
-  assert.match(verifierSource, /Single ticket update gate must exist exactly twice/);
+  assert.match(verifierSource, /Canonical ticket update gate must exist exactly once/);
+  assert.match(verifierSource, /Legacy tickets are not read-only/);
+  assert.match(verifierSource, /Legacy tickets retain the operational update gate/);
   assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, tenant, technician order/);
   assert.match(verifierSource, /Technician append-only proof guard missing/);
 });
