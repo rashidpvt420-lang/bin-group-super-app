@@ -91,6 +91,20 @@ async function ownerMailboxAccessToken() {
   return text(body.access_token);
 }
 
+async function verifyOwnerMailboxIdentity(accessToken) {
+  const profile = await jsonRequest(
+    'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    { headers: { Authorization: \`Bearer \${accessToken}\` } },
+    'Owner mailbox identity read',
+  );
+  const authenticatedMailboxEmail = text(profile.emailAddress).toLowerCase();
+  assert(authenticatedMailboxEmail, 'Owner mailbox profile did not return an email address.');
+  assert(
+    authenticatedMailboxEmail === ownerEmail,
+    'Authenticated Gmail mailbox does not belong to the Owner test identity.',
+  );
+}
+
 async function retrieveOwnerMailboxOtp(requestId, timeoutMs = 120000) {
   const snapshot = await db.collection('contract_signature_otps').doc(requestId).get();
   assert(snapshot.exists, \`OTP evidence \${requestId} was not persisted.\`);
@@ -105,6 +119,7 @@ async function retrieveOwnerMailboxOtp(requestId, timeoutMs = 120000) {
   const requestedAt = value.delivery?.sentAt?.toMillis?.() || value.createdAt?.toMillis?.() || Date.now() - 60000;
 
   const accessToken = await ownerMailboxAccessToken();
+  await verifyOwnerMailboxIdentity(accessToken);
   const deadline = Date.now() + timeoutMs;
   const query = \`from:ceo@bin-groups.com to:\${ownerEmail} subject:"BIN GROUP contract signature OTP" newer_than:1d\`;
   while (Date.now() < deadline) {
@@ -204,6 +219,8 @@ for (const forbidden of [
   }
 }
 for (const required of [
+  'gmail.googleapis.com/gmail/v1/users/me/profile',
+  'authenticatedMailboxEmail === ownerEmail',
   'gmail.googleapis.com/gmail/v1/users/me/messages',
   'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
   'mailboxReceiptVerified: true',
