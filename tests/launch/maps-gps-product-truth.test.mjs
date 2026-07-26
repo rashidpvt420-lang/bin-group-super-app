@@ -8,6 +8,8 @@ const adminMap = read('apps/admin-panel/src/pages/map/LiveMapPage.tsx');
 const adminMapsLoader = read('apps/admin-panel/src/lib/googleMaps.ts');
 const liveTracking = read('src/utils/liveTracking.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
+const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
+const packageJson = JSON.parse(read('package.json'));
 const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
 
 test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
@@ -49,6 +51,15 @@ test('Canonical live-location callable atomically validates assignment and updat
   assert.match(locationCallable, /tx\.set\(ticketRef/);
   assert.match(locationCallable, /tx\.set\(technicianRef/);
   assert.match(locationCallable, /tx\.set\(userRef/);
+});
+
+test('Canonical location rules are generated as Admin-read and browser-write denied', () => {
+  assert.match(ruleHardener, /match \/technician_live_locations\/\{technicianId\} \{/);
+  assert.match(ruleHardener, /allow read: if isAdmin\(\);/);
+  assert.match(ruleHardener, /allow create, update, delete: if false;/);
+  assert.match(ruleHardener, /technician_live_locations'\]/);
+  assert.equal(packageJson.scripts['harden:live-location-authority'], 'node scripts/harden-technician-live-location-authority.mjs');
+  assert.match(packageJson.scripts['prepare:rules'], /harden:live-location-authority/);
 });
 
 test('Global production evidence cannot bypass the language UI or pass without a map', () => {
