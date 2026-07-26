@@ -120,7 +120,7 @@ test('verified properties keep ordinary Owner updates while canonical geo stays 
     read('test/property-geo-authority-rules.test.js'),
   ]);
   const updateStart = rules.indexOf('function safeOwnerPropertyUpdate()');
-  const updateEnd = rules.indexOf('\n    }', updateStart) + '\n    }'.length;
+  const updateEnd = rules.indexOf('\\n    }', updateStart) + '\\n    }'.length;
   const updateBlock = rules.slice(updateStart, updateEnd);
   assert.ok(updateStart >= 0 && updateEnd > updateStart);
   assert.match(updateBlock, /canonicalPropertyGeoUnchanged\(\)/);
