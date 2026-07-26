@@ -1,18 +1,26 @@
 name: One-time Safe Broker Mailbox Evidence Patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/broker-otp-hmac-real-input
+      - main
+    types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/broker-mailbox-evidence-patch-safe.yml
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   patch:
-    if: github.repository == 'rashidpvt420-lang/bin-group-super-app' && github.ref == 'refs/heads/fix/broker-otp-hmac-real-input'
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.number == 627 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/broker-otp-hmac-real-input' &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.title == 'Harden Broker OTP evidence against offline derivation'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact Broker hardening branch
