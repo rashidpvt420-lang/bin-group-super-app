@@ -58,7 +58,9 @@ test('Founder callable and Admin page are the only browser review path', () => {
   assert.match(adminReview, /hasDispatchReadyPropertyGeo/);
   assert.match(adminReview, /VERIFY_PROPERTY_GEO/);
   assert.match(adminReview, /pending_admin_approval/);
+  assert.match(adminReview, /pending_admin_review/);
   assert.match(adminPage, /PENDING ADMIN APPROVAL/);
+  assert.match(adminPage, /PENDING ADMIN REVIEW/);
   assert.match(adminReview, /geoDispatchReady/);
   assert.match(adminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
   assert.doesNotMatch(adminPage, /updateDoc\(|addDoc\(|serverTimestamp\(/);
