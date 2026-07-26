@@ -67,18 +67,21 @@ test('review issues and revalidates the server quote before contract progression
   assert.match(source, /setValuationResult/);
 });
 
-test('payment package accepts only a recorded quote or a fresh server-recalculated legacy quote', async () => {
+test('payment package accepts only a recorded quote or a deterministic fresh server-recalculated legacy quote', async () => {
   const source = await read('functions/secureOwnerRegistrationRequest.ts');
-  const handlerSource = await read('functions/ownerRegistrationRequest.ts');
   assert.match(source, /async function assertServerQuote/);
   assert.match(source, /if \(text\(data\.quoteId\)\)/);
   assert.match(source, /assertOwnerPortfolioQuoteRecord/);
   assert.match(source, /inputHash:\s*data\.quoteInputHash \|\| data\.inputHash/);
-  assert.match(source, /await previewOwnerOnboardingQuoteHandler\(\{/);
+  assert.match(source, /const quoteStartedAt = finiteNumber\(data\.quoteQuotedAtMs\)/);
+  assert.match(source, /quoteStartedAt > Date\.now\(\) \+ 60_000/);
+  assert.match(source, /calculateOwnerOnboardingQuote\(/);
+  assert.match(source, /data\.serviceDetails\.selectedAddOns,\s*quoteStartedAt,/s);
+  assert.match(source, /\.update\(JSON\.stringify\(quote\)\)/);
+  assert.doesNotMatch(source, /await previewOwnerOnboardingQuoteHandler\(\{/);
   assert.doesNotMatch(source, /previewOwnerOnboardingQuote as any\)\.run/);
-  assert.match(handlerSource, /export async function previewOwnerOnboardingQuoteHandler/);
   assert.match(source, /Number\(quote\.expiresAtMs \|\| 0\) <= Date\.now\(\)/);
-  assert.match(source, /text\(quote\.quoteHash\) !== text\(data\.quoteHash\)/);
+  assert.match(source, /quoteHash !== text\(data\.quoteHash\)/);
   assert.match(source, /money\(quote\.annualContractValue\) !== money\(data\.annualContractValue\)/);
   assert.match(source, /money\(quote\.activationDeposit\) !== money\(data\.activationDeposit \|\| data\.amount\)/);
   assert.match(source, /payment manifest does not match the active owner quote/i);
