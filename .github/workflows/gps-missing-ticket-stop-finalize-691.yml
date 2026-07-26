@@ -27,24 +27,25 @@ jobs:
           fetch-depth: 0
       - name: Apply missing-ticket STOP and duplicate-idempotence hardening
         run: python .github/scripts/apply-gps-missing-ticket-stop-691.py
-      - name: Commit product/tests and remove one-off write workflow
+      - name: Run focused CAS regression
+        run: node --test tests/launch/technician-live-location-cas.test.mjs
+      - name: Commit product/tests and remove every one-off 691 write helper
         run: |
           set -euo pipefail
           git add functions/technicianLiveLocation.ts tests/launch/technician-live-location-cas.test.mjs
-          git rm .github/scripts/apply-gps-missing-ticket-stop-691.py
-          git rm .github/workflows/gps-missing-ticket-stop-finalize-691.yml
-          changed="$(git diff --cached --name-only | sort)"
-          expected="$(printf '%s\n' \
-            .github/scripts/apply-gps-missing-ticket-stop-691.py \
-            .github/workflows/gps-missing-ticket-stop-finalize-691.yml \
-            functions/technicianLiveLocation.ts \
-            tests/launch/technician-live-location-cas.test.mjs | sort)"
-          [[ "$changed" == "$expected" ]] || {
+          mapfile -t helpers < <(git ls-files '.github/scripts/*691*.py' '.github/workflows/*691*.yml')
+          [[ ${#helpers[@]} -gt 0 ]] || {
+            echo '::error::Expected one-off 691 helpers were not found.'
+            exit 1
+          }
+          git rm -f -- "${helpers[@]}"
+          unexpected="$(git diff --cached --name-only | grep -Ev '^(functions/technicianLiveLocation\.ts|tests/launch/technician-live-location-cas\.test\.mjs|\.github/scripts/[^/]*691[^/]*\.py|\.github/workflows/[^/]*691[^/]*\.yml)$' || true)"
+          [[ -z "$unexpected" ]] || {
             echo '::error::Final STOP patch touched unexpected files.'
-            printf 'Changed:\n%s\n' "$changed"
+            printf '%s\n' "$unexpected"
             exit 1
           }
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m 'fix(gps): reconcile missing-ticket STOP safely'
+          git commit -m 'fix(gps): finalize session CAS and missing-ticket STOP'
           git push origin HEAD:fix/technician-gps-session-cas
