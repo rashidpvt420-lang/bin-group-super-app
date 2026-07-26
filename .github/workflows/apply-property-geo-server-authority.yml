@@ -48,10 +48,16 @@ jobs:
       - name: Apply deterministic property geo authority repair
         run: python .github/scripts/apply-property-geo-server-authority.py
 
+      - name: Exclude properties from generic Admin catch-all writes
+        run: python .github/scripts/harden-property-geo-catchall.py
+
       - name: Validate focused source contracts
         run: |
           set -euo pipefail
-          node --test tests/launch/property-geo-authority.test.mjs tests/launch/admin-property-review-authority.test.mjs
+          node --test \
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs \
+            tests/launch/admin-property-review-authority.test.mjs
           npm run typecheck
           npm run build:functions
 
@@ -94,31 +100,37 @@ jobs:
           git add \
             firestore.rules \
             functions/adminPropertyReview.ts \
+            scripts/harden-final-firestore-authority.mjs \
             src/components/onboarding/PropertyLocationStep.tsx \
             apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
             apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
             test/security-rules.test.js \
             test/property-geo-authority-rules.test.js \
             tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs \
             tests/launch/admin-property-review-authority.test.mjs
           git rm \
             .github/scripts/apply-property-geo-server-authority.py \
             .github/scripts/prepare-owner-geo-authority-markers.py \
+            .github/scripts/harden-property-geo-catchall.py \
             .github/workflows/apply-property-geo-server-authority.yml
           changed="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             .github/scripts/apply-property-geo-server-authority.py \
             .github/scripts/prepare-owner-geo-authority-markers.py \
+            .github/scripts/harden-property-geo-catchall.py \
             .github/workflows/apply-property-geo-server-authority.yml \
             apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx \
             apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx \
             firestore.rules \
             functions/adminPropertyReview.ts \
+            scripts/harden-final-firestore-authority.mjs \
             src/components/onboarding/PropertyLocationStep.tsx \
             test/property-geo-authority-rules.test.js \
             test/security-rules.test.js \
             tests/launch/admin-property-review-authority.test.mjs \
-            tests/launch/property-geo-authority.test.mjs | sort)"
+            tests/launch/property-geo-authority.test.mjs \
+            tests/launch/property-geo-catchall-authority.test.mjs | sort)"
           [[ "$changed" == "$expected" ]] || {
             echo '::error::Property geo repair touched unexpected files.'
             printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
