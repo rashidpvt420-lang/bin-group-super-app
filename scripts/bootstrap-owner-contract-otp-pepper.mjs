@@ -19,7 +19,14 @@ export function isValidPepper(value) {
 
 export function classifyAccessFailure(output) {
   const safe = text(output).toLowerCase();
-  if (/not[_ -]?found|does not exist|could not find|404/.test(safe)) return 'missing';
+  if (/permission[_ -]?denied|forbidden|unauthenticated|not authorized|access denied|\b403\b/.test(safe)) {
+    return 'inaccessible';
+  }
+  if (
+    /not[_ -]?found|does not exist|could not find|\b404\b|does not have any versions|no (?:enabled )?versions|versions\/latest.*not found|secret version.*not found/.test(safe)
+  ) {
+    return 'missing';
+  }
   return 'inaccessible';
 }
 
