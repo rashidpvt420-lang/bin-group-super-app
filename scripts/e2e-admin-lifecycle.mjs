@@ -14,9 +14,11 @@ import {
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const DEPLOY_WORKFLOW_NAME = 'Firebase Production Deploy';
+const LIVE_ROLE_WORKFLOW_NAME = 'Live Role Smoke Tests';
 const DIAGNOSTIC_WORKFLOW_NAME = 'Live Business Failure Diagnostics';
 const ALLOWED_PHASES_BY_WORKFLOW = new Map([
   [DEPLOY_WORKFLOW_NAME, new Set(['predeploy', 'post-business-evidence', 'post-launch-audit'])],
+  [LIVE_ROLE_WORKFLOW_NAME, new Set(['post-business-evidence'])],
   [DIAGNOSTIC_WORKFLOW_NAME, new Set(['post-business-diagnostic'])],
 ]);
 const DIRECT_PROFILE_COLLECTIONS = [
@@ -73,9 +75,9 @@ function requireProtectedContext({ projectId, phase, env }) {
   }
 
   let evidenceSha = '';
-  if (workflow === DEPLOY_WORKFLOW_NAME) {
-    if (env.GITHUB_REF !== 'refs/heads/main') {
-      throw new Error('Firebase Production Deploy lifecycle changes require refs/heads/main.');
+  if (workflow === DEPLOY_WORKFLOW_NAME || workflow === LIVE_ROLE_WORKFLOW_NAME) {
+    if (env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') {
+      throw new Error(`${workflow} lifecycle changes require a protected workflow_dispatch from refs/heads/main.`);
     }
     evidenceSha = text(env.GITHUB_SHA);
   } else if (workflow === DIAGNOSTIC_WORKFLOW_NAME) {
@@ -199,11 +201,7 @@ export async function retireConfiguredE2eAdmin({
 
   const profileSnapshot = await db.collection('users').doc(authUser.uid).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() : null;
-  const identity = validateEphemeralE2eAdminIdentity({
-    authUser,
-    profile,
-    configuredEmail,
-  });
+  const identity = validateEphemeralE2eAdminIdentity({ authUser, profile, configuredEmail });
 
   await auth.updateUser(identity.uid, { disabled: true });
   await auth.revokeRefreshTokens(identity.uid);
