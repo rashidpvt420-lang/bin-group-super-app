@@ -191,7 +191,7 @@ export function resolveDispatchReadyPropertyGeo(property: Record<string, any>): 
     area,
     placeId: text(geo.placeId, 240) || null,
     verifiedBy,
-    verifiedAtMs: geoVerifiedAtMs,
+    verifiedAtMs: geoVerifiedAtMs!,
     verificationVersion: 1,
   };
 }
