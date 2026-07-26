@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 export * from "./index";
 export * from "./contractActivation";
 export * from "./brokerCommissions";
+export * from "./brokerCommercialLifecycle";
 export * from "./brokerKycProfile";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
@@ -71,6 +72,7 @@ export {
   verifyBrokerPayoutOtp,
   submitBrokerPayoutRequest,
 } from "./secureBrokerPayoutOperations";
+export { adminReviewBrokerPayoutRequest } from "./adminBrokerPayoutReview";
 export {
   submitTenantCorrectionRequest,
   listTenantCorrectionRequests,
