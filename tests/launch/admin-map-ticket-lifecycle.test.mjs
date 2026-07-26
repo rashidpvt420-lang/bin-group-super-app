@@ -64,6 +64,7 @@ test('Admin map deterministically merges every bounded listener chunk', () => {
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS\.map\(\(statuses, chunkIndex\)/);
   assert.match(adminMapSource, /where\('status', 'in', statuses\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\),\s*limit\(100\)/);
+  assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\)[\s\S]{0,80}limit\(/);
   assert.match(adminMapSource, /ticketSnapshots\.size !== TICKET_STATUS_QUERY_CHUNKS\.length/);
   assert.match(adminMapSource, /byId\.set\(String\(ticket\.id\), ticket\)/);
   assert.match(adminMapSource, /localeCompare\(String\(right\.id\)\)/);
