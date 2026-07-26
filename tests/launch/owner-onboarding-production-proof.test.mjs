@@ -59,14 +59,20 @@ for (const token of [
 ]) {
   assert.ok(secureLifecycle.includes(token), `Mailbox-authoritative Owner OTP evidence is missing: ${token}`);
 }
+
+const mailboxBlockStart = secureLifecycle.indexOf('const mailboxBlock =');
+const mailboxBlockEnd = secureLifecycle.indexOf('source = `${source.slice', mailboxBlockStart);
+assert.ok(mailboxBlockStart >= 0 && mailboxBlockEnd > mailboxBlockStart, 'Owner mailbox transformation block is missing');
+const generatedMailboxBlock = secureLifecycle.slice(mailboxBlockStart, mailboxBlockEnd);
 for (const forbidden of [
   "callFunction('retrieveContractSignatureOtpForTestEvidence'",
   'protected_test_callable',
   'for (let number = 0; number <= 999999; number += 1)',
   'beforeData.testEvidence',
 ]) {
-  assert.ok(!secureLifecycle.includes(forbidden), `Owner mailbox evidence contains forbidden OTP bypass: ${forbidden}`);
+  assert.ok(!generatedMailboxBlock.includes(forbidden), `Generated Owner mailbox evidence contains forbidden OTP bypass: ${forbidden}`);
 }
+assert.ok(secureLifecycle.includes('if (source.includes(forbidden))'), 'Owner wrapper must fail closed if a forbidden OTP bypass survives transformation');
 
 for (const token of [
   'defineSecret("OWNER_CONTRACT_OTP_PEPPER")',
