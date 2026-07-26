@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { signInWithRequiredTotpMfa } from '../../scripts/lib/firebase-mfa-sign-in.mjs';
@@ -79,21 +80,10 @@ test('operational MFA helper and canonical wrapper parse under Node', () => {
     'scripts/lib/firebase-mfa-sign-in.mjs',
     'scripts/verify-operational-application-evidence-mfa.mjs',
   ]) {
-    const result = BunFallbackCheck(file);
+    const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
     assert.equal(result.status, 0, `${file} syntax failure:\n${result.stderr || result.stdout}`);
   }
 });
-
-function BunFallbackCheck(file) {
-  const { spawnSync } = requireNodeChildProcess();
-  return spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
-}
-
-function requireNodeChildProcess() {
-  return globalThis.__nodeChildProcessForOperationalEvidenceTest || (() => {
-    throw new Error('child_process test dependency was not installed');
-  })();
-}
 
 test('verified Founder TOTP returns the unique server-verified factor identifier', async () => {
   const { fixture, result } = await completeChallenge();
