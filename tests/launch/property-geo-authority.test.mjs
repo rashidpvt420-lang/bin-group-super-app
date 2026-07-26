@@ -8,6 +8,8 @@ const transpiled = ts.transpileModule(helperSource, { compilerOptions: { module:
 const authority = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`);
 const rules = readFileSync('firestore.rules', 'utf8');
 const hardener = readFileSync('scripts/harden-final-firestore-authority.mjs', 'utf8');
+const propertyHardener = readFileSync('scripts/harden-property-geo-authority.mjs', 'utf8');
+const ticketHardener = readFileSync('scripts/apply-ticket-rule-binding.mjs', 'utf8');
 const rootOwner = readFileSync('src/components/onboarding/PropertyLocationStep.tsx', 'utf8');
 const ownerApp = readFileSync('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx', 'utf8');
 const adminReview = readFileSync('functions/adminPropertyReview.ts', 'utf8');
@@ -15,8 +17,9 @@ const adminPage = readFileSync('apps/admin-panel/src/pages/admin/AdminPropertyAp
 const pinResolver = readFileSync('apps/admin-panel/src/lib/verifiedPropertyPin.ts', 'utf8');
 const tenantTickets = readFileSync('functions/tenantTicketOperations.ts', 'utf8');
 const ownerTickets = readFileSync('functions/ownerMaintenanceOperations.ts', 'utf8');
+const tenantPage = readFileSync('src/tenant/pages/TenantRequestPage.tsx', 'utf8');
 
-test('Founder review builds a versioned canonical geo contract and dispatch resolver rejects browser evidence', () => {
+ test('Founder review builds a versioned canonical geo contract and dispatch resolver rejects browser evidence', () => {
   const now = 1_720_000_000_000;
   const property = { submittedGeo: { lat: 24.2, lng: 55.3, address: 'Al Ain, UAE', emirate: 'Abu Dhabi', city: 'Al Ain', area: 'Central', source: 'owner_submission' } };
   const built = authority.buildFounderVerifiedPropertyGeo(property, 'founder_uid', now);
@@ -38,6 +41,8 @@ test('browser rules isolate canonical geo while retaining ordinary Owner and Adm
   assert.doesNotMatch(rules, /function safeManagedPropertyUpdate\(\)[\s\S]{0,300}propertyCreateHasNoCanonicalGeo/);
   assert.match(rules, /submittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
   assert.match(rules, /'properties',\s*'users'/);
+  assert.match(propertyHardener, /Browser property writes are evidence-only/);
+  assert.match(ticketHardener, /import '\.\/harden-property-geo-authority\.mjs'/);
   assert.match(hardener, /const legacyLiveLocationWriteList/);
   assert.match(hardener, /'technician_live_locations',\s*'properties',\s*'users'/);
 });
@@ -75,4 +80,15 @@ test('Admin map and all ticket callables require the same canonical verification
     assert.match(source, /SERVER_VERIFIED_PROPERTY_GEO/);
     assert.doesNotMatch(source, /property\.location \|\| property\.propertyLocation/);
   }
+});
+
+test('Tenant maintenance form uses the App Check callable and never submits browser coordinates', () => {
+  assert.match(tenantPage, /httpsCallable\(functions, 'createTenantServiceTicket'\)/);
+  assert.match(tenantPage, /kind: 'AI_CONCIERGE'/);
+  assert.match(tenantPage, /clientRequestId: stableClientRequestId\(\)/);
+  assert.match(tenantPage, /crypto\.randomUUID|crypto\.getRandomValues/);
+  assert.doesNotMatch(tenantPage, /addDoc\(collection\(db, 'maintenanceTickets'/);
+  assert.doesNotMatch(tenantPage, /jobLocation/);
+  assert.doesNotMatch(tenantPage, /latitude:\s*propertyLat|longitude:\s*propertyLng/);
+  assert.equal((rules.match(/allow create: if isAdmin\(\);/g) || []).length >= 2, true);
 });
