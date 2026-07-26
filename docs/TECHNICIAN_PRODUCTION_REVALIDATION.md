@@ -33,7 +33,7 @@ The protected Technician suite must prove all of the following against productio
 - the Technician uploads a new before-work image after arrival;
 - the server verifies the Storage object, content type, size, ticket metadata, Technician metadata and assignment;
 - PPE and safety confirmation precede `IN_PROGRESS`;
-- the first after-work upload request is deliberately failed and a later retry succeeds;
+- the browser loses connectivity during after-work evidence upload, reconnects, and completes the real Storage upload without Firebase route interception;
 - completion requests Tenant feedback;
 - an offline `EN_ROUTE` action enters the local queue and automatically replays after connectivity returns;
 - App Check, authenticated Firebase reads and same-SHA production provenance remain clean.
