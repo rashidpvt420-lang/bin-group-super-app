@@ -1,21 +1,19 @@
-﻿/**
+/**
  * Protected production Admin business proof.
  *
- * This suite deliberately performs real Firebase Auth, MFA, App Check-protected
- * callable operations and verifies their server-authoritative terminal state.
- * All records are run-scoped synthetic fixtures and are removed after the run.
+ * One real Firebase password + enrolled phone-MFA session executes the complete
+ * Admin responsibility chain. All fixtures are run-scoped synthetic records
+ * and are removed after the run.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Response } from '@playwright/test';
 import admin from 'firebase-admin';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
 const PASSWORD = String(process.env.E2E_ADMIN_PASSWORD || '').trim();
+const REAL_MFA_CODE = String(process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').trim().replace(/\/+$/, '');
-const MFA_RUNTIME_PATH = path.resolve(process.cwd(), process.env.E2E_ADMIN_MFA_RUNTIME_PATH || '.e2e-admin-mfa-runtime.json');
 const PROJECT_ID = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
 const STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'bin-group-57c60.firebasestorage.app';
 const RUN_ID = String(process.env.GITHUB_RUN_ID || `${Date.now()}-${randomBytes(3).toString('hex')}`).replace(/[^a-zA-Z0-9-]/g, '').slice(-42);
@@ -52,6 +50,7 @@ const BROKER_APPROVE_NAME = `E2E Broker Approve ${RUN_ID}`;
 const BROKER_REJECT_NAME = `E2E Broker Reject ${RUN_ID}`;
 const BROKER_SUBMISSION_HASH = createHash('sha256').update(`broker:${PREFIX}`).digest('hex');
 const BROKER_REJECT_HASH = createHash('sha256').update(`broker-reject:${PREFIX}`).digest('hex');
+const BROKER_RERA = `RERA${RUN_ID.replace(/[^a-zA-Z0-9]/g, '').slice(-12)}1`;
 const BROKER_IBAN = 'AE070331234567890123456';
 const BROKER_DOCUMENT_TYPES = ['rera_license', 'bank_details', 'broker_agreement', 'emirates_id'] as const;
 const BROKER_STORAGE_PATHS = BROKER_DOCUMENT_TYPES.map((type) => `brokerDocuments/${BROKER_APPROVE_ID}/${type}/${PREFIX}.pdf`);
@@ -68,15 +67,18 @@ let createdTechnicianUid = '';
 let createdSupportUid = '';
 
 const adminUrl = (pathname: string) => `${ADMIN_BASE_URL}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
-const now = () => admin.firestore.FieldValue.serverTimestamp();
+const serverTimestamp = () => admin.firestore.FieldValue.serverTimestamp();
 
 function requireLaunchCredentials() {
   const missing = [
     !EMAIL ? 'E2E_ADMIN_EMAIL' : '',
     !PASSWORD ? 'E2E_ADMIN_PASSWORD' : '',
-    !ADMIN_BASE_URL ? 'E2E_ADMIN_BASE_URL' : '',
+    !/^\d{6}$/.test(REAL_MFA_CODE) ? 'E2E_ADMIN_REAL_MFA_CODE' : '',
   ].filter(Boolean);
-  if (missing.length) throw new Error(`Missing ${missing.join(', ')}. Admin business proof cannot be skipped.`);
+  if (missing.length) throw new Error(`Missing or invalid ${missing.join(', ')}. Admin business proof cannot be skipped.`);
+  if (EMAIL !== 'ceo@bin-groups.com') {
+    throw new Error('The full Admin business proof requires the canonical Founder account because Owner property approval is Founder-only.');
+  }
 }
 
 function parseServiceAccount() {
@@ -104,46 +106,77 @@ function initializeAdminSdk() {
   });
 }
 
-function readProtectedMfaRuntime() {
-  const runtime = JSON.parse(readFileSync(MFA_RUNTIME_PATH, 'utf8'));
-  const code = String(runtime?.verificationCode || '').trim();
-  const phone = String(runtime?.phoneNumber || '').trim();
-  const evidenceSha = String(runtime?.evidenceSha || '').trim();
-  if (!/^\d{6}$/.test(code) || !/^\+1650555\d{4}$/.test(phone)) {
-    throw new Error('Protected E2E Admin MFA runtime is missing valid Firebase test-factor values.');
-  }
-  if (process.env.GITHUB_SHA && evidenceSha !== process.env.GITHUB_SHA) {
-    throw new Error('Protected E2E Admin MFA runtime does not match the exact evidence SHA.');
-  }
-  return { code };
+function isFirebasePasswordResponse(response: Response) {
+  return /identitytoolkit\.googleapis\.com\/v1\/accounts:signInWithPassword/.test(response.url());
+}
+
+async function collectDiagnostics(page: Page) {
+  const errors: string[] = [];
+  const failedRequests: string[] = [];
+  const failedScripts: string[] = [];
+  const pageErrors: string[] = [];
+
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('requestfailed', (request) => {
+    const line = `${request.method()} ${request.url()} — ${request.failure()?.errorText || 'failed'}`;
+    failedRequests.push(line);
+    if (request.resourceType() === 'script') failedScripts.push(line);
+  });
+
+  return async (authResponse?: Response | null) => ({
+    currentUrl: page.url(),
+    bodyText: (await page.locator('body').innerText().catch(() => '')).slice(0, 4_000),
+    firstPageError: pageErrors[0] || null,
+    consoleErrors: errors.slice(0, 20),
+    requestFailures: failedRequests.slice(0, 20),
+    failedScriptUrl: failedScripts[0] || null,
+    firebaseAuthStatus: authResponse?.status() || null,
+    firebaseAuthBody: authResponse ? (await authResponse.text().catch(() => '')).slice(0, 2_000) : null,
+  });
 }
 
 async function waitForLoader(page: Page) {
   await page.locator('.MuiCircularProgress-root').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => undefined);
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
 }
 
-async function login(page: Page) {
-  const mfa = readProtectedMfaRuntime();
-  await page.addInitScript(() => window.localStorage.setItem('bin-e2e-admin-mfa-test', 'enabled'));
-  await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
-  await expect(page.getByTestId('admin-login-email')).toBeVisible({ timeout: 20_000 });
-  await page.getByTestId('admin-login-email').fill(EMAIL);
-  await page.getByTestId('admin-login-password').fill(PASSWORD);
-  await page.getByTestId('admin-login-submit').click();
+async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<typeof collectDiagnostics>>) {
+  let authResponse: Response | null = null;
+  try {
+    await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText('AUTHENTICATING SOVEREIGN IDENTITY', { timeout: 20_000 });
+    await expect(page.getByTestId('admin-bootstrap-error')).not.toBeVisible({ timeout: 2_000 }).catch(() => undefined);
+    await expect(page.getByTestId('admin-login-email')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('admin-login-password')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('admin-login-submit')).toBeVisible({ timeout: 10_000 });
 
-  const challenge = page.getByTestId('admin-mfa-signin-challenge');
-  await expect(challenge, 'the protected E2E Admin must receive a real Firebase MFA challenge').toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('admin-mfa-send-signin-code').click();
-  await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('admin-mfa-signin-code').fill(mfa.code);
-  await page.getByTestId('admin-mfa-resolve-signin').click();
-  await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 45_000 });
-  await waitForLoader(page);
-  await expect(page.locator('body')).not.toContainText(
-    /permission-denied|missing or insufficient permissions|application error|minified react error|admin console could not start/i,
-    { timeout: 10_000 },
-  );
+    const responsePromise = page.waitForResponse(isFirebasePasswordResponse, { timeout: 30_000 });
+    await page.getByTestId('admin-login-email').fill(EMAIL);
+    await page.getByTestId('admin-login-password').fill(PASSWORD);
+    await page.getByTestId('admin-login-submit').click();
+    authResponse = await responsePromise;
+    expect(authResponse.status(), `Firebase Auth response: ${(await authResponse.text()).slice(0, 1_000)}`).toBeLessThan(400);
+
+    const challenge = page.getByTestId('admin-mfa-signin-challenge');
+    await expect(challenge, 'the canonical Founder must receive the real enrolled Firebase MFA challenge').toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('admin-mfa-send-signin-code').click();
+    await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('admin-mfa-signin-code').fill(REAL_MFA_CODE);
+    await page.getByTestId('admin-mfa-resolve-signin').click();
+
+    await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 45_000 });
+    await waitForLoader(page);
+    await expect(page.locator('body')).not.toContainText(
+      /permission-denied|missing or insufficient permissions|application error|minified react error|admin console could not start/i,
+      { timeout: 10_000 },
+    );
+  } catch (error) {
+    const evidence = await diagnostics(authResponse);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nAdmin auth diagnostics:\n${JSON.stringify(evidence, null, 2)}`);
+  }
 }
 
 async function findAuthUser(email: string) {
@@ -188,8 +221,8 @@ async function seedBrokerDocuments() {
       storagePath,
       status: 'pending_review',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
   }
 }
@@ -206,7 +239,7 @@ async function seedOperationalFixtures() {
       email: `${PREFIX}-review-owner@bin-groups.com`,
       status: 'ACTIVE',
       e2eRunId: RUN_ID,
-      createdAt: now(),
+      createdAt: serverTimestamp(),
     }),
     db.collection('properties').doc(APPROVE_PROPERTY_ID).set({
       name: APPROVE_PROPERTY_NAME,
@@ -218,8 +251,8 @@ async function seedOperationalFixtures() {
       address: 'Protected E2E approval fixture',
       status: 'pending_review',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
     db.collection('properties').doc(REJECT_PROPERTY_ID).set({
       name: REJECT_PROPERTY_NAME,
@@ -231,15 +264,15 @@ async function seedOperationalFixtures() {
       address: 'Protected E2E rejection fixture',
       status: 'pending_review',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
   ]);
 
   await Promise.all([
-    db.collection('users').doc(PAYMENT_OWNER_UID).set({ role: 'owner', email: `${PREFIX}-payment-owner@bin-groups.com`, status: 'pending', e2eRunId: RUN_ID, createdAt: now() }),
-    db.collection('owners').doc(PAYMENT_OWNER_UID).set({ role: 'owner', email: `${PREFIX}-payment-owner@bin-groups.com`, status: 'PENDING', e2eRunId: RUN_ID, createdAt: now() }),
-    db.collection('intake_submissions').doc(PAYMENT_ID).set({ ownerUid: PAYMENT_OWNER_UID, status: 'PENDING_APPROVAL', quoteHash: PAYMENT_QUOTE_HASH, e2eRunId: RUN_ID, createdAt: now() }),
+    db.collection('users').doc(PAYMENT_OWNER_UID).set({ role: 'owner', email: `${PREFIX}-payment-owner@bin-groups.com`, status: 'pending', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
+    db.collection('owners').doc(PAYMENT_OWNER_UID).set({ role: 'owner', email: `${PREFIX}-payment-owner@bin-groups.com`, status: 'PENDING', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
+    db.collection('intake_submissions').doc(PAYMENT_ID).set({ ownerUid: PAYMENT_OWNER_UID, status: 'PENDING_APPROVAL', quoteHash: PAYMENT_QUOTE_HASH, e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('contracts').doc(PAYMENT_ID).set({
       contractId: PAYMENT_ID,
       intakeId: PAYMENT_ID,
@@ -254,8 +287,8 @@ async function seedOperationalFixtures() {
       otpVerificationId: PAYMENT_OTP_ID,
       signatureState: { ownerSignatureName: PAYMENT_SIGNATURE },
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
     db.collection('contract_signature_otps').doc(PAYMENT_OTP_ID).set({
       status: 'VERIFIED',
@@ -264,8 +297,8 @@ async function seedOperationalFixtures() {
       contractHash: PAYMENT_QUOTE_HASH,
       consumedFor: PAYMENT_ID,
       signature: PAYMENT_SIGNATURE,
-      verifiedAt: now(),
-      consumedAt: now(),
+      verifiedAt: serverTimestamp(),
+      consumedAt: serverTimestamp(),
       e2eRunId: RUN_ID,
     }),
     db.collection('properties').doc(PAYMENT_PROPERTY_ID).set({
@@ -277,8 +310,8 @@ async function seedOperationalFixtures() {
       status: 'pending_approval',
       geo: { verified: true, dispatchReady: true, requiresGeoReview: false, lat: 25.2048, lng: 55.2708 },
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
     db.collection('payment_transactions').doc(PAYMENT_ID).set({
       paymentId: PAYMENT_ID,
@@ -306,15 +339,15 @@ async function seedOperationalFixtures() {
       otpVerificationId: PAYMENT_OTP_ID,
       signatureName: PAYMENT_SIGNATURE,
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
   ]);
 
   await Promise.all([
-    db.collection('users').doc(REJECT_PAYMENT_OWNER_UID).set({ role: 'owner', status: 'pending', e2eRunId: RUN_ID, createdAt: now() }),
-    db.collection('owners').doc(REJECT_PAYMENT_OWNER_UID).set({ role: 'owner', status: 'PENDING', e2eRunId: RUN_ID, createdAt: now() }),
-    db.collection('contracts').doc(REJECT_PAYMENT_ID).set({ ownerUid: REJECT_PAYMENT_OWNER_UID, status: 'pending_approval', e2eRunId: RUN_ID, createdAt: now() }),
+    db.collection('users').doc(REJECT_PAYMENT_OWNER_UID).set({ role: 'owner', status: 'pending', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
+    db.collection('owners').doc(REJECT_PAYMENT_OWNER_UID).set({ role: 'owner', status: 'PENDING', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
+    db.collection('contracts').doc(REJECT_PAYMENT_ID).set({ ownerUid: REJECT_PAYMENT_OWNER_UID, status: 'pending_approval', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).set({
       paymentId: REJECT_PAYMENT_ID,
       contractId: REJECT_PAYMENT_ID,
@@ -329,8 +362,8 @@ async function seedOperationalFixtures() {
       verificationState: 'PENDING_ADMIN',
       adminApprovalRequired: true,
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
   ]);
 
@@ -343,7 +376,7 @@ async function seedOperationalFixtures() {
       approvalStatus: 'PENDING',
       brokerKycStatus: 'PENDING_REVIEW',
       kycStatus: 'PENDING_REVIEW',
-      reraLicense: `RERA-${RUN_ID.slice(-8)}1`,
+      reraLicense: BROKER_RERA,
       emiratesIdNumber: '784-1990-1234567-1',
       bankName: 'E2E UAE Bank',
       bankAccountHolder: BROKER_APPROVE_NAME,
@@ -352,13 +385,13 @@ async function seedOperationalFixtures() {
       profileCompletionScore: 100,
       brokerProfileCompletion: 100,
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
     db.collection('broker_kyc_profiles').doc(BROKER_APPROVE_ID).set({
       submissionHash: BROKER_SUBMISSION_HASH,
       profileCompletionScore: 100,
-      reraLicense: `RERA-${RUN_ID.slice(-8)}1`,
+      reraLicense: BROKER_RERA,
       emiratesIdNumber: '784-1990-1234567-1',
       bankName: 'E2E UAE Bank',
       bankAccountHolder: BROKER_APPROVE_NAME,
@@ -366,8 +399,8 @@ async function seedOperationalFixtures() {
       commissionAgreementAccepted: true,
       brokerKycStatus: 'PENDING_REVIEW',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
     db.collection('users').doc(BROKER_REJECT_ID).set({
       role: 'broker',
@@ -376,24 +409,24 @@ async function seedOperationalFixtures() {
       status: 'PENDING',
       brokerKycStatus: 'PENDING_REVIEW',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
     db.collection('broker_kyc_profiles').doc(BROKER_REJECT_ID).set({
       submissionHash: BROKER_REJECT_HASH,
       brokerKycStatus: 'PENDING_REVIEW',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
   ]);
   await seedBrokerDocuments();
 
   await Promise.all([
-    db.collection('broker_commissions').doc(COMMISSION_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, amount: 1_250, currency: 'AED', status: 'APPROVED', payoutStatus: 'REQUESTED', payoutRequestId: PAYOUT_APPROVE_ID, e2eRunId: RUN_ID, createdAt: now() }),
-    db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: BROKER_APPROVE_NAME, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 1_250, currency: 'AED', commissionIds: [COMMISSION_APPROVE_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: now(), requestedAt: now() }),
-    db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, amount: 750, currency: 'AED', status: 'APPROVED', payoutStatus: 'REQUESTED', payoutRequestId: PAYOUT_REJECT_ID, e2eRunId: RUN_ID, createdAt: now() }),
-    db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: `E2E Payout Reject ${RUN_ID}`, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 750, currency: 'AED', commissionIds: [COMMISSION_REJECT_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: now(), requestedAt: now() }),
+    db.collection('broker_commissions').doc(COMMISSION_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, amount: 1_250, currency: 'AED', status: 'APPROVED', payoutStatus: 'REQUESTED', payoutRequestId: PAYOUT_APPROVE_ID, e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
+    db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: BROKER_APPROVE_NAME, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 1_250, currency: 'AED', commissionIds: [COMMISSION_APPROVE_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: serverTimestamp(), requestedAt: serverTimestamp() }),
+    db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, amount: 750, currency: 'AED', status: 'APPROVED', payoutStatus: 'REQUESTED', payoutRequestId: PAYOUT_REJECT_ID, e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
+    db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).set({ brokerId: BROKER_APPROVE_ID, brokerName: `E2E Payout Reject ${RUN_ID}`, brokerEmail: `${PREFIX}-broker-approve@bin-groups.com`, amount: 750, currency: 'AED', commissionIds: [COMMISSION_REJECT_ID], commissionCount: 1, status: 'PENDING_ADMIN_REVIEW', approvalStatus: 'PENDING', paymentStatus: 'REQUESTED', bankName: 'E2E UAE Bank', bankIban: BROKER_IBAN, e2eRunId: RUN_ID, createdAt: serverTimestamp(), requestedAt: serverTimestamp() }),
   ]);
 
   const readiness = {
@@ -416,12 +449,12 @@ async function seedOperationalFixtures() {
     currentJobCount: 0,
     maxConcurrentJobs: 3,
     e2eRunId: RUN_ID,
-    updatedAt: now(),
+    updatedAt: serverTimestamp(),
   };
   await Promise.all([
     db.collection('users').doc(SECOND_TECH_ID).set(readiness),
     db.collection('technicians').doc(SECOND_TECH_ID).set(readiness),
-    db.collection('properties').doc(TICKET_PROPERTY_ID).set({ name: `E2E Dispatch Property ${RUN_ID}`, status: 'ACTIVE', e2eRunId: RUN_ID, createdAt: now() }),
+    db.collection('properties').doc(TICKET_PROPERTY_ID).set({ name: `E2E Dispatch Property ${RUN_ID}`, status: 'ACTIVE', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('maintenanceTickets').doc(TICKET_ID).set({
       tenantId: `${PREFIX}-tenant`,
       propertyId: TICKET_PROPERTY_ID,
@@ -434,8 +467,8 @@ async function seedOperationalFixtures() {
       status: 'OPEN',
       priority: 'HIGH',
       e2eRunId: RUN_ID,
-      createdAt: now(),
-      updatedAt: now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     }),
   ]);
 }
@@ -460,16 +493,7 @@ async function cleanupOperationalFixtures() {
 
   await Promise.all(BROKER_DOCUMENT_TYPES.map((type) => db.collection('brokerDocuments').doc(`${PREFIX}-${type}`).delete().catch(() => undefined)));
   await Promise.all(BROKER_STORAGE_PATHS.map((storagePath) => admin.storage().bucket().file(storagePath).delete({ ignoreNotFound: true }).catch(() => undefined)));
-  await db.collection('invoice_registry').doc(createHash('sha256').update(JSON.stringify({
-    invoiceId: PAYMENT_INVOICE_ID,
-    paymentId: PAYMENT_ID,
-    contractId: PAYMENT_ID,
-    intakeId: PAYMENT_ID,
-    amount: PAYMENT_DEPOSIT,
-    currency: 'AED',
-    feeType: 'MOBILIZATION_DEPOSIT',
-    quoteHash: PAYMENT_QUOTE_HASH,
-  })).digest('hex')).delete().catch(() => undefined);
+  await deleteQuery('invoice_registry', 'entityId', PAYMENT_INVOICE_ID).catch(() => undefined);
 
   for (const [field, value] of [
     ['paymentId', PAYMENT_ID], ['paymentId', REJECT_PAYMENT_ID], ['targetId', APPROVE_PROPERTY_ID], ['targetId', REJECT_PROPERTY_ID],
@@ -488,8 +512,11 @@ async function createStaffThroughUi(page: Page, name: string, email: string, rol
   await dialog.getByLabel('Role').click();
   await page.getByRole('option', { name: new RegExp(roleLabel, 'i') }).click();
   await dialog.getByRole('button', { name: /CREATE & SEND INVITATION/i }).click();
-  await expect(dialog).not.toBeVisible({ timeout: 40_000 });
-  return expect.poll(async () => (await findAuthUser(email))?.uid || '', { timeout: 45_000 }).not.toBe('');
+  await expect(dialog).not.toBeVisible({ timeout: 45_000 });
+  await expect.poll(async () => Boolean(await findAuthUser(email)), { timeout: 45_000 }).toBe(true);
+  const user = await findAuthUser(email);
+  if (!user) throw new Error(`adminCreateUser did not create ${email}.`);
+  return user;
 }
 
 async function patchTechnicianReadiness(uid: string) {
@@ -511,7 +538,7 @@ async function patchTechnicianReadiness(uid: string) {
     currentJobCount: 0,
     maxConcurrentJobs: 3,
     e2eRunId: RUN_ID,
-    updatedAt: now(),
+    updatedAt: serverTimestamp(),
   };
   await Promise.all([
     admin.firestore().collection('users').doc(uid).set(readiness, { merge: true }),
@@ -519,9 +546,13 @@ async function patchTechnicianReadiness(uid: string) {
   ]);
 }
 
-test.describe('Admin protected operational business workflow', () => {
-  test.describe.configure({ mode: 'serial' });
+function payoutCard(page: Page, brokerName: string) {
+  return page.getByText(brokerName, { exact: true }).last().locator(
+    'xpath=ancestor::div[contains(@class,"MuiBox-root") and .//button][1]',
+  );
+}
 
+test.describe('Admin protected operational business workflow', () => {
   test.beforeAll(async () => {
     requireLaunchCredentials();
     initializeAdminSdk();
@@ -534,29 +565,21 @@ test.describe('Admin protected operational business workflow', () => {
     await cleanupOperationalFixtures();
   });
 
-  test.beforeEach(async ({ page }) => {
+  test('real MFA session proves Admin hard-launch responsibilities end to end', async ({ page }) => {
+    test.setTimeout(720_000);
+    const diagnostics = await collectDiagnostics(page);
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = monitor;
     await monitor.assertTokenFingerprint();
-    await login(page);
-  });
+    await loginWithRealMfa(page, diagnostics);
+    const db = admin.firestore();
 
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
-  });
-
-  test('adminCreateUser creates Staff and Technician with least-privilege custom claims', async ({ page }) => {
-    test.setTimeout(180_000);
+    // Staff and Technician creation through adminCreateUser, with least privilege.
     await page.goto(adminUrl('/hr'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
+    await page.getByTestId('admin-open-secure-staff-access').click();
     await expect(page.getByText('Staff Access Control')).toBeVisible({ timeout: 25_000 });
 
-    await createStaffThroughUi(page, SUPPORT_NAME, SUPPORT_EMAIL, 'Support Admin');
-    const supportUser = await expect.poll(async () => await findAuthUser(SUPPORT_EMAIL), { timeout: 45_000 }).toBeTruthy().then(() => findAuthUser(SUPPORT_EMAIL));
-    if (!supportUser) throw new Error('adminCreateUser did not create the Support Admin Auth identity.');
+    const supportUser = await createStaffThroughUi(page, SUPPORT_NAME, SUPPORT_EMAIL, 'Support Admin');
     createdSupportUid = supportUser.uid;
     expect(supportUser.customClaims?.role).toBe('support_admin');
     expect(supportUser.customClaims?.admin).toBe(false);
@@ -567,9 +590,7 @@ test.describe('Admin protected operational business workflow', () => {
     expect(supportUser.customClaims?.permissions?.canDispatchJobs).toBe(true);
     expect(supportUser.customClaims?.permissions?.canManageTechnicians).not.toBe(true);
 
-    await createStaffThroughUi(page, TECHNICIAN_NAME, TECHNICIAN_EMAIL, 'Technician');
-    const technicianUser = await expect.poll(async () => await findAuthUser(TECHNICIAN_EMAIL), { timeout: 45_000 }).toBeTruthy().then(() => findAuthUser(TECHNICIAN_EMAIL));
-    if (!technicianUser) throw new Error('adminCreateUser did not create the Technician Auth identity.');
+    const technicianUser = await createStaffThroughUi(page, TECHNICIAN_NAME, TECHNICIAN_EMAIL, 'Technician');
     createdTechnicianUid = technicianUser.uid;
     expect(technicianUser.customClaims?.role).toBe('technician');
     expect(technicianUser.customClaims?.technician).toBe(true);
@@ -577,61 +598,51 @@ test.describe('Admin protected operational business workflow', () => {
     expect(technicianUser.customClaims?.modules).toEqual([]);
 
     const [supportProfile, supportAccess, technicianProfile, technicianAccess] = await Promise.all([
-      admin.firestore().collection('users').doc(createdSupportUid).get(),
-      admin.firestore().collection('staffAccess').doc(createdSupportUid).get(),
-      admin.firestore().collection('users').doc(createdTechnicianUid).get(),
-      admin.firestore().collection('staffAccess').doc(createdTechnicianUid).get(),
+      db.collection('users').doc(createdSupportUid).get(),
+      db.collection('staffAccess').doc(createdSupportUid).get(),
+      db.collection('users').doc(createdTechnicianUid).get(),
+      db.collection('staffAccess').doc(createdTechnicianUid).get(),
     ]);
     expect(supportProfile.data()?.role).toBe('support_admin');
     expect(supportAccess.data()?.modules).toEqual(['dashboard', 'tenants', 'tickets']);
     expect(technicianProfile.data()?.role).toBe('technician');
     expect(technicianAccess.data()?.modules).toEqual([]);
     await patchTechnicianReadiness(createdTechnicianUid);
-  });
 
-  test('adminReviewOwnerProperty approves and rejects real pending Owner properties', async ({ page }) => {
-    test.setTimeout(150_000);
+    // Founder-only adminReviewOwnerProperty approval and rejection.
     await page.goto(adminUrl('/owners'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-
-    const approveRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
-    await expect(approveRow).toBeVisible({ timeout: 30_000 });
+    const approvePropertyRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
+    await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
     page.once('dialog', async (dialog) => dialog.accept());
-    await approveRow.getByRole('button', { name: 'Approve', exact: true }).click();
-    await expect.poll(async () => (await admin.firestore().collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 40_000 }).toBe('APPROVED');
+    await approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
+    await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
 
-    const rejectRow = page.getByRole('row').filter({ hasText: REJECT_PROPERTY_NAME }).first();
-    await expect(rejectRow).toBeVisible({ timeout: 30_000 });
-    await rejectRow.getByRole('button', { name: 'Reject', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Reject Property Submission' });
-    await dialog.getByLabel('Rejection Reason').fill('Protected E2E property evidence requires correction.');
-    page.once('dialog', async (browserDialog) => browserDialog.accept());
-    await dialog.getByRole('button', { name: 'Reject Property' }).click();
-    await expect.poll(async () => (await admin.firestore().collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 40_000 }).toBe('REJECTED');
+    const rejectPropertyRow = page.getByRole('row').filter({ hasText: REJECT_PROPERTY_NAME }).first();
+    await expect(rejectPropertyRow).toBeVisible({ timeout: 30_000 });
+    await rejectPropertyRow.getByRole('button', { name: 'Reject', exact: true }).click();
+    const propertyRejectDialog = page.getByRole('dialog', { name: 'Reject Property Submission' });
+    await propertyRejectDialog.getByLabel('Rejection Reason').fill('Protected E2E property evidence requires correction.');
+    page.once('dialog', async (dialog) => dialog.accept());
+    await propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
+    await expect.poll(async () => (await db.collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
 
-    const [approveAudit, rejectAudit] = await Promise.all([
-      admin.firestore().collection('audit_logs').where('targetId', '==', APPROVE_PROPERTY_ID).where('action', '==', 'APPROVE_PROPERTY').get(),
-      admin.firestore().collection('audit_logs').where('targetId', '==', REJECT_PROPERTY_ID).where('action', '==', 'REJECT_PROPERTY').get(),
-    ]);
-    expect(approveAudit.size).toBe(1);
-    expect(rejectAudit.size).toBe(1);
-  });
+    const propertyApprovalAudits = await db.collection('audit_logs').where('targetId', '==', APPROVE_PROPERTY_ID).get();
+    const propertyRejectionAudits = await db.collection('audit_logs').where('targetId', '==', REJECT_PROPERTY_ID).get();
+    expect(propertyApprovalAudits.docs.filter((doc) => doc.data().action === 'APPROVE_PROPERTY')).toHaveLength(1);
+    expect(propertyRejectionAudits.docs.filter((doc) => doc.data().action === 'REJECT_PROPERTY')).toHaveLength(1);
 
-  test('payment approval, rejection and exactly-once activation mutate all authoritative records', async ({ page }) => {
-    test.setTimeout(180_000);
+    // Payment approval, rejection and exactly-once activation.
     await page.goto(adminUrl('/payments'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-
     const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
     await expect(activationRow).toBeVisible({ timeout: 35_000 });
     await activationRow.getByRole('button', { name: /Verify & Unlock/i }).click();
     const approvalDialog = page.getByRole('dialog', { name: /Confirm Payment & Unlock Owner/i });
-    await expect(approvalDialog).toBeVisible();
-    const confirm = approvalDialog.getByRole('button', { name: /Confirm & Unlock Owner/i });
-    await expect(confirm).toBeEnabled();
-    await confirm.evaluate((node: HTMLElement) => { node.click(); node.click(); });
+    const confirmApproval = approvalDialog.getByRole('button', { name: /Confirm & Unlock Owner/i });
+    await expect(confirmApproval).toBeEnabled();
+    await confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); });
 
-    const db = admin.firestore();
     await expect.poll(async () => {
       const [payment, contract, intake, owner, property] = await Promise.all([
         db.collection('payment_transactions').doc(PAYMENT_ID).get(),
@@ -646,36 +657,32 @@ test.describe('Admin protected operational business workflow', () => {
     const [invoice, registry, approvalAudits] = await Promise.all([
       db.collection('invoices').doc(PAYMENT_INVOICE_ID).get(),
       db.collection('invoice_registry').where('entityId', '==', PAYMENT_INVOICE_ID).get(),
-      db.collection('audit_logs').where('action', '==', 'ADMIN_APPROVE_PAYMENT').where('paymentId', '==', PAYMENT_ID).get(),
+      db.collection('audit_logs').where('paymentId', '==', PAYMENT_ID).get(),
     ]);
     expect(invoice.exists).toBe(true);
     expect(invoice.data()?.status).toBe('PAID');
     expect(registry.size).toBe(1);
-    expect(approvalAudits.size, 'double invocation must remain idempotent and create one activation audit').toBe(1);
+    expect(approvalAudits.docs.filter((doc) => doc.data().action === 'ADMIN_APPROVE_PAYMENT'), 'idempotent double invocation must create one activation audit').toHaveLength(1);
 
     await page.goto(adminUrl('/payments'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    const rejectRow = page.getByRole('row').filter({ hasText: REJECT_PAYMENT_ID }).first();
-    await expect(rejectRow).toBeVisible({ timeout: 35_000 });
-    await rejectRow.getByRole('button', { name: /Reject \/ Return/i }).click();
-    const rejectDialog = page.getByRole('dialog', { name: /Return \/ Reject Payment Proof/i });
-    await rejectDialog.getByLabel('Return reason / admin review note').fill('Protected E2E payment evidence does not match the submitted reference.');
-    await rejectDialog.getByRole('button', { name: /Return \/ Reject/i }).click();
+    const rejectPaymentRow = page.getByRole('row').filter({ hasText: REJECT_PAYMENT_ID }).first();
+    await expect(rejectPaymentRow).toBeVisible({ timeout: 35_000 });
+    await rejectPaymentRow.getByRole('button', { name: /Reject \/ Return/i }).click();
+    const rejectPaymentDialog = page.getByRole('dialog', { name: /Return \/ Reject Payment Proof/i });
+    await rejectPaymentDialog.getByLabel('Return reason / admin review note').fill('Protected E2E payment evidence does not match the submitted reference.');
+    await rejectPaymentDialog.getByRole('button', { name: /Return \/ Reject/i }).click();
     await expect.poll(async () => (await db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
-  });
 
-  test('adminReviewBrokerKyc and adminReviewBrokerPayoutRequest execute approval, rejection and settlement', async ({ page }) => {
-    test.setTimeout(220_000);
-    const db = admin.firestore();
+    // adminReviewBrokerKyc and adminReviewBrokerPayoutRequest settlement chain.
     await page.goto(adminUrl('/broker'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-
     const approveBrokerRow = page.getByRole('row').filter({ hasText: BROKER_APPROVE_NAME }).first();
     await expect(approveBrokerRow).toBeVisible({ timeout: 35_000 });
     await approveBrokerRow.locator('button').nth(1).click();
-    const approveDialog = page.getByRole('dialog', { name: /Approve broker KYC/i });
-    await approveDialog.getByLabel('Review note').fill('Protected E2E KYC dossier verified against immutable Storage metadata.');
-    await approveDialog.getByRole('button', { name: 'Approve', exact: true }).click();
+    const approveKycDialog = page.getByRole('dialog', { name: /Approve broker KYC/i });
+    await approveKycDialog.getByLabel('Review note').fill('Protected E2E KYC dossier verified against immutable Storage metadata.');
+    await approveKycDialog.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => {
       const [publicProfile, privateProfile] = await Promise.all([
         db.collection('users').doc(BROKER_APPROVE_ID).get(),
@@ -692,31 +699,26 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectKycDialog.getByRole('button', { name: 'Reject', exact: true }).click();
     await expect.poll(async () => (await db.collection('users').doc(BROKER_REJECT_ID).get()).data()?.brokerKycStatus, { timeout: 45_000 }).toBe('REJECTED');
 
-    const payoutApproveCard = page.getByText(BROKER_APPROVE_NAME, { exact: true }).last().locator('xpath=ancestor::div[contains(@class,"MuiBox-root")][1]');
-    await expect(payoutApproveCard.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 35_000 });
-    await payoutApproveCard.getByRole('button', { name: 'Approve', exact: true }).click();
+    let approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
+    await expect(approvePayoutCard.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 35_000 });
+    await approvePayoutCard.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
-    const refreshedPayoutCard = page.getByText(BROKER_APPROVE_NAME, { exact: true }).last().locator('xpath=ancestor::div[contains(@class,"MuiBox-root")][1]');
+    approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     page.once('dialog', async (dialog) => dialog.accept(`E2E-PAYOUT-${RUN_ID}`));
-    await refreshedPayoutCard.getByRole('button', { name: /Mark paid/i }).click();
+    await approvePayoutCard.getByRole('button', { name: /Mark paid/i }).click();
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('PAID');
     expect((await db.collection('broker_commissions').doc(COMMISSION_APPROVE_ID).get()).data()?.status).toBe('PAID');
 
-    const payoutRejectCard = page.getByText(`E2E Payout Reject ${RUN_ID}`, { exact: true }).locator('xpath=ancestor::div[contains(@class,"MuiBox-root")][1]');
+    const rejectPayoutCard = payoutCard(page, `E2E Payout Reject ${RUN_ID}`);
     page.once('dialog', async (dialog) => dialog.accept('Protected E2E payout bank evidence requires correction.'));
-    await payoutRejectCard.getByRole('button', { name: 'Reject', exact: true }).click();
+    await rejectPayoutCard.getByRole('button', { name: 'Reject', exact: true }).click();
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
     expect((await db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).get()).data()?.payoutStatus).toBe('AVAILABLE');
-  });
 
-  test('adminAssignTechnician assigns and re-dispatches an active ticket with a server audit trail', async ({ page }) => {
-    test.setTimeout(180_000);
-    if (!createdTechnicianUid) throw new Error('The live Admin-created Technician is required for dispatch proof.');
-    const db = admin.firestore();
-
+    // adminAssignTechnician assignment and active-ticket re-dispatch.
     await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     let ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
@@ -726,25 +728,25 @@ test.describe('Admin protected operational business workflow', () => {
     await assignmentDialog.getByText(TECHNICIAN_NAME, { exact: true }).click();
     await expect.poll(async () => (await db.collection('maintenanceTickets').doc(TICKET_ID).get()).data()?.assignedTechnicianId, { timeout: 50_000 }).toBe(createdTechnicianUid);
 
-    await db.collection('maintenanceTickets').doc(TICKET_ID).set({ status: 'EN_ROUTE', updatedAt: now() }, { merge: true });
+    await db.collection('maintenanceTickets').doc(TICKET_ID).set({ status: 'EN_ROUTE', updatedAt: serverTimestamp() }, { merge: true });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
     await ticketRow.getByRole('button', { name: 'REASSIGN', exact: true }).click();
     const reassignDialog = page.getByRole('dialog', { name: /MANUAL SPECIALIST ASSIGNMENT/i });
     await reassignDialog.getByText(SECOND_TECH_NAME, { exact: true }).click();
-
     await expect.poll(async () => {
       const ticket = (await db.collection('maintenanceTickets').doc(TICKET_ID).get()).data() || {};
       return `${ticket.assignedTechnicianId}|${ticket.status}|${ticket.reassignmentReasonSource}`;
     }, { timeout: 50_000 }).toBe(`${SECOND_TECH_ID}|ASSIGNED|ADMIN_PORTAL_DEFAULT`);
 
-    const audits = await db.collection('audit_logs')
-      .where('action', '==', 'ADMIN_REASSIGN_READY_TECHNICIAN')
-      .where('ticketId', '==', TICKET_ID)
-      .get();
-    expect(audits.size).toBe(1);
-    expect(audits.docs[0].data()?.previousTechnicianId).toBe(createdTechnicianUid);
-    expect(audits.docs[0].data()?.technicianId).toBe(SECOND_TECH_ID);
+    const reassignAudits = await db.collection('audit_logs').where('ticketId', '==', TICKET_ID).get();
+    const reassignAudit = reassignAudits.docs.find((doc) => doc.data().action === 'ADMIN_REASSIGN_READY_TECHNICIAN');
+    expect(reassignAudit).toBeTruthy();
+    expect(reassignAudit?.data()?.previousTechnicianId).toBe(createdTechnicianUid);
+    expect(reassignAudit?.data()?.technicianId).toBe(SECOND_TECH_ID);
+
+    monitor.assertClean(test.info().title);
+    monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 });
