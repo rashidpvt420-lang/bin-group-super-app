@@ -227,14 +227,65 @@ const inferLegacyAuditTarget = (data: any) => {
   return { targetType: explicitTargetType, targetId: explicitTargetId };
 };
 
+const stableLegacyTicketRequestId = (data: any) => {
+  const supplied = String(data?.clientRequestId || '').trim();
+  if (/^[A-Za-z0-9._:-]{8,160}$/.test(supplied)) return supplied;
+  const randomPart =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  return `tenant_web_${randomPart}`;
+};
+
+const createLegacyTenantTicket = async (reference: any, data: any) => {
+  const unitId = String(data?.unitId || '').trim();
+  const propertyId = String(data?.propertyId || '').trim();
+  const category = String(data?.category || '').trim();
+  const priority = String(data?.priority || '').trim().toLowerCase();
+  const description = String(data?.description || '').trim();
+  const specificLocation = String(data?.specificLocation || data?.serviceLocationDetail || '').trim();
+  if (!unitId || !propertyId || !category || !description || !specificLocation) {
+    throw new Error('Tenant maintenance requests require unit, property, category, description, and exact service location.');
+  }
+
+  // Never forward jobLocation, propertyLocation, latitude, longitude, owner IDs,
+  // status, assignment, or SLA fields from the browser. The App Check-protected
+  // callable reads the bound property and writes canonical server-verified geo.
+  const createTenantServiceTicket = httpsCallable(functions, 'createTenantServiceTicket');
+  const response: any = await createTenantServiceTicket({
+    kind: 'AI_CONCIERGE',
+    unitId,
+    propertyId,
+    clientRequestId: stableLegacyTicketRequestId(data),
+    details: {
+      category,
+      priority,
+      description,
+      specificLocation,
+      photoEvidenceExpected: data?.photoEvidenceRequired === true,
+    },
+  });
+  const ticketId = String(response?.data?.ticketId || '').trim();
+  if (!ticketId) throw new Error('The server did not return a maintenance ticket ID.');
+  return doc(reference, ticketId);
+};
+
 /**
- * Compatibility bridge for legacy screens that still call addDoc() directly on
- * audit_logs/auditLogs. Security Rules deny those client writes by design, so
- * route them through the authenticated Cloud Function instead. All other
- * collections retain the native Firestore addDoc behavior.
+ * Compatibility bridge for legacy screens:
+ * - Tenant maintenance addDoc calls are converted into the App Check-protected
+ *   canonical ticket callable; browser-supplied coordinates are discarded.
+ * - audit_logs/auditLogs writes are converted into the authenticated audit
+ *   callable because Security Rules deny those client writes by design.
+ * All other collections retain native Firestore addDoc behavior.
  */
 const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
   const collectionPath = String(reference?.path || '');
+  const isLegacyTenantTicket =
+    collectionPath === 'maintenanceTickets' &&
+    String(data?.requesterRole || '').trim().toLowerCase() === 'tenant' &&
+    String(data?.source || '').trim().toUpperCase() === 'TENANT_PORTAL';
+  if (isLegacyTenantTicket) return createLegacyTenantTicket(reference, data);
+
   if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
     return firestoreAddDoc(reference, data);
   }
