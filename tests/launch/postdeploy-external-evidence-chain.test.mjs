@@ -25,6 +25,15 @@ const ordered = (source, fragments) => {
   }
 };
 
+const requireJobScopedOidc = (workflow) => {
+  const jobsIndex = workflow.indexOf('\njobs:');
+  assert.ok(jobsIndex >= 0, 'workflow jobs block is missing');
+  assert.doesNotMatch(workflow.slice(0, jobsIndex), /id-token:\s*write/);
+  assert.match(workflow.slice(jobsIndex), /permissions:[\s\S]*id-token:\s*write/);
+  assert.doesNotMatch(workflow, /ref:\s*\$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(workflow, /Checkout current main evidence commit/);
+};
+
 test('postdeploy chain is bound to a successful exact-main Firebase production workflow', async () => {
   const [workflow, dispatcher] = await Promise.all([read(paths.chain), read(paths.dispatcher)]);
   assert.match(workflow, /^name:\s*Postdeploy External Evidence Chain/m);
@@ -33,8 +42,11 @@ test('postdeploy chain is bound to a successful exact-main Firebase production w
   assert.match(workflow, /workflow_run\.conclusion == 'success'/);
   assert.match(workflow, /workflow_run\.event == 'workflow_dispatch'/);
   assert.match(workflow, /workflow_run\.head_branch == 'main'/);
-  assert.match(workflow, /actions:\s*write/);
-  assert.match(workflow, /ref:\s*\$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+  const jobsIndex = workflow.indexOf('\njobs:');
+  assert.doesNotMatch(workflow.slice(0, jobsIndex), /actions:\s*write/);
+  assert.match(workflow.slice(jobsIndex), /permissions:[\s\S]*actions:\s*write/);
+  assert.match(workflow, /Checkout current main orchestration commit/);
+  assert.doesNotMatch(workflow, /ref:\s*\$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
   assert.match(workflow, /if-no-files-found:\s*error/);
   assert.match(workflow, /if:\s*always\(\)/);
   assert.doesNotMatch(workflow, /pull_request_target|repository_dispatch/);
@@ -105,6 +117,7 @@ test('provider child retains protected environment and scopes operational author
   assert.match(workflow, /^\s{2}verify-and-publish:/m);
   assert.match(workflow, /name:\s*Verify and publish provider evidence/);
   assert.match(workflow, /environment:\s*hard-public-launch/);
+  requireJobScopedOidc(workflow);
   assert.match(workflow, /SOURCE_AUTHORIZED_FOUNDER_ACTORS:/);
   assert.doesNotMatch(workflow.slice(0, workflow.indexOf('steps:')), /\n\s+AUTHORIZED_FOUNDER_ACTORS:/);
   ordered(workflow, [
@@ -125,6 +138,7 @@ test('application child uses the validated canonical verifier and scopes Founder
   assert.match(workflow, /^name:\s*Operational Application Evidence/m);
   assert.match(workflow, /name:\s*Verify and publish application evidence/);
   assert.match(workflow, /environment:\s*hard-public-launch/);
+  requireJobScopedOidc(workflow);
   const steps = workflow.indexOf('\n    steps:');
   const evidence = workflow.indexOf('- name: Auto-discover, verify, and publish all application evidence');
   const upload = workflow.indexOf('- name: Upload deployment-triggered application proof batch');
@@ -149,6 +163,7 @@ test('rotation child proves real Admin authentication before publishing protecte
   assert.match(workflow, /^name:\s*Privileged Access Rotation Evidence/m);
   assert.match(workflow, /name:\s*Verify privileged access rotation/);
   assert.match(workflow, /environment:\s*hard-launch-operations/);
+  requireJobScopedOidc(workflow);
   ordered(workflow, [
     'Verify trusted parent production deployment',
     'Prove rotated Admin credential is accepted by Firebase Auth',
