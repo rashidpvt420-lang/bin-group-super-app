@@ -101,6 +101,14 @@ function hardenReviewedRoleSelfUpdates(rulesText) {
   return `${rulesText.slice(0, functionStart)}${block}${rulesText.slice(functionEnd)}`;
 }
 
+function matchBlock(rulesText, collectionName) {
+  const marker = `    match /${collectionName}/{ticketId} {`;
+  const start = rulesText.indexOf(marker);
+  if (start < 0) throw new Error(`[final-firestore-authority] ${collectionName} block missing`);
+  const next = rulesText.indexOf('\n    match /', start + marker.length);
+  return rulesText.slice(start, next < 0 ? rulesText.length : next);
+}
+
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
 await import('./optimize-current-main-technician-ticket-rule.mjs');
@@ -121,8 +129,6 @@ if (!text.includes(liveLocationReadCatchAll)) {
   throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR and live-location exclusions');
 }
 
-// These lists share prefixes, so detect the strictest state first. The output
-// must always exclude canonical live locations from generic browser writes.
 if (text.includes(liveLocationWriteList)) {
   // Already canonical.
 } else if (text.includes(legacyLiveLocationWriteList)) {
@@ -191,8 +197,19 @@ for (const fragment of required) {
   if (!text.includes(fragment)) throw new Error(`[final-firestore-authority] missing required fragment: ${fragment}`);
 }
 
-if (text.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) {
-  throw new Error('[final-firestore-authority] bounded ticket update gate must exist exactly twice');
+if (text.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 1) {
+  throw new Error('[final-firestore-authority] canonical maintenance ticket update gate must exist exactly once');
+}
+const legacyTicketBlock = matchBlock(text, 'tickets');
+if (!legacyTicketBlock.includes('allow create, update, delete: if false;')) {
+  throw new Error('[final-firestore-authority] legacy tickets must be read-only compatibility data');
+}
+if (legacyTicketBlock.includes('allow update: if safeTicketUpdateByActor();')) {
+  throw new Error('[final-firestore-authority] legacy tickets cannot retain the operational update gate');
+}
+const canonicalTicketBlock = matchBlock(text, 'maintenanceTickets');
+if (!canonicalTicketBlock.includes('allow update: if safeTicketUpdateByActor();')) {
+  throw new Error('[final-firestore-authority] canonical maintenance ticket update gate is missing');
 }
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[final-firestore-authority] shared ticket update router must exist exactly once');
@@ -231,4 +248,4 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-console.log('[final-firestore-authority] status-aware ticket authorization, server-only Admin security sessions, private HR and canonical live-location isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
+console.log('[final-firestore-authority] status-aware canonical ticket authorization, read-only legacy tickets, server-only Admin security sessions, private HR and canonical live-location isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
