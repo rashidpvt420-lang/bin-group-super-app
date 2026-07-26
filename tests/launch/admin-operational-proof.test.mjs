@@ -4,21 +4,29 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('protected Admin evidence uses only the enrolled real Firebase MFA factor', async () => {
-  const [runner, protectedRunner, login, challenge, spec] = await Promise.all([
+test('protected Admin evidence uses only enrolled real Firebase phone or TOTP factors', async () => {
+  const [runner, protectedRunner, login, challenge, helper, readiness, workflow] = await Promise.all([
     read('scripts/run-critical-evidence.mjs'),
     read('scripts/run-protected-business-evidence.mjs'),
     read('apps/admin-panel/src/components/UnifiedLogin.tsx'),
     read('apps/admin-panel/src/components/security/AdminMfaSignInChallenge.tsx'),
-    read('tests/e2e/business-admin.spec.ts'),
+    read('tests/e2e/helpers/adminMfa.ts'),
+    read('scripts/verify-founder-totp-readiness.mjs'),
+    read('.github/workflows/admin-production-evidence.yml'),
   ]);
   assert.match(login, /auth\/multi-factor-auth-required/);
   assert.match(login, /getMultiFactorResolver\(auth, err\)/);
   assert.match(challenge, /PhoneAuthProvider/);
+  assert.match(challenge, /TotpMultiFactorGenerator\.assertionForSignIn/);
   assert.match(challenge, /resolver\.resolveSignIn\(assertion\)/);
-  assert.match(spec, /E2E_ADMIN_REAL_MFA_CODE/);
+  assert.match(helper, /generateTotp/);
+  assert.match(runner, /E2E_FOUNDER_TOTP_SECRET/);
+  assert.match(readiness, /factorId\) === 'totp'/);
+  assert.match(readiness, /totpFactorCount:\s*1/);
+  assert.match(workflow, /Verify canonical Founder TOTP readiness/);
+  assert.match(workflow, /run-critical-evidence\.mjs --suite adminCredentialLogin/);
   assert.match(protectedRunner, /real_firebase_mfa_only=true/);
-  for (const source of [runner, protectedRunner, login, challenge, spec]) {
+  for (const source of [runner, protectedRunner, login, challenge, helper, readiness, workflow]) {
     assert.doesNotMatch(source, /appVerificationDisabledForTesting|testPhoneNumbers|fictional[- ]phone|signInWithCustomToken/);
   }
 });
