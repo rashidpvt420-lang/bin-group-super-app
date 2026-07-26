@@ -192,9 +192,10 @@ source = source.replace(
       contractOtpResubmissionMailboxMessageIdHash: resubmissionOtp.mailboxMessageIdHash,`,
 );
 
+const forbiddenRetrievalCall = ["callFunction(", "'retrieveContractSignatureOtpForTestEvidence'"].join('');
 for (const forbidden of [
   'for (let number = 0; number <= 999999; number += 1)',
-  "callFunction('retrieveContractSignatureOtpForTestEvidence'",
+  forbiddenRetrievalCall,
   'beforeData.testEvidence',
   'protected_test_callable',
 ]) {
