@@ -64,6 +64,8 @@ test('queue has retry, expiry, terminal and explicit saturation disposal policy'
   assert.match(tracking, /Explicitly disposed .* expired\/saturated queue actions/);
   assert.match(tracking, /entry\.status === 'TERMINAL'/);
   assert.match(tracking, /entry\.action === 'UPDATE'/);
+  assert.match(tracking, /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/);
+  assert.doesNotMatch(tracking, /if \(index < 0\) index = 0/);
 });
 
 test('precise retry data is UID-scoped, session-only and purged on account change/logout', () => {

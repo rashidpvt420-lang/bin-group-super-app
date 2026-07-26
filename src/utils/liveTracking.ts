@@ -328,9 +328,11 @@ function compactQueue(queue: QueuedTrackingAction[], nowMs = Date.now()) {
     const disposed: QueuedTrackingAction[] = [...expired];
 
     while (active.length > MAX_QUEUE_SIZE) {
-        let index = active.findIndex((entry) => entry.status === 'TERMINAL');
+        let index = active.findIndex((entry) => entry.status === 'TERMINAL' && entry.action === 'UPDATE');
         if (index < 0) index = active.findIndex((entry) => entry.action === 'UPDATE');
-        if (index < 0) index = 0;
+        if (index < 0) {
+            throw new Error('GPS_STOP_QUEUE_CAPACITY_EXCEEDED');
+        }
         const [removed] = active.splice(index, 1);
         if (removed) disposed.push(removed);
     }
