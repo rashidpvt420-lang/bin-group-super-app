@@ -1,0 +1,40 @@
+name: Apply Missing Ticket STOP Patch 696
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/missing-ticket-stop-696.yml
+      - .github/scripts/apply-missing-ticket-stop-696.py
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.number == 696 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/technician-gps-session-cas-main' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/technician-gps-session-cas-main
+          fetch-depth: 0
+      - name: Apply deterministic missing-ticket STOP patch
+        run: python .github/scripts/apply-missing-ticket-stop-696.py
+      - name: Commit reviewed changes and remove one-off patch machinery
+        run: |
+          set -euo pipefail
+          git rm .github/scripts/apply-missing-ticket-stop-696.py .github/workflows/missing-ticket-stop-696.yml
+          git add functions/technicianLiveLocation.ts tests/launch/technician-live-location-cas.test.mjs
+          git diff --cached --quiet && { echo '::error::Missing-ticket STOP patch produced no changes.'; exit 1; }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): reconcile exact STOP after ticket deletion'
+          git push origin HEAD:fix/technician-gps-session-cas-main
