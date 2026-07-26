@@ -20,6 +20,8 @@ test('bootstrap binds to stable exact main before and after the protected mutati
   assert.match(workflow, /first_sha=.*git\/ref\/heads\/main/);
   assert.match(workflow, /second_sha=.*git\/ref\/heads\/main/);
   assert.match(workflow, /\[\[ "\$second_sha" == "\$first_sha" \]\]/);
+  assert.match(workflow, /ref: main/);
+  assert.doesNotMatch(workflow, /ref: \$\{\{ needs\.authorize-owner-command\.outputs\.commit_sha \}\}/);
   assert.match(workflow, /checked_out_sha=.*git rev-parse HEAD/);
   assert.match(workflow, /\[\[ "\$checked_out_sha" == "\$EXPECTED_COMMIT_SHA" \]\]/);
   assert.match(workflow, /name: Reverify exact main after protected mutation/);
