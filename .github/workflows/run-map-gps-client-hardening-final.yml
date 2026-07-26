@@ -29,10 +29,14 @@ jobs:
             src/utils/gpsRetryQueue.ts \
             tests/launch/gps-stop-migration-source-contract.test.mjs \
             tests/launch/map-gps-state-behavior.test.mjs
+          python .github/scripts/prepare-map-gps-client-hardening-final.py
           python .github/scripts/build-map-gps-client-hardening-final.py
+          python .github/scripts/patch-technician-logout-order-final.py
           rm -f \
             .github/client-hardening-trigger \
             .github/scripts/build-map-gps-client-hardening-final.py \
+            .github/scripts/prepare-map-gps-client-hardening-final.py \
+            .github/scripts/patch-technician-logout-order-final.py \
             .github/workflows/build-map-gps-client-hardening-final.yml \
             .github/workflows/run-map-gps-client-hardening-final.yml
           git config user.name 'github-actions[bot]'
