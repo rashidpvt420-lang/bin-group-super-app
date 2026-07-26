@@ -40,7 +40,12 @@ function defaultSecretResolver(name, { env, projectId }) {
 }
 
 async function jsonRequest(fetchImpl, url, options, label) {
-  const response = await fetchImpl(url, options);
+  let response;
+  try {
+    response = await fetchImpl(url, options);
+  } catch {
+    throw new Error(`${label} failed before an HTTP response.`);
+  }
   let body = {};
   try {
     body = await response.json();
@@ -73,7 +78,7 @@ async function verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl })
     `${mailbox.label} mailbox profile verification`,
   );
   if (text(profile.emailAddress).toLowerCase() !== expectedEmail) {
-    throw new Error(`${mailbox.label} mailbox OAuth identity does not match ${mailbox.emailEnv}.`);
+    throw new Error(`${mailbox.label} mailbox OAuth identity does not match the configured mailbox.`);
   }
 
   await jsonRequest(
@@ -95,32 +100,73 @@ export async function runProductionOtpMailboxPreflight({
     throw new Error(`OTP/mailbox preflight must target ${EXPECTED_PROJECT_ID}.`);
   }
 
+  const blockers = [];
+  let peppersVerified = 0;
+  let mailboxesVerified = 0;
+
+  const resolveProtectedSecret = (name) => {
+    try {
+      const value = text(resolveSecret(name, { env, projectId }));
+      if (!value) {
+        blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
+      }
+      return value;
+    } catch {
+      blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
+      return '';
+    }
+  };
+
   for (const name of PEPPER_NAMES) {
-    const value = resolveSecret(name, { env, projectId });
-    if (value.length < 32) throw new Error(`${name} must contain at least 32 characters.`);
+    const value = resolveProtectedSecret(name);
+    if (!value) continue;
+    if (value.length < 32) {
+      blockers.push(`${name} must contain at least 32 characters.`);
+      continue;
+    }
+    peppersVerified += 1;
   }
 
   for (const mailbox of MAILBOXES) {
     const expectedEmail = text(env[mailbox.emailEnv]).toLowerCase();
-    if (!expectedEmail || !expectedEmail.includes('@')) {
-      throw new Error(`${mailbox.emailEnv} is required for protected mailbox verification.`);
+    const emailIsValid = Boolean(expectedEmail && expectedEmail.includes('@'));
+    if (!emailIsValid) {
+      blockers.push(`${mailbox.emailEnv} is required for protected mailbox verification.`);
     }
+
     const credentials = {
-      clientId: resolveSecret(mailbox.clientIdSecret, { env, projectId }),
-      clientSecret: resolveSecret(mailbox.clientSecretSecret, { env, projectId }),
-      refreshToken: resolveSecret(mailbox.refreshTokenSecret, { env, projectId }),
+      clientId: resolveProtectedSecret(mailbox.clientIdSecret),
+      clientSecret: resolveProtectedSecret(mailbox.clientSecretSecret),
+      refreshToken: resolveProtectedSecret(mailbox.refreshTokenSecret),
     };
-    if (!credentials.clientId || !credentials.clientSecret || !credentials.refreshToken) {
-      throw new Error(`${mailbox.label} mailbox OAuth credentials are incomplete.`);
+    if (!emailIsValid || !credentials.clientId || !credentials.clientSecret || !credentials.refreshToken) {
+      continue;
     }
-    await verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl });
+
+    try {
+      await verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl });
+      mailboxesVerified += 1;
+    } catch (error) {
+      const safeMessage = error instanceof Error && text(error.message)
+        ? text(error.message).replace(/[\r\n]+/g, ' ').slice(0, 320)
+        : `${mailbox.label} mailbox verification failed.`;
+      blockers.push(safeMessage);
+    }
+  }
+
+  const uniqueBlockers = [...new Set(blockers)];
+  if (uniqueBlockers.length > 0) {
+    const label = uniqueBlockers.length === 1 ? 'blocker' : 'blockers';
+    throw new Error(
+      `Protected OTP/mailbox preflight found ${uniqueBlockers.length} ${label}: ${uniqueBlockers.join(' | ')}`,
+    );
   }
 
   return {
     ok: true,
     projectId,
-    peppersVerified: PEPPER_NAMES.length,
-    mailboxesVerified: MAILBOXES.length,
+    peppersVerified,
+    mailboxesVerified,
     secretValuesLogged: false,
     hardLaunchClaim: false,
   };
