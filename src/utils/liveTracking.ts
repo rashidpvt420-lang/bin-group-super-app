@@ -4,9 +4,22 @@
  * Browser geolocation remains foreground-only. Every accepted coordinate is
  * sent to an App-Check protected callable that atomically updates the canonical
  * technician_live_locations document and its compatibility mirrors.
+ *
+ * Retry data is session-scoped, user-scoped and short-lived. Precise location
+ * is never written to localStorage and queued STOP actions are replayed before a
+ * new tracking session may start.
  */
 
-import { db, doc, functions, httpsCallable, serverTimestamp, setDoc } from '../lib/firebase';
+import {
+    auth,
+    db,
+    doc,
+    functions,
+    httpsCallable,
+    onAuthStateChanged,
+    serverTimestamp,
+    setDoc,
+} from '../lib/firebase';
 
 export interface GeoPoint {
     lat: number;
@@ -47,17 +60,36 @@ export type GpsReadiness = {
 };
 
 type StopTrackingStatus = TrackingStatus | 'PRESERVE';
+type QueueActionType = 'UPDATE' | 'STOP';
 type QueuedTrackingAction = {
-    action: 'UPDATE' | 'STOP';
+    id: string;
+    action: QueueActionType;
     ticketId: string;
     technicianUid: string;
     trackingSessionId: string;
     point?: GeoPoint;
+    finalStatus?: StopTrackingStatus;
     queuedAtMs: number;
+    expiresAtMs: number;
+    attemptCount: number;
+    lastAttemptAtMs?: number;
+    lastErrorCode?: string;
 };
 
-const QUEUE_KEY = 'bin-technician-gps-queue-v1';
+type FlushResult = {
+    sent: number;
+    retained: number;
+    discarded: number;
+    pendingStop: boolean;
+};
+
+const LEGACY_QUEUE_KEY = 'bin-technician-gps-queue-v1';
+const QUEUE_KEY = 'bin-technician-gps-queue-v2';
 const MAX_QUEUE_SIZE = 25;
+const MAX_RETRY_ATTEMPTS = 5;
+const UPDATE_TTL_MS = 2 * 60 * 1000;
+const STOP_TTL_MS = 30 * 60 * 1000;
+const CAPTURE_THROTTLE_MS = 10_000;
 
 const _state: TrackingState = {
     watchId: null,
@@ -67,6 +99,10 @@ const _state: TrackingState = {
     trackingSessionId: null,
     onlineHandler: null,
 };
+
+let onlineReplayInstalled = false;
+
+const text = (value: unknown) => String(value ?? '').trim();
 
 async function readGpsPermissionState(): Promise<PermissionState | 'unsupported' | 'unknown'> {
     try {
@@ -116,6 +152,7 @@ export function normalizeLocation(input: any): { lat: number; lng: number; latit
     const lat = Number(source.lat ?? source.latitude);
     const lng = Number(source.lng ?? source.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
     if (lat === 0 && lng === 0) return null;
     return { lat, lng, latitude: lat, longitude: lng };
 }
@@ -226,25 +263,120 @@ function createTrackingSessionId() {
     return `gps_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function readQueue(): QueuedTrackingAction[] {
-    if (typeof window === 'undefined') return [];
+function createQueueId() {
+    return `gpsq_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function queueStorage(): Storage | null {
+    if (typeof window === 'undefined') return null;
     try {
-        const value = JSON.parse(window.localStorage.getItem(QUEUE_KEY) || '[]');
-        return Array.isArray(value) ? value.filter((entry) => entry && typeof entry === 'object') : [];
+        return window.sessionStorage;
     } catch {
+        return null;
+    }
+}
+
+function purgeLegacyPersistentQueue() {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.removeItem(LEGACY_QUEUE_KEY);
+        window.localStorage.removeItem(QUEUE_KEY);
+    } catch {
+        // localStorage may be unavailable. No new queue data is written there.
+    }
+}
+
+function validQueuedAction(value: any, nowMs: number): value is QueuedTrackingAction {
+    const normalizedPoint = value?.point ? normalizeLocation(value.point) : null;
+    return Boolean(
+        value &&
+        typeof value === 'object' &&
+        ['UPDATE', 'STOP'].includes(value.action) &&
+        text(value.id) &&
+        text(value.ticketId) &&
+        text(value.technicianUid) &&
+        /^[A-Za-z0-9_-]{8,128}$/.test(text(value.trackingSessionId)) &&
+        Number.isFinite(value.queuedAtMs) &&
+        Number.isFinite(value.expiresAtMs) &&
+        value.expiresAtMs > nowMs &&
+        Number.isFinite(value.attemptCount) &&
+        value.attemptCount >= 0 &&
+        (value.action === 'STOP' || normalizedPoint),
+    );
+}
+
+function readQueue(): QueuedTrackingAction[] {
+    purgeLegacyPersistentQueue();
+    const storage = queueStorage();
+    if (!storage) return [];
+    try {
+        const nowMs = Date.now();
+        const value = JSON.parse(storage.getItem(QUEUE_KEY) || '[]');
+        const queue = Array.isArray(value) ? value.filter((entry) => validQueuedAction(entry, nowMs)) : [];
+        if (!Array.isArray(value) || queue.length !== value.length) writeQueue(queue);
+        return queue;
+    } catch {
+        storage.removeItem(QUEUE_KEY);
         return [];
     }
 }
 
-function writeQueue(queue: QueuedTrackingAction[]) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-MAX_QUEUE_SIZE)));
+function prioritizeQueue(queue: QueuedTrackingAction[]) {
+    const stops = queue.filter((entry) => entry.action === 'STOP').sort((a, b) => a.queuedAtMs - b.queuedAtMs);
+    const updates = queue.filter((entry) => entry.action === 'UPDATE').sort((a, b) => a.queuedAtMs - b.queuedAtMs);
+    if (stops.length >= MAX_QUEUE_SIZE) return stops.slice(-MAX_QUEUE_SIZE);
+    return [...stops, ...updates.slice(-(MAX_QUEUE_SIZE - stops.length))];
 }
 
-function enqueueAction(action: QueuedTrackingAction) {
+function writeQueue(queue: QueuedTrackingAction[]) {
+    const storage = queueStorage();
+    if (!storage) return;
+    const normalized = prioritizeQueue(queue);
+    if (normalized.length === 0) storage.removeItem(QUEUE_KEY);
+    else storage.setItem(QUEUE_KEY, JSON.stringify(normalized));
+}
+
+function minimalQueuedPoint(point: GeoPoint): GeoPoint {
+    return {
+        lat: point.lat,
+        lng: point.lng,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        accuracy: point.accuracy,
+        deviceTimestampMs: point.deviceTimestampMs,
+    };
+}
+
+function enqueueAction(input: Omit<QueuedTrackingAction, 'id' | 'expiresAtMs' | 'attemptCount'>) {
     const queue = readQueue();
-    queue.push(action);
-    writeQueue(queue);
+    const nowMs = Date.now();
+    let next = queue;
+
+    if (input.action === 'STOP') {
+        next = next.filter((entry) => !(
+            entry.technicianUid === input.technicianUid &&
+            entry.ticketId === input.ticketId &&
+            entry.trackingSessionId === input.trackingSessionId
+        ));
+    } else {
+        next = next.filter((entry) => !(
+            entry.action === 'UPDATE' &&
+            entry.technicianUid === input.technicianUid &&
+            entry.ticketId === input.ticketId &&
+            entry.trackingSessionId === input.trackingSessionId
+        ));
+    }
+
+    const action: QueuedTrackingAction = {
+        ...input,
+        point: input.point ? minimalQueuedPoint(input.point) : undefined,
+        id: createQueueId(),
+        expiresAtMs: nowMs + (input.action === 'STOP' ? STOP_TTL_MS : UPDATE_TTL_MS),
+        attemptCount: 0,
+    };
+    writeQueue([...next, action]);
+    ensureOnlineReplayListener();
+    return action;
 }
 
 function discardSessionUpdates(technicianUid: string, ticketId: string, trackingSessionId: string) {
@@ -256,9 +388,54 @@ function discardSessionUpdates(technicianUid: string, ticketId: string, tracking
     )));
 }
 
+function discardSessionStop(technicianUid: string, ticketId: string, trackingSessionId: string) {
+    writeQueue(readQueue().filter((entry) => !(
+        entry.action === 'STOP' &&
+        entry.technicianUid === technicianUid &&
+        entry.ticketId === ticketId &&
+        entry.trackingSessionId === trackingSessionId
+    )));
+}
+
+export function purgeTechnicianTrackingQueue(technicianUid?: string) {
+    const storage = queueStorage();
+    purgeLegacyPersistentQueue();
+    if (!storage) return;
+    if (!technicianUid) {
+        storage.removeItem(QUEUE_KEY);
+        return;
+    }
+    writeQueue(readQueue().filter((entry) => entry.technicianUid !== technicianUid));
+}
+
+function retainQueueForAuthenticatedTechnician(technicianUid: string) {
+    writeQueue(readQueue().filter((entry) => entry.technicianUid === technicianUid));
+}
+
+function safeErrorCode(error: any) {
+    const value = text(error?.code || error?.name || 'TRACKING_SYNC_FAILED').toUpperCase();
+    return value.replace(/[^A-Z0-9_/-]/g, '_').slice(0, 80) || 'TRACKING_SYNC_FAILED';
+}
+
+function terminalQueueFailure(error: any) {
+    const code = text(error?.code).toLowerCase();
+    return [
+        'functions/invalid-argument',
+        'functions/not-found',
+        'functions/permission-denied',
+        'functions/failed-precondition',
+    ].includes(code);
+}
+
 const publishLiveLocation = httpsCallable(functions, 'updateTechnicianLiveLocation');
 
 async function sendAction(action: QueuedTrackingAction) {
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid || currentUid !== action.technicianUid) {
+        const error = new Error('Authenticated Technician does not match queued GPS owner.');
+        (error as any).code = 'functions/permission-denied';
+        throw error;
+    }
     const point = action.point;
     await publishLiveLocation({
         action: action.action,
@@ -268,40 +445,106 @@ async function sendAction(action: QueuedTrackingAction) {
             latitude: point.latitude,
             longitude: point.longitude,
             accuracy: point.accuracy,
-            heading: point.heading,
-            speed: point.speed,
             deviceTimestampMs: point.deviceTimestampMs,
         } : {}),
     });
 }
 
-async function flushCurrentSessionQueue() {
-    const { technicianUid, activeTicketId, trackingSessionId } = _state;
-    if (!technicianUid || !activeTicketId || !trackingSessionId || typeof navigator === 'undefined' || !navigator.onLine) return;
+function pendingStopForUid(technicianUid: string) {
+    return readQueue().some((entry) => entry.technicianUid === technicianUid && entry.action === 'STOP');
+}
+
+export async function flushTechnicianTrackingQueue(technicianUid: string): Promise<FlushResult> {
+    if (!technicianUid || typeof navigator === 'undefined' || !navigator.onLine) {
+        return { sent: 0, retained: readQueue().length, discarded: 0, pendingStop: pendingStopForUid(technicianUid) };
+    }
 
     const queue = readQueue();
     const retained: QueuedTrackingAction[] = [];
-    let blocked = false;
+    let sent = 0;
+    let discarded = 0;
 
     for (const entry of queue) {
-        const isCurrentSession =
-            entry.technicianUid === technicianUid &&
-            entry.ticketId === activeTicketId &&
-            entry.trackingSessionId === trackingSessionId;
-        if (!isCurrentSession) continue;
-        if (blocked) {
+        if (entry.technicianUid !== technicianUid) {
+            retained.push(entry);
+            continue;
+        }
+        if (entry.action === 'STOP' && entry.attemptCount >= MAX_RETRY_ATTEMPTS) {
             retained.push(entry);
             continue;
         }
         try {
             await sendAction(entry);
-        } catch {
-            retained.push(entry);
-            blocked = true;
+            sent += 1;
+            if (entry.action === 'STOP') {
+                await persistTrackingDiagnostic(entry.technicianUid, entry.ticketId, {
+                    status: 'STOPPED',
+                    finalStatus: entry.finalStatus || 'PRESERVE',
+                    trackingSessionId: entry.trackingSessionId,
+                    stopReconciledAt: serverTimestamp(),
+                    queueActionId: entry.id,
+                    serverAcknowledged: true,
+                });
+            }
+        } catch (error) {
+            const nextAttempt = entry.attemptCount + 1;
+            const terminal = terminalQueueFailure(error) || nextAttempt >= MAX_RETRY_ATTEMPTS;
+            const failedEntry = {
+                ...entry,
+                attemptCount: Math.min(nextAttempt, MAX_RETRY_ATTEMPTS),
+                lastAttemptAtMs: Date.now(),
+                lastErrorCode: safeErrorCode(error),
+            };
+            if (terminal) {
+                await persistTrackingDiagnostic(entry.technicianUid, entry.ticketId, {
+                    status: entry.action === 'STOP' ? 'STOP_RECONCILIATION_FAILED' : 'LOCATION_SYNC_DISCARDED',
+                    trackingSessionId: entry.trackingSessionId,
+                    queueActionId: entry.id,
+                    retryCount: nextAttempt,
+                    failureCode: safeErrorCode(error),
+                    serverAcknowledged: false,
+                    failedAt: serverTimestamp(),
+                });
+                if (entry.action === 'STOP') retained.push(failedEntry);
+                else discarded += 1;
+                continue;
+            }
+            retained.push(failedEntry);
         }
     }
 
     writeQueue(retained);
+    return {
+        sent,
+        retained: retained.length,
+        discarded,
+        pendingStop: retained.some((entry) => entry.technicianUid === technicianUid && entry.action === 'STOP'),
+    };
+}
+
+function ensureOnlineReplayListener() {
+    if (typeof window === 'undefined' || onlineReplayInstalled) return;
+    const handler = () => {
+        const uid = auth.currentUser?.uid;
+        if (uid) void flushTechnicianTrackingQueue(uid);
+    };
+    window.addEventListener('online', handler);
+    onlineReplayInstalled = true;
+    _state.onlineHandler = handler;
+}
+
+if (typeof window !== 'undefined') {
+    purgeLegacyPersistentQueue();
+    ensureOnlineReplayListener();
+    onAuthStateChanged(auth, (user) => {
+        const nextUid = user?.uid || null;
+        if (!nextUid) {
+            purgeTechnicianTrackingQueue();
+        } else {
+            retainQueueForAuthenticatedTechnician(nextUid);
+            void flushTechnicianTrackingQueue(nextUid);
+        }
+    });
 }
 
 export const startLiveTracking = async (
@@ -316,6 +559,7 @@ export const startLiveTracking = async (
         readiness,
         startedAt: serverTimestamp(),
         trackingMode: 'FOREGROUND_BROWSER',
+        retryStorage: 'SESSION_SCOPED',
     });
 
     if (!navigator.geolocation) {
@@ -332,21 +576,39 @@ export const startLiveTracking = async (
         return;
     }
 
+    if (auth.currentUser?.uid !== technicianUid) {
+        const message = 'Authenticated Technician identity does not match the requested tracking session.';
+        await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'IDENTITY_MISMATCH', error: message });
+        onError?.(message);
+        return;
+    }
+
+    retainQueueForAuthenticatedTechnician(technicianUid);
+    const replay = await flushTechnicianTrackingQueue(technicianUid);
+    if (replay.pendingStop) {
+        const message = 'A previous GPS stop request is still waiting for server acknowledgement. Reconnect and retry before starting a new mission.';
+        await persistTrackingDiagnostic(technicianUid, ticketId, {
+            status: 'STOP_REQUEST_QUEUED',
+            pendingStopCount: readQueue().filter((entry) => entry.technicianUid === technicianUid && entry.action === 'STOP').length,
+            error: message,
+        });
+        onError?.(message);
+        return;
+    }
+
     if (_state.watchId !== null) navigator.geolocation.clearWatch(_state.watchId);
-    if (_state.onlineHandler) window.removeEventListener('online', _state.onlineHandler);
 
     _state.activeTicketId = ticketId;
     _state.technicianUid = technicianUid;
     _state.trackingSessionId = createTrackingSessionId();
     _state.lastPushTime = 0;
-    _state.onlineHandler = () => { void flushCurrentSessionQueue(); };
-    window.addEventListener('online', _state.onlineHandler);
-    await flushCurrentSessionQueue();
+    ensureOnlineReplayListener();
 
     _state.watchId = navigator.geolocation.watchPosition(
         async (position) => {
             const now = Date.now();
-            if (now - _state.lastPushTime < 10_000) return;
+            if (now - _state.lastPushTime < CAPTURE_THROTTLE_MS) return;
+            _state.lastPushTime = now;
 
             if (position.coords.accuracy <= 0 || position.coords.accuracy > 100) {
                 await persistTrackingDiagnostic(technicianUid, ticketId, {
@@ -368,26 +630,33 @@ export const startLiveTracking = async (
                 deviceTimestampMs: position.timestamp || now,
                 updatedAt: new Date(now).toISOString(),
             };
-            const action: QueuedTrackingAction = {
-                action: 'UPDATE',
+            const actionBase = {
+                action: 'UPDATE' as const,
                 ticketId,
                 technicianUid,
                 trackingSessionId: _state.trackingSessionId!,
                 point,
                 queuedAtMs: now,
             };
+            const immediateAction: QueuedTrackingAction = {
+                ...actionBase,
+                id: createQueueId(),
+                expiresAtMs: now + UPDATE_TTL_MS,
+                attemptCount: 0,
+            };
 
             try {
-                await flushCurrentSessionQueue();
-                await sendAction(action);
-                _state.lastPushTime = now;
+                await flushTechnicianTrackingQueue(technicianUid);
+                await sendAction(immediateAction);
                 onLocationUpdate?.(point);
             } catch (error) {
-                enqueueAction(action);
+                const queued = enqueueAction(actionBase);
                 await persistTrackingDiagnostic(technicianUid, ticketId, {
                     status: 'LOCATION_SYNC_QUEUED',
                     accuracy: position.coords.accuracy,
-                    error: String(error),
+                    failureCode: safeErrorCode(error),
+                    queueActionId: queued.id,
+                    queuedUntilMs: queued.expiresAtMs,
                     failedAt: serverTimestamp(),
                 });
                 onError?.('Location captured but waiting for a network-safe server sync.');
@@ -432,29 +701,48 @@ export const stopLiveTracking = async (
     const sessionId = _state.trackingSessionId;
 
     if (_state.watchId !== null && typeof navigator !== 'undefined') navigator.geolocation.clearWatch(_state.watchId);
-    if (_state.onlineHandler && typeof window !== 'undefined') window.removeEventListener('online', _state.onlineHandler);
 
     if (uid && activeTicketId && sessionId) {
         discardSessionUpdates(uid, activeTicketId, sessionId);
-        const stopAction: QueuedTrackingAction = {
-            action: 'STOP',
+        const nowMs = Date.now();
+        const stopBase = {
+            action: 'STOP' as const,
             ticketId: activeTicketId,
             technicianUid: uid,
             trackingSessionId: sessionId,
-            queuedAtMs: Date.now(),
+            finalStatus,
+            queuedAtMs: nowMs,
+        };
+        const immediateStop: QueuedTrackingAction = {
+            ...stopBase,
+            id: createQueueId(),
+            expiresAtMs: nowMs + STOP_TTL_MS,
+            attemptCount: 0,
         };
         try {
-            await sendAction(stopAction);
+            await sendAction(immediateStop);
+            discardSessionStop(uid, activeTicketId, sessionId);
+            await persistTrackingDiagnostic(uid, activeTicketId, {
+                status: 'STOPPED',
+                finalStatus,
+                trackingSessionId: sessionId,
+                stoppedAt: serverTimestamp(),
+                serverAcknowledged: true,
+            });
         } catch (error) {
-            enqueueAction(stopAction);
-            console.error('[Tracking] Stop state queued for server reconciliation:', error);
+            const queued = enqueueAction(stopBase);
+            await persistTrackingDiagnostic(uid, activeTicketId, {
+                status: 'STOP_REQUEST_QUEUED',
+                finalStatus,
+                trackingSessionId: sessionId,
+                queueActionId: queued.id,
+                queuedUntilMs: queued.expiresAtMs,
+                failureCode: safeErrorCode(error),
+                stopRequestedAt: serverTimestamp(),
+                serverAcknowledged: false,
+            });
+            console.warn('[Tracking] Stop request queued for server reconciliation.');
         }
-        await persistTrackingDiagnostic(uid, activeTicketId, {
-            status: 'STOPPED',
-            finalStatus,
-            trackingSessionId: sessionId,
-            stoppedAt: serverTimestamp(),
-        });
     }
 
     _state.watchId = null;
@@ -462,5 +750,4 @@ export const stopLiveTracking = async (
     _state.activeTicketId = null;
     _state.technicianUid = null;
     _state.trackingSessionId = null;
-    _state.onlineHandler = null;
 };
