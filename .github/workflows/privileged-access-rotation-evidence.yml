@@ -100,8 +100,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: privileged-access-rotation-${{ inputs.expected_commit_sha }}
-          path: |
-            launch_package/operational-proof.json
-            launch_package/admin-credential-login-proof.json
+          path: launch_package/operational-proof.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Upload Admin credential login proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-credential-login-${{ inputs.expected_commit_sha }}
+          path: launch_package/admin-credential-login-proof.json
           if-no-files-found: error
           retention-days: 365
