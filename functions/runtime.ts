@@ -17,6 +17,8 @@ export * from "./securePaymentApproval";
 export * from "./paymentConfiguration";
 export * from "./mailDelivery";
 export * from "./notificationDelivery";
+export * from "./technicianDispatchNotifications";
+export * from "./technicianBeforeWorkEvidence";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./adminUserProvisioning";
@@ -29,6 +31,7 @@ export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtp";
+export * from "./ownerOnboardingLifecycleEmail";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
 export * from "./profileP1Workflows";
@@ -59,6 +62,7 @@ export {
   listTechnicianCredentialRenewals,
 } from "./secureTechnicianProfileOperations";
 export { adminAssignTechnician } from "./secureAdminTechnicianAssignment";
+export { tenantRequestUnitLink } from "./secureTenantUnitLinkRequest";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
 export { submitBrokerKycProfile, getBrokerKycProfileSummary } from "./secureBrokerKycSubmission";
 export { adminReviewBrokerKyc } from "./secureBrokerKycReview";
