@@ -4,6 +4,7 @@ import {
   PhoneAuthProvider,
   PhoneMultiFactorGenerator,
   RecaptchaVerifier,
+  TotpMultiFactorGenerator,
 } from 'firebase/auth';
 import { KeyRound, MessageSquareText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { auth } from '../../lib/firebase';
@@ -25,12 +26,26 @@ const phoneValue = (hint: MultiFactorInfo) => {
   return candidate.phoneNumber || '';
 };
 
+const factorLabel = (hint: MultiFactorInfo, index: number) => {
+  if (hint.factorId === TotpMultiFactorGenerator.FACTOR_ID) {
+    return hint.displayName || `Authenticator app ${index + 1}`;
+  }
+  return `${hint.displayName || `Admin phone ${index + 1}`} ${maskPhone(phoneValue(hint))}`;
+};
+
 export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel }: Props) {
-  const phoneHints = React.useMemo(
-    () => resolver.hints.filter((hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID),
+  const supportedHints = React.useMemo(
+    () => resolver.hints.filter((hint) =>
+      hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID ||
+      hint.factorId === TotpMultiFactorGenerator.FACTOR_ID
+    ),
     [resolver],
   );
-  const [selectedUid, setSelectedUid] = React.useState(phoneHints[0]?.uid || '');
+  const defaultHint = React.useMemo(
+    () => supportedHints.find((hint) => hint.factorId === TotpMultiFactorGenerator.FACTOR_ID) || supportedHints[0],
+    [supportedHints],
+  );
+  const [selectedUid, setSelectedUid] = React.useState(defaultHint?.uid || '');
   const [verificationId, setVerificationId] = React.useState('');
   const [code, setCode] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -38,6 +53,10 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   const [notice, setNotice] = React.useState('');
   const verifierRef = React.useRef<RecaptchaVerifier | null>(null);
   const recaptchaId = 'admin-mfa-signin-recaptcha';
+
+  const selectedHint = supportedHints.find((hint) => hint.uid === selectedUid) || defaultHint;
+  const isTotp = selectedHint?.factorId === TotpMultiFactorGenerator.FACTOR_ID;
+  const isPhone = selectedHint?.factorId === PhoneMultiFactorGenerator.FACTOR_ID;
 
   const clearVerifier = () => {
     verifierRef.current?.clear();
@@ -47,6 +66,12 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   React.useEffect(() => () => {
     clearVerifier();
   }, []);
+
+  React.useEffect(() => {
+    if (!supportedHints.some((hint) => hint.uid === selectedUid)) {
+      setSelectedUid(defaultHint?.uid || '');
+    }
+  }, [defaultHint, selectedUid, supportedHints]);
 
   const clearChallenge = () => {
     clearVerifier();
@@ -71,9 +96,8 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   };
 
   const sendCode = async () => {
-    const hint = phoneHints.find((candidate) => candidate.uid === selectedUid) || phoneHints[0];
-    if (!hint) {
-      setError('No supported phone MFA factor is enrolled for this Admin account.');
+    if (!selectedHint || !isPhone) {
+      setError('Select an enrolled phone MFA factor before requesting an SMS code.');
       return;
     }
     setBusy(true);
@@ -85,15 +109,15 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       verifierRef.current = verifier;
       const provider = new PhoneAuthProvider(auth);
       const id = await provider.verifyPhoneNumber({
-        multiFactorHint: hint,
+        multiFactorHint: selectedHint,
         session: resolver.session,
       }, verifier);
       setVerificationId(id);
       setCode('');
       setNotice('Firebase sent an MFA code to the enrolled Admin phone.');
       // Keep the verifier alive until the challenge is resolved, reset or
-      // unmounted. Clearing it in this finally block can invalidate the
-      // asynchronous phone challenge before React exposes the code field.
+      // unmounted. Clearing it here can invalidate the phone challenge before
+      // the verification code is submitted.
     } catch (mfaError) {
       clearVerifier();
       setVerificationId('');
@@ -106,12 +130,16 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
   };
 
   const verifyCode = async () => {
-    if (!verificationId || !/^\d{6}$/.test(code)) return;
+    if (!selectedHint || !/^\d{6}$/.test(code)) return;
+    if (isPhone && !verificationId) return;
     setBusy(true);
     setError('');
     try {
-      const credential = PhoneAuthProvider.credential(verificationId, code);
-      const assertion = PhoneMultiFactorGenerator.assertion(credential);
+      const assertion = isTotp
+        ? TotpMultiFactorGenerator.assertionForSignIn(selectedHint.uid, code)
+        : PhoneMultiFactorGenerator.assertion(
+            PhoneAuthProvider.credential(verificationId, code),
+          );
       await resolver.resolveSignIn(assertion);
       clearVerifier();
       onResolved();
@@ -122,13 +150,15 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
     }
   };
 
-  if (!phoneHints.length) {
+  if (!supportedHints.length) {
     return (
       <div data-testid="admin-mfa-unsupported" className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
-        This Admin account has no supported phone MFA factor. Contact the security administrator.
+        This Admin account has no supported phone or authenticator-app MFA factor. Contact the security administrator.
       </div>
     );
   }
+
+  const showCodeInput = isTotp || Boolean(verificationId);
 
   return (
     <div data-testid="admin-mfa-signin-challenge" className="space-y-4">
@@ -136,36 +166,42 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
         <ShieldCheck className="w-5 h-5 text-[#C6A75E] shrink-0 mt-0.5" />
         <div>
           <div className="text-white font-black text-sm">Admin MFA required</div>
-          <div className="text-[#94a3b8] text-xs mt-1">Complete the enrolled Firebase second factor before the Admin portal opens.</div>
+          <div className="text-[#94a3b8] text-xs mt-1">Complete an enrolled Firebase second factor before the Admin portal opens.</div>
         </div>
       </div>
 
-      {phoneHints.length > 1 && (
+      {supportedHints.length > 1 && (
         <label className="block text-xs text-[#94a3b8] font-bold">
           Enrolled factor
           <select
             data-testid="admin-mfa-factor-select"
             value={selectedUid}
             onChange={(event) => {
-              setSelectedUid(event.target.value);
               clearChallenge();
+              setSelectedUid(event.target.value);
             }}
-            disabled={busy || Boolean(verificationId)}
+            disabled={busy}
             className="mt-2 w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white"
           >
-            {phoneHints.map((hint, index) => (
+            {supportedHints.map((hint, index) => (
               <option key={hint.uid} value={hint.uid}>
-                {hint.displayName || `Admin phone ${index + 1}`} {maskPhone(phoneValue(hint))}
+                {factorLabel(hint, index)}
               </option>
             ))}
           </select>
         </label>
       )}
 
+      {isTotp && (
+        <div data-testid="admin-mfa-totp-selected" className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-[#94a3b8]">
+          Enter the current 6-digit code from the enrolled authenticator app.
+        </div>
+      )}
+
       {error && <div data-testid="admin-mfa-signin-error" className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-bold">{error}</div>}
       {notice && <div data-testid="admin-mfa-signin-notice" className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 text-xs font-bold">{notice}</div>}
 
-      {!verificationId ? (
+      {isPhone && !verificationId && (
         <button
           data-testid="admin-mfa-send-signin-code"
           type="button"
@@ -175,7 +211,9 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
         >
           {busy ? 'Sending…' : <><MessageSquareText className="w-5 h-5" /> Send MFA code</>}
         </button>
-      ) : (
+      )}
+
+      {showCodeInput && (
         <div className="space-y-3">
           <label className="block text-xs text-[#94a3b8] font-bold">
             6-digit MFA code
@@ -199,15 +237,17 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
           >
             {busy ? 'Verifying…' : <><KeyRound className="w-5 h-5" /> Verify MFA and sign in</>}
           </button>
-          <button
-            data-testid="admin-mfa-resend-signin-code"
-            type="button"
-            onClick={clearChallenge}
-            disabled={busy}
-            className="w-full flex items-center justify-center gap-2 text-[#C6A75E] font-black py-2"
-          >
-            <RefreshCw className="w-4 h-4" /> Request another code
-          </button>
+          {isPhone && (
+            <button
+              data-testid="admin-mfa-resend-signin-code"
+              type="button"
+              onClick={clearChallenge}
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 text-[#C6A75E] font-black py-2"
+            >
+              <RefreshCw className="w-4 h-4" /> Request another code
+            </button>
+          )}
         </div>
       )}
 
