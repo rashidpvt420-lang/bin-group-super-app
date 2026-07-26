@@ -9,6 +9,10 @@ export type VerifiedPropertyPin = {
   verificationVersion: 1;
 };
 
+// Version 1 canonical pins are created only by the Founder-MFA review callable.
+// Keep the allowlist explicit so additional sources require a reviewed versioned contract.
+const ALLOWED_VERIFICATION_SOURCES = new Set(['admin_manual']);
+
 export const timestampMillis = (value: any): number | null => {
   if (!value) return null;
   if (typeof value.toMillis === 'function') return value.toMillis();
@@ -48,7 +52,8 @@ export const resolveVerifiedPropertyPin = (property: any): VerifiedPropertyPin |
   const verification = property.geoVerification;
   if (!propertyId || !geo || typeof geo !== 'object' || !verification || typeof verification !== 'object') return null;
   if (geo.verified !== true || geo.dispatchReady !== true || geo.requiresGeoReview === true) return null;
-  if (geo.source !== 'admin_manual' || Number(geo.verificationVersion) !== 1) return null;
+  if (!ALLOWED_VERIFICATION_SOURCES.has(String(geo.source || '').trim().toLowerCase())) return null;
+  if (Number(geo.verificationVersion) !== 1) return null;
   if (verification.state !== 'VERIFIED' || verification.source !== 'FOUNDER_MFA_REVIEW' || Number(verification.verificationVersion) !== 1) return null;
 
   const verifiedBy = String(geo.verifiedBy || '').trim();
@@ -71,7 +76,7 @@ export const resolveVerifiedPropertyPin = (property: any): VerifiedPropertyPin |
     propertyId,
     verifiedBy,
     verifiedAtMs,
-    source: geo.source,
+    source: String(geo.source).trim().toLowerCase(),
     verificationVersion: 1,
   };
 };
