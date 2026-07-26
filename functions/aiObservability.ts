@@ -7,11 +7,22 @@ const db = admin.firestore();
 
 export const AI_OPERATIONAL_SLO = Object.freeze({
   maxLiveLatencyMs: 20_000,
+  maxOutputTokensPerResponse: 700,
+  maxTotalTokensPerChatRequest: 5_000,
+  budgetEnvelopeAedPerMillionTokens: 40,
+  maxBudgetEnvelopeAedMicrosPerChatRequest: 200_000,
   minLiveProviderSuccessRate: 0.95,
   maxFallbackRate: 0.05,
   maxInvalidOutputRate: 0.01,
   maxFunctionErrorRate: 0.01,
 });
+
+export type AiProviderUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  budgetEnvelopeAedMicros: number;
+};
 
 type AiOutcome = "live-success" | "degraded-fallback" | "function-error";
 
@@ -23,6 +34,7 @@ type AiOperationalMetric = {
   redactionCount?: number;
   providerFailureCount?: number;
   invalidOutputCount?: number;
+  usage?: AiProviderUsage;
   quotaCharged: boolean;
 };
 
@@ -46,11 +58,19 @@ function latencyBucket(latencyMs: number) {
   return "latencyGt20s";
 }
 
+function safeCounter(value: unknown, max = 10_000_000) {
+  return Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
+}
+
 export async function recordAiOperationalMetric(metric: AiOperationalMetric) {
   try {
-    const latencyMs = Math.max(0, Math.min(120_000, Math.round(Number(metric.latencyMs) || 0)));
+    const latencyMs = safeCounter(metric.latencyMs, 120_000);
     const providerKey = providerMetricKey(metric.provider);
     const bucket = latencyBucket(latencyMs);
+    const inputTokens = safeCounter(metric.usage?.inputTokens);
+    const outputTokens = safeCounter(metric.usage?.outputTokens);
+    const totalTokens = safeCounter(metric.usage?.totalTokens);
+    const budgetEnvelopeAedMicros = safeCounter(metric.usage?.budgetEnvelopeAedMicros, 100_000_000);
     const ref = db.collection("ai_health_daily").doc(metricDay());
     await ref.set({
       day: metricDay(),
@@ -58,16 +78,31 @@ export async function recordAiOperationalMetric(metric: AiOperationalMetric) {
       liveSuccesses: FieldValue.increment(metric.outcome === "live-success" ? 1 : 0),
       degradedFallbacks: FieldValue.increment(metric.outcome === "degraded-fallback" ? 1 : 0),
       functionErrors: FieldValue.increment(metric.outcome === "function-error" ? 1 : 0),
-      providerFailures: FieldValue.increment(Math.max(0, Number(metric.providerFailureCount) || 0)),
-      invalidOutputs: FieldValue.increment(Math.max(0, Number(metric.invalidOutputCount) || 0)),
-      redactionsApplied: FieldValue.increment(Math.max(0, Number(metric.redactionCount) || 0)),
+      providerFailures: FieldValue.increment(safeCounter(metric.providerFailureCount)),
+      invalidOutputs: FieldValue.increment(safeCounter(metric.invalidOutputCount)),
+      redactionsApplied: FieldValue.increment(safeCounter(metric.redactionCount)),
       quotaCharged: FieldValue.increment(metric.quotaCharged ? 1 : 0),
       quotaReleased: FieldValue.increment(metric.quotaCharged ? 0 : 1),
+      inputTokens: FieldValue.increment(inputTokens),
+      outputTokens: FieldValue.increment(outputTokens),
+      totalTokens: FieldValue.increment(totalTokens),
+      budgetEnvelopeAedMicros: FieldValue.increment(budgetEnvelopeAedMicros),
+      tokenSamples: FieldValue.increment(totalTokens > 0 ? 1 : 0),
+      tokenBudgetBreaches: FieldValue.increment(
+        totalTokens > AI_OPERATIONAL_SLO.maxTotalTokensPerChatRequest
+          || outputTokens > AI_OPERATIONAL_SLO.maxOutputTokensPerResponse
+          ? 1
+          : 0,
+      ),
+      costEnvelopeBreaches: FieldValue.increment(
+        budgetEnvelopeAedMicros > AI_OPERATIONAL_SLO.maxBudgetEnvelopeAedMicrosPerChatRequest ? 1 : 0,
+      ),
       latencyTotalMs: FieldValue.increment(latencyMs),
       latencySamples: FieldValue.increment(1),
       [bucket]: FieldValue.increment(1),
       [`${providerKey}Requests`]: FieldValue.increment(1),
       [`${providerKey}LiveSuccesses`]: FieldValue.increment(metric.outcome === "live-success" ? 1 : 0),
+      [`${providerKey}TotalTokens`]: FieldValue.increment(totalTokens),
       [`${metric.capability}Requests`]: FieldValue.increment(1),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
