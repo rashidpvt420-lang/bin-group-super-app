@@ -19,8 +19,23 @@ export function isValidOwnerContractOtpPepper(value) {
 
 export function classifyOwnerSecretAccessFailure(output) {
   const safe = text(output).toLowerCase();
-  if (/not[_ -]?found|does not exist|could not find|404/.test(safe)) return 'missing';
+  if (/permission[_ -]?denied|forbidden|unauthenticated|not authorized|access denied|\b403\b/.test(safe)) {
+    return 'inaccessible';
+  }
+  if (
+    /not[_ -]?found|does not exist|could not find|\b404\b|does not have any versions|no (?:enabled )?versions|versions\/latest.*not found|secret version.*not found/.test(safe)
+  ) {
+    return 'missing';
+  }
   return 'inaccessible';
+}
+
+export function chooseOwnerContractOtpPepperAction({ secretExists, accessStatus, currentValue }) {
+  if (accessStatus === 'inaccessible') return 'fail-inaccessible';
+  if (accessStatus === 'available' && isValidOwnerContractOtpPepper(currentValue)) return 'unchanged';
+  if (!secretExists) return 'created';
+  if (accessStatus === 'available') return 'rotated-invalid-value';
+  return 'added-missing-version';
 }
 
 function gcloudCommand(args, { env = process.env, input } = {}) {
@@ -127,22 +142,26 @@ export async function bootstrapOwnerContractOtpPepper({ env = process.env } = {}
 
   try {
     const describedState = describeSecret({ env });
+    const secretExists = describedState === 'available';
     previousState = describedState;
 
     let existing = { status: describedState, value: '' };
-    if (describedState === 'available') {
+    if (secretExists) {
       existing = accessSecret({ env });
       previousState = existing.status;
     }
 
-    if (existing.status === 'available' && isValidOwnerContractOtpPepper(existing.value)) {
-      action = 'unchanged';
-    } else {
-      if (existing.status === 'inaccessible') {
-        throw new Error('SECRET_ACCESS_DENIED_OR_UNAVAILABLE');
-      }
+    action = chooseOwnerContractOtpPepperAction({
+      secretExists,
+      accessStatus: existing.status,
+      currentValue: existing.value,
+    });
 
-      action = existing.status === 'available' ? 'rotated-invalid-value' : 'created';
+    if (action === 'fail-inaccessible') {
+      throw new Error('SECRET_ACCESS_DENIED_OR_UNAVAILABLE');
+    }
+
+    if (action !== 'unchanged') {
       const generated = randomBytes(48).toString('base64url');
       if (!isValidOwnerContractOtpPepper(generated)) throw new Error('GENERATED_SECRET_TOO_SHORT');
 
