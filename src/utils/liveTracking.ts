@@ -75,6 +75,10 @@ type LiveTrackingAction = {
     point?: GeoPoint | QueuedGpsAction['point'];
     queuedAtMs: number;
 };
+type LiveTrackingActionResult = {
+    superseded: boolean;
+    alreadyStopped: boolean;
+};
 
 const CAPTURE_INTERVAL_MS = 10_000;
 
@@ -250,9 +254,9 @@ function createTrackingSessionId() {
 
 const publishLiveLocation = httpsCallable(functions, 'updateTechnicianLiveLocation');
 
-async function sendAction(action: LiveTrackingAction | QueuedGpsAction) {
+async function sendAction(action: LiveTrackingAction | QueuedGpsAction): Promise<LiveTrackingActionResult> {
     const point = action.point;
-    await publishLiveLocation({
+    const response = await publishLiveLocation({
         action: action.action,
         ticketId: action.ticketId,
         trackingSessionId: action.trackingSessionId,
@@ -265,6 +269,11 @@ async function sendAction(action: LiveTrackingAction | QueuedGpsAction) {
             deviceTimestampMs: point.deviceTimestampMs,
         } : {}),
     });
+    const data = (response as { data?: { superseded?: unknown; alreadyStopped?: unknown } }).data || {};
+    return {
+        superseded: data.superseded === true,
+        alreadyStopped: data.alreadyStopped === true,
+    };
 }
 
 function detachOnlineRecovery() {
@@ -279,7 +288,9 @@ async function replayForTechnician(technicianUid: string, ticketIdForDiagnostic?
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return { attempted: 0, succeeded: 0, failed: 0, terminal: 0, pendingStops: hasPendingGpsStop(technicianUid) ? 1 : 0 };
     }
-    const result = await replayGpsRetryQueue(technicianUid, sendAction);
+    const result = await replayGpsRetryQueue(technicianUid, async (entry) => {
+        await sendAction(entry);
+    });
     if (ticketIdForDiagnostic && result.succeeded > 0) {
         await persistTrackingDiagnostic(technicianUid, ticketIdForDiagnostic, {
             status: result.pendingStops > 0 ? 'STOP_RECONCILIATION_PENDING' : 'QUEUED_ACTIONS_RECONCILED',
@@ -350,8 +361,6 @@ export const startLiveTracking = async (
     if (_state.watchId !== null) navigator.geolocation.clearWatch(_state.watchId);
     detachOnlineRecovery();
     removeLegacyGpsQueue();
-    // Account change is an explicit privacy disposal boundary. Entries for a
-    // different identity are removed rather than silently exposed or replayed.
     purgeGpsQueuesExceptTechnician(technicianUid);
     installOnlineRecovery(technicianUid, ticketId);
 
@@ -388,8 +397,6 @@ export const startLiveTracking = async (
                 return;
             }
 
-            // Advance the capture clock before network work so an outage cannot
-            // flood the queue with browser callbacks.
             _state.lastPushTime = now;
             const sessionId = _state.trackingSessionId;
             if (!sessionId) return;
@@ -478,6 +485,7 @@ export const stopLiveTracking = async (
     if (_state.watchId !== null && typeof navigator !== 'undefined') navigator.geolocation.clearWatch(_state.watchId);
 
     let stopAcknowledged = false;
+    let stopSuperseded = false;
     if (uid && activeTicketId && sessionId) {
         discardQueuedSessionUpdates(uid, activeTicketId, sessionId);
         const stopAction: LiveTrackingAction = {
@@ -488,8 +496,9 @@ export const stopLiveTracking = async (
             queuedAtMs: Date.now(),
         };
         try {
-            await sendAction(stopAction);
-            stopAcknowledged = true;
+            const response = await sendAction(stopAction);
+            stopSuperseded = response.superseded;
+            stopAcknowledged = !stopSuperseded;
         } catch (error) {
             enqueueGpsRetryAction({
                 action: 'STOP',
@@ -502,7 +511,14 @@ export const stopLiveTracking = async (
             console.error('[Tracking] Stop state queued for server reconciliation:', error);
         }
 
-        await persistTrackingDiagnostic(uid, activeTicketId, stopAcknowledged ? {
+        const diagnostic = stopSuperseded ? {
+            status: 'STOP_SUPERSEDED_RECONCILED',
+            finalStatus,
+            trackingSessionId: sessionId,
+            reconciledAt: serverTimestamp(),
+            serverAcknowledged: true,
+            canonicalSessionUnchanged: true,
+        } : stopAcknowledged ? {
             status: 'STOPPED',
             finalStatus,
             trackingSessionId: sessionId,
@@ -515,7 +531,8 @@ export const stopLiveTracking = async (
             stopRequestedAt: serverTimestamp(),
             serverAcknowledged: false,
             requiresReconciliation: true,
-        });
+        };
+        await persistTrackingDiagnostic(uid, activeTicketId, diagnostic);
     }
 
     _state.watchId = null;
@@ -523,5 +540,5 @@ export const stopLiveTracking = async (
     _state.activeTicketId = null;
     _state.technicianUid = null;
     _state.trackingSessionId = null;
-    if (stopAcknowledged || !uid) detachOnlineRecovery();
+    if (stopAcknowledged || stopSuperseded || !uid) detachOnlineRecovery();
 };
