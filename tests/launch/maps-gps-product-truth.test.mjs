@@ -17,12 +17,24 @@ const packageJson = JSON.parse(read('package.json'));
 const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
 const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
 
-test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
+test('Admin operational map renders only authoritative verified property pins and fresh canonical GPS', () => {
   assert.match(adminMap, /loadAdminGoogleMaps\(\)/);
   assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
-  assert.match(adminMap, /data-testid="admin-live-google-map"/);
+  assert.match(adminMap, /collection\(db, 'properties'\)/);
+  assert.match(adminMap, /function verifiedPinContract|const verifiedPinContract/);
+  assert.match(adminMap, /verification\.verified === true/);
+  assert.match(adminMap, /dispatchReady === true/);
+  assert.match(adminMap, /verifiedAtMs === null/);
+  assert.match(adminMap, /!verifiedBy \|\| !captureSource \|\| !verificationId/);
+  assert.match(adminMap, /IMMUTABLE_DISPATCH_SNAPSHOT/);
+  assert.match(adminMap, /A coordinate is recorded but unverified/);
+  assert.match(adminMap, /it is not displayed on the dispatch map/);
+  assert.match(adminMap, /setInterval\(\(\) => setNowMs\(Date\.now\(\)\), LIVE_LOCATION_CLOCK_MS\)/);
+  assert.match(adminMap, /\[liveLocations, nowMs\]/);
   assert.match(adminMap, /No markers have been fabricated/);
+  assert.match(adminMap, /data-testid="admin-live-google-map"/);
   assert.match(adminMap, /onSnapshot\([\s\S]*setLocationsError/);
+  assert.doesNotMatch(adminMap, /Open verified pin/);
   assert.doesNotMatch(adminMap, /AI Autonomous|AI INTERCEPTING|Marina Bridges|DUBAI-HQ|Streaming live telemetry/i);
   assert.doesNotMatch(adminMap, /55\.12|55\.42|25\.3 - loc\.lat|const positions = \[/);
   assert.doesNotMatch(adminMap, /Auto-SMS Triggered/);
@@ -70,11 +82,40 @@ test('Owner and Tenant tracking card identifies schematic and freshness limitati
   assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
 });
 
-test('Technician GPS client uses the protected callable and retains a bounded retry queue', () => {
+test('Technician GPS retry queue is durable across reload, user-scoped, bounded and privacy-safe', () => {
   assert.match(liveTracking, /httpsCallable\(functions, 'updateTechnicianLiveLocation'\)/);
-  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
+  assert.match(liveTracking, /QUEUE_KEY = 'bin-technician-gps-queue-v2'/);
+  assert.match(liveTracking, /LEGACY_QUEUE_KEY = 'bin-technician-gps-queue-v1'/);
+  assert.match(liveTracking, /window\.sessionStorage/);
+  assert.match(liveTracking, /window\.localStorage\.removeItem\(LEGACY_QUEUE_KEY\)/);
+  assert.doesNotMatch(liveTracking, /window\.localStorage\.setItem/);
   assert.match(liveTracking, /MAX_QUEUE_SIZE = 25/);
+  assert.match(liveTracking, /MAX_RETRY_ATTEMPTS = 5/);
+  assert.match(liveTracking, /UPDATE_TTL_MS = 2 \* 60 \* 1000/);
+  assert.match(liveTracking, /STOP_TTL_MS = 30 \* 60 \* 1000/);
+  const minimalPointStart = liveTracking.indexOf('function minimalQueuedPoint');
+  const enqueueStart = liveTracking.indexOf('function enqueueAction', minimalPointStart);
+  assert.ok(minimalPointStart >= 0 && enqueueStart > minimalPointStart);
+  const minimalPointSource = liveTracking.slice(minimalPointStart, enqueueStart);
+  assert.doesNotMatch(minimalPointSource, /heading:|speed:/);
+  assert.match(liveTracking, /retainQueueForAuthenticatedTechnician/);
+  assert.match(liveTracking, /onAuthStateChanged\(auth/);
+  assert.match(liveTracking, /purgeTechnicianTrackingQueue\(\)/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
+  assert.doesNotMatch(liveTracking, /window\.removeEventListener\('online'/);
+});
+
+test('Technician GPS queue replays STOP before a new session and records server truth only', () => {
+  assert.match(liveTracking, /export async function flushTechnicianTrackingQueue/);
+  assert.match(liveTracking, /entry\.action === 'STOP' && entry\.attemptCount >= MAX_RETRY_ATTEMPTS/);
+  assert.match(liveTracking, /if \(entry\.action === 'STOP'\) retained\.push\(failedEntry\)/);
+  assert.match(liveTracking, /const replay = await flushTechnicianTrackingQueue\(technicianUid\)/);
+  assert.match(liveTracking, /if \(replay\.pendingStop\)/);
+  assert.match(liveTracking, /status: 'STOP_REQUEST_QUEUED'/);
+  assert.match(liveTracking, /serverAcknowledged: false/);
+  assert.match(liveTracking, /status: 'STOPPED'/);
+  assert.match(liveTracking, /serverAcknowledged: true/);
+  assert.match(liveTracking, /_state\.lastPushTime = now;[\s\S]*await flushTechnicianTrackingQueue/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'technicians'/);
