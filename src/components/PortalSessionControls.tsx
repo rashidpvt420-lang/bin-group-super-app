@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
+import { purgeTechnicianGpsRetryQueue } from '../utils/liveTracking';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -19,6 +20,8 @@ type PortalSessionControlsProps = {
 
 const clearSessionAndPreserveLanguage = async () => {
   const preferredLanguage = localStorage.getItem('bin_language');
+  const authenticatedUid = auth.currentUser?.uid || '';
+  if (authenticatedUid) purgeTechnicianGpsRetryQueue(authenticatedUid);
   await clearOnboardingSessionArtifacts();
   localStorage.clear();
   sessionStorage.clear();
