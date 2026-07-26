@@ -86,14 +86,17 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(verifier, /invalid App Check token/);
   assert.match(verifier, /rejectedAttemptUncharged/);
   assert.match(verifier, /providerSuccessRate/);
-  assert.match(verifier, /maxOutputTokensPerProviderResponse/);
-  assert.match(publisher, /aiProviderHealth:/);
+  assert.match(verifier, /measuredProviderUsageRequired/);
+  assert.match(verifier, /maxBudgetEnvelopeAedMicrosPerChatRequest/);
+  assert.match(publisher, /AI SLO .*missing or non-numeric/);
+  assert.match(publisher, /measured token\/cost evidence invalid/);
   assert.match(finalizer, /aiProviderHealth: 'workflow-artifact'/);
   assert.match(gate, /'aiProviderHealth'/);
 });
 
-test('AI observability records non-PII aggregate SLO metrics', () => {
+test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {
   const observability = read('functions/aiObservability.ts');
+  const assistant = read('functions/aiAssistant.ts');
   assert.match(observability, /ai_health_daily/);
   assert.match(observability, /liveSuccesses/);
   assert.match(observability, /degradedFallbacks/);
@@ -102,6 +105,16 @@ test('AI observability records non-PII aggregate SLO metrics', () => {
   assert.match(observability, /invalidOutputs/);
   assert.match(observability, /redactionsApplied/);
   assert.match(observability, /quotaCharged/);
+  assert.match(observability, /inputTokens/);
+  assert.match(observability, /outputTokens/);
+  assert.match(observability, /totalTokens/);
+  assert.match(observability, /budgetEnvelopeAedMicros/);
+  assert.match(observability, /tokenBudgetBreaches/);
+  assert.match(observability, /costEnvelopeBreaches/);
+  assert.match(assistant, /usageMetadata\?\.totalTokenCount/);
+  assert.match(assistant, /usage\?\.total_tokens/);
+  assert.match(assistant, /sloTokenBudgetMet: true/);
+  assert.match(assistant, /sloCostEnvelopeMet: true/);
   assert.doesNotMatch(observability, /metric\.(?:uid|email|phone|prompt|message)/i);
   assert.doesNotMatch(observability, /collection\("users"\)/);
 });
