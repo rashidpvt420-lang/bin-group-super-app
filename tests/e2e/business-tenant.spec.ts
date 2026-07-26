@@ -24,6 +24,8 @@ const TENANT_PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
 const TECHNICIAN_EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const TECHNICIAN_PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
 const RUN_MARKER = `tenant-cross-role-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const RECOVERY_EMAIL = `e2e.tenant.recovery.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@bin-groups.com`;
+const RECOVERY_PASSWORD = `Tmp!${Date.now()}Aa9#${Math.random().toString(36).slice(2, 10)}`;
 const IMAGE_BUFFER = Buffer.from(
   '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
   'hex',
@@ -36,7 +38,8 @@ let tenantUid = '';
 let technicianUid = '';
 let technicianName = 'E2E Technician';
 let technicianEmail = '';
-let linkedUnitBackup: { path: string; data: FirebaseFirestore.DocumentData } | null = null;
+let recoveryTenantUid = '';
+let recoveryTarget: { propertyId: string; propertyName: string; unitNumber: string } | null = null;
 
 function requireLaunchCredentials() {
   if (!TENANT_EMAIL || !TENANT_PASSWORD || !TECHNICIAN_EMAIL || !TECHNICIAN_PASSWORD) {
@@ -305,6 +308,7 @@ async function assertTenantDeliveryReceipt(ticketId: string) {
       pushFailureCount: notification.pushFailureCount || 0,
       emailDeliveryState: mail?.delivery?.state || null,
       emailMessageIdPresent: Boolean(mail?.delivery?.messageId),
+      emailRecipientSource: mail?.metadata?.recipientSource || null,
     };
     return pushDelivered || emailDelivered;
   }, {
@@ -327,15 +331,77 @@ async function createAndComplete(browser: Browser, page: Page, suffix: string) {
   return created.ticketId;
 }
 
-async function restoreLinkedUnit() {
-  if (!linkedUnitBackup || !admin.apps.length) return;
-  await admin.firestore().doc(linkedUnitBackup.path).set(linkedUnitBackup.data, { merge: false });
+async function deleteRecoveryTenant(uid: string) {
+  if (!uid || !admin.apps.length) return;
+  const db = admin.firestore();
+  const requests = await db.collection('tenant_unit_link_requests').where('tenantUid', '==', uid).get().catch(() => null);
+  if (requests && !requests.empty) {
+    const batch = db.batch();
+    requests.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit().catch(() => undefined);
+  }
+  await Promise.all([
+    db.collection('users').doc(uid).delete().catch(() => undefined),
+    db.collection('tenants').doc(uid).delete().catch(() => undefined),
+    admin.auth().deleteUser(uid).catch(() => undefined),
+  ]);
+}
+
+async function cleanupExpiredRecoveryTenants() {
+  const db = admin.firestore();
+  const now = Date.now();
+  const snapshot = await db.collection('users').where('e2eTenantRecovery', '==', true).limit(25).get();
+  for (const docSnap of snapshot.docs) {
+    const expiresAtMs = Number(docSnap.data()?.expiresAtMs || 0);
+    if (expiresAtMs > 0 && expiresAtMs <= now) {
+      await deleteRecoveryTenant(docSnap.id);
+    }
+  }
+}
+
+async function createRecoveryTenant() {
+  const account = await admin.auth().createUser({
+    email: RECOVERY_EMAIL,
+    password: RECOVERY_PASSWORD,
+    displayName: 'E2E Unassigned Tenant',
+    emailVerified: true,
+    disabled: false,
+  });
+  recoveryTenantUid = account.uid;
+  await admin.auth().setCustomUserClaims(account.uid, {
+    role: 'tenant',
+    userRole: 'tenant',
+    primaryRole: 'tenant',
+    active: true,
+    e2eTenantRecovery: true,
+  });
+
+  const profile = {
+    uid: account.uid,
+    email: RECOVERY_EMAIL.toLowerCase(),
+    displayName: 'E2E Unassigned Tenant',
+    role: 'tenant',
+    userRole: 'tenant',
+    primaryRole: 'tenant',
+    status: 'active',
+    approvalStatus: 'approved',
+    emailVerified: true,
+    e2eTenantRecovery: true,
+    e2eRunMarker: RUN_MARKER,
+    expiresAtMs: Date.now() + (30 * 60 * 1000),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  const db = admin.firestore();
+  await Promise.all([
+    db.collection('users').doc(account.uid).set(profile, { merge: false }),
+    db.collection('tenants').doc(account.uid).set(profile, { merge: false }),
+  ]);
 }
 
 async function cleanupRunData() {
   if (!admin.apps.length) return;
   const db = admin.firestore();
-  await restoreLinkedUnit().catch(() => undefined);
 
   for (const ticketId of createdTicketIds) {
     const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get().catch(() => null);
@@ -359,6 +425,7 @@ async function cleanupRunData() {
   for (const requestId of createdUnitLinkRequestIds) {
     await db.collection('tenant_unit_link_requests').doc(requestId).delete().catch(() => undefined);
   }
+  await deleteRecoveryTenant(recoveryTenantUid);
 }
 
 test.describe('Tenant Business Workflow', () => {
@@ -367,6 +434,7 @@ test.describe('Tenant Business Workflow', () => {
   test.beforeAll(async () => {
     requireLaunchCredentials();
     initializeAdminSdk();
+    await cleanupExpiredRecoveryTenants();
     const [tenant, technician] = await Promise.all([
       admin.auth().getUserByEmail(TENANT_EMAIL),
       admin.auth().getUserByEmail(TECHNICIAN_EMAIL),
@@ -388,8 +456,20 @@ test.describe('Tenant Business Workflow', () => {
       const byEmail = await db.collection('units').where('tenantEmail', '==', TENANT_EMAIL.toLowerCase()).limit(1).get();
       unitSnap = byEmail.docs[0] || null;
     }
-    if (!unitSnap?.exists) throw new Error('Protected Tenant fixture has no linked unit to exercise and restore.');
-    linkedUnitBackup = { path: unitSnap.ref.path, data: unitSnap.data() || {} };
+    if (!unitSnap?.exists) throw new Error('Protected Tenant fixture has no linked unit for the recovery request target.');
+    const unit = unitSnap.data() || {};
+    const linkedTenantId = String(unit.tenantUid || unit.tenantId || unit.currentTenantId || '');
+    if (linkedTenantId && linkedTenantId !== tenantUid) {
+      throw new Error('Protected Tenant fixture points to a unit assigned to a different Tenant.');
+    }
+    const propertyId = String(unit.propertyId || '');
+    const propertySnap = propertyId ? await db.collection('properties').doc(propertyId).get() : null;
+    recoveryTarget = {
+      propertyId,
+      propertyName: String(propertySnap?.data()?.name || unit.propertyName || 'E2E Live Role Tower'),
+      unitNumber: String(unit.unitNumber || unit.number || 'E2E-101'),
+    };
+    await createRecoveryTenant();
   });
 
   test.afterAll(async () => {
@@ -488,57 +568,47 @@ test.describe('Tenant Business Workflow', () => {
     await expect(requestCard.getByTestId('tenant-correction-events')).toContainText(/SUBMITTED/i);
   });
 
-  test('Unassigned-residence fallback creates a secured unit-link recovery request', async ({ page }) => {
+  test('Unassigned-residence fallback creates a secured unit-link recovery request without mutating an occupied unit', async ({ page }) => {
     test.setTimeout(150_000);
-    if (!linkedUnitBackup) throw new Error('Tenant linked-unit backup was not prepared.');
+    if (!recoveryTarget || !recoveryTenantUid) throw new Error('Temporary unassigned Tenant fixture was not prepared.');
     const db = admin.firestore();
-    const unitRef = db.doc(linkedUnitBackup.path);
-    const propertyId = String(linkedUnitBackup.data.propertyId || '');
-    const propertySnap = propertyId ? await db.collection('properties').doc(propertyId).get() : null;
-    const propertyName = String(propertySnap?.data()?.name || linkedUnitBackup.data.propertyName || 'E2E Live Role Tower');
-    const unitNumber = String(linkedUnitBackup.data.unitNumber || linkedUnitBackup.data.number || 'E2E-101');
     const notes = `Unassigned residence recovery ${RUN_MARKER}`;
 
-    try {
-      await unitRef.set({
-        tenantId: admin.firestore.FieldValue.delete(),
-        tenantUid: admin.firestore.FieldValue.delete(),
-        currentTenantId: admin.firestore.FieldValue.delete(),
-        tenantEmail: admin.firestore.FieldValue.delete(),
-        tenantName: admin.firestore.FieldValue.delete(),
-        tenantStatus: 'none',
-        occupancyStatus: 'vacant',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+    await login(page, 'tenant', RECOVERY_EMAIL, RECOVERY_PASSWORD);
+    await page.goto(`/tenant/request?recovery=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+    const fallback = page.getByTestId('tenant-unit-link-fallback');
+    await expect(fallback).toBeVisible({ timeout: 35_000 });
+    await page.getByTestId('tenant-unit-link-property').fill(recoveryTarget.propertyName);
+    await page.getByTestId('tenant-unit-link-unit').fill(recoveryTarget.unitNumber);
+    await page.getByTestId('tenant-unit-link-lease').fill(`LEASE-${RUN_MARKER}`);
+    await page.getByTestId('tenant-unit-link-code').fill(`VERIFY-${RUN_MARKER}`);
+    await page.getByTestId('tenant-unit-link-notes').fill(notes);
+    await page.getByTestId('tenant-unit-link-submit').click();
+    await expect(page.getByTestId('tenant-unit-link-notice')).toContainText(/submitted for admin verification/i, { timeout: 35_000 });
 
-      await page.goto(`/tenant/request?recovery=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-      const fallback = page.getByTestId('tenant-unit-link-fallback');
-      await expect(fallback).toBeVisible({ timeout: 35_000 });
-      await page.getByTestId('tenant-unit-link-property').fill(propertyName);
-      await page.getByTestId('tenant-unit-link-unit').fill(unitNumber);
-      await page.getByTestId('tenant-unit-link-lease').fill(`LEASE-${RUN_MARKER}`);
-      await page.getByTestId('tenant-unit-link-code').fill(`VERIFY-${RUN_MARKER}`);
-      await page.getByTestId('tenant-unit-link-notes').fill(notes);
-      await page.getByTestId('tenant-unit-link-submit').click();
-      await expect(page.getByTestId('tenant-unit-link-notice')).toContainText(/submitted for admin verification/i, { timeout: 35_000 });
+    let requestId = '';
+    await expect.poll(async () => {
+      const snapshot = await db.collection('tenant_unit_link_requests').where('tenantUid', '==', recoveryTenantUid).get();
+      const requestDoc = snapshot.docs.find((docSnap) => docSnap.data()?.notes === notes);
+      requestId = requestDoc?.id || '';
+      return requestId;
+    }, { timeout: 35_000 }).not.toBe('');
+    createdUnitLinkRequestIds.add(requestId);
 
-      let requestId = '';
-      await expect.poll(async () => {
-        const snapshot = await db.collection('tenant_unit_link_requests').where('tenantUid', '==', tenantUid).get();
-        const requestDoc = snapshot.docs.find((docSnap) => docSnap.data()?.notes === notes);
-        requestId = requestDoc?.id || '';
-        return requestId;
-      }, { timeout: 35_000 }).not.toBe('');
-      createdUnitLinkRequestIds.add(requestId);
+    const requestSnap = await db.collection('tenant_unit_link_requests').doc(requestId).get();
+    const requestData = requestSnap.data() || {};
+    expect(requestData.status).toBe('PENDING_ADMIN_REVIEW');
+    expect(requestData.verificationState).toBe('ADMIN_OR_OWNER_VERIFICATION_REQUIRED');
+    expect(requestData.verificationCodeHash).toMatch(/^[a-f0-9]{64}$/i);
+    expect(requestData.verificationCode).toBeUndefined();
 
-      const requestSnap = await db.collection('tenant_unit_link_requests').doc(requestId).get();
-      const requestData = requestSnap.data() || {};
-      expect(requestData.status).toBe('PENDING_ADMIN_REVIEW');
-      expect(requestData.verificationState).toBe('ADMIN_OR_OWNER_VERIFICATION_REQUIRED');
-      expect(requestData.verificationCodeHash).toMatch(/^[a-f0-9]{64}$/i);
-      expect(requestData.verificationCode).toBeUndefined();
-    } finally {
-      await restoreLinkedUnit();
-    }
+    const occupiedUnit = await db.collection('units')
+      .where('propertyId', '==', recoveryTarget.propertyId)
+      .where('unitNumber', '==', recoveryTarget.unitNumber)
+      .limit(1)
+      .get();
+    expect(occupiedUnit.size).toBe(1);
+    const occupiedData = occupiedUnit.docs[0].data() || {};
+    expect(String(occupiedData.tenantUid || occupiedData.tenantId || occupiedData.currentTenantId)).toBe(tenantUid);
   });
 });
