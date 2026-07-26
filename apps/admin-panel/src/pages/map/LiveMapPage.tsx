@@ -201,7 +201,8 @@ const displayStatus = (ticket: any) => {
 export default function LiveMapPage() {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
-  const markerRefs = useRef<any[]>([]);
+  const markerRefs = useRef<Map<string, any>>(new Map());
+  const hasAutoFittedViewportRef = useRef(false);
 
   const [tickets, setTickets] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
@@ -314,16 +315,30 @@ export default function LiveMapPage() {
     const maps = (window as any).google?.maps;
     if (!maps) return;
 
-    markerRefs.current.forEach((marker) => marker.setMap(null));
-    markerRefs.current = [];
     const bounds = new maps.LatLngBounds();
+    const activeMarkerKeys = new Set<string>();
     let pointCount = 0;
+
+    const upsertMarker = (key: string, options: any, point: Coordinate) => {
+      activeMarkerKeys.add(key);
+      let marker = markerRefs.current.get(key);
+      if (!marker) {
+        marker = new maps.Marker({ map: mapRef.current, ...options });
+        markerRefs.current.set(key, marker);
+      } else {
+        marker.setMap(mapRef.current);
+        marker.setPosition(options.position);
+        marker.setTitle(options.title);
+        marker.setIcon(options.icon);
+      }
+      bounds.extend(point);
+      pointCount += 1;
+    };
 
     for (const location of freshLocations) {
       const point = coordinate(location.location);
       if (!point) continue;
-      const marker = new maps.Marker({
-        map: mapRef.current,
+      upsertMarker(`technician:${location.id}`, {
         position: point,
         title: `${location.technicianName || 'Technician'} — fresh foreground GPS`,
         icon: {
@@ -334,16 +349,12 @@ export default function LiveMapPage() {
           strokeColor: '#ffffff',
           strokeWeight: 2,
         },
-      });
-      markerRefs.current.push(marker);
-      bounds.extend(point);
-      pointCount += 1;
+      }, point);
     }
 
     for (const { ticket, verifiedPin } of ticketsWithVerifiedPins as Array<{ ticket: any; verifiedPin: VerifiedTicketPin }>) {
       const priority = text(ticket.priority || ticket.severity).toUpperCase();
-      const marker = new maps.Marker({
-        map: mapRef.current,
+      upsertMarker(`ticket:${ticket.id}`, {
         position: verifiedPin.point,
         title: `${ticket.propertyName || ticket.unit || ticket.id} — verified property pin — ${displayStatus(ticket)}`,
         icon: {
@@ -354,20 +365,26 @@ export default function LiveMapPage() {
           strokeColor: '#ffffff',
           strokeWeight: 1.5,
         },
-      });
-      markerRefs.current.push(marker);
-      bounds.extend(verifiedPin.point);
-      pointCount += 1;
+      }, verifiedPin.point);
     }
 
-    if (pointCount > 0) {
+    for (const [key, marker] of markerRefs.current.entries()) {
+      if (activeMarkerKeys.has(key)) continue;
+      marker.setMap(null);
+      markerRefs.current.delete(key);
+    }
+
+    if (!hasAutoFittedViewportRef.current && pointCount > 0) {
       mapRef.current.fitBounds(bounds, 72);
       if (pointCount === 1) mapRef.current.setZoom(15);
-    } else {
-      mapRef.current.setCenter(UAE_CENTRE);
-      mapRef.current.setZoom(7);
+      hasAutoFittedViewportRef.current = true;
     }
   }, [freshLocations, mapReady, ticketsWithVerifiedPins]);
+
+  useEffect(() => () => {
+    for (const marker of markerRefs.current.values()) marker.setMap(null);
+    markerRefs.current.clear();
+  }, []);
 
   const unassignedCount = tickets.filter((ticket) => ['UNASSIGNED', 'OPEN', 'open'].includes(text(ticket.status))).length;
   const assignedCount = Math.max(0, tickets.length - unassignedCount);
