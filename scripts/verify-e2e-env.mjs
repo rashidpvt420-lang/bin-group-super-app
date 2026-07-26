@@ -26,11 +26,17 @@ for (const envPath of possibleConfigPaths) {
 
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
+const strictProtectedBusiness = strictRoles && process.env.GITHUB_ACTIONS === 'true';
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
   ...roles.flatMap((role) => [`E2E_${role}_EMAIL`, `E2E_${role}_PASSWORD`]),
   ...(strictRoles ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
+  ...(strictProtectedBusiness ? [
+    'E2E_BROKER_GMAIL_CLIENT_ID',
+    'E2E_BROKER_GMAIL_CLIENT_SECRET',
+    'E2E_BROKER_GMAIL_REFRESH_TOKEN',
+  ] : []),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
@@ -96,6 +102,19 @@ function validateFounderEvidence() {
   return errors;
 }
 
+function validateBrokerMailboxEvidence() {
+  if (!strictProtectedBusiness) return [];
+  const errors = [];
+  for (const key of ['E2E_BROKER_GMAIL_CLIENT_ID', 'E2E_BROKER_GMAIL_CLIENT_SECRET', 'E2E_BROKER_GMAIL_REFRESH_TOKEN']) {
+    const current = String(process.env[key] || '').trim();
+    if (current && PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(current))) {
+      errors.push(`${key}(placeholder)`);
+    }
+  }
+  if (!errors.length) console.log('[E2E_ENV_GUARD] BROKER_MAILBOX: oauth=set receipt-proof=required');
+  return errors;
+}
+
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
@@ -104,7 +123,8 @@ for (const role of roles) {
 
 const appCheckMissing = validateAppCheckToken();
 const founderMissing = validateFounderEvidence();
-const allMissing = [...missing, ...appCheckMissing, ...founderMissing];
+const brokerMailboxMissing = validateBrokerMailboxEvidence();
+const allMissing = [...missing, ...appCheckMissing, ...founderMissing, ...brokerMailboxMissing];
 
 const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
 const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
