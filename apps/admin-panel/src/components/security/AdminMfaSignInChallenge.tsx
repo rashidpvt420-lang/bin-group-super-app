@@ -112,6 +112,9 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       setVerificationId(id);
       setCode('');
       setNotice('Firebase sent an MFA code to the enrolled Admin phone.');
+      // Keep the verifier alive until the challenge is resolved, reset or
+      // unmounted. Clearing it here can invalidate the asynchronous challenge
+      // before the verification code is submitted.
     } catch (mfaError) {
       clearVerifier();
       setVerificationId('');
@@ -119,7 +122,6 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
       setNotice('');
       setError(friendlyError(mfaError));
     } finally {
-      clearVerifier();
       setBusy(false);
     }
   };
