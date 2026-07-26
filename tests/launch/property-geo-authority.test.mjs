@@ -32,6 +32,10 @@ test('browser rules isolate canonical geo while retaining ordinary Owner and Adm
   assert.match(rules, /function propertyCreateHasNoCanonicalGeo/);
   assert.match(rules, /function canonicalPropertyGeoUnchanged/);
   assert.match(rules, /function safeManagedPropertyUpdate/);
+  assert.match(rules, /allow create:[\s\S]*propertyCreateHasNoCanonicalGeo\(request\.resource\.data\)/);
+  assert.match(rules, /allow update:[\s\S]*canManageProperties\(\) && safeManagedPropertyUpdate\(\)/);
+  assert.match(rules, /safeOwnerPropertyUpdate\(\)[\s\S]*safeManagedPropertyUpdate\(\)/);
+  assert.doesNotMatch(rules, /function safeManagedPropertyUpdate\(\)[\s\S]{0,300}propertyCreateHasNoCanonicalGeo/);
   assert.match(rules, /submittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
   assert.match(rules, /'properties',\s*'users'/);
   assert.match(hardener, /const legacyLiveLocationWriteList/);
