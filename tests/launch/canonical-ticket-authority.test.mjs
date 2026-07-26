@@ -65,9 +65,10 @@ test('No browser source directly mutates the legacy tickets collection', () => {
 test('Ticket rule preparation repeatedly enforces read-only legacy compatibility', () => {
   assert.equal(packageJson.scripts['harden:ticket-binding'], 'node scripts/apply-ticket-rule-binding.mjs');
   assert.match(packageJson.scripts['prepare:rules'], /harden:ticket-binding/);
-  assert.match(ticketRuleBinding, /Legacy \/tickets must exist exactly once as read-only compatibility data/);
+  assert.match(ticketRuleBinding, /replaceMatchBlock\(legacyHeader, legacyReadOnlyBlock, 'legacy \/tickets'\)/);
   assert.match(ticketRuleBinding, /allow create, update, delete: if false/);
-  assert.match(ticketRuleBinding, /Canonical \/maintenanceTickets operational authority is missing/);
+  assert.match(ticketRuleBinding, /Canonical \/maintenanceTickets fragment is missing/);
+  assert.match(ticketRuleBinding, /read-only legacy tickets/);
 
   const directory = mkdtempSync(join(tmpdir(), 'bin-ticket-rules-'));
   const scriptPath = resolve('scripts/apply-ticket-rule-binding.mjs');
