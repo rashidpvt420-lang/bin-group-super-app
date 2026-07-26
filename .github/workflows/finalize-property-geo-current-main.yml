@@ -1,5 +1,5 @@
 name: Finalize Current Main Property Geo Authority
-# One-shot workflow: applies the reviewed current-main delta, validates it, then removes itself.
+# One-shot workflow: applies the reviewed current-main delta, validates it, then removes itself. Retry: schema assertion aligned.
 
 on:
   pull_request:
