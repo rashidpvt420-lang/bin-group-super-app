@@ -39,17 +39,27 @@ jobs:
       - name: Apply missing-session STOP no-op repair
         run: python .github/scripts/apply-gps-missing-session-stop-noop.py
 
-      - name: Validate server and client GPS contracts
+      - name: Type the missing-session callable response
+        run: python .github/scripts/fix-gps-missing-session-response-type.py
+
+      - name: Validate focused GPS contracts
         run: |
-          set -euo pipefail
           node --test \
             tests/launch/technician-live-location-cas.test.mjs \
             tests/launch/gps-missing-session-stop-contract.test.mjs \
             tests/launch/map-gps-state-behavior.test.mjs
-          npm run typecheck
-          npm run build:functions
-          npm run lint
-          npm run build
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Build Cloud Functions
+        run: npm run build:functions
+
+      - name: Lint root app
+        run: npm run lint
+
+      - name: Build production app
+        run: npm run build
 
       - name: Commit product changes and remove one-off machinery
         run: |
@@ -61,10 +71,12 @@ jobs:
             tests/launch/gps-missing-session-stop-contract.test.mjs
           git rm \
             .github/scripts/apply-gps-missing-session-stop-noop.py \
+            .github/scripts/fix-gps-missing-session-response-type.py \
             .github/workflows/apply-gps-missing-session-stop-noop.yml
           changed="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             .github/scripts/apply-gps-missing-session-stop-noop.py \
+            .github/scripts/fix-gps-missing-session-response-type.py \
             .github/workflows/apply-gps-missing-session-stop-noop.yml \
             functions/technicianLiveLocation.ts \
             src/utils/liveTracking.ts \
