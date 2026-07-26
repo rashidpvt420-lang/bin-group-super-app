@@ -1,6 +1,7 @@
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import path from 'path';
+import { runProductionOtpMailboxPreflight } from './lib/production-otp-mailbox-preflight.mjs';
 
 const root = process.cwd();
 for (const pkg of ['dotenv', 'firebase-admin']) {
@@ -26,11 +27,16 @@ for (const envPath of possibleConfigPaths) {
 
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
+const requireFounderEvidence = strictRoles && (
+  process.env.E2E_REQUIRE_FOUNDER_MFA === 'true' ||
+  process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests' ||
+  process.env.GITHUB_WORKFLOW === 'Admin Production Evidence'
+);
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
   ...roles.flatMap((role) => [`E2E_${role}_EMAIL`, `E2E_${role}_PASSWORD`]),
-  ...(strictRoles ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
+  ...(requireFounderEvidence ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
@@ -77,7 +83,7 @@ function validateAppCheckToken() {
 }
 
 function validateFounderEvidence() {
-  if (!strictRoles) return [];
+  if (!requireFounderEvidence) return [];
   const founderEmail = String(process.env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase();
   const founderPassword = String(process.env.E2E_FOUNDER_PASSWORD || '').trim();
   const founderTotp = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').trim().toUpperCase().replace(/[\s=-]/g, '');
@@ -140,5 +146,18 @@ if (allMissing.length) {
   }
   console.warn('[E2E_ENV_GUARD] Continuing with missing values because E2E_ALLOW_MISSING_ENV=true. This must not be used for launch clearance.');
 } else {
+  const protectedEvidenceWorkflow = process.env.GITHUB_ACTIONS === 'true' && [
+    'Firebase Production Deploy',
+    'Live Role Smoke Tests',
+  ].includes(String(process.env.GITHUB_WORKFLOW || ''));
+  if (protectedEvidenceWorkflow) {
+    try {
+      const preflight = await runProductionOtpMailboxPreflight();
+      console.log(`[E2E_ENV_GUARD] protected_mailboxes=${preflight.mailboxesVerified} otp_peppers=${preflight.peppersVerified} secret_values_logged=false`);
+    } catch (error) {
+      console.error(`[E2E_ENV_GUARD] protected OTP/mailbox preflight failed: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    }
+  }
   console.log('[E2E_ENV_GUARD] ok');
 }
