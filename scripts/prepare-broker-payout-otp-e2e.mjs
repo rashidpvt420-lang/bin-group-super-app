@@ -17,7 +17,7 @@ for (const envPath of [
 
 const projectId = resolveFirebaseAdminProjectId();
 const brokerEmail = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
-if (!brokerEmail) throw new Error('E2E_BROKER_EMAIL is required for Broker production evidence.');
+if (!brokerEmail) throw new Error('E2E_BROKER_EMAIL is required for Broker commercial lifecycle evidence.');
 
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
@@ -32,17 +32,32 @@ const privateKycRef = db.collection('broker_kyc_profiles').doc(brokerUid);
 const profileSnap = await profileRef.get();
 const profile = profileSnap.data() || {};
 if (profile.e2eLaunchSeed !== true || String(profile.role || profile.userRole || '').toLowerCase() !== 'broker') {
-  throw new Error('Refusing Broker production fixture reset for an account that is not the dedicated E2E Broker.');
+  throw new Error('Refusing Broker lifecycle reset for an account that is not the dedicated E2E Broker.');
 }
 
-const safeId = String(brokerUid).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
 
-const challengeSnapshot = await db.collection('broker_payout_otps')
-  .where('uid', '==', brokerUid)
-  .limit(100)
-  .get();
+async function deleteQuery(query) {
+  let deleted = 0;
+  while (true) {
+    const snapshot = await query.limit(200).get();
+    if (snapshot.empty) return deleted;
+    const batch = db.batch();
+    snapshot.docs.forEach((document) => batch.delete(document.ref));
+    await batch.commit();
+    deleted += snapshot.size;
+    if (snapshot.size < 200) return deleted;
+  }
+}
+
+const deleted = await Promise.all([
+  deleteQuery(db.collection('broker_payout_otps').where('uid', '==', brokerUid)),
+  deleteQuery(db.collection('broker_payout_requests').where('brokerId', '==', brokerUid)),
+  deleteQuery(db.collection('broker_commissions').where('brokerId', '==', brokerUid)),
+  deleteQuery(db.collection('brokerLeads').where('brokerId', '==', brokerUid)),
+  deleteQuery(db.collection('broker_attributed_onboardings').where('brokerId', '==', brokerUid)),
+]);
 
 const batch = db.batch();
 batch.set(profileRef, {
@@ -77,20 +92,12 @@ batch.set(privateKycRef, {
   submissionHash,
   approvedSubmissionHash: submissionHash,
   approvedAt: now,
-  approvedBy: 'e2e-launch-fixture',
+  approvedBy: 'protected-e2e-fixture',
   e2eLaunchSeed: true,
   updatedAt: now,
   createdAt: profile.createdAt || now,
 }, { merge: true });
 
-// Retire the request-only synthetic commission. The protected Broker runner must
-// now generate its commission from an ACTIVE attributed contract.
-batch.delete(db.collection('broker_commissions').doc(`e2e-live-broker-commission-${safeId}`));
 batch.delete(db.collection('broker_payout_otp_rate_limits').doc(brokerUid));
-for (const challenge of challengeSnapshot.docs) {
-  const status = String(challenge.data().status || '').toUpperCase();
-  if (['PENDING', 'VERIFIED', 'CONSUMED', 'EXPIRED'].includes(status)) batch.delete(challenge.ref);
-}
-
 await batch.commit();
-console.log(`Prepared Broker KYC and OTP hygiene for ${brokerEmail}; no commission was seeded; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(`Prepared dedicated Broker KYC and cleared prior commercial evidence for ${brokerEmail}; no commission was seeded; deleted=${deleted.reduce((sum, value) => sum + value, 0)}.`);

@@ -16,6 +16,7 @@ const RECAPTCHA_SITE_KEY_RE = /^[A-Za-z0-9_-]{30,100}$/;
 const WIF_PROVIDER_RE = /^projects\/\d+\/locations\/global\/workloadIdentityPools\/[A-Za-z0-9._-]+\/providers\/[A-Za-z0-9._-]+$/;
 const SERVICE_ACCOUNT_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MFA_CODE_RE = /^\d{6}$/;
 const PLACEHOLDER_RE = /(?:YOUR_|REPLACE(?:_ME)?|CHANGE_ME|CHANGEME|TODO|EXAMPLE|XXX+)/i;
 
 export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
@@ -38,6 +39,7 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
   'E2E_ADMIN_BASE_URL',
   'E2E_ADMIN_EMAIL',
   'E2E_ADMIN_PASSWORD',
+  'E2E_ADMIN_REAL_MFA_CODE',
   'E2E_OWNER_EMAIL',
   'E2E_OWNER_PASSWORD',
   'E2E_TENANT_EMAIL',
@@ -46,6 +48,9 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
   'E2E_TECHNICIAN_PASSWORD',
   'E2E_BROKER_EMAIL',
   'E2E_BROKER_PASSWORD',
+  'E2E_BROKER_GMAIL_CLIENT_ID',
+  'E2E_BROKER_GMAIL_CLIENT_SECRET',
+  'E2E_BROKER_GMAIL_REFRESH_TOKEN',
 ]);
 
 const value = (env, key) => String(env?.[key] || '').trim();
@@ -66,6 +71,7 @@ export function validateProductionWorkflowEnv(env = process.env) {
   }
   requirePattern(failures, env, 'GCP_WORKLOAD_IDENTITY_PROVIDER', WIF_PROVIDER_RE, 'must be a full Workload Identity provider resource name');
   requirePattern(failures, env, 'GCP_SERVICE_ACCOUNT', SERVICE_ACCOUNT_RE, 'must be a Google service-account email');
+  requirePattern(failures, env, 'E2E_ADMIN_REAL_MFA_CODE', MFA_CODE_RE, 'must be the protected six-digit Admin MFA code');
 
   const hmac = value(env, 'HARD_LAUNCH_APPROVAL_HMAC_KEY');
   if (hmac && hmac.length < 32) failures.push('HARD_LAUNCH_APPROVAL_HMAC_KEY must contain at least 32 characters');
@@ -87,6 +93,10 @@ export function validateProductionWorkflowEnv(env = process.env) {
     'VITE_APP_CHECK_SITE_KEY',
   ];
   for (const key of namedClientValues) {
+    if (PLACEHOLDER_RE.test(value(env, key))) failures.push(`${key} must not contain a placeholder value`);
+  }
+
+  for (const key of ['E2E_BROKER_GMAIL_CLIENT_ID', 'E2E_BROKER_GMAIL_CLIENT_SECRET', 'E2E_BROKER_GMAIL_REFRESH_TOKEN']) {
     if (PLACEHOLDER_RE.test(value(env, key))) failures.push(`${key} must not contain a placeholder value`);
   }
 
@@ -146,6 +156,11 @@ export function productionWorkflowEnvSummary(env = process.env) {
     mainUrlMatched: value(env, 'E2E_BASE_URL').replace(/\/+$/, '') === EXPECTED_MAIN_URL,
     adminUrlMatched: value(env, 'E2E_ADMIN_BASE_URL').replace(/\/+$/, '') === EXPECTED_ADMIN_URL,
     appCheckEnabled: value(env, 'VITE_ENABLE_FIREBASE_APPCHECK') === 'true',
+    brokerMailboxConfigured:
+      Boolean(value(env, 'E2E_BROKER_GMAIL_CLIENT_ID')) &&
+      Boolean(value(env, 'E2E_BROKER_GMAIL_CLIENT_SECRET')) &&
+      Boolean(value(env, 'E2E_BROKER_GMAIL_REFRESH_TOKEN')),
+    adminMfaConfigured: MFA_CODE_RE.test(value(env, 'E2E_ADMIN_REAL_MFA_CODE')),
     firebaseAndMapsKeysSeparated:
       Boolean(value(env, 'VITE_FIREBASE_API_KEY')) &&
       Boolean(value(env, 'VITE_GOOGLE_MAPS_API_KEY')) &&
@@ -165,7 +180,7 @@ if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
   }
   const summary = productionWorkflowEnvSummary(process.env);
   console.log(
-    '[production-preflight] PASS — deployment, five-role, App Check, Maps and Web Push values are configured '
+    '[production-preflight] PASS — deployment, five-role, App Check, Maps, Web Push, Admin MFA and Broker mailbox values are configured '
       + `(required=${summary.requiredValueCount}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
   );
 }
