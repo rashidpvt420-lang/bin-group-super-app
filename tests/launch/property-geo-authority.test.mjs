@@ -1,65 +1,100 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import ts from 'typescript';
 
-const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const helperSource = readFileSync('functions/propertyGeoAuthority.ts', 'utf8');
+const transpiled = ts.transpileModule(helperSource, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2021 } }).outputText;
+const authority = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`);
+const rules = readFileSync('firestore.rules', 'utf8');
+const hardener = readFileSync('scripts/harden-final-firestore-authority.mjs', 'utf8');
+const propertyHardener = readFileSync('scripts/harden-property-geo-authority.mjs', 'utf8');
+const ticketHardener = readFileSync('scripts/apply-ticket-rule-binding.mjs', 'utf8');
+const rootOwner = readFileSync('src/components/onboarding/PropertyLocationStep.tsx', 'utf8');
+const ownerApp = readFileSync('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx', 'utf8');
+const adminReview = readFileSync('functions/adminPropertyReview.ts', 'utf8');
+const adminPage = readFileSync('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx', 'utf8');
+const pinResolver = readFileSync('apps/admin-panel/src/lib/verifiedPropertyPin.ts', 'utf8');
+const tenantTickets = readFileSync('functions/tenantTicketOperations.ts', 'utf8');
+const ownerTickets = readFileSync('functions/ownerMaintenanceOperations.ts', 'utf8');
+const tenantPage = readFileSync('src/tenant/pages/TenantRequestPage.tsx', 'utf8');
 
-test('canonical property geo is server-authoritative and Owner submissions remain unverified', async () => {
-  const [rules, backend, authority, rootLocation, ownerLocation, legacyAdminPage, pinResolver] = await Promise.all([
-    read('firestore.rules'),
-    read('functions/adminPropertyReview.ts'),
-    read('functions/propertyGeoAuthority.ts'),
-    read('src/components/onboarding/PropertyLocationStep.tsx'),
-    read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx'),
-    read('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx'),
-    read('apps/admin-panel/src/lib/verifiedPropertyPin.ts'),
-  ]);
-
-  assert.match(rules, /function ownerCannotSupplyCanonicalPropertyGeo/);
-  assert.match(rules, /function ownerSubmittedPropertyGeoIsUnverified/);
-  assert.match(rules, /function canonicalPropertyGeoUnchanged/);
-  assert.match(rules, /function safeOwnerPropertyCreate[\s\S]*ownerCannotSupplyCanonicalPropertyGeo\(data\)[\s\S]*ownerSubmittedPropertyGeoIsUnverified\(data\)/);
-  assert.match(rules, /'geoVerification'/);
-  assert.match(rules, /canManageProperties\(\) && canonicalPropertyGeoUnchanged\(\)/);
-
-  for (const component of [rootLocation, ownerLocation]) {
-    assert.match(component, /submittedGeo:/);
-    assert.match(component, /source: 'owner_submission'/);
-    assert.match(component, /verified: false/);
-    assert.match(component, /dispatchReady: false/);
-    assert.match(component, /requiresGeoReview: true/);
-    assert.doesNotMatch(component, /geo: geo as any/);
-  }
-
-  assert.match(authority, /export function buildFounderVerifiedPropertyGeo/);
-  assert.match(authority, /source: "admin_manual"/);
-  assert.match(authority, /verified: true/);
-  assert.match(authority, /dispatchReady: true/);
-  assert.match(authority, /requiresGeoReview: false/);
-  assert.match(authority, /verificationVersion: 1/);
-  assert.match(backend, /buildFounderVerifiedPropertyGeo\(property, actor\.uid, now\)/);
-  assert.match(backend, /update\.geo = canonical\.geo/);
-  assert.match(backend, /update\.geoVerification = canonical\.geoVerification/);
-  assert.match(backend, /geoDispatchReady/);
-
-  assert.match(legacyAdminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
-  assert.doesNotMatch(legacyAdminPage, /updateDoc\s*\(/);
-  assert.doesNotMatch(legacyAdminPage, /addDoc\s*\(/);
-  assert.doesNotMatch(pinResolver, /owner_submission/);
+test('Founder review builds a versioned canonical geo contract and dispatch resolver rejects browser evidence', () => {
+  const now = 1_720_000_000_000;
+  const property = { submittedGeo: { lat: 24.2, lng: 55.3, address: 'Al Ain, UAE', emirate: 'Abu Dhabi', city: 'Al Ain', area: 'Central', source: 'owner_submission' } };
+  const built = authority.buildFounderVerifiedPropertyGeo(property, 'founder_uid', now);
+  const resolved = authority.resolveDispatchReadyPropertyGeo({ ...property, ...built });
+  assert.equal(resolved.lat, 24.2);
+  assert.equal(resolved.verificationVersion, 1);
+  assert.throws(() => authority.resolveDispatchReadyPropertyGeo({ location: property.submittedGeo }));
+  assert.throws(() => authority.resolveDispatchReadyPropertyGeo({ geo: built.geo }));
+  assert.throws(() => authority.resolveDispatchReadyPropertyGeo({ ...property, ...built, geoVerification: { ...built.geoVerification, verifiedBy: 'other' } }));
 });
 
-test('verified properties keep ordinary Owner updates while canonical geo stays immutable', async () => {
-  const [rules, emulatorTest] = await Promise.all([
-    read('firestore.rules'),
-    read('test/property-geo-authority-rules.test.js'),
-  ]);
-  const updateStart = rules.indexOf('function safeOwnerPropertyUpdate()');
-  const updateEnd = rules.indexOf('\n    }', updateStart) + '\n    }'.length;
-  const updateBlock = rules.slice(updateStart, updateEnd);
-  assert.ok(updateStart >= 0 && updateEnd > updateStart);
-  assert.match(updateBlock, /canonicalPropertyGeoUnchanged\(\)/);
-  assert.match(updateBlock, /ownerSubmittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
-  assert.doesNotMatch(updateBlock, /ownerCannotSupplyCanonicalPropertyGeo/);
-  assert.match(emulatorTest, /Owner-updated ordinary property name/);
-  assert.match(emulatorTest, /assertFails\(updateDoc\(refOwner, \{ geo:/);
+test('browser rules isolate canonical geo while retaining ordinary Owner and Admin updates', () => {
+  assert.match(rules, /function propertyCreateHasNoCanonicalGeo/);
+  assert.match(rules, /function canonicalPropertyGeoUnchanged/);
+  assert.match(rules, /function safeManagedPropertyUpdate/);
+  assert.match(rules, /allow create:[\s\S]*propertyCreateHasNoCanonicalGeo\(request\.resource\.data\)/);
+  assert.match(rules, /allow update:[\s\S]*canManageProperties\(\) && safeManagedPropertyUpdate\(\)/);
+  assert.match(rules, /safeOwnerPropertyUpdate\(\)[\s\S]*safeManagedPropertyUpdate\(\)/);
+  const managedStart = rules.indexOf('function safeManagedPropertyUpdate()');
+  const managedEnd = rules.indexOf('\n    }', managedStart) + '\n    }'.length;
+  const managedBlock = rules.slice(managedStart, managedEnd);
+  assert.ok(managedStart >= 0 && managedEnd > managedStart);
+  assert.match(managedBlock, /canonicalPropertyGeoUnchanged\(\)/);
+  assert.match(managedBlock, /submittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
+  assert.doesNotMatch(managedBlock, /propertyCreateHasNoCanonicalGeo/);
+  assert.match(rules, /submittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
+  assert.match(rules, /'properties',\s*'users'/);
+  assert.match(propertyHardener, /Browser property writes are evidence-only/);
+  assert.match(ticketHardener, /import '\.\/harden-property-geo-authority\.mjs'/);
+  assert.match(hardener, /const legacyLiveLocationWriteList/);
+  assert.match(hardener, /'technician_live_locations',\s*'properties',\s*'users'/);
+});
+
+test('Owner onboarding emits submitted evidence only', () => {
+  for (const source of [rootOwner, ownerApp]) {
+    assert.match(source, /submittedGeo:/);
+    assert.match(source, /source: 'owner_submission'/);
+    assert.match(source, /verified: false/);
+    assert.match(source, /dispatchReady: false/);
+    assert.match(source, /requiresGeoReview: true/);
+    assert.doesNotMatch(source, /geo: geo as any/);
+  }
+});
+
+test('Founder callable and Admin page are the only browser review path', () => {
+  assert.match(adminReview, /buildFounderVerifiedPropertyGeo/);
+  assert.match(adminReview, /hasDispatchReadyPropertyGeo/);
+  assert.match(adminReview, /VERIFY_PROPERTY_GEO/);
+  assert.match(adminReview, /pending_admin_approval/);
+  assert.match(adminReview, /pending_admin_review/);
+  assert.match(adminPage, /PENDING ADMIN APPROVAL/);
+  assert.match(adminPage, /PENDING ADMIN REVIEW/);
+  assert.match(adminReview, /geoDispatchReady/);
+  assert.match(adminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
+  assert.doesNotMatch(adminPage, /updateDoc\(|addDoc\(|serverTimestamp\(/);
+});
+
+test('Admin map and all ticket callables require the same canonical verification', () => {
+  assert.match(pinResolver, /geo\.verificationVersion/);
+  assert.match(pinResolver, /FOUNDER_MFA_REVIEW/);
+  assert.match(pinResolver, /verifiedBy !== verificationActor/);
+  for (const source of [tenantTickets, ownerTickets]) {
+    assert.match(source, /resolveDispatchReadyPropertyGeo/);
+    assert.match(source, /SERVER_VERIFIED_PROPERTY_GEO/);
+    assert.doesNotMatch(source, /property\.location \|\| property\.propertyLocation/);
+  }
+});
+
+test('Tenant maintenance form uses the App Check callable and never submits browser coordinates', () => {
+  assert.match(tenantPage, /httpsCallable\(functions, 'createTenantServiceTicket'\)/);
+  assert.match(tenantPage, /kind: 'AI_CONCIERGE'/);
+  assert.match(tenantPage, /clientRequestId: stableClientRequestId\(\)/);
+  assert.match(tenantPage, /crypto\.randomUUID|crypto\.getRandomValues/);
+  assert.doesNotMatch(tenantPage, /addDoc\(collection\(db, 'maintenanceTickets'/);
+  assert.doesNotMatch(tenantPage, /jobLocation/);
+  assert.doesNotMatch(tenantPage, /latitude:\s*propertyLat|longitude:\s*propertyLng/);
+  assert.equal((rules.match(/allow create: if isAdmin\(\);/g) || []).length >= 2, true);
 });
