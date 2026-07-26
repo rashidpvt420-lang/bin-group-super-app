@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const PROJECT_ID = 'bin-group-57c60';
@@ -138,7 +138,7 @@ for (let index = 0; index < batches.length; index += 1) {
   }
 }
 
-const completed = JSON.parse(String(await import('node:fs').then(({ readFileSync }) => readFileSync(PLAN_PATH, 'utf8'))));
+const completed = JSON.parse(readFileSync(PLAN_PATH, 'utf8'));
 completed.status = 'passed';
 completed.completedAt = new Date().toISOString();
 writeFileSync(PLAN_PATH, `${JSON.stringify(completed, null, 2)}\n`, { mode: 0o600 });
