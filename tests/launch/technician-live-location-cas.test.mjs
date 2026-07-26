@@ -109,15 +109,20 @@ test('server implementation performs STOP, UPDATE and watchdog comparisons insid
   assert.match(callableSource, /lastStoppedTicketId: ticketId \|\| null/);
   assert.match(callableSource, /lastStoppedTicketId: null/);
   const idempotentIndex = callableSource.indexOf('stopDecision === "ALREADY_STOPPED"');
-  const stopTicketCheckIndex = callableSource.indexOf('if (!ticketSnap.exists)', idempotentIndex);
-  assert.ok(idempotentIndex >= 0 && stopTicketCheckIndex > idempotentIndex, 'duplicate STOP must succeed before ticket assignment is rechecked');
+  const assignmentCheckIndex = callableSource.indexOf('if (ticketSnap.exists && assignedTechnicianId(ticket) !== technicianUid)', idempotentIndex);
+  assert.ok(
+    idempotentIndex >= 0 && assignmentCheckIndex > idempotentIndex,
+    'duplicate STOP must succeed before an existing ticket assignment is rechecked',
+  );
   assert.match(callableSource, /Another unexpired tracking session is active; stale or cross-tab coordinates were rejected/);
 });
 
-
 test('exact canonical STOP can reconcile when its ticket document is missing', () => {
-  assert.match(callableSource, /if \(ticketSnap\.exists && assignedTechnicianId\(ticket\) !== technicianUid\)/);
-  assert.match(callableSource, /if \(ticketSnap\.exists\) \{\s*tx\.set\(ticketRef/);
-  const stopBranch = callableSource.slice(callableSource.indexOf('if (action === "STOP")'), callableSource.indexOf('if (!ticketSnap.exists)', callableSource.indexOf('if (action === "STOP")'));
+  const stopStart = callableSource.indexOf('if (action === "STOP")');
+  const updateTicketGuard = callableSource.indexOf('if (!ticketSnap.exists)', stopStart);
+  assert.ok(stopStart >= 0 && updateTicketGuard > stopStart, 'STOP and UPDATE branches must remain ordered');
+  const stopBranch = callableSource.slice(stopStart, updateTicketGuard);
+  assert.match(stopBranch, /if \(ticketSnap\.exists && assignedTechnicianId\(ticket\) !== technicianUid\)/);
+  assert.match(stopBranch, /if \(ticketSnap\.exists\) \{\s*tx\.set\(ticketRef/);
   assert.doesNotMatch(stopBranch, /Assigned mission not found/);
 });
