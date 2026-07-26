@@ -104,6 +104,7 @@ test('Technician GPS client uses protected callable with durable STOP and short-
   assert.match(liveTracking, /serverAcknowledged: false/);
   assert.match(liveTracking, /_state\.lastPushTime = now;[\s\S]*await replayForTechnician/);
   assert.match(liveTracking, /window\.addEventListener\('online'/);
+  assert.match(liveTracking, /onError\?\.\(message\);\s*throw new Error\(message\);/);
   assert.doesNotMatch(liveTracking, /status: 'STOPPED'[\s\S]{0,300}catch/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'maintenanceTickets'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
@@ -116,6 +117,9 @@ test('Technician GPS client uses protected callable with durable STOP and short-
   assert.match(gpsRetryQueue, /UPDATE_TTL_MS = 5 \* 60 \* 1000/);
   assert.match(gpsRetryQueue, /STOP_TTL_MS = 24 \* 60 \* 60 \* 1000/);
   assert.match(gpsRetryQueue, /retryCount >= MAX_RETRY_COUNT/);
+  assert.match(gpsRetryQueue, /action === 'STOP' && terminal/);
+  assert.match(gpsRetryQueue, /boundedStopEntries/);
+  assert.match(gpsRetryQueue, /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/);
   assert.match(gpsRetryQueue, /entry\.action === 'STOP'\) break/);
   assert.match(gpsRetryQueue, /Number\(latitude\.toFixed\(6\)\)/);
   assert.doesNotMatch(gpsRetryQueue, /heading|speed/);
