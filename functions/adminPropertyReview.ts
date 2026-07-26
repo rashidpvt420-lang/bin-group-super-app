@@ -13,10 +13,60 @@ const REVIEWABLE_STATUSES = new Set([
   "pending-review",
   "pending_review",
   "onboarding",
+  "submitted",
+  "draft",
+  "pending review",
+  "admin review",
 ]);
 
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
 const lower = (value: unknown, max = 500) => text(value, max).toLowerCase();
+const finite = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+function canonicalVerifiedGeo(property: Record<string, any>, actorUid: string, now: unknown) {
+  const candidate = property.submittedGeo || property.geo || property.location;
+  if (!candidate || typeof candidate !== "object") {
+    throw new HttpsError("failed-precondition", "A reviewed property location is required before approval.");
+  }
+  const lat = finite(candidate.lat ?? candidate.latitude);
+  const lng = finite(candidate.lng ?? candidate.longitude);
+  if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat === 0 && lng === 0)) {
+    throw new HttpsError("failed-precondition", "The submitted property coordinates are invalid.");
+  }
+  const address = text(candidate.address || property.address, 500);
+  const emirate = text(candidate.emirate || property.emirate, 120);
+  const city = text(candidate.city || property.city, 120);
+  const area = text(candidate.area || property.area, 160);
+  if (!address || !emirate || (!city && !area)) {
+    throw new HttpsError("failed-precondition", "Address, emirate, and city or area are required before geo verification.");
+  }
+  const accuracy = finite(candidate.accuracyMeters);
+  return {
+    point: new admin.firestore.GeoPoint(lat, lng),
+    lat,
+    lng,
+    geohash: text(candidate.geohash, 120),
+    address,
+    emirate,
+    city,
+    area,
+    placeId: text(candidate.placeId || property.googlePlaceId, 240) || null,
+    source: "admin_manual",
+    submittedSource: text(candidate.source, 80) || "owner_submission",
+    verified: true,
+    verifiedBy: actorUid,
+    verifiedAt: now,
+    updatedAt: now,
+    requiresGeoReview: false,
+    dispatchReady: true,
+    accuracyMeters: accuracy === null ? null : Math.max(0, accuracy),
+    capturedAt: candidate.capturedAt || now,
+    verificationVersion: 1,
+  };
+}
 
 function roleOf(token: Record<string, unknown> = {}) {
   const role = lower(token.role || token.userRole || token.primaryRole, 80);
@@ -85,10 +135,22 @@ export const adminReviewOwnerProperty = onCall(
         reviewedBy: actor.uid,
         reviewedByRole: actor.role,
       };
+      let geoDispatchReady = false;
       if (decision === "APPROVE") {
+        const canonicalGeo = canonicalVerifiedGeo(property, actor.uid, now);
         update.approvedAt = now;
         update.approvedBy = actor.uid;
         update.rejectionReason = FieldValue.delete();
+        update.geo = canonicalGeo;
+        update.geoVerification = {
+          state: "VERIFIED",
+          source: "FOUNDER_MFA_REVIEW",
+          verifiedBy: actor.uid,
+          verifiedAt: now,
+          submittedSource: canonicalGeo.submittedSource,
+          verificationVersion: 1,
+        };
+        geoDispatchReady = true;
       } else {
         update.rejectedAt = now;
         update.rejectedBy = actor.uid;
@@ -103,7 +165,11 @@ export const adminReviewOwnerProperty = onCall(
         targetType: "PROPERTY",
         targetId: propertyId,
         before: { status: property.status || null },
-        after: { status: nextStatus, reason: decision === "REJECT" ? rejectionReason : null },
+        after: {
+          status: nextStatus,
+          reason: decision === "REJECT" ? rejectionReason : null,
+          geoDispatchReady,
+        },
         metadata: { propertyName },
         source: "ADMIN_REVIEW_OWNER_PROPERTY_CALLABLE",
         trustLevel: "SERVER_AUTHORITATIVE",
@@ -128,7 +194,7 @@ export const adminReviewOwnerProperty = onCall(
         });
       }
 
-      return { propertyName, nextStatus, notificationCreated: Boolean(recipientId) };
+      return { propertyName, nextStatus, notificationCreated: Boolean(recipientId), geoDispatchReady };
     });
 
     return {
@@ -136,6 +202,7 @@ export const adminReviewOwnerProperty = onCall(
       propertyId,
       status: result.nextStatus,
       notificationCreated: result.notificationCreated,
+      geoDispatchReady: result.geoDispatchReady,
       hardLaunchClaim: false,
     };
   },
