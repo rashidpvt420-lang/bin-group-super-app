@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+// Canonical invariant: maintenanceTickets owns the sole operational update gate;
+// legacy tickets remains participant-readable compatibility data with no writes.
 const rules = readFileSync('firestore.rules', 'utf8').replace(/\r\n?/g, '\n');
 
 function readFunction(name) {
