@@ -47,9 +47,13 @@ jobs:
           git show refs/remotes/origin/gps-permanent-source:tests/launch/gps-permanent-retry-policy.test.mjs > tests/launch/gps-permanent-retry-policy.test.mjs
 
       - name: Validate permanent and transient retry policy
-        run: |
-          node --test tests/launch/gps-permanent-retry-policy.test.mjs
-          node --test tests/launch/map-gps-state-behavior.test.mjs tests/launch/technician-gps-logout-watch-final.test.mjs
+        run: node --test tests/launch/gps-permanent-retry-policy.test.mjs
+
+      - name: Validate map GPS state behavior
+        run: node --test tests/launch/map-gps-state-behavior.test.mjs
+
+      - name: Validate logout and watch fail-closed behavior
+        run: node --test tests/launch/technician-gps-logout-watch-final.test.mjs
 
       - name: TypeScript and production build
         run: |
