@@ -195,6 +195,7 @@ export const updateTechnicianLiveLocation = onCall(
           activeTicketId: null,
           isTracking: false,
           trackingSessionId,
+          lastStoppedTicketId: ticketId,
           stopReason: "TECHNICIAN_REQUESTED",
           stoppedAt: now,
           serverUpdatedAt: now,
@@ -303,6 +304,7 @@ export const updateTechnicianLiveLocation = onCall(
         tenantId: String(ticket.tenantId || ticket.tenantUid || "") || null,
         isTracking: true,
         trackingSessionId,
+        lastStoppedTicketId: null,
         sequence,
         location: point,
         serverUpdatedAt: now,
@@ -430,6 +432,7 @@ export const reconcileExpiredTechnicianLiveLocations = onSchedule(
         tx.set(snapshot.ref, {
           activeTicketId: null,
           isTracking: false,
+          lastStoppedTicketId: ticketId || null,
           stopReason: "SERVER_EXPIRY_WATCHDOG",
           stoppedAt: transactionNow,
           reconciledAt: transactionNow,
