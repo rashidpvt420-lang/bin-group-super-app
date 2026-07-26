@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = '8ec73c7e8732508a3de8bda6daf45cacf01a1e98'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = '6dc65307a93ccc8c031b577f3f3b359b8feb09ea'
           python .github/scripts/apply-tenant-canonical-ticket-path.py
           rm -f \
             .github/scripts/apply-tenant-canonical-ticket-path.py \
