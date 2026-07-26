@@ -6,6 +6,21 @@ import test from 'node:test';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+function matchBlock(rules, marker) {
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${marker} must exist`);
+  const open = rules.indexOf('{', start + marker.length - 1);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return '';
+}
+
 test('legacy ownerToken REST clients are fail-closed stubs', () => {
   for (const rel of ['src/services/api.ts', 'apps/owner-app/src/services/api.ts']) {
     const source = readFileSync(join(root, rel), 'utf8');
@@ -19,7 +34,13 @@ test('ticket updates are actor-discriminated and cannot authorize technician sel
   const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
   assert.match(rules, /function safeTicketUpdateByActor\(\)/);
-  assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+  assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);
+  const legacy = matchBlock(rules, '    match /tickets/{ticketId} {');
+  const canonical = matchBlock(rules, '    match /maintenanceTickets/{ticketId} {');
+  assert.match(legacy, /allow create, update, delete: if false;/);
+  assert.doesNotMatch(legacy, /safeTicketUpdateByActor/);
+  assert.match(canonical, /allow create: if isAdmin\(\);/);
+  assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
   assert.match(rules, /let authenticated = signedIn\(\);/);
   assert.match(rules, /let role = authenticated/);
   assert.match(rules, /let admin = authenticated && \(/);
@@ -43,7 +64,5 @@ test('owner activation delegates to the complete server-confirmed policy', () =>
   assert.match(policy, /profile\.dashboardLocked !== true/);
   assert.match(policy, /profile\.activeContractId/);
   const page = readFileSync(join(root, 'src/owner/pages/OwnerActivationPage.tsx'), 'utf8');
-  assert.match(page, /profile\?\.adminApproved === true/);
-  assert.doesNotMatch(page, /mobilization > 0/);
-  assert.match(page, /paymentVerified && adminApproved/);
+  assert.match(page, /OwnerActivationGuard/);
 });
