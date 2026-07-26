@@ -25,6 +25,7 @@ test('all external production evidence requires an exact successful deployment r
     assert.match(source, /production_deploy_run_id:/, `${path} must request a deployment run`);
     assert.match(source, /required:\s*true[\s\S]*production_deploy_run_id must be numeric/, `${path} must require and validate the run ID`);
     assert.match(source, /actions:\s*read/, `${path} must read protected workflow artifacts`);
+    assert.match(source, /verify-trusted-production-deploy-source\.mjs/, `${path} must verify the source workflow run`);
     assert.match(source, /production-deployment-\$\{\{ inputs\.expected_commit_sha \}\}/, `${path} must download the exact-SHA artifact`);
     assert.match(source, /run-id:\s*\$\{\{ inputs\.production_deploy_run_id \}\}/, `${path} must select the exact deployment run`);
     assert.match(source, /verify-exact-production-deployment-artifact\.mjs/, `${path} must validate deployment metadata`);
@@ -35,7 +36,8 @@ test('all external production evidence requires an exact successful deployment r
 test('deployment binding runs before every external provider or operational proof', () => {
   const provider = read('.github/workflows/operational-provider-evidence.yml');
   ordered(provider, [
-    'Verify exact production deployment binding',
+    'verify-trusted-production-deploy-source.mjs',
+    'verify-exact-production-deployment-artifact.mjs',
     'Verify BIN GROUP branded SMTP delivery',
     'Verify production App Check enforcement',
     'Verify live Sovereign AI providers',
@@ -45,7 +47,8 @@ test('deployment binding runs before every external provider or operational proo
 
   const rotation = read('.github/workflows/privileged-access-rotation-evidence.yml');
   ordered(rotation, [
-    'Verify exact production deployment binding',
+    'verify-trusted-production-deploy-source.mjs',
+    'verify-exact-production-deployment-artifact.mjs',
     'Prove rotated Admin credential is accepted by Firebase Auth',
     'Verify provider-backed credential rotation',
     'Publish canonical privileged-rotation evidence',
@@ -53,10 +56,28 @@ test('deployment binding runs before every external provider or operational proo
 
   const technician = read('.github/workflows/technician-physical-evidence.yml');
   ordered(technician, [
-    'Verify exact production deployment binding',
+    'verify-trusted-production-deploy-source.mjs',
+    'verify-exact-production-deployment-artifact.mjs',
     'Verify real physical technician mission',
     'Publish canonical technician operational evidence',
   ]);
+});
+
+test('source verifier requires the successful Founder-triggered Firebase deployment workflow', () => {
+  const source = read('scripts/verify-trusted-production-deploy-source.mjs');
+  assert.match(source, /SOURCE_WORKFLOW_NAME = 'Firebase Production Deploy'/);
+  assert.match(source, /SOURCE_WORKFLOW_PATH = '\.github\/workflows\/firebase-production-deploy\.yml'/);
+  assert.match(source, /REQUIRED_JOB_NAME = 'Deploy Firebase production stack'/);
+  assert.match(source, /run\?\.event !== 'workflow_dispatch'/);
+  assert.match(source, /run\?\.head_branch !== 'main'/);
+  assert.match(source, /run\?\.head_sha !== expectedSha/);
+  assert.match(source, /run\?\.conclusion !== 'success'/);
+  assert.match(source, /authorizedActors\.includes\(sourceActor\)/);
+  assert.match(source, /deploymentJob\.conclusion !== 'success'/);
+  assert.match(source, /production-deployment-\$\{expectedSha\}/);
+  assert.match(source, /artifact\.expired !== true/);
+  assert.match(source, /MAX_SOURCE_AGE_MS/);
+  assert.doesNotMatch(source, /GITHUB_ACTOR !== 'github-actions\[bot\]'/);
 });
 
 test('shared deployment verifier rejects stale, mismatched and unreconciled deployments', () => {
