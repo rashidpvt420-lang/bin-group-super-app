@@ -8,6 +8,7 @@
  */
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
+import { randomBytes } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Browser, BrowserContext, Locator, Page } from '@playwright/test';
@@ -23,9 +24,10 @@ const TENANT_EMAIL = process.env.E2E_TENANT_EMAIL ?? '';
 const TENANT_PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
 const TECHNICIAN_EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const TECHNICIAN_PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
-const RUN_MARKER = `tenant-cross-role-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const RECOVERY_EMAIL = `e2e.tenant.recovery.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@bin-groups.com`;
-const RECOVERY_PASSWORD = `Tmp!${Date.now()}Aa9#${Math.random().toString(36).slice(2, 10)}`;
+const RUN_MARKER = `tenant-cross-role-${Date.now()}-${randomBytes(6).toString('hex')}`;
+const RECOVERY_NONCE = randomBytes(12).toString('hex');
+const RECOVERY_EMAIL = `e2e.tenant.recovery.${Date.now()}.${RECOVERY_NONCE}@bin-groups.com`;
+const RECOVERY_PASSWORD = `${randomBytes(24).toString('base64url')}Aa9!`;
 const IMAGE_BUFFER = Buffer.from(
   '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
   'hex',
@@ -508,12 +510,8 @@ test.describe('Tenant Business Workflow', () => {
     await expect.poll(async () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
-      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}`;
-    }, { timeout: 40_000 }).toMatch(/CLOSED\|true\|APPROVED/i);
-    await expect.poll(async () => {
-      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
-      return snap.data()?.finalApproval === true;
-    }, { timeout: 40_000 }).toBe(true);
+      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
+    }, { timeout: 40_000 }).toMatch(/CLOSED\|true\|APPROVED\|true/i);
   });
 
   test('Tenant dispute opens Admin review after real Technician completion', async ({ browser, page }) => {
