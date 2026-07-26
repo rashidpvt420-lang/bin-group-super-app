@@ -15,13 +15,17 @@ The controlled pilot uses foreground browser geolocation. A Technician is shown 
 - Terminal STOP tombstones remain blocking until secure purge or successful server reconciliation.
 - STOP queue saturation fails closed rather than silently deleting stop intent.
 
+## STOP acknowledgement truth
+
+A STOP can arrive before the first accepted coordinate creates a canonical server session. In that case, the App Check-protected callable records an audited missing-session no-op and returns `missingSession=true`; it does not create or mutate a live-location record. The client records `STOP_MISSING_SESSION_RECONCILED` with `canonicalSessionAbsent=true`, clears the retry safely, and does not falsely claim that an active canonical session was stopped.
+
 ## Legacy migration
 
 Before deleting the previous global v2 queue, the client validates every legacy entry and keeps only the newest STOP for each Technician, ticket and tracking-session identity. The coordinate property is removed entirely. The resulting STOP is written into the matching Technician’s UID-scoped v3 queue and read back for verification. Legacy keys are deleted only after every valid migrated STOP is confirmed. Legacy UPDATE coordinates and malformed records are deleted rather than trusted or migrated.
 
 ## Privacy boundaries
 
-Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout first clears the foreground watch, submits the canonical STOP, and immediately replays any queued STOP while Firebase authentication is still available. Direct server acknowledgement, superseded-session acknowledgement, or a successful queued replay permits logout. The authenticated UID queue is purged only after reconciliation succeeds; otherwise storage cleanup, sign-out and navigation remain blocked.
+Legacy global queue keys are deleted after verified STOP migration. Starting under another Technician account removes other UID scopes. Secure Technician logout first clears the foreground watch, submits the canonical STOP, and immediately replays any queued STOP while Firebase authentication is still available. Direct server acknowledgement, missing-session acknowledgement, superseded-session acknowledgement, or a successful queued replay permits logout. The authenticated UID queue is purged only after reconciliation succeeds; otherwise storage cleanup, sign-out and navigation remain blocked.
 
 ## Admin map behavior
 
