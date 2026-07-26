@@ -16,6 +16,8 @@ const REVIEWABLE_STATUSES = new Set([
   "pending",
   "pending_approval",
   "pending_review",
+  "pending_admin_approval",
+  "pending_admin_review",
   "onboarding",
   "submitted",
   "draft",

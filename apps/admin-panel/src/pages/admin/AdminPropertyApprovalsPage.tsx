@@ -3,7 +3,7 @@ import { Alert, Box, Button, Chip, Paper, Stack, Table, TableBody, TableCell, Ta
 import { collection, db, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
 import { resolveVerifiedPropertyPin } from '../../lib/verifiedPropertyPin';
 
-const pendingStates = ['PENDING', 'PENDING REVIEW', 'PENDING APPROVAL', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'ONBOARDING', 'UNKNOWN'];
+const pendingStates = ['PENDING', 'PENDING REVIEW', 'PENDING APPROVAL', 'PENDING ADMIN APPROVAL', 'PENDING ADMIN REVIEW', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'ONBOARDING', 'UNKNOWN'];
 const approvedStates = ['APPROVED', 'ACTIVE'];
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/[_-]/g, ' ').toUpperCase();
 const toMillis = (value: any) => {
