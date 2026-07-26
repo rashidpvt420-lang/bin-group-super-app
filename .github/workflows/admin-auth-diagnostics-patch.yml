@@ -1,0 +1,89 @@
+name: One-time Admin Auth Diagnostics Patch
+
+on:
+  push:
+    branches:
+      - fix/admin-operational-proof
+    paths:
+      - .github/workflows/admin-auth-diagnostics-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Admin evidence branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/admin-operational-proof
+          fetch-depth: 0
+
+      - name: Remove Firebase Auth response bodies from retained diagnostics
+        shell: python
+        run: |
+          from pathlib import Path
+
+          replacements = {
+              Path('tests/e2e/business-admin.spec.ts'): [
+                  (
+                      "    firebaseAuthBody: authResponse ? (await authResponse.text().catch(() => '')).slice(0, 2_000) : null,",
+                      "    firebaseAuthEndpoint: authResponse ? 'identitytoolkit.accounts:signInWithPassword' : null,",
+                  ),
+                  (
+                      "    expect(authResponse.status(), `Firebase Auth response: ${(await authResponse.text()).slice(0, 1_000)}`).toBeLessThan(400);",
+                      "    expect(authResponse.status(), 'Firebase Auth password endpoint returned an error status.').toBeLessThan(400);",
+                  ),
+              ],
+              Path('tests/e2e/helpers/adminMfa.ts'): [
+                  (
+                      "    expect(authResponse.status(), `Firebase Auth response: ${(await authResponse.text()).slice(0, 1_000)}`).toBeLessThan(400);",
+                      "    expect(authResponse.status(), 'Firebase Auth password endpoint returned an error status.').toBeLessThan(400);",
+                  ),
+                  (
+                      "      firebaseAuthBody: authResponse ? (await authResponse.text().catch(() => '')).slice(0, 2_000) : null,",
+                      "      firebaseAuthEndpoint: authResponse ? 'identitytoolkit.accounts:signInWithPassword' : null,",
+                  ),
+              ],
+          }
+
+          for path, pairs in replacements.items():
+              source = path.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  if old not in source:
+                      raise SystemExit(f'Expected unsafe Admin diagnostics pattern not found in {path}: {old}')
+                  source = source.replace(old, new, 1)
+              path.write_text(source, encoding='utf-8')
+
+          test_path = Path('tests/launch/admin-auth-diagnostics-redaction.test.mjs')
+          test_path.write_text("""import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+
+          const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+
+          test('Admin production evidence never retains Firebase Auth or MFA response bodies', async () => {
+            const sources = await Promise.all([
+              read('tests/e2e/business-admin.spec.ts'),
+              read('tests/e2e/helpers/adminMfa.ts'),
+            ]);
+            for (const source of sources) {
+              assert.doesNotMatch(source, /firebaseAuthBody/);
+              assert.doesNotMatch(source, /authResponse\\.text\\(/);
+              assert.match(source, /firebaseAuthStatus/);
+              assert.match(source, /identitytoolkit\\.accounts:signInWithPassword/);
+            }
+          });
+          """.replace('          ', ''), encoding='utf-8')
+
+      - name: Commit bounded security patch
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/e2e/business-admin.spec.ts tests/e2e/helpers/adminMfa.ts tests/launch/admin-auth-diagnostics-redaction.test.mjs
+          git diff --cached --check
+          git commit -m "test(admin): redact Firebase Auth response bodies"
+          git push origin HEAD:fix/admin-operational-proof
