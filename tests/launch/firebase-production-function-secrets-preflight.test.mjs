@@ -21,6 +21,7 @@ const expectedAiSecrets = [
 const expectedBankPilotSecrets = [
   'SMTP_USER',
   'SMTP_PASS',
+  'OWNER_CONTRACT_OTP_PEPPER',
   ...expectedAiSecrets,
 ];
 
@@ -45,7 +46,7 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('bank-pilot requires SMTP and AI while public mode additionally requires Stripe', () => {
+test('bank-pilot requires SMTP, Owner OTP pepper, and AI while public mode additionally requires Stripe', () => {
   assert.deepEqual(requiredFirebaseAiSecrets, expectedAiSecrets);
   assert.deepEqual(requiredFirebaseBankPilotSecrets, expectedBankPilotSecrets);
   assert.deepEqual(requiredFirebasePublicSecrets, expectedPublicSecrets);
@@ -74,9 +75,6 @@ test('protected production deploy imports mode-aware secret preflight before Fir
 });
 
 test('production deploy allows deployment when GITHUB_SHA is an ancestor of origin/main (race-condition tolerance)', () => {
-  // Verifies the deploy script uses ancestry check when origin/main has advanced beyond GITHUB_SHA.
-  // This prevents spurious "stale deployment" failures when new commits land on main while the
-  // workflow is running (the GITHUB_SHA was valid at dispatch time).
   assert.match(deploy, /merge-base.*--is-ancestor/, 'ancestry check via git merge-base must be present');
   assert.match(deploy, /FETCH_HEAD/, 'ancestry check must reference FETCH_HEAD after fetching origin/main');
   assert.match(deploy, /fetch.*--depth.*origin.*main/s, 'must fetch origin main before ancestry check');

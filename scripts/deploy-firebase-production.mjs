@@ -16,6 +16,7 @@ const approvalPath = 'launch_package/predeploy-approval.json';
 const deploymentMetadataPath = 'launch_package/production-deployment.json';
 const adminBootstrapMetadataPath = 'launch_package/admin-mfa-bootstrap-hosting.json';
 const adminBootstrapMarker = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
+const functionsRuntimeEntry = 'functions/lib/runtimeAll.js';
 const adminBootstrapFunctions = Object.freeze([
   'registerAdminSecuritySession',
   'getAdminSecurityProfile',
@@ -98,14 +99,10 @@ const remoteMain = spawnSync(
 );
 const remoteMainSha = String(remoteMain.stdout || '').trim().split(/\s+/)[0] || '';
 if ((remoteMain.status ?? 1) !== 0 || !remoteMainSha) {
-  console.error(
-    `[production-deploy] Refusing stale deployment: could not resolve current origin/main`,
-  );
+  console.error('[production-deploy] Refusing stale deployment: could not resolve current origin/main');
   process.exit(1);
 }
 if (remoteMainSha !== githubSha) {
-  // origin/main has advanced since dispatch; verify GITHUB_SHA is still an ancestor
-  // (i.e. main only moved forward — not reverted or force-pushed)
   const fetchResult = spawnSync(
     'git',
     ['fetch', '--depth=500', 'origin', 'main'],
@@ -152,9 +149,29 @@ function run(command, args, options = {}) {
   return result.status ?? 1;
 }
 
-function retryFirebase(target, label) {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    console.log(`[production-deploy] ${label} attempt ${attempt}/3`);
+function boundedInteger(name, fallback, minimum, maximum) {
+  const parsed = Number.parseInt(String(process.env[name] || ''), 10);
+  const value = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function sleepSeconds(seconds, reason) {
+  const duration = Math.max(0, Number(seconds) || 0);
+  if (!duration) return;
+  console.log(`[production-deploy] waiting ${duration}s ${reason}`);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, duration * 1000);
+}
+
+function retryFirebase(target, label, options = {}) {
+  const attempts = boundedInteger('FIREBASE_DEPLOY_MAX_ATTEMPTS', options.attempts || 3, 1, 5);
+  const retryDelaySeconds = boundedInteger(
+    'FIREBASE_DEPLOY_RETRY_DELAY_SECONDS',
+    options.retryDelaySeconds || 120,
+    60,
+    300,
+  );
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    console.log(`[production-deploy] ${label} attempt ${attempt}/${attempts}`);
     const status = run('npx', [
       'firebase',
       'deploy',
@@ -166,13 +183,97 @@ function retryFirebase(target, label) {
       '--force',
     ]);
     if (status === 0) return;
-    if (attempt < 3) {
-      const sleep = spawnSync('sleep', ['30'], { stdio: 'inherit' });
-      if ((sleep.status ?? 1) !== 0) process.exit(1);
+    if (attempt < attempts) {
+      sleepSeconds(retryDelaySeconds * attempt, `before retrying ${label}`);
     }
   }
-  console.error(`[production-deploy] ${label} failed after 3 attempts`);
+  console.error(`[production-deploy] ${label} failed after ${attempts} attempts`);
   process.exit(1);
+}
+
+function discoverDeployableFunctionNames() {
+  if (!existsSync(functionsRuntimeEntry)) {
+    console.error(`[production-deploy] Missing compiled Functions runtime: ${functionsRuntimeEntry}`);
+    process.exit(1);
+  }
+  const absoluteEntry = `${process.cwd()}/${functionsRuntimeEntry}`;
+  const probe = `
+const mod = require(${JSON.stringify(absoluteEntry)});
+const names = Object.entries(mod || {})
+  .filter(([, value]) => Boolean(value && (value.__endpoint || value.__trigger)))
+  .map(([name]) => name)
+  .sort();
+process.stdout.write(JSON.stringify(names));
+`;
+  const result = spawnSync(process.execPath, ['-e', probe], {
+    cwd: process.cwd(),
+    env: { ...process.env, NODE_ENV: 'production' },
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if ((result.status ?? 1) !== 0) {
+    console.error('[production-deploy] Could not discover compiled Firebase Function exports');
+    console.error(result.stderr || result.stdout || 'unknown Functions discovery failure');
+    process.exit(1);
+  }
+  let names;
+  try {
+    names = JSON.parse(String(result.stdout || '').trim());
+  } catch {
+    console.error('[production-deploy] Compiled Firebase Function discovery returned malformed JSON');
+    process.exit(1);
+  }
+  if (!Array.isArray(names) || names.length === 0) {
+    console.error('[production-deploy] No deployable Firebase Function exports were discovered');
+    process.exit(1);
+  }
+  const invalid = names.filter((name) => !/^[A-Za-z][A-Za-z0-9_-]*$/.test(String(name)));
+  if (invalid.length > 0 || new Set(names).size !== names.length) {
+    console.error(`[production-deploy] Invalid or duplicate Firebase Function export names: ${invalid.join(', ')}`);
+    process.exit(1);
+  }
+  return names;
+}
+
+function chunk(values, size) {
+  const chunks = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function deployFunctionsQuotaSafe() {
+  const functionNames = discoverDeployableFunctionNames();
+  const batchSize = boundedInteger('FIREBASE_FUNCTION_DEPLOY_BATCH_SIZE', 4, 1, 6);
+  const cooldownSeconds = boundedInteger('FIREBASE_FUNCTION_DEPLOY_COOLDOWN_SECONDS', 75, 60, 300);
+  const batches = chunk(functionNames, batchSize);
+
+  console.log(
+    `[production-deploy] quota-safe Functions deployment: ${functionNames.length} exports in ${batches.length} sequential batches (size<=${batchSize}, cooldown=${cooldownSeconds}s)`,
+  );
+
+  batches.forEach((batch, index) => {
+    const target = batch.map((name) => `functions:${name}`).join(',');
+    retryFirebase(
+      target,
+      `Functions batch ${index + 1}/${batches.length} [${batch.join(', ')}]`,
+      { retryDelaySeconds: 120 },
+    );
+    if (index < batches.length - 1) {
+      sleepSeconds(cooldownSeconds, 'to respect the regional Cloud Functions mutation quota');
+    }
+  });
+
+  return {
+    strategy: 'sequential-export-batches',
+    functionCount: functionNames.length,
+    batchCount: batches.length,
+    batchSize,
+    cooldownSeconds,
+    deployedFunctions: functionNames,
+  };
 }
 
 let phoneAuthEvidence;
@@ -289,9 +390,11 @@ try {
   process.exit(1);
 }
 
+const functionDeploymentEvidence = deployFunctionsQuotaSafe();
 retryFirebase(
-  'functions,hosting,firestore:rules,firestore:indexes,storage',
-  'complete Firebase production stack',
+  'hosting,firestore:rules,firestore:indexes,storage',
+  'non-Functions Firebase production stack',
+  { retryDelaySeconds: 90 },
 );
 
 const metadataStatus = run(process.execPath, [
@@ -305,11 +408,12 @@ try {
   const deploymentMetadata = JSON.parse(readFileSync(deploymentMetadataPath, 'utf8'));
   deploymentMetadata.firebasePhoneAuth = phoneAuthEvidence;
   deploymentMetadata.adminMfa = adminMfaEvidence;
+  deploymentMetadata.functionsDeployment = functionDeploymentEvidence;
   writeFileSync(deploymentMetadataPath, `${JSON.stringify(deploymentMetadata, null, 2)}\n`);
-  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth and Admin MFA evidence');
+  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth, Admin MFA and quota-safe Functions deployment evidence');
 } catch (error) {
   const message = error instanceof Error ? error.message : 'metadata embedding failed';
-  console.error(`[production-deploy] Could not bind Firebase Phone Auth and Admin MFA evidence to deployment metadata: ${message}`);
+  console.error(`[production-deploy] Could not bind Firebase Phone Auth, Admin MFA and Functions batching evidence to deployment metadata: ${message}`);
   process.exit(1);
 }
 
