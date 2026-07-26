@@ -23,7 +23,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /Auto-discover, verify, and publish application evidence/);
-  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence-mfa\.mjs/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-application-evidence\.mjs/);
   assert.match(workflow, /application-proofs\/\$\{gate\}\.json/);
   assert.match(workflow, /SELECTED_GATE.*all/s);
