@@ -88,10 +88,10 @@ function parseMarker(content) {
 }
 
 async function resolveAutomatedFounder({ repository, commitSha, workflowActor, authorizedActors, authorizedEmails }) {
-  if (workflowActor.toLowerCase() !== AUTOMATION_ACTOR) {
+  if (workflowActor !== AUTOMATION_ACTOR) {
     throw new Error('automated Founder identity may only be resolved for github-actions[bot]');
   }
-  if (!authorizedActors.includes(AUTOMATION_ACTOR)) {
+  if (!authorizedActors.includes(workflowActor)) {
     throw new Error('automation workflow actor is not authorized');
   }
   if (authorizedEmails.length !== 1) {
@@ -111,6 +111,7 @@ async function resolveAutomatedFounder({ repository, commitSha, workflowActor, a
   if (matches.length !== 1) {
     throw new Error('production incident evidence must identify exactly one owner bank-pilot request PR');
   }
+
   const pullNumber = matches[0][1];
   const apiRoot = `https://api.github.com/repos/${repository}`;
   const pull = await fetchGithubJson(`${apiRoot}/pulls/${pullNumber}`, 'owner request PR');
@@ -145,7 +146,7 @@ async function resolveAutomatedFounder({ repository, commitSha, workflowActor, a
   parseMarker(Buffer.from(marker.content.replace(/\s+/g, ''), 'base64').toString('utf8'));
 
   return {
-    actor: founderActor,
+    founderActor,
     founderEmail: authorizedEmails[0],
     ownerRequestPullRequest: Number(pullNumber),
   };
@@ -173,7 +174,9 @@ try {
 
   const authorizedActors = parseCsvRequired(authorizedActorsRaw, 'AUTHORIZED_FOUNDER_ACTORS');
   const authorizedEmails = parseCsvRequired(authorizedEmailsRaw, 'AUTHORIZED_FOUNDER_EMAILS');
-  let actor = workflowActor;
+  if (!authorizedActors.includes(workflowActor)) throw new Error('workflow actor is not authorized');
+
+  let founderActor = workflowActor;
   let founderEmail = requestedFounderEmail;
   let ownerRequestPullRequest = null;
 
@@ -185,14 +188,13 @@ try {
       authorizedActors,
       authorizedEmails,
     });
-    actor = automated.actor;
+    founderActor = automated.founderActor;
     founderEmail = automated.founderEmail;
     ownerRequestPullRequest = automated.ownerRequestPullRequest;
   } else {
     if (workflowActor === AUTOMATION_ACTOR) {
       throw new Error('automated Founder authorization requires the protected email sentinel and owner PR evidence');
     }
-    if (!authorizedActors.includes(actor)) throw new Error('workflow actor is not an authorized Founder actor');
     if (!authorizedEmails.includes(founderEmail)) throw new Error('Founder email is not authorized');
   }
 
@@ -207,12 +209,13 @@ try {
     repository,
     runId,
     runAttempt,
-    actor,
+    actor: workflowActor,
     workflowActor,
     ownerRequestPullRequest,
     founder: {
       name: founderName,
       email: founderEmail,
+      actor: founderActor,
     },
     issuedAt: new Date(issuedAtMs).toISOString(),
     expiresAt: new Date(issuedAtMs + AUTHORIZATION_MAX_AGE_MS).toISOString(),
@@ -226,7 +229,7 @@ try {
     ref,
     repository,
     runId,
-    actor,
+    actor: workflowActor,
     authorizedActors: authorizedActorsRaw,
     authorizedEmails: authorizedEmailsRaw,
     hmacKey,
@@ -237,11 +240,11 @@ try {
   mkdirSync(path.dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
   const githubEnv = String(process.env.GITHUB_ENV || '').trim();
-  if (githubEnv) appendFileSync(githubEnv, `AUTHORIZATION_ACTOR=${actor}\n`, 'utf8');
+  if (githubEnv) appendFileSync(githubEnv, `AUTHORIZATION_ACTOR=${workflowActor}\n`, 'utf8');
   console.log(`[hard-launch-auth] wrote ${outputPath}`);
   console.log(`[hard-launch-auth] commitSha=${commitSha}`);
-  console.log(`[hard-launch-auth] authorizationActor=${actor}`);
   console.log(`[hard-launch-auth] workflowActor=${workflowActor}`);
+  console.log(`[hard-launch-auth] founderActor=${founderActor}`);
   console.log('[hard-launch-auth] Founder authorization signed and bound to this workflow run');
 } catch (error) {
   console.error(`[hard-launch-auth] REFUSED: ${error instanceof Error ? error.message : 'unknown failure'}`);
