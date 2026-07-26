@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+// These regressions keep every rule hardener and its independent launch verifier
+// converged on the same server-authoritative canonical property geo boundary.
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 const hardening = await read('scripts/harden-final-firestore-authority.mjs');
 const privateHrHardening = await read('scripts/harden-private-hr-authority.mjs');
