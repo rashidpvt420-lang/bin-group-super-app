@@ -150,7 +150,7 @@ jobs:
           if (doc.deployedCommitSha !== expectedSha) failures.push('deployment commit mismatch');
           if (String(doc.workflowRunId || '') !== deployRunId) failures.push('deployment run mismatch');
           if (doc.workflowRef !== 'refs/heads/main') failures.push('deployment ref mismatch');
-          if (doc.repository !== 'rashidpvt420-lang/bin-group-super-app') failures.push('deployment repository mismatch');
+          if (doc.repository !== process.env.GITHUB_REPOSITORY) failures.push('deployment repository mismatch');
           if (!/^sha256:[a-f0-9]{64}$/.test(String(doc.validatedArtifactDigest || '').toLowerCase())) failures.push('validated artifact digest is invalid');
           const deployedAt = Date.parse(String(doc.deployedAt || ''));
           if (!Number.isFinite(deployedAt)) failures.push('deployment timestamp is invalid');
