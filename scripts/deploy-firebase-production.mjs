@@ -98,14 +98,10 @@ const remoteMain = spawnSync(
 );
 const remoteMainSha = String(remoteMain.stdout || '').trim().split(/\s+/)[0] || '';
 if ((remoteMain.status ?? 1) !== 0 || !remoteMainSha) {
-  console.error(
-    `[production-deploy] Refusing stale deployment: could not resolve current origin/main`,
-  );
+  console.error('[production-deploy] Refusing stale deployment: could not resolve current origin/main');
   process.exit(1);
 }
 if (remoteMainSha !== githubSha) {
-  // origin/main has advanced since dispatch; verify GITHUB_SHA is still an ancestor
-  // (i.e. main only moved forward — not reverted or force-pushed)
   const fetchResult = spawnSync(
     'git',
     ['fetch', '--depth=500', 'origin', 'main'],
@@ -290,9 +286,12 @@ try {
 }
 
 retryFirebase(
-  'functions,hosting,firestore:rules,firestore:indexes,storage',
-  'complete Firebase production stack',
+  'hosting,firestore:rules,firestore:indexes,storage',
+  'non-Functions Firebase production resources',
 );
+
+const functionsStatus = run(process.execPath, ['scripts/deploy-firebase-functions-batched.mjs']);
+if (functionsStatus !== 0) process.exit(functionsStatus);
 
 const metadataStatus = run(process.execPath, [
   'scripts/write-production-deployment-metadata.mjs',
@@ -305,8 +304,9 @@ try {
   const deploymentMetadata = JSON.parse(readFileSync(deploymentMetadataPath, 'utf8'));
   deploymentMetadata.firebasePhoneAuth = phoneAuthEvidence;
   deploymentMetadata.adminMfa = adminMfaEvidence;
+  deploymentMetadata.functionsDeploymentPlan = 'launch_package/functions-deployment-plan.json';
   writeFileSync(deploymentMetadataPath, `${JSON.stringify(deploymentMetadata, null, 2)}\n`);
-  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth and Admin MFA evidence');
+  console.log('[production-deploy] embedded exact-SHA Firebase Phone Auth, Admin MFA, and batched Functions evidence');
 } catch (error) {
   const message = error instanceof Error ? error.message : 'metadata embedding failed';
   console.error(`[production-deploy] Could not bind Firebase Phone Auth and Admin MFA evidence to deployment metadata: ${message}`);
