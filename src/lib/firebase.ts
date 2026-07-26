@@ -59,7 +59,7 @@ import {
 import {
   getStorage,
   ref,
-  uploadBytes,
+  uploadBytes as firebaseUploadBytes,
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
@@ -163,6 +163,34 @@ if (typeof window !== 'undefined') {
 export const storage: FirebaseStorage = getStorage(app);
 export const FUNCTIONS_REGION = 'europe-west3';
 export const functions: Functions = getFunctions(app, FUNCTIONS_REGION);
+
+const transientStorageCodes = new Set([
+  'storage/unknown',
+  'storage/retry-limit-exceeded',
+  'storage/server-file-wrong-size',
+  'storage/quota-exceeded',
+]);
+
+const uploadBytes: typeof firebaseUploadBytes = (async (...args: Parameters<typeof firebaseUploadBytes>) => {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await firebaseUploadBytes(...args);
+    } catch (error: any) {
+      lastError = error;
+      const code = String(error?.code || '').toLowerCase();
+      const message = String(error?.message || '').toLowerCase();
+      const transient = transientStorageCodes.has(code)
+        || message.includes('network')
+        || message.includes('failed to fetch')
+        || message.includes('timeout')
+        || message.includes('connection');
+      if (!transient || attempt === 3 || (typeof navigator !== 'undefined' && !navigator.onLine)) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 350 * (2 ** (attempt - 1))));
+    }
+  }
+  throw lastError;
+}) as typeof firebaseUploadBytes;
 
 const pendingAuditWrites = new Map<string, Promise<void>>();
 
