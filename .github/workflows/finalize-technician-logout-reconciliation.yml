@@ -1,0 +1,35 @@
+name: Finalize Technician Logout Reconciliation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'fix/map-gps-client-hardening-final'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Apply fail-closed logout reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "$(git rev-parse origin/main)" = 'ed0656cc5336bd97e90d6a33430b035818b9be05'
+          python .github/scripts/finalize-technician-logout-reconciliation.py
+          rm -f \
+            .github/scripts/finalize-technician-logout-reconciliation.py \
+            .github/workflows/finalize-technician-logout-reconciliation.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && { echo '::error::No logout reconciliation changes were produced.'; exit 1; }
+          git commit -m 'Reconcile GPS STOP before Technician logout'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
