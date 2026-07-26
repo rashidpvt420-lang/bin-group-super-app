@@ -217,42 +217,90 @@ export const readGpsRetryQueue = (
   return entries;
 };
 
-const migrateLegacyV2Stops = (nowMs = Date.now()) => {
-  const local = safeStorage('localStorage');
-  if (!local) return;
+const legacyEntryIdentity = (entry: QueuedGpsAction) =>
+  `${entry.technicianUid}|${entry.ticketId}|${entry.trackingSessionId}`;
+
+export const legacyStopEntriesForMigration = (
+  inputs: unknown[],
+  nowMs = Date.now(),
+): QueuedGpsAction[] => {
+  const newest = new Map<string, QueuedGpsAction>();
+  for (const input of inputs) {
+    const entry = sanitizeEntry(input, nowMs);
+    if (!entry || entry.action !== 'STOP') continue;
+    const { point: _legacyPoint, ...coordinateFree } = entry;
+    const key = legacyEntryIdentity(coordinateFree);
+    const previous = newest.get(key);
+    if (!previous || coordinateFree.queuedAtMs >= previous.queuedAtMs) newest.set(key, coordinateFree);
+  }
+  return [...newest.values()].sort((left, right) =>
+    left.queuedAtMs - right.queuedAtMs || left.id.localeCompare(right.id));
+};
+
+const readLegacyRawEntries = (storage: StorageLike, key: string): unknown[] => {
+  let serialized: string | null;
+  try { serialized = storage.getItem(key); }
+  catch { throw new Error('GPS_LEGACY_QUEUE_READ_FAILED'); }
+  if (!serialized) return [];
   try {
-    const raw = JSON.parse(local.getItem(LEGACY_QUEUE_KEYS[1]) || '[]');
-    if (!Array.isArray(raw)) return;
-    const validStops = raw
-      .map((entry) => sanitizeEntry(entry, nowMs))
-      .filter((entry): entry is QueuedGpsAction => Boolean(entry && entry.action === 'STOP'));
-    for (const entry of validStops) {
-      const selected = browserGpsQueueStorage(entry.technicianUid);
-      const existing = readGpsRetryQueue(selected, nowMs);
-      const duplicate = existing.some((candidate) =>
-        candidate.action === 'STOP' &&
-        candidate.technicianUid === entry.technicianUid &&
-        candidate.ticketId === entry.ticketId &&
-        candidate.trackingSessionId === entry.trackingSessionId,
-      );
-      if (!duplicate) writeQueues(selected, [...existing, { ...entry, point: undefined }]);
-    }
+    const parsed = JSON.parse(serialized);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    // Malformed legacy data is deleted below and is never allowed to start a
-    // new session as trusted reconciliation evidence.
+    return [];
   }
 };
 
-export const removeLegacyGpsQueue = () => {
-  // Preserve coordinate-free pending STOP authority before deleting the old
-  // global key. Legacy UPDATE coordinates are intentionally not migrated.
-  migrateLegacyV2Stops();
-  for (const storage of [safeStorage('localStorage'), safeStorage('sessionStorage')]) {
-    if (!storage) continue;
-    for (const key of LEGACY_QUEUE_KEYS) {
-      try { storage.removeItem(key); } catch { /* no-op */ }
+export const migrateAndRemoveLegacyGpsQueue = (nowMs = Date.now()) => {
+  const local = safeStorage('localStorage');
+  const session = safeStorage('sessionStorage');
+  const sources = [local, session].filter(Boolean) as StorageLike[];
+  if (!sources.length) return 0;
+
+  const legacyRaw: unknown[] = [];
+  for (const storage of sources) {
+    for (const key of LEGACY_QUEUE_KEYS) legacyRaw.push(...readLegacyRawEntries(storage, key));
+  }
+  const legacyStops = legacyStopEntriesForMigration(legacyRaw, nowMs);
+  if (legacyStops.length && !local) throw new Error('GPS_STOP_MIGRATION_STORAGE_UNAVAILABLE');
+
+  const stopsByTechnician = new Map<string, QueuedGpsAction[]>();
+  for (const entry of legacyStops) {
+    const current = stopsByTechnician.get(entry.technicianUid) || [];
+    current.push(entry);
+    stopsByTechnician.set(entry.technicianUid, current);
+  }
+
+  for (const [technicianUid, migratedStops] of stopsByTechnician) {
+    const target = scopedStorage(local, technicianUid);
+    if (!target) throw new Error('GPS_STOP_MIGRATION_STORAGE_UNAVAILABLE');
+    const combined = legacyStopEntriesForMigration([
+      ...readList(target, STOP_QUEUE_KEY, nowMs),
+      ...migratedStops,
+    ], nowMs);
+    const bounded = boundedStopEntries(combined);
+    writeList(target, STOP_QUEUE_KEY, bounded, MAX_STOP_QUEUE_SIZE);
+    const verified = readList(target, STOP_QUEUE_KEY, nowMs);
+    for (const expected of migratedStops) {
+      if (!verified.some((candidate) => legacyEntryIdentity(candidate) === legacyEntryIdentity(expected))) {
+        throw new Error('GPS_STOP_MIGRATION_VERIFICATION_FAILED');
+      }
     }
   }
+
+  // Delete old keys only after every valid coordinate-free STOP was written and
+  // re-read from its Technician-scoped v3 queue. Legacy UPDATE coordinates are
+  // intentionally never migrated.
+  for (const storage of sources) {
+    for (const key of LEGACY_QUEUE_KEYS) {
+      try { storage.removeItem(key); }
+      catch { throw new Error('GPS_LEGACY_QUEUE_DELETE_FAILED'); }
+    }
+  }
+  return legacyStops.length;
+};
+
+export const removeLegacyGpsQueue = () => {
+  migrateAndRemoveLegacyGpsQueue();
 };
 
 const purgeOtherBrowserStopScopes = (technicianUid: string) => {

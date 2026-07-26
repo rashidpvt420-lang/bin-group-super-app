@@ -256,12 +256,25 @@ test('new ticket startup discards stale UPDATE coordinates before STOP reconcili
 });
 
 
-test('legacy v2 STOP authority migrates before global queue deletion', () => {
+test('legacy v2 STOP migration keeps only coordinate-free newest STOP authority', () => {
+  const now = 20_000;
+  const migrated = queue.legacyStopEntriesForMigration([
+    { ...stopInput(), id: 'older-stop', queuedAtMs: 1_000, expiresAtMs: 30_000, retryCount: 0, nextAttemptAtMs: 1_000, terminal: false, point: { latitude: 24.2, longitude: 55.3 } },
+    { ...stopInput(), id: 'newer-stop', queuedAtMs: 2_000, expiresAtMs: 30_000, retryCount: 1, nextAttemptAtMs: 2_500, terminal: false },
+    { ...updateInput(), id: 'legacy-update', queuedAtMs: 3_000, expiresAtMs: 30_000, retryCount: 0, nextAttemptAtMs: 3_000, terminal: false },
+  ], now);
+  assert.equal(migrated.length, 1);
+  assert.equal(migrated[0].id, 'newer-stop');
+  assert.equal(migrated[0].action, 'STOP');
+  assert.equal('point' in migrated[0], false);
+});
+
+test('legacy keys are deleted only after scoped STOP write verification', () => {
   const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
-  const migrationIndex = queueSource.indexOf('migrateLegacyV2Stops();');
-  const deletionIndex = queueSource.indexOf('storage.removeItem(key)', migrationIndex);
-  assert.ok(migrationIndex >= 0 && deletionIndex > migrationIndex);
-  assert.match(queueSource, /entry\.action === 'STOP'/);
-  assert.match(queueSource, /point: undefined/);
-  assert.match(queueSource, /candidate\.trackingSessionId === entry\.trackingSessionId/);
+  const writeIndex = queueSource.indexOf('writeList(target, STOP_QUEUE_KEY');
+  const verifyIndex = queueSource.indexOf("throw new Error('GPS_STOP_MIGRATION_VERIFICATION_FAILED')", writeIndex);
+  const deleteIndex = queueSource.indexOf('storage.removeItem(key)', verifyIndex);
+  assert.ok(writeIndex >= 0 && verifyIndex > writeIndex && deleteIndex > verifyIndex);
+  assert.match(queueSource, /for \(const storage of sources\)/);
+  assert.match(queueSource, /Legacy UPDATE coordinates are[\s\S]*never migrated/);
 });
