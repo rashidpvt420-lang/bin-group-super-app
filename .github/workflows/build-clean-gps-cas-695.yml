@@ -1,0 +1,58 @@
+name: Build Clean GPS CAS 695
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/build-clean-gps-cas-695.yml
+      - .github/scripts/build-clean-gps-cas-695.py
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: build-clean-gps-cas-695
+  cancel-in-progress: false
+
+jobs:
+  build-clean-diff:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.number == 695 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/technician-gps-session-cas-current-main' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/technician-gps-session-cas-current-main
+          fetch-depth: 0
+      - name: Fetch pinned reviewed server source
+        run: git fetch origin fix/technician-gps-session-cas
+      - name: Build deterministic four-file CAS diff
+        run: python .github/scripts/build-clean-gps-cas-695.py
+      - name: Validate focused CAS scenarios
+        run: node --test tests/launch/technician-live-location-cas.test.mjs tests/launch/maps-gps-product-truth.test.mjs
+      - name: Commit product and tests, then remove one-off machinery
+        run: |
+          set -euo pipefail
+          git rm .github/scripts/build-clean-gps-cas-695.py .github/workflows/build-clean-gps-cas-695.yml
+          git add functions/technicianLiveLocation.ts functions/technicianLiveLocationCas.ts tests/launch/technician-live-location-cas.test.mjs tests/launch/maps-gps-product-truth.test.mjs
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            functions/technicianLiveLocation.ts \
+            functions/technicianLiveLocationCas.ts \
+            tests/launch/maps-gps-product-truth.test.mjs \
+            tests/launch/technician-live-location-cas.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Clean GPS CAS builder produced an unexpected final diff.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): enforce session CAS for STOP UPDATE and watchdog'
+          git push origin HEAD:fix/technician-gps-session-cas-current-main
