@@ -47,6 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           cp tests/launch/property-geo-authority.test.mjs /tmp/property-geo-authority.test.mjs
+          cp tests/launch/property-geo-catchall-authority.test.mjs /tmp/property-geo-catchall-authority.test.mjs
           expected_source='28806cc2b488733067cef595d0cb5f040f2e0ee3'
           git fetch --no-tags origin refs/heads/fix/property-tenant-authority-current-main:refs/remotes/origin/property-tenant-authority-source
           [[ "$(git rev-parse refs/remotes/origin/property-tenant-authority-source)" == "$expected_source" ]]
@@ -64,13 +65,13 @@ jobs:
             src/tenant/pages/TenantRequestPage.tsx
             test/property-geo-authority-rules.test.js
             test/tenant-ticket-server-authority-rules.test.js
-            tests/launch/property-geo-catchall-authority.test.mjs
           )
           for file in "${files[@]}"; do
             mkdir -p "$(dirname "$file")"
             git show "refs/remotes/origin/property-tenant-authority-source:$file" > "$file"
           done
           cp /tmp/property-geo-authority.test.mjs tests/launch/property-geo-authority.test.mjs
+          cp /tmp/property-geo-catchall-authority.test.mjs tests/launch/property-geo-catchall-authority.test.mjs
 
       - name: Make ticket-create verification collection-scoped
         shell: bash
