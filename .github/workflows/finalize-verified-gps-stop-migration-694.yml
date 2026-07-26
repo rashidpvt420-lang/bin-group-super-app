@@ -1,0 +1,103 @@
+name: Finalize Verified GPS STOP Migration 694
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/finalize-verified-gps-stop-migration-694.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply-test-and-clean:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.number == 694 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/map-gps-client-hardening-current-main' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: fix/map-gps-client-hardening-current-main
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Apply verified legacy STOP migration
+        run: python .github/scripts/apply-verified-gps-stop-migration-694.py
+
+      - name: Run focused behavior test
+        id: behavior
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node --test tests/launch/map-gps-state-behavior.test.mjs 2>&1 | tee gps-migration-behavior.log
+
+      - name: Run focused launch contract
+        id: launch
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          node --test tests/launch/maps-gps-product-truth.test.mjs 2>&1 | tee gps-migration-launch.log
+
+      - name: Upload focused diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gps-stop-migration-focused-${{ github.event.pull_request.head.sha }}
+          path: |
+            gps-migration-behavior.log
+            gps-migration-launch.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce focused tests
+        if: always()
+        env:
+          BEHAVIOR_OUTCOME: ${{ steps.behavior.outcome }}
+          LAUNCH_OUTCOME: ${{ steps.launch.outcome }}
+        run: |
+          set -euo pipefail
+          [[ "$BEHAVIOR_OUTCOME" == 'success' ]]
+          [[ "$LAUNCH_OUTCOME" == 'success' ]]
+
+      - name: Commit product/tests and remove one-off finalizer
+        run: |
+          set -euo pipefail
+          git add \
+            src/utils/gpsRetryQueue.ts \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs
+          git rm \
+            .github/scripts/apply-verified-gps-stop-migration-694.py \
+            .github/workflows/finalize-verified-gps-stop-migration-694.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/scripts/apply-verified-gps-stop-migration-694.py \
+            .github/workflows/finalize-verified-gps-stop-migration-694.yml \
+            src/utils/gpsRetryQueue.ts \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Verified GPS migration touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): preserve pending STOP authority during v3 migration'
+          git push origin HEAD:fix/map-gps-client-hardening-current-main
