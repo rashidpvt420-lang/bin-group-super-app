@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
-    Clock, Navigation, ArrowRight
+    Clock, Navigation, ArrowRight, BellRing
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -38,12 +38,28 @@ const STATUS_COLOR: Record<string, string> = {
 
 const ACTIVE_STATUS_SET = new Set(ALL_TECHNICIAN_ACTIVE_STATUSES.map((status) => String(status)));
 
+type AssignmentReceipt = {
+    id: string;
+    ticketId: string;
+    pushDeliveryState: string;
+    pushSuccessCount: number;
+    pushFailureCount: number;
+    createdAtMs: number;
+};
+
+function timestampMs(value: any) {
+    if (value && typeof value.toMillis === 'function') return value.toMillis();
+    const parsed = Date.parse(String(value || ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export default function TechnicianJobsPage() {
     const { user } = useRole();
     const navigate = useNavigate();
     const { tx, isRTL } = useLanguage();
 
     const [assignedJobs, setAssignedJobs] = useState<SnapshotDoc[]>([]);
+    const [assignmentReceipts, setAssignmentReceipts] = useState<Record<string, AssignmentReceipt>>({});
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
 
@@ -58,8 +74,14 @@ export default function TechnicianJobsPage() {
             collection(db, 'maintenanceTickets'),
             where('assignedTechnicianId', '==', user.uid),
         );
+        const receiptQuery = query(
+            collection(db, 'notifications'),
+            where('recipientId', '==', user.uid),
+            where('recipientRole', '==', 'technician'),
+            where('type', '==', 'TECHNICIAN_JOB_ASSIGNED'),
+        );
 
-        const unsub = onSnapshot(
+        const unsubAssigned = onSnapshot(
             assignedQuery,
             (snap) => {
                 const jobs = snap.docs
@@ -76,7 +98,29 @@ export default function TechnicianJobsPage() {
             },
         );
 
-        return () => unsub();
+        const unsubReceipts = onSnapshot(receiptQuery, (snap) => {
+            const latest: Record<string, AssignmentReceipt> = {};
+            snap.docs.forEach((docSnap) => {
+                const data = docSnap.data() as Record<string, any>;
+                const ticketId = String(data.ticketId || '');
+                if (!ticketId) return;
+                const receipt: AssignmentReceipt = {
+                    id: docSnap.id,
+                    ticketId,
+                    pushDeliveryState: String(data.pushDeliveryState || 'QUEUED'),
+                    pushSuccessCount: Number(data.pushSuccessCount || 0),
+                    pushFailureCount: Number(data.pushFailureCount || 0),
+                    createdAtMs: timestampMs(data.createdAt),
+                };
+                if (!latest[ticketId] || receipt.createdAtMs >= latest[ticketId].createdAtMs) latest[ticketId] = receipt;
+            });
+            setAssignmentReceipts(latest);
+        }, () => setAssignmentReceipts({}));
+
+        return () => {
+            unsubAssigned();
+            unsubReceipts();
+        };
     }, [user?.uid, tx]);
 
     if (loading) return (
@@ -92,6 +136,9 @@ export default function TechnicianJobsPage() {
         const jobLoc = getTicketJobLocation(job);
         const dist = calculateDistanceKm(techLoc, jobLoc);
         const eta = calculateEtaMinutes(dist);
+        const receipt = assignmentReceipts[String(job.id)];
+        const deliveryState = receipt?.pushDeliveryState || 'PENDING_TRIGGER';
+        const deliverySucceeded = ['SUCCESS', 'PARTIAL'].includes(deliveryState) && (receipt?.pushSuccessCount || 0) > 0;
 
         return (
             <Paper key={job.id} data-testid="technician-assigned-job-card" sx={{
@@ -111,7 +158,22 @@ export default function TechnicianJobsPage() {
                             {String(job.propertyName || 'Property')} · Unit {String(job.unitNumber || 'N/A')}
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <Chip
+                            data-testid="technician-job-notification-receipt"
+                            data-ticket-id={String(job.id)}
+                            data-delivery-state={deliveryState}
+                            size="small"
+                            icon={<BellRing size={11} />}
+                            label={`DISPATCH ALERT: ${deliveryState}`}
+                            sx={{
+                                fontSize: '0.62rem',
+                                fontWeight: 950,
+                                bgcolor: alpha(deliverySucceeded ? '#10b981' : '#f59e0b', 0.12),
+                                color: deliverySucceeded ? '#10b981' : '#f59e0b',
+                                '& .MuiChip-icon': { color: 'inherit' },
+                            }}
+                        />
                         {isLive && eta !== null && (
                             <Chip
                                 size="small"
@@ -153,6 +215,7 @@ export default function TechnicianJobsPage() {
 
                 <Button
                     data-testid="technician-open-job-card"
+                    data-ticket-id={String(job.id)}
                     fullWidth variant="contained"
                     onClick={() => navigate(`/technician/job/${job.id}`)}
                     endIcon={<ArrowRight size={18} />}
@@ -171,7 +234,7 @@ export default function TechnicianJobsPage() {
                 {tx('tech.jobs.title', 'My Jobs')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 5 }}>
-                {tx('tech.jobs.subtitle', 'Active assignments securely issued by dispatch.')}
+                {tx('tech.jobs.subtitle', 'Active assignments securely issued by dispatch.')} Assignment alerts include a server delivery receipt.
             </Typography>
 
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
@@ -188,7 +251,7 @@ export default function TechnicianJobsPage() {
                 </Stack>
             )}
 
-            <Alert severity="info" sx={{ borderRadius: 3 }}>
+            <Alert data-testid="technician-dispatch-boundary" severity="info" sx={{ borderRadius: 3 }}>
                 {tx(
                     'tech.jobs.dispatch_only',
                     'For resident privacy and duplicate-claim protection, full mission details appear only after dispatch assigns the ticket to you.'
