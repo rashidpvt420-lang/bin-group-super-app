@@ -33,7 +33,7 @@ test('pending STOP actions replay before a new tracking session can start', () =
   assert.match(tracking, /stale UPDATE actions before starting another ticket session/);
 });
 
-test('STOPPED is recorded only after the server acknowledges STOP', () => {
+test('STOPPED is recorded only after direct or queued server acknowledgement', () => {
   const stopStart = tracking.indexOf('export const stopLiveTracking');
   const stopSource = tracking.slice(stopStart);
   ordered(stopSource, [
@@ -44,8 +44,20 @@ test('STOPPED is recorded only after the server acknowledges STOP', () => {
     'if (acknowledged)',
     "status: 'STOPPED'",
   ]);
-  assert.match(tracking, /stopAcknowledgedAt: serverTimestamp\(\)/);
-  assert.match(tracking, /stopRequestedAt: serverTimestamp\(\)/);
+  assert.match(stopSource, /stopAcknowledgedAt: serverTimestamp\(\)/);
+  assert.match(stopSource, /stopRequestedAt: serverTimestamp\(\)/);
+
+  const replayStart = tracking.indexOf('async function performQueueFlush');
+  const replayEnd = tracking.indexOf('export async function flushLiveTrackingQueue', replayStart);
+  const replaySource = tracking.slice(replayStart, replayEnd);
+  ordered(replaySource, [
+    'await sendAction(entry);',
+    "if (entry.action === 'STOP')",
+    "status: 'STOPPED'",
+    "finalStatus: entry.finalStatus || 'PRESERVE'",
+    'stopAcknowledgedAt: serverTimestamp()',
+  ]);
+  assert.doesNotMatch(replaySource, /status: 'STOPPED'[\s\S]*await sendAction\(entry\)/);
 });
 
 test('capture throttling advances before a failed network call can enqueue again', () => {
@@ -71,14 +83,13 @@ test('queue has retry, expiry, terminal and explicit saturation disposal policy'
   assert.match(tracking, /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/);
   assert.match(tracking, /GPS_TERMINAL_STOP_TOMBSTONE_LOST/);
   assert.doesNotMatch(tracking, /if \(index < 0\) index = 0/);
-  assert.match(tracking, /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/);
-  assert.doesNotMatch(tracking, /if \(index < 0\) index = 0/);
 });
 
-test('precise retry data is UID-scoped, session-only and purged on account change/logout', () => {
+test('precise retry data is UID-scoped, session-safe and purged on account change/logout', () => {
   assert.match(tracking, /QUEUE_KEY_PREFIX = 'bin-technician-gps-queue-v2:'/);
   assert.match(tracking, /window\.sessionStorage/);
   assert.match(tracking, /window\.localStorage\.removeItem\(LEGACY_QUEUE_KEY\)/);
+  assert.doesNotMatch(tracking, /window\.localStorage\.(?:getItem|setItem)\(/);
   assert.match(tracking, /memoryUpdateQueues/);
   assert.match(tracking, /persistentStops/);
   assert.match(tracking, /map\(\(\{ point: _discardedPoint, \.\.\.entry \}\) => entry\)/);
@@ -89,7 +100,6 @@ test('precise retry data is UID-scoped, session-only and purged on account chang
   assert.match(tracking, /round\(Number\(point\.longitude \?\? point\.lng\), 6\)/);
   assert.match(tracking, /purgeOtherTechnicianQueues/);
   assert.match(tracking, /export function purgeLiveTrackingQueue/);
-  assert.doesNotMatch(tracking, /window\.localStorage/);
 
   const queueType = tracking.slice(tracking.indexOf('type QueuedTrackingAction'), tracking.indexOf('type QueueFlushResult'));
   assert.doesNotMatch(queueType, /technicianUid|email|displayName|authToken|idToken/);
