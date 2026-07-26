@@ -84,7 +84,7 @@ function retireEphemeralE2eAdmin(phase) {
 
 const SUITE_FIXTURES = Object.freeze({
   businessBroker: {
-    label: 'request-only Broker payout OTP evidence',
+    label: 'Owner-linked Broker commercial conversion and settlement evidence',
     script: 'scripts/prepare-broker-payout-otp-e2e.mjs',
   },
   launchAuditLive: {
