@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
@@ -133,20 +134,24 @@ async function signInAdminWithAppCheck() {
   const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
   const appId = text(process.env.VITE_FIREBASE_APP_ID);
   const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
-  const email = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();
-  const password = text(process.env.E2E_ADMIN_PASSWORD);
-  if (!apiKey || !appId || !debugToken || !email || !password) fail('Firebase Auth and App Check protected bindings are incomplete');
+  const email = text(process.env.E2E_FOUNDER_EMAIL).toLowerCase();
+  const password = text(process.env.E2E_FOUNDER_PASSWORD);
+  const totpSecret = text(process.env.E2E_FOUNDER_TOTP_SECRET);
+  if (!apiKey || !appId || !debugToken || email !== 'ceo@bin-groups.com' || !password || !totpSecret) {
+    fail('Canonical Founder Auth, TOTP, and App Check protected bindings are incomplete');
+  }
 
-  const signInEndpoint = new URL('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword');
-  signInEndpoint.searchParams.set('key', apiKey);
-  const signInResponse = await fetch(signInEndpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', Referer: 'https://admin.bin-groups.com/' },
-    body: JSON.stringify({ email, password, returnSecureToken: true }),
-  });
-  const signInPayload = await responseJson(signInResponse);
-  if (!signInResponse.ok || !text(signInPayload?.idToken) || !text(signInPayload?.localId)) {
-    fail(`Firebase Admin sign-in failed with HTTP ${signInResponse.status}`);
+  let founderAuth;
+  try {
+    founderAuth = await signInWithRequiredTotpMfa({
+      apiKey,
+      email,
+      password,
+      totpSecret,
+      referer: 'https://admin.bin-groups.com/',
+    });
+  } catch (error) {
+    fail(error instanceof Error ? error.message : 'Founder MFA sign-in failed');
   }
 
   const exchangeEndpoint = new URL(
@@ -163,9 +168,10 @@ async function signInAdminWithAppCheck() {
     fail(`App Check token exchange failed with HTTP ${exchangeResponse.status}`);
   }
   return {
-    idToken: text(signInPayload.idToken),
+    idToken: founderAuth.idToken,
     appCheckToken: text(exchangePayload.token),
-    uid: text(signInPayload.localId),
+    uid: founderAuth.uid,
+    secondFactor: founderAuth.secondFactor,
   };
 }
 
@@ -191,7 +197,11 @@ async function replayPaymentApproval(paymentId) {
   if (payload?.status !== 'SUCCESS' || payload?.idempotent !== true) {
     fail('adminApprovePayment replay did not return SUCCESS with idempotent=true');
   }
-  return { replayActorUidHash: sha256(auth.uid), responseStatus: replayResponse.status };
+  return {
+    replayActorUidHash: sha256(auth.uid),
+    responseStatus: replayResponse.status,
+    secondFactorHash: sha256(auth.secondFactor),
+  };
 }
 
 function photoEvidence(ticket) {
@@ -306,6 +316,7 @@ async function paymentUnlockExactlyOnceProof() {
     invoiceCount: invoicesAfter.length,
     replayHttpStatus: replay.responseStatus,
     replayActorUidHash: replay.replayActorUidHash,
+    replaySecondFactorHash: replay.secondFactorHash,
     stateUnchanged: true,
     observedAt: new Date().toISOString(),
   };
@@ -365,6 +376,7 @@ async function brokerCommissionProof() {
     commissionStateHash: afterHash,
     replayHttpStatus: replay.responseStatus,
     replayActorUidHash: replay.replayActorUidHash,
+    replaySecondFactorHash: replay.secondFactorHash,
     stateUnchanged: true,
     observedAt: new Date().toISOString(),
   };
