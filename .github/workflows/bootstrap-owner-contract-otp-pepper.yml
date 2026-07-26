@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   authorize-owner-command:
+    name: Authorize exact owner bootstrap command
     if: >-
       github.event.issue.number == 434 &&
       github.event.issue.pull_request == null &&
@@ -26,10 +27,12 @@ jobs:
       authorized: ${{ steps.bind.outputs.authorized }}
       commit_sha: ${{ steps.bind.outputs.commit_sha }}
     steps:
-      - id: bind
+      - name: Bind command to stable current main
+        id: bind
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
+        shell: bash
         run: |
           set -euo pipefail
           echo 'authorized=false' >> "$GITHUB_OUTPUT"
@@ -37,11 +40,15 @@ jobs:
           [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
           sleep 3
           second_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          [[ "$second_sha" == "$first_sha" ]] || exit 1
+          [[ "$second_sha" == "$first_sha" ]] || {
+            echo '::error::main advanced during Owner OTP pepper authorization.'
+            exit 1
+          }
           echo "commit_sha=$second_sha" >> "$GITHUB_OUTPUT"
           echo 'authorized=true' >> "$GITHUB_OUTPUT"
 
   bootstrap-production-secret:
+    name: Create or verify Owner contract OTP pepper
     needs: authorize-owner-command
     if: needs.authorize-owner-command.outputs.authorized == 'true'
     runs-on: ubuntu-latest
@@ -59,35 +66,53 @@ jobs:
       REPOSITORY: ${{ github.repository }}
       ISSUE_NUMBER: '434'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Checkout exact authorized main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: main
+          ref: ${{ needs.authorize-owner-command.outputs.commit_sha }}
           persist-credentials: false
+
       - name: Verify exact checkout binding
+        shell: bash
         run: |
           set -euo pipefail
           checked_out_sha="$(git rev-parse HEAD)"
-          [[ "$checked_out_sha" == "$EXPECTED_COMMIT_SHA" ]]
+          [[ "$checked_out_sha" == "$EXPECTED_COMMIT_SHA" ]] || {
+            echo "::error::Checked-out SHA $checked_out_sha does not match authorized main $EXPECTED_COMMIT_SHA."
+            exit 1
+          }
           current_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          [[ "$current_main" == "$EXPECTED_COMMIT_SHA" ]]
+          [[ "$current_main" == "$EXPECTED_COMMIT_SHA" ]] || {
+            echo "::error::Current main moved to $current_main before protected Owner secret bootstrap."
+            exit 1
+          }
           echo "CHECKED_OUT_COMMIT_SHA=$checked_out_sha" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed
+
+      - name: Authenticate Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
         with:
           version: '>= 416.0.0'
           project_id: bin-group-57c60
-      - name: Bootstrap and verify Owner contract OTP pepper
+
+      - name: Bootstrap and verify Owner contract OTP pepper without disk persistence
         run: node scripts/bootstrap-owner-contract-otp-pepper.mjs
+
       - name: Reverify exact main after protected mutation
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
           evidence='launch_package/owner-contract-otp-pepper-bootstrap.json'
@@ -134,28 +159,37 @@ jobs:
           jq -e --arg sha "$EXPECTED_COMMIT_SHA" '
             .status == "passed" and
             .exactCommitSha == $sha and
+            .minimumLengthSatisfied == true and
             .secretTransport == "stdin" and
             .secretPersistedToRunnerDisk == false and
             .secretValueLogged == false and
             .hardLaunchClaim == false
           ' "$evidence" >/dev/null
-      - name: Upload sanitized evidence
+
+      - name: Upload sanitized bootstrap evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: owner-contract-otp-pepper-bootstrap-${{ needs.authorize-owner-command.outputs.commit_sha }}
           path: launch_package/owner-contract-otp-pepper-bootstrap.json
           if-no-files-found: error
           retention-days: 365
-      - name: Publish sanitized result
+
+      - name: Publish sanitized bootstrap result
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
-          test -f launch_package/owner-contract-otp-pepper-bootstrap.json
+          if [[ ! -f launch_package/owner-contract-otp-pepper-bootstrap.json ]]; then
+            echo '::error::Sanitized Owner OTP pepper bootstrap evidence is missing.'
+            exit 1
+          fi
           status="$(jq -r '.status' launch_package/owner-contract-otp-pepper-bootstrap.json)"
           action="$(jq -r '.action' launch_package/owner-contract-otp-pepper-bootstrap.json)"
           failure_code="$(jq -r '.failureCode // empty' launch_package/owner-contract-otp-pepper-bootstrap.json)"
           body="## Owner contract OTP pepper bootstrap\n\n- Exact main SHA: \`$EXPECTED_COMMIT_SHA\`\n- Status: \`$status\`\n- Action: \`$action\`\n- Secret transport: \`stdin\`\n- Secret persisted to runner disk: \`false\`\n- Secret value logged: \`false\`\n- Hard-launch claim: \`false\`"
-          if [[ -n "$failure_code" ]]; then body="$body\n- Failure code: \`$failure_code\`"; fi
-          body="$body\n\nA fresh exact-SHA bank-pilot deployment is required after a successful bootstrap."
+          if [[ -n "$failure_code" ]]; then
+            body="$body\n- Failure code: \`$failure_code\`"
+          fi
+          body="$body\n\nA fresh exact-SHA bank-pilot deployment is required after a successful bootstrap so Owner contract OTP functions bind the secret version."
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
