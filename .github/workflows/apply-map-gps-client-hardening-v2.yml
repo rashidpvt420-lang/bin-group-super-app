@@ -35,56 +35,39 @@ jobs:
       - name: Apply deterministic current-main reconciliation
         run: python .github/scripts/apply-map-gps-client-hardening-v2.py
 
-      - name: Test complete Admin ticket lifecycle
-        run: node --test tests/launch/admin-map-ticket-lifecycle.test.mjs
+      - name: Capture verified property pin regression
+        id: verified-pin
+        continue-on-error: true
+        run: |
+          set +e
+          node --test --test-name-pattern="unverified or incomplete" tests/launch/map-gps-state-behavior.test.mjs > /tmp/verified-property-pin.log 2>&1
+          status=$?
+          cat /tmp/verified-property-pin.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
 
-      - name: Test GPS STOP migration source contract
-        run: node --test tests/launch/gps-stop-migration-source-contract.test.mjs
+      - name: Upload verified property pin diagnostic
+        if: steps.verified-pin.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-property-pin-diagnostic
+          path: /tmp/verified-property-pin.log
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Behaviour - verified property pins
-        run: node --test --test-name-pattern="unverified or incomplete" tests/launch/map-gps-state-behavior.test.mjs
+      - name: Refuse reconciliation while verified pin regression fails
+        if: steps.verified-pin.outcome == 'failure'
+        run: exit 1
 
-      - name: Behaviour - live GPS freshness clock
-        run: node --test --test-name-pattern="live GPS expires" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - latest UPDATE coordinate
-        run: node --test --test-name-pattern="UPDATE retries retain" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - STOP before UPDATE replay
-        run: node --test --test-name-pattern="STOP retries persist" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - failed STOP blocks newer actions
-        run: node --test --test-name-pattern="failed STOP remains" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - account disposal and expiry
-        run: node --test --test-name-pattern="account change is" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - terminal STOP and saturation
-        run: node --test --test-name-pattern="terminal STOP reconciliation" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - startup failure rejection
-        run: node --test --test-name-pattern="GPS startup failures" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - UID scoped memory storage
-        run: node --test --test-name-pattern="browser queue defaults" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - Admin viewport retention
-        run: node --test --test-name-pattern="freshness ticks update" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - discard stale UPDATE on startup
-        run: node --test --test-name-pattern="new ticket startup" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - legacy STOP authority migration
-        run: node --test --test-name-pattern="legacy v2 STOP migration" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Behaviour - verified migration deletion order
-        run: node --test --test-name-pattern="legacy keys are deleted" tests/launch/map-gps-state-behavior.test.mjs
-
-      - name: Test map and GPS product truth
-        run: node --test tests/launch/maps-gps-product-truth.test.mjs
-
-      - name: Test server GPS session compare-and-set
-        run: node --test tests/launch/technician-live-location-cas.test.mjs
+      - name: Run all focused lifecycle and GPS regressions
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/launch/admin-map-ticket-lifecycle.test.mjs \
+            tests/launch/gps-stop-migration-source-contract.test.mjs \
+            tests/launch/map-gps-state-behavior.test.mjs \
+            tests/launch/maps-gps-product-truth.test.mjs \
+            tests/launch/technician-live-location-cas.test.mjs
 
       - name: Commit only permanent product and test files
         run: |
