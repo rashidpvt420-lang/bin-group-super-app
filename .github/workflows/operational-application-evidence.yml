@@ -105,6 +105,12 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Verify trusted production deployment workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_DEPLOYMENT_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/verify-trusted-production-deploy-source.mjs
+
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -122,7 +128,7 @@ jobs:
           name: production-deployment-${{ inputs.expected_commit_sha }}
           path: downloaded-production
           run-id: ${{ inputs.production_deploy_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: Restore and validate production deployment binding
         env:
@@ -197,6 +203,7 @@ jobs:
         with:
           name: operational-application-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
           path: |
+            launch_package/trusted-production-deploy-source.json
             launch_package/production-deployment.json
             launch_package/application-proof.json
             launch_package/application-provenance.json
