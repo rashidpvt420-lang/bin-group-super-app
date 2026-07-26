@@ -32,6 +32,14 @@ test('delayed STOP from session A cannot terminate newer session B', () => {
   assert.equal(cas.classifyStopRequest(currentSessionB, 'ticket-1', 'session-A'), 'REJECT_SUPERSEDED');
 });
 
+test('an unexpired active session accepts only its exact ticket and session', () => {
+  assert.equal(cas.classifyUpdateRequest(state({ expiresAtMs: 5_000 }), 'ticket-1', 'session-A', 2_000), 'APPLY');
+  assert.equal(cas.classifyUpdateRequest(state({ expiresAtMs: 5_000 }), 'ticket-1', 'session-B', 2_000), 'REJECT_SUPERSEDED');
+  assert.equal(cas.classifyUpdateRequest(state({ expiresAtMs: 5_000 }), 'ticket-2', 'session-A', 2_000), 'REJECT_SUPERSEDED');
+  assert.equal(cas.classifyUpdateRequest(state({ expiresAtMs: 1_000 }), 'ticket-1', 'session-B', 2_000), 'APPLY');
+  assert.equal(cas.classifyUpdateRequest(state({ isTracking: false }), 'ticket-1', 'session-B', 2_000), 'APPLY');
+});
+
 test('STOP for another ticket or missing canonical state fails closed', () => {
   assert.equal(cas.classifyStopRequest(state(), 'ticket-2', 'session-A'), 'REJECT_SUPERSEDED');
   assert.equal(cas.classifyStopRequest(state({ exists: false }), 'ticket-1', 'session-A'), 'REJECT_MISSING');
@@ -67,10 +75,15 @@ test('watchdog cannot clear a superseding session or changed ticket', () => {
 
 test('server implementation performs STOP and watchdog comparison inside transactions', () => {
   assert.match(callableSource, /classifyStopRequest\(/);
+  assert.match(callableSource, /classifyUpdateRequest\(/);
   assert.match(callableSource, /classifyWatchdogCandidate\(/);
   assert.match(callableSource, /for \(const snapshot of stale\.docs\)[\s\S]*db\.runTransaction/);
   assert.doesNotMatch(callableSource, /const batch = db\.batch\(\)/);
   assert.match(callableSource, /TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED/);
   assert.match(callableSource, /reason: decision/);
   assert.match(callableSource, /alreadyStopped: true/);
+  const idempotentIndex = callableSource.indexOf('stopDecision === "ALREADY_STOPPED"');
+  const stopTicketCheckIndex = callableSource.indexOf('if (!ticketSnap.exists)', idempotentIndex);
+  assert.ok(idempotentIndex >= 0 && stopTicketCheckIndex > idempotentIndex, 'duplicate STOP must succeed before ticket assignment is rechecked');
+  assert.match(callableSource, /Another unexpired tracking session is active; stale or cross-tab coordinates were rejected/);
 });

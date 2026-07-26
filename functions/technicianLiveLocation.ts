@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import {
   classifyStopRequest,
+  classifyUpdateRequest,
   classifyWatchdogCandidate,
   liveSessionState,
 } from "./technicianLiveLocationCas";
@@ -152,13 +153,7 @@ export const updateTechnicianLiveLocation = onCall(
 
     const result = await db.runTransaction(async (tx) => {
       const [ticketSnap, liveSnap] = await Promise.all([tx.get(ticketRef), tx.get(liveRef)]);
-      if (!ticketSnap.exists) throw new HttpsError("not-found", "Assigned mission not found.");
-
       const ticket = ticketSnap.data() || {};
-      if (assignedTechnicianId(ticket) !== technicianUid) {
-        throw new HttpsError("permission-denied", "You are not assigned to this mission.");
-      }
-
       const now = admin.firestore.Timestamp.now();
       const previous = liveSnap.data() || {};
       const previousSequence = Math.max(0, Number(previous.sequence || 0));
@@ -188,6 +183,11 @@ export const updateTechnicianLiveLocation = onCall(
             expiresAtMs: Number.isFinite(previousExpiryMs) ? previousExpiryMs : now.toMillis(),
             alreadyStopped: true,
           };
+        }
+
+        if (!ticketSnap.exists) throw new HttpsError("not-found", "Assigned mission not found.");
+        if (assignedTechnicianId(ticket) !== technicianUid) {
+          throw new HttpsError("permission-denied", "You are not assigned to this mission.");
         }
 
         tx.set(liveRef, {
@@ -241,6 +241,11 @@ export const updateTechnicianLiveLocation = onCall(
         return { action, sequence: previousSequence, expiresAtMs: now.toMillis(), alreadyStopped: false };
       }
 
+      if (!ticketSnap.exists) throw new HttpsError("not-found", "Assigned mission not found.");
+      if (assignedTechnicianId(ticket) !== technicianUid) {
+        throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+      }
+
       if (!ACTIVE_TRACKING_STATUSES.has(upper(ticket.status || ticket.trackingStatus))) {
         throw new HttpsError("failed-precondition", "Live GPS is allowed only for an active assigned mission.");
       }
@@ -253,13 +258,17 @@ export const updateTechnicianLiveLocation = onCall(
       }
 
       const trackingSessionId = requireSessionId(request.data?.trackingSessionId);
-      if (
-        previous.isTracking === true &&
-        previous.activeTicketId &&
-        previous.activeTicketId !== ticketId &&
-        previous.expiresAt?.toMillis?.() > now.toMillis()
-      ) {
-        throw new HttpsError("failed-precondition", "Another live tracking session is still active.");
+      const updateDecision = classifyUpdateRequest(
+        liveSessionState(previous, liveSnap.exists),
+        ticketId,
+        trackingSessionId,
+        now.toMillis(),
+      );
+      if (updateDecision === "REJECT_SUPERSEDED") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Another unexpired tracking session is active; stale or cross-tab coordinates were rejected.",
+        );
       }
 
       const deviceTimestampMs = Math.max(0, finiteNumber(request.data?.deviceTimestampMs || Date.now(), "deviceTimestampMs"));
