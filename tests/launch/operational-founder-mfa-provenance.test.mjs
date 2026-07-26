@@ -30,7 +30,8 @@ test('operational evidence scopes canonical Founder credentials to the MFA-aware
 
   for (const name of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET']) {
     assert.doesNotMatch(jobScope, new RegExp(`${name}:`));
-    assert.match(replayStep, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+    const expectedBinding = `${name}: ` + '${{ secrets.' + name + ' }}';
+    assert.ok(replayStep.includes(expectedBinding), `${name} must be scoped to the protected replay step`);
   }
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\./);
   assert.doesNotMatch(workflow, /E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\./);
