@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
+import { purgeTechnicianTrackingQueue } from '../utils/liveTracking';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -43,6 +44,13 @@ export default function PortalSessionControls({
 
   const handleLogout = async () => {
     try {
+      if (role === 'technician') {
+        try {
+          await purgeTechnicianTrackingQueue(auth.currentUser?.uid || undefined);
+        } catch (error) {
+          console.warn('[technician] GPS retry queue purge failed before full session clearing.', error);
+        }
+      }
       await clearSessionAndPreserveLanguage();
       await signOut(auth);
     } catch (error) {
