@@ -29,7 +29,8 @@ test('Broker conversion is loop-safe and one commission is deterministic per rea
   assert.match(lifecycle, /RECONCILIATION_IN_PROGRESS/);
   assert.match(lifecycle, /commission_\$\{intakeId\}/);
   assert.match(lifecycle, /commissionLockKey: `commission_\$\{intakeId\}`/);
-  assert.match(commissionEngine, /const commissionId = `commission_\$\{contractId\}`/);
+  assert.match(commissionEngine, /collection\("broker_commissions"\)\.doc\(`commission_\$\{contractId\}`\)/);
+  assert.match(commissionEngine, /existingCommission\.exists/);
   assert.match(commissionEngine, /transaction\.create\(commissionRef/);
   assert.match(runner, /ensureOwnerLifecycleEvidence/);
   assert.match(runner, /ownerEvidence\.onboarding\.intakeId/);
