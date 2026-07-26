@@ -47,16 +47,14 @@ jobs:
         run: |
           set -euo pipefail
           git rm .github/scripts/build-clean-gps-cas-695.py .github/workflows/build-clean-gps-cas-695.yml
-          git add functions/technicianLiveLocation.ts functions/technicianLiveLocationCas.ts tests/launch/technician-live-location-cas.test.mjs tests/launch/maps-gps-product-truth.test.mjs
+          git add functions/technicianLiveLocation.ts tests/launch/maps-gps-product-truth.test.mjs
 
           staged="$(git diff --cached --name-only | sort)"
           expected_staged="$(printf '%s\n' \
             .github/scripts/build-clean-gps-cas-695.py \
             .github/workflows/build-clean-gps-cas-695.yml \
             functions/technicianLiveLocation.ts \
-            functions/technicianLiveLocationCas.ts \
-            tests/launch/maps-gps-product-truth.test.mjs \
-            tests/launch/technician-live-location-cas.test.mjs | sort)"
+            tests/launch/maps-gps-product-truth.test.mjs | sort)"
           [[ "$staged" == "$expected_staged" ]] || {
             echo '::error::Clean GPS CAS builder staged an unexpected path.'
             printf 'Staged:\n%s\nExpected:\n%s\n' "$staged" "$expected_staged"
