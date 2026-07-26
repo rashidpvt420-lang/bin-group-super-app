@@ -54,6 +54,7 @@ function validOperational() {
     adminStaffClaims: 'workflow-artifact',
     stripeLiveBilling: 'production-transaction',
     appCheckEnforcement: 'workflow-artifact',
+    aiProviderHealth: 'workflow-artifact',
     privilegedAccessRotation: 'secret-rotation-record',
     brandedEmailDelivery: 'workflow-artifact',
     renewalScheduler: 'scheduler-run',
@@ -67,6 +68,7 @@ function validOperational() {
     adminStaffClaims: 'Firebase Auth and staff registries',
     stripeLiveBilling: 'stripe-live-api-and-webhook',
     appCheckEnforcement: 'Firebase App Check enforcement',
+    aiProviderHealth: 'Firebase Sovereign AI callable with Gemini and OpenAI',
     privilegedAccessRotation: 'Google Secret Manager and Firebase Authentication',
     brandedEmailDelivery: 'Postmark email delivery',
     renewalScheduler: 'Firebase contract renewal watcher',
@@ -171,6 +173,10 @@ test('operational readiness requires every current-commit provider and physical 
   const missing = validOperational();
   delete missing.gates.stripeLiveBilling;
   assert.ok(validateOperationalReadinessReport(missing, commitSha, { now }).includes('operational gate missing: stripeLiveBilling'));
+
+  const missingAi = validOperational();
+  delete missingAi.gates.aiProviderHealth;
+  assert.ok(validateOperationalReadinessReport(missingAi, commitSha, { now }).includes('operational gate missing: aiProviderHealth'));
 
   const stale = validOperational();
   stale.gates.appCheckEnforcement.verifiedAt = '2026-06-01T00:00:00.000Z';
@@ -351,7 +357,7 @@ test('owner and tenant business proofs are mandatory and backend-verified', () =
   assert.doesNotMatch(owner, /page\.route\(/);
   assert.match(tenant, /APPROVE, RATE & CLOSE/);
   assert.match(tenant, /maintenanceTickets/);
-  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED/i);
+  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\/i/);
   assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
 });
 
