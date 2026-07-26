@@ -1,0 +1,139 @@
+name: Bootstrap Broker Payout OTP Pepper
+run-name: Bootstrap Broker Payout OTP Pepper · ${{ github.event.comment.id }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: bootstrap-broker-payout-otp-pepper-production
+  cancel-in-progress: false
+
+jobs:
+  authorize-owner-command:
+    name: Authorize exact owner bootstrap command
+    if: >-
+      github.event.issue.number == 434 &&
+      github.event.issue.pull_request == null &&
+      github.event.comment.body == '/bin-launch bootstrap-broker-payout-otp-pepper' &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      authorized: ${{ steps.bind.outputs.authorized }}
+      commit_sha: ${{ steps.bind.outputs.commit_sha }}
+    steps:
+      - name: Bind command to stable current main
+        id: bind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'authorized=false' >> "$GITHUB_OUTPUT"
+          first_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$second_sha" == "$first_sha" ]] || {
+            echo '::error::main advanced during Broker OTP pepper authorization.'
+            exit 1
+          }
+          echo "commit_sha=$second_sha" >> "$GITHUB_OUTPUT"
+          echo 'authorized=true' >> "$GITHUB_OUTPUT"
+
+  bootstrap-production-secret:
+    name: Create or verify Broker payout OTP pepper
+    needs: authorize-owner-command
+    if: needs.authorize-owner-command.outputs.authorized == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      EXPECTED_COMMIT_SHA: ${{ needs.authorize-owner-command.outputs.commit_sha }}
+      DEPLOYMENT_ENVIRONMENT: production
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+    steps:
+      - name: Checkout exact authorized main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.authorize-owner-command.outputs.commit_sha }}
+          persist-credentials: false
+
+      - name: Verify exact checkout binding
+        id: checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          [[ "$checked_out_sha" == "$EXPECTED_COMMIT_SHA" ]] || {
+            echo "::error::Checked-out SHA $checked_out_sha does not match authorized main $EXPECTED_COMMIT_SHA."
+            exit 1
+          }
+          current_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$EXPECTED_COMMIT_SHA" ]] || {
+            echo "::error::Current main moved to $current_main before protected secret bootstrap."
+            exit 1
+          }
+          echo "sha=$checked_out_sha" >> "$GITHUB_OUTPUT"
+          echo "CHECKED_OUT_COMMIT_SHA=$checked_out_sha" >> "$GITHUB_ENV"
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Bootstrap and verify Firebase Secret Manager value
+        run: node scripts/bootstrap-broker-payout-otp-pepper.mjs
+
+      - name: Upload sanitized bootstrap evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: broker-payout-otp-pepper-bootstrap-${{ needs.authorize-owner-command.outputs.commit_sha }}
+          path: launch_package/broker-payout-otp-pepper-bootstrap.json
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish sanitized bootstrap result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f launch_package/broker-payout-otp-pepper-bootstrap.json ]]; then
+            echo '::error::Sanitized Broker OTP pepper bootstrap evidence is missing.'
+            exit 1
+          fi
+          status="$(jq -r '.status' launch_package/broker-payout-otp-pepper-bootstrap.json)"
+          action="$(jq -r '.action' launch_package/broker-payout-otp-pepper-bootstrap.json)"
+          failure_code="$(jq -r '.failureCode // empty' launch_package/broker-payout-otp-pepper-bootstrap.json)"
+          body="## Broker payout OTP pepper bootstrap\n\n- Exact main SHA: \`$EXPECTED_COMMIT_SHA\`\n- Status: \`$status\`\n- Action: \`$action\`\n- Secret value logged: \`false\`\n- Hard-launch claim: \`false\`"
+          if [[ -n "$failure_code" ]]; then
+            body="$body\n- Failure code: \`$failure_code\`"
+          fi
+          body="$body\n\nA fresh exact-SHA bank-pilot deployment is required after a successful bootstrap so the Broker payout functions bind the secret version."
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
