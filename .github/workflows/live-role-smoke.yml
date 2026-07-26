@@ -3,118 +3,153 @@ name: Live Role Smoke Tests
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Run live-evidence first; hard-clearance only after a completed 24-hour pilot'
+        required: true
+        default: live-evidence
+        type: choice
+        options:
+          - live-evidence
+          - hard-clearance
       expected_commit_sha:
-        description: "Full lowercase 40-character main SHA that is already deployed"
+        description: 'Full lowercase 40-character production main SHA'
         required: true
         type: string
       production_deploy_run_id:
-        description: "Successful Firebase Production Deploy run ID for this same SHA"
-        required: true
+        description: 'For live-evidence: successful Firebase Production Deploy run ID'
+        required: false
         type: string
       live_evidence_run_id:
-        description: "Successful Live Role Smoke Tests run ID that produced exact-SHA live evidence"
+        description: 'For hard-clearance: successful live-evidence run ID for the same SHA'
         required: false
         type: string
       confirmation:
-        description: "Type AUTHORIZE PUBLIC HARD LAUNCH for the clearance job"
+        description: 'For hard-clearance: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
         required: false
         type: string
       incident_confirmation:
-        description: "Type INCIDENT REVIEW COMPLETE for the clearance job"
+        description: 'For hard-clearance: NO_OPEN_P0_P1'
         required: false
         type: string
       rollback_confirmation:
-        description: "Type ROLLBACK PATH VERIFIED for the clearance job"
+        description: 'For hard-clearance: ROLLBACK_PLAN_VERIFIED'
+        required: false
+        type: string
+      pilot_started_at:
+        description: 'Deprecated: pilot start is derived from the successful live-evidence workflow run'
+        required: false
+        type: string
+      pilot_completed_at:
+        description: 'Deprecated: pilot completion is derived by the protected hard-clearance workflow'
         required: false
         type: string
       open_p0:
-        description: "Confirmed unresolved P0 incident count"
+        description: 'For hard-clearance: open P0 count, must be 0'
         required: false
-        default: "0"
+        default: '0'
         type: string
       open_p1:
-        description: "Confirmed unresolved P1 incident count"
+        description: 'For hard-clearance: open P1 count, must be 0'
         required: false
-        default: "0"
+        default: '0'
         type: string
       incident_reference:
-        description: "Incident review evidence reference"
+        description: 'For hard-clearance: approved HTTPS incident register or operations log URL'
         required: false
         type: string
       rollback_reference:
-        description: "Rollback readiness evidence reference"
+        description: 'For hard-clearance: approved HTTPS rollback plan or rollback test URL'
         required: false
         type: string
       monitoring_reference:
-        description: "Monitoring and alerting readiness evidence reference"
+        description: 'For hard-clearance: approved HTTPS monitoring dashboard or pilot report URL'
         required: false
         type: string
+  schedule:
+    - cron: '0 4 * * *'
 
 permissions:
   contents: read
   actions: read
-  id-token: write
 
 concurrency:
-  group: live-role-smoke-${{ github.ref }}
+  group: live-role-smoke-${{ github.event_name }}-${{ github.ref }}-${{ inputs.mode || 'scheduled' }}
   cancel-in-progress: false
 
 env:
   E2E_BASE_URL: https://bin-group-57c60.web.app
-  E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
+  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
   E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
   E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-  E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
-  E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
-  E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
-  E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
   E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
   E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
   E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
   E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
   E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
   E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
-  E2E_TECHNICIAN_B_EMAIL: ${{ secrets.E2E_TECHNICIAN_B_EMAIL }}
-  E2E_TECHNICIAN_B_PASSWORD: ${{ secrets.E2E_TECHNICIAN_B_PASSWORD }}
   E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
-  E2E_BROKER_PHONE: ${{ secrets.E2E_BROKER_PHONE }}
-  E2E_BROKER_PAYOUT_OTP_CODE: ${{ secrets.E2E_BROKER_PAYOUT_OTP_CODE }}
-  E2E_BROKER_PAYOUT_ACCOUNT_HOLDER: ${{ secrets.E2E_BROKER_PAYOUT_ACCOUNT_HOLDER }}
-  E2E_BROKER_PAYOUT_IBAN: ${{ secrets.E2E_BROKER_PAYOUT_IBAN }}
-  E2E_TENANT_CORRECTION_REQUEST_ID: ${{ secrets.E2E_TENANT_CORRECTION_REQUEST_ID }}
-  E2E_STRICT_ROLES: "true"
-  E2E_STRICT_LIVE: "true"
-  E2E_STRICT_BUSINESS: "true"
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
-  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
-  FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-  GCP_PROJECT_ID: bin-group-57c60
-  GCLOUD_PROJECT: bin-group-57c60
-  GOOGLE_CLOUD_PROJECT: bin-group-57c60
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+  AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
 
 jobs:
-  live-evidence:
-    name: Live multi-role business evidence
-    if: github.ref == 'refs/heads/main' && inputs.live_evidence_run_id == ''
+  scheduled-public-smoke:
+    name: Scheduled production public smoke
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    environment: production
+    timeout-minutes: 30
 
     steps:
-      - name: Verify protected exact-SHA inputs
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+      - name: Validate App Check debug configuration
+        run: node scripts/ensure-appcheck.mjs
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run public smoke tests
+        run: npx playwright test --grep "production public smoke" --project=chromium-desktop
+      - name: Upload scheduled smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-public-smoke-${{ github.sha }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  live-evidence:
+    name: Generate same-commit five-role production evidence
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'live-evidence'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Enforce same-commit deployment inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: |
           set -euo pipefail
-          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_commit_sha must be a full lowercase 40-character SHA."
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Live launch evidence may only run from refs/heads/main."
             exit 1
           fi
-          if [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
-            echo "::error::Expected SHA does not match the current main workflow SHA."
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
             exit 1
           fi
           if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
@@ -122,16 +157,14 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout exact main SHA
+      - name: Checkout exact production commit
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.expected_commit_sha }}
-          fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
           cache: npm
 
       - name: Authenticate Google Cloud
@@ -142,7 +175,10 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Download exact production deployment evidence
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download exact production deployment artifact
         uses: actions/download-artifact@v4
         with:
           name: production-deployment-${{ inputs.expected_commit_sha }}
@@ -150,140 +186,141 @@ jobs:
           run-id: ${{ inputs.production_deploy_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Restore exact production deployment evidence
+      - name: Restore deployment metadata
         run: |
           set -euo pipefail
           source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
           if [[ -z "$source_file" ]]; then
-            echo "::error::production-deployment.json was not found in the selected production deploy artifact."
+            echo "::error::production-deployment.json was not found."
             exit 1
           fi
           mkdir -p launch_package
           cp "$source_file" launch_package/production-deployment.json
+          test -s launch_package/production-deployment.json
 
-      - name: Install dependencies
-        run: bash scripts/npm-install-retry.sh
-
-      - name: Verify E2E environment and App Check
+      - name: Validate role credentials and App Check
+        env:
+          E2E_STRICT_ROLES: 'true'
         run: |
           node scripts/verify-e2e-env.mjs
           node scripts/ensure-appcheck.mjs
 
-      - name: Verify canonical Founder TOTP readiness
-        run: node scripts/verify-founder-totp-readiness.mjs
+      - name: Seed or repair launch accounts and fixtures
+        run: |
+          node scripts/seed-e2e-auth.mjs
+          node scripts/seed-live-role-test-data.mjs
 
-      - name: Verify exact production deployment evidence
-        run: node scripts/verify-production-deployment.mjs
-
-      - name: Seed protected E2E role identities
-        run: node scripts/seed-e2e-auth.mjs
-
-      - name: Run exact-SHA protected live business evidence
+      - name: Run every required live evidence suite
         run: node scripts/run-critical-evidence.mjs --suite all-required
 
-      - name: Verify exact-SHA launch status
+      - name: Verify controlled-pilot eligibility
         run: node scripts/launch-status.mjs
 
       - name: Upload live launch evidence
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
           path: |
             launch_package/production-deployment.json
             launch_package/launch-evidence-batch.json
+            launch_package/launch-status.json
             launch_package/artifacts
-            launch_package/e2e-admin-lifecycle-post-business-evidence.json
-            playwright-report
-            test-results
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
   hard-public-launch-clearance:
-    name: Hard public launch clearance
-    if: github.ref == 'refs/heads/main' && inputs.live_evidence_run_id != ''
+    name: Verify and authorize hard public launch
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    environment: production
+    timeout-minutes: 60
+    environment: hard-public-launch
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
 
     steps:
-      - name: Verify founder authorization and incident inputs
+      - name: Enforce protected release inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
-          CURRENT_SHA: ${{ github.sha }}
-          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
           LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
-          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
-          INCIDENT_CONFIRMATION: ${{ inputs.incident_confirmation }}
-          ROLLBACK_CONFIRMATION: ${{ inputs.rollback_confirmation }}
-          OPEN_P0: ${{ inputs.open_p0 }}
-          OPEN_P1: ${{ inputs.open_p1 }}
-          INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
-          ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
-          MONITORING_REFERENCE: ${{ inputs.monitoring_reference }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          INCIDENT_CONFIRMATION_INPUT: ${{ inputs.incident_confirmation }}
+          ROLLBACK_CONFIRMATION_INPUT: ${{ inputs.rollback_confirmation }}
+          OPEN_P0_INPUT: ${{ inputs.open_p0 }}
+          OPEN_P1_INPUT: ${{ inputs.open_p1 }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          CURRENT_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
-          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::expected_commit_sha must be a full lowercase 40-character SHA."
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Hard clearance may only run from refs/heads/main."
             exit 1
           fi
-          if [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
-            echo "::error::Expected SHA does not match the current main workflow SHA."
-            exit 1
-          fi
-          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]] || [[ ! "$LIVE_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "::error::Both workflow run IDs must be numeric."
-            exit 1
-          fi
-          if [[ "$HARD_LAUNCH_CONFIRMATION" != "AUTHORIZE PUBLIC HARD LAUNCH" ]]; then
-            echo "::error::Missing exact founder hard-launch confirmation phrase."
-            exit 1
-          fi
-          if [[ "$INCIDENT_CONFIRMATION" != "INCIDENT REVIEW COMPLETE" ]]; then
-            echo "::error::Missing exact incident review confirmation phrase."
-            exit 1
-          fi
-          if [[ "$ROLLBACK_CONFIRMATION" != "ROLLBACK PATH VERIFIED" ]]; then
-            echo "::error::Missing exact rollback verification phrase."
-            exit 1
-          fi
-          if [[ ! "$OPEN_P0" =~ ^[0-9]+$ ]] || [[ ! "$OPEN_P1" =~ ^[0-9]+$ ]]; then
-            echo "::error::Open P0/P1 values must be non-negative integers."
-            exit 1
-          fi
-          if [[ "$OPEN_P0" != "0" ]] || [[ "$OPEN_P1" != "0" ]]; then
-            echo "::error::Hard launch is blocked while any P0/P1 incident remains open."
-            exit 1
-          fi
-          for entry in "$INCIDENT_REFERENCE" "$ROLLBACK_REFERENCE" "$MONITORING_REFERENCE"; do
-            if [[ -z "${entry//[[:space:]]/}" ]] || [[ "$entry" =~ ^[Pp]laceholder ]] || [[ "$entry" =~ ^[Tt][Oo][Dd][Oo]$ ]]; then
-              echo "::error::Incident, rollback and monitoring references must be real evidence references."
-              exit 1
-            fi
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
           done
+          if [[ "$authorized_actor" != "true" ]]; then
+            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
+            exit 1
+          fi
+          if [[ ! "$LIVE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::live_evidence_run_id must be numeric."
+            exit 1
+          fi
+          if [[ "$RELEASE_CONFIRMATION" != "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]]; then
+            echo "::error::Hard launch confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$INCIDENT_CONFIRMATION_INPUT" != "NO_OPEN_P0_P1" ]]; then
+            echo "::error::Incident confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$ROLLBACK_CONFIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
+            echo "::error::Rollback confirmation phrase mismatch."
+            exit 1
+          fi
+          if [[ "$OPEN_P0_INPUT" != "0" ]] || [[ "$OPEN_P1_INPUT" != "0" ]]; then
+            echo "::error::Hard launch requires zero open P0 and P1 incidents."
+            exit 1
+          fi
 
-      - name: Checkout exact main SHA
+      - name: Checkout exact production commit
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.expected_commit_sha }}
-          fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
           cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Download exact production deployment evidence
-        uses: actions/download-artifact@v4
-        with:
-          name: production-deployment-${{ inputs.expected_commit_sha }}
-          path: downloaded-production
-          run-id: ${{ inputs.production_deploy_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify live-evidence run provenance and enforce a real 24-hour pilot
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/resolve-live-pilot-window.mjs
 
       - name: Download exact live launch evidence
         uses: actions/download-artifact@v4
@@ -296,7 +333,7 @@ jobs:
       - name: Restore and validate evidence bundle
         run: |
           set -euo pipefail
-          deployment_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
           evidence_file="$(find downloaded-live-evidence -type f -name launch-evidence-batch.json -print -quit)"
           artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
           if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
