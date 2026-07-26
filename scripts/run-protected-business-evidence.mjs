@@ -13,5 +13,5 @@ const result = spawnSync(
 );
 
 const exitCode = result.status ?? 1;
-console.log(`[protected-business-evidence] real_firebase_mfa_only=true exit_code=${exitCode} hardLaunchClaim=false`);
+console.log(`[protected-business-evidence] real_firebase_mfa_only=true admin_proof=canonical-founder-totp exit_code=${exitCode} hardLaunchClaim=false`);
 process.exit(exitCode);

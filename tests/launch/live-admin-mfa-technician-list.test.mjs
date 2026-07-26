@@ -20,7 +20,7 @@ const jobsPageSource = await readFile(
 );
 
 test('real Admin MFA keeps the verifier alive until the challenge resolves or resets', () => {
-  const sendStart = mfaSource.indexOf('const sendCode = async () => {');
+  const sendStart = mfaSource.indexOf('const prepareCodeEntry = async () => {');
   const verifyStart = mfaSource.indexOf('const verifyCode = async () => {', sendStart);
   assert.ok(sendStart >= 0 && verifyStart > sendStart);
   const sendBlock = mfaSource.slice(sendStart, verifyStart);

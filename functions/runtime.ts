@@ -30,7 +30,7 @@ export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
 export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
-export * from "./contractSignatureOtp";
+export * from "./contractSignatureOtpSecure";
 export * from "./ownerOnboardingLifecycleEmail";
 export * from "./tenantHandoverInspections";
 export * from "./ownerHandoverInspections";
@@ -66,6 +66,7 @@ export { tenantRequestUnitLink } from "./secureTenantUnitLinkRequest";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
 export { submitBrokerKycProfile, getBrokerKycProfileSummary } from "./secureBrokerKycSubmission";
 export { adminReviewBrokerKyc } from "./secureBrokerKycReview";
+export { adminReviewBrokerPayoutRequest } from "./adminBrokerPayoutReview";
 export {
   requestBrokerPayoutOtp,
   verifyBrokerPayoutOtp,

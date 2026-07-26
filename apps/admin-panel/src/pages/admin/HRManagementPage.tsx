@@ -6,14 +6,14 @@ import {
     Chip, Avatar, alpha, CircularProgress, Tab, Tabs, TextField, InputAdornment,
     IconButton
 } from '@mui/material';
-import { 
-    DollarSign, 
+import {
+    DollarSign,
     FileText, UserPlus, ChevronRight, Search as SearchIcon
 } from 'lucide-react';
 import { db, collection, query, onSnapshot, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
-import RegisterStaffDialog from '../../components/RegisterStaffDialog';
+import StaffAccessPage from './StaffAccessPage';
 
 export default function HRManagementPage() {
     const { user } = useAuth();
@@ -23,7 +23,6 @@ export default function HRManagementPage() {
     const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
 
     const privilegedHRRoles = new Set(['super_admin', 'admin', 'ceo', 'hr_admin', 'hr_manager']);
     const isHRManager = Boolean(user?.claims?.admin === true || user?.isAdmin === true || privilegedHRRoles.has(String(user?.role)));
@@ -84,7 +83,7 @@ export default function HRManagementPage() {
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
     return (
-        <Box sx={{ height: '100%', overflowY: 'auto', bgcolor: '#020617', py: 4 }}>
+        <Box sx={{ height: '100%', overflowY: 'auto', bgcolor: '#020617', py: 4 }} data-testid="admin-staff-access-route">
             <Container maxWidth="xl">
                 <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
@@ -100,10 +99,11 @@ export default function HRManagementPage() {
                     </Box>
                     <Stack direction="row" spacing={2}>
                         {isHRManager && (
-                            <Button 
-                                variant="contained" 
-                                startIcon={<UserPlus size={18} />} 
-                                onClick={() => setIsRegisterDialogOpen(true)}
+                            <Button
+                                variant="contained"
+                                startIcon={<UserPlus size={18} />}
+                                onClick={() => setTab(4)}
+                                data-testid="admin-open-secure-staff-access"
                                 sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
                             >
                                 REGISTER STAFF
@@ -112,23 +112,19 @@ export default function HRManagementPage() {
                     </Stack>
                 </Box>
 
-                <RegisterStaffDialog 
-                    open={isRegisterDialogOpen} 
-                    onClose={() => setIsRegisterDialogOpen(false)} 
-                />
-
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 4, '& .MuiTab-root': { color: 'rgba(255,255,255,0.4)', fontWeight: 900 } }}>
                     <Tab label="STAFF REGISTRY" />
                     <Tab label="ATTENDANCE & LEAVE" disabled={!isHRStaff} />
                     <Tab label="PAYROLL HUB" disabled={!isHRManager} />
                     <Tab label="HR DOCUMENTS" disabled={!isHRStaff} />
+                    <Tab label="STAFF ACCESS" disabled={!isHRManager} />
                 </Tabs>
 
                 {tab === 0 && (
                     <Paper sx={{ p: 0, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                         <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <TextField 
-                                placeholder="Search by name, role, ID..." 
+                            <TextField
+                                placeholder="Search by name, role, ID..."
                                 size="small"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -196,15 +192,15 @@ export default function HRManagementPage() {
                                             <TableCell align="right">
                                                 <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
                                                     {isHRManager && (
-                                                        <Button 
-                                                            size="small" 
-                                                            variant="outlined" 
+                                                        <Button
+                                                            size="small"
+                                                            variant="outlined"
                                                             startIcon={<FileText size={14} />}
                                                             onClick={() => navigate('/financials/payroll')}
                                                             title="Generate a server-authoritative payroll batch before settling and emailing a payslip."
-                                                            sx={{ 
-                                                                borderColor: alpha(binThemeTokens.gold, 0.3), 
-                                                                color: binThemeTokens.gold, 
+                                                            sx={{
+                                                                borderColor: alpha(binThemeTokens.gold, 0.3),
+                                                                color: binThemeTokens.gold,
                                                                 fontWeight: 900,
                                                                 fontSize: '0.7rem'
                                                             }}
@@ -296,6 +292,8 @@ export default function HRManagementPage() {
                         </Typography>
                     </Paper>
                 )}
+
+                {tab === 4 && isHRManager && <StaffAccessPage />}
             </Container>
         </Box>
     );
