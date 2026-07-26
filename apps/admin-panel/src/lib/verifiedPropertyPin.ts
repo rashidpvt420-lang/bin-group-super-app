@@ -6,14 +6,8 @@ export type VerifiedPropertyPin = {
   verifiedBy: string;
   verifiedAtMs: number;
   source: string;
+  verificationVersion: 1;
 };
-
-const ALLOWED_VERIFICATION_SOURCES = new Set([
-  'google_maps',
-  'title_deed',
-  'admin_manual',
-  'device_gps',
-]);
 
 export const timestampMillis = (value: any): number | null => {
   if (!value) return null;
@@ -41,32 +35,45 @@ export const recordedTicketCoordinate = (ticket: any): MapCoordinate | null =>
   mapCoordinate(ticket?.location) ||
   null;
 
-const canonicalGeo = (property: any) => property?.geo || property?.geoAnchor || property?.verifiedGeo || null;
-
 /**
  * Fail-closed production property-pin contract.
  *
- * A numeric coordinate alone is never a verified pin. The canonical property
- * record must prove review completion, dispatch readiness, verifier identity,
- * verification time and an approved capture source.
+ * Browser aliases and numeric coordinates are evidence only. A rendered pin
+ * requires canonical `geo` plus matching versioned Founder-MFA verification.
  */
 export const resolveVerifiedPropertyPin = (property: any): VerifiedPropertyPin | null => {
   if (!property || typeof property !== 'object') return null;
   const propertyId = String(property.id || property.propertyId || '').trim();
-  const geo = canonicalGeo(property);
-  if (!propertyId || !geo || typeof geo !== 'object') return null;
-  if (geo.verified !== true) return null;
-  if (geo.dispatchReady !== true) return null;
-  if (geo.requiresGeoReview === true) return null;
+  const geo = property.geo;
+  const verification = property.geoVerification;
+  if (!propertyId || !geo || typeof geo !== 'object' || !verification || typeof verification !== 'object') return null;
+  if (geo.verified !== true || geo.dispatchReady !== true || geo.requiresGeoReview === true) return null;
+  if (geo.source !== 'admin_manual' || Number(geo.verificationVersion) !== 1) return null;
+  if (verification.state !== 'VERIFIED' || verification.source !== 'FOUNDER_MFA_REVIEW' || Number(verification.verificationVersion) !== 1) return null;
 
   const verifiedBy = String(geo.verifiedBy || '').trim();
+  const verificationActor = String(verification.verifiedBy || '').trim();
   const verifiedAtMs = timestampMillis(geo.verifiedAt);
-  const source = String(geo.source || '').trim().toLowerCase();
+  const verificationAtMs = timestampMillis(verification.verifiedAt);
   const point = mapCoordinate(geo);
-  if (!verifiedBy || verifiedAtMs === null || verifiedAtMs <= 0 || !point) return null;
-  if (!ALLOWED_VERIFICATION_SOURCES.has(source)) return null;
+  if (
+    !verifiedBy ||
+    verifiedBy !== verificationActor ||
+    verifiedAtMs === null ||
+    verificationAtMs === null ||
+    verifiedAtMs <= 0 ||
+    verifiedAtMs !== verificationAtMs ||
+    !point
+  ) return null;
 
-  return { point, propertyId, verifiedBy, verifiedAtMs, source };
+  return {
+    point,
+    propertyId,
+    verifiedBy,
+    verifiedAtMs,
+    source: geo.source,
+    verificationVersion: 1,
+  };
 };
 
 export const ticketPropertyId = (ticket: any) => String(
