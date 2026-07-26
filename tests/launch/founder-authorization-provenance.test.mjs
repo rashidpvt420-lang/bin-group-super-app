@@ -27,7 +27,7 @@ test('automated signer independently revalidates the canonical owner PR', () => 
   assert.match(signer, /\/pull\/\(\[1-9\]\[0-9\]\*\)/);
   assert.match(signer, /pull\?\.state !== 'open' \|\| pull\?\.draft !== true/);
   assert.match(signer, /pull\?\.base\?\.ref !== 'main' \|\| pull\?\.base\?\.sha !== commitSha/);
-  assert.match(signer, /pull\?\.head\?\.repo\?\.full_name !== repository/);
+  assert.match(signer, /pull\?\.head\?\.repo\?\.full_name !== EXPECTED_REPOSITORY/);
   assert.match(signer, /OWNER_REQUEST_BRANCH_PREFIX/);
   assert.match(signer, /founderActor !== repositoryOwner/);
   assert.match(signer, /authorizedActors\.includes\(founderActor\)/);
@@ -35,6 +35,18 @@ test('automated signer independently revalidates the canonical owner PR', () => 
   assert.match(signer, /parseMarker\(Buffer\.from/);
   assert.match(signer, /owner request marker must keep the public gate disabled/);
   assert.match(signer, /owner request marker must not claim hard launch/);
+});
+
+test('GitHub provenance requests use one fixed host and tightly validated paths', () => {
+  assert.match(signer, /import \{ request \} from 'node:https'/);
+  assert.match(signer, /GITHUB_API_HOST = 'api\.github\.com'/);
+  assert.match(signer, /hostname: GITHUB_API_HOST/);
+  assert.match(signer, /allowedPrefix = `\/repos\/\$\{EXPECTED_REPOSITORY\}\//);
+  assert.match(signer, /apiPath\.includes\('\.\.'\)/);
+  assert.match(signer, /MAX_GITHUB_RESPONSE_BYTES/);
+  assert.match(signer, /timeout: 10_000/);
+  assert.doesNotMatch(signer, /\bfetch\s*\(/);
+  assert.doesNotMatch(signer, /new URL\(/);
 });
 
 test('automated email derives from exactly one protected allowlist entry', () => {
@@ -51,7 +63,7 @@ test('signed document preserves workflow actor and independently verified Founde
   assert.match(signer, /founder:\s*\{[\s\S]*actor: founderActor/);
   assert.match(signer, /signDocument\(payload, hmacKey\)/);
   assert.match(signer, /validateAuthorizationDocument\(document/);
-  assert.match(signer, /AUTHORIZATION_ACTOR=\$\{workflowActor\}/);
+  assert.doesNotMatch(signer, /GITHUB_ENV|appendFileSync/);
   assert.doesNotMatch(signer, /AUTHORIZED_FOUNDER_EMAILS.*console\./);
 });
 
