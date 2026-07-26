@@ -41,18 +41,22 @@ jobs:
         run: python .github/scripts/apply-verified-gps-stop-migration-694.py
 
       - name: Run focused behavior test
-        id: behavior
-        continue-on-error: true
         run: |
+          set +e
           set -o pipefail
           node --test tests/launch/map-gps-state-behavior.test.mjs 2>&1 | tee gps-migration-behavior.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > gps-migration-behavior.status
+          exit 0
 
       - name: Run focused launch contract
-        id: launch
-        continue-on-error: true
         run: |
+          set +e
           set -o pipefail
           node --test tests/launch/maps-gps-product-truth.test.mjs 2>&1 | tee gps-migration-launch.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > gps-migration-launch.status
+          exit 0
 
       - name: Upload focused diagnostics
         if: always()
@@ -61,19 +65,17 @@ jobs:
           name: gps-stop-migration-focused-${{ github.event.pull_request.head.sha }}
           path: |
             gps-migration-behavior.log
+            gps-migration-behavior.status
             gps-migration-launch.log
+            gps-migration-launch.status
           if-no-files-found: error
           retention-days: 7
 
       - name: Enforce focused tests
-        if: always()
-        env:
-          BEHAVIOR_OUTCOME: ${{ steps.behavior.outcome }}
-          LAUNCH_OUTCOME: ${{ steps.launch.outcome }}
         run: |
           set -euo pipefail
-          [[ "$BEHAVIOR_OUTCOME" == 'success' ]]
-          [[ "$LAUNCH_OUTCOME" == 'success' ]]
+          [[ "$(cat gps-migration-behavior.status)" == '0' ]]
+          [[ "$(cat gps-migration-launch.status)" == '0' ]]
 
       - name: Commit product/tests and remove one-off finalizer
         run: |
