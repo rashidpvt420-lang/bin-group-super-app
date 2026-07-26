@@ -1,11 +1,15 @@
+import './harden-property-geo-authority.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'firestore.rules';
 let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
-const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
+// Tenant and Owner browser applications create tickets through App Check
+// callables. Direct Firestore creates are reserved for server/Admin operations.
+const canonicalCreate = '      allow create: if isAdmin();';
 for (const legacyCreate of [
+  "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
   "      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if canDispatchJobs() || canCreateTenantBoundTicket(request.resource.data);",
@@ -19,13 +23,11 @@ for (const legacyCreate of [
 function removeRuleFunction(functionName) {
   const needle = `    function ${functionName}(`;
   let removed = 0;
-
   while (true) {
     const start = text.indexOf(needle);
     if (start < 0) break;
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
-
     let depth = 0;
     let end = -1;
     for (let index = openingBrace; index < text.length; index += 1) {
@@ -106,7 +108,6 @@ const splitRules = [
   '      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
 const canonicalUpdate = '      allow update: if safeTicketUpdateByActor();';
-
 if (text.includes(monolithicUpdate)) {
   text = text.split(monolithicUpdate).join(canonicalUpdate);
   changed = true;
@@ -126,7 +127,6 @@ if (text.split(canonicalUpdate).length - 1 !== 2) {
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
   throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 }
-
 for (const required of [
   'let authenticated = signedIn();',
   'let role = authenticated',
@@ -139,7 +139,6 @@ for (const required of [
 ]) {
   if (!text.includes(required)) throw new Error(`[ticket-rule-binding] Bounded router fragment missing: ${required}`);
 }
-
 for (const forbidden of [
   'function safeOpenMissionClaim(',
   'function missionClaimFieldsLookValid(',
@@ -149,15 +148,18 @@ for (const forbidden of [
   'openMissionPoolRead(resource.data)',
   monolithicUpdate.trim(),
   ...splitRules.map((rule) => rule.trim()),
+  'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
 ]) {
-  if (text.includes(forbidden)) {
-    throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
-  }
+  if (text.includes(forbidden)) throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
 }
-
-if (!text.includes(canonicalCreate)) {
-  throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
+for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+  const start = text.indexOf(marker);
+  const block = start < 0 ? '' : text.slice(start, start + 900);
+  if (!block.includes(canonicalCreate)) throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser creation outside Admin authority.`);
+}
+if (text.split(canonicalCreate).length - 1 !== 2) {
+  throw new Error('[ticket-rule-binding] Admin/server-only ticket create gate must exist exactly twice.');
 }
 
 if (changed) writeFileSync(file, text);
-console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
+console.log(`Applied server-only ticket create and bounded update gates (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);

@@ -31,6 +31,7 @@ const forbiddenFragments = [
   ['unrestricted notification creation', '      allow create: if signedIn();'],
   ['open mission pool exposes private tickets before dispatch', 'function openMissionPoolRead(data)'],
   ['tenant ticket create without unit/property validation', "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);"],
+  ['direct Tenant browser ticket creation', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
   ['direct client-side technician mission claim helper', 'function safeOpenMissionClaim() {'],
   ['direct client-side mission assignment field helper', 'function missionClaimFieldsLookValid() {'],
   ['tickets update rule still permits direct technician claiming', '|| safeOpenMissionClaim()'],
@@ -42,6 +43,8 @@ const forbiddenFragments = [
   ['canonical live location omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
   ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
   ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['legacy Owner-only property geo create helper', 'function ownerCannotSupplyCanonicalPropertyGeo(data) {'],
+  ['legacy unbounded submitted property geo helper', 'function ownerSubmittedPropertyGeoIsUnverified(data) {'],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
 
@@ -52,8 +55,7 @@ const requiredFragments = [
   ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
   ['approved technician read helper', 'function isApprovedTechnician() {'],
   ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
-  ['tenant ticket unit/property binding helper', 'function canCreateTenantBoundTicket(data) {'],
-  ['tenant ticket create uses binding helper', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
+  ['ticket creation is callable/Admin only', 'allow create: if isAdmin();'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
   ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
@@ -65,6 +67,11 @@ const requiredFragments = [
   ['dispatcher branch uses cached authority', '(!admin && dispatcher && safeDispatcherTicketUpdate())'],
   ['tenant branch supports roleless legacy claims but excludes named non-tenant roles', "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())"],
   ['technician branch is role-discriminated', "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())"],
+  ['submitted property geo validates coordinates and unverified state', 'function submittedPropertyGeoIsUnverified(data) {'],
+  ['property creation excludes every canonical geo field', 'function propertyCreateHasNoCanonicalGeo(data) {'],
+  ['managed property updates preserve canonical geo', 'function safeManagedPropertyUpdate() {'],
+  ['property create uses shared canonical-geo guard', 'propertyCreateHasNoCanonicalGeo(request.resource.data) &&'],
+  ['Admin browser property update uses safe managed guard', '(canManageProperties() && safeManagedPropertyUpdate())'],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
   ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
@@ -88,6 +95,12 @@ const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
 
+if (rules.split('allow create: if isAdmin();').length - 1 < 2) failures.push('Server/Admin-only ticket create gate must exist for both ticket collections.');
+for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+  const start = rules.indexOf(marker);
+  const block = start < 0 ? '' : rules.slice(start, start + 900);
+  if (!block.includes('allow create: if isAdmin();')) failures.push(`${marker} still permits direct browser creation.`);
+}
 if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
@@ -109,9 +122,7 @@ if (!router) {
   if (
     [authentication, role, adminClaim, dispatcherClaim, admin, dispatcher, tenant, technician].some((index) => index < 0) ||
     !(authentication < role && role < adminClaim && adminClaim < dispatcherClaim && dispatcherClaim < admin && admin < dispatcher && dispatcher < tenant && tenant < technician)
-  ) {
-    failures.push('Ticket update router must short-circuit in admin, dispatcher, tenant, technician order.');
-  }
+  ) failures.push('Ticket update router must short-circuit in admin, dispatcher, tenant, technician order.');
   for (const repeatedHelper of ['hasAdminClaim()', 'hasNonAdminDispatchClaimOnly()', 'claimedRole()']) {
     if (router.includes(repeatedHelper)) failures.push(`Ticket update router re-evaluates expensive actor helper: ${repeatedHelper}`);
   }
