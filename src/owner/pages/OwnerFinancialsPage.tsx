@@ -5,7 +5,7 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
 import {
-    DollarSign, CreditCard, Download,
+    CreditCard, Download,
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle, FileText
 } from 'lucide-react';
@@ -77,10 +77,9 @@ export default function OwnerFinancialsPage() {
 
         const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(20));
         const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
+            const rows: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setInvoices(
-                snap.docs
-                    .map(d => ({ id: d.id, ...d.data() }))
-                    .sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
+                rows.sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
             );
         });
 
