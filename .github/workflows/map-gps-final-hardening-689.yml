@@ -1,0 +1,39 @@
+name: Apply Map GPS Final Hardening 689
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/map-gps-final-hardening-689.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.number == 689 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/admin-map-gps-queue-truth' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/admin-map-gps-queue-truth
+          fetch-depth: 0
+      - name: Apply terminal STOP and startup rejection hardening
+        run: python .github/scripts/apply-map-gps-final-hardening-689.py
+      - name: Commit bounded map and GPS changes
+        run: |
+          set -euo pipefail
+          git add src/utils/gpsRetryQueue.ts src/utils/liveTracking.ts tests/launch/map-gps-state-behavior.test.mjs
+          git diff --cached --quiet && { echo '::error::Final map/GPS patch produced no changes.'; exit 1; }
+          test "$(git diff --cached --name-only | wc -l)" -eq 3
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(gps): preserve STOP tombstones and reject blocked starts'
+          git push origin HEAD:fix/admin-map-gps-queue-truth
