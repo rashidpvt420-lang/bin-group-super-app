@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import ts from 'typescript';
+
+const nodeRequire = createRequire(import.meta.url);
+const plain = (value) => JSON.parse(JSON.stringify(value));
 
 function loadTypeScriptModule(path) {
   const source = readFileSync(path, 'utf8');
@@ -18,7 +22,7 @@ function loadTypeScriptModule(path) {
   const context = vm.createContext({
     module,
     exports: module.exports,
-    require,
+    require: nodeRequire,
     console,
     Date,
     Math,
@@ -82,7 +86,7 @@ test('unverified or incomplete property geography never resolves as a verified p
       source: 'admin_manual',
     },
   };
-  assert.deepEqual(pins.resolveVerifiedPropertyPin(base), {
+  assert.deepEqual(plain(pins.resolveVerifiedPropertyPin(base)), {
     point: { lat: 24.2, lng: 55.3 },
     propertyId: 'property-1',
     verifiedBy: 'founder-uid',
@@ -121,7 +125,7 @@ test('UPDATE retries retain only the latest short-lived minimum coordinate', () 
   const entries = queue.readGpsRetryQueue(stores, 2000);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].action, 'UPDATE');
-  assert.deepEqual(entries[0].point, { latitude: 24.444444, longitude: 55.555556, accuracy: 8 });
+  assert.deepEqual(plain(entries[0].point), { latitude: 24.444444, longitude: 55.555556, accuracy: 8 });
   assert.equal(entries[0].expiresAtMs, 2000 + (5 * 60 * 1000));
   assert.equal('heading' in entries[0].point, false);
   assert.equal('speed' in entries[0].point, false);
