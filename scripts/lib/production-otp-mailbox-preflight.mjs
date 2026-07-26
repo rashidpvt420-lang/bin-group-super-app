@@ -127,30 +127,41 @@ export async function runProductionOtpMailboxPreflight({
     peppersVerified += 1;
   }
 
-  for (const mailbox of MAILBOXES) {
+  const mailboxCandidates = MAILBOXES.map((mailbox) => {
     const expectedEmail = text(env[mailbox.emailEnv]).toLowerCase();
     const emailIsValid = Boolean(expectedEmail && expectedEmail.includes('@'));
     if (!emailIsValid) {
       blockers.push(`${mailbox.emailEnv} is required for protected mailbox verification.`);
     }
 
-    const credentials = {
-      clientId: resolveProtectedSecret(mailbox.clientIdSecret),
-      clientSecret: resolveProtectedSecret(mailbox.clientSecretSecret),
-      refreshToken: resolveProtectedSecret(mailbox.refreshTokenSecret),
+    return {
+      mailbox,
+      expectedEmail,
+      emailIsValid,
+      credentials: {
+        clientId: resolveProtectedSecret(mailbox.clientIdSecret),
+        clientSecret: resolveProtectedSecret(mailbox.clientSecretSecret),
+        refreshToken: resolveProtectedSecret(mailbox.refreshTokenSecret),
+      },
     };
-    if (!emailIsValid || !credentials.clientId || !credentials.clientSecret || !credentials.refreshToken) {
-      continue;
-    }
+  });
 
-    try {
-      await verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl });
-      mailboxesVerified += 1;
-    } catch (error) {
-      const safeMessage = error instanceof Error && text(error.message)
-        ? text(error.message).replace(/[\r\n]+/g, ' ').slice(0, 320)
-        : `${mailbox.label} mailbox verification failed.`;
-      blockers.push(safeMessage);
+  if (blockers.length === 0) {
+    for (const candidate of mailboxCandidates) {
+      try {
+        await verifyMailbox({
+          mailbox: candidate.mailbox,
+          credentials: candidate.credentials,
+          expectedEmail: candidate.expectedEmail,
+          fetchImpl,
+        });
+        mailboxesVerified += 1;
+      } catch (error) {
+        const safeMessage = error instanceof Error && text(error.message)
+          ? text(error.message).replace(/[\r\n]+/g, ' ').slice(0, 320)
+          : `${candidate.mailbox.label} mailbox verification failed.`;
+        blockers.push(safeMessage);
+      }
     }
   }
 
