@@ -28,6 +28,7 @@ import {
   spawnNpmPlaywrightJson,
   writePlaywrightDiagnosticLog,
 } from './lib/playwright-json-artifact.mjs';
+import { generateTotp } from './lib/totp.mjs';
 
 function argValue(name) {
   const idx = process.argv.indexOf(`--${name}`);
@@ -108,6 +109,31 @@ function prepareSuiteFixture(suiteKey) {
   return status;
 }
 
+function founderAdminEnvironment(suiteKey) {
+  if (!['adminCredentialLogin', 'launchAuditLive'].includes(suiteKey)) return {};
+  const email = String(process.env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase();
+  const password = String(process.env.E2E_FOUNDER_PASSWORD || '').trim();
+  const totpSecret = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').trim();
+  const realPhoneCode = String(process.env.E2E_FOUNDER_REAL_MFA_CODE || '').trim();
+  if (email !== 'ceo@bin-groups.com') {
+    throw new Error('Admin production evidence requires E2E_FOUNDER_EMAIL=ceo@bin-groups.com.');
+  }
+  if (!password) throw new Error('E2E_FOUNDER_PASSWORD is required for Admin production evidence.');
+  const currentCode = totpSecret ? generateTotp(totpSecret) : realPhoneCode;
+  if (!/^\d{6}$/.test(currentCode)) {
+    throw new Error('E2E_FOUNDER_TOTP_SECRET or a current E2E_FOUNDER_REAL_MFA_CODE is required.');
+  }
+  return {
+    E2E_ADMIN_EMAIL: email,
+    E2E_ADMIN_PASSWORD: password,
+    E2E_ADMIN_REAL_MFA_CODE: currentCode,
+    E2E_FOUNDER_EMAIL: email,
+    E2E_FOUNDER_PASSWORD: password,
+    E2E_FOUNDER_TOTP_SECRET: totpSecret,
+    E2E_FOUNDER_REAL_MFA_CODE: realPhoneCode,
+  };
+}
+
 function runPlaywrightSuite(suiteKey, def) {
   const startedAt = new Date().toISOString();
   const reportPath = path.join(artifactsDir, `${def.suiteName}-${commitSha.slice(0, 8)}.json`);
@@ -143,6 +169,7 @@ function runPlaywrightSuite(suiteKey, def) {
   ];
   const env = {
     ...process.env,
+    ...founderAdminEnvironment(suiteKey),
     E2E_BASE_URL: mainUrl,
     E2E_ADMIN_BASE_URL: adminUrl,
     E2E_STRICT_ROLES: def.requiresAdminUrl ? 'true' : process.env.E2E_STRICT_ROLES,
