@@ -19,48 +19,73 @@ test('operational MFA evidence scripts parse under the repository Node runtime',
   }
 });
 
-test('operational evidence injects canonical Founder credentials and uses the MFA-aware verifier', async () => {
+test('Founder credentials are scoped only to the protected MFA-aware verifier step', async () => {
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const stepsIndex = workflow.indexOf('\n    steps:');
+  const evidenceStepIndex = workflow.indexOf('- name: Auto-discover, verify, and publish application evidence');
+  const uploadStepIndex = workflow.indexOf('- name: Upload application proof batch');
+  assert.ok(stepsIndex >= 0 && evidenceStepIndex > stepsIndex && uploadStepIndex > evidenceStepIndex);
 
-  assert.match(workflow, /E2E_FOUNDER_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
-  assert.match(workflow, /E2E_FOUNDER_PASSWORD:\s*\$\{\{ secrets\.E2E_FOUNDER_PASSWORD \}\}/);
-  assert.match(workflow, /E2E_FOUNDER_TOTP_SECRET:\s*\$\{\{ secrets\.E2E_FOUNDER_TOTP_SECRET \}\}/);
+  const jobScope = workflow.slice(0, stepsIndex);
+  const evidenceStep = workflow.slice(evidenceStepIndex, uploadStepIndex);
+  for (const name of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET']) {
+    assert.doesNotMatch(jobScope, new RegExp(`${name}:`));
+    assert.match(evidenceStep, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+  }
   assert.match(workflow, /node scripts\/verify-operational-application-evidence-mfa\.mjs/);
   assert.doesNotMatch(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
 });
 
-test('Firebase operational replay completes TOTP and rejects tokens without a second-factor claim', async () => {
+test('Firebase operational replay verifies the canonical Founder TOTP token with Firebase Admin', async () => {
   const helper = await read('scripts/lib/firebase-mfa-sign-in.mjs');
 
   assert.match(helper, /accounts\/mfaSignIn:finalize/);
   assert.match(helper, /totpVerificationInfo: \{ verificationCode \}/);
-  assert.match(helper, /firebase\?\.sign_in_second_factor/);
-  assert.match(helper, /const verified = requireMfaToken\(directToken\)/);
-  assert.match(helper, /Firebase sign-in did not produce a verified second-factor session/);
+  assert.match(helper, /verifyIdToken\(idToken, true\)/);
+  assert.match(helper, /email !== CANONICAL_FOUNDER_EMAIL/);
+  assert.match(helper, /CEO or Super Admin Founder authority/);
+  assert.match(helper, /second_factor_identifier/);
+  assert.match(helper, /secondFactorType !== 'totp'/);
+  assert.doesNotMatch(helper, /response\.text\(\)/);
+  assert.doesNotMatch(helper, /Buffer\.from\(parts\[1\]/);
 });
 
-test('finance replay is bound to the canonical Founder and serializes only MFA hashes', async () => {
+test('finance replay requires MFA only for replay gates and serializes only verified factor hashes', async () => {
   const wrapper = await read('scripts/verify-operational-application-evidence-mfa.mjs');
 
+  assert.match(wrapper, /MFA_REPLAY_GATES = new Set\(\['paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'\]\)/);
+  assert.match(wrapper, /const mfaRequired = MFA_REPLAY_GATES\.has\(gate\)/);
+  assert.match(wrapper, /if \(mfaRequired\) \{/);
   assert.match(wrapper, /founderEmail !== 'ceo@bin-groups\.com'/);
   assert.match(wrapper, /signInWithRequiredTotpMfa/);
   assert.match(wrapper, /Operational finance replay attempted to use a non-Founder credential/);
-  assert.match(wrapper, /MFA_REPLAY_GATES = new Set\(\['paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'\]\)/);
-  assert.match(wrapper, /!verifiedMfa\?\.uid \|\| !verifiedMfa\?\.secondFactor/);
+  assert.match(wrapper, /verifiedMfa\?\.secondFactorType !== 'totp'/);
   assert.match(wrapper, /replayMfaVerified = true/);
   assert.match(wrapper, /replayActorUidHash = sha256\(verifiedMfa\.uid\)/);
-  assert.match(wrapper, /replaySecondFactorHash = sha256\(verifiedMfa\.secondFactor\)/);
+  assert.match(wrapper, /replaySecondFactorHash = sha256\(verifiedMfa\.secondFactorIdentifier\)/);
   assert.doesNotMatch(wrapper, /proof\.evidence\.secondFactor\s*=/);
   assert.doesNotMatch(wrapper, /proof\.evidence\.idToken\s*=/);
 });
 
-test('operational provenance paginates the full matching collection before release-time filtering', async () => {
-  const provenance = await read('scripts/verify-operational-application-provenance.mjs');
+test('application selectors and provenance both paginate before selecting production records', async () => {
+  const [wrapper, provenance] = await Promise.all([
+    read('scripts/verify-operational-application-evidence-mfa.mjs'),
+    read('scripts/verify-operational-application-provenance.mjs'),
+  ]);
 
-  assert.match(provenance, /const PAGE_SIZE = 250/);
-  assert.match(provenance, /async function readAllMatchingDocuments/);
-  assert.match(provenance, /FieldPath\.documentId\(\)/);
-  assert.match(provenance, /startAfter\(cursor\)/);
+  for (const source of [wrapper, provenance]) {
+    assert.match(source, /const PAGE_SIZE = 250/);
+    assert.match(source, /readAllMatchingDocuments/);
+    assert.match(source, /FieldPath\.documentId\(\)/);
+    assert.match(source, /startAfter\(cursor\)/);
+  }
+  for (const label of [
+    'approved-payment selector',
+    'notification selector',
+    'Broker commission selector',
+    'staff-audit selector',
+    'renewal-watch selector',
+  ]) assert.match(wrapper, new RegExp(label));
   assert.match(provenance, /const documents = await readAllMatchingDocuments\(query\)/);
   assert.match(provenance, /scannedDocumentCount: documents\.length/);
   assert.match(provenance, /entry\.observedMs >= deployedAt\.getTime\(\)/);
