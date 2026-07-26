@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
+  chooseBootstrapAction,
   classifyAccessFailure,
   isValidPepper,
 } from '../../scripts/bootstrap-owner-contract-otp-pepper.mjs';
@@ -64,12 +65,43 @@ test('pepper is generated strongly and streamed without value disclosure', () =>
   assert.doesNotMatch(workflow, /OWNER_CONTRACT_OTP_PEPPER:\s*\$\{\{/);
 });
 
+test('existing secret resources receive a version instead of being recreated', () => {
+  assert.equal(chooseBootstrapAction({
+    secretExists: false,
+    accessStatus: 'missing',
+    currentValue: '',
+  }), 'created');
+  assert.equal(chooseBootstrapAction({
+    secretExists: true,
+    accessStatus: 'missing',
+    currentValue: '',
+  }), 'added-missing-version');
+  assert.equal(chooseBootstrapAction({
+    secretExists: true,
+    accessStatus: 'available',
+    currentValue: 'short',
+  }), 'rotated-invalid-value');
+  assert.equal(chooseBootstrapAction({
+    secretExists: true,
+    accessStatus: 'available',
+    currentValue: 'x'.repeat(32),
+  }), 'unchanged');
+  assert.equal(chooseBootstrapAction({
+    secretExists: true,
+    accessStatus: 'inaccessible',
+    currentValue: '',
+  }), 'fail-inaccessible');
+  assert.match(bootstrap, /const secretExists = describedState === 'available'/);
+  assert.match(bootstrap, /action === 'created'\) createSecret/);
+  assert.match(bootstrap, /else addSecretVersion/);
+});
+
 test('valid existing peppers are idempotent and inaccessible secrets fail closed', () => {
   assert.equal(isValidPepper('x'.repeat(32)), true);
   assert.equal(isValidPepper('x'.repeat(31)), false);
   assert.equal(classifyAccessFailure('Error: secret does not exist'), 'missing');
   assert.equal(classifyAccessFailure('PERMISSION_DENIED'), 'inaccessible');
-  assert.match(bootstrap, /action = 'unchanged'/);
+  assert.match(bootstrap, /'unchanged'/);
   assert.match(bootstrap, /SECRET_ACCESS_DENIED_OR_UNAVAILABLE/);
 });
 
