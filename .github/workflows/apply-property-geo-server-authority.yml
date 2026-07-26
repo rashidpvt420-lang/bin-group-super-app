@@ -54,8 +54,17 @@ jobs:
       - name: Validate canonical property geo source contract
         run: node --test tests/launch/property-geo-authority.test.mjs
 
-      - name: Validate generic Admin catch-all exclusion
-        run: node --test tests/launch/property-geo-catchall-authority.test.mjs
+      - name: Catch-all - named list exists
+        run: node --test --test-name-pattern="named list exists" tests/launch/property-geo-catchall-authority.test.mjs
+
+      - name: Catch-all - properties exclusion order
+        run: node --test --test-name-pattern="excludes properties between" tests/launch/property-geo-catchall-authority.test.mjs
+
+      - name: Catch-all - browser denial regression
+        run: node --test --test-name-pattern="names browser denial" tests/launch/property-geo-catchall-authority.test.mjs
+
+      - name: Catch-all - Admin geo mutation rejection
+        run: node --test --test-name-pattern="rejects Admin canonical geo mutation" tests/launch/property-geo-catchall-authority.test.mjs
 
       - name: Validate Admin property review callable authority
         run: node --test tests/launch/admin-property-review-authority.test.mjs
