@@ -28,6 +28,8 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
 
     steps:
@@ -82,8 +84,14 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
+      - name: Prove rotated Admin credential is accepted by Firebase Auth
+        run: node scripts/verify-admin-credential-login.mjs
+
       - name: Verify provider-backed credential rotation
         run: node scripts/verify-privileged-access-rotation.mjs
+
+      - name: Bind Admin login proof to the rotation record
+        run: node scripts/bind-admin-credential-rotation-proof.mjs
 
       - name: Publish canonical privileged-rotation evidence
         run: node scripts/publish-direct-operational-proof.mjs
@@ -92,6 +100,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: privileged-access-rotation-${{ inputs.expected_commit_sha }}
-          path: launch_package/operational-proof.json
+          path: |
+            launch_package/operational-proof.json
+            launch_package/admin-credential-login-proof.json
           if-no-files-found: error
           retention-days: 365
