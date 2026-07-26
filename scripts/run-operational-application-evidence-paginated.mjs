@@ -183,6 +183,31 @@ replaceExactlyOnce(
   };`,
   'verified TOTP factor evidence hash',
 );
+replaceExactCount(
+  `    replayActorUidHash: replay.replayActorUidHash,
+    stateUnchanged: true,`,
+  `    replayActorUidHash: replay.replayActorUidHash,
+    replaySecondFactorHash: replay.secondFactorHash,
+    stateUnchanged: true,`,
+  2,
+  'published finance replay TOTP hashes',
+);
+replaceExactlyOnce(
+  `else evidence = await renewalSchedulerProof();
+
+const proof = {`,
+  `else evidence = await renewalSchedulerProof();
+
+if (
+  ['paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate) &&
+  !/^[a-f0-9]{64}$/.test(text(evidence?.replaySecondFactorHash))
+) {
+  fail('finance replay evidence is missing the verified Founder TOTP factor hash');
+}
+
+const proof = {`,
+  'finance replay TOTP publication gate',
+);
 
 const selectorReplacements = [
   [
@@ -263,6 +288,8 @@ for (const required of [
   'startAfter(cursor)',
   'secondFactorIdentifier: founderAuth.secondFactorIdentifier,',
   'secondFactorHash: sha256(auth.secondFactorIdentifier),',
+  'replaySecondFactorHash: replay.secondFactorHash,',
+  'finance replay evidence is missing the verified Founder TOTP factor hash',
   "readAllMatchingDocuments(db.collection('payment_transactions')",
   "readAllMatchingDocuments(db.collection('notifications')",
   "readAllMatchingDocuments(db.collection('broker_commissions')",
