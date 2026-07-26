@@ -100,7 +100,10 @@ test('valid existing peppers are idempotent and inaccessible secrets fail closed
   assert.equal(isValidPepper('x'.repeat(32)), true);
   assert.equal(isValidPepper('x'.repeat(31)), false);
   assert.equal(classifyAccessFailure('Error: secret does not exist'), 'missing');
+  assert.equal(classifyAccessFailure('Secret exists but does not have any versions'), 'missing');
+  assert.equal(classifyAccessFailure('No enabled versions are available'), 'missing');
   assert.equal(classifyAccessFailure('PERMISSION_DENIED'), 'inaccessible');
+  assert.equal(classifyAccessFailure('403 Permission denied: secret not found'), 'inaccessible');
   assert.match(bootstrap, /'unchanged'/);
   assert.match(bootstrap, /SECRET_ACCESS_DENIED_OR_UNAVAILABLE/);
 });
