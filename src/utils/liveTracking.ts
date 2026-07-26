@@ -79,6 +79,7 @@ type LiveTrackingAction = {
 type LiveTrackingActionResult = {
     superseded: boolean;
     alreadyStopped: boolean;
+    missingSession: boolean;
 };
 
 const CAPTURE_INTERVAL_MS = 10_000;
@@ -270,10 +271,13 @@ async function sendAction(action: LiveTrackingAction | QueuedGpsAction): Promise
             deviceTimestampMs: point.deviceTimestampMs,
         } : {}),
     });
-    const data = (response as { data?: { superseded?: unknown; alreadyStopped?: unknown } }).data || {};
+    const data = (response as {
+        data?: { superseded?: unknown; alreadyStopped?: unknown; missingSession?: unknown };
+    }).data || {};
     return {
         superseded: data.superseded === true,
         alreadyStopped: data.alreadyStopped === true,
+        missingSession: data.missingSession === true,
     };
 }
 
@@ -499,6 +503,7 @@ export type StopLiveTrackingResult = {
     hadActiveSession: boolean;
     serverAcknowledged: boolean;
     superseded: boolean;
+    missingSession: boolean;
     stopQueued: boolean;
 };
 
@@ -516,6 +521,7 @@ export const stopLiveTracking = async (
     const hadActiveSession = Boolean(uid && activeTicketId && sessionId);
     let stopAcknowledged = false;
     let stopSuperseded = false;
+    let stopMissingSession = false;
     let stopQueued = false;
     if (uid && activeTicketId && sessionId) {
         discardQueuedSessionUpdates(uid, activeTicketId, sessionId);
@@ -529,6 +535,7 @@ export const stopLiveTracking = async (
         try {
             const response = await sendAction(stopAction);
             stopSuperseded = response.superseded;
+            stopMissingSession = response.missingSession;
             stopAcknowledged = !stopSuperseded;
         } catch (error) {
             enqueueGpsRetryAction({
@@ -550,6 +557,13 @@ export const stopLiveTracking = async (
             reconciledAt: serverTimestamp(),
             serverAcknowledged: true,
             canonicalSessionUnchanged: true,
+        } : stopMissingSession ? {
+            status: 'STOP_MISSING_SESSION_RECONCILED',
+            finalStatus,
+            trackingSessionId: sessionId,
+            reconciledAt: serverTimestamp(),
+            serverAcknowledged: true,
+            canonicalSessionAbsent: true,
         } : stopAcknowledged ? {
             status: 'STOPPED',
             finalStatus,
@@ -577,6 +591,7 @@ export const stopLiveTracking = async (
         hadActiveSession,
         serverAcknowledged: stopAcknowledged || stopSuperseded,
         superseded: stopSuperseded,
+        missingSession: stopMissingSession,
         stopQueued,
     };
 };
