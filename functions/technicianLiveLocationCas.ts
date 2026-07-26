@@ -3,6 +3,7 @@ export type TechnicianLiveSessionState = {
   isTracking: boolean;
   trackingSessionId: string;
   activeTicketId: string;
+  lastStoppedTicketId: string;
   expiresAtMs: number | null;
 };
 
@@ -42,6 +43,7 @@ export function liveSessionState(data: Record<string, unknown> | undefined, exis
     isTracking: data?.isTracking === true,
     trackingSessionId: clean(data?.trackingSessionId),
     activeTicketId: clean(data?.activeTicketId),
+    lastStoppedTicketId: clean(data?.lastStoppedTicketId),
     expiresAtMs,
   };
 }
@@ -54,6 +56,7 @@ export function classifyStopRequest(
   if (!current.exists) return "REJECT_MISSING";
   const ticketId = clean(requestedTicketId);
   const sessionId = clean(requestedSessionId);
+  if (!ticketId || !sessionId) return "REJECT_SUPERSEDED";
 
   if (current.isTracking) {
     return current.trackingSessionId === sessionId && current.activeTicketId === ticketId
@@ -61,7 +64,9 @@ export function classifyStopRequest(
       : "REJECT_SUPERSEDED";
   }
 
-  return current.trackingSessionId === sessionId && !current.activeTicketId
+  return current.trackingSessionId === sessionId &&
+    !current.activeTicketId &&
+    current.lastStoppedTicketId === ticketId
     ? "ALREADY_STOPPED"
     : "REJECT_SUPERSEDED";
 }
