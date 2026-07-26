@@ -89,6 +89,10 @@ env:
   E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
   E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
   E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+  E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+  E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+  E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+  E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
   AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
@@ -201,6 +205,7 @@ jobs:
       - name: Validate role credentials and App Check
         env:
           E2E_STRICT_ROLES: 'true'
+          E2E_REQUIRE_FOUNDER_MFA: 'true'
         run: |
           node scripts/verify-e2e-env.mjs
           node scripts/ensure-appcheck.mjs
