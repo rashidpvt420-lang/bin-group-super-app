@@ -66,6 +66,8 @@ const artifacts = Array.isArray(artifactsPayload?.artifacts) ? artifactsPayload.
 const artifactName = `production-deployment-${expectedSha}`;
 const deploymentArtifact = artifacts.find((artifact) => artifact?.name === artifactName && artifact?.expired !== true);
 if (!deploymentArtifact) fail(`source run is missing ${artifactName}`);
+const artifactDigest = text(deploymentArtifact.digest).toLowerCase();
+if (!/^sha256:[a-f0-9]{64}$/.test(artifactDigest)) fail('source deployment artifact digest is missing or invalid');
 
 const proof = {
   schemaVersion: 1,
@@ -79,7 +81,7 @@ const proof = {
   repository: REPOSITORY,
   artifactName,
   artifactId: String(deploymentArtifact.id || ''),
-  artifactDigest: text(deploymentArtifact.digest),
+  artifactDigest,
   verifiedAt: new Date().toISOString(),
   hardLaunchClaim: false,
 };
