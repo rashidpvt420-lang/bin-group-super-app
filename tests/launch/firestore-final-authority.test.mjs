@@ -39,7 +39,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
 
     assert.match(
       rules,
-      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles'\]\) && hasAdminClaim\(\);/,
+      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations'\]\) && hasAdminClaim\(\);/,
     );
     assert.match(rules, /allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
@@ -48,7 +48,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /match \/broker_kyc_submission_limits\/\{brokerId\} \{\n\s*allow read, write: if false;/);
     assert.match(rules, /match \/admin_security_sessions\/\{sessionId\} \{\n\s*allow read, write: if false;/);
     assert.match(rules, /match \/private_hr_profiles\/\{profileId\} \{\n\s*allow read, write: if false;/);
-    assert.match(rules, /'system_secrets',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
+    assert.match(rules, /match \/technician_live_locations\/\{technicianId\} \{\n\s*allow read: if isAdmin\(\);\n\s*allow create, update, delete: if false;/);
+    assert.match(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
     for (const legacy of [
       'allow update: if isAdmin() && isNotSuspended();',
@@ -57,6 +58,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
       'allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
       "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();",
       "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();",
+      "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();",
     ]) assert.equal(rules.includes(legacy), false);
 
     const routerStart = rules.indexOf('    function safeTicketUpdateByActor() {');
