@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const rulesPath = 'firestore.rules';
-let rules = readFileSync(rulesPath, 'utf8');
+let rules = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 const collectionName = 'technician_live_locations';
 
 const explicitBlock = `
@@ -24,11 +24,17 @@ if (!rules.includes('match /technician_live_locations/{technicianId} {')) {
   rules = rules.replace(genericMarker, `${explicitBlock}${genericMarker}`);
 }
 
-const readNeedle = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'])";
-const readReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'technician_live_locations'])";
-if (rules.includes(readNeedle)) rules = rules.replace(readNeedle, readReplacement);
+const readCandidates = [
+  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles'])",
+  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'])",
+];
+const readReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations'])";
 if (!rules.includes(readReplacement)) {
-  throw new Error('Canonical live-location collection is not excluded from the generic Admin read fallback.');
+  const candidate = readCandidates.find((value) => rules.includes(value));
+  if (!candidate) {
+    throw new Error('Generic Admin read fallback is not in a reviewed form; refusing to weaken or guess the rule.');
+  }
+  rules = rules.replace(candidate, readReplacement);
 }
 
 const protectedCollectionAnchor = "          'system_secrets',\n          'users',";
@@ -38,15 +44,17 @@ while (rules.includes(protectedCollectionAnchor)) {
 }
 
 const protectedOccurrences = rules.match(/'technician_live_locations'/g)?.length || 0;
-if (protectedOccurrences < 4) {
-  throw new Error(`Expected explicit, read-fallback, create and update protection for ${collectionName}; found ${protectedOccurrences} references.`);
+if (protectedOccurrences !== 3) {
+  throw new Error(`Expected read-fallback, create and update exclusions for ${collectionName}; found ${protectedOccurrences} quoted references.`);
 }
 
-const block = rules.slice(
-  rules.indexOf('match /technician_live_locations/{technicianId} {'),
-  rules.indexOf('match /technician_live_locations/{technicianId} {') + 260,
-);
-if (!block.includes('allow read: if isAdmin();') || !block.includes('allow create, update, delete: if false;')) {
+const blockStart = rules.indexOf('match /technician_live_locations/{technicianId} {');
+const block = rules.slice(blockStart, blockStart + 260);
+if (
+  blockStart < 0 ||
+  !block.includes('allow read: if isAdmin();') ||
+  !block.includes('allow create, update, delete: if false;')
+) {
   throw new Error('Canonical live-location rule block is malformed.');
 }
 
