@@ -463,29 +463,32 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
-    function ownerSubmittedPropertyGeoIsUnverified(data) {
+    function ownerCannotSupplyCanonicalPropertyGeo(data) {
       return !data.keys().hasAny([
-          'geo',
-          'geoAnchor',
-          'verifiedGeo',
-          'geoVerification',
-          'verified',
-          'verifiedBy',
-          'verifiedAt',
-          'dispatchReady',
-          'requiresGeoReview',
-          'geoReviewStatus',
-          'geoVerifiedAt',
-          'geoVerifiedBy'
-        ]) &&
-        (!('submittedGeo' in data) || (
-          data.submittedGeo is map &&
-          data.submittedGeo.get('verified', false) == false &&
-          data.submittedGeo.get('dispatchReady', false) == false &&
-          data.submittedGeo.get('requiresGeoReview', true) == true &&
-          data.submittedGeo.get('verifiedBy', null) == null &&
-          data.submittedGeo.get('verifiedAt', null) == null
-        ));
+        'geo',
+        'geoAnchor',
+        'verifiedGeo',
+        'geoVerification',
+        'verified',
+        'verifiedBy',
+        'verifiedAt',
+        'dispatchReady',
+        'requiresGeoReview',
+        'geoReviewStatus',
+        'geoVerifiedAt',
+        'geoVerifiedBy'
+      ]);
+    }
+
+    function ownerSubmittedPropertyGeoIsUnverified(data) {
+      return !('submittedGeo' in data) || (
+        data.submittedGeo is map &&
+        data.submittedGeo.get('verified', false) == false &&
+        data.submittedGeo.get('dispatchReady', false) == false &&
+        data.submittedGeo.get('requiresGeoReview', true) == true &&
+        data.submittedGeo.get('verifiedBy', null) == null &&
+        data.submittedGeo.get('verifiedAt', null) == null
+      );
     }
 
     function canonicalPropertyGeoUnchanged() {
@@ -506,7 +509,9 @@ service cloud.firestore {
     }
 
     function safeOwnerPropertyCreate(data) {
-      return ownerDraftCreate(data) && ownerSubmittedPropertyGeoIsUnverified(data);
+      return ownerDraftCreate(data) &&
+        ownerCannotSupplyCanonicalPropertyGeo(data) &&
+        ownerSubmittedPropertyGeoIsUnverified(data);
     }
 
     function safeOwnerPropertyUpdate() {

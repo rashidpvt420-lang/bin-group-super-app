@@ -14,9 +14,10 @@ test('canonical property geo is server-authoritative and Owner submissions remai
     read('apps/admin-panel/src/lib/verifiedPropertyPin.ts'),
   ]);
 
+  assert.match(rules, /function ownerCannotSupplyCanonicalPropertyGeo/);
   assert.match(rules, /function ownerSubmittedPropertyGeoIsUnverified/);
   assert.match(rules, /function canonicalPropertyGeoUnchanged/);
-  assert.match(rules, /safeOwnerPropertyCreate/);
+  assert.match(rules, /function safeOwnerPropertyCreate[\s\S]*ownerCannotSupplyCanonicalPropertyGeo\(data\)[\s\S]*ownerSubmittedPropertyGeoIsUnverified\(data\)/);
   assert.match(rules, /'geoVerification'/);
   assert.match(rules, /canManageProperties\(\) && canonicalPropertyGeoUnchanged\(\)/);
 
@@ -42,4 +43,21 @@ test('canonical property geo is server-authoritative and Owner submissions remai
   assert.doesNotMatch(legacyAdminPage, /updateDoc\s*\(/);
   assert.doesNotMatch(legacyAdminPage, /addDoc\s*\(/);
   assert.doesNotMatch(pinResolver, /owner_submission/);
+});
+
+
+test('verified properties keep ordinary Owner updates while canonical geo stays immutable', async () => {
+  const [rules, emulatorTest] = await Promise.all([
+    read('firestore.rules'),
+    read('test/property-geo-authority-rules.test.js'),
+  ]);
+  const updateStart = rules.indexOf('function safeOwnerPropertyUpdate()');
+  const updateEnd = rules.indexOf('\n    }', updateStart) + '\n    }'.length;
+  const updateBlock = rules.slice(updateStart, updateEnd);
+  assert.ok(updateStart >= 0 && updateEnd > updateStart);
+  assert.match(updateBlock, /canonicalPropertyGeoUnchanged\(\)/);
+  assert.match(updateBlock, /ownerSubmittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
+  assert.doesNotMatch(updateBlock, /ownerCannotSupplyCanonicalPropertyGeo/);
+  assert.match(emulatorTest, /Owner-updated ordinary property name/);
+  assert.match(emulatorTest, /assertFails\(updateDoc\(refOwner, \{ geo:/);
 });

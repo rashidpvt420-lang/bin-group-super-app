@@ -75,6 +75,7 @@ describe('Canonical property geo authority', () => {
     await assertFails(updateDoc(refOwner, { geo: { ...submittedGeo, verified: true, dispatchReady: true } }));
     await assertFails(updateDoc(refOwner, { geoVerification: { state: 'VERIFIED', verifiedBy: 'owner_geo' } }));
     await assertFails(updateDoc(refAdmin, { geo: { ...submittedGeo, verified: true, dispatchReady: true, verifiedBy: 'admin_geo' } }));
+    await assertSucceeds(updateDoc(refOwner, { name: 'Owner-updated ordinary property name' }));
     await assertSucceeds(updateDoc(refAdmin, { adminReviewNote: 'Non-geo administrative correction.' }));
   });
 
