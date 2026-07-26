@@ -79,6 +79,34 @@ const canonicalUserSubcollectionBlock = `  it('user push token and readiness sub
 
 `;
 
+const legacyTicketFixtureReplacements = [
+  [
+    "    await setDoc(doc(adminDb, 'tickets/open_ticket'), openTicket);",
+    "    await seedServerDocument('tickets/open_ticket', openTicket);",
+    'open legacy mission seed',
+  ],
+  [
+    "    await setDoc(doc(adminDb, 'tickets/open_ticket_approved_tech'), openTicket);",
+    "    await seedServerDocument('tickets/open_ticket_approved_tech', openTicket);",
+    'approved-Technician legacy mission seed',
+  ],
+  [
+    "    await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));",
+    "    await assertFails(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));",
+    'dispatcher legacy mission mutation denial',
+  ],
+  [
+    "    await setDoc(doc(adminDb, 'tickets/suspended_tenant_existing'), existingTenantTicket);",
+    "    await seedServerDocument('tickets/suspended_tenant_existing', existingTenantTicket);",
+    'suspended Tenant legacy seed',
+  ],
+  [
+    "    await setDoc(doc(adminDb, 'tickets/suspended_tech_existing'), existingTechTicket);",
+    "    await seedServerDocument('tickets/suspended_tech_existing', existingTechTicket);",
+    'suspended Technician legacy seed',
+  ],
+];
+
 const obsoleteCount = source.split(obsoleteBlock).length - 1;
 const canonicalCount = source.split(canonicalBlock).length - 1;
 let next = source;
@@ -118,14 +146,27 @@ if (legacyStartIndex >= 0) {
   );
 }
 
+for (const [legacy, canonical, label] of legacyTicketFixtureReplacements) {
+  const legacyCount = next.split(legacy).length - 1;
+  const canonicalCountForFixture = next.split(canonical).length - 1;
+  if (legacyCount === 1 && canonicalCountForFixture === 0) {
+    next = next.replace(legacy, canonical);
+  } else if (!(legacyCount === 0 && canonicalCountForFixture === 1)) {
+    throw new Error(
+      `[normalize-rule-tests] expected one legacy or canonical ${label}; ` +
+      `found legacy=${legacyCount}, canonical=${canonicalCountForFixture}`,
+    );
+  }
+}
+
 for (const requiredImport of [...requiredImports].reverse()) {
   if (!next.includes(requiredImport)) next = `${requiredImport}\n${next}`;
 }
 
 if (next === source) {
-  console.log('[normalize-rule-tests] callable-only lifecycle/Tenant tickets, Broker KYC, five-profile, push-token and technician list tests already canonical');
+  console.log('[normalize-rule-tests] callable-only lifecycle/Tenant tickets, read-only legacy fixtures, Broker KYC, five-profile, push-token and technician list tests already canonical');
   process.exit(0);
 }
 
 writeFileSync(file, next.replace(/\n/g, newline));
-console.log('[normalize-rule-tests] Tenant ticket creation and protected role rules tests normalized');
+console.log('[normalize-rule-tests] Tenant ticket creation, read-only legacy fixtures and protected role rules tests normalized');
