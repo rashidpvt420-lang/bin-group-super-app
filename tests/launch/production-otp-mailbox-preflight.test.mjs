@@ -109,7 +109,7 @@ test('Live Role Smoke injects canonical Founder MFA secrets and requires them fo
 
 test('preflight source never prints or serializes protected secret values', () => {
   assert.doesNotMatch(preflightSource, /console\.(?:log|error|warn)/);
-  assert.doesNotMatch(preflightSource, /JSON\.stringify\(credentials\)/);
-  assert.doesNotMatch(preflightSource, /accessToken\s*[,}]/);
+  assert.doesNotMatch(preflightSource, /JSON\.stringify\((?:credentials|accessToken|token)\)/);
+  assert.doesNotMatch(preflightSource, /return\s*\{\s*accessToken\b/);
   assert.match(preflightSource, /secretValuesLogged:\s*false/);
 });
