@@ -93,13 +93,17 @@ test('Canonical live-location callable atomically validates assignment and updat
   assert.match(locationCallable, /tx\.set\(userRef/);
 });
 
-test('Server watchdog clears abandoned foreground tracking sessions', () => {
+test('Server watchdog clears only the exact still-expired canonical tracking session', () => {
   assert.match(locationCallable, /reconcileExpiredTechnicianLiveLocations = onSchedule/);
   assert.match(locationCallable, /schedule: "every 5 minutes"/);
   assert.match(locationCallable, /where\("isTracking", "==", true\)/);
-  assert.match(locationCallable, /where\("expiresAt", "<=", now\)/);
+  assert.match(locationCallable, /where\("expiresAt", "<=", queryNow\)/);
+  assert.match(locationCallable, /for \(const snapshot of stale\.docs\)[\s\S]*db\.runTransaction/);
+  assert.match(locationCallable, /classifyWatchdogCandidate\(/);
+  assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED/);
   assert.match(locationCallable, /SERVER_EXPIRY_WATCHDOG/);
   assert.match(locationCallable, /TECHNICIAN_LIVE_LOCATION_EXPIRED/);
+  assert.doesNotMatch(locationCallable, /const batch = db\.batch\(\)/);
   const watchdogIndex = indexes.indexes.find((entry) => entry.collectionGroup === 'technician_live_locations');
   assert.deepEqual(watchdogIndex?.fields, [
     { fieldPath: 'isTracking', order: 'ASCENDING' },
