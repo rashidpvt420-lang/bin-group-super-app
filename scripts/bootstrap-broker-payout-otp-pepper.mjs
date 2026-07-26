@@ -2,8 +2,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,23 +23,42 @@ export function classifyAccessFailure(output) {
   return 'inaccessible';
 }
 
-function firebaseCommand(args, { env = process.env } = {}) {
-  const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  return spawnSync(executable, ['firebase', ...args], {
+function gcloudCommand(args, { env = process.env, input } = {}) {
+  return spawnSync('gcloud', args, {
     encoding: 'utf8',
     env,
+    input,
     maxBuffer: 8 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
 
-function accessSecret({ env = process.env } = {}) {
-  const result = firebaseCommand([
-    'functions:secrets:access',
+function describeSecret({ env = process.env } = {}) {
+  const result = gcloudCommand([
+    'secrets',
+    'describe',
     SECRET_NAME,
     '--project',
     PROJECT_ID,
-    '--non-interactive',
+    '--format=json',
+    '--quiet',
+  ], { env });
+
+  if (result.status === 0) return 'available';
+  return classifyAccessFailure(`${result.stderr || ''}\n${result.stdout || ''}`);
+}
+
+function accessSecret({ env = process.env } = {}) {
+  const result = gcloudCommand([
+    'secrets',
+    'versions',
+    'access',
+    'latest',
+    '--secret',
+    SECRET_NAME,
+    '--project',
+    PROJECT_ID,
+    '--quiet',
   ], { env });
 
   if (result.status === 0) {
@@ -53,21 +71,34 @@ function accessSecret({ env = process.env } = {}) {
   };
 }
 
-function setSecretFromFile(filePath, { env = process.env } = {}) {
-  const result = firebaseCommand([
-    'functions:secrets:set',
+function createSecret(secretValue, { env = process.env } = {}) {
+  const result = gcloudCommand([
+    'secrets',
+    'create',
     SECRET_NAME,
-    '--data-file',
-    filePath,
+    '--replication-policy=automatic',
+    '--data-file=-',
     '--project',
     PROJECT_ID,
-    '--force',
-    '--non-interactive',
-  ], { env });
+    '--quiet',
+  ], { env, input: secretValue });
 
-  if (result.status !== 0) {
-    throw new Error('SECRET_SET_FAILED');
-  }
+  if (result.status !== 0) throw new Error('SECRET_CREATE_FAILED');
+}
+
+function addSecretVersion(secretValue, { env = process.env } = {}) {
+  const result = gcloudCommand([
+    'secrets',
+    'versions',
+    'add',
+    SECRET_NAME,
+    '--data-file=-',
+    '--project',
+    PROJECT_ID,
+    '--quiet',
+  ], { env, input: secretValue });
+
+  if (result.status !== 0) throw new Error('SECRET_VERSION_ADD_FAILED');
 }
 
 function writeReport(report) {
@@ -93,11 +124,16 @@ export async function bootstrapBrokerPayoutOtpPepper({ env = process.env } = {})
   const expectedSha = requireProtectedContext(env);
   let action = 'none';
   let previousState = 'unknown';
-  let tempDirectory = '';
 
   try {
-    const existing = accessSecret({ env });
-    previousState = existing.status;
+    const describedState = describeSecret({ env });
+    previousState = describedState;
+
+    let existing = { status: describedState, value: '' };
+    if (describedState === 'available') {
+      existing = accessSecret({ env });
+      previousState = existing.status;
+    }
 
     if (existing.status === 'available' && isValidPepper(existing.value)) {
       action = 'unchanged';
@@ -110,11 +146,8 @@ export async function bootstrapBrokerPayoutOtpPepper({ env = process.env } = {})
       const generated = randomBytes(48).toString('base64url');
       if (!isValidPepper(generated)) throw new Error('GENERATED_SECRET_TOO_SHORT');
 
-      tempDirectory = mkdtempSync(path.join(tmpdir(), 'bin-group-broker-otp-'));
-      chmodSync(tempDirectory, 0o700);
-      const secretFile = path.join(tempDirectory, 'secret-value');
-      writeFileSync(secretFile, generated, { mode: 0o600, flag: 'wx' });
-      setSecretFromFile(secretFile, { env });
+      if (action === 'created') createSecret(generated, { env });
+      else addSecretVersion(generated, { env });
 
       const verified = accessSecret({ env });
       if (verified.status !== 'available' || verified.value !== generated || !isValidPepper(verified.value)) {
@@ -136,6 +169,8 @@ export async function bootstrapBrokerPayoutOtpPepper({ env = process.env } = {})
       githubRepository: text(env.GITHUB_REPOSITORY) || null,
       githubRef: 'refs/heads/main',
       protectedEnvironment: 'production',
+      secretTransport: 'stdin',
+      secretPersistedToRunnerDisk: false,
       secretValueLogged: false,
       hardLaunchClaim: false,
       startedAt,
@@ -156,6 +191,8 @@ export async function bootstrapBrokerPayoutOtpPepper({ env = process.env } = {})
       workflowRunId: text(env.GITHUB_RUN_ID) || null,
       githubRepository: text(env.GITHUB_REPOSITORY) || null,
       protectedEnvironment: text(env.DEPLOYMENT_ENVIRONMENT) || null,
+      secretTransport: 'stdin',
+      secretPersistedToRunnerDisk: false,
       secretValueLogged: false,
       hardLaunchClaim: false,
       startedAt,
@@ -163,8 +200,6 @@ export async function bootstrapBrokerPayoutOtpPepper({ env = process.env } = {})
     };
     writeReport(report);
     throw error;
-  } finally {
-    if (tempDirectory) rmSync(tempDirectory, { recursive: true, force: true });
   }
 }
 
