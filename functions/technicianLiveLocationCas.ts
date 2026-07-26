@@ -60,10 +60,14 @@ export function classifyStopRequest(
   requestedTicketId: string,
   requestedSessionId: string,
 ): StopDecision {
-  if (!current.exists) return "REJECT_MISSING";
   const ticketId = clean(requestedTicketId);
   const sessionId = clean(requestedSessionId);
   if (!ticketId || !sessionId) return "REJECT_SUPERSEDED";
+
+  // A STOP received before the first accepted UPDATE still needs a canonical
+  // non-live record. Routing it through APPLY makes the existing transaction
+  // write that tombstone instead of acknowledging an empty state.
+  if (!current.exists) return "APPLY";
 
   if (current.isTracking) {
     return current.trackingSessionId === sessionId && current.activeTicketId === ticketId
@@ -84,10 +88,23 @@ export function classifyUpdateRequest(
   requestedSessionId: string,
   transactionNowMs: number,
 ): UpdateDecision {
+  const ticketId = clean(requestedTicketId);
+  const sessionId = clean(requestedSessionId);
+
+  // Reject a coordinate callback that was already in flight when the same
+  // ticket/session was stopped. A different new session ID remains allowed.
+  if (
+    current.exists &&
+    !current.isTracking &&
+    current.trackingSessionId === sessionId &&
+    current.lastStoppedTicketId === ticketId
+  ) {
+    return "REJECT_SUPERSEDED";
+  }
+
   if (!current.exists || !current.isTracking) return "APPLY";
   if (current.expiresAtMs !== null && current.expiresAtMs <= transactionNowMs) return "APPLY";
-  return current.activeTicketId === clean(requestedTicketId) &&
-    current.trackingSessionId === clean(requestedSessionId)
+  return current.activeTicketId === ticketId && current.trackingSessionId === sessionId
     ? "APPLY"
     : "REJECT_SUPERSEDED";
 }
