@@ -12,6 +12,7 @@ const fixture = read('scripts/prepare-broker-payout-otp-e2e.mjs');
 const runner = read('scripts/run-broker-commercial-lifecycle-evidence.mjs');
 const mailbox = read('scripts/lib/gmail-mailbox-proof.mjs');
 const brokerSpec = read('tests/e2e/business-broker.spec.ts');
+const adminMfaHelper = read('tests/e2e/helpers/adminMfa.ts');
 const page = read('src/broker/pages/BrokerCommissionsPage.tsx');
 
 test('Broker lead attribution is Owner-bound, immutable and activation-driven', () => {
@@ -53,7 +54,7 @@ test('Broker payout OTP proves branded SMTP acceptance and actual Gmail mailbox 
   assert.doesNotMatch(payout, /otp:\s*otp[,}]/);
 });
 
-test('Admin payout settlement requires real MFA and supports correction and resubmission', () => {
+test('Admin payout settlement requires the canonical Founder MFA session and supports correction and resubmission', () => {
   assert.match(adminReview, /sign_in_second_factor/);
   assert.match(adminReview, /action must be APPROVE, REJECT or MARK_PAID/);
   assert.match(adminReview, /payoutStatus: "AVAILABLE"/);
@@ -61,7 +62,10 @@ test('Admin payout settlement requires real MFA and supports correction and resu
   assert.match(adminReview, /status: "PAID"/);
   assert.match(adminReview, /ADMIN_BROKER_PAYOUT_\$\{action\}/);
   assert.match(runtime, /export \{ adminReviewBrokerPayoutRequest \} from "\.\/adminBrokerPayoutReview"/);
-  assert.match(brokerSpec, /E2E_ADMIN_REAL_MFA_CODE/);
+  assert.match(adminMfaHelper, /requireAdminMfaCredentials/);
+  assert.match(adminMfaHelper, /generateTotp/);
+  assert.match(brokerSpec, /requireAdminMfaCredentials\('E2E_FOUNDER'\)/);
+  assert.match(brokerSpec, /ceo@bin-groups\.com/);
   assert.match(brokerSpec, /rejectFirstPayout/);
   assert.match(brokerSpec, /approveAndPayReplacement/);
 });
