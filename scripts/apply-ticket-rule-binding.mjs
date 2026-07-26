@@ -4,8 +4,9 @@ const file = 'firestore.rules';
 let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
-const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
+const canonicalCreate = "      allow create: if isAdmin();";
 for (const legacyCreate of [
+  "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
   "      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if canDispatchJobs() || canCreateTenantBoundTicket(request.resource.data);",
@@ -149,15 +150,20 @@ for (const forbidden of [
   'openMissionPoolRead(resource.data)',
   monolithicUpdate.trim(),
   ...splitRules.map((rule) => rule.trim()),
+  'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
 ]) {
   if (text.includes(forbidden)) {
     throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
   }
 }
 
-if (!text.includes(canonicalCreate)) {
-  throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
+for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
+  const start = text.indexOf(marker);
+  const block = start < 0 ? '' : text.slice(start, start + 700);
+  if (!block.includes(canonicalCreate)) {
+    throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser ticket creation outside Admin authority.`);
+  }
 }
 
 if (changed) writeFileSync(file, text);
-console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
+console.log(`Applied callable-only ticket creation and bounded single update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
