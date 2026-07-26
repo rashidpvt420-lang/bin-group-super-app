@@ -7,6 +7,8 @@ export type MinimalGpsPoint = {
   deviceTimestampMs?: number;
 };
 
+export type GpsRetryTerminalReason = 'PERMANENT_CALLABLE_ERROR' | 'RETRY_EXHAUSTED';
+
 export type QueuedGpsAction = {
   id: string;
   action: GpsRetryActionKind;
@@ -19,6 +21,7 @@ export type QueuedGpsAction = {
   retryCount: number;
   nextAttemptAtMs: number;
   terminal: boolean;
+  terminalReason?: GpsRetryTerminalReason;
   lastErrorCode?: string;
 };
 
@@ -37,6 +40,11 @@ export type ReplayResult = {
   pendingStops: number;
 };
 
+export type GpsRetryErrorDisposition = {
+  code: string;
+  terminal: boolean;
+};
+
 const STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v3';
 const UPDATE_QUEUE_KEY = 'bin-technician-gps-update-memory-v3';
 const LEGACY_QUEUE_KEYS = [
@@ -50,6 +58,12 @@ const MAX_STOP_QUEUE_SIZE = 20;
 const MAX_UPDATE_QUEUE_SIZE = 12;
 const MAX_RETRY_COUNT = 8;
 const MAX_BACKOFF_MS = 60_000;
+const PERMANENT_CALLABLE_CODES = new Set([
+  'invalid-argument',
+  'not-found',
+  'permission-denied',
+  'unauthenticated',
+]);
 
 const memoryValues = new Map<string, string>();
 const memoryStorage: StorageLike = {
@@ -92,9 +106,6 @@ const scopedStorage = (storage: StorageLike | null, technicianUid: string): Stor
  * Browser production storage:
  * - coordinate-free STOP records use a Technician-UID-scoped localStorage key;
  * - UPDATE coordinates use module memory only and disappear on reload/restart.
- *
- * Tests can inject independent StorageLike instances and retain the original
- * multi-user queue behavior without browser globals.
  */
 export const browserGpsQueueStorage = (technicianUid = ''): QueueStorage => ({
   stop: scopedStorage(safeStorage('localStorage'), technicianUid),
@@ -131,6 +142,10 @@ const sanitizePoint = (input: unknown): MinimalGpsPoint | undefined => {
   };
 };
 
+const sanitizeTerminalReason = (value: unknown): GpsRetryTerminalReason | undefined => (
+  value === 'PERMANENT_CALLABLE_ERROR' || value === 'RETRY_EXHAUSTED' ? value : undefined
+);
+
 const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null => {
   if (!input || typeof input !== 'object') return null;
   const source = input as Record<string, unknown>;
@@ -142,7 +157,8 @@ const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null =>
   const queuedAtMs = finite(source.queuedAtMs);
   const expiresAtMs = finite(source.expiresAtMs);
   const retryCount = Math.max(0, Math.floor(finite(source.retryCount) ?? 0));
-  const terminal = source.terminal === true || retryCount >= MAX_RETRY_COUNT;
+  const terminalReason = sanitizeTerminalReason(source.terminalReason);
+  const terminal = source.terminal === true || retryCount >= MAX_RETRY_COUNT || Boolean(terminalReason);
   const nextAttemptAtMs = Math.max(0, Math.floor(finite(source.nextAttemptAtMs) ?? queuedAtMs ?? nowMs));
   if (!ticketId || !technicianUid || !trackingSessionId || queuedAtMs === null || expiresAtMs === null) return null;
   // A terminal STOP is a coordinate-free reconciliation tombstone. It remains
@@ -163,6 +179,7 @@ const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null =>
     retryCount,
     nextAttemptAtMs,
     terminal,
+    ...(terminalReason ? { terminalReason } : {}),
     ...(source.lastErrorCode ? { lastErrorCode: String(source.lastErrorCode).slice(0, 80) } : {}),
   };
 };
@@ -194,8 +211,6 @@ const boundedStopEntries = (entries: QueuedGpsAction[]) => {
     .filter((entry) => entry.action === 'STOP')
     .map(({ point: _discardedPoint, ...entry }) => entry)
     .sort((left, right) => left.queuedAtMs - right.queuedAtMs || left.id.localeCompare(right.id));
-  // STOP intent is never evicted. Saturation fails closed instead of silently
-  // allowing a new session to claim LIVE authority.
   if (stops.length > MAX_STOP_QUEUE_SIZE) throw new Error('GPS_STOP_QUEUE_CAPACITY_EXCEEDED');
   return stops;
 };
@@ -390,7 +405,7 @@ export const discardAllQueuedUpdates = (
 };
 
 export const enqueueGpsRetryAction = (
-  input: Omit<QueuedGpsAction, 'id' | 'expiresAtMs' | 'retryCount' | 'nextAttemptAtMs' | 'terminal'>,
+  input: Omit<QueuedGpsAction, 'id' | 'expiresAtMs' | 'retryCount' | 'nextAttemptAtMs' | 'terminal' | 'terminalReason'>,
   storage?: QueueStorage,
   nowMs = Date.now(),
 ): QueuedGpsAction => {
@@ -428,11 +443,25 @@ const safeErrorCode = (error: unknown) => {
   if (error && typeof error === 'object') {
     const candidate = error as { code?: unknown; message?: unknown };
     const code = String(candidate.code || '').trim();
-    if (code) return code.slice(0, 80);
+    if (code) return code.toLowerCase().slice(0, 80);
     const message = String(candidate.message || '').trim();
-    if (message) return message.replace(/[^A-Za-z0-9_./:-]+/g, '_').slice(0, 80);
+    if (message) return message.replace(/[^A-Za-z0-9_./:-]+/g, '_').toLowerCase().slice(0, 80);
   }
-  return 'UNKNOWN_RETRY_ERROR';
+  return 'unknown_retry_error';
+};
+
+const canonicalCallableCode = (code: string) => code
+  .toLowerCase()
+  .replace(/^firebase:/, '')
+  .replace(/^functions\//, '')
+  .replace(/^https?:/, '');
+
+export const classifyGpsRetryError = (error: unknown): GpsRetryErrorDisposition => {
+  const code = safeErrorCode(error);
+  return {
+    code,
+    terminal: PERMANENT_CALLABLE_CODES.has(canonicalCallableCode(code)),
+  };
 };
 
 const retryDelayMs = (retryCount: number) => Math.min(MAX_BACKOFF_MS, 2_000 * (2 ** Math.min(retryCount, 5)));
@@ -446,6 +475,40 @@ export const hasPendingGpsStop = (
   return readGpsRetryQueue(selected, nowMs).some((entry) => (
     entry.action === 'STOP' && entry.technicianUid === technicianUid
   ));
+};
+
+export const terminalGpsStopsForTechnician = (
+  technicianUid: string,
+  storage?: QueueStorage,
+  nowMs = Date.now(),
+) => {
+  const selected = storage ?? browserGpsQueueStorage(technicianUid);
+  return readGpsRetryQueue(selected, nowMs).filter((entry) => (
+    entry.action === 'STOP' && entry.technicianUid === technicianUid && entry.terminal
+  ));
+};
+
+export const clearTerminalGpsStopAfterServerReconciliation = (
+  input: {
+    technicianUid: string;
+    ticketId: string;
+    trackingSessionId: string;
+    serverReconciled: boolean;
+  },
+  storage?: QueueStorage,
+) => {
+  if (input.serverReconciled !== true) throw new Error('GPS_STOP_RECONCILIATION_PROOF_REQUIRED');
+  const selected = storage ?? browserGpsQueueStorage(input.technicianUid);
+  const queue = readGpsRetryQueue(selected);
+  const target = queue.find((entry) => (
+    entry.action === 'STOP' &&
+    entry.terminal &&
+    entry.technicianUid === input.technicianUid &&
+    entry.ticketId === input.ticketId &&
+    entry.trackingSessionId === input.trackingSessionId
+  ));
+  if (!target) throw new Error('GPS_TERMINAL_STOP_NOT_FOUND');
+  writeQueues(selected, queue.filter((entry) => entry.id !== target.id));
 };
 
 export const replayGpsRetryQueue = async (
@@ -477,14 +540,20 @@ export const replayGpsRetryQueue = async (
       result.succeeded += 1;
     } catch (error) {
       result.failed += 1;
-      const retryCount = entry.retryCount + 1;
-      const terminal = retryCount >= MAX_RETRY_COUNT;
+      const disposition = classifyGpsRetryError(error);
+      const nextRetryCount = entry.retryCount + 1;
+      const terminal = disposition.terminal || nextRetryCount >= MAX_RETRY_COUNT;
+      const retryCount = disposition.terminal ? MAX_RETRY_COUNT : nextRetryCount;
+      const terminalReason: GpsRetryTerminalReason | undefined = terminal
+        ? (disposition.terminal ? 'PERMANENT_CALLABLE_ERROR' : 'RETRY_EXHAUSTED')
+        : undefined;
       current = current.map((candidate) => candidate.id === entry.id ? {
         ...candidate,
         retryCount,
         terminal,
+        ...(terminalReason ? { terminalReason } : {}),
         nextAttemptAtMs: terminal ? candidate.expiresAtMs : nowMs + retryDelayMs(retryCount),
-        lastErrorCode: safeErrorCode(error),
+        lastErrorCode: disposition.code,
       } : candidate);
       if (terminal) result.terminal += 1;
       // A STOP reconciliation failure blocks all newer actions for the same UID.
