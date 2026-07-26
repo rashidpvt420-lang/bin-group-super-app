@@ -52,6 +52,7 @@ class MemoryStorage {
 
 const queue = loadTypeScriptModule('src/utils/gpsRetryQueue.ts');
 const pins = loadTypeScriptModule('apps/admin-panel/src/lib/verifiedPropertyPin.ts');
+const liveTrackingSource = readFileSync('src/utils/liveTracking.ts', 'utf8');
 
 const storage = () => ({ stop: new MemoryStorage(), update: new MemoryStorage() });
 const updateInput = (overrides = {}) => ({
@@ -178,4 +179,52 @@ test('account change is an explicit queue disposal boundary and expiry removes s
   const expiring = storage();
   queue.enqueueGpsRetryAction(updateInput({ queuedAtMs: now }), expiring, now);
   assert.equal(queue.readGpsRetryQueue(expiring, now + (5 * 60 * 1000) + 1).length, 0);
+});
+
+
+test('terminal STOP reconciliation survives TTL and STOP saturation fails closed', () => {
+  const now = 50_000;
+  const stores = storage();
+  const tombstone = {
+    id: 'terminal-stop',
+    action: 'STOP',
+    ticketId: 'ticket-terminal',
+    technicianUid: 'tech-1',
+    trackingSessionId: 'session-terminal',
+    queuedAtMs: 1_000,
+    expiresAtMs: now - 1,
+    retryCount: 8,
+    nextAttemptAtMs: now - 1,
+    terminal: true,
+    lastErrorCode: 'permission-denied',
+  };
+  stores.stop.setItem(queue.gpsRetryQueueKeys.stop, JSON.stringify([tombstone]));
+  const retained = queue.readGpsRetryQueue(stores, now);
+  assert.equal(retained.length, 1);
+  assert.equal(retained[0].terminal, true);
+  assert.equal(retained[0].action, 'STOP');
+  assert.equal('point' in retained[0], false);
+  assert.equal(queue.hasPendingGpsStop('tech-1', stores, now), true);
+
+  const saturated = storage();
+  for (let index = 0; index < 20; index += 1) {
+    queue.enqueueGpsRetryAction(stopInput({
+      ticketId: `ticket-${index}`,
+      trackingSessionId: `session-${index}`,
+    }), saturated, now + index);
+  }
+  assert.throws(
+    () => queue.enqueueGpsRetryAction(stopInput({ ticketId: 'overflow', trackingSessionId: 'overflow' }), saturated, now + 21),
+    /GPS_STOP_QUEUE_CAPACITY_EXCEEDED/,
+  );
+  assert.equal(queue.readGpsRetryQueue(saturated, now + 22).filter((entry) => entry.action === 'STOP').length, 20);
+});
+
+test('GPS startup failures reject after reporting so callers cannot claim LIVE tracking', () => {
+  const rejectionPattern = /onError\?\.\(message\);\s*throw new Error\(message\);/g;
+  const matches = liveTrackingSource.match(rejectionPattern) || [];
+  assert.ok(matches.length >= 3, 'unsupported, insecure, and pending-STOP starts must reject');
+  assert.match(liveTrackingSource, /A previous GPS stop is still waiting for server acknowledgement/);
+  assert.match(liveTrackingSource, /STOP_RECONCILIATION_TERMINAL/);
+  assert.doesNotMatch(liveTrackingSource, /onError\?\.\(message\);\s*return;\s*}\s*\n\s*_state\.activeTicketId/s);
 });

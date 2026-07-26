@@ -337,14 +337,14 @@ export const startLiveTracking = async (
         const message = 'Geolocation is not supported by this browser.';
         await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'UNSUPPORTED', error: message, readiness });
         onError?.(message);
-        return;
+        throw new Error(message);
     }
 
     if (!readiness.secureContext) {
         const message = 'GPS requires a secure HTTPS context.';
         await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'INSECURE_CONTEXT', error: message, readiness });
         onError?.(message);
-        return;
+        throw new Error(message);
     }
 
     if (_state.watchId !== null) navigator.geolocation.clearWatch(_state.watchId);
@@ -366,7 +366,7 @@ export const startLiveTracking = async (
             requiresManualReconciliation: replay.terminal > 0,
         });
         onError?.(message);
-        return;
+        throw new Error(message);
     }
 
     _state.activeTicketId = ticketId;

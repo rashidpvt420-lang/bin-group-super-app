@@ -114,9 +114,13 @@ const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null =>
   const queuedAtMs = finite(source.queuedAtMs);
   const expiresAtMs = finite(source.expiresAtMs);
   const retryCount = Math.max(0, Math.floor(finite(source.retryCount) ?? 0));
+  const terminal = source.terminal === true || retryCount >= MAX_RETRY_COUNT;
   const nextAttemptAtMs = Math.max(0, Math.floor(finite(source.nextAttemptAtMs) ?? queuedAtMs ?? nowMs));
   if (!ticketId || !technicianUid || !trackingSessionId || queuedAtMs === null || expiresAtMs === null) return null;
-  if (expiresAtMs <= nowMs) return null;
+  // Terminal STOP records are coordinate-free reconciliation tombstones. They
+  // survive the ordinary STOP TTL until explicit secure purge or successful
+  // operational reconciliation; otherwise a new mission could start falsely.
+  if (expiresAtMs <= nowMs && !(action === 'STOP' && terminal)) return null;
   const point = action === 'UPDATE' ? sanitizePoint(source.point) : undefined;
   if (action === 'UPDATE' && !point) return null;
   return {
@@ -130,7 +134,7 @@ const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null =>
     expiresAtMs: Math.floor(expiresAtMs),
     retryCount,
     nextAttemptAtMs,
-    terminal: source.terminal === true || retryCount >= MAX_RETRY_COUNT,
+    terminal,
     ...(source.lastErrorCode ? { lastErrorCode: String(source.lastErrorCode).slice(0, 80) } : {}),
   };
 };
@@ -157,8 +161,19 @@ const writeList = (storage: StorageLike | null, key: string, entries: QueuedGpsA
   }
 };
 
+const boundedStopEntries = (entries: QueuedGpsAction[]) => {
+  const stops = entries
+    .filter((entry) => entry.action === 'STOP')
+    .sort((left, right) => left.queuedAtMs - right.queuedAtMs || left.id.localeCompare(right.id));
+  // STOP intent is never evicted to make room. Losing either a pending STOP or
+  // a terminal reconciliation tombstone could let a new tracking session make
+  // a false LIVE claim, so saturation fails closed instead.
+  if (stops.length > MAX_STOP_QUEUE_SIZE) throw new Error('GPS_STOP_QUEUE_CAPACITY_EXCEEDED');
+  return stops;
+};
+
 const writeQueues = (storage: QueueStorage, entries: QueuedGpsAction[]) => {
-  writeList(storage.stop, STOP_QUEUE_KEY, entries.filter((entry) => entry.action === 'STOP'), MAX_STOP_QUEUE_SIZE);
+  writeList(storage.stop, STOP_QUEUE_KEY, boundedStopEntries(entries), MAX_STOP_QUEUE_SIZE);
   writeList(storage.update, UPDATE_QUEUE_KEY, entries.filter((entry) => entry.action === 'UPDATE'), MAX_UPDATE_QUEUE_SIZE);
 };
 
