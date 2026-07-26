@@ -1,6 +1,10 @@
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { AI_OPERATIONAL_SLO, recordAiOperationalMetric } from "./aiObservability";
+import {
+  AI_OPERATIONAL_SLO,
+  recordAiOperationalMetric,
+  type AiProviderUsage,
+} from "./aiObservability";
 import { asSafeText, redactSensitiveText, safeExternalAiJson } from "./aiSafety";
 import { reserveAiUsageQuota, settleAiUsageQuota } from "./aiUsageQuota";
 
@@ -67,6 +71,34 @@ function deterministicFallback(data: any) {
   return "Rule-based guidance is available, but live Gemini and OpenAI providers are currently unavailable. No approval, payment, assignment, compliance decision, inspection, or quotation has been produced.";
 }
 
+function measuredProviderUsage(inputValue: unknown, outputValue: unknown, totalValue: unknown): AiProviderUsage {
+  const inputTokens = Math.round(Number(inputValue));
+  const outputTokens = Math.round(Number(outputValue));
+  const totalTokens = Math.round(Number(totalValue));
+  if (
+    !Number.isFinite(inputTokens)
+    || !Number.isFinite(outputTokens)
+    || !Number.isFinite(totalTokens)
+    || inputTokens < 1
+    || outputTokens < 1
+    || totalTokens < inputTokens
+    || totalTokens < outputTokens
+  ) {
+    throw new Error("Provider token usage metadata is missing or invalid.");
+  }
+  const budgetEnvelopeAedMicros = Math.ceil(
+    totalTokens * AI_OPERATIONAL_SLO.budgetEnvelopeAedPerMillionTokens,
+  );
+  if (
+    outputTokens > AI_OPERATIONAL_SLO.maxOutputTokensPerResponse
+    || totalTokens > AI_OPERATIONAL_SLO.maxTotalTokensPerChatRequest
+    || budgetEnvelopeAedMicros > AI_OPERATIONAL_SLO.maxBudgetEnvelopeAedMicrosPerChatRequest
+  ) {
+    throw new Error("Provider response exceeded the AI token or cost envelope.");
+  }
+  return { inputTokens, outputTokens, totalTokens, budgetEnvelopeAedMicros };
+}
+
 async function askGeminiModel(apiKey: string, model: string, prompt: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
@@ -86,7 +118,12 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string) {
     if (!response.ok) throw new Error(json?.error?.message || `Gemini ${model} failed with ${response.status}`);
     const text = json?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || "").join(" ").trim();
     if (!text) throw new Error(`Gemini ${model} returned an empty response.`);
-    return text;
+    const usage = measuredProviderUsage(
+      json?.usageMetadata?.promptTokenCount,
+      json?.usageMetadata?.candidatesTokenCount,
+      json?.usageMetadata?.totalTokenCount,
+    );
+    return { text, usage };
   } finally {
     clearTimeout(timeout);
   }
@@ -96,8 +133,8 @@ async function askGemini(apiKey: string, prompt: string) {
   const errors: string[] = [];
   for (const model of GEMINI_MODEL_CANDIDATES) {
     try {
-      const text = await askGeminiModel(apiKey, model, prompt);
-      return { text, model };
+      const result = await askGeminiModel(apiKey, model, prompt);
+      return { ...result, model };
     } catch (error: any) {
       errors.push(`${model}: ${error?.message || "failed"}`);
     }
@@ -116,15 +153,20 @@ async function askOpenAIModel(apiKey: string, model: string, prompt: string) {
   });
   const text = String((response as any).output_text || "").trim();
   if (!text) throw new Error(`OpenAI ${model} returned an empty response.`);
-  return text;
+  const usage = measuredProviderUsage(
+    (response as any).usage?.input_tokens,
+    (response as any).usage?.output_tokens,
+    (response as any).usage?.total_tokens,
+  );
+  return { text, usage };
 }
 
 async function askOpenAI(apiKey: string, prompt: string) {
   const errors: string[] = [];
   for (const model of OPENAI_MODEL_CANDIDATES) {
     try {
-      const text = await askOpenAIModel(apiKey, model, prompt);
-      return { text, model };
+      const result = await askOpenAIModel(apiKey, model, prompt);
+      return { ...result, model };
     } catch (error: any) {
       errors.push(`${model}: ${error?.message || "failed"}`);
     }
@@ -188,12 +230,14 @@ export const runSovereignAI = onCall({
           latencyMs,
           redactionCount: redactions,
           providerFailureCount,
+          usage: result.usage,
           quotaCharged: true,
         });
         return {
           provider: "gemini",
           model: result.model,
           text: result.text,
+          usage: result.usage,
           live: true,
           operationalStatus: "healthy",
           latencyMs,
@@ -201,6 +245,8 @@ export const runSovereignAI = onCall({
           clientContextAuthoritative: false,
           redactionsApplied: redactions,
           sloLatencyMet: latencyMs <= AI_OPERATIONAL_SLO.maxLiveLatencyMs,
+          sloTokenBudgetMet: true,
+          sloCostEnvelopeMet: true,
         };
       } catch (error: any) {
         providerFailureCount += 1;
@@ -223,12 +269,14 @@ export const runSovereignAI = onCall({
           latencyMs,
           redactionCount: redactions,
           providerFailureCount,
+          usage: result.usage,
           quotaCharged: true,
         });
         return {
           provider: "openai",
           model: result.model,
           text: result.text,
+          usage: result.usage,
           live: true,
           operationalStatus: "healthy",
           latencyMs,
@@ -236,6 +284,8 @@ export const runSovereignAI = onCall({
           clientContextAuthoritative: false,
           redactionsApplied: redactions,
           sloLatencyMet: latencyMs <= AI_OPERATIONAL_SLO.maxLiveLatencyMs,
+          sloTokenBudgetMet: true,
+          sloCostEnvelopeMet: true,
         };
       } catch (error: any) {
         providerFailureCount += 1;
