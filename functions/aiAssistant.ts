@@ -26,6 +26,33 @@ const LIVE_PROVIDER_BUDGET_MS = Math.min(18_000, AI_OPERATIONAL_SLO.maxLiveLaten
 const PER_MODEL_TIMEOUT_MS = 6_000;
 const MIN_PROVIDER_ATTEMPT_MS = 750;
 
+class ProviderAttemptError extends Error {
+  readonly failureCode: string;
+
+  constructor(failureCode: string) {
+    super("AI provider attempt failed.");
+    this.name = "ProviderAttemptError";
+    this.failureCode = failureCode;
+  }
+}
+
+function providerFailureCode(error: unknown) {
+  if (error instanceof ProviderAttemptError) return error.failureCode;
+  if (!error || typeof error !== "object") return "provider-failed";
+  const candidate = error as { name?: unknown; code?: unknown; status?: unknown };
+  const name = String(candidate.name || "").toLowerCase();
+  const code = String(candidate.code || "").toLowerCase();
+  const status = Number(candidate.status);
+  if (name === "aborterror" || code.includes("timeout") || code.includes("timed_out")) {
+    return "timeout";
+  }
+  if (status === 429 || code.includes("rate_limit")) return "rate-limited";
+  if (status === 401 || status === 403 || code.includes("auth")) return "provider-auth-failed";
+  if (Number.isFinite(status) && status >= 500) return "provider-server-error";
+  if (Number.isFinite(status) && status >= 400) return "provider-http-error";
+  return "provider-failed";
+}
+
 function uniqueModels(values: Array<string | undefined>) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
 }
@@ -88,7 +115,7 @@ function measuredProviderUsage(inputValue: unknown, outputValue: unknown, totalV
     || totalTokens < inputTokens
     || totalTokens < outputTokens
   ) {
-    throw new Error("Provider token usage metadata is missing or invalid.");
+    throw new ProviderAttemptError("usage-metadata-invalid");
   }
   const budgetEnvelopeAedMicros = Math.ceil(
     totalTokens * AI_OPERATIONAL_SLO.budgetEnvelopeAedPerMillionTokens,
@@ -98,7 +125,7 @@ function measuredProviderUsage(inputValue: unknown, outputValue: unknown, totalV
     || totalTokens > AI_OPERATIONAL_SLO.maxTotalTokensPerChatRequest
     || budgetEnvelopeAedMicros > AI_OPERATIONAL_SLO.maxBudgetEnvelopeAedMicrosPerChatRequest
   ) {
-    throw new Error("Provider response exceeded the AI token or cost envelope.");
+    throw new ProviderAttemptError("usage-envelope-exceeded");
   }
   return { inputTokens, outputTokens, totalTokens, budgetEnvelopeAedMicros };
 }
@@ -109,7 +136,9 @@ function remainingBudgetMs(deadlineMs: number) {
 
 function attemptTimeoutMs(deadlineMs: number) {
   const remaining = remainingBudgetMs(deadlineMs);
-  if (remaining < MIN_PROVIDER_ATTEMPT_MS) throw new Error("Live AI provider budget exhausted.");
+  if (remaining < MIN_PROVIDER_ATTEMPT_MS) {
+    throw new ProviderAttemptError("budget-exhausted");
+  }
   return Math.max(MIN_PROVIDER_ATTEMPT_MS, Math.min(PER_MODEL_TIMEOUT_MS, remaining));
 }
 
@@ -117,10 +146,13 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string, tim
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       signal: controller.signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
@@ -129,9 +161,18 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string, tim
       }),
     });
     const json: any = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(json?.error?.message || `Gemini ${model} failed with ${response.status}`);
+    if (!response.ok) {
+      const statusCode = response.status === 429
+        ? "rate-limited"
+        : response.status === 401 || response.status === 403
+          ? "provider-auth-failed"
+          : response.status >= 500
+            ? "provider-server-error"
+            : "provider-http-error";
+      throw new ProviderAttemptError(statusCode);
+    }
     const text = json?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || "").join(" ").trim();
-    if (!text) throw new Error(`Gemini ${model} returned an empty response.`);
+    if (!text) throw new ProviderAttemptError("empty-response");
     const usage = measuredProviderUsage(
       json?.usageMetadata?.promptTokenCount,
       json?.usageMetadata?.candidatesTokenCount,
@@ -144,17 +185,17 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string, tim
 }
 
 async function askGemini(apiKey: string, prompt: string, deadlineMs: number) {
-  const errors: string[] = [];
+  let lastFailureCode = "provider-failed";
   for (const model of GEMINI_MODEL_CANDIDATES) {
     try {
       const result = await askGeminiModel(apiKey, model, prompt, attemptTimeoutMs(deadlineMs));
       return { ...result, model };
-    } catch (error: any) {
-      errors.push(`${model}: ${error?.message || "failed"}`);
+    } catch (error) {
+      lastFailureCode = providerFailureCode(error);
       if (remainingBudgetMs(deadlineMs) < MIN_PROVIDER_ATTEMPT_MS) break;
     }
   }
-  throw new Error(errors.slice(0, 2).join(" | ") || "Gemini failed.");
+  throw new ProviderAttemptError(lastFailureCode);
 }
 
 async function askOpenAIModel(apiKey: string, model: string, prompt: string, timeoutMs: number) {
@@ -167,7 +208,7 @@ async function askOpenAIModel(apiKey: string, model: string, prompt: string, tim
     max_output_tokens: 700,
   });
   const text = String((response as any).output_text || "").trim();
-  if (!text) throw new Error(`OpenAI ${model} returned an empty response.`);
+  if (!text) throw new ProviderAttemptError("empty-response");
   const usage = measuredProviderUsage(
     (response as any).usage?.input_tokens,
     (response as any).usage?.output_tokens,
@@ -177,17 +218,17 @@ async function askOpenAIModel(apiKey: string, model: string, prompt: string, tim
 }
 
 async function askOpenAI(apiKey: string, prompt: string, deadlineMs: number) {
-  const errors: string[] = [];
+  let lastFailureCode = "provider-failed";
   for (const model of OPENAI_MODEL_CANDIDATES) {
     try {
       const result = await askOpenAIModel(apiKey, model, prompt, attemptTimeoutMs(deadlineMs));
       return { ...result, model };
-    } catch (error: any) {
-      errors.push(`${model}: ${error?.message || "failed"}`);
+    } catch (error) {
+      lastFailureCode = providerFailureCode(error);
       if (remainingBudgetMs(deadlineMs) < MIN_PROVIDER_ATTEMPT_MS) break;
     }
   }
-  throw new Error(errors.slice(0, 2).join(" | ") || "OpenAI failed.");
+  throw new ProviderAttemptError(lastFailureCode);
 }
 
 export const runSovereignAI = onCall({
@@ -230,7 +271,7 @@ export const runSovereignAI = onCall({
     const forcedProvider = evidenceProbe && ["gemini", "openai"].includes(requestedProvider)
       ? requestedProvider
       : "";
-    const errors: string[] = [];
+    const failureCodes: string[] = [];
 
     const gemini = geminiApiKey.value();
     if (gemini && forcedProvider !== "openai") {
@@ -266,14 +307,18 @@ export const runSovereignAI = onCall({
           sloTokenBudgetMet: true,
           sloCostEnvelopeMet: true,
         };
-      } catch (error: any) {
+      } catch (error) {
         providerFailureCount += 1;
-        errors.push(`gemini: ${error?.message || "failed"}`);
+        failureCodes.push(`gemini:${providerFailureCode(error)}`);
       }
     }
 
     const openai = openAiKey.value();
-    if (openai && forcedProvider !== "gemini" && remainingBudgetMs(providerDeadlineMs) >= MIN_PROVIDER_ATTEMPT_MS) {
+    if (
+      openai
+      && forcedProvider !== "gemini"
+      && remainingBudgetMs(providerDeadlineMs) >= MIN_PROVIDER_ATTEMPT_MS
+    ) {
       try {
         const result = await askOpenAI(openai, built.prompt, providerDeadlineMs);
         const settlement = await settleAiUsageQuota(quota, true);
@@ -306,12 +351,12 @@ export const runSovereignAI = onCall({
           sloTokenBudgetMet: true,
           sloCostEnvelopeMet: true,
         };
-      } catch (error: any) {
+      } catch (error) {
         providerFailureCount += 1;
-        errors.push(`openai: ${error?.message || "failed"}`);
+        failureCodes.push(`openai:${providerFailureCode(error)}`);
       }
     } else if (openai && forcedProvider !== "gemini") {
-      errors.push("openai: live provider budget exhausted before fallback attempt");
+      failureCodes.push("openai:budget-exhausted");
     }
 
     const settlement = await settleAiUsageQuota(quota, false);
@@ -321,7 +366,7 @@ export const runSovereignAI = onCall({
     console.warn("[runSovereignAI] Live providers unavailable", {
       role: quota.role,
       forcedProvider: forcedProvider || "automatic",
-      errors: errors.slice(0, 2),
+      failureCodes: failureCodes.slice(0, 2),
       providerBudgetMs: LIVE_PROVIDER_BUDGET_MS,
     });
     await recordAiOperationalMetric({
@@ -361,7 +406,7 @@ export const runSovereignAI = onCall({
     });
     console.error("[runSovereignAI] Callable failed", {
       role: quota.role,
-      error: error instanceof Error ? error.message : "unknown",
+      failureCode: providerFailureCode(error),
     });
     throw new HttpsError("unavailable", "Sovereign AI could not complete this request. No live AI answer was produced.");
   }
