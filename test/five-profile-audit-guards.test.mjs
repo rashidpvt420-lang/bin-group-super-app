@@ -6,6 +6,14 @@ import test from 'node:test';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+const ticketBlock = (rules, collectionName) => {
+  const marker = `    match /${collectionName}/{ticketId} {`;
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${collectionName} ticket block must exist`);
+  const next = rules.indexOf('\n    match /', start + marker.length);
+  return rules.slice(start, next < 0 ? rules.length : next);
+};
+
 test('legacy ownerToken REST clients are fail-closed stubs', () => {
   for (const rel of ['src/services/api.ts', 'apps/owner-app/src/services/api.ts']) {
     const source = readFileSync(join(root, rel), 'utf8');
@@ -15,11 +23,11 @@ test('legacy ownerToken REST clients are fail-closed stubs', () => {
   }
 });
 
-test('ticket updates are actor-discriminated and cannot authorize technician self-claims', () => {
+test('ticket updates are actor-discriminated and legacy tickets are read-only', () => {
   const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
   assert.match(rules, /function safeTicketUpdateByActor\(\)/);
-  assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+  assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);
   assert.match(rules, /let authenticated = signedIn\(\);/);
   assert.match(rules, /let role = authenticated/);
   assert.match(rules, /let admin = authenticated && \(/);
@@ -30,6 +38,13 @@ test('ticket updates are actor-discriminated and cannot authorize technician sel
   assert.match(rules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
   assert.match(rules, /allow read: if collection != 'tickets' && collection != 'maintenanceTickets'/);
   assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets'/);
+
+  const legacy = ticketBlock(rules, 'tickets');
+  assert.match(legacy, /allow create, update, delete: if false;/);
+  assert.doesNotMatch(legacy, /allow update: if safeTicketUpdateByActor\(\);/);
+  const canonical = ticketBlock(rules, 'maintenanceTickets');
+  assert.match(canonical, /allow create: if isAdmin\(\) \|\| canCreateTenantBoundTicket/);
+  assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
 });
 
 test('owner activation delegates to the complete server-confirmed policy', () => {
