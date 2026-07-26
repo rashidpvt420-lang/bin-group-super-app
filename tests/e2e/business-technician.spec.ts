@@ -1,8 +1,8 @@
 /**
  * Authenticated production business proof for the Technician role.
  * Proves a dispatch-bound assignment, push delivery receipt, GPS controls,
- * technician-owned before-work evidence, retrying Storage upload, completion,
- * and automatic offline lifecycle replay.
+ * technician-owned before-work evidence, real network recovery during proof
+ * upload, completion, and automatic offline lifecycle replay.
  */
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'fs';
@@ -194,7 +194,7 @@ test.describe('Technician Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-  test('dispatch assigns the job, push receipt succeeds, and technician completes with resilient evidence upload', async ({ page }) => {
+  test('dispatch assigns the job, push receipt succeeds, and technician completes through network recovery', async ({ page, context }) => {
     test.setTimeout(240_000);
     const db = admin.firestore();
     const pushRegistrationStartedAt = Date.now();
@@ -251,27 +251,18 @@ test.describe('Technician Business Workflow', () => {
     await page.getByLabel(/Resolution notes/i).first().fill('E2E completion proof: issue inspected, repaired, tested, and verified operational.');
     await page.getByLabel(/Materials used|No parts required/i).first().fill('No parts required');
 
-    let completionUploadRequests = 0;
-    await page.route(/firebasestorage\.googleapis\.com|storage\.googleapis\.com/, async (route) => {
-      const decoded = decodeURIComponent(route.request().url());
-      if (decoded.includes(`/maintenanceTickets/${dispatchTicketId}/completionPhotos/`)) {
-        completionUploadRequests += 1;
-        if (completionUploadRequests === 1) {
-          await route.abort('failed');
-          return;
-        }
-      }
-      await route.continue();
-    });
-
     const afterInput = page.locator('input[type="file"][accept*="image"]').last();
-    await setImage(afterInput, 'after-work-proof.png');
+    await context.setOffline(true);
+    await expect(page.locator('body')).toContainText(/Offline mode/i, { timeout: 15_000 });
+    await setImage(afterInput, 'network-recovery-after-work-proof.png');
+    await page.waitForTimeout(1_000);
+    await context.setOffline(false);
+
     const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback/i }).first();
-    await expect(complete).toBeEnabled({ timeout: 20_000 });
+    await expect(complete).toBeEnabled({ timeout: 60_000 });
     await complete.click();
 
     await page.waitForURL('**/technician/jobs', { timeout: 60_000 });
-    expect(completionUploadRequests).toBeGreaterThanOrEqual(2);
     await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toMatch(/COMPLETED/);
   });
 
