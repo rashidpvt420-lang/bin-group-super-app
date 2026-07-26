@@ -5,6 +5,7 @@ import ts from 'typescript';
 
 const helperSource = readFileSync('functions/technicianLiveLocationCas.ts', 'utf8');
 const callableSource = readFileSync('functions/technicianLiveLocation.ts', 'utf8');
+const clientSource = readFileSync('src/utils/liveTracking.ts', 'utf8');
 const transpiled = ts.transpileModule(helperSource, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
@@ -99,11 +100,13 @@ test('server implementation binds STOP and watchdog changes to canonical transac
   assert.match(callableSource, /TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED/);
   assert.match(callableSource, /superseded: true/);
   assert.match(callableSource, /currentTrackingSessionId/);
-  assert.doesNotMatch(callableSource, /stopDecision === "REJECT_SUPERSEDED"[\s\S]{0,220}throw new HttpsError/);
+  assert.match(callableSource, /const ticketSnap = ticketRef \? await tx\.get\(ticketRef\) : null/);
+  assert.match(callableSource, /if \(ticketRef && ticketSnap\?\.exists\)/);
+  assert.match(callableSource, /ticketMissing: Boolean\(ticketId\) && ticketSnap\?\.exists !== true/);
   assert.doesNotMatch(callableSource, /const batch = db\.batch\(\)/);
 });
 
-test('superseded STOP is an audited acknowledged no-op so client reconciliation can finish', () => {
+test('superseded STOP is an audited acknowledged no-op and the client does not claim STOPPED', () => {
   const branchStart = callableSource.indexOf('if (stopDecision === "REJECT_SUPERSEDED")');
   const branchEnd = callableSource.indexOf('if (stopDecision === "ALREADY_STOPPED")', branchStart);
   const branch = callableSource.slice(branchStart, branchEnd);
@@ -114,4 +117,17 @@ test('superseded STOP is an audited acknowledged no-op so client reconciliation 
   assert.match(branch, /reason: "REJECT_SUPERSEDED"/);
   assert.doesNotMatch(branch, /tx\.set\(liveRef/);
   assert.doesNotMatch(branch, /throw new HttpsError/);
+
+  assert.match(clientSource, /stopSuperseded = response\.superseded/);
+  assert.match(clientSource, /STOP_SUPERSEDED_RECONCILED/);
+  assert.match(clientSource, /canonicalSessionUnchanged: true/);
+  assert.match(clientSource, /if \(stopAcknowledged \|\| stopSuperseded \|\| !uid\) detachOnlineRecovery\(\)/);
+});
+
+test('missing ticket cleanup remains explicit and never recreates a ghost ticket', () => {
+  assert.match(callableSource, /targetType: ticketExists \? "maintenanceTickets" : "technician_live_locations"/);
+  assert.match(callableSource, /requestedTicketId: ticketId/);
+  assert.match(callableSource, /ticketMissing: !ticketExists/);
+  assert.match(callableSource, /targetType: ticketSnap\?\.exists \? "maintenanceTickets" : "technician_live_locations"/);
+  assert.doesNotMatch(callableSource, /if \(ticketId\) \{\s*tx\.set\(db\.collection\("maintenanceTickets"\)\.doc\(ticketId\)/);
 });
