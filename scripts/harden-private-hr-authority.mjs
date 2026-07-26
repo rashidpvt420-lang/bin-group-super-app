@@ -6,12 +6,19 @@ let source = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
 const legacyRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
 const hardenedRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
+const liveLocationRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
 
 const legacyWritePrefix = `          'system_secrets',
           'users',
           'audit_logs',
           'admin_security_sessions',`;
 const hardenedWritePrefix = `          'system_secrets',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const liveLocationWritePrefix = `          'system_secrets',
+          'technician_live_locations',
           'users',
           'audit_logs',
           'admin_security_sessions',
@@ -25,19 +32,24 @@ const privateBlock = `    // Sensitive employment, Emirates ID and salary data. 
 `;
 
 if (source.includes(legacyRead)) source = source.replace(legacyRead, hardenedRead);
-if (!source.includes(hardenedRead)) {
+if (!source.includes(hardenedRead) && !source.includes(liveLocationRead)) {
   throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
 }
 
-// The strict list contains the legacy list as a prefix. Detect strict state first.
-if (source.includes(hardenedWritePrefix)) {
-  // Already canonical.
+// Preserve a stricter canonical fallback if another authority hardener has also
+// excluded server-managed live locations. Never replace it with the shorter
+// private-HR-only list.
+let canonicalWritePrefix = hardenedWritePrefix;
+if (source.includes(liveLocationWritePrefix)) {
+  canonicalWritePrefix = liveLocationWritePrefix;
+} else if (source.includes(hardenedWritePrefix)) {
+  // Already private-HR canonical.
 } else if (source.includes(legacyWritePrefix)) {
   source = source.replaceAll(legacyWritePrefix, hardenedWritePrefix);
 } else {
   throw new Error('[harden-private-hr-authority] private HR write fallback could not be identified');
 }
-if (source.split(hardenedWritePrefix).length - 1 !== 2) {
+if (source.split(canonicalWritePrefix).length - 1 !== 2) {
   throw new Error('[harden-private-hr-authority] hardened private HR fallback must exist exactly twice');
 }
 
