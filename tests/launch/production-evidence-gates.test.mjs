@@ -47,7 +47,7 @@ test('finance replay completes canonical Founder TOTP and verifies second-factor
   assert.match(helper, /accounts\/mfaSignIn:finalize/);
   assert.match(helper, /totpVerificationInfo: \{ verificationCode \}/);
   assert.match(helper, /firebase\?\.sign_in_second_factor/);
-  assert.doesNotMatch(helper, /return \{ idToken: directToken/);
+  assert.match(helper, /const verified = requireMfaToken\(directToken\)/);
 });
 
 test('operational provenance paginates all matching documents before deployment-time filtering', async () => {
