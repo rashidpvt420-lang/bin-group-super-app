@@ -5,6 +5,7 @@ import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
 import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
+import { purgeTechnicianGpsRetryQueue, stopLiveTracking } from '../utils/liveTracking';
 import SafeIcon from './SafeIcon';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
@@ -42,15 +43,26 @@ export default function PortalSessionControls({
   const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
 
   const handleLogout = async () => {
+    const technicianUid = role === 'technician' ? auth.currentUser?.uid : undefined;
     try {
+      if (technicianUid) {
+        await stopLiveTracking(technicianUid);
+        purgeTechnicianGpsRetryQueue(technicianUid);
+      }
       await clearSessionAndPreserveLanguage();
       await signOut(auth);
     } catch (error) {
       console.warn(`[${role}] Secure logout fallback triggered.`, error);
       try {
+        if (technicianUid) {
+          await stopLiveTracking(technicianUid);
+          purgeTechnicianGpsRetryQueue(technicianUid);
+        }
+        await clearSessionAndPreserveLanguage();
         await signOut(auth);
       } catch {
-        // Navigation below still terminates the local portal session.
+        // Navigation below still terminates the local portal session. The server
+        // watchdog remains authoritative if the STOP callable was unavailable.
       }
     } finally {
       window.location.replace(logoutRedirect || `/login?intendedRole=${role}&logout=1`);

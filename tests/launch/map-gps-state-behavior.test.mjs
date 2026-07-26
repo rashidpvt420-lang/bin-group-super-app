@@ -53,6 +53,8 @@ class MemoryStorage {
 const queue = loadTypeScriptModule('src/utils/gpsRetryQueue.ts');
 const pins = loadTypeScriptModule('apps/admin-panel/src/lib/verifiedPropertyPin.ts');
 const liveTrackingSource = readFileSync('src/utils/liveTracking.ts', 'utf8');
+const portalSessionSource = readFileSync('src/components/PortalSessionControls.tsx', 'utf8');
+const portalSessionSource = readFileSync('src/components/PortalSessionControls.tsx', 'utf8');
 
 const storage = () => ({ stop: new MemoryStorage(), update: new MemoryStorage() });
 const updateInput = (overrides = {}) => ({
@@ -227,4 +229,89 @@ test('GPS startup failures reject after reporting so callers cannot claim LIVE t
   assert.match(liveTrackingSource, /A previous GPS stop is still waiting for server acknowledgement/);
   assert.match(liveTrackingSource, /STOP_RECONCILIATION_TERMINAL/);
   assert.doesNotMatch(liveTrackingSource, /onError\?\.\(message\);\s*return;\s*}\s*\n\s*_state\.activeTicketId/s);
+});
+
+
+test('browser queue defaults keep coordinates in memory and scope STOP persistence by Technician UID', () => {
+  const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
+  assert.match(queueSource, /update: scopedStorage\(memoryStorage, technicianUid\)/);
+  assert.match(queueSource, /stop: scopedStorage\(safeStorage\('localStorage'\), technicianUid\)/);
+  assert.match(queueSource, /scopedKey\(key, uid\)/);
+  assert.match(queueSource, /map\(\(\{ point: _discardedPoint, \.\.\.entry \}\) => entry\)/);
+  assert.match(queueSource, /discardAllQueuedUpdates/);
+  assert.doesNotMatch(queueSource, /update: safeStorage\('sessionStorage'\)/);
+});
+
+test('freshness ticks update marker membership without resetting the Admin viewport', () => {
+  const mapSource = readFileSync('apps/admin-panel/src/pages/map/LiveMapPage.tsx', 'utf8');
+  assert.match(mapSource, /technicianMarkerRefs = useRef<Map<string, any>>/);
+  assert.match(mapSource, /ticketMarkerRefs = useRef<Map<string, any>>/);
+  assert.match(mapSource, /if \(!viewportInitializedRef\.current && initialPointCount > 0\)/);
+  assert.match(mapSource, /existing\.setPosition/);
+  assert.match(mapSource, /marker\.setMap\(null\)/);
+  assert.doesNotMatch(mapSource, /markerRefs\.current\.forEach/);
+});
+
+test('new ticket startup discards stale UPDATE coordinates before STOP reconciliation', () => {
+  assert.match(liveTrackingSource, /discardAllQueuedUpdates\(technicianUid\)/);
+  assert.match(liveTrackingSource, /readGpsRetryQueue\(browserGpsQueueStorage\(technicianUid\)\)/);
+});
+
+
+test('legacy v2 STOP migration keeps only coordinate-free newest STOP authority', () => {
+  const now = 20_000;
+  const migrated = queue.legacyStopEntriesForMigration([
+    { ...stopInput(), id: 'older-stop', queuedAtMs: 1_000, expiresAtMs: 30_000, retryCount: 0, nextAttemptAtMs: 1_000, terminal: false, point: { latitude: 24.2, longitude: 55.3 } },
+    { ...stopInput(), id: 'newer-stop', queuedAtMs: 2_000, expiresAtMs: 30_000, retryCount: 1, nextAttemptAtMs: 2_500, terminal: false },
+    { ...updateInput(), id: 'legacy-update', queuedAtMs: 3_000, expiresAtMs: 30_000, retryCount: 0, nextAttemptAtMs: 3_000, terminal: false },
+  ], now);
+  assert.equal(migrated.length, 1);
+  assert.equal(migrated[0].id, 'newer-stop');
+  assert.equal(migrated[0].action, 'STOP');
+  assert.equal('point' in migrated[0], false);
+});
+
+test('legacy keys are deleted only after scoped STOP write verification', () => {
+  const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
+  const writeIndex = queueSource.indexOf('writeList(target, STOP_QUEUE_KEY');
+  const verifyIndex = queueSource.indexOf("throw new Error('GPS_STOP_MIGRATION_VERIFICATION_FAILED')", writeIndex);
+  const deleteIndex = queueSource.indexOf('storage.removeItem(key)', verifyIndex);
+  assert.ok(writeIndex >= 0 && verifyIndex > writeIndex && deleteIndex > verifyIndex);
+  assert.match(queueSource, /for \(const storage of sources\)/);
+  assert.match(queueSource, /Legacy UPDATE coordinates are[\s\S]*never migrated/);
+});
+
+
+test('Technician logout reconciles STOP before queue purge and authentication removal', () => {
+  const helperIndex = liveTrackingSource.indexOf('export const prepareTechnicianTrackingLogout');
+  const stopIndex = liveTrackingSource.indexOf("await stopLiveTracking(uid, undefined, 'PRESERVE')", helperIndex);
+  const replayIndex = liveTrackingSource.indexOf('await replayForTechnician(uid)', stopIndex);
+  const pendingIndex = liveTrackingSource.indexOf('GPS_LOGOUT_STOP_PENDING', replayIndex);
+  const purgeIndex = liveTrackingSource.indexOf('purgeTechnicianGpsRetryQueue(uid)', pendingIndex);
+  assert.ok(helperIndex >= 0 && stopIndex > helperIndex && replayIndex > stopIndex && pendingIndex > replayIndex && purgeIndex > pendingIndex);
+  assert.match(liveTrackingSource, /replay\.pendingStops > 0/);
+  assert.match(liveTrackingSource, /Promise<StopLiveTrackingResult>/);
+
+  const prepareIndex = portalSessionSource.indexOf('await prepareTechnicianTrackingLogout(technicianUid)');
+  const clearIndex = portalSessionSource.indexOf('await clearSessionAndPreserveLanguage()', prepareIndex);
+  const signOutIndex = portalSessionSource.indexOf('await signOut(auth)', clearIndex);
+  assert.ok(prepareIndex >= 0 && clearIndex > prepareIndex && signOutIndex > clearIndex);
+  assert.match(portalSessionSource, /error\?\.code === 'GPS_LOGOUT_STOP_PENDING'/);
+  assert.match(portalSessionSource, /if \(shouldRedirect\)/);
+  assert.doesNotMatch(portalSessionSource, /purgeTechnicianGpsRetryQueue\(auth\.currentUser/);
+});
+
+
+test('Technician logout tears down tracking before final queue purge and sign-out', () => {
+  const stopIndex = portalSessionSource.indexOf('await stopLiveTracking(technicianUid)');
+  const purgeIndex = portalSessionSource.indexOf('purgeTechnicianGpsRetryQueue(technicianUid)', stopIndex);
+  const clearIndex = portalSessionSource.indexOf('await clearSessionAndPreserveLanguage()', purgeIndex);
+  const signOutIndex = portalSessionSource.indexOf('await signOut(auth)', clearIndex);
+  assert.ok(stopIndex >= 0 && purgeIndex > stopIndex && clearIndex > purgeIndex && signOutIndex > clearIndex);
+});
+
+test('current server supersession acknowledgement remains intact after privacy hardening', () => {
+  assert.match(liveTrackingSource, /stopSuperseded = response\.superseded/);
+  assert.match(liveTrackingSource, /STOP_SUPERSEDED_RECONCILED/);
+  assert.match(liveTrackingSource, /canonicalSessionUnchanged: true/);
 });
