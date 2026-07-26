@@ -1,19 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import {
   FUNCTIONS_DEPLOYMENT_STRATEGY,
   validateFunctionsDeploymentEvidence,
 } from '../../scripts/lib/functions-deployment-evidence.mjs';
 
-const deploySource = await readFile(
-  new URL('../../scripts/deploy-firebase-production.mjs', import.meta.url),
-  'utf8',
-);
-const verifierSource = await readFile(
-  new URL('../../scripts/verify-production-deployment.mjs', import.meta.url),
-  'utf8',
-);
+const deployUrl = new URL('../../scripts/deploy-firebase-production.mjs', import.meta.url);
+const verifierUrl = new URL('../../scripts/verify-production-deployment.mjs', import.meta.url);
+const deploySource = await readFile(deployUrl, 'utf8');
+const verifierSource = await readFile(verifierUrl, 'utf8');
 
 const validEvidence = () => ({
   strategy: FUNCTIONS_DEPLOYMENT_STRATEGY,
@@ -30,6 +28,19 @@ const validEvidence = () => ({
     'scheduledServiceReminderCron',
     'verifyBrokerPayoutOtp',
   ],
+});
+
+test('production deployment and verification scripts parse under the repository Node runtime', () => {
+  for (const url of [deployUrl, verifierUrl]) {
+    const result = spawnSync(process.execPath, ['--check', fileURLToPath(url)], {
+      encoding: 'utf8',
+    });
+    assert.equal(
+      result.status,
+      0,
+      `${fileURLToPath(url)} failed Node syntax validation:\n${result.stderr || result.stdout}`,
+    );
+  }
 });
 
 test('production deployment never updates the entire Functions estate in one Firebase mutation burst', () => {
