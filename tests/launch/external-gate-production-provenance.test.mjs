@@ -15,6 +15,7 @@ const ordered = (source, fragments) => {
 
 test('operational application evidence is bound to the exact production deployment', () => {
   const workflow = read('.github/workflows/operational-application-evidence.yml');
+  const paginatedRunner = read('scripts/run-operational-application-evidence-paginated.mjs');
   assert.match(workflow, /production_deploy_run_id:/);
   assert.match(workflow, /actions:\s*read/);
   assert.match(workflow, /production-deployment-\$\{\{ inputs\.expected_commit_sha \}\}/);
@@ -24,11 +25,21 @@ test('operational application evidence is bound to the exact production deployme
   assert.match(workflow, /validatedArtifactDigest/);
 
   ordered(workflow, [
+    'run-operational-application-evidence-paginated.mjs --prepare-in-place',
     'verify-operational-application-provenance.mjs',
-    'verify-operational-application-evidence-mfa.mjs',
+    'verify-operational-application-evidence.mjs',
     'bind-operational-application-provenance.mjs',
     'publish-operational-application-evidence.mjs',
   ]);
+  assert.match(paginatedRunner, /sourcePath = path\.join\(__dirname, 'verify-operational-application-evidence\.mjs'\)/);
+  assert.match(paginatedRunner, /--prepare-in-place/);
+  assert.match(paginatedRunner, /replaceExactlyOnce/);
+  assert.match(paginatedRunner, /replaceExactCount/);
+  assert.match(paginatedRunner, /readAllMatchingDocuments/);
+  assert.match(paginatedRunner, /readAllMatchingSnapshot/);
+  assert.match(paginatedRunner, /renameSync\(temporaryPath, sourcePath\)/);
+  assert.match(paginatedRunner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
+  assert.doesNotMatch(workflow, /verify-operational-application-evidence-mfa\.mjs/);
 });
 
 test('application provenance verifier rejects stale or mismatched production state', () => {
