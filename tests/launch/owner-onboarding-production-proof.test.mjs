@@ -6,7 +6,7 @@ const secureLifecycle = fs.readFileSync(new URL('../../scripts/run-owner-onboard
 const wrapper = fs.readFileSync(new URL('../../scripts/run-owner-business-suite-evidence.mjs', import.meta.url), 'utf8');
 const ownerSpec = fs.readFileSync(new URL('../e2e/business-owner.spec.ts', import.meta.url), 'utf8');
 const financials = fs.readFileSync(new URL('../../src/owner/pages/OwnerFinancialsPage.tsx', import.meta.url), 'utf8');
-const otpSecurity = fs.readFileSync(new URL('../../functions/contractSignatureOtpSecure.ts', import.meta.url), 'utf8');
+const otpSecurity = fs.readFileSync(new URL('../../functions/contractSignatureOtpMailbox.ts', import.meta.url), 'utf8');
 const mailTrigger = fs.readFileSync(new URL('../../functions/ownerOnboardingLifecycleEmail.ts', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../../functions/runtime.ts', import.meta.url), 'utf8');
 
@@ -45,31 +45,67 @@ assert.ok(!lifecycle.includes('E2E_OWNER_OTP'), 'Owner production proof must not
 assert.ok(!lifecycle.includes('hardLaunchClaim: true'), 'Owner evidence cannot claim hard-launch approval');
 
 for (const token of [
-  "callFunction('retrieveContractSignatureOtpForTestEvidence'",
-  "beforeData.otpHashAlgorithm === 'HMAC_SHA256_SMTP_SECRET_V1'",
-  "beforeData.testEvidence?.algorithm === 'AES_256_GCM_SMTP_SECRET_V1'",
-  'beforeData.otp === undefined && beforeData.code === undefined',
-  'Protected OTP ciphertext was not destroyed after one-time retrieval',
-  'Protected Owner evidence still contains the six-digit OTP search loop',
+  'E2E_OWNER_MAILBOX_CLIENT_ID',
+  'E2E_OWNER_MAILBOX_CLIENT_SECRET',
+  'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
+  'functions:secrets:access',
+  'gmail.googleapis.com/gmail/v1/users/me/messages',
+  "subject !== 'BIN GROUP contract signature OTP'",
+  'normalizeMailboxMessageId(providerMessageId) !== receivedMessageId',
+  'mailboxReceiptVerified: true',
+  'mailboxMessageIdHash: sha256(receivedMessageId)',
+  "value.testEvidence === undefined",
+  'HMAC_SHA256_OWNER_CONTRACT_V1',
 ]) {
-  assert.ok(secureLifecycle.includes(token), `Secure Owner OTP evidence is missing: ${token}`);
+  assert.ok(secureLifecycle.includes(token), `Mailbox-authoritative Owner OTP evidence is missing: ${token}`);
 }
+
+const mailboxBlockStart = secureLifecycle.indexOf('const mailboxBlock =');
+const mailboxBlockEnd = secureLifecycle.indexOf('source = `${source.slice', mailboxBlockStart);
+assert.ok(mailboxBlockStart >= 0 && mailboxBlockEnd > mailboxBlockStart, 'Owner mailbox transformation block is missing');
+const generatedMailboxBlock = secureLifecycle.slice(mailboxBlockStart, mailboxBlockEnd);
+for (const forbidden of [
+  "callFunction('retrieveContractSignatureOtpForTestEvidence'",
+  'protected_test_callable',
+  'for (let number = 0; number <= 999999; number += 1)',
+  'beforeData.testEvidence',
+]) {
+  assert.ok(!generatedMailboxBlock.includes(forbidden), `Generated Owner mailbox evidence contains forbidden OTP bypass: ${forbidden}`);
+}
+assert.ok(secureLifecycle.includes('if (source.includes(forbidden))'), 'Owner wrapper must fail closed if a forbidden OTP bypass survives transformation');
 
 for (const token of [
-  'crypto.createHmac("sha256", pepper)',
-  'crypto.createCipheriv("aes-256-gcm"',
-  'crypto.createDecipheriv(',
-  'request.auth.token?.testAccount !== true',
-  'retrieveContractSignatureOtpForTestEvidence',
-  '"testEvidence.ciphertext": FieldValue.delete()',
+  'defineSecret("OWNER_CONTRACT_OTP_PEPPER")',
+  'OTP_HASH_ALGORITHM = "HMAC_SHA256_OWNER_CONTRACT_V1"',
+  'crypto.createHmac("sha256", args.pepper)',
+  'args.requestId',
+  'args.uid',
+  'args.contractHash',
+  'args.otp',
+  'args.salt',
+  'secrets: [smtpUser, smtpPass, ownerContractOtpPepper]',
+  'secrets: [ownerContractOtpPepper]',
   'status: "REISSUE_REQUIRED"',
+  'providerAccepted: true',
+  'BRANDED_FROM',
 ]) {
-  assert.ok(otpSecurity.includes(token), `Secure Owner OTP callable is missing: ${token}`);
+  assert.ok(otpSecurity.includes(token), `Mailbox-authoritative Owner OTP callable is missing: ${token}`);
 }
-assert.ok(!otpSecurity.includes('createHash("sha256").update(`${otp}:${salt}`)'), 'Owner OTP hashes must not be offline-brute-forceable SHA-256 values');
+for (const forbidden of [
+  'retrieveContractSignatureOtpForTestEvidence',
+  'encryptTestEvidence',
+  'decryptTestEvidence',
+  'createCipheriv',
+  'createDecipheriv',
+  'testAccount',
+  'testEvidence',
+  'createHash("sha256").update(`${otp}:${salt}`)',
+]) {
+  assert.ok(!otpSecurity.includes(forbidden), `Owner OTP callable contains forbidden test recovery path: ${forbidden}`);
+}
 
 assert.ok(wrapper.includes("mode === 'lifecycle'"), 'Owner suite wrapper must expose lifecycle mode');
-assert.ok(wrapper.includes("run('scripts/run-owner-onboarding-production-evidence-secure.mjs')"), 'Owner suite wrapper must execute the secure acquisition evidence runner');
+assert.ok(wrapper.includes("run('scripts/run-owner-onboarding-production-evidence-secure.mjs')"), 'Owner suite wrapper must execute the mailbox-authoritative acquisition evidence runner');
 assert.ok(!wrapper.includes("run('scripts/run-owner-onboarding-production-evidence.mjs')"), 'Protected Owner evidence must not directly execute the legacy OTP runner');
 assert.ok(wrapper.includes("mode === 'restore-shared-fixtures'"), 'Owner suite wrapper must expose fixture restoration mode');
 assert.ok(wrapper.includes("run('scripts/seed-live-role-test-data.mjs')"), 'Owner suite wrapper must restore shared live-role fixtures');
@@ -101,7 +137,8 @@ for (const token of [
   assert.ok(mailTrigger.includes(token), `Owner lifecycle delivery is missing: ${token}`);
 }
 
-assert.ok(runtime.includes('export * from "./contractSignatureOtpSecure";'), 'Functions runtime must export only the secure Owner OTP callable layer');
+assert.ok(runtime.includes('export * from "./contractSignatureOtpMailbox";'), 'Functions runtime must export only the mailbox-authoritative Owner OTP callable layer');
+assert.ok(!runtime.includes('export * from "./contractSignatureOtpSecure";'), 'Functions runtime must not export the test-retrieval Owner OTP callable layer');
 assert.ok(!runtime.includes('export * from "./contractSignatureOtp";'), 'Functions runtime must not export the legacy Owner OTP callables');
 assert.ok(runtime.includes('export * from "./ownerOnboardingLifecycleEmail";'), 'Owner lifecycle email triggers must be deployed through the Functions runtime');
 
