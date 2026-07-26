@@ -8,16 +8,43 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
+const brokerPayoutOtpPepper = defineSecret("BROKER_PAYOUT_OTP_PEPPER");
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const EVIDENCE_TTL_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const MAX_REQUESTS_PER_HOUR = 5;
+const OTP_HASH_VERSION = "HMAC_SHA256_V1";
 const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
 const money = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const hash = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
-const hashOtp = (otp: string, salt: string) => hash(`${otp}:${salt}`);
+
+function otpPepper() {
+  const value = brokerPayoutOtpPepper.value() || process.env.BROKER_PAYOUT_OTP_PEPPER || "";
+  if (value.length < 32) {
+    throw new HttpsError("failed-precondition", "Broker payout OTP protection is not configured.");
+  }
+  return value;
+}
+
+function hashOtp(input: {
+  otp: string;
+  salt: string;
+  challengeId: string;
+  uid: string;
+  bindingHash: string;
+}) {
+  const payload = [
+    OTP_HASH_VERSION,
+    input.challengeId,
+    input.uid,
+    input.bindingHash,
+    input.otp,
+    input.salt,
+  ].join("|");
+  return crypto.createHmac("sha256", otpPepper()).update(payload).digest("hex");
+}
 
 function commissionIds(value: unknown): string[] {
   const values = Array.isArray(value) ? value.map((entry) => text(entry)).filter(Boolean) : [];
@@ -79,15 +106,25 @@ async function requireBroker(auth: any) {
 async function eligible(uid: string, requested: unknown) {
   let ids = commissionIds(requested);
   if (!ids.length) {
-    const snap = await db.collection("broker_commissions").where("brokerId", "==", uid).where("status", "==", "APPROVED").limit(50).get();
-    ids = snap.docs.filter((doc) => !["REQUESTED", "APPROVED", "PAID"].includes(text(doc.data().payoutStatus).toUpperCase())).map((doc) => doc.id).sort();
+    const snap = await db.collection("broker_commissions")
+      .where("brokerId", "==", uid)
+      .where("status", "==", "APPROVED")
+      .limit(50)
+      .get();
+    ids = snap.docs
+      .filter((doc) => !["REQUESTED", "APPROVED", "PAID"].includes(text(doc.data().payoutStatus).toUpperCase()))
+      .map((doc) => doc.id)
+      .sort();
   }
   if (!ids.length) throw new HttpsError("failed-precondition", "No approved unpaid commissions are available for payout.");
   const refs = ids.map((id) => db.collection("broker_commissions").doc(id));
   const docs = await Promise.all(refs.map((ref) => ref.get()));
   const invalid = docs.some((doc) => {
     const data = doc.data() || {};
-    return !doc.exists || data.brokerId !== uid || text(data.status).toUpperCase() !== "APPROVED" || ["REQUESTED", "APPROVED", "PAID"].includes(text(data.payoutStatus).toUpperCase());
+    return !doc.exists ||
+      data.brokerId !== uid ||
+      text(data.status).toUpperCase() !== "APPROVED" ||
+      ["REQUESTED", "APPROVED", "PAID"].includes(text(data.payoutStatus).toUpperCase());
   });
   if (invalid) throw new HttpsError("permission-denied", "One or more commissions are not eligible for this payout.");
   const amount = docs.reduce((sum, doc) => sum + money(doc.data()?.amount), 0);
@@ -105,7 +142,12 @@ async function enforceRate(uid: string) {
     const active = started > 0 && now - started < 60 * 60 * 1000;
     const count = active ? Number(data.count || 0) : 0;
     if (count >= MAX_REQUESTS_PER_HOUR) throw new HttpsError("resource-exhausted", "Too many payout OTP requests. Try again after one hour.");
-    tx.set(ref, { uid, count: count + 1, windowStartedAt: active ? data.windowStartedAt : admin.firestore.Timestamp.fromMillis(now), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(ref, {
+      uid,
+      count: count + 1,
+      windowStartedAt: active ? data.windowStartedAt : admin.firestore.Timestamp.fromMillis(now),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
   });
 }
 
@@ -115,7 +157,12 @@ async function deliverOtp(email: string, otp: string, amount: number, count: num
   if (!user || !pass) throw new HttpsError("failed-precondition", "SMTP email service is not configured.");
   const nodemailer = await import("nodemailer");
   const port = Number(process.env.SMTP_PORT || 465);
-  const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST || "smtp.sendgrid.net", port, secure: port === 465, auth: { user, pass } });
+  const transport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.sendgrid.net",
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
   const info = await transport.sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_FROM || "BIN GROUP <ceo@bin-groups.com>",
     to: email,
@@ -126,7 +173,12 @@ async function deliverOtp(email: string, otp: string, amount: number, count: num
   return text(info.messageId);
 }
 
-export const requestBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true, secrets: [smtpUser, smtpPass] }, async (request) => {
+export const requestBrokerPayoutOtp = onCall({
+  cors: true,
+  region: "europe-west3",
+  enforceAppCheck: true,
+  secrets: [smtpUser, smtpPass, brokerPayoutOtpPepper],
+}, async (request) => {
   const broker = await requireBroker(request.auth);
   const commissions = await eligible(broker.uid, request.data?.commissionIds);
   await enforceRate(broker.uid);
@@ -136,12 +188,48 @@ export const requestBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
   const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length);
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS);
-  await ref.set({ uid: broker.uid, email: broker.email, commissionIds: commissions.ids, amount: commissions.amount, currency: "AED", bindingHash, kycSubmissionHash: broker.approvedSubmissionHash, otpHash: hashOtp(otp, salt), salt, attempts: 0, status: "PENDING", expiresAt, delivery: { messageId, sentAt: FieldValue.serverTimestamp() }, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  await db.collection("audit_logs").add({ action: "BROKER_PAYOUT_OTP_SENT", actorId: broker.uid, challengeId: ref.id, bindingHash, kycSubmissionHash: broker.approvedSubmissionHash, createdAt: FieldValue.serverTimestamp() });
-  return { status: "OTP_SENT", challengeId: ref.id, expiresAt: expiresAt.toMillis(), amount: commissions.amount, commissionCount: commissions.ids.length };
+  await ref.set({
+    uid: broker.uid,
+    email: broker.email,
+    commissionIds: commissions.ids,
+    amount: commissions.amount,
+    currency: "AED",
+    bindingHash,
+    kycSubmissionHash: broker.approvedSubmissionHash,
+    otpHash: hashOtp({ otp, salt, challengeId: ref.id, uid: broker.uid, bindingHash }),
+    otpHashVersion: OTP_HASH_VERSION,
+    salt,
+    attempts: 0,
+    status: "PENDING",
+    expiresAt,
+    delivery: { messageId, sentAt: FieldValue.serverTimestamp() },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("audit_logs").add({
+    action: "BROKER_PAYOUT_OTP_SENT",
+    actorId: broker.uid,
+    challengeId: ref.id,
+    bindingHash,
+    kycSubmissionHash: broker.approvedSubmissionHash,
+    otpHashVersion: OTP_HASH_VERSION,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {
+    status: "OTP_SENT",
+    challengeId: ref.id,
+    expiresAt: expiresAt.toMillis(),
+    amount: commissions.amount,
+    commissionCount: commissions.ids.length,
+  };
 });
 
-export const verifyBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+export const verifyBrokerPayoutOtp = onCall({
+  cors: true,
+  region: "europe-west3",
+  enforceAppCheck: true,
+  secrets: [brokerPayoutOtpPepper],
+}, async (request) => {
   const broker = await requireBroker(request.auth);
   const challengeId = text(request.data?.challengeId);
   const otp = text(request.data?.otp);
@@ -155,13 +243,28 @@ export const verifyBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3"
     if (data.kycSubmissionHash !== broker.approvedSubmissionHash) return "KYC_CHANGED";
     if (data.status === "CONSUMED") return "CONSUMED";
     if ((data.expiresAt?.toMillis?.() || 0) < Date.now()) return "EXPIRED";
+    if (data.otpHashVersion !== OTP_HASH_VERSION) return "LEGACY_CHALLENGE";
     const attempts = Number(data.attempts || 0);
     if (attempts >= MAX_ATTEMPTS) return "MAX_ATTEMPTS";
     const expected = Buffer.from(text(data.otpHash), "hex");
-    const submitted = Buffer.from(hashOtp(otp, text(data.salt)), "hex");
+    const submitted = Buffer.from(hashOtp({
+      otp,
+      salt: text(data.salt),
+      challengeId,
+      uid: broker.uid,
+      bindingHash: text(data.bindingHash),
+    }), "hex");
     const valid = expected.length > 0 && expected.length === submitted.length && crypto.timingSafeEqual(expected, submitted);
-    if (!valid) { tx.set(ref, { attempts: attempts + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true }); return "INVALID"; }
-    tx.set(ref, { status: "VERIFIED", verifiedAt: FieldValue.serverTimestamp(), evidenceExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + EVIDENCE_TTL_MS), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    if (!valid) {
+      tx.set(ref, { attempts: attempts + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      return "INVALID";
+    }
+    tx.set(ref, {
+      status: "VERIFIED",
+      verifiedAt: FieldValue.serverTimestamp(),
+      evidenceExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + EVIDENCE_TTL_MS),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
     return "VERIFIED";
   });
   const messages: Record<string, [any, string]> = {
@@ -170,11 +273,22 @@ export const verifyBrokerPayoutOtp = onCall({ cors: true, region: "europe-west3"
     KYC_CHANGED: ["failed-precondition", "Broker KYC changed after the OTP was issued."],
     CONSUMED: ["failed-precondition", "Payout OTP evidence was already consumed."],
     EXPIRED: ["deadline-exceeded", "Payout OTP expired."],
+    LEGACY_CHALLENGE: ["failed-precondition", "Payout OTP protection changed. Request a new code."],
     MAX_ATTEMPTS: ["resource-exhausted", "Maximum OTP attempts exceeded."],
     INVALID: ["permission-denied", "Invalid payout OTP."],
   };
-  if (result !== "VERIFIED") { const [code, message] = messages[result]; throw new HttpsError(code, message); }
-  await db.collection("audit_logs").add({ action: "BROKER_PAYOUT_OTP_VERIFIED", actorId: broker.uid, challengeId, kycSubmissionHash: broker.approvedSubmissionHash, createdAt: FieldValue.serverTimestamp() });
+  if (result !== "VERIFIED") {
+    const [code, message] = messages[result];
+    throw new HttpsError(code, message);
+  }
+  await db.collection("audit_logs").add({
+    action: "BROKER_PAYOUT_OTP_VERIFIED",
+    actorId: broker.uid,
+    challengeId,
+    kycSubmissionHash: broker.approvedSubmissionHash,
+    otpHashVersion: OTP_HASH_VERSION,
+    createdAt: FieldValue.serverTimestamp(),
+  });
   return { status: "VERIFIED", challengeId };
 });
 
@@ -192,6 +306,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
     if (!challengeSnap.exists) throw new HttpsError("not-found", "Payout OTP evidence not found.");
     const challenge = challengeSnap.data() || {};
     if (challenge.uid !== broker.uid || challenge.status !== "VERIFIED") throw new HttpsError("permission-denied", "Payout OTP evidence is not valid for this Broker.");
+    if (challenge.otpHashVersion !== OTP_HASH_VERSION) throw new HttpsError("failed-precondition", "Payout OTP protection changed. Request a new code.");
     if (challenge.kycSubmissionHash !== broker.approvedSubmissionHash) throw new HttpsError("failed-precondition", "Broker KYC changed after OTP verification.");
     if ((challenge.evidenceExpiresAt?.toMillis?.() || 0) < Date.now()) throw new HttpsError("deadline-exceeded", "Payout OTP evidence expired.");
     if (challenge.consumedAt || challenge.payoutRequestId) throw new HttpsError("failed-precondition", "Payout OTP evidence was already consumed.");
@@ -224,9 +339,29 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
       createdAt: now,
       updatedAt: now,
     });
-    commissionDocs.forEach((doc) => tx.set(doc.ref, { payoutStatus: "REQUESTED", payoutRequestId: payoutRef.id, payoutRequestedAt: now, updatedAt: now }, { merge: true }));
-    tx.set(challengeRef, { status: "CONSUMED", consumedAt: now, payoutRequestId: payoutRef.id, updatedAt: now }, { merge: true });
-    tx.set(db.collection("audit_logs").doc(), { action: "BROKER_PAYOUT_REQUEST_SUBMITTED_WITH_OTP", actorId: broker.uid, payoutRequestId: payoutRef.id, challengeId, bindingHash, kycSubmissionHash: broker.approvedSubmissionHash, commissionIds: commissions.ids, amount: commissions.amount, createdAt: now });
+    commissionDocs.forEach((doc) => tx.set(doc.ref, {
+      payoutStatus: "REQUESTED",
+      payoutRequestId: payoutRef.id,
+      payoutRequestedAt: now,
+      updatedAt: now,
+    }, { merge: true }));
+    tx.set(challengeRef, {
+      status: "CONSUMED",
+      consumedAt: now,
+      payoutRequestId: payoutRef.id,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(db.collection("audit_logs").doc(), {
+      action: "BROKER_PAYOUT_REQUEST_SUBMITTED_WITH_OTP",
+      actorId: broker.uid,
+      payoutRequestId: payoutRef.id,
+      challengeId,
+      bindingHash,
+      kycSubmissionHash: broker.approvedSubmissionHash,
+      commissionIds: commissions.ids,
+      amount: commissions.amount,
+      createdAt: now,
+    });
   });
   return { status: "SUCCESS", payoutRequestId: payoutRef.id, amount: commissions.amount, commissionCount: commissions.ids.length };
 });

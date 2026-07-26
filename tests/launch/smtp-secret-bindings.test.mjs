@@ -48,12 +48,13 @@ test('secure contract signature OTP callables bind required SMTP secrets', () =>
   assert.match(evidenceBlock, /secrets:\s*\[\s*smtpPass\s*\]/);
 });
 
-test('Broker payout OTP request binds both SMTP secrets at deployment', () => {
+test('Broker payout OTP request binds SMTP and HMAC pepper secrets at deployment', () => {
   const requestBlock = brokerPayoutOtp.slice(
     brokerPayoutOtp.indexOf('export const requestBrokerPayoutOtp'),
     brokerPayoutOtp.indexOf('export const verifyBrokerPayoutOtp'),
   );
-  assert.match(requestBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*\]/);
+  assert.match(requestBlock, /secrets:\s*\[\s*smtpUser\s*,\s*smtpPass\s*,\s*brokerPayoutOtpPepper\s*\]/);
+  assert.match(brokerPayoutOtp, /defineSecret\(["']BROKER_PAYOUT_OTP_PEPPER["']\)/);
 });
 
 test('corrected mail and OTP functions are exported by the deployed runtime', () => {
