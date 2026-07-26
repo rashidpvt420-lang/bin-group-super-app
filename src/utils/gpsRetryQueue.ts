@@ -37,9 +37,13 @@ export type ReplayResult = {
   pendingStops: number;
 };
 
-const STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v2';
-const UPDATE_QUEUE_KEY = 'bin-technician-gps-update-queue-v2';
-const LEGACY_QUEUE_KEY = 'bin-technician-gps-queue-v1';
+const STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v3';
+const UPDATE_QUEUE_KEY = 'bin-technician-gps-update-memory-v3';
+const LEGACY_QUEUE_KEYS = [
+  'bin-technician-gps-queue-v1',
+  'bin-technician-gps-stop-queue-v2',
+  'bin-technician-gps-update-queue-v2',
+];
 const STOP_TTL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_TTL_MS = 5 * 60 * 1000;
 const MAX_STOP_QUEUE_SIZE = 20;
@@ -47,7 +51,14 @@ const MAX_UPDATE_QUEUE_SIZE = 12;
 const MAX_RETRY_COUNT = 8;
 const MAX_BACKOFF_MS = 60_000;
 
-const safeStorage = (kind: 'localStorage' | 'sessionStorage'): StorageLike | null => {
+const memoryValues = new Map<string, string>();
+const memoryStorage: StorageLike = {
+  getItem: (key) => memoryValues.get(key) ?? null,
+  setItem: (key, value) => { memoryValues.set(key, String(value)); },
+  removeItem: (key) => { memoryValues.delete(key); },
+};
+
+const safeStorage = (kind: 'localStorage' | 'sessionStorage'): Storage | null => {
   if (typeof window === 'undefined') return null;
   try {
     const storage = window[kind];
@@ -60,12 +71,34 @@ const safeStorage = (kind: 'localStorage' | 'sessionStorage'): StorageLike | nul
   }
 };
 
-export const browserGpsQueueStorage = (): QueueStorage => ({
-  // STOP records contain no coordinates and survive a browser restart so the
-  // next authenticated session can reconcile server state.
-  stop: safeStorage('localStorage'),
-  // Precise UPDATE records are tab-session scoped and expire quickly.
-  update: safeStorage('sessionStorage'),
+const validIdentity = (value: unknown) => {
+  const text = String(value || '').trim();
+  return text.length > 0 && text.length <= 256 ? text : '';
+};
+
+const scopedKey = (key: string, technicianUid: string) => `${key}:${encodeURIComponent(technicianUid)}`;
+
+const scopedStorage = (storage: StorageLike | null, technicianUid: string): StorageLike | null => {
+  const uid = validIdentity(technicianUid);
+  if (!storage || !uid) return storage;
+  return {
+    getItem: (key) => storage.getItem(scopedKey(key, uid)),
+    setItem: (key, value) => storage.setItem(scopedKey(key, uid), value),
+    removeItem: (key) => storage.removeItem(scopedKey(key, uid)),
+  };
+};
+
+/**
+ * Browser production storage:
+ * - coordinate-free STOP records use a Technician-UID-scoped localStorage key;
+ * - UPDATE coordinates use module memory only and disappear on reload/restart.
+ *
+ * Tests can inject independent StorageLike instances and retain the original
+ * multi-user queue behavior without browser globals.
+ */
+export const browserGpsQueueStorage = (technicianUid = ''): QueueStorage => ({
+  stop: scopedStorage(safeStorage('localStorage'), technicianUid),
+  update: scopedStorage(memoryStorage, technicianUid),
 });
 
 const randomId = () => {
@@ -78,11 +111,6 @@ const randomId = () => {
 const finite = (value: unknown): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-};
-
-const validIdentity = (value: unknown) => {
-  const text = String(value || '').trim();
-  return text.length > 0 && text.length <= 256 ? text : '';
 };
 
 const sanitizePoint = (input: unknown): MinimalGpsPoint | undefined => {
@@ -117,9 +145,9 @@ const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null =>
   const terminal = source.terminal === true || retryCount >= MAX_RETRY_COUNT;
   const nextAttemptAtMs = Math.max(0, Math.floor(finite(source.nextAttemptAtMs) ?? queuedAtMs ?? nowMs));
   if (!ticketId || !technicianUid || !trackingSessionId || queuedAtMs === null || expiresAtMs === null) return null;
-  // Terminal STOP records are coordinate-free reconciliation tombstones. They
-  // survive the ordinary STOP TTL until explicit secure purge or successful
-  // operational reconciliation; otherwise a new mission could start falsely.
+  // A terminal STOP is a coordinate-free reconciliation tombstone. It remains
+  // blocking beyond the ordinary TTL until explicit secure purge or successful
+  // server reconciliation.
   if (expiresAtMs <= nowMs && !(action === 'STOP' && terminal)) return null;
   const point = action === 'UPDATE' ? sanitizePoint(source.point) : undefined;
   if (action === 'UPDATE' && !point) return null;
@@ -157,17 +185,17 @@ const writeList = (storage: StorageLike | null, key: string, entries: QueuedGpsA
     if (!bounded.length) storage.removeItem(key);
     else storage.setItem(key, JSON.stringify(bounded));
   } catch {
-    // Storage denial is handled by the caller through a visible queued-sync error.
+    // Storage denial is surfaced through the caller's queued-sync diagnostics.
   }
 };
 
 const boundedStopEntries = (entries: QueuedGpsAction[]) => {
   const stops = entries
     .filter((entry) => entry.action === 'STOP')
+    .map(({ point: _discardedPoint, ...entry }) => entry)
     .sort((left, right) => left.queuedAtMs - right.queuedAtMs || left.id.localeCompare(right.id));
-  // STOP intent is never evicted to make room. Losing either a pending STOP or
-  // a terminal reconciliation tombstone could let a new tracking session make
-  // a false LIVE claim, so saturation fails closed instead.
+  // STOP intent is never evicted. Saturation fails closed instead of silently
+  // allowing a new session to claim LIVE authority.
   if (stops.length > MAX_STOP_QUEUE_SIZE) throw new Error('GPS_STOP_QUEUE_CAPACITY_EXCEEDED');
   return stops;
 };
@@ -184,57 +212,112 @@ export const readGpsRetryQueue = (
   const entries = [
     ...readList(storage.stop, STOP_QUEUE_KEY, nowMs),
     ...readList(storage.update, UPDATE_QUEUE_KEY, nowMs),
-  ].sort((left, right) => left.queuedAtMs - right.queuedAtMs);
+  ].sort((left, right) => left.queuedAtMs - right.queuedAtMs || left.id.localeCompare(right.id));
   writeQueues(storage, entries);
   return entries;
 };
 
-export const removeLegacyGpsQueue = (storage: QueueStorage = browserGpsQueueStorage()) => {
-  try { storage.stop?.removeItem(LEGACY_QUEUE_KEY); } catch { /* no-op */ }
-  try { storage.update?.removeItem(LEGACY_QUEUE_KEY); } catch { /* no-op */ }
+export const removeLegacyGpsQueue = () => {
+  for (const storage of [safeStorage('localStorage'), safeStorage('sessionStorage')]) {
+    if (!storage) continue;
+    for (const key of LEGACY_QUEUE_KEYS) {
+      try { storage.removeItem(key); } catch { /* no-op */ }
+    }
+  }
+};
+
+const purgeOtherBrowserStopScopes = (technicianUid: string) => {
+  const local = safeStorage('localStorage');
+  if (!local) return;
+  const keep = scopedKey(STOP_QUEUE_KEY, technicianUid);
+  const prefix = `${STOP_QUEUE_KEY}:`;
+  const staleKeys: string[] = [];
+  for (let index = 0; index < local.length; index += 1) {
+    const key = local.key(index);
+    if (key?.startsWith(prefix) && key !== keep) staleKeys.push(key);
+  }
+  staleKeys.forEach((key) => local.removeItem(key));
+};
+
+const purgeOtherMemoryScopes = (technicianUid: string) => {
+  const keep = scopedKey(UPDATE_QUEUE_KEY, technicianUid);
+  const prefix = `${UPDATE_QUEUE_KEY}:`;
+  for (const key of [...memoryValues.keys()]) {
+    if (key.startsWith(prefix) && key !== keep) memoryValues.delete(key);
+  }
 };
 
 export const purgeGpsQueueForTechnician = (
   technicianUid: string,
-  storage: QueueStorage = browserGpsQueueStorage(),
+  storage?: QueueStorage,
 ) => {
   const uid = validIdentity(technicianUid);
   if (!uid) return;
-  writeQueues(storage, readGpsRetryQueue(storage).filter((entry) => entry.technicianUid !== uid));
+  const selected = storage ?? browserGpsQueueStorage(uid);
+  writeQueues(selected, []);
 };
 
 export const purgeGpsQueuesExceptTechnician = (
   technicianUid: string,
-  storage: QueueStorage = browserGpsQueueStorage(),
+  storage?: QueueStorage,
 ) => {
   const uid = validIdentity(technicianUid);
   if (!uid) {
-    writeQueues(storage, []);
+    if (storage) writeQueues(storage, []);
+    else {
+      const local = safeStorage('localStorage');
+      if (local) {
+        const prefix = `${STOP_QUEUE_KEY}:`;
+        const keys: string[] = [];
+        for (let index = 0; index < local.length; index += 1) {
+          const key = local.key(index);
+          if (key?.startsWith(prefix)) keys.push(key);
+        }
+        keys.forEach((key) => local.removeItem(key));
+      }
+      memoryValues.clear();
+    }
     return;
   }
-  writeQueues(storage, readGpsRetryQueue(storage).filter((entry) => entry.technicianUid === uid));
+  if (!storage) {
+    purgeOtherBrowserStopScopes(uid);
+    purgeOtherMemoryScopes(uid);
+  }
+  const selected = storage ?? browserGpsQueueStorage(uid);
+  writeQueues(selected, readGpsRetryQueue(selected).filter((entry) => entry.technicianUid === uid));
 };
 
 export const discardQueuedSessionUpdates = (
   technicianUid: string,
   ticketId: string,
   trackingSessionId: string,
-  storage: QueueStorage = browserGpsQueueStorage(),
+  storage?: QueueStorage,
 ) => {
-  const queue = readGpsRetryQueue(storage).filter((entry) => !(
+  const selected = storage ?? browserGpsQueueStorage(technicianUid);
+  const queue = readGpsRetryQueue(selected).filter((entry) => !(
     entry.action === 'UPDATE' &&
     entry.technicianUid === technicianUid &&
     entry.ticketId === ticketId &&
     entry.trackingSessionId === trackingSessionId
   ));
-  writeQueues(storage, queue);
+  writeQueues(selected, queue);
+};
+
+export const discardAllQueuedUpdates = (
+  technicianUid: string,
+  storage?: QueueStorage,
+) => {
+  const selected = storage ?? browserGpsQueueStorage(technicianUid);
+  const queue = readGpsRetryQueue(selected).filter((entry) => entry.action === 'STOP');
+  writeQueues(selected, queue);
 };
 
 export const enqueueGpsRetryAction = (
   input: Omit<QueuedGpsAction, 'id' | 'expiresAtMs' | 'retryCount' | 'nextAttemptAtMs' | 'terminal'>,
-  storage: QueueStorage = browserGpsQueueStorage(),
+  storage?: QueueStorage,
   nowMs = Date.now(),
 ): QueuedGpsAction => {
+  const selected = storage ?? browserGpsQueueStorage(input.technicianUid);
   const action: QueuedGpsAction = {
     id: randomId(),
     action: input.action,
@@ -252,26 +335,15 @@ export const enqueueGpsRetryAction = (
     throw new Error('INVALID_GPS_RETRY_ACTION');
   }
 
-  let queue = readGpsRetryQueue(storage, nowMs);
-  if (action.action === 'STOP') {
-    queue = queue.filter((entry) => !(
-      entry.action === 'STOP' &&
-      entry.technicianUid === action.technicianUid &&
-      entry.ticketId === action.ticketId &&
-      entry.trackingSessionId === action.trackingSessionId
-    ));
-  } else {
-    // Retain only the latest unsent coordinate for a session. This bounds both
-    // privacy exposure and outage capture volume.
-    queue = queue.filter((entry) => !(
-      entry.action === 'UPDATE' &&
-      entry.technicianUid === action.technicianUid &&
-      entry.ticketId === action.ticketId &&
-      entry.trackingSessionId === action.trackingSessionId
-    ));
-  }
+  let queue = readGpsRetryQueue(selected, nowMs);
+  queue = queue.filter((entry) => !(
+    entry.action === action.action &&
+    entry.technicianUid === action.technicianUid &&
+    entry.ticketId === action.ticketId &&
+    entry.trackingSessionId === action.trackingSessionId
+  ));
   queue.push(action);
-  writeQueues(storage, queue);
+  writeQueues(selected, queue);
   return action;
 };
 
@@ -290,20 +362,24 @@ const retryDelayMs = (retryCount: number) => Math.min(MAX_BACKOFF_MS, 2_000 * (2
 
 export const hasPendingGpsStop = (
   technicianUid: string,
-  storage: QueueStorage = browserGpsQueueStorage(),
+  storage?: QueueStorage,
   nowMs = Date.now(),
-) => readGpsRetryQueue(storage, nowMs).some((entry) => (
-  entry.action === 'STOP' && entry.technicianUid === technicianUid
-));
+) => {
+  const selected = storage ?? browserGpsQueueStorage(technicianUid);
+  return readGpsRetryQueue(selected, nowMs).some((entry) => (
+    entry.action === 'STOP' && entry.technicianUid === technicianUid
+  ));
+};
 
 export const replayGpsRetryQueue = async (
   technicianUid: string,
   sender: (entry: QueuedGpsAction) => Promise<void>,
-  storage: QueueStorage = browserGpsQueueStorage(),
+  storage?: QueueStorage,
   nowMs = Date.now(),
 ): Promise<ReplayResult> => {
   const uid = validIdentity(technicianUid);
-  const queue = readGpsRetryQueue(storage, nowMs);
+  const selected = storage ?? browserGpsQueueStorage(uid);
+  const queue = readGpsRetryQueue(selected, nowMs);
   const ordered = [
     ...queue.filter((entry) => entry.technicianUid === uid && entry.action === 'STOP'),
     ...queue.filter((entry) => entry.technicianUid === uid && entry.action === 'UPDATE'),
@@ -334,13 +410,12 @@ export const replayGpsRetryQueue = async (
         lastErrorCode: safeErrorCode(error),
       } : candidate);
       if (terminal) result.terminal += 1;
-      // A STOP reconciliation failure blocks newer actions for the same user;
-      // server state must be resolved before another session is claimed.
+      // A STOP reconciliation failure blocks all newer actions for the same UID.
       if (entry.action === 'STOP') break;
     }
   }
 
-  writeQueues(storage, current);
+  writeQueues(selected, current);
   result.pendingStops = current.filter((entry) => entry.technicianUid === uid && entry.action === 'STOP').length;
   return result;
 };
@@ -348,5 +423,6 @@ export const replayGpsRetryQueue = async (
 export const gpsRetryQueueKeys = Object.freeze({
   stop: STOP_QUEUE_KEY,
   update: UPDATE_QUEUE_KEY,
-  legacy: LEGACY_QUEUE_KEY,
+  legacy: LEGACY_QUEUE_KEYS[0],
+  stopPrefix: `${STOP_QUEUE_KEY}:`,
 });
