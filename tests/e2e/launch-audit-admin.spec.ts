@@ -1,36 +1,29 @@
 /**
- * launch-audit-admin.spec.ts
  * Deep E2E launch audit for the dedicated Admin application.
- * Verifies: dashboard KPIs, key nav clicks, AR/EN switch, no runtime errors.
+ * Verifies: real Founder MFA, dashboard KPIs, key nav clicks, AR/EN switch,
+ * authenticated Firebase reads and no runtime errors.
  */
-import { expect, Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { loginAdminWithRealMfa, requireAdminMfaCredentials } from './helpers/adminMfa';
 
-const EMAIL = process.env.E2E_ADMIN_EMAIL ?? '';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
-
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
 const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
-  if (!EMAIL || !PASSWORD || !ADMIN_BASE_URL) {
-    throw new Error('Launch audit blocked: missing E2E_ADMIN_EMAIL/PASSWORD/E2E_ADMIN_BASE_URL. Do not skip admin launch audit during clearance.');
+  if (!ADMIN_BASE_URL) {
+    throw new Error('Launch audit blocked: E2E_ADMIN_BASE_URL is required.');
   }
+  const credentials = requireAdminMfaCredentials('E2E_FOUNDER');
+  if (credentials.email !== 'ceo@bin-groups.com') {
+    throw new Error('Admin launch audit requires the canonical Founder account.');
+  }
+  return credentials;
 }
 
 const adminUrl = (pathname: string) => `${ADMIN_BASE_URL}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
-
-async function login(page: Page) {
-  await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 25_000 });
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(1_000);
-}
 
 async function assertHealthy(page: Page, context: string) {
   const body = await page.locator('body').innerText({ timeout: 20_000 });
@@ -42,18 +35,20 @@ async function assertHealthy(page: Page, context: string) {
 
 async function consoleCollector(page: Page) {
   const errors: string[] = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
   return errors;
 }
 
 test.describe('Admin launch audit', () => {
   test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
-    requireAuditCredentials();
-    await login(page);
+    const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = appCheckMonitor;
+    await appCheckMonitor.assertTokenFingerprint();
+    await loginAdminWithRealMfa(page, ADMIN_BASE_URL, requireAuditCredentials());
   });
+
   test.afterEach(async ({ page }) => {
     const monitor = (page as any).__binAppCheckMonitor;
     if (!monitor) return;
@@ -123,18 +118,14 @@ test.describe('Admin launch audit', () => {
   test('admin AR/EN language switch works and shows no raw i18n keys', async ({ page }) => {
     await page.goto(adminUrl('/dashboard'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
-
-    const langBtn = page.locator(
+    const languageButton = page.locator(
       'button:has-text("AR"), button:has-text("EN"), [id*="lang"], button[aria-label*="language" i], button:has-text("Arabic"), button:has-text("عربي")',
     ).first();
-    await expect(langBtn, 'Language toggle must be visible in admin shell').toBeVisible({ timeout: 10_000 });
-    await langBtn.click();
+    await expect(languageButton, 'Language toggle must be visible in admin shell').toBeVisible({ timeout: 10_000 });
+    await languageButton.click();
     await page.waitForTimeout(1_000);
-
-    const bodyText = await page.locator('body').innerText({ timeout: 10_000 });
-    expect(bodyText, 'Body must still render after language switch').toBeTruthy();
-
-    await langBtn.click();
+    expect(await page.locator('body').innerText({ timeout: 10_000 })).toBeTruthy();
+    await languageButton.click();
     await page.waitForTimeout(500);
   });
 
