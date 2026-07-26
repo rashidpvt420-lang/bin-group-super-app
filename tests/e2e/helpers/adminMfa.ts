@@ -100,6 +100,8 @@ export async function loginAdminWithRealMfa(
       if (!credentials.totpSecret) {
         throw new Error(`${credentials.label || 'Admin'} has a TOTP factor selected, but no TOTP secret was injected.`);
       }
+      await page.getByTestId('admin-mfa-send-signin-code').click();
+      await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 10_000 });
       await page.getByTestId('admin-mfa-signin-code').fill(generateTotp(credentials.totpSecret));
     } else {
       if (!/^\d{6}$/.test(String(credentials.realPhoneCode || ''))) {
