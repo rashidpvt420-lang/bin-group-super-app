@@ -37,7 +37,7 @@ const roleCases: RoleCase[] = [
   {
     name: 'Owner',
     roleKey: 'owner',
-    email: process.env.E2E_OWNER_EMAIL || '',
+    email: process.env.E2E_OWNER_MAILBOX_EMAIL || '',
     password: process.env.E2E_OWNER_PASSWORD || '',
     routes: ['/owner/dashboard', '/owner/properties', '/owner/contracts', '/owner/financials', '/owner/tenants', '/owner/documents', '/owner/property-passport', '/owner/tickets', '/owner/units', '/owner/roi', '/owner/activation'],
   },
@@ -58,7 +58,7 @@ const roleCases: RoleCase[] = [
   {
     name: 'Broker',
     roleKey: 'broker',
-    email: process.env.E2E_BROKER_EMAIL || '',
+    email: process.env.E2E_BROKER_MAILBOX_EMAIL || '',
     password: process.env.E2E_BROKER_PASSWORD || '',
     routes: ['/broker/dashboard', '/broker/leads', '/broker/referrals', '/broker/commissions', '/broker/documents', '/broker/profile'],
   },

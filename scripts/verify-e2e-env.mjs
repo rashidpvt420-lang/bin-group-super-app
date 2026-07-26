@@ -26,6 +26,18 @@ for (const envPath of possibleConfigPaths) {
 }
 
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
+const mailboxEmailEnv = (role) =>
+  role === 'OWNER' || role === 'BROKER'
+    ? `E2E_${role}_MAILBOX_EMAIL`
+    : `E2E_${role}_EMAIL`;
+const mailboxOauthKeys = [
+  'E2E_OWNER_MAILBOX_CLIENT_ID',
+  'E2E_OWNER_MAILBOX_CLIENT_SECRET',
+  'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
+  'E2E_BROKER_MAILBOX_CLIENT_ID',
+  'E2E_BROKER_MAILBOX_CLIENT_SECRET',
+  'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
+];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
 const requireFounderEvidence = strictRoles && (
   process.env.E2E_REQUIRE_FOUNDER_MFA === 'true' ||
@@ -35,7 +47,7 @@ const requireFounderEvidence = strictRoles && (
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
-  ...roles.flatMap((role) => [`E2E_${role}_EMAIL`, `E2E_${role}_PASSWORD`]),
+  ...roles.flatMap((role) => [mailboxEmailEnv(role), `E2E_${role}_PASSWORD`]),
   ...(requireFounderEvidence ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
@@ -105,7 +117,7 @@ function validateFounderEvidence() {
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
-  console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[`E2E_${role}_EMAIL`] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
+  console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[mailboxEmailEnv(role)] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
 }
 
 const appCheckMissing = validateAppCheckToken();
@@ -128,6 +140,14 @@ if (process.env.E2E_STRICT_LIVE === 'true') {
     process.exit(1);
   }
   console.log('[E2E_ENV_GUARD] live_build_site_key=set');
+
+  const missingMailboxOauth = mailboxOauthKeys.filter((key) => !String(process.env[key] || '').trim());
+  if (missingMailboxOauth.length) {
+    console.error('[E2E_ENV_GUARD] Missing mailbox OAuth secrets: ' + missingMailboxOauth.join(', '));
+    console.error('[E2E_ENV_GUARD] Protected live OTP evidence requires both Owner and Broker read-only Gmail mailbox credentials.');
+    process.exit(1);
+  }
+  console.log('[E2E_ENV_GUARD] mailbox_oauth_secrets=set (owner+broker)');
 }
 
 if (process.env.E2E_STRICT_BUSINESS === 'true') {

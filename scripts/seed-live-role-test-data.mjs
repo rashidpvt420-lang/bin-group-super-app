@@ -17,15 +17,15 @@ for (const envPath of [
 
 const projectId = resolveFirebaseAdminProjectId();
 const tenantEmail = String(process.env.E2E_TENANT_EMAIL || '').trim().toLowerCase();
-const ownerEmail = String(process.env.E2E_OWNER_EMAIL || '').trim().toLowerCase();
+const ownerEmail = String(process.env.E2E_OWNER_MAILBOX_EMAIL || '').trim().toLowerCase();
 const technicianEmail = String(process.env.E2E_TECHNICIAN_EMAIL || '').trim().toLowerCase();
-const brokerEmail = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
+const brokerEmail = String(process.env.E2E_BROKER_MAILBOX_EMAIL || '').trim().toLowerCase();
 
 const missing = [
-  ['E2E_OWNER_EMAIL', ownerEmail],
+  ['E2E_OWNER_MAILBOX_EMAIL', ownerEmail],
   ['E2E_TENANT_EMAIL', tenantEmail],
   ['E2E_TECHNICIAN_EMAIL', technicianEmail],
-  ['E2E_BROKER_EMAIL', brokerEmail],
+  ['E2E_BROKER_MAILBOX_EMAIL', brokerEmail],
 ].filter(([, value]) => !value).map(([key]) => key);
 
 if (missing.length) {

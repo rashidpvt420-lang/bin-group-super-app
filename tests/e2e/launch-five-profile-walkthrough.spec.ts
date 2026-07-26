@@ -9,10 +9,10 @@ function requireEnv(name: string): string {
   return value;
 }
 
-const OWNER_EMAIL = () => requireEnv('E2E_OWNER_EMAIL');
+const OWNER_EMAIL = () => requireEnv('E2E_OWNER_MAILBOX_EMAIL');
 const TENANT_EMAIL = () => requireEnv('E2E_TENANT_EMAIL');
 const TECH_A_EMAIL = () => requireEnv('E2E_TECHNICIAN_EMAIL');
-const BROKER_EMAIL = () => requireEnv('E2E_BROKER_EMAIL');
+const BROKER_EMAIL = () => requireEnv('E2E_BROKER_MAILBOX_EMAIL');
 
 function rolePassword(role: 'OWNER' | 'TENANT' | 'TECHNICIAN' | 'BROKER' | 'ADMIN'): string {
   return requireEnv(`E2E_${role}_PASSWORD`);

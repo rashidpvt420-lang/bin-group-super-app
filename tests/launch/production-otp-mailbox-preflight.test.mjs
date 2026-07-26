@@ -45,8 +45,8 @@ test('protected OTP/mailbox preflight verifies both peppers and both mailbox ide
   const result = await runProductionOtpMailboxPreflight({
     env: {
       GCP_PROJECT_ID: 'bin-group-57c60',
-      E2E_OWNER_EMAIL: 'owner@example.com',
-      E2E_BROKER_EMAIL: 'broker@example.com',
+      E2E_OWNER_MAILBOX_EMAIL: 'owner@example.com',
+      E2E_BROKER_MAILBOX_EMAIL: 'broker@example.com',
     },
     fetchImpl,
     resolveSecret: (name) => secretValues.get(name) || '',
@@ -65,8 +65,8 @@ test('preflight rejects a weak OTP pepper before mailbox access', async () => {
     runProductionOtpMailboxPreflight({
       env: {
         GCP_PROJECT_ID: 'bin-group-57c60',
-        E2E_OWNER_EMAIL: 'owner@example.com',
-        E2E_BROKER_EMAIL: 'broker@example.com',
+        E2E_OWNER_MAILBOX_EMAIL: 'owner@example.com',
+        E2E_BROKER_MAILBOX_EMAIL: 'broker@example.com',
       },
       fetchImpl: async () => {
         fetchCalled = true;
@@ -86,8 +86,8 @@ test('preflight aggregates every locally detectable protected credential blocker
     await runProductionOtpMailboxPreflight({
       env: {
         GCP_PROJECT_ID: 'bin-group-57c60',
-        E2E_OWNER_EMAIL: '',
-        E2E_BROKER_EMAIL: 'broker@example.com',
+        E2E_OWNER_MAILBOX_EMAIL: '',
+        E2E_BROKER_MAILBOX_EMAIL: 'broker@example.com',
       },
       fetchImpl: async () => {
         fetchCalled = true;
@@ -107,7 +107,7 @@ test('preflight aggregates every locally detectable protected credential blocker
   assert.ok(failure instanceof Error);
   assert.match(failure.message, /found 4 blockers/);
   assert.match(failure.message, /BROKER_PAYOUT_OTP_PEPPER must contain at least 32 characters/);
-  assert.match(failure.message, /E2E_OWNER_EMAIL is required for protected mailbox verification/);
+  assert.match(failure.message, /E2E_OWNER_MAILBOX_EMAIL is required for protected mailbox verification/);
   assert.match(failure.message, /E2E_OWNER_MAILBOX_CLIENT_ID is missing or inaccessible/);
   assert.match(failure.message, /E2E_BROKER_MAILBOX_REFRESH_TOKEN is missing or inaccessible/);
   assert.doesNotMatch(failure.message, /resolver-secret-payload-must-not-leak/);

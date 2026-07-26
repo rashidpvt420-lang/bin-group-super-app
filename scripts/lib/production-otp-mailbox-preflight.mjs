@@ -8,14 +8,14 @@ const PEPPER_NAMES = [
 const MAILBOXES = [
   {
     label: 'Owner',
-    emailEnv: 'E2E_OWNER_EMAIL',
+    emailEnv: 'E2E_OWNER_MAILBOX_EMAIL',
     clientIdSecret: 'E2E_OWNER_MAILBOX_CLIENT_ID',
     clientSecretSecret: 'E2E_OWNER_MAILBOX_CLIENT_SECRET',
     refreshTokenSecret: 'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
   },
   {
     label: 'Broker',
-    emailEnv: 'E2E_BROKER_EMAIL',
+    emailEnv: 'E2E_BROKER_MAILBOX_EMAIL',
     clientIdSecret: 'E2E_BROKER_MAILBOX_CLIENT_ID',
     clientSecretSecret: 'E2E_BROKER_MAILBOX_CLIENT_SECRET',
     refreshTokenSecret: 'E2E_BROKER_MAILBOX_REFRESH_TOKEN',

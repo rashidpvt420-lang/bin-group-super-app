@@ -7,7 +7,7 @@
 import { expect, Page, test } from '@playwright/test';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
-const EMAIL    = process.env.E2E_OWNER_EMAIL    ?? '';
+const EMAIL    = process.env.E2E_OWNER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
@@ -15,7 +15,7 @@ const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not autho
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
-    throw new Error('Launch audit blocked: missing E2E_OWNER_EMAIL/PASSWORD. Do not skip owner launch audit during clearance.');
+    throw new Error('Launch audit blocked: missing E2E_OWNER_MAILBOX_EMAIL/PASSWORD. Do not skip owner launch audit during clearance.');
   }
 }
 

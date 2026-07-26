@@ -26,10 +26,10 @@ for (const p of possibleConfigPaths) {
 // Validate required environment variables and exit on failure
 const requiredEnvVars = [
   'E2E_ADMIN_EMAIL', 'E2E_ADMIN_PASSWORD',
-  'E2E_OWNER_EMAIL', 'E2E_OWNER_PASSWORD',
+  'E2E_OWNER_MAILBOX_EMAIL', 'E2E_OWNER_PASSWORD',
   'E2E_TENANT_EMAIL', 'E2E_TENANT_PASSWORD',
   'E2E_TECHNICIAN_EMAIL', 'E2E_TECHNICIAN_PASSWORD',
-  'E2E_BROKER_EMAIL', 'E2E_BROKER_PASSWORD'
+  'E2E_BROKER_MAILBOX_EMAIL', 'E2E_BROKER_PASSWORD'
 ];
 
 const missingVars = requiredEnvVars.filter(v => !process.env[v]);
@@ -40,10 +40,10 @@ if (missingVars.length > 0) {
 
 const requiredRoleEmailVars = [
   'E2E_ADMIN_EMAIL',
-  'E2E_OWNER_EMAIL',
+  'E2E_OWNER_MAILBOX_EMAIL',
   'E2E_TENANT_EMAIL',
   'E2E_TECHNICIAN_EMAIL',
-  'E2E_BROKER_EMAIL',
+  'E2E_BROKER_MAILBOX_EMAIL',
 ];
 const configuredRoleEmails = requiredRoleEmailVars.map((name) => ({
   name,
@@ -78,7 +78,7 @@ const usersToSeed = [
   },
   {
     role: 'owner',
-    email: configuredRoleEmails.find(({ name }) => name === 'E2E_OWNER_EMAIL').email,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_OWNER_MAILBOX_EMAIL').email,
     password: process.env.E2E_OWNER_PASSWORD,
     claims: { role: 'owner', testAccount: true },
     displayName: 'E2E Owner',
@@ -112,7 +112,7 @@ const usersToSeed = [
   },
   {
     role: 'broker',
-    email: configuredRoleEmails.find(({ name }) => name === 'E2E_BROKER_EMAIL').email,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_BROKER_MAILBOX_EMAIL').email,
     password: process.env.E2E_BROKER_PASSWORD,
     claims: { role: 'broker', testAccount: true },
     displayName: 'E2E Broker',

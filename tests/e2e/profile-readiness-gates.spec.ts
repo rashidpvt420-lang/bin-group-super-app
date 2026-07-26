@@ -38,7 +38,7 @@ test.describe('Profile readiness gates', () => {
 
   test.describe('Owner profile gates', () => {
     test('ownerOnboardingFullPath — credentialed owner reaches activation/dashboard surfaces', async ({ page }) => {
-      await loginMainRole(page, 'owner', requireEnv('E2E_OWNER_EMAIL'), requireEnv('E2E_OWNER_PASSWORD'));
+      await loginMainRole(page, 'owner', requireEnv('E2E_OWNER_MAILBOX_EMAIL'), requireEnv('E2E_OWNER_PASSWORD'));
       await page.goto('/owner/activation', { waitUntil: 'domcontentloaded' });
       await expect(page.locator('body')).not.toContainText(ACCESS_DENIED, { timeout: 10_000 });
       await expect(page.locator('body')).toContainText(/activation|payment|contract|signature|gate/i, { timeout: 15_000 });
@@ -65,7 +65,7 @@ test.describe('Profile readiness gates', () => {
     });
 
     test('ownerPostPaymentDashboard — unlocked owner dashboard shows portfolio and vault', async ({ page }) => {
-      await loginMainRole(page, 'owner', requireEnv('E2E_OWNER_EMAIL'), requireEnv('E2E_OWNER_PASSWORD'));
+      await loginMainRole(page, 'owner', requireEnv('E2E_OWNER_MAILBOX_EMAIL'), requireEnv('E2E_OWNER_PASSWORD'));
       await page.goto('/owner/dashboard', { waitUntil: 'domcontentloaded' });
       await expect(page.locator('body')).not.toContainText(/dashboard remains locked|activation incomplete/i, { timeout: 10_000 });
       await expect(page.locator('body')).toContainText(/Properties|Contract|Portfolio|Document Vault|No owner profile/i, { timeout: 15_000 });
@@ -236,7 +236,7 @@ test.describe('Profile readiness gates', () => {
 
   test.describe('Broker profile gates', () => {
     test('brokerReferralCommissionLifecycle — commissions surface shows lifecycle states', async ({ page }) => {
-      await loginMainRole(page, 'broker', requireEnv('E2E_BROKER_EMAIL'), requireEnv('E2E_BROKER_PASSWORD'));
+      await loginMainRole(page, 'broker', requireEnv('E2E_BROKER_MAILBOX_EMAIL'), requireEnv('E2E_BROKER_PASSWORD'));
       await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
       await expect(page.locator('body')).toContainText(/Finance|Payout|Commission|PENDING|LIFETIME/i, { timeout: 15_000 });
       await page.goto('/broker/leads', { waitUntil: 'domcontentloaded' });
@@ -244,7 +244,7 @@ test.describe('Profile readiness gates', () => {
     });
 
     test('brokerDocsPolicyFraud — document vault shows compliance policy and upload controls', async ({ page }) => {
-      await loginMainRole(page, 'broker', requireEnv('E2E_BROKER_EMAIL'), requireEnv('E2E_BROKER_PASSWORD'));
+      await loginMainRole(page, 'broker', requireEnv('E2E_BROKER_MAILBOX_EMAIL'), requireEnv('E2E_BROKER_PASSWORD'));
       await page.goto('/broker/documents', { waitUntil: 'domcontentloaded' });
       const vault = page.getByTestId('broker-documents-vault');
       if (await vault.isVisible({ timeout: 8_000 }).catch(() => false)) {
