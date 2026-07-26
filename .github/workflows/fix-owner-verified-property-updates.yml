@@ -50,8 +50,14 @@ jobs:
       - name: Separate create-time canonical prohibition from update-time immutability
         run: python .github/scripts/fix-owner-verified-property-updates.py
 
-      - name: Validate property geo launch contracts
-        run: node --test tests/launch/property-geo-authority.test.mjs tests/launch/property-geo-catchall-authority.test.mjs tests/launch/firestore-final-authority.test.mjs
+      - name: Validate property geo authority contract
+        run: node --test tests/launch/property-geo-authority.test.mjs
+
+      - name: Validate property geo catch-all contract
+        run: node --test tests/launch/property-geo-catchall-authority.test.mjs
+
+      - name: Validate final Firestore authority contract
+        run: node --test tests/launch/firestore-final-authority.test.mjs
 
       - name: Prepare deterministic Firestore rules
         run: |
