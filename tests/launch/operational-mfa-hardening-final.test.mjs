@@ -35,15 +35,23 @@ function response(body, status = 200) {
   };
 }
 
-test('Founder sign-in proves TOTP and the exact enrolled factor identifier', async () => {
-  const value = fixture();
-  const token = jwt({
-    user_id: value.uid,
+function verifiedClaims(value, overrides = {}) {
+  return {
+    uid: value.uid,
+    sub: value.uid,
+    email: 'ceo@bin-groups.com',
+    email_verified: true,
+    role: 'ceo',
+    ceo: true,
     firebase: {
       sign_in_second_factor: 'totp',
       second_factor_identifier: value.factorId,
     },
-  });
+    ...overrides,
+  };
+}
+
+function totpFetch(value, token) {
   const requests = [];
   const fetchImpl = async (url, options = {}) => {
     requests.push({ url: String(url), body: JSON.parse(String(options.body || '{}')) });
@@ -56,6 +64,13 @@ test('Founder sign-in proves TOTP and the exact enrolled factor identifier', asy
     if (String(url).includes('mfaSignIn:finalize')) return response({ idToken: token });
     return response({}, 404);
   };
+  return { requests, fetchImpl };
+}
+
+test('Founder sign-in proves a server-verified TOTP factor and exact enrollment identifier', async () => {
+  const value = fixture();
+  const token = jwt({ sub: value.uid });
+  const { requests, fetchImpl } = totpFetch(value, token);
 
   const result = await signInWithRequiredTotpMfa({
     apiKey: value.apiKey,
@@ -63,42 +78,57 @@ test('Founder sign-in proves TOTP and the exact enrolled factor identifier', asy
     password: value.password,
     totpSecret: value.totpSecret,
     fetchImpl,
+    verifyIdTokenImpl: async () => verifiedClaims(value),
   });
 
   assert.equal(result.uid, value.uid);
   assert.equal(result.secondFactorType, 'totp');
   assert.equal(result.secondFactorIdentifier, value.factorId);
+  assert.equal(result.secondFactor, value.factorId);
   assert.equal(result.idToken, token);
   assert.equal(requests.length, 2);
   assert.equal(requests[1].body.mfaEnrollmentId, value.factorId);
   assert.match(requests[1].body.totpVerificationInfo.verificationCode, /^\d{6}$/);
 });
 
-test('Founder sign-in rejects another factor type or identifier', async () => {
+test('Founder sign-in rejects unverified, non-TOTP, mismatched, or non-Founder tokens', async () => {
   const value = fixture();
-  const execute = async (firebaseClaims) => signInWithRequiredTotpMfa({
-    apiKey: value.apiKey,
-    email: 'ceo@bin-groups.com',
-    password: value.password,
-    totpSecret: value.totpSecret,
-    fetchImpl: async (url) => {
-      if (String(url).includes('accounts:signInWithPassword')) {
-        return response({
-          mfaPendingCredential: value.pending,
-          mfaInfo: [{ mfaEnrollmentId: value.factorId, totpInfo: {} }],
-        });
-      }
-      return response({ idToken: jwt({ user_id: value.uid, firebase: firebaseClaims }) });
-    },
-  });
+  const token = jwt({ sub: value.uid });
+  const execute = async (claimsVerifier) => {
+    const { fetchImpl } = totpFetch(value, token);
+    return signInWithRequiredTotpMfa({
+      apiKey: value.apiKey,
+      email: 'ceo@bin-groups.com',
+      password: value.password,
+      totpSecret: value.totpSecret,
+      fetchImpl,
+      verifyIdTokenImpl: claimsVerifier,
+    });
+  };
 
   await assert.rejects(
-    execute({ sign_in_second_factor: 'phone', second_factor_identifier: value.factorId }),
+    execute(async () => { throw new Error('invalid signature'); }),
+    /Admin SDK rejected/,
+  );
+  await assert.rejects(
+    execute(async () => verifiedClaims(value, {
+      firebase: { sign_in_second_factor: 'phone', second_factor_identifier: value.factorId },
+    })),
     /verified TOTP second-factor session/,
   );
   await assert.rejects(
-    execute({ sign_in_second_factor: 'totp', second_factor_identifier: `other-${value.factorId}` }),
-    /factor identifier does not match the completed challenge/,
+    execute(async () => verifiedClaims(value, {
+      firebase: { sign_in_second_factor: 'totp', second_factor_identifier: `other-${value.factorId}` },
+    })),
+    /factor identifier does not match/,
+  );
+  await assert.rejects(
+    execute(async () => verifiedClaims(value, { email: 'other@bin-groups.com' })),
+    /canonical Founder email/,
+  );
+  await assert.rejects(
+    execute(async () => verifiedClaims(value, { role: 'admin', ceo: false })),
+    /Founder authority/,
   );
 });
 
@@ -115,6 +145,7 @@ test('Firebase provider response bodies never enter Founder authentication diagn
         status: 502,
         async json() { throw new Error(value.marker); },
       }),
+      verifyIdTokenImpl: async () => verifiedClaims(value),
     }),
     (error) => {
       assert.match(error.message, /HTTP 502/);
@@ -125,6 +156,16 @@ test('Firebase provider response bodies never enter Founder authentication diagn
   assert.doesNotMatch(helperSource, /response\.text\(\)/);
   assert.doesNotMatch(helperSource, /raw:\s*raw/);
   assert.doesNotMatch(helperSource, /console\.(?:log|warn|error)/);
+});
+
+test('Founder token verification is project-bound and server-authoritative', () => {
+  assert.match(helperSource, /EXPECTED_PROJECT_ID = 'bin-group-57c60'/);
+  assert.match(helperSource, /initializeFirebaseAdmin/);
+  assert.match(helperSource, /verifyIdToken\(idToken, true\)/);
+  assert.match(helperSource, /CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups\.com'/);
+  assert.match(helperSource, /email_verified !== true/);
+  assert.match(helperSource, /CEO or Super Admin Founder authority/);
+  assert.doesNotMatch(helperSource, /decodeJwtPayload/);
 });
 
 test('operational evidence scans every matching record and hashes the verified TOTP identifier', () => {
@@ -138,7 +179,7 @@ test('operational evidence scans every matching record and hashes the verified T
     'Broker commission selector',
     'staff-audit selector',
     'renewal-watch selector',
-    'verifiedMfa.secondFactorType !== \'totp\'',
+    "verifiedMfa.secondFactorType !== 'totp'",
     'sha256(verifiedMfa.secondFactorIdentifier)',
     'applicationSelectorPagination = { pageSize: PAGE_SIZE, completeScan: true }',
   ]) {
@@ -157,7 +198,7 @@ test('Founder credentials are scoped only to the protected replay step', () => {
   const replayStep = workflow.slice(replayStepIndex, uploadStepIndex);
   for (const name of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET']) {
     assert.doesNotMatch(jobScope, new RegExp(`${name}:`));
-    assert.match(replayStep, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+    assert.match(replayStep, new RegExp(`${name}: \$\{\{ secrets\.${name} \}\}`));
   }
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\./);
   assert.doesNotMatch(workflow, /E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\./);
