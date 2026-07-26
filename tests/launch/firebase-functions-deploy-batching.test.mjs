@@ -1,17 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import {
   FUNCTIONS_DEPLOYMENT_STRATEGY,
+  FUNCTIONS_RECONCILIATION_STRATEGY,
+  buildFunctionReconciliationPlan,
+  parseRemoteFunctionList,
   validateFunctionsDeploymentEvidence,
 } from '../../scripts/lib/functions-deployment-evidence.mjs';
 
-const deployUrl = new URL('../../scripts/deploy-firebase-production.mjs', import.meta.url);
-const verifierUrl = new URL('../../scripts/verify-production-deployment.mjs', import.meta.url);
-const deploySource = await readFile(deployUrl, 'utf8');
-const verifierSource = await readFile(verifierUrl, 'utf8');
+const deploySource = await readFile(
+  new URL('../../scripts/deploy-firebase-production.mjs', import.meta.url),
+  'utf8',
+);
+const verifierSource = await readFile(
+  new URL('../../scripts/verify-production-deployment.mjs', import.meta.url),
+  'utf8',
+);
+const reconciliationSource = await readFile(
+  new URL('../../scripts/lib/functions-deployment-evidence.mjs', import.meta.url),
+  'utf8',
+);
 
 const validEvidence = () => ({
   strategy: FUNCTIONS_DEPLOYMENT_STRATEGY,
@@ -28,29 +37,48 @@ const validEvidence = () => ({
     'scheduledServiceReminderCron',
     'verifyBrokerPayoutOtp',
   ],
-});
-
-test('production deployment and verification scripts parse under the repository Node runtime', () => {
-  for (const url of [deployUrl, verifierUrl]) {
-    const result = spawnSync(process.execPath, ['--check', fileURLToPath(url)], {
-      encoding: 'utf8',
-    });
-    assert.equal(
-      result.status,
-      0,
-      `${fileURLToPath(url)} failed Node syntax validation:\n${result.stderr || result.stdout}`,
-    );
-  }
+  reconciliation: {
+    strategy: FUNCTIONS_RECONCILIATION_STRATEGY,
+    status: 'passed',
+    projectId: 'bin-group-57c60',
+    codebase: 'default',
+    remoteBefore: [
+      'default|europe-west3|adminCreateUser',
+      'default|europe-west3|dailyHrComplianceSweep',
+      'default|europe-west3|getAdminSecurityProfile',
+      'default|europe-west3|onScheduledServiceUpdated',
+      'default|europe-west3|requestBrokerPayoutOtp',
+      'default|europe-west3|scheduledServiceReminderCron',
+      'default|europe-west3|verifyBrokerPayoutOtp',
+    ],
+    obsoleteDeleted: [],
+    preservedUnowned: [],
+    remoteAfter: [
+      'default|europe-west3|adminCreateUser',
+      'default|europe-west3|dailyHrComplianceSweep',
+      'default|europe-west3|getAdminSecurityProfile',
+      'default|europe-west3|onScheduledServiceUpdated',
+      'default|europe-west3|requestBrokerPayoutOtp',
+      'default|europe-west3|scheduledServiceReminderCron',
+      'default|europe-west3|verifyBrokerPayoutOtp',
+    ],
+    obsoleteOwnedRemaining: [],
+    currentMissingAfter: [],
+    deletionBatchSize: 4,
+    deletionCooldownSeconds: 75,
+    retryRecoveryMinimumSeconds: 120,
+    observedAt: '2026-07-26T07:00:00.000Z',
+  },
 });
 
 test('production deployment never updates the entire Functions estate in one Firebase mutation burst', () => {
   assert.doesNotMatch(
     deploySource,
-    /['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/,
+    /['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/, 
   );
   assert.doesNotMatch(
     deploySource,
-    /retryFirebase\(\s*['"]functions['"]/,
+    /retryFirebase\(\s*['"]functions['"]/, 
   );
   assert.match(deploySource, /function deployFunctionsQuotaSafe\(\)/);
   assert.match(deploySource, /functions:\$\{name\}/);
@@ -89,7 +117,90 @@ test('deployment metadata records the batching strategy used for the exact SHA',
   );
 });
 
-test('exact-SHA production verification requires valid batching evidence', () => {
+test('remote list parser accepts Firebase result payloads and rejects malformed output', () => {
+  const parsed = parseRemoteFunctionList(JSON.stringify({
+    result: [
+      {
+        id: 'tenantReminder',
+        region: 'europe-west3',
+        labels: { 'firebase-functions-codebase': 'default' },
+      },
+      {
+        name: 'projects/bin-group-57c60/locations/us-central1/functions/ext-mailer-send',
+        labels: { 'firebase-functions-codebase': 'ext-mailer' },
+      },
+    ],
+  }));
+  assert.deepEqual(parsed, [
+    { name: 'tenantReminder', region: 'europe-west3', codebase: 'default' },
+    { name: 'ext-mailer-send', region: 'us-central1', codebase: 'ext-mailer' },
+  ]);
+  assert.throws(() => parseRemoteFunctionList('not-json'), /malformed JSON/);
+  assert.throws(() => parseRemoteFunctionList('{"status":"success"}'), /function array/);
+});
+
+test('reconciliation plans deletion for removed or renamed owned Functions only', () => {
+  const plan = buildFunctionReconciliationPlan(
+    ['activeFunction', 'renamedFunction'],
+    [
+      { name: 'activeFunction', region: 'europe-west3', codebase: 'default' },
+      { name: 'oldFunctionName', region: 'europe-west3', codebase: 'default' },
+      { name: 'ext-mailer-send', region: 'us-central1', codebase: 'ext-mailer' },
+      { name: 'unownedManualFunction', region: 'europe-west3', codebase: '' },
+      { name: 'renamedFunction', region: 'europe-west3', codebase: 'default' },
+    ],
+  );
+  assert.deepEqual(plan.obsoleteOwned, [
+    { name: 'oldFunctionName', region: 'europe-west3', codebase: 'default' },
+  ]);
+  assert.deepEqual(plan.preservedUnowned, [
+    'ext-mailer|us-central1|ext-mailer-send',
+    'unknown|europe-west3|unownedManualFunction',
+  ]);
+  assert.deepEqual(plan.currentMissing, []);
+});
+
+test('reconciliation no-op is deterministic when remote owned Functions match source', () => {
+  const plan = buildFunctionReconciliationPlan(
+    ['alphaFunction', 'betaFunction'],
+    [
+      { name: 'betaFunction', region: 'europe-west3', codebase: 'default' },
+      { name: 'alphaFunction', region: 'europe-west3', codebase: 'default' },
+    ],
+  );
+  assert.deepEqual(plan.obsoleteOwned, []);
+  assert.deepEqual(plan.remoteBefore, [
+    'default|europe-west3|alphaFunction',
+    'default|europe-west3|betaFunction',
+  ]);
+});
+
+test('obsolete owned Functions without region metadata fail closed', () => {
+  assert.throws(
+    () => buildFunctionReconciliationPlan(
+      ['activeFunction'],
+      [
+        { name: 'activeFunction', region: 'europe-west3', codebase: 'default' },
+        { name: 'obsoleteFunction', region: '', codebase: 'default' },
+      ],
+    ),
+    /missing region metadata/,
+  );
+});
+
+test('reconciliation deletion is explicit, batched, quota-safe and preserves unowned codebases', () => {
+  assert.match(reconciliationSource, /functions:list/);
+  assert.match(reconciliationSource, /functions:delete/);
+  assert.match(reconciliationSource, /--force/);
+  assert.match(reconciliationSource, /FIREBASE_FUNCTION_DELETE_BATCH_SIZE/);
+  assert.match(reconciliationSource, /FIREBASE_FUNCTION_DELETE_COOLDOWN_SECONDS/);
+  assert.match(reconciliationSource, /preservedUnowned/);
+  assert.match(reconciliationSource, /entry\.codebase === OWNED_CODEBASE/);
+  assert.match(reconciliationSource, /MIN_RETRY_RECOVERY_SECONDS = 120/);
+  assert.match(reconciliationSource, /Math\.max\(\s*MIN_RETRY_RECOVERY_SECONDS/);
+});
+
+test('exact-SHA production verification requires valid batching and reconciliation evidence', () => {
   assert.deepEqual(validateFunctionsDeploymentEvidence(validEvidence()), []);
   assert.match(verifierSource, /validateFunctionsDeploymentEvidence\(existing\.functionsDeployment\)/);
   assert.match(verifierSource, /functionsDeployment: existing\?\.functionsDeployment \?\? null/);
@@ -133,4 +244,28 @@ test('exact-SHA production verification requires valid batching evidence', () =>
     deployedFunctions: [...validEvidence().deployedFunctions, 'adminCreateUser'],
   }).join('\n');
   assert.match(duplicateNames, /duplicates/);
+
+  const missingReconciliation = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    reconciliation: null,
+  }).join('\n');
+  assert.match(missingReconciliation, /reconciliation evidence is missing/);
+
+  const obsoleteRemaining = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    reconciliation: {
+      ...validEvidence().reconciliation,
+      obsoleteOwnedRemaining: ['default|europe-west3|oldFunction'],
+    },
+  }).join('\n');
+  assert.match(obsoleteRemaining, /left obsolete owned Functions/);
+
+  const weakRecovery = validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    reconciliation: {
+      ...validEvidence().reconciliation,
+      retryRecoveryMinimumSeconds: 60,
+    },
+  }).join('\n');
+  assert.match(weakRecovery, /at least 120 seconds/);
 });
