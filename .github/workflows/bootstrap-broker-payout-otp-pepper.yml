@@ -94,7 +94,6 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-          cache: npm
 
       - name: Authenticate Google Cloud by Workload Identity Federation
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
@@ -104,10 +103,13 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Install dependencies
-        run: bash scripts/npm-install-retry.sh
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          version: '>= 416.0.0'
+          project_id: bin-group-57c60
 
-      - name: Bootstrap and verify Firebase Secret Manager value
+      - name: Bootstrap and verify Google Secret Manager value without disk persistence
         run: node scripts/bootstrap-broker-payout-otp-pepper.mjs
 
       - name: Upload sanitized bootstrap evidence
@@ -131,7 +133,7 @@ jobs:
           status="$(jq -r '.status' launch_package/broker-payout-otp-pepper-bootstrap.json)"
           action="$(jq -r '.action' launch_package/broker-payout-otp-pepper-bootstrap.json)"
           failure_code="$(jq -r '.failureCode // empty' launch_package/broker-payout-otp-pepper-bootstrap.json)"
-          body="## Broker payout OTP pepper bootstrap\n\n- Exact main SHA: \`$EXPECTED_COMMIT_SHA\`\n- Status: \`$status\`\n- Action: \`$action\`\n- Secret value logged: \`false\`\n- Hard-launch claim: \`false\`"
+          body="## Broker payout OTP pepper bootstrap\n\n- Exact main SHA: \`$EXPECTED_COMMIT_SHA\`\n- Status: \`$status\`\n- Action: \`$action\`\n- Secret transport: \`stdin\`\n- Secret persisted to runner disk: \`false\`\n- Secret value logged: \`false\`\n- Hard-launch claim: \`false\`"
           if [[ -n "$failure_code" ]]; then
             body="$body\n- Failure code: \`$failure_code\`"
           fi
