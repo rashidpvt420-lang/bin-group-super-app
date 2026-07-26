@@ -35,12 +35,6 @@ jobs:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       SOURCE_DEPLOY_RUN_ID: ${{ inputs.source_deploy_run_id }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
-      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
-      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
 
     steps:
       - name: Checkout exact deployed commit
@@ -86,9 +80,17 @@ jobs:
         run: bash scripts/npm-install-retry.sh
 
       - name: Verify BIN GROUP branded SMTP delivery
+        env:
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
         run: node scripts/verify-smtp-live-delivery.mjs
 
       - name: Verify production App Check enforcement
+        env:
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
         run: node scripts/verify-appcheck-enforcement.mjs
 
       - name: Publish and finalize baseline provider evidence
