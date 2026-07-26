@@ -5,10 +5,9 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('application evidence workflow is protected and auto-discovers fixed production records', async () => {
-  const [workflow, verifier, paginatedRunner, publisher] = await Promise.all([
+  const [workflow, verifier, publisher] = await Promise.all([
     read('.github/workflows/operational-application-evidence.yml'),
     read('scripts/verify-operational-application-evidence.mjs'),
-    read('scripts/run-operational-application-evidence-paginated.mjs'),
     read('scripts/publish-operational-application-evidence.mjs'),
   ]);
 
@@ -24,27 +23,10 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /Auto-discover, verify, and publish application evidence/);
-  assert.match(workflow, /node scripts\/run-operational-application-evidence-paginated\.mjs --prepare-in-place/);
-  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence-mfa\.mjs/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-application-evidence\.mjs/);
   assert.match(workflow, /application-proofs\/\$\{gate\}\.json/);
   assert.match(workflow, /SELECTED_GATE.*all/s);
-  assert.doesNotMatch(workflow, /verify-operational-application-evidence-mfa\.mjs/);
-
-  assert.match(paginatedRunner, /sourcePath = path\.join\(__dirname, 'verify-operational-application-evidence\.mjs'\)/);
-  assert.match(paginatedRunner, /--prepare-in-place/);
-  assert.match(paginatedRunner, /GITHUB_WORKFLOW !== 'Operational Application Evidence'/);
-  assert.match(paginatedRunner, /replaceExactlyOnce/);
-  assert.match(paginatedRunner, /replaceExactCount/);
-  assert.match(paginatedRunner, /readAllMatchingDocuments/);
-  assert.match(paginatedRunner, /readAllMatchingSnapshot/);
-  assert.match(paginatedRunner, /renameSync\(temporaryPath, sourcePath\)/);
-  assert.match(paginatedRunner, /secondFactorIdentifier: founderAuth\.secondFactorIdentifier/);
-  assert.match(paginatedRunner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
-
-  const preparation = workflow.indexOf('node scripts/run-operational-application-evidence-paginated.mjs --prepare-in-place');
-  const directVerifier = workflow.indexOf('OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence.mjs');
-  assert.ok(preparation >= 0 && directVerifier > preparation);
 
   const gates = [
     'ownerPaymentActivation',
@@ -71,31 +53,9 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(workflow, /technicianPhysicalGpsEvidence/);
 });
 
-test('pagination preparation covers every discovery and exact-count query', async () => {
-  const runner = await read('scripts/run-operational-application-evidence-paginated.mjs');
-  for (const label of [
-    'approved-payment selector',
-    'notification selector',
-    'Broker commission selector',
-    'staff-audit selector',
-    'renewal-watch selector',
-    'Owner property count query',
-    'payment invoice exactly-once queries',
-    'payment audit exactly-once queries',
-    'commission exactly-once queries',
-    'staff creation audit count query',
-  ]) assert.match(runner, new RegExp(label));
-  assert.match(runner, /\.limit\(100\)\.get\(\)/);
-  assert.match(runner, /\.limit\(20\)\.get\(\)/);
-  assert.match(runner, /a reviewed obsolete evidence path survived hardening/);
-  assert.match(runner, /readAllMatchingSnapshot\(db\.collection\('invoices'\)/);
-  assert.match(runner, /readAllMatchingSnapshot\(db\.collection\('broker_commissions'\)/);
-});
-
 test('payment and commission evidence auto-discovers records, uses the real callable and proves replay invariants', async () => {
-  const [verifier, runner, approval, commission] = await Promise.all([
+  const [verifier, approval, commission] = await Promise.all([
     read('scripts/verify-operational-application-evidence.mjs'),
-    read('scripts/run-operational-application-evidence-paginated.mjs'),
     read('functions/paymentTransactionApproval.ts'),
     read('functions/brokerCommissions.ts'),
   ]);
@@ -110,7 +70,6 @@ test('payment and commission evidence auto-discovers records, uses the real call
   assert.match(verifier, /`commission_\$\{contractId\}`/);
   assert.match(verifier, /commissionsAfterSnapshot\.size !== 1/);
   assert.match(verifier, /beforeHash !== afterHash/);
-  assert.match(runner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
   assert.match(approval, /approvalWasIdempotent = true/);
   assert.match(commission, /\.doc\(`commission_\$\{contractId\}`\)/);
   assert.match(commission, /transaction\.create\(commissionRef/);
