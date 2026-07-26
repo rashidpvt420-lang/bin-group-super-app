@@ -1,0 +1,43 @@
+name: Run Final Map GPS Client Hardening
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'fix/map-gps-client-hardening-final'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Apply selected current-main hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git fetch origin main fix/map-gps-client-hardening-current-main
+          test "$(git rev-parse origin/main)" = 'ed0656cc5336bd97e90d6a33430b035818b9be05'
+          git checkout origin/fix/map-gps-client-hardening-current-main -- \
+            docs/technician-gps-client-storage-policy.md \
+            src/utils/gpsRetryQueue.ts \
+            tests/launch/gps-stop-migration-source-contract.test.mjs \
+            tests/launch/map-gps-state-behavior.test.mjs
+          python .github/scripts/build-map-gps-client-hardening-final.py
+          rm -f \
+            .github/client-hardening-trigger \
+            .github/scripts/build-map-gps-client-hardening-final.py \
+            .github/workflows/build-map-gps-client-hardening-final.yml \
+            .github/workflows/run-map-gps-client-hardening-final.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && { echo '::error::No permanent hardening changes were produced.'; exit 1; }
+          git commit -m 'Harden Admin viewport and Technician GPS client privacy'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
