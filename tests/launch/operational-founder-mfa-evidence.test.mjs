@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { signInWithRequiredTotpMfa } from '../../scripts/lib/firebase-mfa-sign-in.mjs';
 
@@ -38,6 +39,16 @@ async function completeChallenge(overrides = {}) {
     verifyIdTokenImpl: async () => verifiedClaims(overrides),
   });
 }
+
+test('operational MFA helper and transformation scripts parse under Node', () => {
+  for (const file of [
+    'scripts/lib/firebase-mfa-sign-in.mjs',
+    'scripts/run-operational-application-evidence-paginated.mjs',
+  ]) {
+    const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `${file} syntax failure:\n${result.stderr || result.stdout}`);
+  }
+});
 
 test('verified Founder TOTP returns the unique factor identifier', async () => {
   const result = await completeChallenge();
