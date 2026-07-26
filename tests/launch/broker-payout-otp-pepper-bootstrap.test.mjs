@@ -22,6 +22,7 @@ test('Broker OTP pepper bootstrap is owner-only, issue-bound and protected by pr
   assert.match(workflow, /environment:\s*production/);
   assert.match(workflow, /id-token:\s*write/);
   assert.match(workflow, /google-github-actions\/auth@c200f3691d83b41bf9bbd8638997a462592937ed/);
+  assert.match(workflow, /google-github-actions\/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db/);
   assert.doesNotMatch(workflow, /pull_request:|workflow_run:/);
 });
 
@@ -35,15 +36,19 @@ test('bootstrap binds to stable current main and never accepts branch drift', ()
   assert.match(script, /CHECKOUT_SHA_MISMATCH/);
 });
 
-test('bootstrap creates a cryptographic secret through a temporary 0600 file and verifies it without logging it', () => {
+test('bootstrap streams a cryptographic secret to Secret Manager and verifies it without disk persistence or logging', () => {
   assert.match(script, /randomBytes\(48\)\.toString\('base64url'\)/);
-  assert.match(script, /functions:secrets:set/);
-  assert.match(script, /--data-file/);
-  assert.match(script, /functions:secrets:access/);
-  assert.match(script, /mode:\s*0o600/);
+  assert.match(script, /'secrets',\s*\n\s*'create'/);
+  assert.match(script, /'versions',\s*\n\s*'add'/);
+  assert.match(script, /'versions',\s*\n\s*'access'/);
+  assert.match(script, /--data-file=-/);
+  assert.match(script, /input:\s*secretValue/);
   assert.match(script, /verified\.value !== generated/);
+  assert.match(script, /secretTransport:\s*'stdin'/);
+  assert.match(script, /secretPersistedToRunnerDisk:\s*false/);
   assert.match(script, /secretValueLogged:\s*false/);
   assert.match(script, /hardLaunchClaim:\s*false/);
+  assert.doesNotMatch(script, /mkdtempSync|tmpdir|secretFile|writeFileSync\([^\n]*generated/);
   assert.doesNotMatch(script, /console\.(?:log|error)\([^\n]*(?:generated|existing\.value|verified\.value)/);
   assert.doesNotMatch(workflow, /BROKER_PAYOUT_OTP_PEPPER:\s*\$\{\{/);
 });
