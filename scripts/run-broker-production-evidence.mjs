@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import admin from 'firebase-admin';
@@ -39,7 +40,9 @@ const safeId = (value, fallback = 'evidence') => text(value)
 
 const brokerEmail = text(process.env.E2E_BROKER_EMAIL).toLowerCase();
 const brokerPassword = text(process.env.E2E_BROKER_PASSWORD);
-const brokerRealPayoutOtp = text(process.env.E2E_BROKER_REAL_PAYOUT_OTP);
+const mailboxClientId = text(process.env.E2E_BROKER_MAILBOX_CLIENT_ID);
+const mailboxClientSecret = text(process.env.E2E_BROKER_MAILBOX_CLIENT_SECRET);
+const mailboxRefreshToken = text(process.env.E2E_BROKER_MAILBOX_REFRESH_TOKEN);
 const leadName = text(process.env.E2E_BROKER_LEAD_NAME);
 const appCheckDebugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 const commitSha = text(process.env.GITHUB_SHA) || (() => {
@@ -53,14 +56,15 @@ const commitSha = text(process.env.GITHUB_SHA) || (() => {
 for (const [name, value] of Object.entries({
   E2E_BROKER_EMAIL: brokerEmail,
   E2E_BROKER_PASSWORD: brokerPassword,
-  E2E_BROKER_REAL_PAYOUT_OTP: brokerRealPayoutOtp,
+  E2E_BROKER_MAILBOX_CLIENT_ID: mailboxClientId,
+  E2E_BROKER_MAILBOX_CLIENT_SECRET: mailboxClientSecret,
+  E2E_BROKER_MAILBOX_REFRESH_TOKEN: mailboxRefreshToken,
   E2E_BROKER_LEAD_NAME: leadName,
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: appCheckDebugToken,
   GITHUB_SHA: commitSha,
 })) {
   assert(value, `${name} is required for Broker production evidence.`);
 }
-assert(/^\d{6}$/.test(brokerRealPayoutOtp), 'E2E_BROKER_REAL_PAYOUT_OTP must be the current six-digit code read from the verified Broker mailbox.');
 assert(/^[0-9a-f-]{36}$/i.test(appCheckDebugToken), 'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN must be a registered debug UUID.');
 assert(/^[a-f0-9]{40}$/.test(commitSha), 'Broker production evidence must be bound to an exact lowercase 40-character commit SHA.');
 
@@ -84,6 +88,81 @@ async function jsonRequest(url, options, label) {
     throw new Error(`${label} failed HTTP ${response.status}.`);
   }
   return body;
+}
+
+const normalizeMessageId = (value) => text(value).replace(/^<|>$/g, '').toLowerCase();
+const sha256 = (value) => createHash('sha256').update(String(value)).digest('hex');
+
+function decodeBase64Url(value) {
+  const normalized = text(value).replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  return Buffer.from(padded, 'base64').toString('utf8');
+}
+
+function gmailHeader(message, name) {
+  const headers = Array.isArray(message?.payload?.headers) ? message.payload.headers : [];
+  return text(headers.find((entry) => text(entry?.name).toLowerCase() === name.toLowerCase())?.value);
+}
+
+function gmailBody(payload) {
+  if (!payload || typeof payload !== 'object') return '';
+  const own = text(payload.body?.data) ? decodeBase64Url(payload.body.data) : '';
+  const parts = Array.isArray(payload.parts) ? payload.parts : [];
+  const plain = parts.find((part) => text(part.mimeType).toLowerCase() === 'text/plain');
+  if (plain) return gmailBody(plain);
+  const nested = parts.map(gmailBody).find(Boolean);
+  return own || nested || '';
+}
+
+async function mailboxAccessToken() {
+  const body = await jsonRequest('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: mailboxClientId,
+      client_secret: mailboxClientSecret,
+      refresh_token: mailboxRefreshToken,
+      grant_type: 'refresh_token',
+    }).toString(),
+  }, 'Broker mailbox OAuth exchange');
+  assert(text(body.access_token), 'Broker mailbox OAuth exchange did not return an access token.');
+  return text(body.access_token);
+}
+
+async function waitForMailboxOtp({ providerMessageId, requestedAt, timeoutMs = 120000 }) {
+  const accessToken = await mailboxAccessToken();
+  const deadline = Date.now() + timeoutMs;
+  const query = `from:ceo@bin-groups.com to:${brokerEmail} subject:"BIN GROUP payout verification code" newer_than:1d`;
+  while (Date.now() < deadline) {
+    const list = await jsonRequest(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      'Broker mailbox message search',
+    );
+    for (const candidate of Array.isArray(list.messages) ? list.messages : []) {
+      const message = await jsonRequest(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(candidate.id)}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        'Broker mailbox message read',
+      );
+      const receivedAt = Number(message.internalDate || 0);
+      if (!Number.isFinite(receivedAt) || receivedAt < requestedAt - 10000) continue;
+      const to = gmailHeader(message, 'To').toLowerCase();
+      const subject = gmailHeader(message, 'Subject');
+      const receivedMessageId = normalizeMessageId(gmailHeader(message, 'Message-ID'));
+      if (!to.includes(brokerEmail) || subject !== 'BIN GROUP payout verification code') continue;
+      if (normalizeMessageId(providerMessageId) !== receivedMessageId) continue;
+      const match = gmailBody(message.payload).match(/payout code is\s+(\d{6})/i);
+      if (!match) continue;
+      return {
+        code: match[1],
+        receivedAt: new Date(receivedAt).toISOString(),
+        messageIdHash: sha256(receivedMessageId),
+      };
+    }
+    await sleep(5000);
+  }
+  throw new Error('Timed out waiting for the provider-confirmed Broker OTP in the verified mailbox.');
 }
 
 async function exchangeAppCheckToken() {
@@ -305,17 +384,22 @@ async function main() {
   const brokerSession = await signIn(brokerEmail, brokerPassword);
   assert(brokerSession.uid === brokerUid, 'Broker Auth UID does not match the dedicated production fixture.');
 
+  const otpRequestedAt = Date.now();
   const requested = await callFunction('requestBrokerPayoutOtp', { commissionIds: [commissionId] }, appCheckToken, brokerSession.idToken);
   const challengeId = text(requested.challengeId);
   assert(requested.status === 'OTP_SENT' && challengeId, 'Broker payout OTP request did not return a challenge.');
   assert(Number(requested.amount) === expectedCommissionAmount && Number(requested.commissionCount) === 1, 'Broker payout OTP binding amount/count is incorrect.');
 
   const otpDelivery = await inspectOtpDelivery(challengeId);
+  const mailboxReceipt = await waitForMailboxOtp({
+    providerMessageId: otpDelivery.providerMessageId,
+    requestedAt: otpRequestedAt,
+  });
   const verified = await callFunction('verifyBrokerPayoutOtp', {
     challengeId,
-    otp: brokerRealPayoutOtp,
+    otp: mailboxReceipt.code,
   }, appCheckToken, brokerSession.idToken);
-  assert(verified.status === 'VERIFIED' && text(verified.challengeId) === challengeId, 'Broker payout OTP verification did not complete with the mailbox-read code.');
+  assert(verified.status === 'VERIFIED' && text(verified.challengeId) === challengeId, 'Broker payout OTP verification did not complete with the mailbox-received code.');
 
   const submitted = await callFunction('submitBrokerPayoutRequest', {
     challengeId,
@@ -394,7 +478,9 @@ async function main() {
       providerMessageId: otpDelivery.providerMessageId,
       bindingHash: otpDelivery.bindingHash,
       otpHashVersion: otpDelivery.otpHashVersion,
-      realMailboxCodeUsed: true,
+      mailboxReceiptVerified: true,
+      mailboxReceivedAt: mailboxReceipt.receivedAt,
+      mailboxMessageIdHash: mailboxReceipt.messageIdHash,
       otpVerified: true,
       otpConsumed: upper(challenge.status) === 'CONSUMED',
       payoutRequestId,

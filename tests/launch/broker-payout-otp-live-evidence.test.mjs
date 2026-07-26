@@ -54,14 +54,16 @@ test('Broker protected runner binds one UI lead to contract activation and one d
 });
 
 test('Broker protected runner requires mailbox OTP verification and completed payout submission', () => {
-  assert.match(productionRunner, /E2E_BROKER_REAL_PAYOUT_OTP/);
+  assert.match(productionRunner, /E2E_BROKER_MAILBOX_CLIENT_ID/);
+  assert.match(productionRunner, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
   assert.match(productionRunner, /requestBrokerPayoutOtp/);
   assert.match(productionRunner, /verifyBrokerPayoutOtp/);
   assert.match(productionRunner, /submitBrokerPayoutRequest/);
   assert.match(productionRunner, /delivery\?\.messageId/);
   assert.match(productionRunner, /otpHashVersion/);
   assert.match(productionRunner, /HMAC_SHA256_V1/);
-  assert.match(productionRunner, /realMailboxCodeUsed: true/);
+  assert.match(productionRunner, /mailboxReceiptVerified: true/);
+  assert.match(productionRunner, /mailboxMessageIdHash/);
   assert.doesNotMatch(productionRunner, /deriveOtp|value\.otpHash\b|value\.salt\b|number\s*<=\s*999999/);
   assert.match(productionRunner, /EMAIL_OTP_SINGLE_USE_PRIVATE_KYC/);
   assert.match(productionRunner, /status\) === 'CONSUMED'/);
