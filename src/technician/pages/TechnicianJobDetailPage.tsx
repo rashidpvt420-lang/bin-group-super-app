@@ -332,11 +332,14 @@ export default function TechnicianJobDetailPage() {
             await updateTicketLifecycle(lifecyclePayload);
             if (nextStatus === 'EN_ROUTE') {
                 try {
-                    await startLiveTracking(id, user.uid, () => undefined, (err) => {
+                    const trackingStarted = await startLiveTracking(id, user.uid, () => undefined, (err) => {
                         setGpsError(err);
                         setIsTracking(false);
                     });
-                    setIsTracking(true);
+                    setIsTracking(trackingStarted);
+                    if (!trackingStarted) {
+                        setGpsError('Mission is en route, but this device did not start a live GPS watch.');
+                    }
                 } catch (trackingError: any) {
                     setGpsError(trackingError?.message || 'Mission is en route, but live GPS tracking could not start.');
                     setIsTracking(false);

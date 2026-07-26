@@ -116,3 +116,15 @@ test('online replay listener remains until the UID-scoped queue is empty', () =>
   assert.match(tracking, /if \(readQueue\(technicianUid\)\.length > 0\) return/);
   assert.match(tracking, /window\.removeEventListener\('online', _state\.onlineHandler\)/);
 });
+
+
+test('Technician UI marks GPS active only after a watch is installed', () => {
+  const page = readFileSync('src/technician/pages/TechnicianJobDetailPage.tsx', 'utf8');
+  assert.match(tracking, /Promise<boolean>/);
+  assert.match(tracking, /Geolocation is not supported[\s\S]*return false/);
+  assert.match(tracking, /GPS requires a secure HTTPS context[\s\S]*return false/);
+  assert.match(tracking, /navigator\.geolocation\.watchPosition[\s\S]*return true/);
+  assert.match(page, /const trackingStarted = await startLiveTracking/);
+  assert.match(page, /setIsTracking\(trackingStarted\)/);
+  assert.doesNotMatch(page, /await startLiveTracking[\s\S]{0,250}setIsTracking\(true\)/);
+});

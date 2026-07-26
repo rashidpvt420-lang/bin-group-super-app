@@ -596,7 +596,7 @@ export const startLiveTracking = async (
     technicianUid: string,
     onLocationUpdate?: (loc: GeoPoint) => void,
     onError?: (msg: string) => void,
-): Promise<void> => {
+): Promise<boolean> => {
     const readiness = await getGpsReadiness();
     await persistTrackingDiagnostic(technicianUid, ticketId, {
         status: readiness.supported ? 'READY' : 'UNSUPPORTED',
@@ -610,14 +610,14 @@ export const startLiveTracking = async (
         const message = 'Geolocation is not supported by this browser.';
         await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'UNSUPPORTED', error: message, readiness });
         onError?.(message);
-        return;
+        return false;
     }
 
     if (!readiness.secureContext) {
         const message = 'GPS requires a secure HTTPS context.';
         await persistTrackingDiagnostic(technicianUid, ticketId, { status: 'INSECURE_CONTEXT', error: message, readiness });
         onError?.(message);
-        return;
+        return false;
     }
 
     purgeOtherTechnicianQueues(technicianUid);
@@ -717,6 +717,7 @@ export const startLiveTracking = async (
             timeout: 27_000,
         },
     );
+    return true;
 };
 
 export const stopLiveTracking = async (
