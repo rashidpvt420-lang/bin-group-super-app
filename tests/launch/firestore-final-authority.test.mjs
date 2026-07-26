@@ -9,6 +9,21 @@ const root = process.cwd();
 const liveLocationHardener = path.join(root, 'scripts/harden-technician-live-location-authority.mjs');
 const hardener = path.join(root, 'scripts/harden-final-firestore-authority.mjs');
 
+function matchBlock(rules, marker) {
+  const start = rules.indexOf(marker);
+  assert.notEqual(start, -1, `${marker} must exist`);
+  const open = rules.indexOf('{', start + marker.length - 1);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return '';
+}
+
 test('final Firestore authority hardener is status-aware, explicit, bounded and idempotent', () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'bin-final-firestore-authority-'));
   try {
@@ -27,7 +42,13 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /function hasNonAdminDispatchClaimOnly\(\)/);
     assert.match(rules, /return hasDispatchAuthorityClaimOnly\(\) && isNotSuspended\(\);/);
     assert.match(rules, /function safeTicketUpdateByActor\(\)/);
-    assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 2);
+    assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);
+    const legacy = matchBlock(rules, '    match /tickets/{ticketId} {');
+    const canonical = matchBlock(rules, '    match /maintenanceTickets/{ticketId} {');
+    assert.match(legacy, /allow create, update, delete: if false;/);
+    assert.doesNotMatch(legacy, /safeTicketUpdateByActor/);
+    assert.match(canonical, /allow create: if isAdmin\(\);/);
+    assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
     assert.match(rules, /let authenticated = signedIn\(\);/);
     assert.match(rules, /let role = authenticated/);
     assert.match(rules, /let admin = authenticated && \(/);
@@ -55,7 +76,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'properties',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.doesNotMatch(rules, /'system_secrets',\n\s*'technician_live_locations',\n\s*'users',\n\s*'audit_logs',\n\s*'admin_security_sessions',\n\s*'private_hr_profiles'/);
     assert.match(rules, /'broker_kyc_profiles',\n\s*'broker_kyc_submission_limits',\n\s*'ai_usage'/);
-    for (const legacy of [
+    for (const staleRule of [
       'allow update: if isAdmin() && isNotSuspended();',
       'allow update: if hasNonAdminDispatchClaimOnly() && safeDispatcherTicketUpdate();',
       'allow update: if tenantOwns(resource.data) && safeTenantEvidenceUpdate();',
@@ -63,7 +84,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
       "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();",
       "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();",
       "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();",
-    ]) assert.equal(rules.includes(legacy), false);
+    ]) assert.equal(rules.includes(staleRule), false);
 
     const routerStart = rules.indexOf('    function safeTicketUpdateByActor() {');
     const routerEnd = rules.indexOf('\n    }', routerStart) + '\n    }'.length;
