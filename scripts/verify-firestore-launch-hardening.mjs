@@ -18,6 +18,21 @@ function readFunction(name) {
   return null;
 }
 
+function readMatchBlock(marker) {
+  const start = rules.indexOf(marker);
+  if (start < 0) return '';
+  const open = rules.indexOf('{', start + marker.length - 1);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return '';
+}
+
 const legacyTicketUpdates = [
   'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
   'allow update: if isAdmin() && isNotSuspended();',
@@ -55,10 +70,11 @@ const requiredFragments = [
   ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
   ['approved technician read helper', 'function isApprovedTechnician() {'],
   ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
-  ['ticket creation is callable/Admin only', 'allow create: if isAdmin();'],
+  ['canonical ticket creation is Admin/server only', 'allow create: if isAdmin();'],
+  ['legacy tickets are read-only compatibility data', 'allow create, update, delete: if false;'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
-  ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
+  ['single canonical ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
   ['router caches authentication once', 'let authenticated = signedIn();'],
   ['router caches canonical role once', 'let role = authenticated'],
   ['router caches admin authority once', 'let admin = authenticated && ('],
@@ -95,13 +111,13 @@ const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
 
-if (rules.split('allow create: if isAdmin();').length - 1 < 2) failures.push('Server/Admin-only ticket create gate must exist for both ticket collections.');
-for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenanceTickets/{ticketId} {']) {
-  const start = rules.indexOf(marker);
-  const block = start < 0 ? '' : rules.slice(start, start + 900);
-  if (!block.includes('allow create: if isAdmin();')) failures.push(`${marker} still permits direct browser creation.`);
-}
-if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
+const legacyBlock = readMatchBlock('    match /tickets/{ticketId} {');
+const canonicalBlock = readMatchBlock('    match /maintenanceTickets/{ticketId} {');
+if (!legacyBlock.includes('allow create, update, delete: if false;')) failures.push('Legacy /tickets must deny every browser write.');
+if (legacyBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Legacy /tickets still has an operational update gate.');
+if (!canonicalBlock.includes('allow create: if isAdmin();')) failures.push('Canonical /maintenanceTickets must reserve direct creates for Admin/server authority.');
+if (!canonicalBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Canonical /maintenanceTickets update router is missing.');
+if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 1) failures.push('Exactly one canonical ticket update gate is required.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
 if (rules.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) failures.push('Private HR profile rule must exist exactly once.');
