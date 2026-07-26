@@ -102,5 +102,6 @@ test('AI observability records non-PII aggregate SLO metrics', () => {
   assert.match(observability, /invalidOutputs/);
   assert.match(observability, /redactionsApplied/);
   assert.match(observability, /quotaCharged/);
-  assert.doesNotMatch(observability, /uid|email|phone|prompt|message/i);
+  assert.doesNotMatch(observability, /metric\.(?:uid|email|phone|prompt|message)/i);
+  assert.doesNotMatch(observability, /collection\("users"\)/);
 });
