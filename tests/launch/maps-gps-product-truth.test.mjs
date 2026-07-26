@@ -11,6 +11,7 @@ const liveTracking = read('src/utils/liveTracking.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
 const packageJson = JSON.parse(read('package.json'));
+const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
 const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
 
 test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
@@ -73,6 +74,20 @@ test('Canonical location rules are generated as Admin-read and browser-write den
   assert.match(ruleHardener, /technician_live_locations'\]/);
   assert.equal(packageJson.scripts['harden:live-location-authority'], 'node scripts/harden-technician-live-location-authority.mjs');
   assert.match(packageJson.scripts['prepare:rules'], /harden:live-location-authority/);
+});
+
+test('Static readiness file is a catalogue and cannot claim live launch readiness', () => {
+  assert.equal(readinessCatalogue.decision, 'NON_AUTHORITATIVE_GATE_CATALOGUE');
+  assert.equal(readinessCatalogue.authority?.authoritative, false);
+  assert.equal(readinessCatalogue.authority?.canonicalRuntimeRecord, 'system_health/admin_summaries');
+  assert.equal(readinessCatalogue.authority?.staticScoresAccepted, false);
+  assert.equal('scores' in readinessCatalogue, false);
+  assert.equal('profileScores' in readinessCatalogue, false);
+  assert.equal(readinessCatalogue.paymentPolicy?.controlledPilot?.mode, 'bank-pilot');
+  assert.equal(readinessCatalogue.paymentPolicy?.controlledPilot?.stripeRequired, false);
+  assert.equal(readinessCatalogue.paymentPolicy?.unrestrictedPublicLaunch?.stripeRequiredByCurrentRuntimeGate, true);
+  assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'aiProviderHealth'));
+  assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'signedFinalDecision'));
 });
 
 test('Global production evidence cannot bypass the language UI or pass without a map', () => {
