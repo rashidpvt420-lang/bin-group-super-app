@@ -170,10 +170,29 @@ export const updateTechnicianLiveLocation = onCall(
           throw new HttpsError("failed-precondition", "No canonical live tracking session exists for this STOP request.");
         }
         if (stopDecision === "REJECT_SUPERSEDED") {
-          throw new HttpsError(
-            "failed-precondition",
-            "This STOP request belongs to an older or different tracking session and cannot change the current session.",
-          );
+          // The canonical session is newer or belongs to another ticket. Preserve
+          // it unchanged, but acknowledge the stale STOP so an offline client can
+          // remove its queue entry instead of becoming permanently blocked.
+          tx.set(auditRef, {
+            actorId: technicianUid,
+            actorRole: "technician",
+            action: "TECHNICIAN_LIVE_LOCATION_STALE_STOP_IGNORED",
+            targetType: "technician_live_locations",
+            targetId: technicianUid,
+            requestedTicketId: ticketId,
+            requestedTrackingSessionId: trackingSessionId,
+            canonicalTicketId: String(previous.activeTicketId || "") || null,
+            canonicalTrackingSessionId: String(previous.trackingSessionId || "") || null,
+            createdAt: now,
+          });
+          const previousExpiryMs = previous.expiresAt?.toMillis?.();
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: Number.isFinite(previousExpiryMs) ? previousExpiryMs : now.toMillis(),
+            alreadyStopped: false,
+            staleIgnored: true,
+          };
         }
         if (stopDecision === "ALREADY_STOPPED") {
           const previousExpiryMs = previous.expiresAt?.toMillis?.();
