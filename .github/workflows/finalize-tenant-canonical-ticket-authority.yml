@@ -86,10 +86,51 @@ jobs:
       - name: Enforce focused tests
         run: test "$(cat tenant-authority-tests.exit)" = '0'
 
-      - name: TypeScript and Functions build
+      - name: TypeScript and Functions diagnostics
         run: |
-          npm run typecheck
-          npm run build:functions
+          set +e
+          npm run typecheck > tenant-authority-typecheck.log 2>&1
+          typecheck_status=$?
+          echo "$typecheck_status" > tenant-authority-typecheck.exit
+          npm run build:functions > tenant-authority-functions.log 2>&1
+          functions_status=$?
+          echo "$functions_status" > tenant-authority-functions.exit
+          git diff -- \
+            apps/admin-panel/src/lib/verifiedPropertyPin.ts \
+            apps/admin-panel/src/pages/map/LiveMapPage.tsx \
+            apps/owner-app/src/pages/TenantSOSPage.tsx \
+            firestore.rules \
+            functions/ownerMaintenanceOperations.ts \
+            functions/propertyGeoAuthority.ts \
+            functions/tenantTicketOperations.ts \
+            scripts/apply-ticket-rule-binding.mjs \
+            scripts/verify-firestore-launch-hardening.mjs \
+            src/tenant/pages/TenantRequestPage.tsx \
+            test/property-geo-authority-rules.test.js \
+            tests/launch/property-geo-current-main-authority.test.mjs \
+            > tenant-authority-applied.diff
+          cat tenant-authority-typecheck.log
+          cat tenant-authority-functions.log
+          exit 0
+
+      - name: Upload compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tenant-authority-compiler-${{ github.event.pull_request.head.sha }}
+          path: |
+            tenant-authority-typecheck.log
+            tenant-authority-typecheck.exit
+            tenant-authority-functions.log
+            tenant-authority-functions.exit
+            tenant-authority-applied.diff
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce TypeScript and Functions build
+        run: |
+          test "$(cat tenant-authority-typecheck.exit)" = '0'
+          test "$(cat tenant-authority-functions.exit)" = '0'
 
       - name: Launch honesty
         run: npm run test:launch-honesty
