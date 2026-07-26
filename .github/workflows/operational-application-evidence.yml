@@ -185,7 +185,7 @@ jobs:
           for gate in "${gates[@]}"; do
             echo "::group::Verify and publish ${gate}"
             OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-provenance.mjs
-            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence.mjs
+            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence-mfa.mjs
             OPERATIONAL_GATE="$gate" node scripts/bind-operational-application-provenance.mjs
             OPERATIONAL_GATE="$gate" node scripts/publish-operational-application-evidence.mjs
             cp launch_package/application-proof.json "launch_package/application-proofs/${gate}.json"
