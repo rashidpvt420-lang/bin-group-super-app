@@ -119,7 +119,7 @@ initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 let query = db.collection(definition.collection);
 if (definition.where) query = query.where(...definition.where);
-const snapshot = await query.limit(200).get();
+const snapshot = await query.limit(100).get();
 const candidates = snapshot.docs
   .map(docResult)
   .filter(definition.matches)
