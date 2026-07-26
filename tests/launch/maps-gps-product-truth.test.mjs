@@ -41,7 +41,11 @@ test('Canonical property verification contract is fail-closed and metadata-compl
   assert.match(verifiedPinContract, /geo\.requiresGeoReview === true/);
   assert.match(verifiedPinContract, /geo\.verifiedBy/);
   assert.match(verifiedPinContract, /timestampMillis\(geo\.verifiedAt\)/);
-  assert.match(verifiedPinContract, /ALLOWED_VERIFICATION_SOURCES/);
+  assert.match(verifiedPinContract, /geo\.source !== 'admin_manual'/);
+  assert.match(verifiedPinContract, /verification\.source !== 'FOUNDER_MFA_REVIEW'/);
+  assert.match(verifiedPinContract, /Number\(verification\.verificationVersion\) !== 1/);
+  assert.match(verifiedPinContract, /verifiedBy !== verificationActor/);
+  assert.match(verifiedPinContract, /verifiedAtMs !== verificationAtMs/);
   assert.match(verifiedPinContract, /propertiesById\.get\(propertyId\)/);
   assert.doesNotMatch(verifiedPinContract, /return recordedTicketCoordinate/);
 });
