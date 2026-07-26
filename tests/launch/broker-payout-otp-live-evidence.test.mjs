@@ -53,13 +53,16 @@ test('Broker protected runner binds one UI lead to contract activation and one d
   assert.match(productionRunner, /deterministic commission ID/);
 });
 
-test('Broker protected runner completes provider-confirmed OTP verification and payout submission', () => {
+test('Broker protected runner requires mailbox OTP verification and completed payout submission', () => {
+  assert.match(productionRunner, /E2E_BROKER_REAL_PAYOUT_OTP/);
   assert.match(productionRunner, /requestBrokerPayoutOtp/);
   assert.match(productionRunner, /verifyBrokerPayoutOtp/);
   assert.match(productionRunner, /submitBrokerPayoutRequest/);
   assert.match(productionRunner, /delivery\?\.messageId/);
-  assert.match(productionRunner, /otpHash/);
-  assert.match(productionRunner, /sha256\(`\$\{code\}:\$\{salt\}`\)/);
+  assert.match(productionRunner, /otpHashVersion/);
+  assert.match(productionRunner, /HMAC_SHA256_V1/);
+  assert.match(productionRunner, /realMailboxCodeUsed: true/);
+  assert.doesNotMatch(productionRunner, /deriveOtp|value\.otpHash\b|value\.salt\b|number\s*<=\s*999999/);
   assert.match(productionRunner, /EMAIL_OTP_SINGLE_USE_PRIVATE_KYC/);
   assert.match(productionRunner, /status\) === 'CONSUMED'/);
   assert.match(productionRunner, /payoutStatus\) === 'REQUESTED'/);
