@@ -17,11 +17,13 @@ const packageJson = JSON.parse(read('package.json'));
 const readinessCatalogue = JSON.parse(read('launch_package/hard-launch-readiness.json'));
 const globalBusinessEvidence = read('tests/e2e/business-global.spec.ts');
 
-test('Admin operational map renders Google Maps from verified Firebase coordinates only', () => {
+test('Admin operational map renders Google Maps from contract-verified Firebase coordinates only', () => {
   assert.match(adminMap, /loadAdminGoogleMaps\(\)/);
   assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
   assert.match(adminMap, /data-testid="admin-live-google-map"/);
-  assert.match(adminMap, /No markers have been fabricated/);
+  assert.match(adminMap, /verifiedTicketPin/);
+  assert.match(adminMap, /Recorded coordinates were not rendered as verified markers/);
+  assert.match(adminMap, /Recorded coordinate is unverified and excluded from map and dispatch-distance claims/);
   assert.match(adminMap, /onSnapshot\([\s\S]*setLocationsError/);
   assert.doesNotMatch(adminMap, /AI Autonomous|AI INTERCEPTING|Marina Bridges|DUBAI-HQ|Streaming live telemetry/i);
   assert.doesNotMatch(adminMap, /55\.12|55\.42|25\.3 - loc\.lat|const positions = \[/);
