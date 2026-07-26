@@ -1,6 +1,7 @@
 import { generateTotp } from './totp.mjs';
 
 const text = (value) => String(value ?? '').trim();
+const lower = (value) => text(value).toLowerCase();
 
 async function parseJson(response) {
   try {
@@ -25,16 +26,19 @@ function decodeJwtPayload(token) {
   }
 }
 
-function requireMfaToken(token) {
+function requireTotpMfaToken(token) {
   const payload = decodeJwtPayload(token);
-  const secondFactor = text(payload?.firebase?.sign_in_second_factor);
-  if (!secondFactor) {
-    throw new Error('Firebase sign-in did not produce a verified second-factor session.');
+  const uid = text(payload.user_id || payload.sub);
+  const secondFactorType = lower(payload?.firebase?.sign_in_second_factor);
+  const secondFactorIdentifier = text(payload?.firebase?.second_factor_identifier);
+  if (!uid) throw new Error('Firebase MFA ID token has no authenticated user identifier.');
+  if (secondFactorType !== 'totp') {
+    throw new Error('Firebase sign-in did not produce a verified TOTP second-factor session.');
   }
-  return {
-    uid: text(payload.user_id || payload.sub),
-    secondFactor,
-  };
+  if (!secondFactorIdentifier) {
+    throw new Error('Firebase TOTP session did not include the verified factor identifier.');
+  }
+  return { uid, secondFactorType, secondFactorIdentifier };
 }
 
 export async function signInWithRequiredTotpMfa({
@@ -76,8 +80,8 @@ export async function signInWithRequiredTotpMfa({
 
   const directToken = text(signInPayload?.idToken);
   if (directToken) {
-    const verified = requireMfaToken(directToken);
-    return { idToken: directToken, uid: verified.uid, secondFactor: verified.secondFactor };
+    const verified = requireTotpMfaToken(directToken);
+    return { idToken: directToken, ...verified };
   }
 
   const pendingCredential = text(signInPayload?.mfaPendingCredential);
@@ -114,10 +118,9 @@ export async function signInWithRequiredTotpMfa({
     );
   }
 
-  const verified = requireMfaToken(idToken);
-  return {
-    idToken,
-    uid: verified.uid,
-    secondFactor: verified.secondFactor,
-  };
+  const verified = requireTotpMfaToken(idToken);
+  if (verified.secondFactorIdentifier !== enrollmentId) {
+    throw new Error('Firebase TOTP token factor identifier does not match the completed challenge.');
+  }
+  return { idToken, ...verified };
 }
