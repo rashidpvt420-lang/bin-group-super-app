@@ -32,11 +32,12 @@ test('bootstrap binds to stable exact main before and after the protected mutati
   assert.match(workflow, /first_sha=.*git\/ref\/heads\/main/);
   assert.match(workflow, /second_sha=.*git\/ref\/heads\/main/);
   assert.match(workflow, /\[\[ "\$second_sha" == "\$first_sha" \]\]/);
-  assert.match(workflow, /ref:\s*main/);
-  assert.doesNotMatch(workflow, /ref:\s*\$\{\{ needs\.authorize-owner-command\.outputs\.commit_sha \}\}/);
+  assert.match(workflow, /ref:\s*\$\{\{ needs\.authorize-owner-command\.outputs\.commit_sha \}\}/);
+  assert.doesNotMatch(workflow, /ref:\s*main/);
   assert.match(workflow, /checked_out_sha=.*git rev-parse HEAD/);
   assert.match(workflow, /\[\[ "\$checked_out_sha" == "\$EXPECTED_COMMIT_SHA" \]\]/);
   assert.match(workflow, /current_main=.*git\/ref\/heads\/main/);
+  assert.match(workflow, /Current main moved to/);
   assert.match(workflow, /name:\s*Reverify exact main after protected mutation/);
   assert.match(workflow, /MAIN_ADVANCED_AFTER_SECRET_MUTATION/);
   assert.match(workflow, /\.status = "failed"/);
@@ -83,6 +84,7 @@ test('production preflight still requires the Owner pepper and is not bypassed',
 test('workflow always emits sanitized evidence and never claims launch', () => {
   assert.match(workflow, /BOOTSTRAP_STEP_DID_NOT_PRODUCE_EVIDENCE/);
   assert.match(workflow, /if:\s*always\(\)/);
+  assert.match(workflow, /minimumLengthSatisfied == true/);
   assert.match(workflow, /secretPersistedToRunnerDisk:\s*false/);
   assert.match(workflow, /secretValueLogged:\s*false/);
   assert.match(workflow, /hardLaunchClaim:\s*false/);
