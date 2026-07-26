@@ -54,6 +54,7 @@ const manifests = Object.freeze({
       requiredHash(e.ownerUidHash, 'ownerUidHash', errors);
       requiredHash(e.invoiceProofHash, 'invoiceProofHash', errors);
       requiredHash(e.replayActorUidHash, 'replayActorUidHash', errors);
+      requiredHash(e.replaySecondFactorHash, 'replaySecondFactorHash', errors);
       if (e.stateUnchanged !== true || Number(e.replayHttpStatus) !== 200) errors.push('payment replay was not safely idempotent');
       if (Number(e.approvalAuditCount) !== 1 || Number(e.invoiceCount) !== 1) errors.push('payment activation was not exactly once');
     },
@@ -85,6 +86,7 @@ const manifests = Object.freeze({
       requiredHash(e.brokerUidHash, 'brokerUidHash', errors);
       requiredHash(e.commissionStateHash, 'commissionStateHash', errors);
       requiredHash(e.replayActorUidHash, 'replayActorUidHash', errors);
+      requiredHash(e.replaySecondFactorHash, 'replaySecondFactorHash', errors);
       if (Number(e.commissionCount) !== 1 || e.stateUnchanged !== true || Number(e.replayHttpStatus) !== 200) errors.push('commission lock is not exactly-once and replay-safe');
     },
   },
