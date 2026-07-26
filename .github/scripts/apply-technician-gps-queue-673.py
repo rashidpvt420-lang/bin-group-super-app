@@ -1,8 +1,12 @@
 from pathlib import Path
+import subprocess
 
 
 path = Path('src/utils/liveTracking.ts')
-source = path.read_text(encoding='utf-8')
+source = subprocess.check_output(
+    ['git', 'show', 'origin/main:src/utils/liveTracking.ts'],
+    text=True,
+)
 
 old_import = "import { db, doc, functions, httpsCallable, serverTimestamp, setDoc } from '../lib/firebase';"
 new_import = old_import + "\nimport {\n    type QueuedTrackingAction,\n    discardTechnicianSessionUpdates,\n    enqueueTechnicianGpsAction,\n    gpsRetryDelayMs,\n    pendingTechnicianStopCount,\n    purgeOtherTechnicianGpsQueues,\n    readTechnicianGpsQueue,\n    removeTechnicianGpsQueueEntry,\n    replaceTechnicianGpsQueueEntry,\n} from './technicianGpsQueue';"
@@ -10,14 +14,17 @@ if old_import not in source:
     raise SystemExit('liveTracking Firebase import marker missing')
 source = source.replace(old_import, new_import, 1)
 
-section_start = source.index("type StopTrackingStatus = TrackingStatus | 'PRESERVE';")
-section_end = source.index('export const startLiveTracking', section_start)
-helper_block = r'''type StopTrackingStatus = TrackingStatus | 'PRESERVE';
-const CAPTURE_INTERVAL_MS = 10_000;
+legacy_type_start = source.index('type QueuedTrackingAction = {')
+state_start = source.index('const _state: TrackingState = {', legacy_type_start)
+source = source[:legacy_type_start] + 'const CAPTURE_INTERVAL_MS = 10_000;\n\n' + source[state_start:]
 
-const publishLiveLocation = httpsCallable(functions, 'updateTechnicianLiveLocation');
+queue_start = source.index('function readQueue(): QueuedTrackingAction[] {')
+publish_start = source.index("const publishLiveLocation = httpsCallable(functions, 'updateTechnicianLiveLocation');", queue_start)
+source = source[:queue_start] + source[publish_start:]
 
-function trackingErrorCode(error: any) {
+flush_start = source.index('async function flushCurrentSessionQueue() {')
+start_export = source.index('export const startLiveTracking', flush_start)
+flush_block = r'''function trackingErrorCode(error: any) {
     return String(error?.code || error?.details?.code || error?.message || 'unknown').toLowerCase();
 }
 
@@ -29,23 +36,6 @@ function isTerminalTrackingError(error: any) {
         'invalid-argument',
         'not-found',
     ].some((value) => code.includes(value));
-}
-
-async function sendAction(action: QueuedTrackingAction) {
-    const point = action.point;
-    await publishLiveLocation({
-        action: action.action,
-        ticketId: action.ticketId,
-        trackingSessionId: action.trackingSessionId,
-        ...(point ? {
-            latitude: point.latitude,
-            longitude: point.longitude,
-            accuracy: point.accuracy,
-            heading: point.heading,
-            speed: point.speed,
-            deviceTimestampMs: point.deviceTimestampMs,
-        } : {}),
-    });
 }
 
 type QueueFlushResult = {
@@ -135,11 +125,10 @@ function installQueueOnlineReplay(technicianUid: string) {
 }
 
 '''
-source = source[:section_start] + helper_block + source[section_end:]
+source = source[:flush_start] + flush_block + source[start_export:]
 
-start_marker = """    const readiness = await getGpsReadiness();
-"""
-start_replacement = """    purgeOtherTechnicianGpsQueues(technicianUid);
+readiness_marker = '    const readiness = await getGpsReadiness();\n'
+readiness_replacement = """    purgeOtherTechnicianGpsQueues(technicianUid);
     const priorStopReplay = await flushTechnicianQueue(technicianUid, null, null);
     if (priorStopReplay.pendingStopCount > 0 || priorStopReplay.terminalStopCount > 0) {
         const status = priorStopReplay.pendingStopCount > 0
@@ -160,9 +149,9 @@ start_replacement = """    purgeOtherTechnicianGpsQueues(technicianUid);
 
     const readiness = await getGpsReadiness();
 """
-if start_marker not in source:
+if readiness_marker not in source:
     raise SystemExit('start readiness marker missing')
-source = source.replace(start_marker, start_replacement, 1)
+source = source.replace(readiness_marker, readiness_replacement, 1)
 
 old_state_block = """    _state.activeTicketId = ticketId;
     _state.technicianUid = technicianUid;
@@ -182,6 +171,7 @@ new_state_block = """    _state.activeTicketId = ticketId;
 if old_state_block not in source:
     raise SystemExit('active tracking state marker missing')
 source = source.replace(old_state_block, new_state_block, 1)
+source = source.replace('if (now - _state.lastPushTime < 10_000) return;', 'if (now - _state.lastPushTime < CAPTURE_INTERVAL_MS) return;', 1)
 
 old_action = """            const action: QueuedTrackingAction = {
                 action: 'UPDATE',
@@ -298,11 +288,20 @@ new_stop = r'''export const stopLiveTracking = async (
 '''
 source = source[:stop_start] + new_stop
 
+required = [
+    'export async function getGpsReadiness',
+    'export function normalizeLocation',
+    'export function calculateDistanceKm',
+    'function createTrackingSessionId',
+    "status: 'STOP_REQUEST_QUEUED'",
+]
+for marker in required:
+    if marker not in source:
+        raise SystemExit(f'required tracking helper missing after patch: {marker}')
 for forbidden in [
     "window.localStorage.getItem(QUEUE_KEY)",
     'flushCurrentSessionQueue',
     'enqueueAction(',
-    "status: 'STOPPED',\n            finalStatus,\n            trackingSessionId: sessionId,\n            stoppedAt: serverTimestamp(),\n        });\n    }",
 ]:
     if forbidden in source:
         raise SystemExit(f'forbidden legacy GPS queue marker remains: {forbidden}')
