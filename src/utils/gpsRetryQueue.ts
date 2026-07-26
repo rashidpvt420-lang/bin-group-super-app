@@ -217,7 +217,36 @@ export const readGpsRetryQueue = (
   return entries;
 };
 
+const migrateLegacyV2Stops = (nowMs = Date.now()) => {
+  const local = safeStorage('localStorage');
+  if (!local) return;
+  try {
+    const raw = JSON.parse(local.getItem(LEGACY_QUEUE_KEYS[1]) || '[]');
+    if (!Array.isArray(raw)) return;
+    const validStops = raw
+      .map((entry) => sanitizeEntry(entry, nowMs))
+      .filter((entry): entry is QueuedGpsAction => Boolean(entry && entry.action === 'STOP'));
+    for (const entry of validStops) {
+      const selected = browserGpsQueueStorage(entry.technicianUid);
+      const existing = readGpsRetryQueue(selected, nowMs);
+      const duplicate = existing.some((candidate) =>
+        candidate.action === 'STOP' &&
+        candidate.technicianUid === entry.technicianUid &&
+        candidate.ticketId === entry.ticketId &&
+        candidate.trackingSessionId === entry.trackingSessionId,
+      );
+      if (!duplicate) writeQueues(selected, [...existing, { ...entry, point: undefined }]);
+    }
+  } catch {
+    // Malformed legacy data is deleted below and is never allowed to start a
+    // new session as trusted reconciliation evidence.
+  }
+};
+
 export const removeLegacyGpsQueue = () => {
+  // Preserve coordinate-free pending STOP authority before deleting the old
+  // global key. Legacy UPDATE coordinates are intentionally not migrated.
+  migrateLegacyV2Stops();
   for (const storage of [safeStorage('localStorage'), safeStorage('sessionStorage')]) {
     if (!storage) continue;
     for (const key of LEGACY_QUEUE_KEYS) {

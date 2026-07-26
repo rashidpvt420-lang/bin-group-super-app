@@ -110,10 +110,12 @@ test('Technician GPS client uses protected callable with durable STOP and short-
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'users'/);
   assert.doesNotMatch(liveTracking, /updateDoc\(doc\(db, 'technicians'/);
 
-  assert.match(gpsRetryQueue, /STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v2'/);
-  assert.match(gpsRetryQueue, /UPDATE_QUEUE_KEY = 'bin-technician-gps-update-queue-v2'/);
-  assert.match(gpsRetryQueue, /stop: safeStorage\('localStorage'\)/);
-  assert.match(gpsRetryQueue, /update: safeStorage\('sessionStorage'\)/);
+  assert.match(gpsRetryQueue, /STOP_QUEUE_KEY = 'bin-technician-gps-stop-queue-v3'/);
+  assert.match(gpsRetryQueue, /UPDATE_QUEUE_KEY = 'bin-technician-gps-update-memory-v3'/);
+  assert.match(gpsRetryQueue, /stop: scopedStorage\(safeStorage\('localStorage'\), technicianUid\)/);
+  assert.match(gpsRetryQueue, /update: scopedStorage\(memoryStorage, technicianUid\)/);
+  assert.match(gpsRetryQueue, /migrateLegacyV2Stops/);
+  assert.match(gpsRetryQueue, /Legacy UPDATE coordinates are intentionally not migrated/);
   assert.match(gpsRetryQueue, /UPDATE_TTL_MS = 5 \* 60 \* 1000/);
   assert.match(gpsRetryQueue, /STOP_TTL_MS = 24 \* 60 \* 60 \* 1000/);
   assert.match(gpsRetryQueue, /retryCount >= MAX_RETRY_COUNT/);

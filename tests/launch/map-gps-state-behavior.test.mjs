@@ -254,3 +254,14 @@ test('new ticket startup discards stale UPDATE coordinates before STOP reconcili
   assert.match(liveTrackingSource, /discardAllQueuedUpdates\(technicianUid\)/);
   assert.match(liveTrackingSource, /readGpsRetryQueue\(browserGpsQueueStorage\(technicianUid\)\)/);
 });
+
+
+test('legacy v2 STOP authority migrates before global queue deletion', () => {
+  const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
+  const migrationIndex = queueSource.indexOf('migrateLegacyV2Stops();');
+  const deletionIndex = queueSource.indexOf('storage.removeItem(key)', migrationIndex);
+  assert.ok(migrationIndex >= 0 && deletionIndex > migrationIndex);
+  assert.match(queueSource, /entry\.action === 'STOP'/);
+  assert.match(queueSource, /point: undefined/);
+  assert.match(queueSource, /candidate\.trackingSessionId === entry\.trackingSessionId/);
+});
