@@ -5,9 +5,10 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('application evidence workflow is protected and auto-discovers fixed production records', async () => {
-  const [workflow, verifier, publisher] = await Promise.all([
+  const [workflow, verifier, paginatedRunner, publisher] = await Promise.all([
     read('.github/workflows/operational-application-evidence.yml'),
     read('scripts/verify-operational-application-evidence.mjs'),
+    read('scripts/run-operational-application-evidence-paginated.mjs'),
     read('scripts/publish-operational-application-evidence.mjs'),
   ]);
 
@@ -23,10 +24,16 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /Auto-discover, verify, and publish application evidence/);
-  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/run-operational-application-evidence-paginated\.mjs/);
+  assert.doesNotMatch(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-application-evidence\.mjs/);
   assert.match(workflow, /application-proofs\/\$\{gate\}\.json/);
   assert.match(workflow, /SELECTED_GATE.*all/s);
+  assert.match(paginatedRunner, /sourcePath = path\.join\(__dirname, 'verify-operational-application-evidence\.mjs'\)/);
+  assert.match(paginatedRunner, /replaceExactlyOnce/);
+  assert.match(paginatedRunner, /readAllMatchingDocuments/);
+  assert.match(paginatedRunner, /secondFactorIdentifier: founderAuth\.secondFactorIdentifier/);
+  assert.match(paginatedRunner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
 
   const gates = [
     'ownerPaymentActivation',
