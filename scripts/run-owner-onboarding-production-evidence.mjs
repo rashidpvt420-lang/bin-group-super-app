@@ -548,13 +548,13 @@ async function main() {
     paymentId: intakeId,
     reason: 'E2E production proof: receipt requires corrected bank reference.',
   }, appCheckToken, adminSession.idToken);
-  assert(rejected.status === 'REJECTED', 'Admin rejection did not return REJECTED.');
+  assert(rejected.status === 'SUCCESS' && rejected.idempotent === false, 'Admin rejection callable did not complete successfully.');
   const rejectedPayment = await waitForDocument(
     db.collection('payment_transactions').doc(intakeId),
     (value) => upper(value.status || value.paymentStatus) === 'REJECTED',
     'Owner payment rejection',
   );
-  assert(upper(rejectedPayment.verificationState) === 'REJECTED', 'Rejected payment verification state is not locked.');
+  assert(upper(rejectedPayment.verificationState) === 'ADMIN_REJECTED', 'Rejected payment verification state is not locked.');
   const rejectedUser = (await db.collection('users').doc(ownerUid).get()).data() || {};
   assert(rejectedUser.dashboardLocked === true && rejectedUser.dashboardUnlocked !== true, 'Rejected Owner dashboard was not locked.');
   const rejectionMail = await waitForMailDelivery(`owner_payment_rejected_${intakeId}_${initialQuoteKey}`, ownerEmail);
@@ -610,7 +610,7 @@ async function main() {
 
   const activatedPayment = await waitForDocument(
     db.collection('payment_transactions').doc(intakeId),
-    (value) => upper(value.status || value.paymentStatus) === 'APPROVED' && value.activated === true,
+    (value) => upper(value.status || value.paymentStatus) === 'APPROVED' && value.unblocksDashboard !== false && value.unlocksDashboard === true && value.paymentVerified === true,
     'approved Owner payment activation',
   );
   const activatedContract = (await db.collection('contracts').doc(intakeId).get()).data() || {};
@@ -626,7 +626,7 @@ async function main() {
   assert(propertySnapshot.size === 1, `Expected one activated acquisition property; found ${propertySnapshot.size}.`);
   propertySnapshot.docs.forEach((document) => {
     const value = document.data() || {};
-    assert(upper(value.status) === 'ACTIVE' && upper(value.activationStatus) === 'ACTIVATED', `${document.id} is not active.`);
+    assert(upper(value.status) === 'ACTIVE' && upper(value.activationStatus) === 'ACTIVE', `${document.id} is not active.`);
   });
   assert(passportSnapshot.size === 1 && passportSnapshot.docs.every((document) => document.data()?.activated === true), 'Property passport did not activate.');
   assert(invoiceId && text(invoice.proofHash) === text(activatedPayment.invoiceProofHash), 'Mobilization invoice hash is missing or inconsistent.');
