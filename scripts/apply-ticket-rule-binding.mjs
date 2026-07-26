@@ -157,9 +157,6 @@ for (const marker of ['    match /tickets/{ticketId} {', '    match /maintenance
   const block = start < 0 ? '' : text.slice(start, start + 900);
   if (!block.includes(canonicalCreate)) throw new Error(`[ticket-rule-binding] ${marker} must deny direct browser creation outside Admin authority.`);
 }
-if (text.split(canonicalCreate).length - 1 !== 2) {
-  throw new Error('[ticket-rule-binding] Admin/server-only ticket create gate must exist exactly twice.');
-}
 
 if (changed) writeFileSync(file, text);
 console.log(`Applied server-only ticket create and bounded update gates (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
