@@ -3,8 +3,12 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test, expect, type Page, type Response } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import {
+  loginAdminWithRealMfa,
+  requireAdminMfaCredentials,
+} from './helpers/adminMfa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '../..');
@@ -15,9 +19,6 @@ if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 const BROKER_EMAIL = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
 const BROKER_PASSWORD = String(process.env.E2E_BROKER_PASSWORD || '').trim();
 const OWNER_EMAIL = String(process.env.E2E_OWNER_EMAIL || '').trim().toLowerCase();
-const ADMIN_EMAIL = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
-const ADMIN_PASSWORD = String(process.env.E2E_ADMIN_PASSWORD || '').trim();
-const ADMIN_MFA_CODE = String(process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').trim().replace(/\/+$/, '');
 
 const adminUrl = (pathname: string) => `${ADMIN_BASE_URL}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
@@ -28,9 +29,6 @@ function requireCredentials() {
     E2E_BROKER_PASSWORD: BROKER_PASSWORD,
     E2E_OWNER_EMAIL: OWNER_EMAIL,
     E2E_OWNER_PASSWORD: process.env.E2E_OWNER_PASSWORD,
-    E2E_ADMIN_EMAIL: ADMIN_EMAIL,
-    E2E_ADMIN_PASSWORD: ADMIN_PASSWORD,
-    E2E_ADMIN_REAL_MFA_CODE: /^\d{6}$/.test(ADMIN_MFA_CODE) ? ADMIN_MFA_CODE : '',
     VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN,
     E2E_BROKER_GMAIL_CLIENT_ID: process.env.E2E_BROKER_GMAIL_CLIENT_ID,
     E2E_BROKER_GMAIL_CLIENT_SECRET: process.env.E2E_BROKER_GMAIL_CLIENT_SECRET,
@@ -39,6 +37,10 @@ function requireCredentials() {
   const missing = Object.entries(required).filter(([, value]) => !String(value || '').trim()).map(([name]) => name);
   if (missing.length) {
     throw new Error(`Missing or invalid ${missing.join(', ')}. Broker commercial lifecycle proof cannot be skipped.`);
+  }
+  const founder = requireAdminMfaCredentials('E2E_FOUNDER');
+  if (founder.email !== 'ceo@bin-groups.com') {
+    throw new Error('Broker payout Admin settlement must use the canonical Founder account ceo@bin-groups.com.');
   }
 }
 
@@ -69,41 +71,6 @@ async function loginBroker(page: Page) {
   await page.waitForURL('**/broker/**', { timeout: 30_000 });
   await expect(page.locator('body')).not.toContainText(
     /permission-denied|missing or insufficient permissions|application error|minified react error|identity fault|access denied/i,
-    { timeout: 15_000 },
-  );
-}
-
-function isFirebasePasswordResponse(response: Response) {
-  return /identitytoolkit\.googleapis\.com\/v1\/accounts:signInWithPassword/.test(response.url());
-}
-
-async function loginAdminWithRealMfa(page: Page) {
-  await page.context().clearCookies();
-  await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  });
-  await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
-  await expect(page.getByTestId('admin-login-email')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('admin-login-password')).toBeVisible({ timeout: 10_000 });
-
-  const responsePromise = page.waitForResponse(isFirebasePasswordResponse, { timeout: 30_000 });
-  await page.getByTestId('admin-login-email').fill(ADMIN_EMAIL);
-  await page.getByTestId('admin-login-password').fill(ADMIN_PASSWORD);
-  await page.getByTestId('admin-login-submit').click();
-  const authResponse = await responsePromise;
-  expect(authResponse.status(), `Firebase Admin Auth response: ${(await authResponse.text()).slice(0, 1_000)}`).toBeLessThan(400);
-
-  const challenge = page.getByTestId('admin-mfa-signin-challenge');
-  await expect(challenge, 'Broker payout settlement requires a real enrolled Admin MFA session').toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('admin-mfa-send-signin-code').click();
-  await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('admin-mfa-signin-code').fill(ADMIN_MFA_CODE);
-  await page.getByTestId('admin-mfa-resolve-signin').click();
-  await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 45_000 });
-  await expect(page.locator('body')).not.toContainText(
-    /permission-denied|missing or insufficient permissions|application error|minified react error|admin console could not start/i,
     { timeout: 15_000 },
   );
 }
@@ -179,7 +146,7 @@ test.describe('Broker Business Workflow', () => {
     });
   });
 
-  test('Broker lead converts through Owner activation, one commission, mailbox OTP and Admin MFA settlement', async ({ page }, testInfo) => {
+  test('Broker lead converts through Owner activation, one commission, mailbox OTP and Founder MFA settlement', async ({ page }, testInfo) => {
     requireCredentials();
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
     await monitor.assertTokenFingerprint();
@@ -199,7 +166,7 @@ test.describe('Broker Business Workflow', () => {
     expect(evidence.commission.percentage).toBeGreaterThanOrEqual(5);
     expect(evidence.commission.percentage).toBeLessThanOrEqual(8);
 
-    await loginAdminWithRealMfa(page);
+    await loginAdminWithRealMfa(page, ADMIN_BASE_URL, requireAdminMfaCredentials('E2E_FOUNDER'));
 
     evidence = runEvidence('submit-first');
     expect(evidence.status).toBe('first_payout_pending');
