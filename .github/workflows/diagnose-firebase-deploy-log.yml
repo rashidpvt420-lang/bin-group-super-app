@@ -1,0 +1,60 @@
+name: Diagnose Firebase Deploy Log
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/diagnose-firebase-deploy-log.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    name: Extract Firebase failure context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and filter failed deployment log
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          FAILED_JOB_ID: '89766221940'
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPOSITORY/actions/jobs/$FAILED_JOB_ID/logs" \
+            --output /tmp/failed-job.log
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          raw = Path('/tmp/failed-job.log').read_bytes()
+          text = raw.decode('utf-8-sig', errors='replace')
+          text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
+          lines = text.splitlines()
+
+          deploy_markers = [
+              i for i, line in enumerate(lines)
+              if 'Deploy and verify Firebase production stack' in line
+              or 'deploy-firebase-production.mjs' in line
+          ]
+          start = max(deploy_markers[-1] - 5, 0) if deploy_markers else max(len(lines) - 500, 0)
+          section = lines[start:]
+
+          signal = re.compile(
+              r'(?i)(error|failed|failure|unable|permission|denied|quota|timeout|timed out|'
+              r'production-deploy|firebase deploy|functions deploy|hosting deploy|firestore|storage|'
+              r'cloud run|cloud build|operation|conflict|already exists|invalid|forbidden)'
+          )
+          matched = [(start + i + 1, line) for i, line in enumerate(section) if signal.search(line)]
+
+          print('=== FILTERED FIREBASE DEPLOY FAILURE CONTEXT ===')
+          for line_no, line in matched[-240:]:
+              print(f'{line_no}: {line}')
+          print('=== FINAL 80 DEPLOYMENT LINES ===')
+          tail_start = max(len(lines) - 80, 0)
+          for i, line in enumerate(lines[tail_start:], start=tail_start + 1):
+              print(f'{i}: {line}')
+          PY
