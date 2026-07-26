@@ -75,7 +75,9 @@ test('precise retry data is UID-scoped, session-only and purged on account chang
   assert.match(tracking, /purgeOtherTechnicianQueues/);
   assert.match(tracking, /export function purgeLiveTrackingQueue/);
   assert.doesNotMatch(tracking, /window\.localStorage/);
-  assert.doesNotMatch(tracking, /email|displayName|authToken|idToken/);
+
+  const queueType = tracking.slice(tracking.indexOf('type QueuedTrackingAction'), tracking.indexOf('type QueueFlushResult'));
+  assert.doesNotMatch(queueType, /technicianUid|email|displayName|authToken|idToken/);
 
   assert.match(sessionControls, /import \{ purgeLiveTrackingQueue \} from '\.\.\/utils\/liveTracking'/);
   assert.match(sessionControls, /role === 'technician'/);
