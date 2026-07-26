@@ -21,7 +21,10 @@ test('Broker production evidence requires a real mailbox code and cannot derive 
   assert.match(source, /E2E_BROKER_MAILBOX_CLIENT_ID/);
   assert.match(source, /functions:secrets:access/);
   assert.match(source, /Firebase Secret Manager secret/);
+  assert.match(source, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/profile/);
+  assert.match(source, /mailboxProfile\.emailAddress/);
   assert.match(source, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
+  assert.match(source, /providerMessageIdHash/);
   assert.match(source, /mailboxReceiptVerified:\s*true/);
   assert.match(source, /mailboxMessageIdHash/);
   assert.match(source, /otpHashVersion:\s*otpDelivery\.otpHashVersion/);
@@ -30,4 +33,5 @@ test('Broker production evidence requires a real mailbox code and cannot derive 
   assert.doesNotMatch(source, /value\.salt\b/);
   assert.doesNotMatch(source, /number\s*<=\s*999999/);
   assert.doesNotMatch(source, /padStart\(6, ['"]0['"]\)/);
+  assert.doesNotMatch(source, /providerMessageId:\s*otpDelivery\.providerMessageId/);
 });

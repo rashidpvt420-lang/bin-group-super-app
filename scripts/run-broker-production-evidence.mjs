@@ -145,6 +145,12 @@ async function mailboxAccessToken() {
 
 async function waitForMailboxOtp({ providerMessageId, requestedAt, timeoutMs = 120000 }) {
   const accessToken = await mailboxAccessToken();
+  const mailboxProfile = await jsonRequest(
+    'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    'Broker mailbox profile read',
+  );
+  assert(text(mailboxProfile.emailAddress).toLowerCase() === brokerEmail, 'Broker mailbox OAuth identity does not match the verified Broker email.');
   const deadline = Date.now() + timeoutMs;
   const query = `from:ceo@bin-groups.com to:${brokerEmail} subject:"BIN GROUP payout verification code" newer_than:1d`;
   while (Date.now() < deadline) {
@@ -409,6 +415,8 @@ async function main() {
     providerMessageId: otpDelivery.providerMessageId,
     requestedAt: otpRequestedAt,
   });
+  const providerMessageIdHash = sha256(normalizeMessageId(otpDelivery.providerMessageId));
+  assert(providerMessageIdHash === mailboxReceipt.messageIdHash, 'Broker mailbox receipt is not bound to the SMTP provider Message-ID.');
   const verified = await callFunction('verifyBrokerPayoutOtp', {
     challengeId,
     otp: mailboxReceipt.code,
@@ -489,7 +497,7 @@ async function main() {
     },
     payout: {
       challengeId,
-      providerMessageId: otpDelivery.providerMessageId,
+      providerMessageIdHash,
       bindingHash: otpDelivery.bindingHash,
       otpHashVersion: otpDelivery.otpHashVersion,
       mailboxReceiptVerified: true,
