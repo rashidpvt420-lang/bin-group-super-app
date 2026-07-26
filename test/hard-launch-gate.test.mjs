@@ -355,9 +355,14 @@ test('owner and tenant business proofs are mandatory and backend-verified', () =
   assert.match(owner, /E2E_OWNER_EMAIL/);
   assert.match(owner, /waitForURL\('\*\*\/owner\//);
   assert.doesNotMatch(owner, /page\.route\(/);
+  assert.match(tenant, /This suite deliberately does not seed a completed ticket/);
+  assert.match(tenant, /submitRealTenantRequest/);
+  assert.match(tenant, /completeThroughTechnicianUi/);
+  assert.match(tenant, /assertTenantDeliveryReceipt/);
   assert.match(tenant, /APPROVE, RATE & CLOSE/);
-  assert.match(tenant, /maintenanceTickets/);
-  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\/i/);
+  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\\\|true\/i/);
+  assert.match(tenant, /TENANT_DISPUTED_TICKET/);
+  assert.doesNotMatch(tenant, /APPROVAL_TICKET_ID|e2e-tenant-approval-ticket/);
   assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
 });
 
