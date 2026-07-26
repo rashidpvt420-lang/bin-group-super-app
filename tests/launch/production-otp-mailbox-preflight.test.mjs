@@ -79,6 +79,41 @@ test('preflight rejects a weak OTP pepper before mailbox access', async () => {
   assert.equal(fetchCalled, false);
 });
 
+test('preflight aggregates every locally detectable protected credential blocker without leaking resolver errors', async () => {
+  let fetchCalled = false;
+  let failure;
+  try {
+    await runProductionOtpMailboxPreflight({
+      env: {
+        GCP_PROJECT_ID: 'bin-group-57c60',
+        E2E_OWNER_EMAIL: '',
+        E2E_BROKER_EMAIL: 'broker@example.com',
+      },
+      fetchImpl: async () => {
+        fetchCalled = true;
+        return response({});
+      },
+      resolveSecret: (name) => {
+        if (name === 'BROKER_PAYOUT_OTP_PEPPER') return 'too-short';
+        if (name === 'E2E_OWNER_MAILBOX_CLIENT_ID') throw new Error('resolver-secret-payload-must-not-leak');
+        if (name === 'E2E_BROKER_MAILBOX_REFRESH_TOKEN') return '';
+        return secretValues.get(name) || '';
+      },
+    });
+  } catch (error) {
+    failure = error;
+  }
+
+  assert.ok(failure instanceof Error);
+  assert.match(failure.message, /found 4 blockers/);
+  assert.match(failure.message, /BROKER_PAYOUT_OTP_PEPPER must contain at least 32 characters/);
+  assert.match(failure.message, /E2E_OWNER_EMAIL is required for protected mailbox verification/);
+  assert.match(failure.message, /E2E_OWNER_MAILBOX_CLIENT_ID is missing or inaccessible/);
+  assert.match(failure.message, /E2E_BROKER_MAILBOX_REFRESH_TOKEN is missing or inaccessible/);
+  assert.doesNotMatch(failure.message, /resolver-secret-payload-must-not-leak/);
+  assert.equal(fetchCalled, false);
+});
+
 test('production predeploy gate runs secret and mailbox verification before authorization can pass', () => {
   const preflightCall = predeploy.indexOf('await runProductionOtpMailboxPreflight()');
   const approvalCall = predeploy.indexOf('const result = runPredeployApprovalGate()');
