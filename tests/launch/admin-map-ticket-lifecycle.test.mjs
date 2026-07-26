@@ -59,12 +59,13 @@ test('Admin and Functions consume the same executable lifecycle module', () => {
   assert.doesNotMatch(lifecycleSource, /\bas const\b|:\s*readonly\b|:\s*string\b/);
 });
 
-test('Admin map deterministically merges every bounded listener chunk', () => {
+test('Admin map merges complete status listeners without ticket-row truncation', () => {
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks\(\)/);
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS\.map\(\(statuses, chunkIndex\)/);
   assert.match(adminMapSource, /where\('status', 'in', statuses\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\),\s*limit\(100\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\)[\s\S]{0,80}limit\(/);
+  assert.match(adminMapSource, /const technicianQuery = query\(collection\(db, 'technicians'\), limit\(100\)\)/);
   assert.match(adminMapSource, /ticketSnapshots\.size !== TICKET_STATUS_QUERY_CHUNKS\.length/);
   assert.match(adminMapSource, /byId\.set\(String\(ticket\.id\), ticket\)/);
   assert.match(adminMapSource, /localeCompare\(String\(right\.id\)\)/);
