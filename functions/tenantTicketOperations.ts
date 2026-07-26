@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -127,6 +128,14 @@ export const createTenantServiceTicket = onCall(
         return { idempotent: true };
       }
 
+      let canonicalGeo;
+      try {
+        canonicalGeo = resolveDispatchReadyPropertyGeo(property);
+      } catch (error) {
+        throw error instanceof PropertyGeoAuthorityError
+          ? new HttpsError("failed-precondition", error.message)
+          : error;
+      }
       const propertyName = text(property.name || property.propertyName || property.address, 240);
       const ownerId = text(property.ownerUid || property.ownerId || unit.ownerUid || unit.ownerId, 160);
       const common: Record<string, unknown> = {
@@ -143,6 +152,16 @@ export const createTenantServiceTicket = onCall(
         createdByUid: uid,
         propertyId,
         propertyName,
+        jobLocation: {
+          lat: canonicalGeo.lat,
+          lng: canonicalGeo.lng,
+          latitude: canonicalGeo.lat,
+          longitude: canonicalGeo.lng,
+          address: canonicalGeo.address,
+          source: "SERVER_VERIFIED_PROPERTY_GEO",
+          verificationVersion: canonicalGeo.verificationVersion,
+          verifiedBy: canonicalGeo.verifiedBy,
+        },
         unitId,
         unitNumber: text(unit.unitNumber || unit.name, 80),
         floor: text(unit.floorNumber || unit.floor, 40),
@@ -176,9 +195,6 @@ export const createTenantServiceTicket = onCall(
         if (!category || description.length < 8 || !PRIORITIES.has(priority) || details.photoEvidenceExpected !== true) {
           throw new HttpsError("invalid-argument", "AI maintenance tickets require category, priority, description, and photo evidence.");
         }
-        const location = property.location || property.propertyLocation || property.geoPoint || {};
-        const lat = Number((location as any).lat ?? (location as any).latitude);
-        const lng = Number((location as any).lng ?? (location as any).longitude);
         Object.assign(common, {
           category,
           priority,
@@ -192,9 +208,6 @@ export const createTenantServiceTicket = onCall(
           dispatchStatus: "PENDING_ASSIGNMENT",
           trackingStatus: "WAITING_FOR_TENANT_EVIDENCE",
           slaMinutes: priority === "emergency" ? 60 : priority === "urgent" ? 240 : 1440,
-          ...(Number.isFinite(lat) && Number.isFinite(lng)
-            ? { jobLocation: { lat, lng, latitude: lat, longitude: lng, address: text(property.address, 500), source: "property" } }
-            : {}),
         });
       }
 

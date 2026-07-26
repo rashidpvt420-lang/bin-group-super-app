@@ -24,8 +24,15 @@ const privateHrWriteList = `          'system_secrets',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const legacyLiveLocationWriteList = `          'system_secrets',
+          'technician_live_locations',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
 const liveLocationWriteList = `          'system_secrets',
           'technician_live_locations',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
@@ -118,6 +125,8 @@ if (!text.includes(liveLocationReadCatchAll)) {
 // must always exclude canonical live locations from generic browser writes.
 if (text.includes(liveLocationWriteList)) {
   // Already canonical.
+} else if (text.includes(legacyLiveLocationWriteList)) {
+  text = text.replaceAll(legacyLiveLocationWriteList, liveLocationWriteList);
 } else if (text.includes(privateHrWriteList)) {
   text = text.replaceAll(privateHrWriteList, liveLocationWriteList);
 } else if (text.includes(adminSecurityWriteList)) {
@@ -215,6 +224,7 @@ const forbidden = [
   legacyReadCatchAll.trim(),
   legacyWriteList,
   privateHrWriteList,
+  legacyLiveLocationWriteList,
 ];
 
 for (const fragment of forbidden) {

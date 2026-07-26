@@ -96,8 +96,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [locationError, setLocationError] = useState<string | null>(null);
     const [locating, setLocating] = useState(false);
     const [resolvingAddress, setResolvingAddress] = useState(false);
-    const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
-    const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
+    const [manualLat, setManualLat] = useState(String(activeProperty?.submittedGeo?.lat || activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
+    const [manualLng, setManualLng] = useState(String(activeProperty?.submittedGeo?.lng || activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
     const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
 
@@ -109,7 +109,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
     useEffect(() => {
         if (!activeProperty?.emirate) updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
-        if (!activeProperty?.location?.lat && !activeProperty?.geo?.lat) {
+        if (!activeProperty?.submittedGeo?.lat && !activeProperty?.location?.lat && !activeProperty?.geo?.lat) {
             setManualLat(String(fallbackEmirate.lat));
             setManualLng(String(fallbackEmirate.lng));
         }
@@ -187,9 +187,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area: resolvedArea,
                 placeId: payload.placeId || 'MANUAL',
                 source,
-                verified: payload.verified ?? !isManual,
-                requiresGeoReview: payload.requiresGeoReview ?? isManual,
-                dispatchReady: payload.dispatchReady ?? !isManual,
+                verified: false,
+                requiresGeoReview: true,
+                dispatchReady: false,
                 accuracyMeters: payload.accuracyMeters,
                 capturedAt: payload.capturedAt,
             });
@@ -199,7 +199,17 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 city: geo.city,
                 area: geo.area,
                 googlePlaceId: geo.placeId || 'MANUAL',
-                geo: geo as any,
+                geo: undefined,
+                submittedGeo: {
+                    ...geo,
+                    source: 'owner_submission',
+                    submittedSource: source,
+                    verified: false,
+                    verifiedBy: null,
+                    verifiedAt: null,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
+                } as any,
                 location: {
                     ...(activeProperty?.location || {}),
                     lat: geo.lat,
@@ -210,11 +220,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     emirate: geo.emirate,
                     googleMapsUrl: googleMapsUrlField || directGoogleMapsInput,
                     plusCode: plusCodeField,
-                    quality: geo.verified ? 'VERIFIED_EXACT_GPS' : 'REVIEW_REQUIRED',
-                    source: geo.source,
-                    verified: geo.verified,
-                    dispatchReady: geo.dispatchReady,
-                    requiresGeoReview: geo.requiresGeoReview,
+                    quality: 'OWNER_SUBMITTED_REVIEW_REQUIRED',
+                    source: 'owner_submission',
+                    submittedSource: source,
+                    verified: false,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
                     accuracyMeters: geo.accuracyMeters,
                     capturedAt: geo.capturedAt,
                     updatedAt: new Date().toISOString(),

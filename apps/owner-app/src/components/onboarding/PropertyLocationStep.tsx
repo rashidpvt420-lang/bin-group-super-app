@@ -93,9 +93,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 area: resolvedArea,
                 placeId: payload.placeId || activeProperty?.googlePlaceId || (isManual ? 'MANUAL' : undefined),
                 source: payload.source || (isManual ? 'admin_manual' : 'google_maps'),
-                verified: payload.verified ?? !isManual,
-                requiresGeoReview: isManual ? true : Boolean(payload.requiresGeoReview),
-                dispatchReady: isManual ? false : payload.dispatchReady ?? true
+                verified: false,
+                requiresGeoReview: true,
+                dispatchReady: false
             });
 
             updateProperty(0, {
@@ -104,8 +104,27 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 city: geo.city,
                 area: geo.area,
                 googlePlaceId: geo.placeId || undefined,
-                geo: geo as any,
-                location: { lat: geo.lat, lng: geo.lng }
+                geo: undefined,
+                submittedGeo: {
+                    ...geo,
+                    source: 'owner_submission',
+                    submittedSource: geo.source,
+                    verified: false,
+                    verifiedBy: null,
+                    verifiedAt: null,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
+                } as any,
+                location: {
+                    lat: geo.lat,
+                    lng: geo.lng,
+                    quality: 'OWNER_SUBMITTED_REVIEW_REQUIRED',
+                    source: 'owner_submission',
+                    submittedSource: geo.source,
+                    verified: false,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
+                }
             });
             setManualLat(String(geo.lat));
             setManualLng(String(geo.lng));
@@ -231,7 +250,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         onNext();
     };
 
-    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.geo && !isManualMode) || (isManualMode && activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)));
+    const canProceed = (activeProperty?.address && activeProperty?.emirate && activeProperty?.submittedGeo && !isManualMode) || (isManualMode && activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)));
 
     return (
         <Box sx={{ py: 4 }}>

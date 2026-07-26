@@ -452,11 +452,70 @@ service cloud.firestore {
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
 
+    function submittedPropertyGeoIsUnverified(data) {
+      return !('submittedGeo' in data) || (
+        data.submittedGeo is map &&
+        data.submittedGeo.get('lat', null) is number &&
+        data.submittedGeo.get('lng', null) is number &&
+        data.submittedGeo.get('lat', 0) >= -90 &&
+        data.submittedGeo.get('lat', 0) <= 90 &&
+        data.submittedGeo.get('lng', 0) >= -180 &&
+        data.submittedGeo.get('lng', 0) <= 180 &&
+        !(data.submittedGeo.get('lat', 0) == 0 && data.submittedGeo.get('lng', 0) == 0) &&
+        data.submittedGeo.get('source', '') == 'owner_submission' &&
+        data.submittedGeo.get('verified', false) == false &&
+        data.submittedGeo.get('dispatchReady', false) == false &&
+        data.submittedGeo.get('requiresGeoReview', true) == true &&
+        data.submittedGeo.get('verifiedBy', null) == null &&
+        data.submittedGeo.get('verifiedAt', null) == null
+      );
+    }
+
+    function propertyCreateHasNoCanonicalGeo(data) {
+      return !data.keys().hasAny([
+        'geo',
+        'geoAnchor',
+        'verifiedGeo',
+        'geoVerification',
+        'verified',
+        'verifiedBy',
+        'verifiedAt',
+        'dispatchReady',
+        'requiresGeoReview',
+        'geoReviewStatus',
+        'geoVerifiedAt',
+        'geoVerifiedBy'
+      ]) && submittedPropertyGeoIsUnverified(data);
+    }
+
+    function canonicalPropertyGeoUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'geo',
+        'geoAnchor',
+        'verifiedGeo',
+        'geoVerification',
+        'verified',
+        'verifiedBy',
+        'verifiedAt',
+        'dispatchReady',
+        'requiresGeoReview',
+        'geoReviewStatus',
+        'geoVerifiedAt',
+        'geoVerifiedBy'
+      ]);
+    }
+
+    function safeManagedPropertyUpdate() {
+      return canonicalPropertyGeoUnchanged() &&
+        submittedPropertyGeoIsUnverified(request.resource.data);
+    }
+
     function safeOwnerPropertyUpdate() {
       return signedIn() &&
         owns(resource.data) &&
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
+        safeManagedPropertyUpdate() &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status',
           'activationStatus',
@@ -1034,8 +1093,13 @@ service cloud.firestore {
     match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
       allow read: if isNotSuspended() && (canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
-      allow create: if isNotSuspended() && (canManageProperties() || ownerDraftCreate(request.resource.data));
-      allow update: if isNotSuspended() && (canManageProperties() || safeOwnerPropertyUpdate());
+      allow create: if isNotSuspended() &&
+        propertyCreateHasNoCanonicalGeo(request.resource.data) &&
+        (canManageProperties() || ownerDraftCreate(request.resource.data));
+      allow update: if isNotSuspended() && (
+        (canManageProperties() && safeManagedPropertyUpdate()) ||
+        safeOwnerPropertyUpdate()
+      );
       allow delete: if isNotSuspended() && isAdmin();
     }
 
@@ -1937,6 +2001,7 @@ service cloud.firestore {
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
@@ -1966,6 +2031,7 @@ service cloud.firestore {
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
+          'properties',
           'users',
           'audit_logs',
           'admin_security_sessions',
