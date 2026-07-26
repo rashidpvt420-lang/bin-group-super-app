@@ -228,3 +228,29 @@ test('GPS startup failures reject after reporting so callers cannot claim LIVE t
   assert.match(liveTrackingSource, /STOP_RECONCILIATION_TERMINAL/);
   assert.doesNotMatch(liveTrackingSource, /onError\?\.\(message\);\s*return;\s*}\s*\n\s*_state\.activeTicketId/s);
 });
+
+
+test('browser queue defaults keep coordinates in memory and scope STOP persistence by Technician UID', () => {
+  const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
+  assert.match(queueSource, /update: scopedStorage\(memoryStorage, technicianUid\)/);
+  assert.match(queueSource, /stop: scopedStorage\(safeStorage\('localStorage'\), technicianUid\)/);
+  assert.match(queueSource, /scopedKey\(key, uid\)/);
+  assert.match(queueSource, /map\(\(\{ point: _discardedPoint, \.\.\.entry \}\) => entry\)/);
+  assert.match(queueSource, /discardAllQueuedUpdates/);
+  assert.doesNotMatch(queueSource, /update: safeStorage\('sessionStorage'\)/);
+});
+
+test('freshness ticks update marker membership without resetting the Admin viewport', () => {
+  const mapSource = readFileSync('apps/admin-panel/src/pages/map/LiveMapPage.tsx', 'utf8');
+  assert.match(mapSource, /technicianMarkerRefs = useRef<Map<string, any>>/);
+  assert.match(mapSource, /ticketMarkerRefs = useRef<Map<string, any>>/);
+  assert.match(mapSource, /if \(!viewportInitializedRef\.current && initialPointCount > 0\)/);
+  assert.match(mapSource, /existing\.setPosition/);
+  assert.match(mapSource, /marker\.setMap\(null\)/);
+  assert.doesNotMatch(mapSource, /markerRefs\.current\.forEach/);
+});
+
+test('new ticket startup discards stale UPDATE coordinates before STOP reconciliation', () => {
+  assert.match(liveTrackingSource, /discardAllQueuedUpdates\(technicianUid\)/);
+  assert.match(liveTrackingSource, /readGpsRetryQueue\(browserGpsQueueStorage\(technicianUid\)\)/);
+});
