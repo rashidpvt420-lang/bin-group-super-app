@@ -38,6 +38,6 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add scripts/run-broker-production-evidence.mjs .github/workflows/firebase-production-deploy.yml .github/workflows/live-role-smoke.yml tests/launch/broker-otp-hmac-evidence.test.mjs tests/launch/broker-payout-otp-live-evidence.test.mjs tests/launch/broker-mailbox-workflow-bindings.test.mjs
-          git diff --cached --check
+          git diff --cached --quiet && { echo '::error::Mailbox patch produced no changes.'; exit 1; }
           git commit -m "test(broker): verify OTP through the real mailbox"
           git push origin HEAD:fix/broker-otp-hmac-real-input
