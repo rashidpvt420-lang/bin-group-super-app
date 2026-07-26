@@ -23,8 +23,10 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = '8ec73c7e8732508a3de8bda6daf45cacf01a1e98'
+          python .github/scripts/prepare-property-geo-appcheck-marker.py
           python .github/scripts/apply-property-geo-server-authority-final.py 2>&1 | tee /tmp/property-geo-patch.log
           rm -f \
+            .github/scripts/prepare-property-geo-appcheck-marker.py \
             .github/scripts/apply-property-geo-server-authority-final.py \
             .github/workflows/apply-property-geo-server-authority-final.yml
           git config user.name 'github-actions[bot]'
