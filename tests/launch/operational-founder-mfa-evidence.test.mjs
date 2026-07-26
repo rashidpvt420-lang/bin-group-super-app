@@ -46,7 +46,10 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
   const requests = [];
   const idToken = jwt({
     user_id: fixture.uid,
-    firebase: { sign_in_second_factor: fixture.enrollmentId },
+    firebase: {
+      sign_in_second_factor: 'totp',
+      second_factor_identifier: fixture.enrollmentId,
+    },
   });
   const fetchImpl = async (url, options) => {
     requests.push({ url: String(url), body: JSON.parse(String(options.body || '{}')) });
@@ -69,7 +72,8 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
   });
 
   assert.equal(result.uid, fixture.uid);
-  assert.equal(result.secondFactor, fixture.enrollmentId);
+  assert.equal(result.secondFactorType, 'totp');
+  assert.equal(result.secondFactorIdentifier, fixture.enrollmentId);
   assert.equal(result.idToken, idToken);
   assert.equal(requests.length, 2);
   assert.equal(requests[0].body.email, 'ceo@bin-groups.com');
@@ -78,7 +82,7 @@ test('canonical Founder operational evidence completes a real Firebase TOTP chal
   assert.match(requests[1].body.totpVerificationInfo.verificationCode, /^\d{6}$/);
 });
 
-test('Founder MFA helper refuses a direct token without a verified second factor', async () => {
+test('Founder MFA helper refuses a direct token without a verified TOTP factor', async () => {
   const fixture = generatedFixtures();
   const directToken = jwt({ user_id: fixture.uid, firebase: {} });
   await assert.rejects(
@@ -89,7 +93,37 @@ test('Founder MFA helper refuses a direct token without a verified second factor
       totpSecret: fixture.totpSecret,
       fetchImpl: async () => response({ idToken: directToken }),
     }),
-    /verified second-factor session/,
+    /verified TOTP second-factor session/,
+  );
+});
+
+test('Founder MFA helper rejects a mismatched TOTP factor identifier', async () => {
+  const fixture = generatedFixtures();
+  const idToken = jwt({
+    user_id: fixture.uid,
+    firebase: {
+      sign_in_second_factor: 'totp',
+      second_factor_identifier: `other-${fixture.enrollmentId}`,
+    },
+  });
+  const fetchImpl = async (url) => {
+    if (String(url).includes('accounts:signInWithPassword')) {
+      return response({
+        mfaPendingCredential: fixture.pendingCredential,
+        mfaInfo: [{ mfaEnrollmentId: fixture.enrollmentId, totpInfo: {} }],
+      });
+    }
+    return response({ idToken });
+  };
+  await assert.rejects(
+    signInWithRequiredTotpMfa({
+      apiKey: fixture.apiKey,
+      email: 'ceo@bin-groups.com',
+      password: fixture.password,
+      totpSecret: fixture.totpSecret,
+      fetchImpl,
+    }),
+    /factor identifier does not match/,
   );
 });
 
@@ -136,10 +170,11 @@ test('Founder password and TOTP are scoped only to the protected replay-verifier
   assert.match(workflow, /production_deploy_run_id/);
 });
 
-test('operational payment and commission replays are bound to the verified second factor', () => {
+test('operational payment and commission replays are bound to the verified TOTP identifier', () => {
   assert.match(verifier, /signInWithRequiredTotpMfa/);
   assert.match(verifier, /email !== 'ceo@bin-groups\.com'/);
-  assert.match(verifier, /secondFactorHash:\s*sha256\(auth\.secondFactor\)/);
+  assert.match(paginatedRunner, /secondFactorIdentifier: founderAuth\.secondFactorIdentifier/);
+  assert.match(paginatedRunner, /secondFactorHash: sha256\(auth\.secondFactorIdentifier\)/);
   assert.doesNotMatch(verifier, /E2E_ADMIN_EMAIL\)\.toLowerCase\(\)/);
 });
 
