@@ -26,10 +26,17 @@ for (const envPath of possibleConfigPaths) {
 
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
+const strictProtectedBusiness = strictRoles && process.env.GITHUB_ACTIONS === 'true';
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
   ...roles.flatMap((role) => [`E2E_${role}_EMAIL`, `E2E_${role}_PASSWORD`]),
+  ...(strictProtectedBusiness ? [
+    'E2E_ADMIN_REAL_MFA_CODE',
+    'E2E_BROKER_GMAIL_CLIENT_ID',
+    'E2E_BROKER_GMAIL_CLIENT_SECRET',
+    'E2E_BROKER_GMAIL_REFRESH_TOKEN',
+  ] : []),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
@@ -45,6 +52,7 @@ const PLACEHOLDER_PATTERNS = [
 ];
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MFA_CODE_RE = /^\d{6}$/;
 
 function maskToken(token) {
   if (!token || token.length < 12) return '(invalid)';
@@ -80,6 +88,9 @@ console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL ||
 for (const role of roles) {
   console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[`E2E_${role}_EMAIL`] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
 }
+if (strictProtectedBusiness) {
+  console.log(`[E2E_ENV_GUARD] protected_broker_settlement: admin_mfa=${process.env.E2E_ADMIN_REAL_MFA_CODE ? 'set' : 'missing'} mailbox=${process.env.E2E_BROKER_GMAIL_REFRESH_TOKEN ? 'set' : 'missing'}`);
+}
 
 const appCheckMissing = validateAppCheckToken();
 const allMissing = [...missing, ...appCheckMissing];
@@ -92,6 +103,21 @@ if ((techBEmail && !techBPassword) || (!techBEmail && techBPassword)) {
 }
 if (techBEmail) {
   console.log('[E2E_ENV_GUARD] TECHNICIAN_B: email=set credential=set (optional walkthrough only)');
+}
+
+if (strictProtectedBusiness) {
+  const mfaCode = String(process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
+  if (mfaCode && !MFA_CODE_RE.test(mfaCode)) {
+    console.error('[E2E_ENV_GUARD] E2E_ADMIN_REAL_MFA_CODE must be a six-digit protected value.');
+    process.exit(1);
+  }
+  for (const key of ['E2E_BROKER_GMAIL_CLIENT_ID', 'E2E_BROKER_GMAIL_CLIENT_SECRET', 'E2E_BROKER_GMAIL_REFRESH_TOKEN']) {
+    const current = String(process.env[key] || '').trim();
+    if (current && PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(current))) {
+      console.error(`[E2E_ENV_GUARD] ${key} must not contain a placeholder value.`);
+      process.exit(1);
+    }
+  }
 }
 
 if (process.env.E2E_STRICT_LIVE === 'true') {
