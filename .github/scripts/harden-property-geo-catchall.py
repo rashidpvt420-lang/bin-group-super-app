@@ -58,12 +58,60 @@ if count != 1:
 hardening = hardening.replace(old_forbidden, new_forbidden, 1)
 hardening_path.write_text(hardening, encoding='utf-8')
 
+private_hr_path = Path('scripts/harden-private-hr-authority.mjs')
+private_hr = private_hr_path.read_text(encoding='utf-8')
+old_private_hr_constant = """const liveLocationWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+"""
+new_private_hr_constants = """const liveLocationWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const propertyGeoWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+"""
+count = private_hr.count(old_private_hr_constant)
+if count != 1:
+    raise SystemExit(f'private HR property-geo constant: expected one marker, found {count}')
+private_hr = private_hr.replace(old_private_hr_constant, new_private_hr_constants, 1)
+
+old_private_hr_router = """let canonicalWritePrefix = hardenedWritePrefix;
+if (source.includes(liveLocationWritePrefix)) {
+  canonicalWritePrefix = liveLocationWritePrefix;
+} else if (source.includes(hardenedWritePrefix)) {
+"""
+new_private_hr_router = """let canonicalWritePrefix = hardenedWritePrefix;
+if (source.includes(propertyGeoWritePrefix)) {
+  canonicalWritePrefix = propertyGeoWritePrefix;
+} else if (source.includes(liveLocationWritePrefix)) {
+  source = source.replaceAll(liveLocationWritePrefix, propertyGeoWritePrefix);
+  canonicalWritePrefix = propertyGeoWritePrefix;
+} else if (source.includes(hardenedWritePrefix)) {
+"""
+count = private_hr.count(old_private_hr_router)
+if count != 1:
+    raise SystemExit(f'private HR property-geo router: expected one marker, found {count}')
+private_hr = private_hr.replace(old_private_hr_router, new_private_hr_router, 1)
+private_hr_path.write_text(private_hr, encoding='utf-8')
+
 Path('tests/launch/property-geo-catchall-authority.test.mjs').write_text("""import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 const hardening = await read('scripts/harden-final-firestore-authority.mjs');
+const privateHrHardening = await read('scripts/harden-private-hr-authority.mjs');
 const rulesTest = await read('test/property-geo-authority-rules.test.js');
 const listStart = hardening.indexOf('const liveLocationWriteList');
 const listEnd = hardening.indexOf('`;', listStart);
@@ -84,6 +132,12 @@ test('canonical generator migrates the previous live-location write list', () =>
   assert.match(hardening, /const legacyLiveLocationWriteList/);
   assert.match(hardening, /text\.replaceAll\(legacyLiveLocationWriteList, liveLocationWriteList\)/);
   assert.match(hardening, /forbidden = \[[\s\S]*legacyLiveLocationWriteList/);
+});
+
+test('private HR hardener preserves the stricter property geo exclusion', () => {
+  assert.match(privateHrHardening, /const propertyGeoWritePrefix/);
+  assert.match(privateHrHardening, /source\.replaceAll\(liveLocationWritePrefix, propertyGeoWritePrefix\)/);
+  assert.match(privateHrHardening, /canonicalWritePrefix = propertyGeoWritePrefix/);
 });
 
 test('property authority emulator regression names browser denial', () => {
