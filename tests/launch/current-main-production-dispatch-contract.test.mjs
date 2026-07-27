@@ -61,6 +61,13 @@ test('dispatcher keeps incident, rollback and public-mode validation fail closed
   assert.match(source, /Bank-pilot mode requires all public-only evidence fields to remain blank/);
 });
 
+test('dispatcher slurps deployment payload JSON instead of parsing one raw line at a time', async () => {
+  const source = await read(workflowPath);
+
+  assert.equal((source.match(/printf '%s' "\$DEPLOYMENT_PAYLOAD_JSON" \| jq -Rsce/g) || []).length, 2);
+  assert.doesNotMatch(source, /jq -Rce '\n\s+def decode_payload:/);
+});
+
 test('dispatcher remains GitHub-only and never implements Firebase deployment', async () => {
   const source = await read(workflowPath);
 
