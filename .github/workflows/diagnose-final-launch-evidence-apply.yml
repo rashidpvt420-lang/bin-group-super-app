@@ -26,6 +26,17 @@ jobs:
         with:
           ref: agent/finalize-launch-evidence-sequence
           fetch-depth: 0
+      - name: Extract embedded runtime patcher
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { gunzipSync } from 'node:zlib';
+          const wrapper = readFileSync('scripts/apply-final-launch-evidence-corrections.mjs', 'utf8');
+          const match = wrapper.match(/const payload = '([^']+)'/);
+          if (!match) throw new Error('Compressed launch evidence payload is missing.');
+          writeFileSync('/tmp/final-launch-evidence-runtime.mjs', gunzipSync(Buffer.from(match[1], 'base64')));
+          NODE
       - name: Capture patcher result
         shell: bash
         run: |
@@ -51,6 +62,7 @@ jobs:
         with:
           name: final-launch-evidence-apply-${{ github.sha }}
           path: |
+            /tmp/final-launch-evidence-runtime.mjs
             /tmp/final-launch-evidence-apply.log
             /tmp/final-launch-evidence-apply.status
           if-no-files-found: error
