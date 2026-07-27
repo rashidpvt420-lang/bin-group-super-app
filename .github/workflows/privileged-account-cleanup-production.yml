@@ -74,12 +74,12 @@ jobs:
           fi
 
       - name: Checkout exact main commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload cleanup evidence
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: privileged-account-cleanup-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: launch_package/privileged-account-cleanup.json

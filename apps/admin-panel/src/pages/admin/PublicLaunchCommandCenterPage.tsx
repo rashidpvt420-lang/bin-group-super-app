@@ -199,7 +199,7 @@ export default function PublicLaunchCommandCenterPage() {
   const decision = blockedCount > 0
     ? 'PUBLIC LAUNCH BLOCKED'
     : pendingRequired === 0
-      ? 'MANUAL EVIDENCE COMPLETE'
+      ? 'PUBLIC READY'
       : 'EVIDENCE REQUIRED';
 
   const groupSummary = React.useMemo(() => {
@@ -288,12 +288,12 @@ export default function PublicLaunchCommandCenterPage() {
             This page now reads launch_evidence live from Firestore and calculates readiness from the latest evidence for every Owner, Tenant, Technician, Broker, Admin, provider, device, and business gate.
           </Typography>
         </Box>
-        <Chip icon={<Rocket size={16} />} label={decision} sx={{ bgcolor: decision === 'MANUAL EVIDENCE COMPLETE' ? alpha('#22c55e', .16) : decision.includes('BLOCKED') ? alpha('#ef4444', .16) : alpha('#f59e0b', .16), color: decision === 'MANUAL EVIDENCE COMPLETE' ? '#22c55e' : decision.includes('BLOCKED') ? '#ef4444' : '#f59e0b', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
+        <Chip icon={<Rocket size={16} />} label={decision} sx={{ bgcolor: decision === 'PUBLIC READY' ? alpha('#22c55e', .16) : decision.includes('BLOCKED') ? alpha('#ef4444', .16) : alpha('#f59e0b', .16), color: decision === 'PUBLIC READY' ? '#22c55e' : decision.includes('BLOCKED') ? '#ef4444' : '#f59e0b', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
       </Stack>
 
-      <Alert severity={decision === 'MANUAL EVIDENCE COMPLETE' ? 'warning' : blockedCount > 0 ? 'error' : 'warning'} sx={{ mb: 3, borderRadius: 3 }}>
-        {decision === 'MANUAL EVIDENCE COMPLETE'
-          ? 'All manual launch gates have passed or were formally waived with evidence. This is not hard public-launch clearance; final GO still requires the protected exact-SHA deployment, live evidence chain, pilot clearance, and HMAC-bound launch decision.'
+      <Alert severity={decision === 'PUBLIC READY' ? 'success' : blockedCount > 0 ? 'error' : 'warning'} sx={{ mb: 3, borderRadius: 3 }}>
+        {decision === 'PUBLIC READY'
+          ? 'All required launch gates have passed or were formally waived with evidence.'
           : 'Full public launch requires passed evidence for all required gates. Founder-attested smoke testing is useful, but each gate still needs proof recorded here.'}
       </Alert>
 
@@ -465,7 +465,7 @@ export default function PublicLaunchCommandCenterPage() {
               <TextField label="Notes" multiline minRows={4} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What passed, what failed, exact action tested, next fix if any." />
               <Button onClick={saveProof} disabled={busy} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Saving...' : 'Save proof record'}</Button>
               <Divider sx={{ borderColor: 'rgba(255,255,255,.08)' }} />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Manual readiness is calculated from Firestore evidence records. These records help pilot operations, but they do not authorize hard public launch; only the protected exact-SHA evidence workflow and signed HMAC decision gate can do that.</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Readiness is now calculated from live Firestore evidence. Latest record per gate controls the launch decision. A blocked record blocks public launch until a newer passed/waived proof is saved.</Typography>
             </Stack>
           </Paper>
         </Grid>

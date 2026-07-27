@@ -90,13 +90,6 @@ export default function ContractSignatureOtpControl({
 
   return (
     <Stack spacing={1.5} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography
-        data-testid="owner-contract-signature-reference"
-        variant="caption"
-        sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 800 }}
-      >
-        {contractId}
-      </Typography>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>
         {copy(
           'Verify the signature through the OTP sent to your authenticated email. The contract cannot be signed without this server evidence.',
@@ -105,7 +98,6 @@ export default function ContractSignatureOtpControl({
       </Typography>
       <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
         <Button
-          data-testid="owner-contract-signature-otp-request"
           variant="outlined"
           disabled={busy || !contractId || !contractHash || !signatureName.trim()}
           onClick={requestOtp}
@@ -114,18 +106,16 @@ export default function ContractSignatureOtpControl({
           {copy(requestId ? 'RESEND OTP' : 'SEND CONTRACT OTP', requestId ? 'إعادة إرسال الرمز' : 'إرسال رمز العقد')}
         </Button>
         {requestId && (
-          <Stack data-testid="owner-contract-signature-otp-challenge" data-correlation-id={requestId} direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+          <>
             <TextField
-              data-testid="owner-contract-signature-otp-field"
               value={otp}
               onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
               label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')}
-              inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code', 'data-testid': 'owner-contract-signature-otp-code' }}
+              inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code' }}
               InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }}
               InputProps={{ style: { color: '#fff' } }}
             />
             <Button
-              data-testid="owner-contract-signature-otp-submit"
               variant="contained"
               disabled={busy || otp.length !== 6 || verified}
               onClick={verifyOtp}
@@ -133,7 +123,7 @@ export default function ContractSignatureOtpControl({
             >
               {verified ? copy('OTP VERIFIED', 'تم التحقق') : copy('VERIFY OTP', 'تحقق من الرمز')}
             </Button>
-          </Stack>
+          </>
         )}
       </Stack>
       {requestId && (
