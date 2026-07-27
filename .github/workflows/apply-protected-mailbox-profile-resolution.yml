@@ -1,0 +1,244 @@
+name: Apply Protected Mailbox Profile Resolution
+
+on:
+  push:
+    branches:
+      - fix/resolve-protected-mailbox-identities
+    paths:
+      - .github/workflows/apply-protected-mailbox-profile-resolution.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: protected-mailbox-profile-resolution
+  cancel-in-progress: true
+
+jobs:
+  patch-test-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/resolve-protected-mailbox-identities
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Apply mailbox-profile resolution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > scripts/resolve-production-mailbox-identities.mjs <<'EOF'
+          import { appendFileSync } from 'node:fs';
+          import { exchangeGmailAccessToken } from './lib/gmail-otp-reader.mjs';
+
+          const text = (value) => String(value ?? '').trim();
+          const lower = (value) => text(value).toLowerCase();
+          const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+          async function readMailboxProfile({ accessToken, label, fetchImpl = globalThis.fetch }) {
+            if (typeof fetchImpl !== 'function') throw new Error(`${label} requires a fetch implementation.`);
+            const response = await fetchImpl('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            let body = {};
+            try { body = await response.json(); } catch { body = {}; }
+            if (!response.ok) throw new Error(`${label} profile verification failed with HTTP ${response.status}.`);
+            const mailboxEmail = lower(body.emailAddress);
+            if (!emailPattern.test(mailboxEmail)) throw new Error(`${label} profile returned no valid mailbox email.`);
+            return mailboxEmail;
+          }
+
+          async function resolveMailbox({ role, prefix, env = process.env }) {
+            const label = `${role} Gmail mailbox`;
+            const accessToken = await exchangeGmailAccessToken({
+              clientId: env[`${prefix}_MAILBOX_CLIENT_ID`],
+              clientSecret: env[`${prefix}_MAILBOX_CLIENT_SECRET`],
+              refreshToken: env[`${prefix}_MAILBOX_REFRESH_TOKEN`],
+              label,
+            });
+            const mailboxEmail = await readMailboxProfile({ accessToken, label });
+            const configuredEmail = lower(env[`${prefix}_MAILBOX_EMAIL_CONFIGURED`]);
+            if (configuredEmail && configuredEmail !== mailboxEmail) {
+              throw new Error(`${label} OAuth identity does not match the configured mailbox.`);
+            }
+            return mailboxEmail;
+          }
+
+          export async function resolveProductionMailboxIdentities(env = process.env) {
+            const githubEnv = text(env.GITHUB_ENV);
+            if (!githubEnv) throw new Error('GITHUB_ENV is required to publish resolved mailbox identities.');
+            const [ownerEmail, brokerEmail] = await Promise.all([
+              resolveMailbox({ role: 'Owner', prefix: 'E2E_OWNER', env }),
+              resolveMailbox({ role: 'Broker', prefix: 'E2E_BROKER', env }),
+            ]);
+            for (const mailboxEmail of [ownerEmail, brokerEmail]) console.log(`::add-mask::${mailboxEmail}`);
+            appendFileSync(githubEnv, `E2E_OWNER_MAILBOX_EMAIL=${ownerEmail}\nE2E_BROKER_MAILBOX_EMAIL=${brokerEmail}\n`, 'utf8');
+            console.log('Resolved protected Owner and Broker Gmail mailbox identities from authenticated profiles.');
+            return { ownerEmail, brokerEmail };
+          }
+
+          if (process.argv[1] && new URL(import.meta.url).pathname === new URL(`file://${process.argv[1]}`).pathname) {
+            await resolveProductionMailboxIdentities();
+          }
+          EOF
+
+          python - <<'PY'
+          from pathlib import Path
+
+          resolver_step = """      - name: Resolve protected Gmail mailbox identities
+                  env:
+                    E2E_OWNER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+                    E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+                    E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+                    E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+                    E2E_BROKER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+                    E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+                    E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+                    E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+                  run: node scripts/resolve-production-mailbox-identities.mjs
+
+          """
+          resolver_step = resolver_step.replace('              env:', '        env:').replace('                E2E_', '          E2E_').replace('              run:', '        run:')
+
+          def insert_once(source, marker, replacement, label):
+              count = source.count(marker)
+              if count != 1:
+                  raise SystemExit(f'{label} marker count: {count}')
+              return source.replace(marker, replacement, 1)
+
+          def remove_step_email_overrides(source):
+              lines = []
+              removed = 0
+              for line in source.splitlines(True):
+                  stripped = line.lstrip(' ')
+                  indent = len(line) - len(stripped)
+                  if indent >= 10 and (stripped.startswith('E2E_OWNER_MAILBOX_EMAIL:') or stripped.startswith('E2E_BROKER_MAILBOX_EMAIL:')):
+                      removed += 1
+                      continue
+                  lines.append(line)
+              if removed < 2:
+                  raise SystemExit(f'expected step mailbox overrides, removed={removed}')
+              return ''.join(lines)
+
+          firebase = Path('.github/workflows/firebase-production-deploy.yml')
+          source = firebase.read_text(encoding='utf-8')
+          source = insert_once(
+              source,
+              '      - name: Verify named production values\n',
+              resolver_step + '      - name: Verify named production values\n',
+              'firebase deploy resolver',
+          )
+          public_marker = '  public-release-clearance:\n'
+          head, tail = source.split(public_marker, 1)
+          tail = insert_once(
+              tail,
+              '      - name: Install dependencies with retry\n',
+              resolver_step + '      - name: Install dependencies with retry\n',
+              'firebase public resolver',
+          )
+          source = remove_step_email_overrides(head + public_marker + tail)
+          firebase.write_text(source, encoding='utf-8')
+
+          live = Path('.github/workflows/live-role-smoke.yml')
+          source = live.read_text(encoding='utf-8')
+          source = insert_once(
+              source,
+              '      - name: Validate role credentials and App Check\n',
+              resolver_step + '      - name: Validate role credentials and App Check\n',
+              'live-role resolver',
+          )
+          live.write_text(remove_step_email_overrides(source), encoding='utf-8')
+
+          admin = Path('.github/workflows/admin-production-evidence.yml')
+          source = admin.read_text(encoding='utf-8')
+          source = insert_once(
+              source,
+              '      - name: Validate protected credentials and App Check\n',
+              resolver_step + '      - name: Validate protected credentials and App Check\n',
+              'admin resolver',
+          )
+          admin.write_text(remove_step_email_overrides(source), encoding='utf-8')
+          PY
+
+          cat > tests/launch/production-mailbox-profile-resolution.test.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import test from 'node:test';
+
+          const resolver = readFileSync('scripts/resolve-production-mailbox-identities.mjs', 'utf8');
+          const workflows = [
+            '.github/workflows/firebase-production-deploy.yml',
+            '.github/workflows/live-role-smoke.yml',
+            '.github/workflows/admin-production-evidence.yml',
+          ];
+
+          test('mailbox identities are derived from authenticated Gmail profiles', () => {
+            assert.match(resolver, /users\/me\/profile/);
+            assert.match(resolver, /exchangeGmailAccessToken/);
+            assert.match(resolver, /MAILBOX_EMAIL_CONFIGURED/);
+            assert.match(resolver, /OAuth identity does not match the configured mailbox/);
+            assert.match(resolver, /appendFileSync\(githubEnv/);
+            assert.match(resolver, /::add-mask::/);
+            assert.doesNotMatch(resolver, /console\.log\([^\n]*ownerEmail/);
+            assert.doesNotMatch(resolver, /console\.log\([^\n]*brokerEmail/);
+          });
+
+          test('protected workflows resolve identities before strict environment checks', () => {
+            for (const workflowPath of workflows) {
+              const source = readFileSync(workflowPath, 'utf8');
+              assert.match(source, /Resolve protected Gmail mailbox identities/);
+              assert.match(source, /run: node scripts\/resolve-production-mailbox-identities\.mjs/);
+              assert.match(source, /E2E_OWNER_MAILBOX_EMAIL_CONFIGURED:/);
+              assert.match(source, /E2E_BROKER_MAILBOX_EMAIL_CONFIGURED:/);
+              assert.doesNotMatch(source, /^\s{10,}E2E_OWNER_MAILBOX_EMAIL:/m);
+              assert.doesNotMatch(source, /^\s{10,}E2E_BROKER_MAILBOX_EMAIL:/m);
+            }
+          });
+          EOF
+
+      - name: Validate source and workflow contracts
+        run: |
+          node --check scripts/resolve-production-mailbox-identities.mjs
+          node --test tests/launch/production-mailbox-profile-resolution.test.mjs tests/launch/workflow-mailbox-secret-scope.test.mjs
+          npm run test:launch-honesty
+          npm run typecheck
+
+      - name: Commit permanent mailbox repair and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            .github/workflows/firebase-production-deploy.yml \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/admin-production-evidence.yml \
+            scripts/resolve-production-mailbox-identities.mjs \
+            tests/launch/production-mailbox-profile-resolution.test.mjs
+          git rm .github/workflows/apply-protected-mailbox-profile-resolution.yml
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/admin-production-evidence.yml \
+            .github/workflows/apply-protected-mailbox-profile-resolution.yml \
+            .github/workflows/firebase-production-deploy.yml \
+            .github/workflows/live-role-smoke.yml \
+            scripts/resolve-production-mailbox-identities.mjs \
+            tests/launch/production-mailbox-profile-resolution.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Mailbox repair touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix(launch): derive protected mailbox identities from Gmail profiles'
+          git push origin HEAD:fix/resolve-protected-mailbox-identities
