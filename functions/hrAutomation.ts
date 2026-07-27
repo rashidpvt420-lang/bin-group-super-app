@@ -15,6 +15,7 @@ const serverTimestamp = FieldValue.serverTimestamp;
 
 const HR_RECIPIENT_ROLES = ["admin", "super_admin", "ceo", "manager", "hr_admin", "hr_manager", "hr_staff", "operations_manager"];
 const STAFF_ROLES = ["technician", "hr_staff", "hr_manager", "finance_staff", "account_manager", "finance_admin", "dispatcher", "operations_manager"];
+const TECHNICIAN_NEW_HIRE_ROLE = "technician";
 const EXPIRY_FIELDS = [
     { key: "visaExpiry", label: "Residency Visa" },
     { key: "emiratesIdExpiry", label: "Emirates ID" },
@@ -257,7 +258,9 @@ export const adminSettlePayrollRecord = onCall(
         }
 
         const transactionRef = db.collection("transactions").doc(`payroll_${payrollId}`);
-        const auditRef = db.collection("auditLogs").doc(`payroll_settlement_${payrollId}`);
+        const auditId = `payroll_settlement_${payrollId}`;
+        const auditRef = db.collection("auditLogs").doc(auditId);
+        const auditCompatRef = db.collection("audit_logs").doc(auditId);
         const mailRef = db.collection("mail").doc(`payroll_payslip_${payrollId}`);
         const now = serverTimestamp();
         let idempotent = false;
@@ -294,7 +297,7 @@ export const adminSettlePayrollRecord = onCall(
                 paidBy: request.auth!.uid,
                 updatedAt: now,
             }, { merge: true });
-            transaction.set(auditRef, {
+            const auditPayload = {
                 action: "ADMIN_SETTLE_PAYROLL",
                 actorId: request.auth!.uid,
                 payrollId,
@@ -305,7 +308,9 @@ export const adminSettlePayrollRecord = onCall(
                 paymentReference,
                 payslipUrl: pdfUrl,
                 createdAt: now,
-            });
+            };
+            transaction.set(auditRef, auditPayload);
+            transaction.set(auditCompatRef, auditPayload);
 
             const email = safeText(freshPayroll.email).toLowerCase();
             if (email) {
@@ -346,8 +351,8 @@ async function queueUserNotification(userId: string, title: string, body: string
     });
 }
 
-async function writeHrAudit(action: string, targetId: string, details: Record<string, unknown>) {
-    const payload = {
+function hrAuditPayload(action: string, targetId: string, details: Record<string, unknown>) {
+    return {
         action,
         targetId,
         targetType: "hr",
@@ -358,10 +363,15 @@ async function writeHrAudit(action: string, targetId: string, details: Record<st
         timestamp: serverTimestamp(),
         createdAt: serverTimestamp(),
     };
-    await Promise.allSettled([
-        db.collection("auditLogs").add(payload),
-        db.collection("audit_logs").add(payload),
-    ]);
+}
+
+async function writeHrAudit(action: string, targetId: string, details: Record<string, unknown>) {
+    const auditRef = db.collection("audit_logs").doc();
+    const payload = hrAuditPayload(action, targetId, details);
+    const batch = db.batch();
+    batch.set(auditRef, payload);
+    batch.set(db.collection("auditLogs").doc(auditRef.id), payload);
+    await batch.commit();
 }
 
 export const createStaffHrCase = onCall(
@@ -483,19 +493,10 @@ export const createStaffHrCase = onCall(
 );
 
 function attachHrAuditToBatch(batch: FirebaseFirestore.WriteBatch, action: string, targetId: string, details: Record<string, unknown>) {
-    const payload = {
-        action,
-        targetId,
-        targetType: "hr",
-        actorId: "HR_AUTOMATION",
-        actorName: "BIN People AI",
-        module: "hr_automation",
-        details,
-        timestamp: serverTimestamp(),
-        createdAt: serverTimestamp(),
-    };
-    batch.set(db.collection("auditLogs").doc(), payload);
-    batch.set(db.collection("audit_logs").doc(), payload);
+    const auditRef = db.collection("audit_logs").doc();
+    const payload = hrAuditPayload(action, targetId, details);
+    batch.set(auditRef, payload);
+    batch.set(db.collection("auditLogs").doc(auditRef.id), payload);
 }
 
 function dateFromAny(value: unknown): Date | null {
@@ -534,7 +535,6 @@ function complianceWarnings(data: FirebaseFirestore.DocumentData) {
     return gpssaWarning ? [...expiryWarnings, gpssaWarning] : expiryWarnings;
 }
 
-
 function normalizedKey(value: unknown) {
     return safeText(value).toLowerCase().replace(/[\s-]+/g, "_");
 }
@@ -571,6 +571,24 @@ function currentPayrollPeriod() {
     return new Date().toISOString().slice(0, 7);
 }
 
+async function blockInvalidNewHireRole(requestId: string, requestedRole: string, reviewer: string) {
+    const requestRef = db.collection("staffRequests").doc(requestId);
+    const batch = db.batch();
+    batch.update(requestRef, {
+        provisioningStatus: "blocked_invalid_role",
+        provisioningBlocker: "technician_self_service_only",
+        requestedProvisioningRole: requestedRole || null,
+        provisioningBlockedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    });
+    attachHrAuditToBatch(batch, "HR_NEW_HIRE_PROVISION_BLOCKED", requestId, {
+        reason: "non_technician_role_requires_protected_staff_access",
+        requestedRole: requestedRole || null,
+        reviewedBy: reviewer,
+    });
+    await batch.commit();
+}
+
 async function provisionApprovedNewHire(requestId: string, data: FirebaseFirestore.DocumentData, reviewer: string) {
     const staffUid = safeText(
         data.uid ||
@@ -590,8 +608,14 @@ async function provisionApprovedNewHire(requestId: string, data: FirebaseFiresto
         return;
     }
 
+    const requestedRole = normalizeRole(data.role || data.staffRole || data.position || TECHNICIAN_NEW_HIRE_ROLE) || TECHNICIAN_NEW_HIRE_ROLE;
+    if (requestedRole !== TECHNICIAN_NEW_HIRE_ROLE) {
+        await blockInvalidNewHireRole(requestId, requestedRole, reviewer);
+        return;
+    }
+
     const period = safeText(data.payrollPeriod, currentPayrollPeriod());
-    const role = normalizeRole(data.role || data.staffRole || data.position || "technician") || "technician";
+    const role = TECHNICIAN_NEW_HIRE_ROLE;
     const displayName = safeText(data.displayName || data.fullName || data.name || data.employeeName, "New staff member");
     const email = safeText(data.email || data.workEmail);
     const phone = safeText(data.phone || data.mobile || data.whatsapp);
@@ -637,8 +661,8 @@ async function provisionApprovedNewHire(requestId: string, data: FirebaseFiresto
         fullName: displayName,
         email: email || null,
         phone: phone || null,
-        role: "technician",
-        staffRole: role,
+        role: TECHNICIAN_NEW_HIRE_ROLE,
+        staffRole: TECHNICIAN_NEW_HIRE_ROLE,
         trade,
         skillTags: Array.isArray(data.skillTags) ? data.skillTags : [trade],
         status: "ONBOARDING",
@@ -692,6 +716,7 @@ async function provisionApprovedNewHire(requestId: string, data: FirebaseFiresto
     batch.update(db.collection("staffRequests").doc(requestId), {
         provisionedUid: staffUid,
         provisionedAt: serverTimestamp(),
+        provisioningStatus: "provisioned",
         payrollRecordId,
         updatedAt: serverTimestamp(),
     });
@@ -710,7 +735,7 @@ async function provisionApprovedNewHire(requestId: string, data: FirebaseFiresto
 
     await batch.commit();
 
-    await queueUserNotification(staffUid, "BIN GROUP onboarding activated", "Your staff profile, technician record, device readiness checklist, and payroll setup are now initialized.", {
+    await queueUserNotification(staffUid, "BIN GROUP onboarding activated", "Your Technician profile, device readiness checklist, and payroll setup are now initialized.", {
         type: "hr_new_hire_provisioned",
         requestId,
         payrollRecordId,
