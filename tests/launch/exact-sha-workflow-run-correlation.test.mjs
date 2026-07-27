@@ -99,7 +99,7 @@ test('selector rejects malformed newly observed exact-SHA metadata', () => {
   }), /invalid created_at/);
 });
 
-test('owner launch workflow snapshots paginated baselines and dispatches each protected wrapper once', async () => {
+test('owner launch workflow snapshots and dispatches one exact-SHA privileged review', async () => {
   const [workflow, helper] = await Promise.all([
     readFile(new URL('../../.github/workflows/owner-launch-command.yml', import.meta.url), 'utf8'),
     readFile(new URL('../../scripts/owner-launch-run-correlation.sh', import.meta.url), 'utf8'),
@@ -109,9 +109,7 @@ test('owner launch workflow snapshots paginated baselines and dispatches each pr
   assert.match(workflow, /Use Node\.js 22/);
   assert.match(workflow, /owner_snapshot_workflow_run_ids/);
   assert.match(workflow, /owner_locate_new_exact_sha_workflow_run/);
-  assert.match(workflow, /private-hr-baseline-run-ids\.json/);
-  assert.match(workflow, /bank-pilot-wrapper-baseline-run-ids\.json/);
-  assert.match(workflow, /firebase-production-baseline-run-ids\.json/);
+  assert.match(workflow, /privileged-review-baseline-run-ids\.json/);
   assert.match(workflow, /No duplicate dispatch was attempted/);
   assert.doesNotMatch(workflow, /created_at >= \$started/);
   assert.doesNotMatch(workflow, /\.actor\.login/);
@@ -122,13 +120,18 @@ test('owner launch workflow snapshots paginated baselines and dispatches each pr
   assert.match(helper, /select-new-exact-sha-workflow-run\.mjs/);
 
   assert.equal(
-    (workflow.match(/private-hr-migration-dispatch-current-main\.yml\/dispatches/g) || []).length,
+    (workflow.match(/privileged-account-cleanup-dry-run\.yml\/dispatches/g) || []).length,
     1,
-    'Private-HR wrapper must be dispatched exactly once per owner-command run',
+    'privileged review must be dispatched exactly once per owner-command run',
+  );
+  assert.equal(
+    (workflow.match(/private-hr-migration-dispatch-current-main\.yml\/dispatches/g) || []).length,
+    0,
+    'Private-HR must be left to the protected draft-PR dispatcher',
   );
   assert.equal(
     (workflow.match(/firebase-production-dispatch-current-main\.yml\/dispatches/g) || []).length,
-    1,
-    'bank-pilot wrapper must be dispatched exactly once per owner-command run',
+    0,
+    'production must be left to the protected draft-PR dispatcher',
   );
 });
