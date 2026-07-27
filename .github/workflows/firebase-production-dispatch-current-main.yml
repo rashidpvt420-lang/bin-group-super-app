@@ -78,7 +78,7 @@ jobs:
           if [[ "$LAUNCH_MODE" == "bank-pilot" && -z "${DEPLOYMENT_PAYLOAD_JSON// }" ]]; then
             normalized_payload='{"incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
           else
-            normalized_payload="$(jq -Rce '
+            normalized_payload="$(printf '%s' "$DEPLOYMENT_PAYLOAD_JSON" | jq -Rsce '
               def decode_payload:
                 if length == 0 then {}
                 else
@@ -96,7 +96,7 @@ jobs:
                 stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
                 stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
               }
-            ' <<<"$DEPLOYMENT_PAYLOAD_JSON")" || fail "deployment_payload_json must be valid JSON object."
+            ')" || fail "deployment_payload_json must be valid JSON object."
           fi
           INCIDENT_ACTIVE_JSON="$(jq -r '.incident_active_json' <<<"$normalized_payload")"
           INCIDENT_REQUIRES_ROLLBACK="$(jq -r '.incident_requires_rollback' <<<"$normalized_payload")"
@@ -151,7 +151,7 @@ jobs:
           if [[ "$LAUNCH_MODE" == "bank-pilot" && -z "${DEPLOYMENT_PAYLOAD_JSON// }" ]]; then
             normalized_payload='{"incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
           else
-            normalized_payload="$(jq -Rce '
+            normalized_payload="$(printf '%s' "$DEPLOYMENT_PAYLOAD_JSON" | jq -Rsce '
               def decode_payload:
                 if length == 0 then {}
                 else
@@ -169,7 +169,7 @@ jobs:
                 stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
                 stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
               }
-            ' <<<"$DEPLOYMENT_PAYLOAD_JSON")" || {
+            ')" || {
               echo "::error::deployment_payload_json must be valid JSON object."
               exit 1
             }
