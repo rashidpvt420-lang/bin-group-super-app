@@ -26,19 +26,19 @@ test('generic catch-all excludes properties between live locations and users', (
 
 test('canonical generator migrates the previous live-location write list', () => {
   assert.match(hardening, /const legacyLiveLocationWriteList/);
-  assert.match(hardening, /text\.replaceAll\(legacyLiveLocationWriteList, liveLocationWriteList\)/);
+  assert.match(hardening, /text\.replaceAll\(legacyLiveLocationWriteList, hrServerAuthorityWriteList\)/);
   assert.match(hardening, /forbidden = \[[\s\S]*legacyLiveLocationWriteList/);
 });
 
 test('private HR hardener preserves the stricter property geo exclusion', () => {
   assert.match(privateHrHardening, /const propertyGeoWritePrefix/);
-  assert.match(privateHrHardening, /source\.replaceAll\(liveLocationWritePrefix, propertyGeoWritePrefix\)/);
-  assert.match(privateHrHardening, /canonicalWritePrefix = propertyGeoWritePrefix/);
+  assert.match(privateHrHardening, /source\.replaceAll\(liveLocationWritePrefix, hrServerAuthorityWritePrefix\)/);
+  assert.match(privateHrHardening, /canonicalWritePrefix = hrServerAuthorityWritePrefix/);
 });
 
 test('launch hardening verifier requires property geo exclusion and forbids the old list', () => {
   assert.match(verifier, /canonical property geo omitted from global write fallback exclusions/);
-  assert.match(verifier, /live location, canonical property geo and private HR/);
+  assert.match(verifier, /live location, canonical property geo, HR cases and private HR/);
 });
 
 test('property authority emulator regression names browser denial', () => {
