@@ -51,6 +51,7 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
 ]);
 
 const value = (env, key) => String(env?.[key] || '').trim();
+const normalizeEmail = (entry) => String(entry || '').trim().toLowerCase();
 const hrEnabledByProductionWriter = () =>
   /\[['"]VITE_ENABLE_HR_MODULE['"],\s*['"]true['"]\]/.test(PRODUCTION_ENV_WRITER) &&
   /\[['"]REACT_APP_ENABLE_HR_MODULE['"],\s*['"]true['"]\]/.test(PRODUCTION_ENV_WRITER);
@@ -81,10 +82,17 @@ export function validateProductionWorkflowEnv(env = process.env) {
 
   const founderEmails = value(env, 'AUTHORIZED_FOUNDER_EMAILS')
     .split(',')
-    .map((entry) => entry.trim())
+    .map(normalizeEmail)
     .filter(Boolean);
   if (value(env, 'AUTHORIZED_FOUNDER_EMAILS') && (founderEmails.length === 0 || founderEmails.some((email) => !EMAIL_RE.test(email)))) {
     failures.push('AUTHORIZED_FOUNDER_EMAILS must contain valid comma-separated email addresses');
+  }
+  const productionApprovedBy = normalizeEmail(value(env, 'PRODUCTION_APPROVED_BY'));
+  if (productionApprovedBy && !EMAIL_RE.test(productionApprovedBy)) {
+    failures.push('PRODUCTION_APPROVED_BY must be a valid email address');
+  }
+  if (productionApprovedBy && founderEmails.length > 0 && !founderEmails.includes(productionApprovedBy)) {
+    failures.push('PRODUCTION_APPROVED_BY must be included in AUTHORIZED_FOUNDER_EMAILS');
   }
 
   const namedClientValues = [
@@ -149,6 +157,8 @@ export function validateProductionWorkflowEnv(env = process.env) {
 }
 
 export function productionWorkflowEnvSummary(env = process.env) {
+  const founderEmails = value(env, 'AUTHORIZED_FOUNDER_EMAILS').split(',').map(normalizeEmail).filter(Boolean);
+  const productionApprovedBy = normalizeEmail(value(env, 'PRODUCTION_APPROVED_BY'));
   return {
     projectIdMatched: value(env, 'GCP_PROJECT_ID') === EXPECTED_PROJECT_ID,
     firebaseAppIdMatched: value(env, 'VITE_FIREBASE_APP_ID') === EXPECTED_FIREBASE_APP_ID,
@@ -156,6 +166,7 @@ export function productionWorkflowEnvSummary(env = process.env) {
     adminUrlMatched: value(env, 'E2E_ADMIN_BASE_URL').replace(/\/+$/, '') === EXPECTED_ADMIN_URL,
     appCheckEnabled: value(env, 'VITE_ENABLE_FIREBASE_APPCHECK') === 'true',
     hrModuleEnabledByProductionWriter: hrEnabledByProductionWriter(),
+    selectedFounderEmailAuthorized: Boolean(productionApprovedBy) && founderEmails.includes(productionApprovedBy),
     firebaseAndMapsKeysSeparated:
       Boolean(value(env, 'VITE_FIREBASE_API_KEY')) &&
       Boolean(value(env, 'VITE_GOOGLE_MAPS_API_KEY')) &&
@@ -176,6 +187,6 @@ if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
   const summary = productionWorkflowEnvSummary(process.env);
   console.log(
     '[production-preflight] PASS — deployment, five-role, App Check, HR, Maps and Web Push values are configured '
-      + `(required=${summary.requiredValueCount}, hr=${summary.hrModuleEnabledByProductionWriter}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
+      + `(required=${summary.requiredValueCount}, hr=${summary.hrModuleEnabledByProductionWriter}, founder=${summary.selectedFounderEmailAuthorized}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
   );
 }
