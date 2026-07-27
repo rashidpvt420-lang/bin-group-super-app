@@ -10,7 +10,7 @@ const [dispatcher, signer, predeploy, sameRun, decision] = await Promise.all([
   readFile(new URL('../../scripts/hard-launch-decision-gate.mjs', import.meta.url), 'utf8'),
 ]);
 
-test('bank-pilot automation never hardcodes a protected Founder email', () => {
+test('bank-pilot automation never puts the canonical Founder email in dispatch inputs', () => {
   assert.match(dispatcher, /FOUNDER_EMAIL: authorized-founder@protected\.invalid/);
   assert.doesNotMatch(dispatcher, /FOUNDER_EMAIL: ceo@bin-groups\.com/);
   assert.match(dispatcher, /owner_request_reference="https:\/\/github\.com\/\$REPOSITORY\/pull\/\$REQUEST_PR"/);
@@ -50,11 +50,14 @@ test('GitHub provenance lookup uses fixed URLs and argument-array curl execution
   assert.doesNotMatch(signer, /\bfetch\s*\(|node:https|\beval\s*\(|execSync|shell:\s*true/);
 });
 
-test('automated email derives from exactly one protected allowlist entry', () => {
-  assert.match(signer, /authorizedEmails\.length !== 1/);
-  assert.match(signer, /founderEmail: authorizedEmails\[0\]/);
+test('automated email binds to the canonical Founder only when allowlisted', () => {
+  assert.match(signer, /CANONICAL_AUTOMATED_FOUNDER_EMAIL = 'ceo@bin-groups\.com'/);
+  assert.match(signer, /authorizedEmails\.includes\(CANONICAL_AUTOMATED_FOUNDER_EMAIL\)/);
+  assert.match(signer, /canonical automated Founder email is not authorized/);
+  assert.match(signer, /founderEmail: CANONICAL_AUTOMATED_FOUNDER_EMAIL/);
   assert.match(signer, /automated Founder authorization requires the protected email sentinel and owner PR evidence/);
-  assert.doesNotMatch(signer, /ceo@bin-groups\.com/);
+  assert.doesNotMatch(signer, /authorizedEmails\.length !== 1/);
+  assert.doesNotMatch(signer, /founderEmail: authorizedEmails\[0\]/);
 });
 
 test('signed document preserves workflow actor and independently verified Founder actor', () => {
