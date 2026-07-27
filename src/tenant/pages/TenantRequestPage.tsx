@@ -1,20 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    Box, Typography, Paper, Grid, Stack, Button, TextField,
-    Select, MenuItem, FormControl, InputLabel, CircularProgress,
-    IconButton, alpha, Alert
+    Alert,
+    Box,
+    Button,
+    CircularProgress,
+    FormControl,
+    Grid,
+    IconButton,
+    InputLabel,
+    MenuItem,
+    Paper,
+    Select,
+    Stack,
+    TextField,
+    Typography,
+    alpha,
 } from '@mui/material';
+import { AlertCircle, Camera, ChevronLeft, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, X, AlertCircle, ChevronLeft } from 'lucide-react';
-import { db, storage, collection, addDoc, updateDoc, serverTimestamp, query, where, getDocs, doc, getDoc, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
-import { useRole } from '../../context/RoleContext';
-import { useLanguage } from '../../context/LanguageContext';
-import { binThemeTokens } from '../../theme/binGroupTheme';
-import { notifyTicketCreated, notifyEmergency } from '../../services/notificationService';
-import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
+import {
+    collection,
+    db,
+    doc,
+    functions,
+    getDoc,
+    getDocs,
+    getDownloadURL,
+    httpsCallable,
+    query,
+    ref,
+    serverTimestamp,
+    storage,
+    updateDoc,
+    uploadBytes,
+    where,
+} from '../../lib/firebase';
 import { CANONICAL_SLA_POLICY, slaMinutesForPriority } from '../../config/uaeDominationBlueprint';
+import { useLanguage } from '../../context/LanguageContext';
+import { useRole } from '../../context/RoleContext';
+import { notifyEmergency, notifyTicketCreated } from '../../services/notificationService';
+import { binThemeTokens } from '../../theme/binGroupTheme';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 
-const sanitizeStorageFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
+const sanitizeStorageFileName = (name: string) =>
+    name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'evidence.jpg';
+
 const CATEGORY_PREFILL: Record<string, string> = {
     ac: 'AC',
     cooling: 'AC',
@@ -43,25 +73,79 @@ const normalizeCategoryPrefill = (value: string | null) => {
     return CATEGORY_PREFILL[key] || '';
 };
 
+const timestampMillis = (value: any): number | null => {
+    if (!value) return null;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (Number.isFinite(value.seconds)) return Number(value.seconds) * 1000;
+    if (Number.isFinite(value)) return Number(value);
+    const parsed = Date.parse(String(value));
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const secureRequestId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return `tenant_web_${crypto.randomUUID()}`;
+    }
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        return `tenant_web_${Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')}`;
+    }
+    throw new Error('Secure browser randomness is required to submit a maintenance request.');
+};
+
+const hasCanonicalDispatchGeo = (property: any) => {
+    const geo = property?.geo;
+    const verification = property?.geoVerification;
+    if (!geo || !verification) return false;
+
+    const lat = Number(geo.lat ?? geo.point?.latitude ?? geo.latitude);
+    const lng = Number(geo.lng ?? geo.point?.longitude ?? geo.longitude);
+    const geoVerifiedAt = timestampMillis(geo.verifiedAt);
+    const verificationAt = timestampMillis(verification.verifiedAt);
+    const verifiedBy = String(geo.verifiedBy || '').trim();
+
+    return (
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        lat >= -90 && lat <= 90 &&
+        lng >= -180 && lng <= 180 &&
+        !(lat === 0 && lng === 0) &&
+        geo.verified === true &&
+        geo.dispatchReady === true &&
+        geo.requiresGeoReview !== true &&
+        geo.source === 'admin_manual' &&
+        Number(geo.verificationVersion) === 1 &&
+        verification.state === 'VERIFIED' &&
+        verification.source === 'FOUNDER_MFA_REVIEW' &&
+        Number(verification.verificationVersion) === 1 &&
+        verifiedBy.length > 0 &&
+        verifiedBy === String(verification.verifiedBy || '').trim() &&
+        geoVerifiedAt !== null &&
+        geoVerifiedAt > 0 &&
+        geoVerifiedAt === verificationAt
+    );
+};
+
 export default function TenantRequestPage() {
     const { user } = useRole();
     const { t, isRTL } = useLanguage();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const clientRequestIdRef = useRef('');
+    const previewUrlsRef = useRef<string[]>([]);
 
     const tt = (key: string, fallback: string): string => {
         const value = t(key);
         return typeof value === 'string' && value.trim() && value.trim() !== key ? value : fallback;
     };
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
 
-    const initialCategory = normalizeCategoryPrefill(searchParams.get('category'));
-    const [category, setCategory] = useState(initialCategory);
+    const [category, setCategory] = useState(normalizeCategoryPrefill(searchParams.get('category')));
     const [priority, setPriority] = useState('normal');
     const [description, setDescription] = useState('');
     const [specificLocation, setSpecificLocation] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [uploadingPhotos, setUploadingPhotos] = useState(false);
-
     const [propertyData, setPropertyData] = useState<any>(null);
     const [unitData, setUnitData] = useState<any>(null);
     const [residenceChecked, setResidenceChecked] = useState(false);
@@ -72,40 +156,13 @@ export default function TenantRequestPage() {
     const selectedSlaKey = PRIORITY_TO_SLA_KEY[priority] || 'STANDARD';
     const selectedSlaPolicy = CANONICAL_SLA_POLICY[selectedSlaKey];
     const selectedSlaMinutes = slaMinutesForPriority(priority);
+    const propertyContextReady = residenceChecked && Boolean(unitData) && Boolean(propertyData);
+    const propertyGpsReady = propertyContextReady && hasCanonicalDispatchGeo(propertyData);
 
-    // Property/unit lookup is async (see fetchResidence below); these derive whether the
-    // form has enough real data to be submitted, so the submit button itself can stay
-    // disabled during the load window instead of only failing inside handleSubmit after
-    // the user has already filled out the form and clicked dispatch.
-    const propertyLocationSource =
-        propertyData?.location ||
-        propertyData?.propertyLocation ||
-        propertyData?.geoPoint ||
-        propertyData;
-
-    const propertyLat = Number(
-        propertyLocationSource?.lat ??
-        propertyLocationSource?.latitude ??
-        0
-    );
-
-    const propertyLng = Number(
-        propertyLocationSource?.lng ??
-        propertyLocationSource?.longitude ??
-        0
-    );
-
-    const propertyContextReady =
-        residenceChecked &&
-        Boolean(unitData) &&
-        Boolean(propertyData);
-
-    const propertyGpsReady =
-        propertyContextReady &&
-        Number.isFinite(propertyLat) &&
-        Number.isFinite(propertyLng) &&
-        propertyLat !== 0 &&
-        propertyLng !== 0;
+    const stableClientRequestId = () => {
+        if (!clientRequestIdRef.current) clientRequestIdRef.current = secureRequestId();
+        return clientRequestIdRef.current;
+    };
 
     useEffect(() => {
         const fetchResidence = async () => {
@@ -118,34 +175,30 @@ export default function TenantRequestPage() {
                 if (unitSnap.empty && user.email) {
                     unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())));
                 }
+                if (unitSnap.empty) return;
 
-                if (!unitSnap.empty) {
-                    const uData: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
-                    setUnitData(uData);
+                const unit: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
+                setUnitData(unit);
+                if (!unit.propertyId) return;
 
-                    if (uData.propertyId) {
-                        const propSnap = await getDoc(doc(db, 'properties', uData.propertyId));
-                        if (propSnap.exists()) {
-                            const pData: any = { id: propSnap.id, ...propSnap.data() };
-                            setPropertyData(pData);
+                const propertySnap = await getDoc(doc(db, 'properties', unit.propertyId));
+                if (!propertySnap.exists()) return;
+                const property: any = { id: propertySnap.id, ...propertySnap.data() };
+                setPropertyData(property);
 
-                            if (pData.ownerId) {
-                                const ownerSnap = await getDoc(doc(db, 'users', pData.ownerId));
-                                if (ownerSnap.exists()) {
-                                    const ownerStatus = String(ownerSnap.data()?.status || '').toLowerCase();
-                                    if (ownerStatus === 'suspended') setIsOwnerSuspended(true);
-                                }
-                            }
-                        }
-                    }
+                const ownerId = property.ownerId || property.ownerUid;
+                if (ownerId) {
+                    const ownerSnap = await getDoc(doc(db, 'users', ownerId));
+                    const ownerStatus = ownerSnap.exists() ? String(ownerSnap.data()?.status || '').toLowerCase() : '';
+                    setIsOwnerSuspended(ownerStatus === 'suspended');
                 }
-            } catch (err) {
-                console.warn('Fetch failed:', err);
+            } catch (error) {
+                console.warn('Residence lookup failed:', error);
             } finally {
                 setResidenceChecked(true);
             }
         };
-        fetchResidence();
+        void fetchResidence();
     }, [user]);
 
     useEffect(() => {
@@ -153,56 +206,62 @@ export default function TenantRequestPage() {
         if (nextCategory) setCategory(nextCategory);
     }, [searchParams]);
 
-    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const filesArray = Array.from(e.target.files).slice(0, Math.max(5 - photos.length, 0));
-            setPhotos(prev => [...prev, ...filesArray].slice(0, 5));
-            const newPreviews = filesArray.map(file => URL.createObjectURL(file));
-            setPreviews(prev => [...prev, ...newPreviews].slice(0, 5));
-        }
+    useEffect(() => {
+        previewUrlsRef.current = previews;
+    }, [previews]);
+
+    useEffect(() => () => {
+        previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        previewUrlsRef.current = [];
+    }, []);
+
+    const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!event.target.files) return;
+        const files = Array.from(event.target.files).slice(0, Math.max(5 - photos.length, 0));
+        setPhotos((current) => [...current, ...files].slice(0, 5));
+        setPreviews((current) => [...current, ...files.map((file) => URL.createObjectURL(file))].slice(0, 5));
+        event.target.value = '';
     };
 
     const removePhoto = (index: number) => {
-        setPhotos(prev => prev.filter((_, i) => i !== index));
-        setPreviews(prev => prev.filter((_, i) => i !== index));
+        setPreviews((current) => {
+            const target = current[index];
+            if (target) URL.revokeObjectURL(target);
+            return current.filter((_, itemIndex) => itemIndex !== index);
+        });
+        setPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index));
     };
 
     const uploadPhotosToStorage = async (ticketId: string): Promise<string[]> => {
         if (photos.length === 0) throw new Error('At least one photo is required before dispatch.');
-        const photoUrls: string[] = [];
+        const urls: string[] = [];
         const timestamp = Date.now();
-
-        try {
-            for (let i = 0; i < photos.length; i++) {
-                const file = photos[i];
-                const fileName = `${timestamp}_${i + 1}_${sanitizeStorageFileName(file.name)}`;
-                const storagePath = `maintenanceTickets/${ticketId}/tenant/${fileName}`;
-                const fileRef = ref(storage, storagePath);
-
-                await uploadBytes(fileRef, file, {
-                    contentType: file.type || 'image/jpeg',
-                    customMetadata: {
-                        ticketId,
-                        uploadedBy: user?.uid || '',
-                        evidenceRole: 'tenant',
-                    },
-                });
-
-                photoUrls.push(await getDownloadURL(fileRef));
-            }
-        } catch (err) {
-            console.error('Photo upload failed:', err);
-            throw new Error('Failed to upload evidence photos to secure ticket storage.');
+        for (let index = 0; index < photos.length; index += 1) {
+            const file = photos[index];
+            const fileName = `${timestamp}_${index + 1}_${sanitizeStorageFileName(file.name)}`;
+            const fileRef = ref(storage, `maintenanceTickets/${ticketId}/tenant/${fileName}`);
+            await uploadBytes(fileRef, file, {
+                contentType: file.type || 'image/jpeg',
+                customMetadata: {
+                    ticketId,
+                    uploadedBy: user?.uid || '',
+                    evidenceRole: 'tenant',
+                },
+            });
+            urls.push(await getDownloadURL(fileRef));
         }
-
-        return photoUrls;
+        return urls;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         const cleanLocation = specificLocation.trim();
-        if (!user || !unitData) {
-            alert('No property assigned. Cannot create request.');
+        if (!user || !unitData?.id || !unitData?.propertyId) {
+            alert('No verified property and unit are assigned. Cannot create request.');
+            return;
+        }
+        if (!propertyGpsReady) {
+            alert('This property is waiting for Founder-verified dispatch geography. Contact management before submitting.');
             return;
         }
         if (cleanLocation.length < 3) {
@@ -214,84 +273,29 @@ export default function TenantRequestPage() {
             return;
         }
 
-        const jobLocation = propertyGpsReady ? {
-            lat: propertyLat,
-            lng: propertyLng,
-            latitude: propertyLat,
-            longitude: propertyLng,
-            address:
-                propertyData?.address ||
-                propertyData?.locationAddress ||
-                propertyLocationSource?.address ||
-                '',
-            source: 'property',
-        } : null;
-
-        if (!jobLocation) {
-            alert('Please confirm exact service location before submitting. Property GPS location is missing — contact management.');
-            return;
-        }
-
-        if (!unitData.propertyId) {
-            alert('Property ID is missing. Cannot create request.');
-            return;
-        }
-
         setSubmitting(true);
         let createdTicketId = '';
         try {
-            const docRef = await addDoc(collection(db, 'maintenanceTickets'), {
-                requesterRole: 'tenant',
-                tenantId: user.uid,
-                tenantUid: user.uid,
-                tenantName: user.displayName || 'Resident',
-                tenantPhone: user.phoneNumber || '',
-                tenantEmail: user.email || '',
-                requesterId: user.uid,
-                requesterEmail: user.email || '',
-                reporterEmail: user.email || '',
-                createdBy: user.uid,
-                createdByUid: user.uid,
-                propertyId: unitData.propertyId || '',
-                propertyName: propertyData?.name || propertyData?.propertyName || '',
-                ownerId: propertyData?.ownerId || '',
-                ownerUid: propertyData?.ownerUid || propertyData?.ownerId || '',
-                ownerEmail: propertyData?.ownerEmail || '',
+            const createTenantServiceTicket = httpsCallable(functions, 'createTenantServiceTicket');
+            const response: any = await createTenantServiceTicket({
+                kind: priority === 'emergency' ? 'EMERGENCY' : 'AI_CONCIERGE',
                 unitId: unitData.id,
-                unitNumber: unitData.unitNumber || '',
-                floor: unitData.floorNumber || '',
-                category,
-                priority,
-                slaPriority: selectedSlaKey,
-                slaLabel: selectedSlaPolicy.label,
-                description: description.trim(),
-                specificLocation: cleanLocation,
-                serviceLocationDetail: cleanLocation,
-                serviceLocationRequired: true,
-                serviceLocationVerified: true,
-                photos: [],
-                primaryPhotoUrl: '',
-                jobLocation,
-                photoEvidenceRequired: true,
-                evidenceStatus: 'PENDING_TENANT_UPLOAD',
-                source: 'TENANT_PORTAL',
-                status: 'OPEN',
-                dispatchStatus: 'PENDING_ASSIGNMENT',
-                trackingStatus: 'WAITING_FOR_TECHNICIAN',
-                technicianId: null,
-                assignedTechnicianId: null,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                slaMinutes: selectedSlaMinutes,
-                canonicalSlaVersion: 'uae-domination-2026-07-04',
+                propertyId: unitData.propertyId,
+                clientRequestId: stableClientRequestId(),
+                details: {
+                    category,
+                    priority,
+                    description: description.trim(),
+                    specificLocation: cleanLocation,
+                    photoEvidenceExpected: true,
+                },
             });
-            createdTicketId = docRef.id;
+            createdTicketId = String(response?.data?.ticketId || '').trim();
+            if (!createdTicketId) throw new Error('The server did not return a maintenance ticket ID.');
 
             setUploadingPhotos(true);
-            const photoUrls = await uploadPhotosToStorage(docRef.id);
-            setUploadingPhotos(false);
-
-            await updateDoc(doc(db, 'maintenanceTickets', docRef.id), {
+            const photoUrls = await uploadPhotosToStorage(createdTicketId);
+            await updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
                 photos: photoUrls,
                 primaryPhotoUrl: photoUrls[0] || null,
                 evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
@@ -300,78 +304,95 @@ export default function TenantRequestPage() {
             });
 
             if (priority === 'emergency') {
-                notifyEmergency(docRef.id, user.displayName || 'Resident', propertyData?.name || 'Property', unitData.unitNumber || '').catch(console.warn);
+                void notifyEmergency(
+                    createdTicketId,
+                    user.displayName || 'Resident',
+                    propertyData?.name || propertyData?.propertyName || 'Property',
+                    unitData.unitNumber || '',
+                ).catch(console.warn);
             } else {
-                notifyTicketCreated(docRef.id, user.displayName || 'Resident', category, priority).catch(console.warn);
+                void notifyTicketCreated(
+                    createdTicketId,
+                    user.displayName || 'Resident',
+                    category,
+                    priority,
+                ).catch(console.warn);
             }
+            clientRequestIdRef.current = '';
             navigate('/tenant/tickets');
-        } catch (err) {
-            console.error('Submit failed', err);
+        } catch (error) {
+            console.error('Tenant request submission failed:', error);
             if (createdTicketId) {
-                updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
+                void updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
                     evidenceStatus: 'TENANT_EVIDENCE_UPLOAD_FAILED',
-                    evidenceUploadError: err instanceof Error ? err.message : String(err),
+                    evidenceUploadError: error instanceof Error ? error.message : String(error),
                     updatedAt: serverTimestamp(),
                 }).catch(console.warn);
             }
-            alert('Failed to submit request: ' + (err instanceof Error ? err.message : String(err)));
+            alert(`Failed to submit request: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setSubmitting(false);
             setUploadingPhotos(false);
         }
     };
 
+    if (!residenceChecked) {
+        return (
+            <Paper data-testid="tenant-residence-loading" sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(22,22,24,.7)' }}>
+                <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.7)' }}>Loading residence and property details…</Typography>
+            </Paper>
+        );
+    }
+
+    if (!unitData) {
+        return <TenantUnitLinkFallback message="A unit must be verified before a maintenance request can be dispatched." />;
+    }
+
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.5)', transform: isRTL ? 'rotate(180deg)' : 'none' }}>
+                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,.5)', transform: isRTL ? 'rotate(180deg)' : 'none' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tt('dash.tenant.serviceLabel', 'SOVEREIGN SERVICE')}</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -1 }}>{tt('dash.tenant.newRequest', 'New Maintenance Request')}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>
+                        {tt('dash.tenant.serviceLabel', 'SOVEREIGN SERVICE')}
+                    </Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: '#fff' }}>
+                        {tt('dash.tenant.newRequest', 'New Maintenance Request')}
+                    </Typography>
                 </Box>
             </Stack>
 
-            {!residenceChecked ? (
-                <Paper
-                    data-testid="tenant-residence-loading"
-                    sx={{
-                        p: 5,
-                        textAlign: 'center',
-                        bgcolor: 'rgba(22, 22, 24, 0.7)',
-                        borderRadius: 6,
-                    }}
-                >
-                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
-                    <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.7)' }}>
-                        Loading residence and property details…
-                    </Typography>
-                </Paper>
-            ) : !unitData ? (
-                <TenantUnitLinkFallback
-                    message="A unit must be verified before maintenance, moving, cleaning, or management requests can be dispatched."
-                />
-            ) : (
-            <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, backdropFilter: 'blur(10px)' }}>
+            <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid rgba(255,255,255,.05)', borderRadius: 6 }}>
                 {isOwnerSuspended && (
-                    <Box sx={{ p: 3, mb: 4, bgcolor: alpha('#ef4444', 0.1), border: '1px solid #ef4444', borderRadius: 4 }}>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <AlertCircle color="#ef4444" size={24} />
-                            <Box>
-                                <Typography variant="body1" fontWeight="950" color="#ef4444">{tt('dash.tenant.dispatchSuspended', 'MAINTENANCE DISPATCH SUSPENDED')}</Typography>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>{tt('dash.tenant.dispatchSuspendedDesc', 'Service requests are temporarily disabled for this property due to account status. Please contact your property owner/manager.')}</Typography>
-                            </Box>
-                        </Stack>
-                    </Box>
+                    <Alert severity="error" sx={{ mb: 3 }}>
+                        {tt('dash.tenant.dispatchSuspendedDesc', 'Maintenance dispatch is suspended for this property. Contact the property owner or manager.')}
+                    </Alert>
                 )}
+                {!propertyGpsReady && (
+                    <Alert severity="warning" sx={{ mb: 3 }}>
+                        Founder-verified property geography is required before dispatch. No browser coordinate will be accepted.
+                    </Alert>
+                )}
+
                 <form onSubmit={handleSubmit}>
                     <Stack spacing={4}>
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{tt('dash.tenant.category', 'Category')}</InputLabel>
-                                    <Select data-testid="tenant-request-category" inputProps={{ 'data-testid': 'tenant-request-category-input' }} value={category} label={tt('dash.tenant.category', 'Category')} onChange={(e) => setCategory(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
+                                    <InputLabel>{tt('dash.tenant.category', 'Category')}</InputLabel>
+                                    <Select
+                                        data-testid="tenant-request-category"
+                                        inputProps={{ 'data-testid': 'tenant-request-category-input' }}
+                                        value={category}
+                                        label={tt('dash.tenant.category', 'Category')}
+                                        onChange={(event) => setCategory(event.target.value)}
+                                        required
+                                        disabled={isOwnerSuspended}
+                                        sx={{ color: '#fff' }}
+                                    >
                                         <MenuItem value="AC">{tt('dash.tenant.catAc', 'AC / Cooling')}</MenuItem>
                                         <MenuItem value="electrical">{tt('dash.tenant.catElec', 'Electrical / Power')}</MenuItem>
                                         <MenuItem value="plumbing">{tt('dash.tenant.catPlumb', 'Plumbing / Water')}</MenuItem>
@@ -388,54 +409,105 @@ export default function TenantRequestPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)', transformOrigin: isRTL ? 'top right' : 'top left', right: isRTL ? 28 : 'auto' }}>{tt('dash.tenant.priority', 'Priority')}</InputLabel>
-                                    <Select data-testid="tenant-request-priority" inputProps={{ 'data-testid': 'tenant-request-priority-input' }} value={priority} label={tt('dash.tenant.priority', 'Priority')} onChange={(e) => setPriority(e.target.value)} required disabled={isOwnerSuspended} sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF', textAlign: isRTL ? 'right' : 'left' }}>
+                                    <InputLabel>{tt('dash.tenant.priority', 'Priority')}</InputLabel>
+                                    <Select
+                                        data-testid="tenant-request-priority"
+                                        inputProps={{ 'data-testid': 'tenant-request-priority-input' }}
+                                        value={priority}
+                                        label={tt('dash.tenant.priority', 'Priority')}
+                                        onChange={(event) => setPriority(event.target.value)}
+                                        required
+                                        disabled={isOwnerSuspended}
+                                        sx={{ color: '#fff' }}
+                                    >
                                         <MenuItem value="normal">{tt('dash.tenant.prioNormal', 'Normal (Standard 8h)')}</MenuItem>
                                         <MenuItem value="urgent">{tt('dash.tenant.prioUrgent', 'Urgent (High 2h)')}</MenuItem>
-                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>{tt('dash.tenant.prioEmerg', 'EMERGENCY (Safety/SOS 30m)')}</MenuItem>
+                                        <MenuItem value="emergency">{tt('dash.tenant.prioEmerg', 'EMERGENCY (Safety/SOS 30m)')}</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Grid>
                         </Grid>
 
-                        <TextField fullWidth required label={tt('dash.tenant.specificLocation', 'Exact Service Location (room / area / asset)')} data-testid="tenant-request-location" value={specificLocation} onChange={(e) => setSpecificLocation(e.target.value)} placeholder={tt('dash.tenant.specificLocationHint', 'Example: Kitchen sink, Master bedroom AC, Bathroom ceiling')} disabled={isOwnerSuspended} helperText={tt('dash.tenant.specificLocationRequired', 'Required for dispatch accuracy. This tells the technician exactly where to go.')} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.45)' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} />
-
-                        <TextField fullWidth multiline rows={5} label={tt('dash.tenant.issueDesc', 'Issue Description')} data-testid="tenant-request-description" value={description} onChange={(e) => setDescription(e.target.value)} required placeholder={tt('dash.tenant.issueDescHint', 'Please describe the issue in detail...')} disabled={isOwnerSuspended} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }, '& label': { transformOrigin: isRTL ? 'top right' : 'top left', left: 'auto', right: isRTL ? 28 : 'auto' } }} />
+                        <TextField
+                            fullWidth
+                            required
+                            label={tt('dash.tenant.specificLocation', 'Exact Service Location (room / area / asset)')}
+                            data-testid="tenant-request-location"
+                            value={specificLocation}
+                            onChange={(event) => setSpecificLocation(event.target.value)}
+                            placeholder={tt('dash.tenant.specificLocationHint', 'Example: Kitchen sink, Master bedroom AC, Bathroom ceiling')}
+                            disabled={isOwnerSuspended}
+                        />
+                        <TextField
+                            fullWidth
+                            multiline
+                            rows={5}
+                            required
+                            label={tt('dash.tenant.issueDesc', 'Issue Description')}
+                            data-testid="tenant-request-description"
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
+                            disabled={isOwnerSuspended}
+                        />
 
                         <Box>
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}</Typography>
-                            {uploadingPhotos && <Box sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}><CircularProgress size={20} sx={{ color: binThemeTokens.gold }} /><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos to secure ticket evidence storage...</Typography></Box>}
+                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2 }}>
+                                <Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}
+                            </Typography>
+                            {uploadingPhotos && <CircularProgress size={22} sx={{ color: binThemeTokens.gold, mb: 2 }} />}
                             <Grid container spacing={2}>
-                                {previews.map((src, i) => <Grid item xs={4} md={3} key={i}><Box sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', pt: '100%', border: '1px solid rgba(255,255,255,0.1)' }}><img src={src} alt="issue" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} /><IconButton size="small" onClick={() => removePhoto(i)} sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(0,0,0,0.5)', color: '#FFF', '&:hover': { bgcolor: '#ef4444' } }}><X size={14} /></IconButton></Box></Grid>)}
-                                {previews.length < 5 && !uploadingPhotos && <Grid item xs={4} md={3}><Button component="label" disabled={isOwnerSuspended} sx={{ width: '100%', pt: '100%', position: 'relative', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 3, color: 'rgba(255,255,255,0.3)', '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', borderColor: binThemeTokens.gold, color: binThemeTokens.gold } }}><Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}><Camera size={24} /><Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 900 }}>{tt('dash.tenant.addPhoto', 'ADD')}</Typography></Box><input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} /></Button></Grid>}
+                                {previews.map((source, index) => (
+                                    <Grid item xs={4} md={3} key={source}>
+                                        <Box sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', pt: '100%' }}>
+                                            <img src={source} alt="issue evidence" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <IconButton size="small" onClick={() => removePhoto(index)} sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(0,0,0,.6)', color: '#fff' }}>
+                                                <X size={14} />
+                                            </IconButton>
+                                        </Box>
+                                    </Grid>
+                                ))}
+                                {previews.length < 5 && (
+                                    <Grid item xs={4} md={3}>
+                                        <Button component="label" disabled={isOwnerSuspended} sx={{ minHeight: 110, width: '100%', border: '1px dashed rgba(255,255,255,.25)', color: binThemeTokens.gold }}>
+                                            <Camera size={24} />
+                                            <input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} />
+                                        </Button>
+                                    </Grid>
+                                )}
                             </Grid>
                         </Box>
 
-                        <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
-                            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="flex-start" sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                        <Box sx={{ p: 2.5, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3 }}>
+                            <Stack direction="row" spacing={2} alignItems="flex-start">
                                 <AlertCircle size={20} color={binThemeTokens.gold} />
-                                <Box>
-                                    <Typography variant="caption" fontWeight="950" sx={{ color: binThemeTokens.gold, display: 'block' }}>{tt('dash.tenant.slaCompliance', 'SLA COMPLIANCE')}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', mt: 0.25 }}>{selectedSlaPolicy.label}: {selectedSlaMinutes} minutes. {selectedSlaPolicy.tenantCopy}</Typography>
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', mt: 0.75 }}>{tt('dash.tenant.slaDesc', 'By submitting this request, you authorize BIN GROUP technicians to access your unit during standard service hours.')} {priority === 'emergency' && tt('dash.tenant.slaDescEmerg', ' EMERGENCY requests trigger immediate dispatch.')}</Typography>
-                                </Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.72)' }}>
+                                    {selectedSlaPolicy.label}: {selectedSlaMinutes} minutes. {selectedSlaPolicy.tenantCopy}
+                                </Typography>
                             </Stack>
                         </Box>
 
-                        {propertyContextReady && !propertyGpsReady && (
-                            <Alert severity="warning">
-                                Property GPS coordinates are unavailable. Contact management before
-                                dispatching this request.
-                            </Alert>
-                        )}
-
-                        <Button type="submit" data-testid="tenant-request-submit" variant="contained" size="large" disabled={submitting || uploadingPhotos || isOwnerSuspended || !propertyContextReady || !propertyGpsReady || photos.length === 0 || specificLocation.trim().length < 3} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, borderRadius: 4, fontSize: '1.1rem', boxShadow: `0 12px 24px -8px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: '#b4954e' } }}>
+                        <Button
+                            type="submit"
+                            data-testid="tenant-request-submit"
+                            variant="contained"
+                            size="large"
+                            disabled={
+                                submitting ||
+                                uploadingPhotos ||
+                                isOwnerSuspended ||
+                                !propertyGpsReady ||
+                                photos.length === 0 ||
+                                specificLocation.trim().length < 3 ||
+                                description.trim().length < 8 ||
+                                !category
+                            }
+                            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, borderRadius: 4 }}
+                        >
                             {submitting || uploadingPhotos ? <CircularProgress size={24} color="inherit" /> : tt('dash.tenant.dispatchRequest', 'DISPATCH REQUEST')}
                         </Button>
                     </Stack>
                 </form>
             </Paper>
-            )}
         </Box>
     );
 }

@@ -9,6 +9,10 @@ const db = admin.firestore();
 const KINDS = new Set(["EMERGENCY", "SCHEDULED_SERVICE", "AI_CONCIERGE"]);
 const PRIORITIES = new Set(["normal", "urgent", "emergency"]);
 
+function tenantSlaMinutes(priority: string) {
+  return priority === "emergency" ? 30 : priority === "urgent" ? 120 : 480;
+}
+
 function text(value: unknown, max = 500) {
   return String(value || "").trim().slice(0, max);
 }
@@ -182,7 +186,7 @@ export const createTenantServiceTicket = onCall(
           dispatchStatus: "PENDING_EMERGENCY_DISPATCH",
           trackingStatus: "WAITING_FOR_EMERGENCY_TECHNICIAN",
           requiresImmediateDispatch: true,
-          slaMinutes: 60,
+          slaMinutes: tenantSlaMinutes("emergency"),
           photoEvidenceRequired: false,
           evidenceStatus: "EMERGENCY_EVIDENCE_OPTIONAL",
         });
@@ -207,7 +211,7 @@ export const createTenantServiceTicket = onCall(
           status: "OPEN",
           dispatchStatus: "PENDING_ASSIGNMENT",
           trackingStatus: "WAITING_FOR_TENANT_EVIDENCE",
-          slaMinutes: priority === "emergency" ? 60 : priority === "urgent" ? 240 : 1440,
+          slaMinutes: tenantSlaMinutes(priority),
         });
       }
 
