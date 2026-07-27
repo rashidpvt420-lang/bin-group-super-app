@@ -98,6 +98,7 @@ jobs:
     name: Generate same-commit five-role production evidence
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'live-evidence'
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 120
     permissions:
       contents: read
