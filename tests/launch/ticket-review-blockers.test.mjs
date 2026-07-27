@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(path, 'utf8');
 
+// Exact-head regression contract for the protected launch gate matrix.
 test('Tenant requests route emergencies and persist canonical SLA values', () => {
   const page = read('src/tenant/pages/TenantRequestPage.tsx');
   const operations = read('functions/tenantTicketOperations.ts');
