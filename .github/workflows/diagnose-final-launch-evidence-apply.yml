@@ -38,7 +38,7 @@ jobs:
           if (!match) throw new Error('Compressed launch evidence payload is missing.');
           writeFileSync('/tmp/final-launch-evidence-runtime.mjs', gunzipSync(Buffer.from(match[1], 'base64')));
           NODE
-      - name: Capture patcher result
+      - name: Capture patcher and staging result
         shell: bash
         run: |
           set +e
@@ -52,7 +52,27 @@ jobs:
               second=0
             fi
             printf 'apply_status=%s\ncontract_status=%s\n' "$first" "$second"
-            test "$first" -eq 0 -a "$second" -eq 0
+
+            if [ "$first" -eq 0 ] && [ "$second" -eq 0 ]; then
+              git rm --ignore-unmatch -- \
+                .github/workflows/apply-final-launch-evidence-corrections.yml \
+                .github/workflows/diagnose-final-launch-evidence-apply.yml \
+                scripts/apply-final-launch-evidence-corrections.mjs \
+                scripts/apply-final-launch-evidence-corrections.payload.mjs \
+                scripts/fix-launch-evidence-test-contracts.mjs
+              git add -A
+              printf '\n--- staged name/status ---\n'
+              git diff --cached --name-status
+              printf '\n--- worktree status ---\n'
+              git status --short
+              printf '\n--- staged diff check ---\n'
+              git diff --cached --check
+              stage_status=$?
+            else
+              stage_status=1
+            fi
+            printf 'stage_status=%s\n' "$stage_status"
+            test "$first" -eq 0 -a "$second" -eq 0 -a "$stage_status" -eq 0
           } > /tmp/final-launch-evidence-apply.log 2>&1
           status=$?
           printf '%s\n' "$status" > /tmp/final-launch-evidence-apply.status
