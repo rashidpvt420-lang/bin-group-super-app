@@ -4,6 +4,40 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 
+const envExamplePath = path.join(process.cwd(), '.env.e2e.example');
+const envExample = readFileSync(envExamplePath, 'utf8').replace(/\r\n?/g, '\n');
+const roleSectionStart = envExample.indexOf('# Five canonical launch roles (required for launch clearance)');
+const ownerSectionStart = envExample.indexOf('E2E_OWNER', roleSectionStart);
+const optionalSectionStart = envExample.indexOf('# Optional: second technician', ownerSectionStart);
+if (roleSectionStart < 0 || ownerSectionStart < 0 || optionalSectionStart < 0) {
+  throw new Error('.env.e2e.example canonical role section could not be parsed.');
+}
+const canonicalMailboxSection = `E2E_OWNER_EMAIL=
+E2E_OWNER_PASSWORD=
+E2E_OWNER_MAILBOX_EMAIL=
+E2E_TENANT_EMAIL=
+E2E_TENANT_PASSWORD=
+E2E_TECHNICIAN_EMAIL=
+E2E_TECHNICIAN_PASSWORD=
+E2E_BROKER_EMAIL=
+E2E_BROKER_PASSWORD=
+E2E_BROKER_MAILBOX_EMAIL=
+
+# Gmail read-only evidence credentials. Keep real values in protected secrets only.
+E2E_OWNER_MAILBOX_CLIENT_ID=
+E2E_OWNER_MAILBOX_CLIENT_SECRET=
+E2E_OWNER_MAILBOX_REFRESH_TOKEN=
+E2E_BROKER_MAILBOX_CLIENT_ID=
+E2E_BROKER_MAILBOX_CLIENT_SECRET=
+E2E_BROKER_MAILBOX_REFRESH_TOKEN=
+
+`;
+writeFileSync(
+  envExamplePath,
+  `${envExample.slice(0, ownerSectionStart)}${canonicalMailboxSection}${envExample.slice(optionalSectionStart)}`,
+  'utf8',
+);
+
 const payloadWrapper = readFileSync(
   path.join(process.cwd(), 'scripts/apply-final-launch-evidence-corrections.payload.mjs'),
   'utf8',
