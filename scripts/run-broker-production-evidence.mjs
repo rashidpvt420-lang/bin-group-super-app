@@ -261,7 +261,9 @@ async function inspectOtpDelivery(challengeId) {
   const bindingHash = text(value.bindingHash);
   assert(providerMessageId, 'Broker payout OTP provider did not return a delivery message ID.');
   assert(/^[a-f0-9]{64}$/.test(bindingHash), 'Broker payout OTP binding hash is missing.');
-  const correlationId = text(value.correlationId);\n  assert(correlationId, 'Broker payout OTP correlation ID is missing.');\n  return { providerMessageId, bindingHash, correlationId, otpHashVersion: text(value.otpHashVersion) };
+  const correlationId = text(value.correlationId);
+    assert(correlationId, 'Broker payout OTP correlation ID is missing.');
+    return { providerMessageId, bindingHash, correlationId, otpHashVersion: text(value.otpHashVersion) };
 }
 
 async function main() {
@@ -367,10 +369,18 @@ async function main() {
 
   const otpRequestedAt = Date.now();
   const requested = await callFunction('requestBrokerPayoutOtp', { commissionIds: [commissionId] }, appCheckToken, brokerSession.idToken);
-  const challengeId = text(requested.challengeId);\n  const correlationId = text(requested.correlationId);\n  assert(requested.status === 'OTP_SENT' && challengeId && correlationId, 'Broker payout OTP request did not return a challenge and correlation ID.');
+  const challengeId = text(requested.challengeId);
+    const correlationId = text(requested.correlationId);
+    assert(requested.status === 'OTP_SENT' && challengeId && correlationId, 'Broker payout OTP request did not return a challenge and correlation ID.');
   assert(Number(requested.amount) === expectedCommissionAmount && Number(requested.commissionCount) === 1, 'Broker payout OTP binding amount/count is incorrect.');
 
-  const otpDelivery = await inspectOtpDelivery(challengeId);\n  assert(otpDelivery.correlationId === correlationId, 'Broker payout OTP correlation ID is not backend-bound.');\n  const mailboxReceipt = await waitForMailboxOtp({\n    providerMessageId: otpDelivery.providerMessageId,\n    requestedAt: otpRequestedAt,\n    correlationId,\n  });
+  const otpDelivery = await inspectOtpDelivery(challengeId);
+    assert(otpDelivery.correlationId === correlationId, 'Broker payout OTP correlation ID is not backend-bound.');
+    const mailboxReceipt = await waitForMailboxOtp({
+      providerMessageId: otpDelivery.providerMessageId,
+      requestedAt: otpRequestedAt,
+      correlationId,
+    });
   const providerMessageIdHash = sha256(normalizeMessageId(otpDelivery.providerMessageId));
   assert(providerMessageIdHash === mailboxReceipt.messageIdHash, 'Broker mailbox receipt is not bound to the SMTP provider Message-ID.');
   const verified = await callFunction('verifyBrokerPayoutOtp', {

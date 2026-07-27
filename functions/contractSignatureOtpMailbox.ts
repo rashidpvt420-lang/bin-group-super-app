@@ -118,7 +118,8 @@ async function sendOtpEmail(args: {
       <p>Your one-time passcode for <strong>${safePropertyName}</strong> is:</p>
       <p style="font-size:28px;font-weight:800;letter-spacing:4px">${args.otp}</p>
       <p>This code expires in ${OTP_TTL_MINUTES} minutes. Do not share it with anyone.</p>
-      <p>Contract reference: ${args.contractId || args.requestId}</p>\n      <p>Verification reference: <code>${args.requestId}</code></p>
+      <p>Contract reference: ${args.contractId || args.requestId}</p>
+    <p>Verification reference: <code>${args.requestId}</code></p>
     </div>
   `;
   const text = `BIN GROUP contract signature OTP: ${args.otp}. Expires in ${OTP_TTL_MINUTES} minutes. Contract reference: ${args.contractId || args.requestId}. Verification reference: ${args.requestId}.`;

@@ -179,7 +179,8 @@ export default function BrokerCommissionsPage() {
       <Dialog data-testid="broker-payout-otp-dialog" open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle>Verify payout request</DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>\n          <Typography data-testid="broker-payout-otp-correlation" variant="caption" sx={{ display: 'block', mb: 2, wordBreak: 'break-all' }}>Verification reference: {otp.correlationId}</Typography>
+          <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>
+    <Typography data-testid="broker-payout-otp-correlation" variant="caption" sx={{ display: 'block', mb: 2, wordBreak: 'break-all' }}>Verification reference: {otp.correlationId}</Typography>
           <TextField autoFocus fullWidth label="Six-digit verification code" value={otp.code} inputProps={{ inputMode: 'numeric', maxLength: 6, 'data-testid': 'broker-payout-otp-code' }} onChange={(event) => setOtp((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))} />
         </DialogContent>
         <DialogActions>

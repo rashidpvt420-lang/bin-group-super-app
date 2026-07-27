@@ -159,7 +159,9 @@ for (const forbidden of [
   }
 }
 for (const required of [
-  "from './lib/gmail-otp-reader.mjs'",\n  'expectedMailboxEmail: ownerMailboxEmail',\n  'correlationId: requestId',
+  "from './lib/gmail-otp-reader.mjs'",
+    'expectedMailboxEmail: ownerMailboxEmail',
+    'correlationId: requestId',
   'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
   'mailboxReceiptVerified: true',
   'HMAC_SHA256_OWNER_CONTRACT_V1',

@@ -10,13 +10,15 @@ import { fileURLToPath } from 'node:url';
 import { test, expect, Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
-test.use({ trace: 'off', video: 'off', screenshot: 'off' });\n\nconst __dirname = path.dirname(fileURLToPath(import.meta.url));
+test.use({ trace: 'off', video: 'off', screenshot: 'off' });
+
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '../..');
 const envPath = path.resolve(repositoryRoot, '.env.e2e');
 const evidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/owner-onboarding-production-evidence.json');
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
-const EMAIL = process.env.E2E_OWNER_MAILBOX_EMAIL ?? '';
+const EMAIL = process.env.E2E_OWNER_EMAIL ?? '';
 const PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
 const ACQUIRED_PROPERTY = 'E2E Owner Acquisition Tower';
 
@@ -55,7 +57,7 @@ let lifecycleEvidence: OwnerLifecycleEvidence;
 
 function requireLaunchCredentials() {
   const required = [
-    ['E2E_OWNER_MAILBOX_EMAIL', EMAIL],
+    ['E2E_OWNER_EMAIL', EMAIL],
     ['E2E_OWNER_PASSWORD', PASSWORD],
     ['E2E_ADMIN_EMAIL', process.env.E2E_ADMIN_EMAIL ?? ''],
     ['E2E_ADMIN_PASSWORD', process.env.E2E_ADMIN_PASSWORD ?? ''],
