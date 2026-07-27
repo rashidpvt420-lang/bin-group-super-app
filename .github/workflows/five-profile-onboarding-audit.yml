@@ -28,14 +28,19 @@ on:
       - 'scripts/harden-hr-privacy-rules.mjs'
       - 'scripts/lib/functions-deployment-evidence.mjs'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
+      - 'scripts/run-broker-production-evidence.mjs'
       - 'scripts/setup-ai-secrets.ps1'
       - 'scripts/verify-admin-access.mjs'
       - 'scripts/verify-firebase-production-secrets.mjs'
       - 'scripts/verify-production-deployment.mjs'
+      - 'scripts/verify-production-workflow-env.mjs'
       - 'scripts/windows-ai-live-recovery.ps1'
+      - 'scripts/write-production-env.mjs'
       - 'src/App.tsx'
       - 'src/admin/**'
       - 'src/broker/**'
+      - 'src/components/AuthenticatedShell.tsx'
+      - 'src/components/SovereignAIChat.tsx'
       - 'src/components/onboarding/**'
       - 'src/context/LanguageContext.tsx'
       - 'src/context/RoleContext.tsx'
@@ -46,6 +51,7 @@ on:
       - 'src/technician/**'
       - 'src/tenant/**'
       - 'src/utils/geoAnchor.ts'
+      - 'tests/e2e/business-broker.spec.ts'
       - 'tests/launch/admin-mfa-recovery-deployment.test.mjs'
       - 'tests/launch/admin-property-review-authority.test.mjs'
       - 'tests/launch/admin-staff-invitation-provisioning.test.mjs'
@@ -55,6 +61,7 @@ on:
       - 'tests/launch/canonical-readiness-docs.test.mjs'
       - 'tests/launch/firebase-functions-deploy-batching.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
+      - 'tests/launch/hard-launch-blocker-remediation.test.mjs'
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/privileged-account-cleanup-dry-run.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
@@ -67,6 +74,7 @@ on:
       - main
       - 'agent/five-profile-onboarding-hardening'
       - 'agent/profile-readiness-authority-hardening'
+      - 'agent/hard-launch-blocker-remediation-*'
 
 permissions:
   contents: read
@@ -136,6 +144,7 @@ jobs:
           tests/launch/owner-property-proof-authority-audit.test.mjs
           tests/launch/tenant-readiness-authority-audit.test.mjs
           tests/launch/firebase-functions-deploy-batching.test.mjs
+          tests/launch/hard-launch-blocker-remediation.test.mjs
 
       - name: Build main application
         run: npm run build

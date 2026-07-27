@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const rulesPath = 'firestore.rules';
-const source = readFileSync(rulesPath, 'utf8');
+let source = readFileSync(rulesPath, 'utf8');
 
 const legacy = `    match /hrProfiles/{profileId} {
       allow read: if isHr() || isFinance() || isOps() || (signedIn() && request.auth.uid == profileId) || staffCanRead(resource.data);
@@ -20,15 +20,58 @@ const hardened = `    match /hrProfiles/{profileId} {
       allow delete: if isHrManagerTier();
     }`;
 
-if (source.includes(hardened)) {
-  console.log('[harden-hr-privacy-rules] already hardened');
+const legacyMood = `    match /staffMoodCheckins/{checkinId} {
+      allow read: if isHr() || staffCanRead(resource.data);
+      allow create: if isHr() || staffCanCreate(request.resource.data);
+      allow update: if isHr();
+      allow delete: if isHr();
+    }`;
+
+const hardenedMood = `    match /staffMoodCheckins/{checkinId} {
+      // Wellbeing and distress signals are restricted to the employee and HR-manager tier.
+      allow read: if isHrManagerTier() || staffCanRead(resource.data);
+      allow create: if isHrManagerTier() || staffCanCreate(request.resource.data);
+      allow update: if isHrManagerTier();
+      allow delete: if isHrManagerTier();
+    }`;
+
+const legacyStaffDocuments = `    match /staffDocuments/{documentId} {
+      allow read: if isHr() || isFinance() || staffCanRead(resource.data);
+      allow create: if isHr() || staffRequestCreate(request.resource.data);
+      allow update: if isHr();
+      allow delete: if isHr();
+    }`;
+
+const hardenedStaffDocuments = `    match /staffDocuments/{documentId} {
+      // Passports, IDs, visas and medical files are not a general Finance data source.
+      // Finance consumes payroll-safe records from staffPayslips/payroll instead.
+      allow read: if isHr() || staffCanRead(resource.data);
+      allow create: if isHr() || staffRequestCreate(request.resource.data);
+      allow update: if isHr();
+      allow delete: if isHr();
+    }`;
+
+const transformations = [
+  ['hrProfiles', legacy, hardened],
+  ['staffMoodCheckins', legacyMood, hardenedMood],
+  ['staffDocuments', legacyStaffDocuments, hardenedStaffDocuments],
+];
+
+let changed = false;
+for (const [label, before, after] of transformations) {
+  if (source.includes(after)) continue;
+  if (!source.includes(before)) {
+    console.error(`[harden-hr-privacy-rules] expected ${label} rule block was not found`);
+    process.exit(1);
+  }
+  source = source.replace(before, after);
+  changed = true;
+}
+
+if (!changed) {
+  console.log('[harden-hr-privacy-rules] HR profile, staff document and wellbeing rules already hardened');
   process.exit(0);
 }
 
-if (!source.includes(legacy)) {
-  console.error('[harden-hr-privacy-rules] expected hrProfiles rule block was not found');
-  process.exit(1);
-}
-
-writeFileSync(rulesPath, source.replace(legacy, hardened));
-console.log('[harden-hr-privacy-rules] hardened hrProfiles private-HR access');
+writeFileSync(rulesPath, source);
+console.log('[harden-hr-privacy-rules] hardened private HR, staff document and wellbeing access');

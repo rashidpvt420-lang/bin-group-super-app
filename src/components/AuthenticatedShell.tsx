@@ -102,7 +102,7 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const normalizedRole = (role || '').toLowerCase();
   const shouldRenderGlobalHeader = showChrome;
   const shouldRenderFloatingNavigation = showChrome && !isAdminRoute && !isTenantRoute;
-  const shouldRenderSovereignAI = showChrome && isRolePortalRoute && AI_ENABLED_ROLES.includes(normalizedRole);
+  const shouldRenderSovereignAI = showChrome && isRolePortalRoute && Boolean(user?.uid) && AI_ENABLED_ROLES.includes(normalizedRole);
 
   if (roleLoading && !publicAuth) {
     return <>{loadingFallback}</>;
@@ -135,7 +135,13 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
       {shouldRenderGlobalHeader && <BinGroupHeader />}
       {children}
       {shouldRenderSovereignAI && (
-        <SovereignAIChat role={normalizedRole as any} onNavigate={navigate} />
+        <SovereignAIChat
+          role={normalizedRole as any}
+          onNavigate={navigate}
+          allowLiveProvider
+          isAuthenticated={Boolean(user?.uid)}
+          authUserId={user?.uid || null}
+        />
       )}
       {shouldRenderFloatingNavigation && <NavigationControl />}
       <SovereignAlertHandler />
