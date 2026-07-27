@@ -47,49 +47,72 @@ const mailboxOauthKeys = new Set([
   'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
 ]);
 
-function normalizeWorkflowHeader(relativePath) {
+function currentEnvBlockHas(output, indentation, key) {
+  for (let index = output.length - 1; index >= 0; index -= 1) {
+    const line = output[index];
+    const match = line.match(/^(\s*)([A-Z0-9_]+):/);
+    if (match && match[1].length === indentation.length && match[2] === key) return true;
+    const leading = line.match(/^\s*/)?.[0].length || 0;
+    if (line.trim() && leading < indentation.length) return false;
+  }
+  return false;
+}
+
+function normalizeProtectedWorkflow(relativePath) {
   const workflowPath = path.join(process.cwd(), relativePath);
   const source = readFileSync(workflowPath, 'utf8').replace(/\r\n?/g, '\n');
-  const jobsMarker = '\njobs:';
-  const jobsIndex = source.indexOf(jobsMarker);
-  if (jobsIndex < 0) throw new Error(`${relativePath}: jobs section is missing.`);
+  const output = [];
 
-  const prefix = source.slice(0, jobsIndex);
-  const suffix = source.slice(jobsIndex);
-  const lines = prefix.split('\n');
-  const hasOwnerLogin = lines.some((line) => /^  E2E_OWNER_EMAIL:/.test(line));
-  const hasBrokerLogin = lines.some((line) => /^  E2E_BROKER_EMAIL:/.test(line));
-  const normalized = [];
+  for (const line of source.split('\n')) {
+    const assignment = line.match(/^(\s+)([A-Z0-9_]+):(.*)$/);
+    if (assignment && mailboxOauthKeys.has(assignment[2])) continue;
 
-  for (const line of lines) {
-    const key = line.match(/^  ([A-Z0-9_]+):/)?.[1] || '';
-    if (mailboxOauthKeys.has(key)) continue;
-    if (key === 'E2E_OWNER_MAILBOX_EMAIL' && !hasOwnerLogin) {
-      normalized.push('  E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}');
+    if (assignment && assignment[2] === 'E2E_OWNER_MAILBOX_EMAIL') {
+      const indentation = assignment[1];
+      if (!currentEnvBlockHas(output, indentation, 'E2E_OWNER_EMAIL')) {
+        output.push(`${indentation}E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}`);
+      }
     }
-    if (key === 'E2E_BROKER_MAILBOX_EMAIL' && !hasBrokerLogin) {
-      normalized.push('  E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}');
+    if (assignment && assignment[2] === 'E2E_BROKER_MAILBOX_EMAIL') {
+      const indentation = assignment[1];
+      if (!currentEnvBlockHas(output, indentation, 'E2E_BROKER_EMAIL')) {
+        output.push(`${indentation}E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}`);
+      }
     }
-    normalized.push(line);
+
+    if ([...mailboxOauthKeys].some((key) => line.includes(`printf '${key}=`) || line.includes(`printf \"${key}=`))) {
+      continue;
+    }
+
+    const ownerMailboxWrite = line.match(/^(\s*)printf 'E2E_OWNER_MAILBOX_EMAIL=%s\\n' \"\$E2E_OWNER_MAILBOX_EMAIL\" (>>|>) \.env\.e2e$/);
+    if (ownerMailboxWrite && !output.some((candidate) => candidate.includes("printf 'E2E_OWNER_EMAIL=%s\\n'"))) {
+      output.push(`${ownerMailboxWrite[1]}printf 'E2E_OWNER_EMAIL=%s\\n' \"$E2E_OWNER_EMAIL\" ${ownerMailboxWrite[2]} .env.e2e`);
+    }
+    const brokerMailboxWrite = line.match(/^(\s*)printf 'E2E_BROKER_MAILBOX_EMAIL=%s\\n' \"\$E2E_BROKER_MAILBOX_EMAIL\" (>>|>) \.env\.e2e$/);
+    if (brokerMailboxWrite && !output.some((candidate) => candidate.includes("printf 'E2E_BROKER_EMAIL=%s\\n'"))) {
+      output.push(`${brokerMailboxWrite[1]}printf 'E2E_BROKER_EMAIL=%s\\n' \"$E2E_BROKER_EMAIL\" ${brokerMailboxWrite[2]} .env.e2e`);
+    }
+
+    output.push(line);
   }
 
-  const result = `${normalized.join('\n')}${suffix}`;
-  const resultPrefix = result.slice(0, result.indexOf(jobsMarker));
+  const result = output.join('\n');
   for (const key of mailboxOauthKeys) {
-    if (new RegExp(`^  ${key}:`, 'm').test(resultPrefix)) {
-      throw new Error(`${relativePath}: ${key} remains workflow-global after normalization.`);
+    if (new RegExp(`^\\s+${key}:`, 'm').test(result)) {
+      throw new Error(`${relativePath}: ${key} remains outside a dedicated consuming step before strict patching.`);
     }
-  }
-  for (const required of ['E2E_OWNER_EMAIL', 'E2E_OWNER_MAILBOX_EMAIL', 'E2E_BROKER_EMAIL', 'E2E_BROKER_MAILBOX_EMAIL']) {
-    if (!new RegExp(`^  ${required}:`, 'm').test(resultPrefix)) {
-      throw new Error(`${relativePath}: ${required} is missing from the protected workflow identity header.`);
+    if (result.includes(`printf '${key}=`) || result.includes(`printf \"${key}=`)) {
+      throw new Error(`${relativePath}: ${key} remains persisted in .env.e2e.`);
     }
   }
   writeFileSync(workflowPath, result.endsWith('\n') ? result : `${result}\n`, 'utf8');
 }
 
-normalizeWorkflowHeader('.github/workflows/admin-production-evidence.yml');
-normalizeWorkflowHeader('.github/workflows/live-role-smoke.yml');
+for (const workflow of [
+  '.github/workflows/admin-production-evidence.yml',
+  '.github/workflows/firebase-production-deploy.yml',
+  '.github/workflows/live-role-smoke.yml',
+]) normalizeProtectedWorkflow(workflow);
 
 const payloadWrapper = readFileSync(
   path.join(process.cwd(), 'scripts/apply-final-launch-evidence-corrections.payload.mjs'),
