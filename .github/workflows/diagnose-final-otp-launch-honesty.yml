@@ -1,0 +1,86 @@
+name: Diagnose Final OTP Launch Honesty
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/diagnose-final-otp-launch-honesty.yml
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  diagnose:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'agent/finalize-launch-evidence-sequence' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/finalize-launch-evidence-sequence
+          fetch-depth: 0
+
+      - name: Reuse exact reviewed correction script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/fix-final-otp-review-blockers.yml').read_text(encoding='utf-8')
+          start_marker = "          python3 <<'PY'\n"
+          end_marker = "          PY\n"
+          start = source.index(start_marker) + len(start_marker)
+          end = source.index(end_marker, start)
+          lines = source[start:end].splitlines()
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          Path('/tmp/apply-final-otp-review-corrections.py').write_text(script, encoding='utf-8')
+          PY
+          python3 /tmp/apply-final-otp-review-corrections.py
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Capture complete launch-honesty result
+        shell: bash
+        run: |
+          set +e
+          npm run test:launch-honesty > /tmp/final-otp-launch-honesty.log 2>&1
+          status=$?
+          printf '%s\n' "$status" > /tmp/final-otp-launch-honesty.status
+          {
+            grep -nE 'not ok|AssertionError|ERR_ASSERTION|fail|Error:' /tmp/final-otp-launch-honesty.log || true
+            printf '\n--- final 300 lines ---\n'
+            tail -n 300 /tmp/final-otp-launch-honesty.log
+          } > /tmp/final-otp-launch-honesty-summary.log
+          cat /tmp/final-otp-launch-honesty-summary.log
+          exit 0
+
+      - name: Upload launch-honesty diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-otp-launch-honesty-${{ github.sha }}
+          path: |
+            /tmp/final-otp-launch-honesty.log
+            /tmp/final-otp-launch-honesty-summary.log
+            /tmp/final-otp-launch-honesty.status
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce diagnostic result
+        run: test "$(cat /tmp/final-otp-launch-honesty.status)" = "0"
