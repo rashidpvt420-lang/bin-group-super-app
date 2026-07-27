@@ -20,7 +20,7 @@ if (!existsSync(templatePath)) {
 let source = readFileSync(templatePath, 'utf8');
 source = source.replace(
   "import { mkdirSync, writeFileSync } from 'node:fs';",
-  "import { mkdirSync, writeFileSync } from 'node:fs';\nimport { execFileSync } from 'node:child_process';",
+  "import { mkdirSync, writeFileSync } from 'node:fs';\nimport { execFileSync } from 'node:child_process';\nimport { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';",
 );
 
 const startMarker = 'async function deriveOtp(requestId) {';
@@ -51,58 +51,16 @@ const mailboxBlock = `function resolveOwnerMailboxSecret(name) {
 }
 
 const normalizeMailboxMessageId = (value) => text(value).replace(/^<|>$/g, '').toLowerCase();
-
-function decodeMailboxBase64Url(value) {
-  const normalized = text(value).replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return Buffer.from(padded, 'base64').toString('utf8');
-}
-
-function mailboxHeader(message, name) {
-  const headers = Array.isArray(message?.payload?.headers) ? message.payload.headers : [];
-  return text(headers.find((entry) => text(entry?.name).toLowerCase() === name.toLowerCase())?.value);
-}
-
-function mailboxBody(payload) {
-  if (!payload || typeof payload !== 'object') return '';
-  const own = text(payload.body?.data) ? decodeMailboxBase64Url(payload.body.data) : '';
-  const parts = Array.isArray(payload.parts) ? payload.parts : [];
-  const plain = parts.find((part) => text(part.mimeType).toLowerCase() === 'text/plain');
-  if (plain) return mailboxBody(plain);
-  const nested = parts.map(mailboxBody).find(Boolean);
-  return own || nested || '';
-}
+const ownerMailboxEmail = text(process.env.E2E_OWNER_MAILBOX_EMAIL).toLowerCase();
+assert(ownerMailboxEmail, 'E2E_OWNER_MAILBOX_EMAIL is required for verified Owner mailbox evidence.');
 
 async function ownerMailboxAccessToken() {
-  const clientId = resolveOwnerMailboxSecret('E2E_OWNER_MAILBOX_CLIENT_ID');
-  const clientSecret = resolveOwnerMailboxSecret('E2E_OWNER_MAILBOX_CLIENT_SECRET');
-  const refreshToken = resolveOwnerMailboxSecret('E2E_OWNER_MAILBOX_REFRESH_TOKEN');
-  const body = await jsonRequest('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }).toString(),
-  }, 'Owner mailbox OAuth exchange');
-  assert(text(body.access_token), 'Owner mailbox OAuth exchange did not return an access token.');
-  return text(body.access_token);
-}
-
-async function verifyOwnerMailboxIdentity(accessToken) {
-  const profile = await jsonRequest(
-    'https://gmail.googleapis.com/gmail/v1/users/me/profile',
-    { headers: { Authorization: \`Bearer \${accessToken}\` } },
-    'Owner mailbox identity read',
-  );
-  const authenticatedMailboxEmail = text(profile.emailAddress).toLowerCase();
-  assert(authenticatedMailboxEmail, 'Owner mailbox profile did not return an email address.');
-  assert(
-    authenticatedMailboxEmail === ownerEmail,
-    'Authenticated Gmail mailbox does not belong to the Owner test identity.',
-  );
+  return exchangeGmailAccessToken({
+    clientId: resolveOwnerMailboxSecret('E2E_OWNER_MAILBOX_CLIENT_ID'),
+    clientSecret: resolveOwnerMailboxSecret('E2E_OWNER_MAILBOX_CLIENT_SECRET'),
+    refreshToken: resolveOwnerMailboxSecret('E2E_OWNER_MAILBOX_REFRESH_TOKEN'),
+    label: 'Owner mailbox',
+  });
 }
 
 async function retrieveOwnerMailboxOtp(requestId, timeoutMs = 120000) {
@@ -117,45 +75,27 @@ async function retrieveOwnerMailboxOtp(requestId, timeoutMs = 120000) {
   assert(text(value.delivery?.from) === BRANDED_FROM, 'Contract OTP did not use the approved BIN GROUP sender.');
   assert(value.delivery?.providerAccepted === true, 'Contract OTP provider did not accept the Owner mailbox.');
   const requestedAt = value.delivery?.sentAt?.toMillis?.() || value.createdAt?.toMillis?.() || Date.now() - 60000;
-
   const accessToken = await ownerMailboxAccessToken();
-  await verifyOwnerMailboxIdentity(accessToken);
-  const deadline = Date.now() + timeoutMs;
-  const query = \`from:ceo@bin-groups.com to:\${ownerEmail} subject:"BIN GROUP contract signature OTP" newer_than:1d\`;
-  while (Date.now() < deadline) {
-    const list = await jsonRequest(
-      \`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&q=\${encodeURIComponent(query)}\`,
-      { headers: { Authorization: \`Bearer \${accessToken}\` } },
-      'Owner mailbox message search',
-    );
-    for (const candidate of Array.isArray(list.messages) ? list.messages : []) {
-      const message = await jsonRequest(
-        \`https://gmail.googleapis.com/gmail/v1/users/me/messages/\${encodeURIComponent(candidate.id)}?format=full\`,
-        { headers: { Authorization: \`Bearer \${accessToken}\` } },
-        'Owner mailbox message read',
-      );
-      const receivedAtMs = Number(message.internalDate || 0);
-      if (!Number.isFinite(receivedAtMs) || receivedAtMs < requestedAt - 10000) continue;
-      const from = mailboxHeader(message, 'From');
-      const to = mailboxHeader(message, 'To').toLowerCase();
-      const subject = mailboxHeader(message, 'Subject');
-      const receivedMessageId = normalizeMailboxMessageId(mailboxHeader(message, 'Message-ID'));
-      if (!/ceo@bin-groups\\.com/i.test(from)) continue;
-      if (!to.includes(ownerEmail) || subject !== 'BIN GROUP contract signature OTP') continue;
-      if (normalizeMailboxMessageId(providerMessageId) !== receivedMessageId) continue;
-      const match = mailboxBody(message.payload).match(/contract signature OTP:\\s*(\\d{6})/i);
-      if (!match) continue;
-      return {
-        code: match[1],
-        providerMessageId,
-        mailboxReceiptVerified: true,
-        mailboxReceivedAt: new Date(receivedAtMs).toISOString(),
-        mailboxMessageIdHash: sha256(receivedMessageId),
-      };
-    }
-    await sleep(5000);
-  }
-  throw new Error('Timed out waiting for the provider-confirmed Owner OTP in the verified mailbox.');
+  const receipt = await readGmailOtp({
+    accessToken,
+    expectedMailboxEmail: ownerMailboxEmail,
+    sender: 'ceo@bin-groups.com',
+    recipient: ownerEmail,
+    subject: 'BIN GROUP contract signature OTP',
+    correlationId: requestId,
+    providerMessageId,
+    requestedAtMs: requestedAt,
+    otpPattern: /contract signature OTP:\\s*(\\d{6})/i,
+    timeoutMs,
+    label: 'Owner contract OTP',
+  });
+  return {
+    code: receipt.otp,
+    providerMessageId,
+    mailboxReceiptVerified: true,
+    mailboxReceivedAt: receipt.receivedAt,
+    mailboxMessageIdHash: receipt.messageIdHash,
+  };
 }
 
 async function verifyContractOtp(ownerSession, appCheckToken, intakeId, quoteHash, signatureName, propertyName) {
@@ -219,9 +159,9 @@ for (const forbidden of [
   }
 }
 for (const required of [
-  'gmail.googleapis.com/gmail/v1/users/me/profile',
-  'authenticatedMailboxEmail === ownerEmail',
-  'gmail.googleapis.com/gmail/v1/users/me/messages',
+  "from './lib/gmail-otp-reader.mjs'",
+    'expectedMailboxEmail: ownerMailboxEmail',
+    'correlationId: requestId',
   'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
   'mailboxReceiptVerified: true',
   'HMAC_SHA256_OWNER_CONTRACT_V1',

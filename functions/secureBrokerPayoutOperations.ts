@@ -34,12 +34,14 @@ function hashOtp(input: {
   challengeId: string;
   uid: string;
   bindingHash: string;
+  correlationId: string;
 }) {
   const payload = [
     OTP_HASH_VERSION,
     input.challengeId,
     input.uid,
     input.bindingHash,
+    input.correlationId,
     input.otp,
     input.salt,
   ].join("|");
@@ -151,7 +153,7 @@ async function enforceRate(uid: string) {
   });
 }
 
-async function deliverOtp(email: string, otp: string, amount: number, count: number) {
+async function deliverOtp(email: string, otp: string, amount: number, count: number, correlationId: string) {
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
   if (!user || !pass) throw new HttpsError("failed-precondition", "SMTP email service is not configured.");
@@ -167,7 +169,7 @@ async function deliverOtp(email: string, otp: string, amount: number, count: num
     from: process.env.MAIL_FROM || process.env.SMTP_FROM || "BIN GROUP <ceo@bin-groups.com>",
     to: email,
     subject: "BIN GROUP payout verification code",
-    text: `Your payout code is ${otp}. It authorizes AED ${amount.toFixed(2)} across ${count} commission(s) and expires in 10 minutes.`,
+    text: `Your payout code is ${otp}. It authorizes AED ${amount.toFixed(2)} across ${count} commission(s) and expires in 10 minutes. Verification reference: ${correlationId}.`,
   });
   if (!text(info.messageId)) throw new HttpsError("internal", "OTP provider did not confirm delivery.");
   return text(info.messageId);
@@ -186,7 +188,8 @@ export const requestBrokerPayoutOtp = onCall({
   const salt = crypto.randomBytes(18).toString("hex");
   const ref = db.collection("broker_payout_otps").doc();
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
-  const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length);
+  const correlationId = crypto.randomUUID();
+  const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length, correlationId);
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS);
   await ref.set({
     uid: broker.uid,
@@ -195,8 +198,9 @@ export const requestBrokerPayoutOtp = onCall({
     amount: commissions.amount,
     currency: "AED",
     bindingHash,
+    correlationId,
     kycSubmissionHash: broker.approvedSubmissionHash,
-    otpHash: hashOtp({ otp, salt, challengeId: ref.id, uid: broker.uid, bindingHash }),
+    otpHash: hashOtp({ otp, salt, challengeId: ref.id, uid: broker.uid, bindingHash, correlationId }),
     otpHashVersion: OTP_HASH_VERSION,
     salt,
     attempts: 0,
@@ -210,6 +214,7 @@ export const requestBrokerPayoutOtp = onCall({
     action: "BROKER_PAYOUT_OTP_SENT",
     actorId: broker.uid,
     challengeId: ref.id,
+    correlationId,
     bindingHash,
     kycSubmissionHash: broker.approvedSubmissionHash,
     otpHashVersion: OTP_HASH_VERSION,
@@ -218,6 +223,7 @@ export const requestBrokerPayoutOtp = onCall({
   return {
     status: "OTP_SENT",
     challengeId: ref.id,
+    correlationId,
     expiresAt: expiresAt.toMillis(),
     amount: commissions.amount,
     commissionCount: commissions.ids.length,
@@ -243,7 +249,7 @@ export const verifyBrokerPayoutOtp = onCall({
     if (data.kycSubmissionHash !== broker.approvedSubmissionHash) return "KYC_CHANGED";
     if (data.status === "CONSUMED") return "CONSUMED";
     if ((data.expiresAt?.toMillis?.() || 0) < Date.now()) return "EXPIRED";
-    if (data.otpHashVersion !== OTP_HASH_VERSION) return "LEGACY_CHALLENGE";
+    if (data.otpHashVersion !== OTP_HASH_VERSION || !text(data.correlationId)) return "LEGACY_CHALLENGE";
     const attempts = Number(data.attempts || 0);
     if (attempts >= MAX_ATTEMPTS) return "MAX_ATTEMPTS";
     const expected = Buffer.from(text(data.otpHash), "hex");
@@ -253,6 +259,7 @@ export const verifyBrokerPayoutOtp = onCall({
       challengeId,
       uid: broker.uid,
       bindingHash: text(data.bindingHash),
+      correlationId: text(data.correlationId),
     }), "hex");
     const valid = expected.length > 0 && expected.length === submitted.length && crypto.timingSafeEqual(expected, submitted);
     if (!valid) {

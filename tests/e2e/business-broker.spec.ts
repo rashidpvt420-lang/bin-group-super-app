@@ -14,13 +14,15 @@ import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+test.use({ trace: 'off', video: 'off', screenshot: 'off' });
+
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '../..');
 const envPath = path.resolve(repositoryRoot, '.env.e2e');
 const evidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/broker-production-evidence.json');
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
-const EMAIL = process.env.E2E_BROKER_MAILBOX_EMAIL ?? '';
+const EMAIL = process.env.E2E_BROKER_EMAIL ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
 type BrokerProductionEvidence = {
@@ -66,7 +68,7 @@ type BrokerProductionEvidence = {
 
 function requireLaunchCredentials() {
   const required = [
-    ['E2E_BROKER_MAILBOX_EMAIL', EMAIL],
+    ['E2E_BROKER_EMAIL', EMAIL],
     ['E2E_BROKER_PASSWORD', PASSWORD],
     ['VITE_FIREBASE_APPCHECK_DEBUG_TOKEN', process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN ?? ''],
     ['GITHUB_SHA', process.env.GITHUB_SHA ?? ''],

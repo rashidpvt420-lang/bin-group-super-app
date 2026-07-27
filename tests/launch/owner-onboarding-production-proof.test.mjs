@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 const lifecycle = fs.readFileSync(new URL('../../scripts/run-owner-onboarding-production-evidence.mjs', import.meta.url), 'utf8');
 const secureLifecycle = fs.readFileSync(new URL('../../scripts/run-owner-onboarding-production-evidence-secure.mjs', import.meta.url), 'utf8');
+const gmailReader = fs.readFileSync(new URL('../../scripts/lib/gmail-otp-reader.mjs', import.meta.url), 'utf8');
 const wrapper = fs.readFileSync(new URL('../../scripts/run-owner-business-suite-evidence.mjs', import.meta.url), 'utf8');
 const ownerSpec = fs.readFileSync(new URL('../e2e/business-owner.spec.ts', import.meta.url), 'utf8');
 const financials = fs.readFileSync(new URL('../../src/owner/pages/OwnerFinancialsPage.tsx', import.meta.url), 'utf8');
@@ -49,13 +50,14 @@ for (const token of [
   'E2E_OWNER_MAILBOX_CLIENT_SECRET',
   'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
   'functions:secrets:access',
-  'gmail.googleapis.com/gmail/v1/users/me/profile',
-  'authenticatedMailboxEmail === ownerEmail',
-  'gmail.googleapis.com/gmail/v1/users/me/messages',
-  "subject !== 'BIN GROUP contract signature OTP'",
-  'normalizeMailboxMessageId(providerMessageId) !== receivedMessageId',
+  "from './lib/gmail-otp-reader.mjs'",
+  'expectedMailboxEmail: ownerMailboxEmail',
+  'recipient: ownerEmail',
+  "subject: 'BIN GROUP contract signature OTP'",
+  'correlationId: requestId',
+  'providerMessageId',
   'mailboxReceiptVerified: true',
-  'mailboxMessageIdHash: sha256(receivedMessageId)',
+  'mailboxMessageIdHash: receipt.messageIdHash',
   "value.testEvidence === undefined",
   'HMAC_SHA256_OWNER_CONTRACT_V1',
 ]) {
@@ -75,6 +77,16 @@ for (const forbidden of [
   assert.ok(!generatedMailboxBlock.includes(forbidden), `Generated Owner mailbox evidence contains forbidden OTP bypass: ${forbidden}`);
 }
 assert.ok(secureLifecycle.includes('if (source.includes(forbidden))'), 'Owner wrapper must fail closed if a forbidden OTP bypass survives transformation');
+
+for (const token of [
+  'gmail.googleapis.com/gmail/v1/users/me/profile',
+  'gmail.googleapis.com/gmail/v1/users/me/messages',
+  'attachments/${encodeURIComponent(attachmentId)}',
+  'matched multiple messages',
+  'strict base64url',
+]) {
+  assert.ok(gmailReader.includes(token), `Shared Gmail OTP reader is missing: ${token}`);
+}
 
 for (const token of [
   'defineSecret("OWNER_CONTRACT_OTP_PEPPER")',

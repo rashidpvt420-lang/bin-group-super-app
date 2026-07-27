@@ -1,7 +1,6 @@
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import path from 'path';
-import { runProductionOtpMailboxPreflight } from './lib/production-otp-mailbox-preflight.mjs';
 
 const root = process.cwd();
 for (const pkg of ['dotenv', 'firebase-admin']) {
@@ -39,6 +38,17 @@ const mailboxOauthKeys = [
   'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
 ];
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
+const requireMailboxEvidence = process.env.E2E_REQUIRE_MAILBOX_EVIDENCE === 'true';
+const mailboxEvidenceKeys = [
+  'E2E_OWNER_MAILBOX_EMAIL',
+  'E2E_OWNER_MAILBOX_CLIENT_ID',
+  'E2E_OWNER_MAILBOX_CLIENT_SECRET',
+  'E2E_OWNER_MAILBOX_REFRESH_TOKEN',
+  'E2E_BROKER_MAILBOX_EMAIL',
+  'E2E_BROKER_MAILBOX_CLIENT_ID',
+  'E2E_BROKER_MAILBOX_CLIENT_SECRET',
+  'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
+];
 const requireFounderEvidence = strictRoles && (
   process.env.E2E_REQUIRE_FOUNDER_MFA === 'true' ||
   process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests' ||
@@ -49,6 +59,7 @@ const keys = [
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
   ...roles.flatMap((role) => [mailboxEmailEnv(role), `E2E_${role}_PASSWORD`]),
   ...(requireFounderEvidence ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
+  ...(requireMailboxEvidence ? mailboxEvidenceKeys : []),
 ];
 const missing = keys.filter((key) => !String(process.env[key] || '').trim());
 const allowMissing = process.env.E2E_ALLOW_MISSING_ENV === 'true';
@@ -166,18 +177,8 @@ if (allMissing.length) {
   }
   console.warn('[E2E_ENV_GUARD] Continuing with missing values because E2E_ALLOW_MISSING_ENV=true. This must not be used for launch clearance.');
 } else {
-  const protectedEvidenceWorkflow = process.env.GITHUB_ACTIONS === 'true' && [
-    'Firebase Production Deploy',
-    'Live Role Smoke Tests',
-  ].includes(String(process.env.GITHUB_WORKFLOW || ''));
-  if (protectedEvidenceWorkflow) {
-    try {
-      const preflight = await runProductionOtpMailboxPreflight();
-      console.log(`[E2E_ENV_GUARD] protected_mailboxes=${preflight.mailboxesVerified} otp_peppers=${preflight.peppersVerified} secret_values_logged=false`);
-    } catch (error) {
-      console.error(`[E2E_ENV_GUARD] protected OTP/mailbox preflight failed: ${error instanceof Error ? error.message : String(error)}`);
-      process.exit(1);
-    }
+  if (requireMailboxEvidence) {
+    console.log('[E2E_ENV_GUARD] mailbox evidence inputs=set; live Gmail access is verified only by the dedicated consuming step.');
   }
   console.log('[E2E_ENV_GUARD] ok');
 }

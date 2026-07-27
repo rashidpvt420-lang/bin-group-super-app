@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const fixture = readFileSync('scripts/prepare-broker-payout-otp-e2e.mjs', 'utf8');
 const criticalRunner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
 const productionRunner = readFileSync('scripts/run-broker-production-evidence.mjs', 'utf8');
+const gmailReader = readFileSync('scripts/lib/gmail-otp-reader.mjs', 'utf8');
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 
@@ -55,9 +56,12 @@ test('Broker protected runner binds one UI lead to contract activation and one d
 
 test('Broker protected runner requires mailbox OTP verification and completed payout submission', () => {
   assert.match(productionRunner, /E2E_BROKER_MAILBOX_CLIENT_ID/);
-  assert.match(productionRunner, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/profile/);
-  assert.match(productionRunner, /mailboxProfile\.emailAddress/);
-  assert.match(productionRunner, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
+  assert.match(productionRunner, /exchangeGmailAccessToken, readGmailOtp/);
+  assert.match(productionRunner, /expectedMailboxEmail: brokerMailboxEmail/);
+  assert.match(productionRunner, /correlationId/);
+  assert.match(gmailReader, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/profile/);
+  assert.match(gmailReader, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
+  assert.match(gmailReader, /attachments\/\$\{encodeURIComponent\(attachmentId\)\}/);
   assert.match(productionRunner, /requestBrokerPayoutOtp/);
   assert.match(productionRunner, /verifyBrokerPayoutOtp/);
   assert.match(productionRunner, /submitBrokerPayoutRequest/);

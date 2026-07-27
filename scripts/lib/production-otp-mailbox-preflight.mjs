@@ -1,4 +1,8 @@
 import { execFileSync } from 'node:child_process';
+import {
+  exchangeGmailAccessToken,
+  verifyGmailMailboxAccess,
+} from './gmail-otp-reader.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const PEPPER_NAMES = [
@@ -39,60 +43,11 @@ function defaultSecretResolver(name, { env, projectId }) {
   }
 }
 
-async function jsonRequest(fetchImpl, url, options, label) {
-  let response;
-  try {
-    response = await fetchImpl(url, options);
-  } catch {
-    throw new Error(`${label} failed before an HTTP response.`);
-  }
-  let body = {};
-  try {
-    body = await response.json();
-  } catch {
-    body = {};
-  }
-  if (!response.ok) throw new Error(`${label} failed with HTTP ${response.status}.`);
-  return body;
-}
-
-async function verifyMailbox({ mailbox, credentials, expectedEmail, fetchImpl }) {
-  const tokenResponse = await jsonRequest(fetchImpl, 'https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: credentials.clientId,
-      client_secret: credentials.clientSecret,
-      refresh_token: credentials.refreshToken,
-      grant_type: 'refresh_token',
-    }).toString(),
-  }, `${mailbox.label} mailbox OAuth exchange`);
-  const bearerCredential = text(tokenResponse.access_token);
-  if (!bearerCredential) throw new Error(`${mailbox.label} mailbox OAuth exchange returned no access token.`);
-
-  const headers = { Authorization: `Bearer ${bearerCredential}` };
-  const profile = await jsonRequest(
-    fetchImpl,
-    'https://gmail.googleapis.com/gmail/v1/users/me/profile',
-    { headers },
-    `${mailbox.label} mailbox profile verification`,
-  );
-  if (text(profile.emailAddress).toLowerCase() !== expectedEmail) {
-    throw new Error(`${mailbox.label} mailbox OAuth identity does not match the configured mailbox.`);
-  }
-
-  await jsonRequest(
-    fetchImpl,
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1',
-    { headers },
-    `${mailbox.label} mailbox read-scope verification`,
-  );
-}
-
 export async function runProductionOtpMailboxPreflight({
   env = process.env,
   fetchImpl = globalThis.fetch,
   resolveSecret = defaultSecretResolver,
+  signal,
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required for mailbox verification.');
   const projectId = text(env.GCP_PROJECT_ID || env.GCLOUD_PROJECT || env.GOOGLE_CLOUD_PROJECT || EXPECTED_PROJECT_ID);
@@ -107,9 +62,7 @@ export async function runProductionOtpMailboxPreflight({
   const resolveProtectedSecret = (name) => {
     try {
       const value = text(resolveSecret(name, { env, projectId }));
-      if (!value) {
-        blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
-      }
+      if (!value) blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
       return value;
     } catch {
       blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
@@ -129,15 +82,12 @@ export async function runProductionOtpMailboxPreflight({
 
   const mailboxCandidates = MAILBOXES.map((mailbox) => {
     const expectedEmail = text(env[mailbox.emailEnv]).toLowerCase();
-    const emailIsValid = Boolean(expectedEmail && expectedEmail.includes('@'));
-    if (!emailIsValid) {
+    if (!expectedEmail || !expectedEmail.includes('@')) {
       blockers.push(`${mailbox.emailEnv} is required for protected mailbox verification.`);
     }
-
     return {
       mailbox,
       expectedEmail,
-      emailIsValid,
       credentials: {
         clientId: resolveProtectedSecret(mailbox.clientIdSecret),
         clientSecret: resolveProtectedSecret(mailbox.clientSecretSecret),
@@ -149,11 +99,18 @@ export async function runProductionOtpMailboxPreflight({
   if (blockers.length === 0) {
     for (const candidate of mailboxCandidates) {
       try {
-        await verifyMailbox({
-          mailbox: candidate.mailbox,
-          credentials: candidate.credentials,
-          expectedEmail: candidate.expectedEmail,
+        const accessToken = await exchangeGmailAccessToken({
+          ...candidate.credentials,
           fetchImpl,
+          signal,
+          label: `${candidate.mailbox.label} mailbox`,
+        });
+        await verifyGmailMailboxAccess({
+          accessToken,
+          expectedMailboxEmail: candidate.expectedEmail,
+          fetchImpl,
+          signal,
+          label: `${candidate.mailbox.label} mailbox`,
         });
         mailboxesVerified += 1;
       } catch (error) {
@@ -178,6 +135,7 @@ export async function runProductionOtpMailboxPreflight({
     projectId,
     peppersVerified,
     mailboxesVerified,
+    sentinelFullMessagesVerified: mailboxesVerified,
     secretValuesLogged: false,
     hardLaunchClaim: false,
   };
