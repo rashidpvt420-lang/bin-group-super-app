@@ -59,8 +59,30 @@ jobs:
             tests/launch/property-geo-authority.test.mjs \
             tests/launch/canonical-ticket-authority.test.mjs
 
-      - name: Run complete launch-honesty suite
-        run: npm run test:launch-honesty
+      - name: Capture complete launch-honesty suite
+        id: launch_honesty
+        shell: bash
+        run: |
+          set +e
+          npm run test:launch-honesty > /tmp/ticket-launch-honesty.log 2>&1
+          status=$?
+          printf '%s\n' "$status" > /tmp/ticket-launch-honesty.status
+          tail -n 220 /tmp/ticket-launch-honesty.log
+          exit 0
+
+      - name: Upload launch-honesty diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ticket-launch-honesty-${{ github.sha }}
+          path: |
+            /tmp/ticket-launch-honesty.log
+            /tmp/ticket-launch-honesty.status
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce launch-honesty result
+        run: test "$(cat /tmp/ticket-launch-honesty.status)" = "0"
 
       - name: TypeScript check
         run: npm run typecheck
