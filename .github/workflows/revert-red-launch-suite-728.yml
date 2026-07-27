@@ -10,10 +10,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: revert-red-launch-suite-728
+  cancel-in-progress: true
+
 jobs:
   revert-validate-clean:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    env:
+      CI: 'false'
+      VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
     steps:
       - name: Checkout exact repair branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -52,21 +59,34 @@ jobs:
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Validate launch honesty and application builds
-        run: |
-          npm run test:launch-honesty
-          npm run typecheck
-          npm run lint
-          npm run build
-          npm run build:admin
-          npm run build:functions
+      - name: Validate launch honesty
+        run: npm run test:launch-honesty
 
-      - name: Validate deterministic Firestore authority
+      - name: Validate TypeScript
+        run: npm run typecheck
+
+      - name: Validate lint
+        run: npm run lint
+
+      - name: Build unified app
+        run: npm run build
+
+      - name: Build Admin app
+        run: npm run build:admin
+
+      - name: Build Functions
+        run: npm run build:functions
+
+      - name: Prepare deterministic Firestore authority
         run: |
           npm run normalize:rule-tests
           npm run prepare:rules
           npm run verify:rules-hardening
-          npx firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
+
+      - name: Validate Firestore and Storage rules
+        run: >-
+          npx firebase emulators:exec --only firestore,storage --project bin-group-57c60
+          "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
 
       - name: Confirm no generated drift
         shell: bash
