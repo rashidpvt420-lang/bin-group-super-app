@@ -153,7 +153,7 @@ async function enforceRate(uid: string) {
   });
 }
 
-async function deliverOtp(email: string, otp: string, amount: number, count: number, correlationId: string) {
+async function deliverOtp(email: string, otp: string, amount: number, count: number, correlationId: string, commissionIds: string[]) {
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
   if (!user || !pass) throw new HttpsError("failed-precondition", "SMTP email service is not configured.");
@@ -168,8 +168,8 @@ async function deliverOtp(email: string, otp: string, amount: number, count: num
   const info = await transport.sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_FROM || "BIN GROUP <ceo@bin-groups.com>",
     to: email,
-    subject: "BIN GROUP payout verification code",
-    text: `Your payout code is ${otp}. It authorizes AED ${amount.toFixed(2)} across ${count} commission(s) and expires in 10 minutes. Verification reference: ${correlationId}.`,
+    subject: `BIN GROUP payout verification code ${correlationId}`,
+    text: `Your payout code is ${otp}. It authorizes AED ${amount.toFixed(2)} across ${count} commission(s) and expires in 10 minutes.\n\nRequest reference: ${correlationId}\nCommission reference(s): ${commissionIds.join(", ")}`,
   });
   if (!text(info.messageId)) throw new HttpsError("internal", "OTP provider did not confirm delivery.");
   return text(info.messageId);
@@ -188,46 +188,12 @@ export const requestBrokerPayoutOtp = onCall({
   const salt = crypto.randomBytes(18).toString("hex");
   const ref = db.collection("broker_payout_otps").doc();
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
-  const correlationId = crypto.randomUUID();
-  const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length, correlationId);
+  const correlationId = ref.id;
+  const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length, correlationId, commissions.ids);
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS);
-  await ref.set({
-    uid: broker.uid,
-    email: broker.email,
-    commissionIds: commissions.ids,
-    amount: commissions.amount,
-    currency: "AED",
-    bindingHash,
-    correlationId,
-    kycSubmissionHash: broker.approvedSubmissionHash,
-    otpHash: hashOtp({ otp, salt, challengeId: ref.id, uid: broker.uid, bindingHash, correlationId }),
-    otpHashVersion: OTP_HASH_VERSION,
-    salt,
-    attempts: 0,
-    status: "PENDING",
-    expiresAt,
-    delivery: { messageId, sentAt: FieldValue.serverTimestamp() },
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  await db.collection("audit_logs").add({
-    action: "BROKER_PAYOUT_OTP_SENT",
-    actorId: broker.uid,
-    challengeId: ref.id,
-    correlationId,
-    bindingHash,
-    kycSubmissionHash: broker.approvedSubmissionHash,
-    otpHashVersion: OTP_HASH_VERSION,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  return {
-    status: "OTP_SENT",
-    challengeId: ref.id,
-    correlationId,
-    expiresAt: expiresAt.toMillis(),
-    amount: commissions.amount,
-    commissionCount: commissions.ids.length,
-  };
+  await ref.set({ uid: broker.uid, email: broker.email, commissionIds: commissions.ids, amount: commissions.amount, currency: "AED", bindingHash, correlationId, kycSubmissionHash: broker.approvedSubmissionHash, otpHash: hashOtp(otp, salt), salt, attempts: 0, status: "PENDING", expiresAt, delivery: { messageId, sentAt: FieldValue.serverTimestamp() }, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  await db.collection("audit_logs").add({ action: "BROKER_PAYOUT_OTP_SENT", actorId: broker.uid, challengeId: ref.id, correlationId, bindingHash, kycSubmissionHash: broker.approvedSubmissionHash, createdAt: FieldValue.serverTimestamp() });
+  return { status: "OTP_SENT", challengeId: ref.id, correlationId, expiresAt: expiresAt.toMillis(), amount: commissions.amount, commissionCount: commissions.ids.length };
 });
 
 export const verifyBrokerPayoutOtp = onCall({

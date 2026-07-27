@@ -250,9 +250,8 @@ jobs:
           artifact_name="firebase-production-failure-$SOURCE_RUN_SHA-$SOURCE_RUN_ID"
           failed_steps="$(jq -r '[.failedJobs[] | .failedSteps[]?.name] | unique | join(", ")' launch_package/firebase-production-failure.json)"
           errors="$(jq -r 'if (.normalizedErrorLines | length) == 0 then "- No normalized terminal error was extracted; inspect the redacted artifact." else (.normalizedErrorLines | map("- `" + . + "`") | join("\n")) end' launch_package/firebase-production-failure.json)"
-          body="$(cat <<EOF
-          ## Firebase production deployment failed
-
+          body="## Firebase production deployment failed
+          
           - Exact SHA: \`$SOURCE_RUN_SHA\`
           - Source run: $run_url
           - Failed step(s): \`${failed_steps:-unknown}\`
@@ -260,13 +259,11 @@ jobs:
           - Full artifact log redacted: \`true\`
           - Raw job log uploaded: \`false\`
           - Public launch claim: \`false\`
-
+          
           ### Normalized terminal errors
           $errors
-
-          The deployment remains fail-closed. Fix only the identified software or operational requirement before another protected dispatch.
-          EOF
-          )"
+          
+          The deployment remains fail-closed. Fix only the identified software or operational requirement before another protected dispatch."
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
 
       - name: Close completed diagnostic request without merge

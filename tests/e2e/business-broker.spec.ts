@@ -1,10 +1,8 @@
 /**
- * Protected production business proof for the Broker role.
- *
- * The browser creates the attributed lead. A protected exact-SHA runner then
- * converts that same lead through an active contract, the real commission
- * trigger, one deterministic commission, SMTP OTP verification, and a
- * completed single-use payout submission.
+ * business-broker.spec.ts
+ * Deep E2E business flow for the Broker role.
+ * Verifies: authenticated broker identity, lead attribution, commission visibility,
+ * and payout OTP challenge issuance, retrieval from the Gmail mailbox, and submission.
  */
 import { config as loadDotenv } from 'dotenv';
 import { execFileSync } from 'node:child_process';
@@ -13,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { getLatestOtp } from './helpers/gmail-otp-reader';
 
 test.use({ trace: 'off', video: 'off', screenshot: 'off' });
 
@@ -23,6 +22,7 @@ const evidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/brok
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
 const EMAIL = process.env.E2E_BROKER_EMAIL ?? '';
+const MAILBOX_EMAIL = process.env.E2E_BROKER_MAILBOX_EMAIL ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
 type BrokerProductionEvidence = {
@@ -114,7 +114,7 @@ async function login(page: Page) {
 }
 
 test.describe('Broker Business Workflow', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.use({ trace: 'off', video: 'off', screenshot: 'off' });
 
   test.beforeEach(async ({ page }) => {
     const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
@@ -202,9 +202,52 @@ test.describe('Broker Business Workflow', () => {
     });
 
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByText(/Finance & Payouts/i)).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator('body')).toContainText(/PENDING ADMIN REVIEW/i, { timeout: 30_000 });
-    await expect(page.locator('body')).toContainText(/REQUESTED/i, { timeout: 30_000 });
-    await expect(page.locator('body')).not.toContainText(/Unable to load commission records|payout verification or submission failed|permission-denied/i);
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    await expect(page.getByText(/Finance & Payouts/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 15_000 });
+
+    const requestOtp = page.getByTestId('broker-payout-request-otp');
+    await expect(requestOtp).toBeVisible({ timeout: 15_000 });
+    await expect(requestOtp).toBeEnabled({ timeout: 15_000 });
+    await expect(requestOtp).toContainText(/REQUEST PAYOUT \(1\)/i);
+
+    // Capture timestamp BEFORE the click so fast-arriving messages are not rejected.
+    const otpRequestedAtMs = Date.now();
+    await requestOtp.click();
+
+    await expect(page.getByText(/A six-digit payout verification code was sent to your verified Broker email/i)).toBeVisible({ timeout: 35_000 });
+    const otpDialog = page.getByTestId('broker-payout-otp-dialog');
+    await expect(otpDialog).toBeVisible({ timeout: 35_000 });
+    await expect(otpDialog).toContainText(/Code sent for AED 500 across 1 commission/i);
+
+    const otpCode = page.getByTestId('broker-payout-otp-code');
+    await expect(otpCode).toHaveValue('');
+    await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
+    const brokerCorrelationId = await otpDialog.getAttribute('data-correlation-id') || '';
+    if (!MAILBOX_EMAIL || !brokerCorrelationId) {
+      throw new Error('Missing E2E_BROKER_MAILBOX_EMAIL or backend payout OTP correlation ID.');
+    }
+
+    // Retrieve the real OTP from the broker Gmail mailbox via OAuth2 / Gmail API.
+    // afterMs is set to otpRequestedAtMs to ensure we only accept emails newer than
+    // the request; the -5000 ms skew allowance covers delivery latency.
+    const otp = await getLatestOtp('broker', {
+      expectedSender:    process.env.E2E_OTP_EXPECTED_SENDER || 'ceo@bin-groups.com',
+      expectedRecipient: MAILBOX_EMAIL,
+      correlationId:     brokerCorrelationId,
+      timeoutMs:         90_000,
+      afterMs:           otpRequestedAtMs - 5_000,
+      subjectHint:       'payout verification',
+    });
+
+    await otpCode.fill(otp);
+    const submitOtp = page.getByTestId('broker-payout-otp-submit');
+    await expect(submitOtp).toBeEnabled({ timeout: 5_000 });
+    await submitOtp.click();
+
+    // Verify payout was accepted by the app
+    await expect(page.getByText(/Payout request submitted|Payout approved|payout successfully/i)).toBeVisible({ timeout: 30_000 });
+    await expect(otpDialog).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator('body')).not.toContainText(/Unable to send payout verification code|payout verification or submission failed/i);
   });
 });

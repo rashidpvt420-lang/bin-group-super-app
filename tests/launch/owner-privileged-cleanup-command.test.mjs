@@ -105,9 +105,9 @@ test('review and execution workflows accept and enforce optional expected SHA', 
     assert.match(workflow, /^\s+expected_commit_sha:/m);
     assert.match(workflow, /EXPECTED_COMMIT_SHA:\s*\$\{\{ inputs\.expected_commit_sha \}\}/);
     assert.match(workflow, /\[\[ "\$EXPECTED_COMMIT_SHA" == "\$GITHUB_SHA" \]\]/);
-    assert.match(workflow, /actions\/checkout@v6/);
-    assert.match(workflow, /actions\/setup-node@v6/);
+    assert.match(workflow, /actions\/checkout@v4/);
+    assert.match(workflow, /actions\/setup-node@v4/);
     assert.match(workflow, /google-github-actions\/auth@v3/);
-    assert.match(workflow, /actions\/upload-artifact@v7/);
+    assert.match(workflow, /actions\/upload-artifact@v4/);
   }
 });

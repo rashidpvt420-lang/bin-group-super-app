@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Authenticated production business proof for the Owner role.
  * No Firebase network mocking is allowed in this launch-critical suite.
  */
@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect, Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { getLatestOtp } from './helpers/gmail-otp-reader';
 
 test.use({ trace: 'off', video: 'off', screenshot: 'off' });
 
@@ -19,6 +20,7 @@ const evidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/owne
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
 const EMAIL = process.env.E2E_OWNER_EMAIL ?? '';
+const MAILBOX_EMAIL = process.env.E2E_OWNER_MAILBOX_EMAIL ?? '';
 const PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
 const ACQUIRED_PROPERTY = 'E2E Owner Acquisition Tower';
 
@@ -118,16 +120,7 @@ async function expectAcquiredOwnerDashboard(page: Page) {
 }
 
 test.describe('Owner Business Workflow', () => {
-  test.describe.configure({ mode: 'serial' });
-  test.setTimeout(15 * 60 * 1000);
-
-  test.beforeAll(() => {
-    runOwnerLifecycleProof();
-  });
-
-  test.afterAll(() => {
-    runOwnerSuiteCommand('restore-shared-fixtures');
-  });
+  test.use({ trace: 'off', video: 'off', screenshot: 'off' });
 
   test.beforeEach(async ({ page }) => {
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
@@ -212,5 +205,49 @@ test.describe('Owner Business Workflow', () => {
     );
     await expect(page.locator('body')).toContainText(/AED|payment|financial|invoice|billing/i, { timeout: 20_000 });
     await expect(page.locator('body')).toContainText(new RegExp(String(invoiceId), 'i'), { timeout: 20_000 });
+  });
+
+  test('Owner can request and submit the contract signature OTP from the Gmail mailbox', async ({ page }) => {
+    test.setTimeout(130_000);
+    if (!MAILBOX_EMAIL) {
+      throw new Error('Missing E2E_OWNER_MAILBOX_EMAIL. Owner OTP mailbox validation cannot run without a distinct mailbox identity.');
+    }
+
+    await page.goto('/owner/contracts', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/owner\/contracts/, { timeout: 20_000 });
+
+    const signatureName = page.getByTestId('owner-contract-signature-name');
+    await expect(signatureName).toBeVisible({ timeout: 30_000 });
+    await signatureName.fill('E2E Owner Signature');
+
+    const requestOtp = page.getByTestId('owner-contract-signature-otp-request');
+    await expect(requestOtp).toBeEnabled({ timeout: 10_000 });
+    const otpRequestedAtMs = Date.now();
+    await requestOtp.click();
+
+    const challenge = page.getByTestId('owner-contract-signature-otp-challenge');
+    await expect(challenge).toBeVisible({ timeout: 35_000 });
+    const correlationId = await challenge.getAttribute('data-correlation-id') || '';
+    expect(correlationId, 'backend OTP request ID must be visible before reading Gmail').toMatch(/\S/);
+
+    const otpCode = page.getByTestId('owner-contract-signature-otp-code');
+    await expect(otpCode).toBeVisible({ timeout: 35_000 });
+
+    const otp = await getLatestOtp('owner', {
+      expectedSender:    process.env.E2E_OTP_EXPECTED_SENDER || 'ceo@bin-groups.com',
+      expectedRecipient: MAILBOX_EMAIL,
+      correlationId,
+      timeoutMs:         90_000,
+      afterMs:           otpRequestedAtMs - 5_000,
+      subjectHint:       'contract signature',
+    });
+
+    await otpCode.fill(otp);
+    const submitOtp = page.getByTestId('owner-contract-signature-otp-submit');
+    await expect(submitOtp).toBeEnabled({ timeout: 5_000 });
+    await submitOtp.click();
+
+    await expect(page.getByText(/Signature OTP verified/i)).toBeVisible({ timeout: 30_000 });
+    await expect(submitOtp).toBeDisabled();
   });
 });

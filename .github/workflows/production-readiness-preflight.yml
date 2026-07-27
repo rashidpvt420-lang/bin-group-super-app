@@ -29,7 +29,7 @@ jobs:
   verify-production-readiness:
     name: Verify production configuration without deployment
     runs-on: ubuntu-latest
-    environment: production
+    environment: hard-public-launch
     env:
       GCP_PROJECT_ID: bin-group-57c60
       LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -83,6 +83,21 @@ jobs:
       - name: Verify canonical founder and privileged-account cleanup state
         run: node scripts/verify-admin-mfa-production.mjs
 
+      - name: Verify E2E OTP Mailboxes and Gmail API connectivity
+        env:
+          E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_SENTINEL_MESSAGE_ID: ${{ vars.E2E_OWNER_MAILBOX_SENTINEL_MESSAGE_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_SENTINEL_MESSAGE_ID: ${{ vars.E2E_BROKER_MAILBOX_SENTINEL_MESSAGE_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/production-otp-mailbox-preflight.mjs
+
+
       - name: Publish read-only readiness summary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
@@ -96,6 +111,7 @@ jobs:
           - Phone Auth / UAE SMS MFA configuration: passed
           - Main and Admin Authentication domains: passed
           - Canonical founder email and phone MFA: passed
+          - E2E OTP Mailbox Secrets: passed
           - Unexpected privileged accounts: zero
           - Deployment performed: no
           - Hard-launch claim: false
