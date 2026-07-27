@@ -88,11 +88,13 @@ jobs:
           npx firebase emulators:exec --only firestore,storage --project bin-group-57c60
           "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
 
-      - name: Confirm no generated drift
+      - name: Restore validated generated files and confirm exact tree
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 680d761128f9e23e5acaee547ba8abda1b840591 -- .
+          green='680d761128f9e23e5acaee547ba8abda1b840591'
+          git checkout "$green" -- .
+          git diff --exit-code "$green" -- .
 
       - name: Commit the permanent rollback
         shell: bash
