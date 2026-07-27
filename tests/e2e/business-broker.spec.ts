@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+test.use({ trace: 'off', video: 'off', screenshot: 'off' });\n\nconst __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '../..');
 const envPath = path.resolve(repositoryRoot, '.env.e2e');
 const evidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/broker-production-evidence.json');

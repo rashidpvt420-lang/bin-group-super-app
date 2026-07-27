@@ -28,14 +28,14 @@ const safeId = (value, fallback = 'evidence') => text(value)
   .replace(/_+/g, '_')
   .slice(0, 180) || fallback;
 
-const ownerEmail = text(process.env.E2E_OWNER_MAILBOX_EMAIL).toLowerCase();
+const ownerEmail = text(process.env.E2E_OWNER_EMAIL).toLowerCase();
 const ownerPassword = text(process.env.E2E_OWNER_PASSWORD);
 const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();
 const adminPassword = text(process.env.E2E_ADMIN_PASSWORD);
 const appCheckDebugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 
 for (const [name, value] of Object.entries({
-  E2E_OWNER_MAILBOX_EMAIL: ownerEmail,
+  E2E_OWNER_EMAIL: ownerEmail,
   E2E_OWNER_PASSWORD: ownerPassword,
   E2E_ADMIN_EMAIL: adminEmail,
   E2E_ADMIN_PASSWORD: adminPassword,

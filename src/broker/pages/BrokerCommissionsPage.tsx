@@ -17,13 +17,14 @@ type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
 type OtpState = {
   open: boolean;
   challengeId: string;
+  correlationId: string;
   code: string;
   expiresAt: number;
   amount: number;
   commissionCount: number;
 };
 
-const emptyOtp: OtpState = { open: false, challengeId: '', code: '', expiresAt: 0, amount: 0, commissionCount: 0 };
+const emptyOtp: OtpState = { open: false, challengeId: '', correlationId: '', code: '', expiresAt: 0, amount: 0, commissionCount: 0 };
 
 export default function BrokerCommissionsPage() {
   const { user } = useRole();
@@ -81,7 +82,7 @@ export default function BrokerCommissionsPage() {
       const requestOtp = httpsCallable(functions, 'requestBrokerPayoutOtp');
       const result = await requestOtp({ commissionIds: payableIds });
       const data = result.data as any;
-      setOtp({ open: true, challengeId: String(data?.challengeId || ''), code: '', expiresAt: Number(data?.expiresAt || 0), amount: Number(data?.amount || 0), commissionCount: Number(data?.commissionCount || payableIds.length) });
+      setOtp({ open: true, challengeId: String(data?.challengeId || ''), correlationId: String(data?.correlationId || ''), code: '', expiresAt: Number(data?.expiresAt || 0), amount: Number(data?.amount || 0), commissionCount: Number(data?.commissionCount || payableIds.length) });
       setNotice({ type: 'info', text: 'A six-digit payout verification code was sent to your verified Broker email.' });
     } catch (error: any) {
       setNotice({ type: 'error', text: error?.message || 'Unable to send payout verification code.' });
@@ -178,7 +179,7 @@ export default function BrokerCommissionsPage() {
       <Dialog data-testid="broker-payout-otp-dialog" open={otp.open} onClose={() => !payoutBusy && setOtp(emptyOtp)} fullWidth maxWidth="xs" dir={isRTL ? 'rtl' : 'ltr'}>
         <DialogTitle>Verify payout request</DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>
+          <Alert severity="info" sx={{ mb: 2 }}>Code sent for AED {otp.amount.toLocaleString()} across {otp.commissionCount} commission(s). It expires in 10 minutes.</Alert>\n          <Typography data-testid="broker-payout-otp-correlation" variant="caption" sx={{ display: 'block', mb: 2, wordBreak: 'break-all' }}>Verification reference: {otp.correlationId}</Typography>
           <TextField autoFocus fullWidth label="Six-digit verification code" value={otp.code} inputProps={{ inputMode: 'numeric', maxLength: 6, 'data-testid': 'broker-payout-otp-code' }} onChange={(event) => setOtp((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))} />
         </DialogContent>
         <DialogActions>
