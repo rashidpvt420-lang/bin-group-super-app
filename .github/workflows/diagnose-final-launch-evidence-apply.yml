@@ -1,0 +1,57 @@
+name: Diagnose Final Launch Evidence Apply
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/diagnose-final-launch-evidence-apply.yml
+      - scripts/apply-final-launch-evidence-corrections.mjs
+      - scripts/fix-launch-evidence-test-contracts.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'agent/finalize-launch-evidence-sequence' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/finalize-launch-evidence-sequence
+          fetch-depth: 0
+      - name: Capture patcher result
+        shell: bash
+        run: |
+          set +e
+          {
+            node scripts/apply-final-launch-evidence-corrections.mjs
+            first=$?
+            if [ "$first" -eq 0 ]; then
+              node scripts/fix-launch-evidence-test-contracts.mjs
+              second=$?
+            else
+              second=0
+            fi
+            printf 'apply_status=%s\ncontract_status=%s\n' "$first" "$second"
+            test "$first" -eq 0 -a "$second" -eq 0
+          } > /tmp/final-launch-evidence-apply.log 2>&1
+          status=$?
+          printf '%s\n' "$status" > /tmp/final-launch-evidence-apply.status
+          cat /tmp/final-launch-evidence-apply.log
+          exit 0
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-launch-evidence-apply-${{ github.sha }}
+          path: |
+            /tmp/final-launch-evidence-apply.log
+            /tmp/final-launch-evidence-apply.status
+          if-no-files-found: error
+          retention-days: 7
