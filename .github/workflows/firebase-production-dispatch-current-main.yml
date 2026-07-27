@@ -42,7 +42,7 @@ on:
         description: 'JSON containing incident, hard-clearance, and Stripe live-proof fields'
         required: false
         type: string
-        default: '{"incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
+        default: ''
 
 permissions:
   contents: read
@@ -75,25 +75,29 @@ jobs:
             exit 1
           }
 
-          normalized_payload="$(jq -Rce '
-            def decode_payload:
-              if length == 0 then {}
-              else
-                (try fromjson catch error("invalid-json"))
-                | if type == "string" then (try fromjson catch error("invalid-json-string")) else . end
-              end;
-            decode_payload
-            | if type != "object" then error("not-object") else . end
-            | {
-              incident_active_json: (.incident_active_json // "[]"),
-              incident_requires_rollback: ((.incident_requires_rollback // "false") | tostring),
-              incident_rollback_reason: (.incident_rollback_reason // ""),
-              incident_evidence_refs: (.incident_evidence_refs // ""),
-              hard_clearance_run_id: (.hard_clearance_run_id // ""),
-              stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
-              stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
-            }
-          ' <<<"${DEPLOYMENT_PAYLOAD_JSON:-{}}")" || fail "deployment_payload_json must be valid JSON object."
+          if [[ "$LAUNCH_MODE" == "bank-pilot" && -z "${DEPLOYMENT_PAYLOAD_JSON// }" ]]; then
+            normalized_payload='{"incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
+          else
+            normalized_payload="$(jq -Rce '
+              def decode_payload:
+                if length == 0 then {}
+                else
+                  (try fromjson catch error("invalid-json"))
+                  | if type == "string" then (try fromjson catch error("invalid-json-string")) else . end
+                end;
+              decode_payload
+              | if type != "object" then error("not-object") else . end
+              | {
+                incident_active_json: (.incident_active_json // "[]"),
+                incident_requires_rollback: ((.incident_requires_rollback // "false") | tostring),
+                incident_rollback_reason: (.incident_rollback_reason // ""),
+                incident_evidence_refs: (.incident_evidence_refs // ""),
+                hard_clearance_run_id: (.hard_clearance_run_id // ""),
+                stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
+                stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
+              }
+            ' <<<"${DEPLOYMENT_PAYLOAD_JSON:-{}}")" || fail "deployment_payload_json must be valid JSON object."
+          fi
           INCIDENT_ACTIVE_JSON="$(jq -r '.incident_active_json' <<<"$normalized_payload")"
           INCIDENT_REQUIRES_ROLLBACK="$(jq -r '.incident_requires_rollback' <<<"$normalized_payload")"
           INCIDENT_ROLLBACK_REASON="$(jq -r '.incident_rollback_reason' <<<"$normalized_payload")"
@@ -144,28 +148,32 @@ jobs:
         run: |
           set -euo pipefail
 
-          normalized_payload="$(jq -Rce '
-            def decode_payload:
-              if length == 0 then {}
-              else
-                (try fromjson catch error("invalid-json"))
-                | if type == "string" then (try fromjson catch error("invalid-json-string")) else . end
-              end;
-            decode_payload
-            | if type != "object" then error("not-object") else . end
-            | {
-              incident_active_json: (.incident_active_json // "[]"),
-              incident_requires_rollback: ((.incident_requires_rollback // "false") | tostring),
-              incident_rollback_reason: (.incident_rollback_reason // ""),
-              incident_evidence_refs: (.incident_evidence_refs // ""),
-              hard_clearance_run_id: (.hard_clearance_run_id // ""),
-              stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
-              stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
+          if [[ "$LAUNCH_MODE" == "bank-pilot" && -z "${DEPLOYMENT_PAYLOAD_JSON// }" ]]; then
+            normalized_payload='{"incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
+          else
+            normalized_payload="$(jq -Rce '
+              def decode_payload:
+                if length == 0 then {}
+                else
+                  (try fromjson catch error("invalid-json"))
+                  | if type == "string" then (try fromjson catch error("invalid-json-string")) else . end
+                end;
+              decode_payload
+              | if type != "object" then error("not-object") else . end
+              | {
+                incident_active_json: (.incident_active_json // "[]"),
+                incident_requires_rollback: ((.incident_requires_rollback // "false") | tostring),
+                incident_rollback_reason: (.incident_rollback_reason // ""),
+                incident_evidence_refs: (.incident_evidence_refs // ""),
+                hard_clearance_run_id: (.hard_clearance_run_id // ""),
+                stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
+                stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
+              }
+            ' <<<"${DEPLOYMENT_PAYLOAD_JSON:-{}}")" || {
+              echo "::error::deployment_payload_json must be valid JSON object."
+              exit 1
             }
-          ' <<<"${DEPLOYMENT_PAYLOAD_JSON:-{}}")" || {
-            echo "::error::deployment_payload_json must be valid JSON object."
-            exit 1
-          }
+          fi
           INCIDENT_ACTIVE_JSON="$(jq -r '.incident_active_json' <<<"$normalized_payload")"
           INCIDENT_REQUIRES_ROLLBACK="$(jq -r '.incident_requires_rollback' <<<"$normalized_payload")"
           INCIDENT_ROLLBACK_REASON="$(jq -r '.incident_rollback_reason' <<<"$normalized_payload")"
