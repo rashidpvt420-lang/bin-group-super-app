@@ -22,7 +22,10 @@ function sourceFiles(root) {
   for (const entry of readdirSync(root)) {
     const path = join(root, entry);
     const stat = statSync(path);
-    if (stat.isDirectory()) files.push(...sourceFiles(path));
+    if (stat.isDirectory()) {
+      if (['node_modules', 'dist', 'build'].includes(entry)) continue;
+      files.push(...sourceFiles(path));
+    }
     else if (/\.(?:js|jsx|mjs|ts|tsx)$/.test(entry)) files.push(path);
   }
   return files;

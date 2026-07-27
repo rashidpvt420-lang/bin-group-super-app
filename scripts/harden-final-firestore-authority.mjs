@@ -43,20 +43,20 @@ const hrServerAuthorityWriteList = `          'system_secrets',
           'technician_live_locations',
           'properties',
           'users',
-          'audit_logs',
-          'admin_security_sessions',
-          'private_hr_profiles',
-          'staffRequests',
-          'hrAiConversations',`;
-const staleHrServerAuthorityWriteList = `          'system_secrets',
-          'technician_live_locations',
-          'properties',
-          'users',
           'staffRequests',
           'hrAiConversations',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const staleHrServerAuthorityWriteList = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',`;
 const duplicatedHrServerAuthorityWriteList = `          'system_secrets',
           'technician_live_locations',
           'properties',
@@ -247,10 +247,10 @@ text = text.replace(
 );
 
 for (const candidate of readCatchAllCandidates) {
-  if (text.includes(candidate)) text = text.replace(candidate, liveLocationReadCatchAll);
+  if (text.includes(candidate)) text = text.replace(candidate, invoiceRegistryReadCatchAll);
 }
-if (!text.includes(liveLocationReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR and live-location exclusions');
+if (!text.includes(invoiceRegistryReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR, live-location and invoice-registry exclusions');
 }
 
 if (text.includes(duplicatedHrServerAuthorityWriteList)) {
@@ -318,7 +318,7 @@ const required = [
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
   invoiceRegistryBlock.trim(),
-  liveLocationReadCatchAll.trim(),
+  invoiceRegistryReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
   hrServerAuthorityWriteList.trim(),
@@ -385,8 +385,8 @@ for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
 }
 
-if (text.split(liveLocationWriteList).length - 1 !== 2) {
-  throw new Error('[final-firestore-authority] live-location write fallback must only remain inside the two HR server-authority fallbacks');
+if (text.includes(liveLocationWriteList)) {
+  throw new Error('[final-firestore-authority] live-location write fallback must be upgraded to HR server-authority fallbacks');
 }
 
 console.log('[final-firestore-authority] status-aware canonical ticket authorization, read-only legacy tickets, server-only Admin security sessions, private HR and canonical live-location isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');

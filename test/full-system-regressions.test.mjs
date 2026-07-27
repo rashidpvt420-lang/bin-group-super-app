@@ -67,7 +67,7 @@ test('technician privacy is dispatch-first with explicit denied and listener-err
   assert.match(rules, /function hasDispatchAuthorityClaimOnly\(\)/);
   assert.match(rules, /match \/fcmTokens\/\{tokenId\} \{/);
   assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
-  assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\n\s*allow read, write: if false;/);
+  assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\r?\n\s*allow read, write: if false;/);
   assert.doesNotMatch(dashboard, /assignedTechnicianId['"],\s*['"]==['"],\s*null/);
   assert.doesNotMatch(dashboard, /CLAIM MISSION|Available Mission Pool/);
   assert.match(jobs, /setLoadError/);

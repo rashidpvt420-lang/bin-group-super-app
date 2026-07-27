@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import {
   buildFirebaseExtensionRetirementReadinessReport,
   inspectRepositoryRetirementContracts,
@@ -114,7 +115,7 @@ test('fails closed for an installed Extension that is not in the approved retire
 });
 
 test('current repository exposes the App Check-protected self-managed AI replacement', () => {
-  const repository = inspectRepositoryRetirementContracts(new URL('../..', import.meta.url).pathname);
+  const repository = inspectRepositoryRetirementContracts(fileURLToPath(new URL('../..', import.meta.url)));
   assert.equal(repository.aiReplacementReady, true);
   assert.equal(repository.aiReplacementContract.callable, 'generateDesignConceptCompat');
   assert.equal(repository.aiReplacementContract.appCheckEnforced, true);

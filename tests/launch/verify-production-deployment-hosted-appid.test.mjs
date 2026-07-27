@@ -8,6 +8,6 @@ test('production deployment verifier accepts expected hosted app id presence, no
   assert.match(verifier, /const extractedAppIdMatched = String\(config\.appId \|\| ''\)\.includes\(PRODUCTION\.appIdSuffix\);/);
   assert.match(verifier, /const expectedAppIdMatched = runtimeSummary\.firebaseAppIdMatched === true \|\| extractedAppIdMatched;/);
   assert.match(verifier, /expected Firebase web app id is not embedded in hosted bundle/);
-  assert.match(verifier, /expectedAppIdMatched &&\n\s+runtimeSummary\.allRequiredMatched === true/);
-  assert.doesNotMatch(verifier, /String\(config\.appId \|\| ''\)\.includes\(PRODUCTION\.appIdSuffix\) &&\n\s+runtimeSummary\.allRequiredMatched === true/);
+  assert.match(verifier, /expectedAppIdMatched &&\r?\n\s+runtimeSummary\.allRequiredMatched === true/);
+  assert.doesNotMatch(verifier, /String\(config\.appId \|\| ''\)\.includes\(PRODUCTION\.appIdSuffix\) &&\r?\n\s+runtimeSummary\.allRequiredMatched === true/);
 });
