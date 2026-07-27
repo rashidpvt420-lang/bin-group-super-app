@@ -15,8 +15,8 @@ function validEnv() {
     GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/123413252227/locations/global/workloadIdentityPools/github/providers/bin-group',
     GCP_SERVICE_ACCOUNT: 'github-production@bin-group-57c60.iam.gserviceaccount.com',
     HARD_LAUNCH_APPROVAL_HMAC_KEY: 'h'.repeat(48),
-    AUTHORIZED_FOUNDER_ACTORS: 'rashidpvt420-lang',
-    AUTHORIZED_FOUNDER_EMAILS: 'founder@bin-groups.com',
+    AUTHORIZED_FOUNDER_ACTORS: 'rashidpvt420-lang,github-actions[bot]',
+    AUTHORIZED_FOUNDER_EMAILS: 'founder@bin-groups.com,ceo@bin-groups.com',
     PRODUCTION_APPROVED_BY: 'founder@bin-groups.com',
     VITE_FIREBASE_API_KEY: `AIza${'A'.repeat(35)}`,
     VITE_FIREBASE_APP_ID: '1:123413252227:web:285cb53bc26626d699f3b6',
@@ -57,8 +57,28 @@ test('production client value preflight accepts exact, separated and well-formed
   assert.equal(summary.mainUrlMatched, true);
   assert.equal(summary.adminUrlMatched, true);
   assert.equal(summary.appCheckEnabled, true);
+  assert.equal(summary.selectedFounderEmailAuthorized, true);
   assert.equal(summary.firebaseAndMapsKeysSeparated, true);
   assert.equal(summary.sensitiveValuesExcluded, true);
+});
+
+test('selected production Founder may be one member of a multi-email allowlist', () => {
+  const env = validEnv();
+  assert.deepEqual(validateProductionWorkflowEnv(env), []);
+
+  const missingSelection = validEnv();
+  missingSelection.PRODUCTION_APPROVED_BY = 'not-authorized@bin-groups.com';
+  assert.match(
+    validateProductionWorkflowEnv(missingSelection).join('\n'),
+    /PRODUCTION_APPROVED_BY must be included in AUTHORIZED_FOUNDER_EMAILS/,
+  );
+
+  const malformedSelection = validEnv();
+  malformedSelection.PRODUCTION_APPROVED_BY = 'not-an-email';
+  assert.match(
+    validateProductionWorkflowEnv(malformedSelection).join('\n'),
+    /PRODUCTION_APPROVED_BY must be a valid email address/,
+  );
 });
 
 test('production client value preflight rejects missing, reused, malformed and placeholder provider values', () => {
