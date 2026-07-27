@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/diagnose-final-launch-evidence-apply.yml
       - scripts/apply-final-launch-evidence-corrections.mjs
+      - scripts/apply-final-launch-evidence-corrections.payload.mjs
       - scripts/fix-launch-evidence-test-contracts.mjs
 
 permissions:
@@ -32,7 +33,7 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           import { gunzipSync } from 'node:zlib';
-          const wrapper = readFileSync('scripts/apply-final-launch-evidence-corrections.mjs', 'utf8');
+          const wrapper = readFileSync('scripts/apply-final-launch-evidence-corrections.payload.mjs', 'utf8');
           const match = wrapper.match(/const payload = '([^']+)'/);
           if (!match) throw new Error('Compressed launch evidence payload is missing.');
           writeFileSync('/tmp/final-launch-evidence-runtime.mjs', gunzipSync(Buffer.from(match[1], 'base64')));
