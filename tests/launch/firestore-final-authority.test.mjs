@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
+const ticketBindingHardener = path.join(root, 'scripts/apply-ticket-rule-binding.mjs');
 const liveLocationHardener = path.join(root, 'scripts/harden-technician-live-location-authority.mjs');
 const hardener = path.join(root, 'scripts/harden-final-firestore-authority.mjs');
 
@@ -30,6 +31,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     const target = path.join(directory, 'firestore.rules');
     writeFileSync(target, readFileSync(path.join(root, 'firestore.rules')));
 
+    const ticketBinding = spawnSync(process.execPath, [ticketBindingHardener], { cwd: directory, encoding: 'utf8' });
+    assert.equal(ticketBinding.status, 0, ticketBinding.stderr || ticketBinding.stdout);
     const liveLocation = spawnSync(process.execPath, [liveLocationHardener], { cwd: directory, encoding: 'utf8' });
     assert.equal(liveLocation.status, 0, liveLocation.stderr || liveLocation.stdout);
     const first = spawnSync(process.execPath, [hardener], { cwd: directory, encoding: 'utf8' });
@@ -94,6 +97,8 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     }
 
     const beforeSecond = readFileSync(target);
+    const ticketBindingSecond = spawnSync(process.execPath, [ticketBindingHardener], { cwd: directory, encoding: 'utf8' });
+    assert.equal(ticketBindingSecond.status, 0, ticketBindingSecond.stderr || ticketBindingSecond.stdout);
     const liveLocationSecond = spawnSync(process.execPath, [liveLocationHardener], { cwd: directory, encoding: 'utf8' });
     assert.equal(liveLocationSecond.status, 0, liveLocationSecond.stderr || liveLocationSecond.stdout);
     const second = spawnSync(process.execPath, [hardener], { cwd: directory, encoding: 'utf8' });

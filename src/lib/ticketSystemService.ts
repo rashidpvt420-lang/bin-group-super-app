@@ -201,7 +201,6 @@ class TicketSystemService {
       proofUpdate.technicianNotes = data.notes.trim();
     }
     if (photoUrls.length > 0) {
-      proofUpdate.photos = photoUrls;
       proofUpdate.proofPhotos = photoUrls;
       proofUpdate.completionPhotos = photoUrls;
       proofUpdate.afterPhotos = photoUrls;

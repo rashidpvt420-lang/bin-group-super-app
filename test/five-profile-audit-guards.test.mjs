@@ -1,10 +1,26 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+function preparedTicketRules() {
+  const directory = mkdtempSync(join(tmpdir(), 'bin-five-profile-rules-'));
+  try {
+    copyFileSync(join(root, 'firestore.rules'), join(directory, 'firestore.rules'));
+    execFileSync(process.execPath, [resolve(root, 'scripts/apply-ticket-rule-binding.mjs')], {
+      cwd: directory,
+      stdio: 'pipe',
+    });
+    return readFileSync(join(directory, 'firestore.rules'), 'utf8');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
 
 test('legacy ownerToken REST clients are fail-closed stubs', () => {
   for (const rel of ['src/services/api.ts', 'apps/owner-app/src/services/api.ts']) {
@@ -16,7 +32,7 @@ test('legacy ownerToken REST clients are fail-closed stubs', () => {
 });
 
 test('ticket updates are actor-discriminated and cannot authorize technician self-claims', () => {
-  const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
+  const rules = preparedTicketRules();
   assert.doesNotMatch(rules, /\|\| safeOpenMissionClaim\(\)/);
   assert.match(rules, /function safeTicketUpdateByActor\(\)/);
   assert.equal(rules.split('allow update: if safeTicketUpdateByActor();').length - 1, 1);

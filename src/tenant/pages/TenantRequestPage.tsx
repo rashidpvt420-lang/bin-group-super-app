@@ -133,6 +133,7 @@ export default function TenantRequestPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const clientRequestIdRef = useRef('');
+    const previewUrlsRef = useRef<string[]>([]);
 
     const tt = (key: string, fallback: string): string => {
         const value = t(key);
@@ -205,9 +206,14 @@ export default function TenantRequestPage() {
         if (nextCategory) setCategory(nextCategory);
     }, [searchParams]);
 
-    useEffect(() => () => {
-        previews.forEach((url) => URL.revokeObjectURL(url));
+    useEffect(() => {
+        previewUrlsRef.current = previews;
     }, [previews]);
+
+    useEffect(() => () => {
+        previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        previewUrlsRef.current = [];
+    }, []);
 
     const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!event.target.files) return;
@@ -272,7 +278,7 @@ export default function TenantRequestPage() {
         try {
             const createTenantServiceTicket = httpsCallable(functions, 'createTenantServiceTicket');
             const response: any = await createTenantServiceTicket({
-                kind: 'AI_CONCIERGE',
+                kind: priority === 'emergency' ? 'EMERGENCY' : 'AI_CONCIERGE',
                 unitId: unitData.id,
                 propertyId: unitData.propertyId,
                 clientRequestId: stableClientRequestId(),
@@ -312,6 +318,7 @@ export default function TenantRequestPage() {
                     priority,
                 ).catch(console.warn);
             }
+            clientRequestIdRef.current = '';
             navigate('/tenant/tickets');
         } catch (error) {
             console.error('Tenant request submission failed:', error);
