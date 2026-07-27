@@ -128,7 +128,7 @@ SHA, required environment approval, and post-deployment evidence.
 
 | Service | Purpose | Production status requirement |
 |---------|---------|-------------------------------|
-| **Google Maps Platform** | Property GPS, technician tracking, live map, dispatch support | API keys, billing, domain restrictions, and map tests required |
+| **Google Maps Platform** | Property GPS, technician location summaries, dispatch support | API keys, billing, domain restrictions, and map tests required |
 | **OpenAI/Gemini Vision** | Maintenance image analysis and auto-categorization | Backend secret, billing, model selection, fallback, and manual review required |
 | **Stripe/Network International** | Owner payments, invoices, mobilization fees, card payments | Merchant approval, production keys, webhook verification, and failure/refund tests required |
 | **WhatsApp Business API** | Rent reminders, ticket updates, payment confirmations | Business verification, approved templates, token security, and opt-in policy required |

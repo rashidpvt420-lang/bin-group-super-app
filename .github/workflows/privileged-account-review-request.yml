@@ -184,7 +184,7 @@ jobs:
 
       - name: Upload sanitized privileged review artifact
         if: steps.authorize.outputs.authorized == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: privileged-account-cleanup-review-${{ steps.release.outputs.sha }}-${{ github.run_id }}
           path: launch_package/privileged-account-cleanup.json
@@ -455,7 +455,7 @@ jobs:
           ! find play-store-certificate -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'keystore.properties' \) | grep -q .
 
       - name: Upload public Play certificate artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.certificate.outputs.artifact_name }}
           path: play-store-certificate/

@@ -6,7 +6,7 @@
 ## 1. GOOGLE MAPS API (Technician Tracking)
 
 ### Purpose
-Real-time tracking of technicians in the field for live map display in admin panel.
+Foreground technician GPS points support location summaries in the app. A real embedded live map and road-routing display require separate production evidence.
 
 ### Setup
 

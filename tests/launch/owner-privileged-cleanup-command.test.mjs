@@ -108,6 +108,6 @@ test('review and execution workflows accept and enforce optional expected SHA', 
     assert.match(workflow, /actions\/checkout@v6/);
     assert.match(workflow, /actions\/setup-node@v6/);
     assert.match(workflow, /google-github-actions\/auth@v3/);
-    assert.match(workflow, /actions\/upload-artifact@v7/);
+    assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   }
 });

@@ -1,3 +1,5 @@
+import './invoice-verification-rules.test.js';
+import './tenant-ticket-server-authority-rules.test.js';
 import './technician-assigned-list-security-rules.test.js';
 import './broker-kyc-security-rules.test.js';
 import './five-profile-protected-fields-rules.test.js';
@@ -184,7 +186,7 @@ describe('Firestore Security Rules', () => {
       assignedTechnicianId: null,
       status: 'OPEN',
     };
-    await setDoc(doc(adminDb, 'tickets/open_ticket'), openTicket);
+    await seedServerDocument('tickets/open_ticket', openTicket);
     await setDoc(doc(adminDb, 'maintenanceTickets/open_maintenance_ticket'), openTicket);
 
     const claim = {
@@ -214,7 +216,7 @@ describe('Firestore Security Rules', () => {
       approvalStatus: 'approved',
       suspended: false,
     });
-    await setDoc(doc(adminDb, 'tickets/open_ticket_approved_tech'), openTicket);
+    await seedServerDocument('tickets/open_ticket_approved_tech', openTicket);
     await setDoc(doc(adminDb, 'maintenanceTickets/open_maintenance_ticket_approved_tech'), openTicket);
     const approvedTechDb = testEnv.authenticatedContext('tech_approved', { role: 'technician' }).firestore();
     await assertFails(getDoc(doc(approvedTechDb, 'tickets/open_ticket_approved_tech')));
@@ -228,7 +230,7 @@ describe('Firestore Security Rules', () => {
     }));
 
     const dispatcherDb = testEnv.authenticatedContext('dispatcher_a', { role: 'dispatcher' }).firestore();
-    await assertSucceeds(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));
+    await assertFails(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), claim));
     await assertSucceeds(updateDoc(doc(dispatcherDb, 'maintenanceTickets/open_maintenance_ticket'), claim));
     await assertFails(updateDoc(doc(dispatcherDb, 'tickets/open_ticket'), {
       paymentVerified: true,
@@ -286,7 +288,7 @@ describe('Firestore Security Rules', () => {
 
     const tenantADb = testEnv.authenticatedContext('tenant_a', { role: 'tenant', email: 'tenant-a@example.com' }).firestore();
 
-    await assertSucceeds(setDoc(doc(tenantADb, 'maintenanceTickets/tenant_valid_ticket'), {
+    await assertFails(setDoc(doc(tenantADb, 'maintenanceTickets/tenant_valid_ticket'), {
       tenantId: 'tenant_a',
       tenantUid: 'tenant_a',
       unitId: 'unit_a',
@@ -1023,7 +1025,7 @@ describe('Firestore Security Rules', () => {
       photos: [],
       tenantPhotos: [],
     };
-    await setDoc(doc(adminDb, 'tickets/suspended_tenant_existing'), existingTenantTicket);
+    await seedServerDocument('tickets/suspended_tenant_existing', existingTenantTicket);
     await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tenant_existing'), existingTenantTicket);
 
     const staleTenantDb = testEnv.authenticatedContext('suspended_tenant', { role: 'tenant' }).firestore();
@@ -1087,7 +1089,7 @@ describe('Firestore Security Rules', () => {
       completionPhotos: [],
       evidencePhotos: [],
     };
-    await setDoc(doc(adminDb, 'tickets/suspended_tech_existing'), existingTechTicket);
+    await seedServerDocument('tickets/suspended_tech_existing', existingTechTicket);
     await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tech_existing'), existingTechTicket);
     const staleTechDb = testEnv.authenticatedContext('suspended_tech', { role: 'technician' }).firestore();
     await assertFails(updateDoc(doc(staleTechDb, 'tickets/suspended_tech_existing'), {

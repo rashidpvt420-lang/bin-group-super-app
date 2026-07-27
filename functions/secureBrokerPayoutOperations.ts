@@ -191,34 +191,36 @@ export const requestBrokerPayoutOtp = onCall({
   const correlationId = crypto.randomUUID();
   const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length, correlationId);
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS);
-  await ref.set({
-    uid: broker.uid,
-    email: broker.email,
-    commissionIds: commissions.ids,
-    amount: commissions.amount,
-    currency: "AED",
-    bindingHash,
-    correlationId,
-    kycSubmissionHash: broker.approvedSubmissionHash,
-    otpHash: hashOtp({ otp, salt, challengeId: ref.id, uid: broker.uid, bindingHash, correlationId }),
-    otpHashVersion: OTP_HASH_VERSION,
-    salt,
-    attempts: 0,
-    status: "PENDING",
-    expiresAt,
-    delivery: { messageId, sentAt: FieldValue.serverTimestamp() },
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  await db.collection("audit_logs").add({
-    action: "BROKER_PAYOUT_OTP_SENT",
-    actorId: broker.uid,
-    challengeId: ref.id,
-    correlationId,
-    bindingHash,
-    kycSubmissionHash: broker.approvedSubmissionHash,
-    otpHashVersion: OTP_HASH_VERSION,
-    createdAt: FieldValue.serverTimestamp(),
+  await db.runTransaction(async (tx) => {
+    tx.set(ref, {
+      uid: broker.uid,
+      email: broker.email,
+      commissionIds: commissions.ids,
+      amount: commissions.amount,
+      currency: "AED",
+      bindingHash,
+      correlationId,
+      kycSubmissionHash: broker.approvedSubmissionHash,
+      otpHash: hashOtp({ otp, salt, challengeId: ref.id, uid: broker.uid, bindingHash, correlationId }),
+      otpHashVersion: OTP_HASH_VERSION,
+      salt,
+      attempts: 0,
+      status: "PENDING",
+      expiresAt,
+      delivery: { messageId, sentAt: FieldValue.serverTimestamp() },
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    tx.set(db.collection("audit_logs").doc(), {
+      action: "BROKER_PAYOUT_OTP_SENT",
+      actorId: broker.uid,
+      challengeId: ref.id,
+      correlationId,
+      bindingHash,
+      kycSubmissionHash: broker.approvedSubmissionHash,
+      otpHashVersion: OTP_HASH_VERSION,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   });
   return {
     status: "OTP_SENT",
@@ -272,6 +274,14 @@ export const verifyBrokerPayoutOtp = onCall({
       evidenceExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + EVIDENCE_TTL_MS),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    tx.set(db.collection("audit_logs").doc(), {
+      action: "BROKER_PAYOUT_OTP_VERIFIED",
+      actorId: broker.uid,
+      challengeId,
+      kycSubmissionHash: broker.approvedSubmissionHash,
+      otpHashVersion: OTP_HASH_VERSION,
+      createdAt: FieldValue.serverTimestamp(),
+    });
     return "VERIFIED";
   });
   const messages: Record<string, [any, string]> = {
@@ -288,14 +298,6 @@ export const verifyBrokerPayoutOtp = onCall({
     const [code, message] = messages[result];
     throw new HttpsError(code, message);
   }
-  await db.collection("audit_logs").add({
-    action: "BROKER_PAYOUT_OTP_VERIFIED",
-    actorId: broker.uid,
-    challengeId,
-    kycSubmissionHash: broker.approvedSubmissionHash,
-    otpHashVersion: OTP_HASH_VERSION,
-    createdAt: FieldValue.serverTimestamp(),
-  });
   return { status: "VERIFIED", challengeId };
 });
 

@@ -83,19 +83,19 @@ test('Technician mission map distinguishes data failure from an empty authentica
   assert.match(technicianMap, /Mission Control will not report an empty healthy queue/);
   assert.match(technicianMap, /!jobsError && jobs\.length === 0/);
   assert.match(technicianMap, /The authenticated production query returned no active assigned mission/);
-  assert.match(technicianMap, /Straight-line estimate/);
-  assert.match(technicianMap, /traffic not included/);
+  assert.match(technicianMap, /approximate straight-line estimates/);
+  assert.match(technicianMap, /road routing not included/);
   assert.match(technicianMap, /FOREGROUND GPS FRESH/);
   assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*\}\);/);
 });
 
 test('Owner and Tenant tracking card identifies schematic and freshness limitations', () => {
-  assert.match(trackingSummary, /TRACKING SUMMARY — NOT A STREET MAP/);
+  assert.match(trackingSummary, /LOCATION SUMMARY - NOT A STREET MAP/);
   assert.match(trackingSummary, /FRESH FOREGROUND GPS/);
   assert.match(trackingSummary, /GPS STALE/);
-  assert.match(trackingSummary, /straight-line estimate/i);
-  assert.match(trackingSummary, /Traffic and road routing are available only in Google Maps/);
-  assert.match(trackingSummary, /Open Traffic-Aware Google Maps/);
+  assert.match(trackingSummary, /rough arrival estimate/i);
+  assert.match(trackingSummary, /approximate straight-line distance/i);
+  assert.match(trackingSummary, /Open in Google Maps/);
   assert.doesNotMatch(trackingSummary, />\s*LIVE\s*</);
   assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
 });

@@ -50,6 +50,7 @@ export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
 export * from "./ownerProfileReadiness";
 export * from "./technicianLiveLocation";
+export * from "./proofVerification";
 
 export {
   resumeTechnicianDuty,

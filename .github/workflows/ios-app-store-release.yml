@@ -172,7 +172,7 @@ jobs:
           }
 
       - name: Upload signed iOS release artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ios-app-store-release-${{ github.sha }}-${{ github.run_id }}
           path: |
@@ -183,7 +183,7 @@ jobs:
 
       - name: Upload TestFlight receipt
         if: ${{ inputs.upload_to_testflight == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ios-testflight-upload-${{ github.sha }}-${{ github.run_id }}
           path: ios-app-store-upload-result.json
@@ -192,7 +192,7 @@ jobs:
 
       - name: Upload iOS release diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ios-app-store-release-diagnostics-${{ github.sha }}-${{ github.run_id }}
           path: |

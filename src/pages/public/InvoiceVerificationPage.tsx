@@ -8,19 +8,15 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import WarningIcon from '@mui/icons-material/Warning';
 import { ShieldCheck } from 'lucide-react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { db, doc, getDoc } from '../../lib/firebase';
+import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
-
-const registryFor = (type: string) => type === 'contract' ? 'contract_registry' : 'invoice_registry';
 
 export default function InvoiceVerificationPage() {
     const { t } = useLanguage();
     const { id: routeHash } = useParams();
     const [searchParams] = useSearchParams();
     const proofType = String(searchParams.get('type') || 'invoice').toLowerCase();
-    const externalId = searchParams.get('id') || '';
-    const reference = searchParams.get('ref') || '';
     const [hash, setHash] = useState(routeHash || searchParams.get('hash') || '');
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(false);
@@ -30,14 +26,9 @@ export default function InvoiceVerificationPage() {
         if (!normalized) return;
         setLoading(true);
         try {
-            const docRef = doc(db, registryFor(proofType), normalized);
-            const snap = await getDoc(docRef);
-
-            if (snap.exists()) {
-                setStatus({ valid: true, data: snap.data(), hash: normalized });
-            } else {
-                setStatus({ valid: false, hash: normalized });
-            }
+            const verifyPublicProof = httpsCallable(functions, 'verifyPublicProof');
+            const response: any = await verifyPublicProof({ type: proofType, hash: normalized });
+            setStatus({ valid: response?.data?.verified === true, hash: normalized });
         } catch (e) {
             setStatus({ valid: false, hash: normalized });
         }
@@ -65,8 +56,6 @@ export default function InvoiceVerificationPage() {
                 <Paper sx={{ p: 6, borderRadius: 6, bgcolor: '#161618', border: `1px solid ${binThemeTokens.gold}44`, boxShadow: '0 40px 100px rgba(0,0,0,0.8)' }}>
                     <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap">
                         <Chip label={proofType.toUpperCase()} sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.gold, fontWeight: 900 }} />
-                        {externalId && <Chip label={`ID: ${externalId}`} sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: '#fff', fontWeight: 800 }} />}
-                        {reference && <Chip label={`REF: ${reference}`} sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: '#fff', fontWeight: 800 }} />}
                     </Stack>
                     <Typography variant="subtitle2" sx={{ color: binThemeTokens.textSecondary, mb: 2, fontWeight: 900, letterSpacing: 1 }}>{proofType === 'contract' ? 'Enter Contract Proof Hash' : t('invoice.enter_hash')}</Typography>
                     <TextField
@@ -127,7 +116,7 @@ export default function InvoiceVerificationPage() {
                                     }}
                                 >
                                     <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{proofType === 'contract' ? 'Authentic Contract Record' : t('invoice.authentic')}</Typography>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('invoice.verified_msg', { entity: status.data?.entityId || status.data?.ownerId || 'BIN_CLIENT' })}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('invoice.verified_msg', { entity: 'BIN_VERIFIED_RECORD' })}</Typography>
                                     <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mt: 1 }}>Hash: {status.hash}</Typography>
                                 </Alert>
                             ) : (

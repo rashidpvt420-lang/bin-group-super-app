@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload stability diagnostics
         if: failure() && steps.stability.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: stability-diagnostics
           path: stability-output.txt
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload launch-honesty diagnostics
         if: failure() && steps.launch_honesty.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: launch-honesty-diagnostics
           path: launch-honesty-output.txt
@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload TypeScript diagnostics
         if: failure() && steps.typecheck.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: typecheck-diagnostics
           path: typecheck-output.txt
@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload Admin build diagnostics
         if: failure() && steps.build_admin.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: admin-build-diagnostics-${{ github.sha }}
           path: admin-build-output.txt
@@ -152,7 +152,7 @@ jobs:
 
       - name: Upload Functions build diagnostics
         if: failure() && steps.build_functions.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: functions-build-diagnostics-${{ github.sha }}
           path: functions-build-output.txt
@@ -431,7 +431,7 @@ jobs:
           ! find play-store-certificate -type f \( -name '*.jks' -o -name '*.keystore' -o -name 'keystore.properties' \) | grep -q .
 
       - name: Upload public Play certificate artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.certificate.outputs.artifact_name }}
           path: play-store-certificate/

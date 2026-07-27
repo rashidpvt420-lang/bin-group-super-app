@@ -15,7 +15,7 @@ export default function TechnicianSimpleDashboardPage() {
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('tech.simple.overline', 'TECHNICIAN SIMPLE MODE')}</Typography>
           <Typography variant="h3" sx={{ color: '#111827', fontWeight: 950, mt: 1 }}>{tx('tech.simple.title', 'Start with jobs, map, and proof')}</Typography>
-          <Typography sx={{ color: '#667085', mt: 1, maxWidth: 760 }}>{tx('tech.simple.desc', 'Field workers need fewer choices: assigned jobs, live map, offline queue, support, and evidence readiness.')}</Typography>
+          <Typography sx={{ color: '#667085', mt: 1, maxWidth: 760 }}>{tx('tech.simple.desc', 'Field workers need fewer choices: assigned jobs, location summary, offline queue, support, and evidence readiness.')}</Typography>
         </Box>
 
         <RoleQuickActionsPanel role="technician" isRTL={isRTL} title={tx('tech.simple.primaryTitle', 'Main field actions')} subtitle={tx('tech.simple.primarySubtitle', 'The fastest path for accepting, reaching, proving, and closing jobs.')} />

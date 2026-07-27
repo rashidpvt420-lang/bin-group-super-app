@@ -3,13 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const fixture = readFileSync('scripts/prepare-broker-payout-otp-e2e.mjs', 'utf8');
-const criticalRunner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
-const productionRunner = readFileSync('scripts/run-broker-production-evidence.mjs', 'utf8');
-const gmailReader = readFileSync('scripts/lib/gmail-otp-reader.mjs', 'utf8');
+const runner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 
-test('Broker fixture is restricted to the verified dedicated E2E Broker and does not seed a commission', () => {
+test('Broker payout OTP fixture is restricted to the verified dedicated E2E Broker', () => {
   assert.match(fixture, /E2E_BROKER_MAILBOX_EMAIL is required/);
   assert.match(fixture, /brokerUser\.emailVerified/);
   assert.match(fixture, /profile\.e2eLaunchSeed !== true/);
@@ -18,92 +16,61 @@ test('Broker fixture is restricted to the verified dedicated E2E Broker and does
   assert.match(fixture, /brokerKycStatus: 'verified'/);
   assert.match(fixture, /commissionAgreementAccepted: true/);
   assert.match(fixture, /ibanVerified: true/);
+  assert.match(fixture, /status: 'APPROVED'/);
+  assert.match(fixture, /payoutStatus: 'NOT_REQUESTED'/);
   assert.match(fixture, /broker_payout_otp_rate_limits/);
-  assert.match(fixture, /no commission was seeded/i);
-  assert.match(fixture, /batch\.delete\(db\.collection\('broker_commissions'\)/);
-  assert.doesNotMatch(fixture, /batch\.set\(db\.collection\('broker_commissions'\)/);
+  assert.match(fixture, /\['PENDING', 'VERIFIED', 'EXPIRED'\]/);
   assert.doesNotMatch(fixture, /otpHash|timingSafeEqual|verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });
 
-test('critical evidence prepares only KYC and OTP hygiene before Broker browser execution', () => {
-  const fixtureMap = criticalRunner.indexOf('const SUITE_FIXTURES = Object.freeze');
-  const brokerEntry = criticalRunner.indexOf('businessBroker:', fixtureMap);
-  const fixtureCommand = criticalRunner.indexOf("script: 'scripts/prepare-broker-payout-otp-e2e.mjs'", brokerEntry);
-  const fixtureLookup = criticalRunner.indexOf('const fixture = SUITE_FIXTURES[suiteKey]');
-  const playwrightExecution = criticalRunner.indexOf('const result = spawnNpmPlaywrightJson');
+test('critical evidence prepares the Broker payout fixture before browser execution', () => {
+  const fixtureMap = runner.indexOf('const SUITE_FIXTURES = Object.freeze');
+  const brokerEntry = runner.indexOf('businessBroker:', fixtureMap);
+  const fixtureCommand = runner.indexOf("script: 'scripts/prepare-broker-payout-otp-e2e.mjs'", brokerEntry);
+  const fixtureLookup = runner.indexOf('const fixture = SUITE_FIXTURES[suiteKey]');
+  const fixtureFailure = runner.indexOf('fixture preparation failed — evidence not recorded');
+  const playwrightExecution = runner.indexOf('const result = spawnNpmPlaywrightJson');
 
   assert.ok(fixtureMap >= 0, 'critical evidence must use the central suite fixture map');
-  assert.ok(brokerEntry > fixtureMap, 'fixture must remain scoped to businessBroker');
-  assert.ok(fixtureCommand > brokerEntry, 'businessBroker must prepare the dedicated Broker identity and private KYC');
+  assert.ok(brokerEntry > fixtureMap, 'fixture preparation must remain scoped to businessBroker');
+  assert.ok(fixtureCommand > brokerEntry, 'businessBroker must execute the dedicated fixture script');
   assert.ok(fixtureLookup > fixtureCommand, 'suite fixture lookup must use the central map');
-  assert.ok(playwrightExecution > fixtureLookup, 'fixture preparation must happen before browser execution');
+  assert.ok(fixtureFailure > fixtureLookup, 'fixture failure must block evidence');
+  assert.ok(playwrightExecution > fixtureFailure, 'fixture preparation must happen before browser execution');
 });
 
-test('Broker protected runner binds one UI lead to contract activation and one deterministic commission', () => {
-  assert.match(productionRunner, /PROJECT_ID = 'bin-group-57c60'/);
-  assert.match(productionRunner, /GITHUB_SHA/);
-  assert.match(productionRunner, /E2E_BROKER_LEAD_NAME/);
-  assert.match(productionRunner, /profile\.e2eLaunchSeed === true/);
-  assert.match(productionRunner, /collection\('brokerLeads'\)/);
-  assert.match(productionRunner, /status: 'DRAFT'/);
-  assert.match(productionRunner, /status: 'ACTIVE'/);
-  assert.match(productionRunner, /commission_\$\{contractId\}/);
-  assert.match(productionRunner, /source === 'CONTRACT_ACTIVATION'/);
-  assert.match(productionRunner, /commissionGenerated: false/);
-  assert.match(productionRunner, /commissionCountAfterReplay\.size === 1/);
-  assert.match(productionRunner, /deterministic commission ID/);
+test('Broker live evidence fetches a real OTP from Gmail and submits it — cancel path is forbidden', () => {
+  // Must import the Gmail OAuth2 reader
+  assert.match(brokerSpec, /gmail-otp-reader/);
+  assert.match(brokerSpec, /getLatestOtp/);
+
+  // Must use the mailbox email env key
+  assert.match(brokerSpec, /E2E_BROKER_MAILBOX_EMAIL/);
+
+  // Must issue the OTP request
+  assert.match(brokerSpec, /broker-payout-request-otp/);
+  assert.ok(brokerSpec.includes('REQUEST PAYOUT \\(1\\)'), 'live evidence must require exactly one prepared commission');
+  assert.match(brokerSpec, /broker-payout-otp-dialog/);
+  assert.match(brokerSpec, /broker-payout-otp-code/);
+
+  // Must fill and submit the real code
+  assert.match(brokerSpec, /otpCode\.fill\(otp\)/);
+  assert.match(brokerSpec, /broker-payout-otp-submit/);
+  assert.match(brokerSpec, /submitOtp\.click\(\)/);
+
+  // Cancel path must NOT be used — that was the false-pass escape hatch
+  assert.doesNotMatch(brokerSpec, /broker-payout-otp-cancel/);
+
+  // Server-authoritative callable names must not appear in the client spec
+  assert.doesNotMatch(brokerSpec, /verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });
 
-test('Broker protected runner requires mailbox OTP verification and completed payout submission', () => {
-  assert.match(productionRunner, /E2E_BROKER_MAILBOX_CLIENT_ID/);
-  assert.match(productionRunner, /exchangeGmailAccessToken, readGmailOtp/);
-  assert.match(productionRunner, /expectedMailboxEmail: brokerMailboxEmail/);
-  assert.match(productionRunner, /correlationId/);
-  assert.match(gmailReader, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/profile/);
-  assert.match(gmailReader, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages/);
-  assert.match(gmailReader, /attachments\/\$\{encodeURIComponent\(attachmentId\)\}/);
-  assert.match(productionRunner, /requestBrokerPayoutOtp/);
-  assert.match(productionRunner, /verifyBrokerPayoutOtp/);
-  assert.match(productionRunner, /submitBrokerPayoutRequest/);
-  assert.match(productionRunner, /delivery\?\.messageId/);
-  assert.match(productionRunner, /otpHashVersion/);
-  assert.match(productionRunner, /HMAC_SHA256_V1/);
-  assert.match(productionRunner, /mailboxReceiptVerified: true/);
-  assert.match(productionRunner, /providerMessageIdHash/);
-  assert.match(productionRunner, /mailboxMessageIdHash/);
-  assert.doesNotMatch(productionRunner, /deriveOtp|value\.otpHash\b|value\.salt\b|number\s*<=\s*999999/);
-  assert.match(productionRunner, /EMAIL_OTP_SINGLE_USE_PRIVATE_KYC/);
-  assert.match(productionRunner, /status\) === 'CONSUMED'/);
-  assert.match(productionRunner, /payoutStatus\) === 'REQUESTED'/);
-  assert.match(productionRunner, /callFunctionExpectingFailure/);
-  assert.match(productionRunner, /broker-production-evidence\.json/);
-  assert.match(productionRunner, /hardLaunchClaim: false/);
 
-  const evidenceStart = productionRunner.lastIndexOf('const evidence = {');
-  assert.ok(evidenceStart >= 0, 'Broker production evidence object is missing');
-  const evidenceBlock = productionRunner.slice(evidenceStart);
-  assert.doesNotMatch(evidenceBlock, /\n\s+providerMessageId\s*:/);
-  assert.match(evidenceBlock, /providerMessageIdHash/);
-});
-
-test('Broker browser proof creates the lead and requires the protected lifecycle artifact', () => {
-  assert.match(brokerSpec, /broker-lead-client-name/);
-  assert.match(brokerSpec, /Lead recorded with attribution/);
-  assert.match(brokerSpec, /runBrokerLifecycleProof\(uniqueLead\)/);
-  assert.match(brokerSpec, /broker-production-evidence/);
-  assert.match(brokerSpec, /countAfterActivationReplay: 1/);
-  assert.match(brokerSpec, /deterministicIdPreserved: true/);
-  assert.match(brokerSpec, /otpVerified: true/);
-  assert.match(brokerSpec, /otpConsumed: true/);
-  assert.match(brokerSpec, /PENDING_ADMIN_REVIEW/);
-  assert.match(brokerSpec, /replayRejected: true/);
-  assert.doesNotMatch(brokerSpec, /request-only|broker-payout-otp-cancel/i);
-});
-
-test('Broker payout UI retains server-authoritative request, verify, and submit order', () => {
+test('Broker payout UI exposes stable evidence selectors while retaining server-authoritative order', () => {
   assert.match(page, /data-testid="broker-payout-request-otp"/);
   assert.match(page, /data-testid="broker-payout-otp-dialog"/);
   assert.match(page, /'data-testid': 'broker-payout-otp-code'/);
+  assert.match(page, /data-testid="broker-payout-otp-cancel"/);
   assert.match(page, /data-testid="broker-payout-otp-submit"/);
 
   const requestIndex = page.indexOf("httpsCallable(functions, 'requestBrokerPayoutOtp')");

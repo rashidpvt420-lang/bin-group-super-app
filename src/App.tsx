@@ -88,6 +88,9 @@ const LEGACY_ONBOARDING_KEYS = ['onboardingStore', 'onboardingStep', 'selectedCo
 const MIGRATION_KEY = 'bin_migration_v4_legacy_onboarding_cleanup_done';
 const ACTIVE_ONBOARDING_STORE_KEY = 'bin-group-onboarding-v3';
 
+const HR_ROLES = ['hr_admin', 'hr_manager', 'hr_staff'];
+const ENABLE_HR_MODULE = import.meta.env.VITE_ENABLE_HR_MODULE === 'true';
+
 const ADMIN_STAFF_ROLES = [
   'admin',
   'super_admin',
@@ -95,14 +98,12 @@ const ADMIN_STAFF_ROLES = [
   'manager',
   'operations_admin',
   'finance_admin',
-  'hr_admin',
   'support_admin',
-  'hr_manager',
-  'hr_staff',
   'finance_staff',
   'account_manager',
   'dispatcher',
   'operations_manager',
+  ...(ENABLE_HR_MODULE ? HR_ROLES : []),
 ];
 
 const NOTIFICATION_ROLES = [

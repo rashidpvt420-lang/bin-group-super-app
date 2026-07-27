@@ -3,8 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const repositoryRoot = path.resolve(new URL('../..', import.meta.url).pathname);
+const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 function collectFiles(target, output = []) {
   if (!existsSync(target)) return output;
@@ -65,7 +66,8 @@ test('Admin recovery excludes prohibited production bypass, fake-factor and debu
 });
 
 test('recovery does not track real environment files', () => {
-  const tracked = execFileSync('git', ['ls-files'], { cwd: repositoryRoot, encoding: 'utf8' })
+  const gitCmd = process.platform === 'win32' ? 'git.exe' : 'git';
+  const tracked = execFileSync(gitCmd, ['ls-files'], { cwd: repositoryRoot, encoding: 'utf8', shell: process.platform === 'win32' })
     .split(/\r?\n/)
     .filter(Boolean);
   const prohibited = tracked.filter((file) => {

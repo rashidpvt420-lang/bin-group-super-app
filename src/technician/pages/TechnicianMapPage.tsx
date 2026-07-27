@@ -114,7 +114,7 @@ export default function TechnicianMapPage() {
           Mission Control & Navigation
         </Typography>
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.46)', mt: 1, maxWidth: 760 }}>
-          GPS sharing is foreground-only and starts when you press ON THE WAY. The in-app time and distance figures are straight-line estimates, not traffic-aware navigation.
+          GPS sharing is foreground-only and starts when you press ON THE WAY. The in-app time and distance figures are approximate straight-line estimates, not road navigation.
         </Typography>
       </Box>
 
@@ -175,7 +175,7 @@ export default function TechnicianMapPage() {
                           {resolved.hasExactCoordinates ? <Navigation size={44} color={binThemeTokens.gold} /> : <ShieldAlert size={44} color="#ef4444" />}
                           <Typography variant="h6" fontWeight="950" color="#FFF">{resolved.hasExactCoordinates ? 'Verified pin available' : 'Exact GPS pin missing'}</Typography>
                           {eta !== null && <Chip size="small" icon={<Clock size={11} />} label={`Straight-line estimate ~${eta} min`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.9), color: '#000', fontWeight: 950, '& .MuiChip-icon': { color: '#000' } }} />}
-                          {dist !== null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{dist.toFixed(1)} km straight-line · traffic not included</Typography>}
+                          {dist !== null && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>{dist.toFixed(1)} km approximate straight-line distance · road routing not included</Typography>}
                           <Button variant="contained" onClick={() => openMap(job)} startIcon={<Navigation size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
                             OPEN TRAFFIC-AWARE GOOGLE MAPS
                           </Button>

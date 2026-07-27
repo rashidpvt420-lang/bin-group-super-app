@@ -7,6 +7,7 @@ const boundedReadCatchAll = "      allow read: if collection != 'tickets' && col
 const adminSecurityReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
 const privateHrReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const liveLocationReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
+const invoiceRegistryReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
 const legacyWriteList = `          'system_secrets',
           'users',
           'tickets',
@@ -43,6 +44,13 @@ const legacyUpdateCatchAll = '      allow update, delete: if !(';
 const boundedUpdateCatchAll = "      allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(";
 const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrators must use App Check-protected callables.
     match /admin_security_sessions/{sessionId} {
+      allow read, write: if false;
+    }
+
+`;
+
+const invoiceRegistryBlock = `    // Public invoice registry. Access only via App Check-protected verifyPublicProof callable.
+    match /invoice_registry/{hash} {
       allow read, write: if false;
     }
 
@@ -122,11 +130,19 @@ if (!text.includes('match /admin_security_sessions/{sessionId}')) {
   text = text.replace(anchor, `${adminSecurityBlock}${anchor}`);
 }
 
-for (const candidate of [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll]) {
-  if (text.includes(candidate)) text = text.replace(candidate, liveLocationReadCatchAll);
+if (!text.includes('match /invoice_registry/{hash}')) {
+  const anchor = '    match /{collection}/{document=**} {';
+  if (!text.includes(anchor)) {
+    throw new Error('[final-firestore-authority] wildcard anchor missing for invoice registry block');
+  }
+  text = text.replace(anchor, `${invoiceRegistryBlock}${anchor}`);
 }
-if (!text.includes(liveLocationReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR and live-location exclusions');
+
+for (const candidate of [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll, liveLocationReadCatchAll]) {
+  if (text.includes(candidate)) text = text.replace(candidate, invoiceRegistryReadCatchAll);
+}
+if (!text.includes(invoiceRegistryReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR, live-location and invoice-registry exclusions');
 }
 
 if (text.includes(liveLocationWriteList)) {
@@ -186,7 +202,7 @@ const required = [
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
-  liveLocationReadCatchAll.trim(),
+  invoiceRegistryReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
   liveLocationWriteList.trim(),

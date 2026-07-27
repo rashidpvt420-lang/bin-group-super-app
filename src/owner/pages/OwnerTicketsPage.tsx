@@ -1,7 +1,7 @@
 /**
  * BIN GROUP — OwnerTicketsPage
  * Lists all maintenance tickets filed by or for the owner's properties.
- * Shows live ETA, technician name, and Track chip for active tickets.
+ * Shows rough arrival estimate, technician name, and Track chip for active tickets.
  */
 
 import React, { useState, useEffect } from 'react';

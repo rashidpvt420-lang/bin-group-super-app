@@ -29,6 +29,9 @@ const mailboxEmailEnv = (role) =>
   role === 'OWNER' || role === 'BROKER'
     ? `E2E_${role}_MAILBOX_EMAIL`
     : `E2E_${role}_EMAIL`;
+// Owner and Broker use dedicated OAuth-authenticated mailboxes.
+const EMAIL_KEY = (role) =>
+  role === 'OWNER' || role === 'BROKER' ? `E2E_${role}_MAILBOX_EMAIL` : `E2E_${role}_EMAIL`;
 const mailboxOauthKeys = [
   'E2E_OWNER_MAILBOX_CLIENT_ID',
   'E2E_OWNER_MAILBOX_CLIENT_SECRET',
@@ -57,7 +60,7 @@ const requireFounderEvidence = strictRoles && (
 const keys = [
   'E2E_BASE_URL',
   ...(strictRoles ? ['E2E_ADMIN_BASE_URL'] : []),
-  ...roles.flatMap((role) => [mailboxEmailEnv(role), `E2E_${role}_PASSWORD`]),
+  ...roles.flatMap((role) => [EMAIL_KEY(role), `E2E_${role}_PASSWORD`]),
   ...(requireFounderEvidence ? ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD'] : []),
   ...(requireMailboxEvidence ? mailboxEvidenceKeys : []),
 ];
@@ -128,7 +131,7 @@ function validateFounderEvidence() {
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
-  console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[mailboxEmailEnv(role)] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
+  console.log(`[E2E_ENV_GUARD] ${role}: email=${process.env[EMAIL_KEY(role)] ? 'set' : 'missing'} credential=${process.env[`E2E_${role}_PASSWORD`] ? 'set' : 'missing'}`);
 }
 
 const appCheckMissing = validateAppCheckToken();

@@ -1,7 +1,7 @@
 /**
- * BIN GROUP — LiveTechnicianTrackingCard
+ * BIN GROUP - LiveTechnicianTrackingCard
  * Shared Owner/Tenant tracking summary. This component does not render a
- * street map or traffic-aware route; it displays verified points, freshness,
+ * street map or road route; it displays verified points, freshness,
  * straight-line distance and an external Google Maps route link.
  */
 import React from 'react';
@@ -91,7 +91,7 @@ function getStatusMessage(ticket: any, etaMin: number | null, trackingFresh: boo
         case 'in_progress': return 'Work in Progress';
         case 'arrived': return 'Technician Has Arrived';
         case 'on_the_way':
-            if (trackingFresh && etaMin !== null) return `Technician en route — approx. ${etaMin} min straight-line estimate`;
+            if (trackingFresh && etaMin !== null) return `Technician en route - rough arrival estimate ${etaMin} min`;
             if (locationStale) return 'Technician en route — GPS location is stale';
             return 'Technician en route — waiting for a fresh GPS point';
         case 'accepted':
@@ -175,7 +175,7 @@ export default function LiveTechnicianTrackingCard({
                         letterSpacing: 1,
                     }}
                 >
-                    TRACKING SUMMARY — NOT A STREET MAP
+                    LOCATION SUMMARY - NOT A STREET MAP
                 </Typography>
 
                 {trackingRequested && (
@@ -208,7 +208,7 @@ export default function LiveTechnicianTrackingCard({
                             </Tooltip>
                             <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
                             <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, bgcolor: 'rgba(0,0,0,0.5)', px: 1, borderRadius: 1 }}>
-                                {straightLineDistanceKm === null ? 'Distance unavailable' : `${straightLineDistanceKm.toFixed(1)} km straight-line`}
+                                {straightLineDistanceKm === null ? 'Distance unavailable' : `${straightLineDistanceKm.toFixed(1)} km approximate straight-line distance`}
                             </Typography>
                             <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
                             <Tooltip title="Verified job/property coordinate">
@@ -219,7 +219,7 @@ export default function LiveTechnicianTrackingCard({
                             </Tooltip>
                         </Stack>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700, textAlign: 'center' }}>
-                            In-app estimate uses straight-line distance and a fixed average speed. Traffic and road routing are available only in Google Maps.
+                            In-app estimate uses approximate straight-line distance and a fixed average speed. Road routing is available only in Google Maps.
                         </Typography>
                         <Button
                             size="small"
@@ -227,7 +227,7 @@ export default function LiveTechnicianTrackingCard({
                             onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
                             sx={{ color: '#22d3ee', border: '1px solid rgba(34,211,238,0.3)', borderRadius: 3, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none' }}
                         >
-                            Open Traffic-Aware Google Maps
+                            Open in Google Maps
                         </Button>
                     </>
                 ) : jobLocation ? (
@@ -280,7 +280,7 @@ export default function LiveTechnicianTrackingCard({
                         {straightLineEstimateMinutes !== null && (
                             <Chip
                                 icon={<Clock size={13} />}
-                                label={`~${straightLineEstimateMinutes} min straight-line estimate`}
+                                label={`~${straightLineEstimateMinutes} min rough arrival estimate`}
                                 size="small"
                                 sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
                             />
@@ -288,7 +288,7 @@ export default function LiveTechnicianTrackingCard({
                         {straightLineDistanceKm !== null && (
                             <Chip
                                 icon={<Navigation size={13} />}
-                                label={`${straightLineDistanceKm.toFixed(1)} km straight-line`}
+                                label={`${straightLineDistanceKm.toFixed(1)} km approximate straight-line distance`}
                                 size="small"
                                 sx={{ bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.65)', fontWeight: 900, border: '1px solid rgba(255,255,255,0.08)', '& .MuiChip-icon': { color: 'rgba(255,255,255,0.45)' } }}
                             />

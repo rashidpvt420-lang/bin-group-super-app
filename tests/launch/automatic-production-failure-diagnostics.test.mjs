@@ -40,7 +40,7 @@ test('Firebase failure diagnostics start visibly, support owner-only requests, a
   assert.match(source, /personalIdentifiersRedacted: true/);
   assert.match(source, /Normalized terminal errors/);
   assert.match(source, /gh api --paginate --slurp/);
-  assert.match(source, /actions\/upload-artifact@v4/);
+  assert.match(source, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.match(source, /body="\$\(cat <<EOF/);
   assert.doesNotMatch(
     source,

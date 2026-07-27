@@ -58,7 +58,7 @@ test('cleanup dispatcher publishes sanitized correlation evidence only', () => {
   assert.match(workflow, /expectedTargetCount:\$expectedTargetCount/);
   assert.match(workflow, /mutationRequested:true/);
   assert.match(workflow, /hardLaunchClaim:false/);
-  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.doesNotMatch(workflow, /privileged-cleanup-dispatch-evidence[\s\S]*password/i);
   assert.doesNotMatch(workflow, /privileged-cleanup-dispatch-evidence[\s\S]*privateKey/i);
 });

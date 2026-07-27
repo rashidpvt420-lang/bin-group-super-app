@@ -70,7 +70,7 @@ test('bank-pilot correlates exact wrapper and production runs and publishes sani
   assert.match(workflow, /launchMode:"bank-pilot"/);
   assert.match(workflow, /publicReleaseGate:false/);
   assert.match(workflow, /hardLaunchClaim:false/);
-  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.doesNotMatch(workflow, /bank-pilot-dispatch-evidence[\s\S]*password/i);
   assert.doesNotMatch(workflow, /bank-pilot-dispatch-evidence[\s\S]*privateKey/i);
 });

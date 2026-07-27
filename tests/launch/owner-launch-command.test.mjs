@@ -25,7 +25,7 @@ test('owner diagnosis command runs directly without secondary workflow dispatch'
   assert.match(commandWorkflow, /dispatch-production-diagnosis:/);
   assert.match(commandWorkflow, /Run exact-main sanitized diagnosis/);
   assert.match(commandWorkflow, /bash scripts\/run-owner-production-diagnosis\.sh/);
-  assert.match(commandWorkflow, /actions\/upload-artifact@v7/);
+  assert.match(commandWorkflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.match(commandWorkflow, /steps\.diagnosis\.outputs\.artifact_name/);
   assert.match(commandWorkflow, /Production mutation: none/);
   assert.match(commandWorkflow, /Raw job log uploaded: false/);
@@ -120,7 +120,7 @@ test('production failure diagnostics remain failed-run-only and preserve fail-cl
   assert.match(diagnosticsWorkflow, /githubSecretMaskingApplied:\s*true/);
   assert.match(diagnosticsWorkflow, /secretValuesIntentionallyCollected:\s*false/);
   assert.match(diagnosticsWorkflow, /hardLaunchClaim:\s*false/);
-  assert.match(diagnosticsWorkflow, /actions\/upload-artifact@v4/);
+  assert.match(diagnosticsWorkflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.match(diagnosticsWorkflow, /firebase-production-failure\.log/);
   assert.match(diagnosticsWorkflow, /issues\/\$ISSUE_NUMBER\/comments/);
   assert.doesNotMatch(diagnosticsWorkflow, /continue-on-error:\s*true/);

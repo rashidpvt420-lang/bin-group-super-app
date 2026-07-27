@@ -157,7 +157,7 @@ const cards: StartCard[] = [
     titleAr: 'أنا فني',
     subtitleEn: 'See jobs, map, proof readiness, offline queue, support, and job history.',
     subtitleAr: 'راجع المهام والخريطة وجاهزية الإثبات وقائمة دون اتصال والدعم وسجل العمل.',
-    pointsEn: ['Jobs', 'Live map', 'Proof photos', 'Offline queue'],
+    pointsEn: ['Jobs', 'Location summary', 'Proof photos', 'Offline queue'],
     pointsAr: ['المهام', 'الخريطة', 'صور الإثبات', 'قائمة دون اتصال'],
     path: '/login?intendedRole=technician',
     icon: Wrench,

@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-07-27T12:05:54.983Z",
+  "commitSha": "a8201f66b3f6de93e1bd44a487ef11a9243bd63c",
+  "pilotEligible": false,
+  "hardLaunchClaim": false,
+  "decisionStatus": "missing",
+  "decisionApprovedAt": null,
+  "workflowRunId": null,
+  "failures": [
+    "pilot launch-status did not pass",
+    "launch-status automationOk must equal true",
+    "launch-status pilotEligible must equal true",
+    "hard-launch dependency is missing: authorization",
+    "hard-launch dependency is missing: incidents",
+    "hard-launch dependency is missing: publicReleaseStatus",
+    "hard-launch dependency is missing: stripeLiveProof",
+    "hard-launch dependency is missing: pilotIncidentReport",
+    "hard-launch-decision.json is missing at C:\\Users\\My-PC\\Desktop\\bin app\\launch_package\\hard-launch-decision.json"
+  ]
+}

@@ -39,14 +39,14 @@ test('privileged cleanup always performs a dry run before destructive execution'
   assert.ok(dryRun >= 0);
   assert.ok(execute > dryRun);
   assert.ok(verify > execute);
-  assert.match(workflow, /node scripts\/delete-obsolete-privileged-accounts-production\.mjs\n/);
+  assert.match(workflow, /node scripts\/delete-obsolete-privileged-accounts-production\.mjs\r?\n/);
   assert.match(workflow, /node scripts\/delete-obsolete-privileged-accounts-production\.mjs --execute/);
   assert.match(workflow, /if: \$\{\{ inputs\.execute_cleanup \}\}/);
 });
 
 test('privileged cleanup publishes evidence and excludes unrelated portal accounts', () => {
-  assert.match(workflow, /actions\/upload-artifact@v7/);
-  assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@v7/);
   assert.match(workflow, /launch_package\/privileged-account-cleanup\.json/);
   assert.match(workflow, /Audit logs preserved: required/);
   assert.match(workflow, /Non-privileged Owner, Tenant, Technician and Broker accounts: excluded/);

@@ -233,7 +233,7 @@ jobs:
           ' launch_package/firebase-production-failure.json >/dev/null
 
       - name: Upload redacted production failure evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: firebase-production-failure-${{ env.SOURCE_RUN_SHA }}-${{ env.SOURCE_RUN_ID }}
           path: |

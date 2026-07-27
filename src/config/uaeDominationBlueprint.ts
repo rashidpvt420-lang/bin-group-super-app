@@ -86,7 +86,7 @@ export const ROLE_QUICK_ACTIONS: Record<PortalRole, Array<{ id: string; label: s
   tenant: [
     { id: 'rooms', label: 'Find Room Rent', target: '/tenant/find-room-rent', whyItMatters: 'Shows only BIN-managed vacant rooms with visible repair history and contract handling.' },
     { id: 'report_issue', label: 'Report Issue', target: '/tenant/request', whyItMatters: 'Fastest path to create a photo-backed maintenance ticket.' },
-    { id: 'track_request', label: 'Track Request', target: '/tenant/tickets', whyItMatters: 'Shows status, ETA, proof, and dispute options.' },
+    { id: 'track_request', label: 'Track Request', target: '/tenant/tickets', whyItMatters: 'Shows status, rough arrival estimate, proof, and dispute options.' },
     { id: 'emergency', label: 'Emergency', target: '/tenant/emergency', whyItMatters: 'Separates true SOS from normal maintenance.' },
     { id: 'documents_payments', label: 'Documents & Payments', target: '/tenant/documents', whyItMatters: 'Reduces WhatsApp/file chasing.' },
   ],

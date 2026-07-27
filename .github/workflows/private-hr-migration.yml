@@ -130,7 +130,7 @@ jobs:
         run: node scripts/migrate-private-hr-profiles.mjs --execute
 
       - name: Upload migration report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: private-hr-migration-${{ inputs.mode }}-${{ github.sha }}
           path: launch_package/private-hr-migration.json

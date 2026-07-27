@@ -37,7 +37,7 @@ const readCandidates = [
   "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles'])",
   "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'])",
 ];
-const readReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations'])";
+const readReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry'])";
 if (!rules.includes(readReplacement)) {
   const candidate = readCandidates.find((value) => rules.includes(value));
   if (!candidate) {

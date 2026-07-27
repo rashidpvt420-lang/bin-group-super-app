@@ -48,7 +48,7 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
           </Alert>
         ) : (
           <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-            Technician has been assigned. Live ETA appears once route tracking starts.
+            Technician has been assigned. A rough arrival estimate appears once foreground location sharing starts.
           </Alert>
         )}
 
@@ -57,7 +57,7 @@ export default function TechnicianArrivalCard({ ticket, technician }: Props) {
         <Stack direction="row" spacing={1} alignItems="center">
           <MapPin size={14} color="rgba(255,255,255,0.45)" />
           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700 }}>
-            Live map requires technician route tracking to be active on the technician device.
+            Location summary requires technician foreground location sharing to be active on the technician device.
           </Typography>
         </Stack>
       </Stack>

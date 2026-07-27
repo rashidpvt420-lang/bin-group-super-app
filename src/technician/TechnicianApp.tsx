@@ -27,6 +27,14 @@ import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvide
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import SupportPage from '../pages/public/SupportPage';
 
+const ENABLE_HR_MODULE = import.meta.env.VITE_ENABLE_HR_MODULE === 'true';
+
+const HrComingSoon = () => (
+    <Box sx={{ p: 4, textAlign: 'center', mt: 4 }}>
+        <Typography variant="h5" sx={{ color: '#111827', fontWeight: 900, mb: 2 }}>HR Module Offline</Typography>
+        <Typography variant="body1" sx={{ color: '#667085' }}>The HR & Requests module is currently disabled for this pilot phase. Please contact your supervisor directly for HR matters.</Typography>
+    </Box>
+);
 const shell = { ink: '#111827', muted: '#667085', canvas: '#FFFFFF', soft: '#F8F9FB', border: '#E5E7EB', gold: binThemeTokens.gold };
 const breadcrumbArabic: Record<string, string> = {
     dashboard: 'لوحة التحكم', jobs: 'المهام', job: 'المهمة', proof_readiness: 'جاهزية الإثبات',
@@ -101,7 +109,7 @@ export default function TechnicianApp() {
                 <Route path="/map" element={<TechnicianMapPage />} />
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
-                <Route path="/hr" element={<TechnicianHRPage />} />
+                <Route path="/hr/*" element={ENABLE_HR_MODULE ? <TechnicianHRPage /> : <HrComingSoon />} />
                 <Route path="/offline" element={<TechnicianOfflinePage />} />
                 <Route path="/support" element={<SupportPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="technician" />} />

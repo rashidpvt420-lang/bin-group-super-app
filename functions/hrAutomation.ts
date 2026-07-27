@@ -3,6 +3,8 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
+import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -45,6 +47,51 @@ function requirePayrollAdmin(auth: any) {
 function safeText(value: unknown, fallback = "") {
     const text = String(value || "").trim();
     return text || fallback;
+}
+
+function limitedText(value: unknown, max = 2000) {
+    return safeText(value).slice(0, max);
+}
+
+function requestTitle(value: string) {
+    return safeText(value, "hr_support").replace(/_/g, " ");
+}
+
+function stableCaseId(uid: string, message: string, suppliedKey: unknown) {
+    const rawKey = safeText(suppliedKey).slice(0, 120);
+    const source = rawKey || `${uid}|${message}`;
+    return `hrcase_${crypto.createHash("sha256").update(source).digest("hex").slice(0, 40)}`;
+}
+
+function sanitizedHrMetadata(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const source = value as Record<string, unknown>;
+    return {
+        documentType: safeText(source.documentType).slice(0, 80) || null,
+        documentLabel: safeText(source.documentLabel).slice(0, 120) || null,
+        fileName: safeText(source.fileName || source.documentFileName).slice(0, 180) || null,
+        filePath: safeText(source.filePath).slice(0, 260) || null,
+        mimeType: safeText(source.mimeType).slice(0, 120) || null,
+        sizeBytes: Number.isFinite(Number(source.sizeBytes)) ? Number(source.sizeBytes) : null,
+    };
+}
+
+function isHighRiskHrCase(result: ReturnType<typeof classifyHrIntent>) {
+    return result.privacyTier === "hr_manager_only" ||
+        result.priority === "urgent" ||
+        ["safety", "wellbeing", "confidential"].includes(result.category);
+}
+
+function isStaffActor(auth: any) {
+    if (!auth?.uid || auth.token?.suspended === true) return false;
+    const token = auth.token || {};
+    const role = normalizeRole(token.role || token.userRole || token.primaryRole);
+    return token.admin === true || token.isAdmin === true || STAFF_ROLES.includes(role);
+}
+
+function assertStaffActor(auth: any) {
+    if (isStaffActor(auth)) return;
+    throw new HttpsError("permission-denied", "Approved staff access required.");
 }
 
 function escapeHtml(value: unknown) {
@@ -317,6 +364,140 @@ async function writeHrAudit(action: string, targetId: string, details: Record<st
     ]);
 }
 
+export const createStaffHrCase = onCall(
+    { cors: true, region: "europe-west3", enforceAppCheck: true },
+    async (request) => {
+        assertStaffActor(request.auth);
+        const uid = String(request.auth?.uid || "");
+        const token = (request.auth?.token || {}) as Record<string, unknown>;
+        const message = limitedText(request.data?.message || request.data?.text, 2000);
+        if (message.length < 3) throw new HttpsError("invalid-argument", "HR case message is required.");
+
+        const result = classifyHrIntent(message);
+        const caseId = stableCaseId(uid, message, request.data?.idempotencyKey);
+        const requestRef = db.collection("staffRequests").doc(caseId);
+        const conversationRef = db.collection("hrAiConversations").doc(requestRef.id);
+        const auditRef = db.collection("audit_logs").doc();
+        const auditCompatRef = db.collection("auditLogs").doc(auditRef.id);
+        const escalationRef = db.collection("hrEscalations").doc(requestRef.id);
+        const now = serverTimestamp();
+        const actorEmail = safeText(token.email || request.data?.email, "");
+        const actorName = safeText(token.name || request.data?.displayName, "Staff Member");
+        const role = normalizeRole(token.role || token.userRole || token.primaryRole || request.data?.role || "technician");
+        const metadata = sanitizedHrMetadata(request.data?.metadata);
+        const base = {
+            uid,
+            technicianId: uid,
+            userId: uid,
+            email: actorEmail,
+            displayName: actorName,
+            role,
+            requestType: result.requestType,
+            requestLabel: requestTitle(result.requestType),
+            category: result.category,
+            priority: result.priority,
+            privacyTier: result.privacyTier,
+            confidential: result.privacyTier === "hr_manager_only",
+            serverClassified: true,
+            classificationSource: "server_callable",
+            reason: message,
+            metadata,
+            aiAnswer: result.answer,
+            detectedLanguage: result.language,
+            confidence: result.confidence,
+            matchedKeywords: result.matchedKeywords,
+            requiresHumanReview: result.requiresHumanReview,
+            recommendedNextAction: result.recommendedNextAction,
+            trainingVersion: HR_INTENT_TRAINING_VERSION,
+            source: "bin_people_ai_server_hr_case",
+            paperless: true,
+            status: "pending_hr_review",
+            startDate: new Date().toISOString().slice(0, 10),
+            endDate: new Date().toISOString().slice(0, 10),
+            hours: 0,
+            createdAt: now,
+            updatedAt: now,
+        };
+        const auditPayload = {
+            action: "HR_CASE_SERVER_CLASSIFIED",
+            targetId: requestRef.id,
+            targetType: "staffRequest",
+            actorId: uid,
+            actorRole: role,
+            details: {
+                requestType: result.requestType,
+                category: result.category,
+                priority: result.priority,
+                privacyTier: result.privacyTier,
+                confidence: result.confidence,
+                trainingVersion: HR_INTENT_TRAINING_VERSION,
+            },
+            createdAt: now,
+        };
+        let idempotent = false;
+
+        await db.runTransaction(async (tx) => {
+            const existing = await tx.get(requestRef);
+            if (existing.exists) {
+                idempotent = true;
+                return;
+            }
+            tx.create(requestRef, base);
+            tx.create(conversationRef, {
+                ...base,
+                question: message,
+                answer: result.answer,
+            });
+            tx.create(auditRef, auditPayload);
+            tx.create(auditCompatRef, auditPayload);
+            if (isHighRiskHrCase(result)) {
+                tx.create(escalationRef, {
+                    requestId: requestRef.id,
+                    uid,
+                    userId: uid,
+                    category: result.category,
+                    priority: result.priority,
+                    privacyTier: result.privacyTier,
+                    status: "open",
+                    monitored: true,
+                    acknowledgementRequired: true,
+                    dutyOfficerRole: "hr_manager",
+                    dueAt: admin.firestore.Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+                    source: "createStaffHrCase",
+                    createdAt: now,
+                    updatedAt: now,
+                });
+            }
+        });
+
+        return {
+            ok: true,
+            requestId: requestRef.id,
+            conversationId: conversationRef.id,
+            classification: result,
+            trainingVersion: HR_INTENT_TRAINING_VERSION,
+            serverClassified: true,
+            idempotent,
+        };
+    },
+);
+
+function attachHrAuditToBatch(batch: FirebaseFirestore.WriteBatch, action: string, targetId: string, details: Record<string, unknown>) {
+    const payload = {
+        action,
+        targetId,
+        targetType: "hr",
+        actorId: "HR_AUTOMATION",
+        actorName: "BIN People AI",
+        module: "hr_automation",
+        details,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp(),
+    };
+    batch.set(db.collection("auditLogs").doc(), payload);
+    batch.set(db.collection("audit_logs").doc(), payload);
+}
+
 function dateFromAny(value: unknown): Date | null {
     if (!value) return null;
     const candidate = value as { toDate?: () => Date };
@@ -515,6 +696,18 @@ async function provisionApprovedNewHire(requestId: string, data: FirebaseFiresto
         updatedAt: serverTimestamp(),
     });
 
+    attachHrAuditToBatch(batch, "HR_NEW_HIRE_PROVISIONED", requestId, {
+        staffUid,
+        role,
+        payrollPeriod: period,
+        baseSalary,
+        bonus,
+        absenceDeduction,
+        grossSalary,
+        netSalary,
+        reviewedBy: reviewer,
+    });
+
     await batch.commit();
 
     await queueUserNotification(staffUid, "BIN GROUP onboarding activated", "Your staff profile, technician record, device readiness checklist, and payroll setup are now initialized.", {
@@ -522,14 +715,6 @@ async function provisionApprovedNewHire(requestId: string, data: FirebaseFiresto
         requestId,
         payrollRecordId,
         url: "/technician/hr",
-    });
-
-    await writeHrAudit("HR_NEW_HIRE_PROVISIONED", requestId, {
-        staffUid,
-        role,
-        payrollPeriod: period,
-        payrollRecordId,
-        reviewedBy: reviewer,
     });
 }
 

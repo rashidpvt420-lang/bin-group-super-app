@@ -88,7 +88,7 @@ jobs:
         run: node scripts/publish-direct-operational-proof.mjs
 
       - name: Upload physical-device proof
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: technician-physical-evidence-${{ inputs.expected_commit_sha }}
           path: launch_package/operational-proof.json

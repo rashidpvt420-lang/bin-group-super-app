@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun, Wallet } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
-import { addDoc, collection, db, doc, getDoc, getDownloadURL, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
+import { addDoc, collection, db, doc, functions, getDoc, getDownloadURL, httpsCallable, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES, BLUE_COLLAR_ESS_TRAINING_VERSION, classifyBlueCollarEssIntent } from '../utils/blueCollarEssIntentRouter';
+import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES } from '../utils/blueCollarEssIntentRouter';
 import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
 import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngine';
 
@@ -23,6 +23,8 @@ const quickPrompts = [
   'എനിക്ക് sick leave വേണം',
   'Kailangan ko po ng payslip',
 ];
+
+const HR_SERVER_TRAINING_VERSION = 'BIN-PEOPLE-AI-ESS-V1.2-SERVER';
 
 const documentTypes = [
   ['emirates_id', 'Emirates ID'],
@@ -114,19 +116,28 @@ export default function TechnicianHRPageV2() {
     role: user?.role || 'technician',
   });
 
-  const createAiCase = async (text = message) => {
+  const createAiCase = async (text = message, metadata: Record<string, unknown> = {}) => {
     if (!user?.uid || !text.trim()) return;
     setLoading(true);
     try {
-      const result = classifyBlueCollarEssIntent(text);
+      const createStaffHrCase = httpsCallable(functions, 'createStaffHrCase');
+      const idempotencyKey = `${user.uid}:${text.trim()}:${JSON.stringify(metadata)}`;
+      const response: any = await createStaffHrCase({ message: text.trim(), metadata, idempotencyKey });
+      const result = response?.data?.classification;
+      if (!response?.data?.ok || !result?.requestType) throw new Error('Server HR classifier did not return a case.');
       const optimisticId = `local-${Date.now()}`;
       const now = new Date().toISOString();
       const base = {
         ...identity(),
+        id: response.data.requestId || optimisticId,
         requestType: result.requestType,
         requestLabel: requestTitle(result.requestType),
         category: result.category,
         priority: result.priority,
+        privacyTier: result.privacyTier,
+        confidential: result.privacyTier === 'hr_manager_only',
+        serverClassified: true,
+        classificationSource: 'server_callable',
         reason: text.trim(),
         aiAnswer: result.answer,
         detectedLanguage: result.language,
@@ -134,18 +145,16 @@ export default function TechnicianHRPageV2() {
         matchedKeywords: result.matchedKeywords,
         requiresHumanReview: result.requiresHumanReview,
         recommendedNextAction: result.recommendedNextAction,
-        trainingVersion: BLUE_COLLAR_ESS_TRAINING_VERSION,
-        source: 'bin_people_ai_multilingual_ess',
+        trainingVersion: response.data.trainingVersion || HR_SERVER_TRAINING_VERSION,
+        source: 'bin_people_ai_server_hr_case',
         paperless: true,
         status: 'pending_hr_review',
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date().toISOString().split('T')[0],
         hours: 0,
       };
-      const localCase = { id: optimisticId, ...base, createdAtLocal: now, optimistic: true };
+      const localCase = { ...base, createdAtLocal: now, optimistic: true };
       setRequests((prev) => sortByNewest([localCase, ...prev.filter((item) => item.id !== optimisticId)]));
-      await addDoc(collection(db, 'staffRequests'), { ...base, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      await addDoc(collection(db, 'hrAiConversations'), { ...base, question: text.trim(), answer: result.answer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       setAnswer(`${result.answer} · ${result.language.toUpperCase()} · ${Math.round(result.confidence * 100)}% confidence · ${result.recommendedNextAction}`);
       setMessage('');
     } catch (error: any) {
@@ -186,19 +195,7 @@ export default function TechnicianHRPageV2() {
         source: 'paperless_staff_document_vault',
       };
       await addDoc(collection(db, 'staffDocuments'), { ...common, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      await addDoc(collection(db, 'staffRequests'), {
-        ...common,
-        requestType: 'document_update',
-        requestLabel: `Document Upload: ${label}`,
-        category: 'documents',
-        priority: documentType === 'medical_certificate' ? 'high' : 'normal',
-        reason: `Uploaded ${label}: ${file.name}`,
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
-        hours: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      await createAiCase(`Document update uploaded for HR review: ${label}`, common);
       setUploadMessage('Document uploaded and sent to HR for review.');
     } catch (error: any) {
       console.error('Staff document upload failed:', error);
@@ -247,7 +244,7 @@ export default function TechnicianHRPageV2() {
 
   return (
     <Box sx={{ pb: 6 }}>
-      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {BLUE_COLLAR_ESS_TRAINING_VERSION}</Typography>
+      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {HR_SERVER_TRAINING_VERSION}</Typography>
       <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}>AI-Driven Multilingual Blue-Collar Workforce ESS</Typography>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}>Trained for {BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ')}. Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork.</Typography>
 

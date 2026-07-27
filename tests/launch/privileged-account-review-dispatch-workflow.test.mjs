@@ -54,7 +54,7 @@ test('dispatcher publishes only sanitized exact-run correlation evidence', () =>
   assert.match(workflow, /workflowRunUrl:\$workflowRunUrl/);
   assert.match(workflow, /mutationRequested:false/);
   assert.match(workflow, /hardLaunchClaim:false/);
-  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.match(workflow, /name: privileged-review-dispatch-\$\{\{ steps\.release\.outputs\.sha \}\}-\$\{\{ steps\.correlate\.outputs\.run_id \}\}/);
   assert.doesNotMatch(workflow, /privileged-review-dispatch-evidence[\s\S]*password/i);
   assert.doesNotMatch(workflow, /privileged-review-dispatch-evidence[\s\S]*privateKey/i);

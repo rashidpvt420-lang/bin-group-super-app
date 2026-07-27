@@ -8,7 +8,7 @@ import SafeIcon from '../../components/SafeIcon';
 const cards = [
   { title: 'Owner pilot', body: 'Check portfolio, property passport, payments, documents, approvals, and handover reviews.', path: '/login?intendedRole=owner', icon: Building2 },
   { title: 'Tenant pilot', body: 'Submit issue, emergency request, payment check, documents, and move-in/move-out report.', path: '/login?intendedRole=tenant', icon: UserRound },
-  { title: 'Technician pilot', body: 'Review jobs, live map, proof readiness, offline queue, support, and job lifecycle.', path: '/login?intendedRole=technician', icon: Wrench },
+  { title: 'Technician pilot', body: 'Review jobs, location summary, proof readiness, offline queue, support, and job lifecycle.', path: '/login?intendedRole=technician', icon: Wrench },
   { title: 'Broker pilot', body: 'Check leads, referrals, attribution proof, documents, and commissions dashboard.', path: '/login?intendedRole=broker', icon: ClipboardCheck },
   { title: 'Invoice verify', body: 'Open the public invoice verification page.', path: '/verify', icon: FileCheck2 },
   { title: 'Certificate verify', body: 'Open the public certificate verification page.', path: '/verify-cert', icon: BadgeCheck },

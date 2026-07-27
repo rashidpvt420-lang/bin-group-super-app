@@ -18,11 +18,11 @@ test('privileged cleanup review is protected, exact-main and non-destructive', a
   assert.match(workflow, /actions\/checkout@v6/);
   assert.match(workflow, /actions\/setup-node@v6/);
   assert.match(workflow, /google-github-actions\/auth@v3/);
-  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.doesNotMatch(workflow, /actions\/checkout@v4/);
   assert.doesNotMatch(workflow, /actions\/setup-node@v4/);
   assert.doesNotMatch(workflow, /google-github-actions\/auth@v2/);
-  assert.doesNotMatch(workflow, /actions\/upload-artifact@v4/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@v7/);
   assert.match(workflow, /REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP/);
   assert.match(workflow, /refs\/heads\/main/);
   assert.match(workflow, /review-privileged-accounts-production\.mjs/);

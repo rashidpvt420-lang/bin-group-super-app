@@ -54,18 +54,26 @@ await new Promise((resolve) => setTimeout(resolve, 9000));
 const notifications = await db.collection('notifications')
   .where('extraData.requestId', '==', requestRef.id)
   .limit(20)
-  .get()
-  .catch(async () => db.collection('notifications').limit(20).get());
-const auditLogs = await db.collection('auditLogs')
+  .get();
+let auditLogs = await db.collection('auditLogs')
   .where('targetId', '==', requestRef.id)
   .limit(20)
-  .get()
-  .catch(async () => db.collection('audit_logs').where('targetId', '==', requestRef.id).limit(20).get());
+  .get();
+if (auditLogs.empty) {
+  auditLogs = await db.collection('audit_logs')
+    .where('targetId', '==', requestRef.id)
+    .limit(20)
+    .get();
+}
+
+const status = notifications.size > 0 && auditLogs.size > 0 ? 'PASS' : 'FAIL_TARGETED_EVIDENCE_MISSING';
 
 console.log(JSON.stringify({
   requestId: requestRef.id,
   staffUid,
   notificationsFound: notifications.size,
   auditLogsFound: auditLogs.size,
-  status: notifications.size > 0 || auditLogs.size > 0 ? 'PASS' : 'CHECK_FIREBASE_LOGS',
+  status,
 }, null, 2));
+
+if (status !== 'PASS') process.exit(1);

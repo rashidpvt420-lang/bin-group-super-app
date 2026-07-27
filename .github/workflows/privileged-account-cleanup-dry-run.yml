@@ -72,7 +72,7 @@ jobs:
         run: node scripts/review-privileged-accounts-production.mjs
 
       - name: Upload aggregate report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: privileged-account-cleanup-review-${{ github.sha }}
           path: launch_package/privileged-account-cleanup.json

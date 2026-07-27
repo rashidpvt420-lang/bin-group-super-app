@@ -71,7 +71,7 @@ test('diagnosis uploads only sanitized evidence and captures deployment plus Pla
   assert.match(workflow, /tests\\\/e2e\\\/\[\^\\s\]\+\\\.spec\\\.ts/);
   assert.match(workflow, /fullArtifactLogRedacted:\s*true/);
   assert.match(workflow, /rawJobLogUploaded:\s*false/);
-  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
   assert.match(workflow, /hardLaunchClaim:\s*false/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });

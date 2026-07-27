@@ -102,7 +102,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
         
         <Section title="2. DATA PRIVACY & PDPL COMPLIANCE" content="In accordance with UAE Federal Decree-Law No. 45 of 2021 regarding the Protection of Personal Data (PDPL), BIN GROUP acts as the Data Controller. Your personal identity data, financial records, and maintenance history are encrypted and stored within the Sovereign UAE Cloud Infrastructure." />
         
-        <Section title="3. REAL-TIME TELEMETRY & GPS" content="For Technicians and Field Agents: This platform utilizes real-time GPS tracking to optimize dispatch latency and ensure SLA compliance. For Tenants: Location data is utilized strictly during SOS dispatch events to provide accurate ETA for emergency responders." />
+        <Section title="3. REAL-TIME TELEMETRY & GPS" content="For Technicians and Field Agents: this platform uses foreground GPS points to support dispatch visibility and SLA compliance. For Tenants: location data is used during SOS dispatch events to provide a rough arrival estimate for emergency responders." />
         
         <Section title="4. INSTITUTIONAL SECURITY" content="Unauthorized access, reverse engineering, or attempts to bypass the Role-Based Access Control (RBAC) are strictly prohibited and will be reported to the UAE Cyber Security Council." />
 

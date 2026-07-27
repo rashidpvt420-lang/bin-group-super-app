@@ -181,7 +181,7 @@ export default function TechnicianJobsPage() {
                             <Chip
                                 size="small"
                                 icon={<Clock size={11} />}
-                                label={`~${eta} min ETA`}
+                                label={`~${eta} min rough estimate`}
                                 sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, height: 22, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
                             />
                         )}

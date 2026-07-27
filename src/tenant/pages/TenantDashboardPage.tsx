@@ -220,7 +220,7 @@ export default function TenantDashboardPage() {
     },
     {
       title: tx('tenant.workflow.track.title', '2. Track technician / status'),
-      desc: tx('tenant.workflow.track.desc', 'Watch active requests, technician assignment, field status, ETA and updates from the ticket detail page.'),
+      desc: tx('tenant.workflow.track.desc', 'Watch active requests, technician assignment, field status, rough arrival estimates and updates from the ticket detail page.'),
       icon: <MapPin size={22} />,
       action: tx('tenant.workflow.track.action', 'View Tickets'),
       route: '/tenant/tickets',

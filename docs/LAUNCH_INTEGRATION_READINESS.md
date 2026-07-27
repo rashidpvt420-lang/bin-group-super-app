@@ -51,7 +51,7 @@ Do not describe an integration as **live**, **approved**, **production-ready**, 
 - [ ] Maps JavaScript API enabled.
 - [ ] Geocoding/Places/Geolocation APIs enabled only if actually used.
 - [ ] Test exact UAE property pin capture during onboarding.
-- [ ] Test technician live map under admin.
+- [ ] Test technician location summary under admin; do not claim embedded live-map routing until road-routing evidence exists.
 - [ ] Test route behavior when GPS is missing or invalid.
 - [ ] Confirm App Check or referrer restrictions do not break map rendering.
 
@@ -167,7 +167,7 @@ Use this wording until provider activation is complete:
 
 Do not say:
 
-- "Google Maps is live" unless production map rendering and key restrictions passed.
+- "Google Maps is live" unless production map rendering, key restrictions and the specific map surface being claimed have passed.
 - "AI auto-triage is live" unless backend AI key, billing, fallback, and manual review passed.
 - "Online card payments are live" unless gateway merchant approval and webhook tests passed.
 - "WhatsApp notifications are live" unless templates and sender number are approved.

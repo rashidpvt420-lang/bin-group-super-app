@@ -29,12 +29,16 @@ const hardMode = process.argv.includes('--hard') || process.env.LAUNCH_SCOPE ===
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function run(cmd, args) {
-  const result = spawnSync(cmd, args, { encoding: 'utf8', cwd: root });
+  const result = spawnSync(cmd, args, {
+    encoding: 'utf8',
+    cwd: root,
+    shell: process.platform === 'win32',
+  });
   return {
     command: [cmd, ...args].join(' '),
     exitCode: result.status ?? 1,
     stdout: result.stdout || '',
-    stderr: result.stderr || '',
+    stderr: result.stderr || (result.error ? String(result.error.message || result.error) : ''),
   };
 }
 

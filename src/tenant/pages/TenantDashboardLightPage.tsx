@@ -118,7 +118,7 @@ export default function TenantDashboardLightPage() {
     },
     {
       title: tx('dash.active_tickets', 'Track Requests'),
-      description: tx('tenant.light.trackDesc', 'See status, technician assignment, ETA, proof and dispute options.'),
+      description: tx('tenant.light.trackDesc', 'See status, technician assignment, rough arrival estimate, proof and dispute options.'),
       icon: <Activity size={25} />,
       route: '/tenant/tickets',
       tone: 'gold',

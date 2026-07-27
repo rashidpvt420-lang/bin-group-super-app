@@ -7,6 +7,7 @@ let source = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 const legacyRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();";
 const hardenedRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const liveLocationRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
+const invoiceRegistryRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
 
 const legacyWritePrefix = `          'system_secrets',
           'users',
@@ -39,7 +40,7 @@ const privateBlock = `    // Sensitive employment, Emirates ID and salary data. 
 `;
 
 if (source.includes(legacyRead)) source = source.replace(legacyRead, hardenedRead);
-if (!source.includes(hardenedRead) && !source.includes(liveLocationRead)) {
+if (!source.includes(hardenedRead) && !source.includes(liveLocationRead) && !source.includes(invoiceRegistryRead)) {
   throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
 }
 

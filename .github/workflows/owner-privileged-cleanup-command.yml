@@ -180,20 +180,22 @@ jobs:
           phone_mfa="$(jq -r '.founderPhoneMfaReady' "$report_path")"
           blockers="$(jq -r '.executionBlockers | join("; ") | if length == 0 then "none" else . end' "$report_path")"
 
-          body="## Privileged-account review
-
-- Exact SHA: \`$RELEASE_SHA\`
-- Review run: $run_url
-- Privileged accounts: \`$privileged_count\`
-- Unexpected deletion targets: \`$target_count\`
-- Canonical Founder ready: \`$ready\`
-- Founder email verified: \`$email_verified\`
-- Founder phone MFA ready: \`$phone_mfa\`
-- Cleanup execution eligible: \`$eligible\`
-- Execution blockers: \`$blockers\`
-- Mutation performed: \`false\`
-- Hard-launch claim: \`false\`"
-          post_comment "$body"
+          {
+            echo "## Privileged-account review"
+            echo ""
+            echo "- Exact SHA: \`$RELEASE_SHA\`"
+            echo "- Review run: $run_url"
+            echo "- Privileged accounts: \`$privileged_count\`"
+            echo "- Unexpected deletion targets: \`$target_count\`"
+            echo "- Canonical Founder ready: \`$ready\`"
+            echo "- Founder email verified: \`$email_verified\`"
+            echo "- Founder phone MFA ready: \`$phone_mfa\`"
+            echo "- Cleanup execution eligible: \`$eligible\`"
+            echo "- Execution blockers: \`$blockers\`"
+            echo "- Mutation performed: \`false\`"
+            echo "- Hard-launch claim: \`false\`"
+          } > comment.md
+          post_comment "$(cat comment.md)"
 
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
@@ -332,18 +334,20 @@ jobs:
             ' "$report_path" >/dev/null
 
           deleted="$(jq -r '.deletedAccountCount' "$report_path")"
-          body="## Privileged-account cleanup completed
-
-- Exact SHA: \`$RELEASE_SHA\`
-- Cleanup run: $run_url
-- Unexpected privileged accounts deleted: \`$deleted\`
-- Canonical Founder retained: \`true\`
-- Audit logs preserved: \`true\`
-- Non-privileged accounts untouched: \`true\`
-- Hard-launch claim: \`false\`
-
-Next protected action: run \`/bin-launch bank-pilot-after-mfa\`."
-          post_comment "$body"
+          {
+            echo "## Privileged-account cleanup completed"
+            echo ""
+            echo "- Exact SHA: \`$RELEASE_SHA\`"
+            echo "- Cleanup run: $run_url"
+            echo "- Unexpected privileged accounts deleted: \`$deleted\`"
+            echo "- Canonical Founder retained: \`true\`"
+            echo "- Audit logs preserved: \`true\`"
+            echo "- Non-privileged accounts untouched: \`true\`"
+            echo "- Hard-launch claim: \`false\`"
+            echo ""
+            echo "Next protected action: run \`/bin-launch bank-pilot-after-mfa\`."
+          } > comment.md
+          post_comment "$(cat comment.md)"
 
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "run_url=$run_url" >> "$GITHUB_OUTPUT"

@@ -313,11 +313,15 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
             acceptedAt: now,
             updatedAt: now
         });
-    });
-
-    await logAudit({
-        actorId: request.auth.uid, actorRole: "technician",
-        action: "ACCEPT_TICKET", targetType: "maintenanceTickets", targetId: ticketId
+        transaction.set(db.collection("audit_logs").doc(), {
+            actorId: request.auth!.uid,
+            actorRole: isAdminActor ? "admin" : "technician",
+            action: "ACCEPT_TICKET",
+            targetType: "maintenanceTickets",
+            targetId: ticketId,
+            metadata: { assignedTechnicianId: finalTechId },
+            createdAt: now,
+        });
     });
 
     return { status: "SUCCESS" };
@@ -626,22 +630,22 @@ export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request
             throw new HttpsError("failed-precondition", "Ticket is no longer ready for owner completion review.");
         }
         transaction.update(ticketRef, baseUpdate);
-    });
-
-    await logAudit({
-        actorId: uid,
-        actorRole: isAdmin ? "admin" : "owner",
-        action: `OWNER_TICKET_${action}`,
-        targetType: "maintenanceTickets",
-        targetId: ticketId,
-        before: { status: ticketData.status, ownerApproved: ticketData.ownerApproved },
-        after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved },
-        reason: reason || undefined,
-        metadata: {
-            propertyId: ticketData.propertyId || "",
-            propertyName: ticketData.propertyName || "",
-            assignedTechnicianId: ticketData.assignedTechnicianId || ""
-        }
+        transaction.set(db.collection("audit_logs").doc(), {
+            actorId: uid,
+            actorRole: isAdmin ? "admin" : "owner",
+            action: `OWNER_TICKET_${action}`,
+            targetType: "maintenanceTickets",
+            targetId: ticketId,
+            before: { status: fresh.status, ownerApproved: fresh.ownerApproved },
+            after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved },
+            reason: reason || null,
+            metadata: {
+                propertyId: fresh.propertyId || "",
+                propertyName: fresh.propertyName || "",
+                assignedTechnicianId: fresh.assignedTechnicianId || ""
+            },
+            createdAt: now,
+        });
     });
 
     const ref8 = ticketId.substring(0, 8).toUpperCase();
