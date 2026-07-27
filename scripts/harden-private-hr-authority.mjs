@@ -31,6 +31,35 @@ const propertyGeoWritePrefix = `          'system_secrets',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const hrServerAuthorityWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',`;
+const staleHrServerAuthorityWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const duplicatedHrServerAuthorityWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',`;
 
 const privateBlock = `    // Sensitive employment, Emirates ID and salary data. Admin SDK callables only.
     match /private_hr_profiles/{profileId} {
@@ -48,11 +77,20 @@ if (!source.includes(hardenedRead) && !source.includes(liveLocationRead) && !sou
 // excluded server-managed live locations. Never replace it with the shorter
 // private-HR-only list.
 let canonicalWritePrefix = hardenedWritePrefix;
-if (source.includes(propertyGeoWritePrefix)) {
-  canonicalWritePrefix = propertyGeoWritePrefix;
+if (source.includes(duplicatedHrServerAuthorityWritePrefix)) {
+  source = source.replaceAll(duplicatedHrServerAuthorityWritePrefix, hrServerAuthorityWritePrefix);
+  canonicalWritePrefix = hrServerAuthorityWritePrefix;
+} else if (source.includes(staleHrServerAuthorityWritePrefix)) {
+  source = source.replaceAll(staleHrServerAuthorityWritePrefix, hrServerAuthorityWritePrefix);
+  canonicalWritePrefix = hrServerAuthorityWritePrefix;
+} else if (source.includes(hrServerAuthorityWritePrefix)) {
+  canonicalWritePrefix = hrServerAuthorityWritePrefix;
+} else if (source.includes(propertyGeoWritePrefix)) {
+  source = source.replaceAll(propertyGeoWritePrefix, hrServerAuthorityWritePrefix);
+  canonicalWritePrefix = hrServerAuthorityWritePrefix;
 } else if (source.includes(liveLocationWritePrefix)) {
-  source = source.replaceAll(liveLocationWritePrefix, propertyGeoWritePrefix);
-  canonicalWritePrefix = propertyGeoWritePrefix;
+  source = source.replaceAll(liveLocationWritePrefix, hrServerAuthorityWritePrefix);
+  canonicalWritePrefix = hrServerAuthorityWritePrefix;
 } else if (source.includes(hardenedWritePrefix)) {
   // Already private-HR canonical.
 } else if (source.includes(legacyWritePrefix)) {
