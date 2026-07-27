@@ -8,6 +8,7 @@ const adminSecurityReadCatchAll = "      allow read: if collection != 'tickets' 
 const privateHrReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const liveLocationReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
 const invoiceRegistryReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
+const readCatchAllCandidates = [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll, invoiceRegistryReadCatchAll, liveLocationReadCatchAll];
 const legacyWriteList = `          'system_secrets',
           'users',
           'tickets',
@@ -38,6 +39,35 @@ const liveLocationWriteList = `          'system_secrets',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const hrServerAuthorityWriteList = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',`;
+const staleHrServerAuthorityWriteList = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const duplicatedHrServerAuthorityWriteList = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',`;
 const legacyCreateCatchAll = '      allow create: if !(';
 const boundedCreateCatchAll = "      allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(";
 const legacyUpdateCatchAll = '      allow update, delete: if !(';
@@ -50,11 +80,49 @@ const adminSecurityBlock = `    // Firebase Admin SDK only. Browser administrato
 `;
 
 const invoiceRegistryBlock = `    // Public invoice registry. Access only via App Check-protected verifyPublicProof callable.
-    match /invoice_registry/{hash} {
-      allow read, write: if false;
+    match /invoice_registry/{proofHash} {
+      allow read, create, update, delete: if false;
     }
 
 `;
+
+const confidentialRequestFunction = `    function isConfidentialRequest(data) {
+      return ('privacyTier' in data && data.privacyTier == 'hr_manager_only') ||
+        ('confidential' in data && data.confidential == true) ||
+        ('requestType' in data && data.requestType == 'manager_issue') ||
+        ('category' in data && data.category == 'confidential');
+    }`;
+
+const staffRequestsBlock = `    match /staffRequests/{requestId} {
+      allow read: if isConfidentialRequest(resource.data)
+        ? (isHrManagerTier() || staffCanRead(resource.data))
+        : (isHr() || isFinance() || isOps() || staffCanRead(resource.data));
+      allow create, update, delete: if false;
+    }`;
+
+const hrAiConversationsBlock = `    match /hrAiConversations/{caseId} {
+      allow read: if isConfidentialRequest(resource.data)
+        ? (isHrManagerTier() || staffCanRead(resource.data))
+        : (isHr() || staffCanRead(resource.data));
+      allow create, update, delete: if false;
+    }`;
+
+const hrServerReservedFieldsFunction = `    function hrServerReservedFields() {
+      return [
+        'aiAnswer',
+        'classificationSource',
+        'confidence',
+        'confidential',
+        'privacyTier',
+        'serverClassified',
+        'trainingVersion'
+      ].size() == 7;
+    }`;
+
+const hrClientClassificationGuardFunction = `    function hrClientClassificationGuard(data) {
+      return (!('requestType' in data) || !(data.requestType in ['manager_issue', 'safety_incident', 'staff_wellbeing'])) &&
+        (!('category' in data) || !(data.category in ['confidential', 'safety', 'wellbeing']));
+    }`;
 
 const reviewedRoleFields = Object.freeze({
   tenant: ['displayName', 'phone', 'phoneNumber', 'mobile', 'emergencyContact'],
@@ -117,6 +185,34 @@ function matchBlock(rulesText, collectionName) {
   return rulesText.slice(start, next < 0 ? rulesText.length : next);
 }
 
+function replaceNamedMatchBlock(rulesText, collectionName, variableName, replacement) {
+  const marker = `    match /${collectionName}/{${variableName}} {`;
+  const start = rulesText.indexOf(marker);
+  if (start < 0) throw new Error(`[final-firestore-authority] ${collectionName} block missing`);
+  const next = rulesText.indexOf('\n    match /', start + marker.length);
+  return `${rulesText.slice(0, start)}${replacement}${rulesText.slice(next < 0 ? rulesText.length : next)}`;
+}
+
+function hardenHrServerAuthority(rulesText) {
+  let next = rulesText.replace(
+    /    function isConfidentialRequest\(data\) \{\n[\s\S]*?\n    \}/,
+    confidentialRequestFunction,
+  );
+  if (!next.includes('function hrServerReservedFields() {')) {
+    const anchor = '    function ownerDraftCreate(data) {';
+    if (!next.includes(anchor)) throw new Error('[final-firestore-authority] HR reserved fields insertion anchor missing');
+    next = next.replace(anchor, `${hrServerReservedFieldsFunction}\n\n${anchor}`);
+  }
+  if (!next.includes('function hrClientClassificationGuard(data) {')) {
+    const anchor = '    function ownerDraftCreate(data) {';
+    if (!next.includes(anchor)) throw new Error('[final-firestore-authority] HR classification guard insertion anchor missing');
+    next = next.replace(anchor, `${hrClientClassificationGuardFunction}\n\n${anchor}`);
+  }
+  next = replaceNamedMatchBlock(next, 'staffRequests', 'requestId', staffRequestsBlock);
+  next = replaceNamedMatchBlock(next, 'hrAiConversations', 'caseId', hrAiConversationsBlock);
+  return next;
+}
+
 let text = readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
 await import('./optimize-current-main-technician-ticket-rule.mjs');
@@ -130,37 +226,55 @@ if (!text.includes('match /admin_security_sessions/{sessionId}')) {
   text = text.replace(anchor, `${adminSecurityBlock}${anchor}`);
 }
 
-if (!text.includes('match /invoice_registry/{hash}')) {
+text = text.replace(
+  /    \/\/ Public invoice registry\. Access only via App Check-protected verifyPublicProof callable\.\n    match \/invoice_registry\/\{hash\} \{\n      allow read, write: if false;\n    \}\n\n/g,
+  '',
+);
+text = text.replace(
+  /(?:    \/\/ Public invoice registry\. Access only via App Check-protected verifyPublicProof callable\.\n)*    match \/invoice_registry\/\{proofHash\} \{\n\s*allow read(?:, write|, create, update, delete): if false;\n\s*\}\n/g,
+  invoiceRegistryBlock,
+);
+if (!text.includes('match /invoice_registry/{proofHash}')) {
   const anchor = '    match /{collection}/{document=**} {';
   if (!text.includes(anchor)) {
     throw new Error('[final-firestore-authority] wildcard anchor missing for invoice registry block');
   }
   text = text.replace(anchor, `${invoiceRegistryBlock}${anchor}`);
 }
+text = text.replace(
+  /    \/\/ Public invoice registry\. Access only via App Check-protected verifyPublicProof callable\.\n    match \/invoice_registry\/\{proofHash\} \{\n      allow read, create, update, delete: if false;\n    \}\n+/g,
+  invoiceRegistryBlock,
+);
 
-for (const candidate of [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll, liveLocationReadCatchAll]) {
-  if (text.includes(candidate)) text = text.replace(candidate, invoiceRegistryReadCatchAll);
+for (const candidate of readCatchAllCandidates) {
+  if (text.includes(candidate)) text = text.replace(candidate, liveLocationReadCatchAll);
 }
-if (!text.includes(invoiceRegistryReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR, live-location and invoice-registry exclusions');
+if (!text.includes(liveLocationReadCatchAll)) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR and live-location exclusions');
 }
 
-if (text.includes(liveLocationWriteList)) {
+if (text.includes(duplicatedHrServerAuthorityWriteList)) {
+  text = text.replaceAll(duplicatedHrServerAuthorityWriteList, hrServerAuthorityWriteList);
+} else if (text.includes(staleHrServerAuthorityWriteList)) {
+  text = text.replaceAll(staleHrServerAuthorityWriteList, hrServerAuthorityWriteList);
+} else if (text.includes(hrServerAuthorityWriteList)) {
   // Already canonical.
+} else if (text.includes(liveLocationWriteList)) {
+  text = text.replaceAll(liveLocationWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(legacyLiveLocationWriteList)) {
-  text = text.replaceAll(legacyLiveLocationWriteList, liveLocationWriteList);
+  text = text.replaceAll(legacyLiveLocationWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(privateHrWriteList)) {
-  text = text.replaceAll(privateHrWriteList, liveLocationWriteList);
+  text = text.replaceAll(privateHrWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(adminSecurityWriteList)) {
-  text = text.replaceAll(adminSecurityWriteList, liveLocationWriteList);
+  text = text.replaceAll(adminSecurityWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(legacyWriteList)) {
-  text = text.replaceAll(legacyWriteList, liveLocationWriteList);
+  text = text.replaceAll(legacyWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(boundedWriteList)) {
-  text = text.replaceAll(boundedWriteList, liveLocationWriteList);
+  text = text.replaceAll(boundedWriteList, hrServerAuthorityWriteList);
 } else {
   throw new Error('[final-firestore-authority] global write fallback list could not be identified');
 }
-if (text.split(liveLocationWriteList).length - 1 !== 2) {
+if (text.split(hrServerAuthorityWriteList).length - 1 !== 2) {
   throw new Error('[final-firestore-authority] live-location/private-HR write fallback list must exist exactly twice');
 }
 
@@ -175,6 +289,7 @@ if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)
   throw new Error('[final-firestore-authority] global update/delete catch-all could not be bounded');
 }
 
+text = hardenHrServerAuthority(text);
 text = hardenReviewedRoleSelfUpdates(text);
 writeFileSync(rulesPath, text, 'utf8');
 
@@ -202,10 +317,16 @@ const required = [
   'match /admin_security_sessions/{sessionId} {',
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
-  invoiceRegistryReadCatchAll.trim(),
+  invoiceRegistryBlock.trim(),
+  liveLocationReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  liveLocationWriteList.trim(),
+  hrServerAuthorityWriteList.trim(),
+  confidentialRequestFunction.trim(),
+  hrServerReservedFieldsFunction.trim(),
+  hrClientClassificationGuardFunction.trim(),
+  staffRequestsBlock.trim(),
+  hrAiConversationsBlock.trim(),
   "'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'",
 ];
 
@@ -262,6 +383,10 @@ const forbidden = [
 
 for (const fragment of forbidden) {
   if (text.includes(fragment)) throw new Error(`[final-firestore-authority] forbidden fragment remains: ${fragment}`);
+}
+
+if (text.split(liveLocationWriteList).length - 1 !== 2) {
+  throw new Error('[final-firestore-authority] live-location write fallback must only remain inside the two HR server-authority fallbacks');
 }
 
 console.log('[final-firestore-authority] status-aware canonical ticket authorization, read-only legacy tickets, server-only Admin security sessions, private HR and canonical live-location isolation, reviewed profile authority for all five roles, and bounded global fallbacks are canonical');
