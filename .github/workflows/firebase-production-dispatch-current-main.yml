@@ -96,7 +96,7 @@ jobs:
                 stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
                 stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
               }
-            ' <<<"${DEPLOYMENT_PAYLOAD_JSON:-{}}")" || fail "deployment_payload_json must be valid JSON object."
+            ' <<<"$DEPLOYMENT_PAYLOAD_JSON")" || fail "deployment_payload_json must be valid JSON object."
           fi
           INCIDENT_ACTIVE_JSON="$(jq -r '.incident_active_json' <<<"$normalized_payload")"
           INCIDENT_REQUIRES_ROLLBACK="$(jq -r '.incident_requires_rollback' <<<"$normalized_payload")"
@@ -169,7 +169,7 @@ jobs:
                 stripe_live_checkout_session_id: (.stripe_live_checkout_session_id // ""),
                 stripe_live_webhook_event_id: (.stripe_live_webhook_event_id // "")
               }
-            ' <<<"${DEPLOYMENT_PAYLOAD_JSON:-{}}")" || {
+            ' <<<"$DEPLOYMENT_PAYLOAD_JSON")" || {
               echo "::error::deployment_payload_json must be valid JSON object."
               exit 1
             }
