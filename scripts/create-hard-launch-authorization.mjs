@@ -131,15 +131,24 @@ function parseMarker(content) {
   }
 }
 
-function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, authorizedEmails }) {
+function resolveAutomatedFounder({
+  commitSha,
+  workflowActor,
+  authorizedActors,
+  authorizedEmails,
+  protectedFounderEmail,
+}) {
   if (workflowActor !== AUTOMATION_ACTOR) {
     throw new Error('automated Founder identity may only be resolved for github-actions[bot]');
   }
   if (!authorizedActors.includes(workflowActor)) {
     throw new Error('automation workflow actor is not authorized');
   }
-  if (authorizedEmails.length !== 1) {
-    throw new Error('automated Founder authorization requires exactly one protected Founder email');
+  if (!protectedFounderEmail) {
+    throw new Error('PRODUCTION_APPROVED_BY must identify the protected Founder email');
+  }
+  if (!authorizedEmails.includes(protectedFounderEmail)) {
+    throw new Error('PRODUCTION_APPROVED_BY must be included in AUTHORIZED_FOUNDER_EMAILS');
   }
 
   const incidents = readJson(
@@ -186,7 +195,7 @@ function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, a
 
   return {
     founderActor,
-    founderEmail: authorizedEmails[0],
+    founderEmail: protectedFounderEmail,
     ownerRequestPullRequest: Number(pullNumber),
   };
 }
@@ -200,6 +209,7 @@ try {
   const workflowActor = requiredEnv('GITHUB_ACTOR').toLowerCase();
   const founderName = requiredEnv('FOUNDER_NAME');
   const requestedFounderEmail = normalizeAuthorizedEmail(requiredEnv('FOUNDER_EMAIL'));
+  const protectedFounderEmail = normalizeAuthorizedEmail(requiredEnv('PRODUCTION_APPROVED_BY'));
   const deployConfirmation = requiredEnv('DEPLOYMENT_CONFIRMATION');
   const hardLaunchConfirmation = requiredEnv('HARD_LAUNCH_CONFIRMATION');
   const hmacKey = requiredEnv('HARD_LAUNCH_APPROVAL_HMAC_KEY');
@@ -226,6 +236,7 @@ try {
       workflowActor,
       authorizedActors,
       authorizedEmails,
+      protectedFounderEmail,
     });
     founderActor = automated.founderActor;
     founderEmail = automated.founderEmail;
