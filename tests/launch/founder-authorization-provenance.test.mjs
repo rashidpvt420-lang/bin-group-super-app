@@ -50,10 +50,14 @@ test('GitHub provenance lookup uses fixed URLs and argument-array curl execution
   assert.doesNotMatch(signer, /\bfetch\s*\(|node:https|\beval\s*\(|execSync|shell:\s*true/);
 });
 
-test('automated email derives from exactly one protected allowlist entry', () => {
-  assert.match(signer, /authorizedEmails\.length !== 1/);
-  assert.match(signer, /founderEmail: authorizedEmails\[0\]/);
+test('automated email selects one protected approved address from the allowlist', () => {
+  assert.match(signer, /requiredEnv\('PRODUCTION_APPROVED_BY'\)/);
+  assert.match(signer, /authorizedEmails\.includes\(protectedFounderEmail\)/);
+  assert.match(signer, /founderEmail: protectedFounderEmail/);
+  assert.match(signer, /PRODUCTION_APPROVED_BY must be included in AUTHORIZED_FOUNDER_EMAILS/);
   assert.match(signer, /automated Founder authorization requires the protected email sentinel and owner PR evidence/);
+  assert.doesNotMatch(signer, /authorizedEmails\.length !== 1/);
+  assert.doesNotMatch(signer, /founderEmail: authorizedEmails\[0\]/);
   assert.doesNotMatch(signer, /ceo@bin-groups\.com/);
 });
 
