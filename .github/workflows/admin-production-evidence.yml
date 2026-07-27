@@ -1,0 +1,152 @@
+name: Admin Production Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Full lowercase 40-character production main SHA'
+        required: true
+        type: string
+      production_deploy_run_id:
+        description: 'Successful Firebase Production Deploy run ID for the same SHA'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: admin-production-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  E2E_BASE_URL: https://bin-group-57c60.web.app
+  E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
+  E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+  E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+  E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+  E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+  E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+  E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+  E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+  E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+  E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+  E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+  E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+  E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+  E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+  E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+  E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+  E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
+  VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+  E2E_STRICT_ROLES: 'true'
+  E2E_STRICT_LIVE: 'true'
+  E2E_STRICT_BUSINESS: 'true'
+
+jobs:
+  admin-operational-evidence:
+    name: Prove Admin hard-launch responsibilities
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+
+    steps:
+      - name: Enforce exact deployed main SHA
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must equal the full current main SHA."
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::production_deploy_run_id must be numeric."
+            exit 1
+          fi
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download exact deployment evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore and verify deployment evidence
+        run: |
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$source_file" ]]; then
+            echo "::error::production-deployment.json was not found."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          node scripts/verify-production-deployment.mjs
+
+      - name: Validate protected credentials and App Check
+        run: |
+          node scripts/verify-e2e-env.mjs
+          node scripts/ensure-appcheck.mjs
+
+      - name: Verify protected OTP mailbox access
+        env:
+          E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/verify-production-otp-mailboxes.mjs
+
+      - name: Verify canonical Founder TOTP readiness
+        run: node scripts/verify-founder-totp-readiness.mjs
+
+      - name: Run full Admin operational evidence suite
+        run: node scripts/run-critical-evidence.mjs --suite adminCredentialLogin
+
+      - name: Upload exact-SHA Admin evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-production-evidence-${{ inputs.expected_commit_sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/launch-evidence-batch.json
+            launch_package/artifacts
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 90

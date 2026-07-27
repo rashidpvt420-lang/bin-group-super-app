@@ -26,10 +26,12 @@ on:
       - 'scripts/ensure-admin-mfa-authorized-domains.mjs'
       - 'scripts/grant-admin.mjs'
       - 'scripts/harden-hr-privacy-rules.mjs'
+      - 'scripts/lib/functions-deployment-evidence.mjs'
       - 'scripts/optimize-current-main-technician-ticket-rule.mjs'
       - 'scripts/setup-ai-secrets.ps1'
       - 'scripts/verify-admin-access.mjs'
       - 'scripts/verify-firebase-production-secrets.mjs'
+      - 'scripts/verify-production-deployment.mjs'
       - 'scripts/windows-ai-live-recovery.ps1'
       - 'src/App.tsx'
       - 'src/admin/**'
@@ -51,6 +53,7 @@ on:
       - 'tests/launch/ai-secret-setup-deploy-guard.test.mjs'
       - 'tests/launch/arabic-visible-copy-audit.test.mjs'
       - 'tests/launch/canonical-readiness-docs.test.mjs'
+      - 'tests/launch/firebase-functions-deploy-batching.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/privileged-account-cleanup-dry-run.test.mjs'
@@ -132,6 +135,7 @@ jobs:
           tests/launch/technician-dispatch-authority-audit.test.mjs
           tests/launch/owner-property-proof-authority-audit.test.mjs
           tests/launch/tenant-readiness-authority-audit.test.mjs
+          tests/launch/firebase-functions-deploy-batching.test.mjs
 
       - name: Build main application
         run: npm run build

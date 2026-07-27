@@ -43,7 +43,13 @@ test('authorized-domain repair is bound to canonical exact-SHA approval context'
   const phoneCall = canonicalDeploy.indexOf('await verifyFirebasePhoneAuthProduction');
   assert.ok(secretsCall >= 0 && phoneCall > secretsCall, 'canonical secret/domain preflight must occur before Phone Auth verification');
   assert.match(canonicalDeploy, /ADMIN_MFA_BOOTSTRAP_HOSTING/);
-  assert.match(canonicalDeploy, /complete Firebase production stack/);
+  assert.match(canonicalDeploy, /deployFunctionsQuotaSafe/);
+  assert.match(canonicalDeploy, /non-Functions Firebase production stack/);
+  assert.doesNotMatch(
+    canonicalDeploy,
+    /functions,hosting,firestore:rules,firestore:indexes,storage/,
+    'canonical deployment must not restore the quota-breaking monolithic target',
+  );
 });
 
 test('authorized-domain repair preserves existing domains and adds both Admin Hosting domains', () => {

@@ -136,6 +136,11 @@ export default function ContractSignatureOtpControl({
           </Stack>
         )}
       </Stack>
+      {requestId && (
+        <Typography data-testid="owner-contract-otp-correlation" variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>
+          {copy('Verification reference', 'مرجع التحقق')}: {requestId}
+        </Typography>
+      )}
       {error && <Alert severity="error">{error}</Alert>}
       {verified && <Alert severity="success">{copy('Signature OTP verified.', 'تم التحقق من رمز توقيع العقد.')}</Alert>}
     </Stack>

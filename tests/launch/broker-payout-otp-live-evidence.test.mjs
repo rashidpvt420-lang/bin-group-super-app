@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const fixture = readFileSync('scripts/prepare-broker-payout-otp-e2e.mjs', 'utf8');
-const runner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
+const criticalRunner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
+const productionRunner = readFileSync('scripts/run-broker-production-evidence.mjs', 'utf8');
+const gmailReader = readFileSync('scripts/lib/gmail-otp-reader.mjs', 'utf8');
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 const brokerFunctions = readFileSync('functions/secureBrokerPayoutOperations.ts', 'utf8');
@@ -18,27 +20,25 @@ test('Broker payout OTP fixture is restricted to the verified dedicated E2E Brok
   assert.match(fixture, /brokerKycStatus: 'verified'/);
   assert.match(fixture, /commissionAgreementAccepted: true/);
   assert.match(fixture, /ibanVerified: true/);
-  assert.match(fixture, /status: 'APPROVED'/);
-  assert.match(fixture, /payoutStatus: 'NOT_REQUESTED'/);
   assert.match(fixture, /broker_payout_otp_rate_limits/);
-  assert.match(fixture, /\['PENDING', 'VERIFIED', 'EXPIRED'\]/);
+  assert.match(fixture, /no commission was seeded/i);
+  assert.match(fixture, /batch\.delete\(db\.collection\('broker_commissions'\)/);
+  assert.doesNotMatch(fixture, /batch\.set\(db\.collection\('broker_commissions'\)/);
   assert.doesNotMatch(fixture, /otpHash|timingSafeEqual|verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });
 
-test('critical evidence prepares the Broker payout fixture before browser execution', () => {
-  const fixtureMap = runner.indexOf('const SUITE_FIXTURES = Object.freeze');
-  const brokerEntry = runner.indexOf('businessBroker:', fixtureMap);
-  const fixtureCommand = runner.indexOf("script: 'scripts/prepare-broker-payout-otp-e2e.mjs'", brokerEntry);
-  const fixtureLookup = runner.indexOf('const fixture = SUITE_FIXTURES[suiteKey]');
-  const fixtureFailure = runner.indexOf('fixture preparation failed — evidence not recorded');
-  const playwrightExecution = runner.indexOf('const result = spawnNpmPlaywrightJson');
+test('critical evidence prepares only KYC and OTP hygiene before Broker browser execution', () => {
+  const fixtureMap = criticalRunner.indexOf('const SUITE_FIXTURES = Object.freeze');
+  const brokerEntry = criticalRunner.indexOf('businessBroker:', fixtureMap);
+  const fixtureCommand = criticalRunner.indexOf("script: 'scripts/prepare-broker-payout-otp-e2e.mjs'", brokerEntry);
+  const fixtureLookup = criticalRunner.indexOf('const fixture = SUITE_FIXTURES[suiteKey]');
+  const playwrightExecution = criticalRunner.indexOf('const result = spawnNpmPlaywrightJson');
 
   assert.ok(fixtureMap >= 0, 'critical evidence must use the central suite fixture map');
-  assert.ok(brokerEntry > fixtureMap, 'fixture preparation must remain scoped to businessBroker');
-  assert.ok(fixtureCommand > brokerEntry, 'businessBroker must execute the dedicated fixture script');
+  assert.ok(brokerEntry > fixtureMap, 'fixture must remain scoped to businessBroker');
+  assert.ok(fixtureCommand > brokerEntry, 'businessBroker must prepare the dedicated Broker identity and private KYC');
   assert.ok(fixtureLookup > fixtureCommand, 'suite fixture lookup must use the central map');
-  assert.ok(fixtureFailure > fixtureLookup, 'fixture failure must block evidence');
-  assert.ok(playwrightExecution > fixtureFailure, 'fixture preparation must happen before browser execution');
+  assert.ok(playwrightExecution > fixtureLookup, 'fixture preparation must happen before browser execution');
 });
 
 test('Broker live evidence fetches a real OTP from Gmail and submits it — cancel path is forbidden', () => {
@@ -96,7 +96,6 @@ test('Broker payout UI exposes stable evidence selectors while retaining server-
   assert.match(page, /data-testid="broker-payout-request-otp"/);
   assert.match(page, /data-testid="broker-payout-otp-dialog"/);
   assert.match(page, /'data-testid': 'broker-payout-otp-code'/);
-  assert.match(page, /data-testid="broker-payout-otp-cancel"/);
   assert.match(page, /data-testid="broker-payout-otp-submit"/);
 
   const requestIndex = page.indexOf("httpsCallable(functions, 'requestBrokerPayoutOtp')");

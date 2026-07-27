@@ -1,11 +1,15 @@
+import './harden-property-geo-authority.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const file = 'firestore.rules';
 let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
-const canonicalCreate = "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);";
+// Browser applications create canonical tickets through App Check callables.
+// Direct Firestore creation remains Admin-only for controlled operations.
+const canonicalCreate = '      allow create: if isAdmin();';
 for (const legacyCreate of [
+  "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
   "      allow create: if canDispatchJobs() || ownerDraftCreate(request.resource.data) || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if canDispatchJobs() || canCreateTenantBoundTicket(request.resource.data);",
@@ -16,35 +20,49 @@ for (const legacyCreate of [
   }
 }
 
+function blockEnd(input, openingBrace, label) {
+  let depth = 0;
+  for (let index = openingBrace; index < input.length; index += 1) {
+    if (input[index] === '{') depth += 1;
+    if (input[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  throw new Error(`[ticket-rule-binding] Could not parse ${label}.`);
+}
+
 function removeRuleFunction(functionName) {
   const needle = `    function ${functionName}(`;
   let removed = 0;
-
   while (true) {
     const start = text.indexOf(needle);
     if (start < 0) break;
     const openingBrace = text.indexOf('{', start);
     if (openingBrace < 0) throw new Error(`[ticket-rule-binding] Could not locate opening brace for ${functionName}.`);
-
-    let depth = 0;
-    let end = -1;
-    for (let index = openingBrace; index < text.length; index += 1) {
-      if (text[index] === '{') depth += 1;
-      if (text[index] === '}') {
-        depth -= 1;
-        if (depth === 0) {
-          end = index + 1;
-          while (text[end] === '\r' || text[end] === '\n') end += 1;
-          break;
-        }
-      }
-    }
-    if (end < 0) throw new Error(`[ticket-rule-binding] Could not parse ${functionName}.`);
+    let end = blockEnd(text, openingBrace, functionName);
+    while (text[end] === '\r' || text[end] === '\n') end += 1;
     text = `${text.slice(0, start)}${text.slice(end)}`;
     removed += 1;
     changed = true;
   }
   return removed;
+}
+
+function readMatchBlock(header, label) {
+  const start = text.indexOf(header);
+  if (start < 0) throw new Error(`[ticket-rule-binding] Missing ${label} block.`);
+  if (text.indexOf(header, start + header.length) >= 0) throw new Error(`[ticket-rule-binding] Duplicate ${label} block.`);
+  const openingBrace = start + header.length - 1;
+  const end = blockEnd(text, openingBrace, label);
+  return { start, end, content: text.slice(start, end) };
+}
+
+function replaceMatchBlock(header, replacement, label) {
+  const current = readMatchBlock(header, label);
+  if (current.content === replacement) return;
+  text = `${text.slice(0, current.start)}${replacement}${text.slice(current.end)}`;
+  changed = true;
 }
 
 const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
@@ -60,9 +78,6 @@ if (directClaimReference.test(text)) {
 }
 
 const router = `    function safeTicketUpdateByActor() {
-      // Resolve authentication and actor claims once. Re-evaluating nested role,
-      // admin and dispatcher helpers in every denied branch can exhaust
-      // Firestore's 1,000-expression budget.
       let authenticated = signedIn();
       let role = authenticated
         ? request.auth.token.get('role', request.auth.token.get('userRole', request.auth.token.get('primaryRole', '')))
@@ -106,7 +121,6 @@ const splitRules = [
   '      allow update: if hasTechnicianClaim() && techOwns(resource.data) && safeTechnicianTicketUpdate();',
 ];
 const canonicalUpdate = '      allow update: if safeTicketUpdateByActor();';
-
 if (text.includes(monolithicUpdate)) {
   text = text.split(monolithicUpdate).join(canonicalUpdate);
   changed = true;
@@ -117,15 +131,10 @@ if (text.includes(splitBlock)) {
   changed = true;
 }
 
-if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) {
-  throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
-}
-if (text.split(canonicalUpdate).length - 1 !== 2) {
-  throw new Error('[ticket-rule-binding] Expected exactly two single ticket update gates.');
-}
-if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) {
-  throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
-}
+if (!text.includes('function hasNonAdminDispatchClaimOnly() {')) throw new Error('[ticket-rule-binding] Non-admin dispatch authority helper is missing.');
+const updateGateCount = text.split(canonicalUpdate).length - 1;
+if (![1, 2].includes(updateGateCount)) throw new Error(`[ticket-rule-binding] Expected one canonical gate or two pre-retirement gates, found ${updateGateCount}.`);
+if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 
 for (const required of [
   'let authenticated = signedIn();',
@@ -139,7 +148,6 @@ for (const required of [
 ]) {
   if (!text.includes(required)) throw new Error(`[ticket-rule-binding] Bounded router fragment missing: ${required}`);
 }
-
 for (const forbidden of [
   'function safeOpenMissionClaim(',
   'function missionClaimFieldsLookValid(',
@@ -149,15 +157,28 @@ for (const forbidden of [
   'openMissionPoolRead(resource.data)',
   monolithicUpdate.trim(),
   ...splitRules.map((rule) => rule.trim()),
+  'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
 ]) {
-  if (text.includes(forbidden)) {
-    throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
-  }
+  if (text.includes(forbidden)) throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
 }
 
-if (!text.includes(canonicalCreate)) {
-  throw new Error('[ticket-rule-binding] Ticket creation is not callable/admin or tenant-binding authoritative.');
+const legacyHeader = '    match /tickets/{ticketId} {';
+const legacyReadOnlyBlock = `    match /tickets/{ticketId} {
+      allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
+      allow create, update, delete: if false;
+    }`;
+replaceMatchBlock(legacyHeader, legacyReadOnlyBlock, 'legacy /tickets');
+
+const maintenanceHeader = '    match /maintenanceTickets/{ticketId} {';
+const maintenanceBlock = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets').content;
+for (const required of [
+  'allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());',
+  canonicalCreate.trim(),
+  canonicalUpdate.trim(),
+  'allow delete: if isAdmin();',
+]) {
+  if (!maintenanceBlock.includes(required)) throw new Error(`[ticket-rule-binding] Canonical /maintenanceTickets fragment is missing: ${required}`);
 }
 
 if (changed) writeFileSync(file, text);
-console.log(`Applied bounded single ticket update gate (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);
+console.log(`Applied canonical maintenanceTickets authority and read-only legacy tickets (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);

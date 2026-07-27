@@ -1,0 +1,553 @@
+import * as admin from "firebase-admin";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import {
+  classifyStopRequest,
+  classifyUpdateRequest,
+  classifyWatchdogCandidate,
+  liveSessionState,
+} from "./technicianLiveLocationCas";
+
+if (!admin.apps.length) admin.initializeApp();
+const db = admin.firestore();
+
+const ACTIVE_TRACKING_STATUSES = new Set([
+  "ASSIGNED",
+  "ACCEPTED",
+  "EN_ROUTE",
+  "ON_THE_WAY",
+  "ARRIVED",
+  "IN_PROGRESS",
+  "WORK_STARTED",
+]);
+const APPROVED_PROFILE_STATUSES = new Set(["active", "approved"]);
+const BLOCKED_PROFILE_STATUSES = new Set([
+  "blocked",
+  "disabled",
+  "inactive",
+  "rejected",
+  "revoked",
+  "suspended",
+  "terminated",
+]);
+
+const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
+const upper = (value: unknown) => String(value || "").trim().toUpperCase();
+
+function technicianRole(auth: any) {
+  const token = auth?.token || {};
+  return normalize(token.role || token.userRole || token.primaryRole);
+}
+
+function requireTechnician(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Technician login required.");
+  const role = technicianRole(auth);
+  if (role !== "technician" && role !== "tech" && auth.token?.technician !== true) {
+    throw new HttpsError("permission-denied", "Only a Technician account can publish live location.");
+  }
+}
+
+function profileStatus(data: FirebaseFirestore.DocumentData) {
+  return normalize(data.status || data.accountStatus || data.profileStatus);
+}
+
+function approvedTechnicianProfile(data: FirebaseFirestore.DocumentData) {
+  const status = profileStatus(data);
+  const approvalStatus = normalize(data.approvalStatus || data.verificationStatus);
+  if (
+    data.suspended === true ||
+    data.disabled === true ||
+    data.isDisabled === true ||
+    BLOCKED_PROFILE_STATUSES.has(status) ||
+    BLOCKED_PROFILE_STATUSES.has(approvalStatus)
+  ) {
+    return false;
+  }
+  return APPROVED_PROFILE_STATUSES.has(status) || approvalStatus === "approved";
+}
+
+function profileAllowsIdentityAccess(data: FirebaseFirestore.DocumentData) {
+  const status = profileStatus(data);
+  return data.suspended !== true &&
+    data.disabled !== true &&
+    data.isDisabled !== true &&
+    !BLOCKED_PROFILE_STATUSES.has(status);
+}
+
+async function assertTechnicianLiveLocationEligibility(uid: string) {
+  const [authUser, technicianSnap, userSnap] = await Promise.all([
+    admin.auth().getUser(uid),
+    db.collection("technicians").doc(uid).get(),
+    db.collection("users").doc(uid).get(),
+  ]);
+
+  if (
+    authUser.disabled ||
+    authUser.customClaims?.suspended === true ||
+    authUser.customClaims?.disabled === true
+  ) {
+    throw new HttpsError("permission-denied", "This Technician account is disabled or suspended.");
+  }
+  if (!technicianSnap.exists || !approvedTechnicianProfile(technicianSnap.data() || {})) {
+    throw new HttpsError("permission-denied", "An active approved Technician profile is required for live GPS.");
+  }
+  if (userSnap.exists && !profileAllowsIdentityAccess(userSnap.data() || {})) {
+    throw new HttpsError("permission-denied", "This Technician identity profile is disabled or suspended.");
+  }
+}
+
+function assignedTechnicianId(data: FirebaseFirestore.DocumentData) {
+  return String(
+    data.assignedTechnicianId ||
+      data.technicianId ||
+      data.assignedTechId ||
+      data.technicianUid ||
+      data.techId ||
+      "",
+  ).trim();
+}
+
+function finiteNumber(value: unknown, label: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) throw new HttpsError("invalid-argument", `${label} must be a finite number.`);
+  return parsed;
+}
+
+function requireCoordinate(value: unknown, label: "latitude" | "longitude") {
+  const parsed = finiteNumber(value, label);
+  const valid = label === "latitude"
+    ? parsed >= -90 && parsed <= 90
+    : parsed >= -180 && parsed <= 180;
+  if (!valid) throw new HttpsError("invalid-argument", `${label} is outside the valid coordinate range.`);
+  return parsed;
+}
+
+function requireSessionId(value: unknown) {
+  const sessionId = String(value || "").trim();
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(sessionId)) {
+    throw new HttpsError("invalid-argument", "A valid tracking session ID is required.");
+  }
+  return sessionId;
+}
+
+export const updateTechnicianLiveLocation = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    requireTechnician(request.auth);
+
+    const technicianUid = request.auth!.uid;
+    const action = upper(request.data?.action || "UPDATE");
+    const ticketId = String(request.data?.ticketId || "").trim();
+    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID is required.");
+    if (action !== "UPDATE" && action !== "STOP") {
+      throw new HttpsError("invalid-argument", "Action must be UPDATE or STOP.");
+    }
+    await assertTechnicianLiveLocationEligibility(technicianUid);
+
+    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
+    const liveRef = db.collection("technician_live_locations").doc(technicianUid);
+    const technicianRef = db.collection("technicians").doc(technicianUid);
+    const userRef = db.collection("users").doc(technicianUid);
+    const diagnosticRef = technicianRef.collection("deviceReadiness").doc("gps");
+    const auditRef = db.collection("audit_logs").doc();
+
+    const result = await db.runTransaction(async (tx) => {
+      const [ticketSnap, liveSnap] = await Promise.all([tx.get(ticketRef), tx.get(liveRef)]);
+      const ticket = ticketSnap.data() || {};
+      const now = admin.firestore.Timestamp.now();
+      const previous = liveSnap.data() || {};
+      const previousSequence = Math.max(0, Number(previous.sequence || 0));
+
+      if (action === "STOP") {
+        const trackingSessionId = requireSessionId(request.data?.trackingSessionId);
+        const stopDecision = classifyStopRequest(
+          liveSessionState(previous, liveSnap.exists),
+          ticketId,
+          trackingSessionId,
+        );
+
+        if (stopDecision === "REJECT_MISSING") {
+          tx.set(auditRef, {
+            actorId: technicianUid,
+            actorRole: "technician",
+            action: "TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED",
+            targetType: "technician_live_locations",
+            targetId: technicianUid,
+            requestedTicketId: ticketId,
+            requestedTrackingSessionId: trackingSessionId,
+            currentTicketId: null,
+            currentTrackingSessionId: null,
+            reason: "REJECT_MISSING",
+            createdAt: now,
+          });
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: now.toMillis(),
+            alreadyStopped: true,
+            superseded: false,
+            missingSession: true,
+          };
+        }
+        if (stopDecision === "REJECT_SUPERSEDED") {
+          const previousExpiryMs = previous.expiresAt?.toMillis?.();
+          tx.set(auditRef, {
+            actorId: technicianUid,
+            actorRole: "technician",
+            action: "TECHNICIAN_LIVE_LOCATION_STOP_SKIPPED",
+            targetType: "technician_live_locations",
+            targetId: technicianUid,
+            requestedTicketId: ticketId,
+            requestedTrackingSessionId: trackingSessionId,
+            currentTicketId: String(previous.activeTicketId || "") || null,
+            currentTrackingSessionId: String(previous.trackingSessionId || "") || null,
+            reason: "REJECT_SUPERSEDED",
+            createdAt: now,
+          });
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: Number.isFinite(previousExpiryMs) ? previousExpiryMs : now.toMillis(),
+            alreadyStopped: false,
+            superseded: true,
+          };
+        }
+        if (stopDecision === "ALREADY_STOPPED") {
+          const previousExpiryMs = previous.expiresAt?.toMillis?.();
+          return {
+            action,
+            sequence: previousSequence,
+            expiresAtMs: Number.isFinite(previousExpiryMs) ? previousExpiryMs : now.toMillis(),
+            alreadyStopped: true,
+            superseded: false,
+          };
+        }
+
+        const ticketExists = ticketSnap.exists;
+        if (ticketExists && assignedTechnicianId(ticket) !== technicianUid) {
+          throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+        }
+
+        tx.set(liveRef, {
+          technicianUid,
+          activeTicketId: null,
+          isTracking: false,
+          trackingSessionId,
+          lastStoppedTicketId: ticketId,
+          stopReason: "TECHNICIAN_REQUESTED",
+          stoppedAt: now,
+          serverUpdatedAt: now,
+          expiresAt: now,
+          sequence: previousSequence,
+          source: "technician-callable",
+        }, { merge: true });
+        tx.set(technicianRef, {
+          activeTicketId: null,
+          isTracking: false,
+          liveLocationRef: liveRef.path,
+          locationUpdatedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+        tx.set(userRef, {
+          activeTicketId: null,
+          isTracking: false,
+          liveLocationRef: liveRef.path,
+          locationUpdatedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+        if (ticketExists) {
+          tx.set(ticketRef, {
+            trackingStatus: "STOPPED",
+            technicianLocationExpiresAt: now,
+            updatedAt: now,
+          }, { merge: true });
+        }
+        tx.set(diagnosticRef, {
+          ticketId,
+          status: "STOPPED",
+          stopReason: "TECHNICIAN_REQUESTED",
+          trackingSessionId,
+          ticketMissing: !ticketExists,
+          stoppedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+        tx.set(auditRef, {
+          actorId: technicianUid,
+          actorRole: "technician",
+          action: "TECHNICIAN_LIVE_LOCATION_STOPPED",
+          targetType: ticketExists ? "maintenanceTickets" : "technician_live_locations",
+          targetId: ticketExists ? ticketId : technicianUid,
+          requestedTicketId: ticketId,
+          ticketMissing: !ticketExists,
+          trackingSessionId,
+          createdAt: now,
+        });
+        return {
+          action,
+          sequence: previousSequence,
+          expiresAtMs: now.toMillis(),
+          alreadyStopped: false,
+          superseded: false,
+        };
+      }
+
+      if (!ticketSnap.exists) throw new HttpsError("not-found", "Assigned mission not found.");
+      if (assignedTechnicianId(ticket) !== technicianUid) {
+        throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+      }
+
+      if (!ACTIVE_TRACKING_STATUSES.has(upper(ticket.status || ticket.trackingStatus))) {
+        throw new HttpsError("failed-precondition", "Live GPS is allowed only for an active assigned mission.");
+      }
+
+      const latitude = requireCoordinate(request.data?.latitude ?? request.data?.lat, "latitude");
+      const longitude = requireCoordinate(request.data?.longitude ?? request.data?.lng, "longitude");
+      const accuracy = finiteNumber(request.data?.accuracy, "accuracy");
+      if (accuracy <= 0 || accuracy > 100) {
+        throw new HttpsError("failed-precondition", "GPS accuracy must be between 0 and 100 metres.");
+      }
+
+      const trackingSessionId = requireSessionId(request.data?.trackingSessionId);
+      const updateDecision = classifyUpdateRequest(
+        liveSessionState(previous, liveSnap.exists),
+        ticketId,
+        trackingSessionId,
+        now.toMillis(),
+      );
+      if (updateDecision === "REJECT_SUPERSEDED") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Another unexpired tracking session is active; stale or cross-tab coordinates were rejected.",
+        );
+      }
+
+      const deviceTimestampMs = Math.max(
+        0,
+        finiteNumber(request.data?.deviceTimestampMs || Date.now(), "deviceTimestampMs"),
+      );
+      const previousDeviceTimestampMs = Math.max(0, Number(previous.location?.deviceTimestampMs || 0));
+      if (
+        previous.isTracking === true &&
+        previous.trackingSessionId === trackingSessionId &&
+        deviceTimestampMs <= previousDeviceTimestampMs
+      ) {
+        throw new HttpsError("failed-precondition", "This GPS coordinate is older than the current canonical location.");
+      }
+      const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + 90_000);
+      const sequence = previousSequence + 1;
+      const point = {
+        lat: latitude,
+        lng: longitude,
+        latitude,
+        longitude,
+        accuracy,
+        heading: request.data?.heading == null ? null : finiteNumber(request.data.heading, "heading"),
+        speed: request.data?.speed == null ? null : Math.max(0, finiteNumber(request.data.speed, "speed")),
+        deviceTimestampMs,
+        serverUpdatedAt: now,
+      };
+
+      tx.set(liveRef, {
+        technicianUid,
+        technicianName: String(ticket.assignedTechnicianName || request.auth?.token?.name || "Technician"),
+        activeTicketId: ticketId,
+        propertyId: String(ticket.propertyId || "") || null,
+        ownerId: String(ticket.ownerId || ticket.ownerUid || "") || null,
+        tenantId: String(ticket.tenantId || ticket.tenantUid || "") || null,
+        isTracking: true,
+        trackingSessionId,
+        lastStoppedTicketId: null,
+        sequence,
+        location: point,
+        serverUpdatedAt: now,
+        expiresAt,
+        stopReason: null,
+        source: "technician-callable",
+      }, { merge: true });
+
+      tx.set(ticketRef, {
+        technicianLocation: point,
+        technicianLocationRef: liveRef.path,
+        technicianLocationUpdatedAt: now,
+        technicianLocationExpiresAt: expiresAt,
+        trackingStatus: "LIVE_TRACKING",
+        updatedAt: now,
+      }, { merge: true });
+      tx.set(technicianRef, {
+        currentLocation: point,
+        lastLocation: point,
+        liveLocationRef: liveRef.path,
+        locationUpdatedAt: now,
+        activeTicketId: ticketId,
+        isTracking: true,
+        lastSeenAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      tx.set(userRef, {
+        currentLocation: point,
+        lastLocation: point,
+        liveLocationRef: liveRef.path,
+        locationUpdatedAt: now,
+        activeTicketId: ticketId,
+        isTracking: true,
+        lastSeenAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      tx.set(diagnosticRef, {
+        ticketId,
+        status: "LIVE",
+        trackingSessionId,
+        sequence,
+        accuracy,
+        lastSuccessfulPushAt: now,
+        expiresAt,
+        updatedAt: now,
+      }, { merge: true });
+
+      return {
+        action,
+        sequence,
+        expiresAtMs: expiresAt.toMillis(),
+        alreadyStopped: false,
+        superseded: false,
+      };
+    });
+
+    return {
+      status: "SUCCESS",
+      technicianId: technicianUid,
+      ticketId,
+      ...result,
+    };
+  },
+);
+
+export const reconcileExpiredTechnicianLiveLocations = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "Etc/UTC",
+    region: "europe-west3",
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  },
+  async () => {
+    const queryNow = admin.firestore.Timestamp.now();
+    const stale = await db.collection("technician_live_locations")
+      .where("isTracking", "==", true)
+      .where("expiresAt", "<=", queryNow)
+      .limit(50)
+      .get();
+
+    if (stale.empty) {
+      console.log("[technician-live-location-watchdog] no expired tracking session");
+      return;
+    }
+
+    let reconciled = 0;
+    let skipped = 0;
+
+    for (const snapshot of stale.docs) {
+      const queriedState = liveSessionState(snapshot.data() || {}, true);
+      const technicianUid = snapshot.id;
+      const auditRef = db.collection("audit_logs").doc();
+
+      const didReconcile = await db.runTransaction(async (tx) => {
+        const currentSnap = await tx.get(snapshot.ref);
+        const currentState = liveSessionState(currentSnap.data() || {}, currentSnap.exists);
+        const transactionNow = admin.firestore.Timestamp.now();
+        const decision = classifyWatchdogCandidate(
+          queriedState,
+          currentState,
+          transactionNow.toMillis(),
+        );
+
+        if (decision !== "RECONCILE") {
+          tx.set(auditRef, {
+            actorId: "system",
+            actorRole: "system",
+            action: "TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED",
+            targetType: "technician_live_locations",
+            targetId: snapshot.id,
+            technicianUid,
+            queriedTicketId: queriedState.activeTicketId || null,
+            queriedTrackingSessionId: queriedState.trackingSessionId || null,
+            queriedExpiresAtMs: queriedState.expiresAtMs,
+            currentTicketId: currentState.activeTicketId || null,
+            currentTrackingSessionId: currentState.trackingSessionId || null,
+            currentExpiresAtMs: currentState.expiresAtMs,
+            reason: decision,
+            createdAt: transactionNow,
+          });
+          return false;
+        }
+
+        const ticketId = currentState.activeTicketId;
+        const trackingSessionId = currentState.trackingSessionId || null;
+        const ticketRef = ticketId ? db.collection("maintenanceTickets").doc(ticketId) : null;
+        const ticketSnap = ticketRef ? await tx.get(ticketRef) : null;
+        const technicianRef = db.collection("technicians").doc(technicianUid);
+        const userRef = db.collection("users").doc(technicianUid);
+        const diagnosticRef = technicianRef.collection("deviceReadiness").doc("gps");
+
+        tx.set(snapshot.ref, {
+          activeTicketId: null,
+          isTracking: false,
+          lastStoppedTicketId: ticketId || null,
+          stopReason: "SERVER_EXPIRY_WATCHDOG",
+          stoppedAt: transactionNow,
+          reconciledAt: transactionNow,
+          serverUpdatedAt: transactionNow,
+          expiresAt: transactionNow,
+        }, { merge: true });
+        tx.set(technicianRef, {
+          activeTicketId: null,
+          isTracking: false,
+          locationUpdatedAt: transactionNow,
+          trackingReconciledAt: transactionNow,
+          updatedAt: transactionNow,
+        }, { merge: true });
+        tx.set(userRef, {
+          activeTicketId: null,
+          isTracking: false,
+          locationUpdatedAt: transactionNow,
+          trackingReconciledAt: transactionNow,
+          updatedAt: transactionNow,
+        }, { merge: true });
+        tx.set(diagnosticRef, {
+          ticketId: ticketId || null,
+          status: "STOPPED_STALE",
+          stopReason: "SERVER_EXPIRY_WATCHDOG",
+          trackingSessionId,
+          stoppedAt: transactionNow,
+          updatedAt: transactionNow,
+        }, { merge: true });
+        if (ticketRef && ticketSnap?.exists) {
+          tx.set(ticketRef, {
+            trackingStatus: "STOPPED_STALE",
+            technicianLocationExpiresAt: transactionNow,
+            trackingReconciledAt: transactionNow,
+            updatedAt: transactionNow,
+          }, { merge: true });
+        }
+        tx.set(auditRef, {
+          actorId: "system",
+          actorRole: "system",
+          action: "TECHNICIAN_LIVE_LOCATION_EXPIRED",
+          targetType: ticketSnap?.exists ? "maintenanceTickets" : "technician_live_locations",
+          targetId: ticketSnap?.exists ? ticketId : snapshot.id,
+          requestedTicketId: ticketId || null,
+          ticketMissing: Boolean(ticketId) && ticketSnap?.exists !== true,
+          technicianUid,
+          trackingSessionId,
+          createdAt: transactionNow,
+        });
+        return true;
+      });
+
+      if (didReconcile) reconciled += 1;
+      else skipped += 1;
+    }
+
+    console.log(`[technician-live-location-watchdog] reconciled=${reconciled} skipped=${skipped}`);
+  },
+);

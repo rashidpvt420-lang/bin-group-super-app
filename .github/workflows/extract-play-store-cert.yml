@@ -29,7 +29,6 @@ jobs:
         github.event.issue.number == 434 &&
         !github.event.issue.pull_request &&
         github.event.comment.user.login == github.repository_owner &&
-        github.event.comment.author_association == 'OWNER' &&
         github.event.comment.body == '/bin-launch extract-play-store-cert'
       )
     runs-on: ubuntu-latest
@@ -196,7 +195,7 @@ jobs:
             --arg certificateSha256Fingerprint "$fingerprint" \
             --arg certificateFileSha256 "$certificate_file_sha256" \
             '{
-              schemaVersion: 8,
+              schemaVersion: 9,
               commitSha: $commitSha,
               workflowRunId: $workflowRunId,
               packageName: $packageName,

@@ -47,7 +47,7 @@ test.describe('Final Admin-Login Proof', () => {
   });
 
   test('Non-admin denial redirects or shows error', async ({ page }) => {
-    const email = requireEnv('E2E_OWNER_EMAIL');
+    const email = requireEnv('E2E_OWNER_MAILBOX_EMAIL');
     const password = requireEnv('E2E_OWNER_PASSWORD');
     await testLogin(page, email, password);
     await page.waitForTimeout(3000);

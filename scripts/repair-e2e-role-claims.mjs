@@ -17,10 +17,10 @@ for (const envPath of [
 
 const roleDefinitions = [
   { role: 'admin', emailKey: 'E2E_ADMIN_EMAIL', claims: { role: 'admin', admin: true, testAccount: true } },
-  { role: 'owner', emailKey: 'E2E_OWNER_EMAIL', claims: { role: 'owner', testAccount: true } },
+  { role: 'owner', emailKey: 'E2E_OWNER_MAILBOX_EMAIL', claims: { role: 'owner', testAccount: true } },
   { role: 'tenant', emailKey: 'E2E_TENANT_EMAIL', claims: { role: 'tenant', testAccount: true } },
   { role: 'technician', emailKey: 'E2E_TECHNICIAN_EMAIL', claims: { role: 'technician', testAccount: true } },
-  { role: 'broker', emailKey: 'E2E_BROKER_EMAIL', claims: { role: 'broker', testAccount: true } },
+  { role: 'broker', emailKey: 'E2E_BROKER_MAILBOX_EMAIL', claims: { role: 'broker', testAccount: true } },
 ];
 
 const missing = roleDefinitions

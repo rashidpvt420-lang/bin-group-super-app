@@ -1,6 +1,11 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import {
+  buildFounderVerifiedPropertyGeo,
+  hasDispatchReadyPropertyGeo,
+  PropertyGeoAuthorityError,
+} from "./propertyGeoAuthority";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -10,13 +15,19 @@ const FOUNDER_ROLES = new Set(["ceo", "super_admin"]);
 const REVIEWABLE_STATUSES = new Set([
   "pending",
   "pending_approval",
-  "pending-review",
   "pending_review",
+  "pending_admin_approval",
+  "pending_admin_review",
   "onboarding",
+  "submitted",
+  "draft",
+  "admin_review",
 ]);
+const APPROVED_STATUSES = new Set(["approved", "active"]);
 
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
 const lower = (value: unknown, max = 500) => text(value, max).toLowerCase();
+const normalizedStatus = (value: unknown) => lower(value, 80).replace(/[\s-]+/g, "_");
 
 function roleOf(token: Record<string, unknown> = {}) {
   const role = lower(token.role || token.userRole || token.primaryRole, 80);
@@ -45,6 +56,13 @@ async function requireVerifiedFounderSession(auth: any) {
   return { uid: auth.uid, role: roleOf(token) };
 }
 
+const geoError = (error: unknown) => {
+  if (error instanceof PropertyGeoAuthorityError) {
+    return new HttpsError("failed-precondition", error.message);
+  }
+  return error;
+};
+
 export const adminReviewOwnerProperty = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
@@ -70,25 +88,58 @@ export const adminReviewOwnerProperty = onCall(
       const propertySnap = await transaction.get(propertyRef);
       if (!propertySnap.exists) throw new HttpsError("not-found", "Property not found.");
       const property = propertySnap.data() || {};
-      const currentStatus = lower(property.status, 80);
-      if (!REVIEWABLE_STATUSES.has(currentStatus)) {
-        throw new HttpsError("failed-precondition", "Property is no longer pending founder review.");
+      const status = normalizedStatus(property.status || property.approvalStatus || property.onboardingStatus);
+      const pendingReview = REVIEWABLE_STATUSES.has(status);
+      const approvedLegacy = APPROVED_STATUSES.has(status);
+      const alreadyVerified = hasDispatchReadyPropertyGeo(property);
+      const geoOnlyReview = decision === "APPROVE" && approvedLegacy && !alreadyVerified;
+
+      if (!pendingReview && !geoOnlyReview) {
+        throw new HttpsError("failed-precondition", "Property is no longer eligible for this Founder review decision.");
+      }
+      if (decision === "REJECT" && approvedLegacy) {
+        throw new HttpsError("failed-precondition", "An approved property cannot be rejected through geo re-verification.");
       }
 
       const propertyName = text(property.name || property.propertyName || property.address, 240) || "Property";
       const recipientId = text(property.ownerId || property.ownerUid, 240);
-      const nextStatus = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+      const nextStatus = decision === "APPROVE"
+        ? approvedLegacy ? text(property.status, 80) || "APPROVED" : "APPROVED"
+        : "REJECTED";
       const update: Record<string, unknown> = {
         status: nextStatus,
+        approvalStatus: decision === "APPROVE" ? "APPROVED" : "REJECTED",
         updatedAt: now,
         reviewedAt: now,
         reviewedBy: actor.uid,
         reviewedByRole: actor.role,
       };
+      let geoDispatchReady = false;
+      let auditAction = decision === "APPROVE" ? "APPROVE_PROPERTY" : "REJECT_PROPERTY";
+
       if (decision === "APPROVE") {
-        update.approvedAt = now;
-        update.approvedBy = actor.uid;
+        try {
+          const canonical = buildFounderVerifiedPropertyGeo(property, actor.uid, now);
+          update.geo = canonical.geo;
+          update.geoVerification = canonical.geoVerification;
+          update.geoAnchor = FieldValue.delete();
+          update.verifiedGeo = FieldValue.delete();
+          update.verified = true;
+          update.verifiedBy = actor.uid;
+          update.verifiedAt = now;
+          update.dispatchReady = true;
+          update.requiresGeoReview = false;
+          update.geoReviewStatus = "VERIFIED";
+          update.geoVerifiedAt = now;
+          update.geoVerifiedBy = actor.uid;
+          geoDispatchReady = true;
+        } catch (error) {
+          throw geoError(error);
+        }
+        update.approvedAt = approvedLegacy ? property.approvedAt || now : now;
+        update.approvedBy = approvedLegacy ? property.approvedBy || actor.uid : actor.uid;
         update.rejectionReason = FieldValue.delete();
+        if (geoOnlyReview) auditAction = "VERIFY_PROPERTY_GEO";
       } else {
         update.rejectedAt = now;
         update.rejectedBy = actor.uid;
@@ -99,36 +150,56 @@ export const adminReviewOwnerProperty = onCall(
       transaction.set(auditRef, {
         actorId: actor.uid,
         actorRole: actor.role,
-        action: decision === "APPROVE" ? "APPROVE_PROPERTY" : "REJECT_PROPERTY",
+        action: auditAction,
         targetType: "PROPERTY",
         targetId: propertyId,
-        before: { status: property.status || null },
-        after: { status: nextStatus, reason: decision === "REJECT" ? rejectionReason : null },
-        metadata: { propertyName },
+        before: {
+          status: property.status || null,
+          geoDispatchReady: alreadyVerified,
+        },
+        after: {
+          status: nextStatus,
+          reason: decision === "REJECT" ? rejectionReason : null,
+          geoDispatchReady,
+        },
+        metadata: { propertyName, geoOnlyReview },
         source: "ADMIN_REVIEW_OWNER_PROPERTY_CALLABLE",
         trustLevel: "SERVER_AUTHORITATIVE",
         createdAt: now,
       });
 
       if (recipientId) {
+        const geoOnlyMessage = geoOnlyReview;
         transaction.set(notificationRef, {
           recipientId,
           userId: recipientId,
           recipientRole: "owner",
           toRole: "owner",
-          title: decision === "APPROVE" ? "PROPERTY APPROVED" : "PROPERTY REJECTED",
+          title: decision === "APPROVE"
+            ? geoOnlyMessage ? "PROPERTY LOCATION VERIFIED" : "PROPERTY APPROVED"
+            : "PROPERTY REJECTED",
           body: decision === "APPROVE"
-            ? `Your property "${propertyName}" has been approved by BIN GROUP.`
+            ? geoOnlyMessage
+              ? `The dispatch location for "${propertyName}" has been verified by BIN GROUP.`
+              : `Your property "${propertyName}" has been approved by BIN GROUP.`
             : `Your property "${propertyName}" was rejected. Reason: ${rejectionReason}`,
           read: false,
-          type: decision === "APPROVE" ? "PROPERTY_APPROVAL" : "PROPERTY_REJECTION",
+          type: decision === "APPROVE"
+            ? geoOnlyMessage ? "PROPERTY_GEO_VERIFIED" : "PROPERTY_APPROVAL"
+            : "PROPERTY_REJECTION",
           link: "/owner/properties",
           source: "ADMIN_REVIEW_OWNER_PROPERTY_CALLABLE",
           createdAt: now,
         });
       }
 
-      return { propertyName, nextStatus, notificationCreated: Boolean(recipientId) };
+      return {
+        propertyName,
+        nextStatus,
+        notificationCreated: Boolean(recipientId),
+        geoDispatchReady,
+        geoOnlyReview,
+      };
     });
 
     return {
@@ -136,6 +207,8 @@ export const adminReviewOwnerProperty = onCall(
       propertyId,
       status: result.nextStatus,
       notificationCreated: result.notificationCreated,
+      geoDispatchReady: result.geoDispatchReady,
+      geoOnlyReview: result.geoOnlyReview,
       hardLaunchClaim: false,
     };
   },

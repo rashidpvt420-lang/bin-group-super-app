@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 
 // Load .env.e2e to get passwords and emails
 const possibleConfigPaths = [
@@ -25,15 +26,36 @@ for (const p of possibleConfigPaths) {
 // Validate required environment variables and exit on failure
 const requiredEnvVars = [
   'E2E_ADMIN_EMAIL', 'E2E_ADMIN_PASSWORD',
-  'E2E_OWNER_EMAIL', 'E2E_OWNER_PASSWORD',
+  'E2E_OWNER_MAILBOX_EMAIL', 'E2E_OWNER_PASSWORD',
   'E2E_TENANT_EMAIL', 'E2E_TENANT_PASSWORD',
   'E2E_TECHNICIAN_EMAIL', 'E2E_TECHNICIAN_PASSWORD',
-  'E2E_BROKER_EMAIL', 'E2E_BROKER_PASSWORD'
+  'E2E_BROKER_MAILBOX_EMAIL', 'E2E_BROKER_PASSWORD'
 ];
 
 const missingVars = requiredEnvVars.filter(v => !process.env[v]);
 if (missingVars.length > 0) {
   console.error(`❌ Missing required E2E environment variables: ${missingVars.join(', ')}`);
+  process.exit(1);
+}
+
+const requiredRoleEmailVars = [
+  'E2E_ADMIN_EMAIL',
+  'E2E_OWNER_MAILBOX_EMAIL',
+  'E2E_TENANT_EMAIL',
+  'E2E_TECHNICIAN_EMAIL',
+  'E2E_BROKER_MAILBOX_EMAIL',
+];
+const configuredRoleEmails = requiredRoleEmailVars.map((name) => ({
+  name,
+  email: String(process.env[name] || '').trim().toLowerCase(),
+}));
+if (configuredRoleEmails.some(({ email }) => email === CANONICAL_FOUNDER_EMAIL)) {
+  console.error(`❌ E2E role accounts must never use the canonical Founder email ${CANONICAL_FOUNDER_EMAIL}.`);
+  process.exit(1);
+}
+const uniqueRoleEmails = new Set(configuredRoleEmails.map(({ email }) => email));
+if (uniqueRoleEmails.size !== configuredRoleEmails.length) {
+  console.error('❌ Every E2E role must use a distinct email address.');
   process.exit(1);
 }
 
@@ -49,14 +71,14 @@ const auth = admin.auth();
 const usersToSeed = [
   {
     role: 'admin',
-    email: process.env.E2E_ADMIN_EMAIL,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_ADMIN_EMAIL').email,
     password: process.env.E2E_ADMIN_PASSWORD,
     claims: { admin: true, role: 'admin', testAccount: true },
     displayName: 'E2E Admin',
   },
   {
     role: 'owner',
-    email: process.env.E2E_OWNER_EMAIL,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_OWNER_MAILBOX_EMAIL').email,
     password: process.env.E2E_OWNER_PASSWORD,
     claims: { role: 'owner', testAccount: true },
     displayName: 'E2E Owner',
@@ -69,7 +91,7 @@ const usersToSeed = [
   },
   {
     role: 'tenant',
-    email: process.env.E2E_TENANT_EMAIL,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_TENANT_EMAIL').email,
     password: process.env.E2E_TENANT_PASSWORD,
     claims: { role: 'tenant', testAccount: true },
     displayName: 'E2E Tenant',
@@ -79,7 +101,7 @@ const usersToSeed = [
   },
   {
     role: 'technician',
-    email: process.env.E2E_TECHNICIAN_EMAIL,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_TECHNICIAN_EMAIL').email,
     password: process.env.E2E_TECHNICIAN_PASSWORD,
     claims: { role: 'technician', testAccount: true },
     displayName: 'E2E Technician',
@@ -90,7 +112,7 @@ const usersToSeed = [
   },
   {
     role: 'broker',
-    email: process.env.E2E_BROKER_EMAIL,
+    email: configuredRoleEmails.find(({ name }) => name === 'E2E_BROKER_MAILBOX_EMAIL').email,
     password: process.env.E2E_BROKER_PASSWORD,
     claims: { role: 'broker', testAccount: true },
     displayName: 'E2E Broker',
@@ -100,6 +122,10 @@ const usersToSeed = [
 const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim().toLowerCase();
 const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
 if (techBEmail && techBPassword) {
+  if (techBEmail === CANONICAL_FOUNDER_EMAIL || uniqueRoleEmails.has(techBEmail)) {
+    console.error('❌ E2E Technician B must use a distinct non-Founder email address.');
+    process.exit(1);
+  }
   usersToSeed.push({
     role: 'technician',
     email: techBEmail,

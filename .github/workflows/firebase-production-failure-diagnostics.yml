@@ -1,5 +1,5 @@
 name: Firebase Production Failure Diagnostics
-run-name: Diagnose Firebase production run ${{ github.event.workflow_run.id }}
+run-name: Firebase production failure diagnostics · ${{ github.run_id }}
 
 on:
   workflow_run:
@@ -7,30 +7,82 @@ on:
       - Firebase Production Deploy
     types:
       - completed
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, converted_to_draft]
+    paths:
+      - .github/firebase-production-diagnostics-request
 
 permissions:
   actions: read
   contents: read
   issues: write
+  pull-requests: write
 
 concurrency:
-  group: firebase-production-failure-diagnostics-${{ github.event.workflow_run.id }}
+  group: firebase-production-failure-diagnostics-${{ github.event_name }}-${{ github.event.workflow_run.id || github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   collect:
     name: Collect safe production failure evidence
-    if: github.event.workflow_run.conclusion == 'failure'
+    if: github.event_name == 'pull_request' || github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
-      SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-      SOURCE_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
       ISSUE_NUMBER: '434'
+      REQUEST_PR: ${{ github.event.pull_request.number || '' }}
+      REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+      SOURCE_RUN_SHA: ${{ github.event.workflow_run.head_sha || '' }}
 
     steps:
+      - name: Resolve and validate protected diagnostic request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            draft="$(jq -r '.pull_request.draft' "$GITHUB_EVENT_PATH")"
+            base_ref="$(jq -r '.pull_request.base.ref' "$GITHUB_EVENT_PATH")"
+            head_repo="$(jq -r '.pull_request.head.repo.full_name' "$GITHUB_EVENT_PATH")"
+            requester="$(jq -r '.pull_request.user.login' "$GITHUB_EVENT_PATH")"
+            title="$(jq -r '.pull_request.title' "$GITHUB_EVENT_PATH")"
+            head_ref="$(jq -r '.pull_request.head.ref' "$GITHUB_EVENT_PATH")"
+
+            [[ "$draft" == 'true' ]]
+            [[ "$base_ref" == 'main' ]]
+            [[ "$head_repo" == "$REPOSITORY" ]]
+            [[ "$requester" == "$GITHUB_REPOSITORY_OWNER" ]]
+            [[ "$title" == 'Diagnose failed Firebase production deployment' ]]
+            [[ "$head_ref" == ops/diagnose-firebase-production-* ]]
+
+            mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+            [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/firebase-production-diagnostics-request' ]] || {
+              printf '::error::Diagnostic request must change only .github/firebase-production-diagnostics-request. Found: %s\n' "${files[*]:-none}"
+              exit 1
+            }
+
+            marker="$(gh api "repos/$REPOSITORY/contents/.github/firebase-production-diagnostics-request?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+            request="$(sed -n 's/^request=//p' <<<"$marker")"
+            source_run_id="$(sed -n 's/^source_run_id=//p' <<<"$marker")"
+            source_run_sha="$(sed -n 's/^source_run_sha=//p' <<<"$marker")"
+            hard_launch_claim="$(sed -n 's/^hard_launch_claim=//p' <<<"$marker")"
+            line_count="$(awk 'END{print NR}' <<<"$marker")"
+
+            [[ "$line_count" -eq 4 ]]
+            [[ "$request" == 'diagnose-firebase-production-run' ]]
+            [[ "$source_run_id" =~ ^[1-9][0-9]*$ ]]
+            [[ "$source_run_sha" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$hard_launch_claim" == 'false' ]]
+
+            echo "SOURCE_RUN_ID=$source_run_id" >> "$GITHUB_ENV"
+            echo "SOURCE_RUN_SHA=$source_run_sha" >> "$GITHUB_ENV"
+          fi
+
       - name: Validate protected source run through GitHub API
         shell: bash
         run: |
@@ -150,7 +202,7 @@ jobs:
             }));
 
           const report = {
-            schemaVersion: 2,
+            schemaVersion: 3,
             status: 'FAILED',
             sourceWorkflow: 'Firebase Production Deploy',
             sourceRunId: runId,
@@ -173,7 +225,7 @@ jobs:
           NODE
 
           jq -e '
-            .schemaVersion == 2 and
+            .schemaVersion == 3 and
             .status == "FAILED" and
             .sourceRunId == env.SOURCE_RUN_ID and
             .sourceRunSha == env.SOURCE_RUN_SHA and
@@ -183,7 +235,7 @@ jobs:
       - name: Upload redacted production failure evidence
         uses: actions/upload-artifact@v4
         with:
-          name: firebase-production-failure-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}
+          name: firebase-production-failure-${{ env.SOURCE_RUN_SHA }}-${{ env.SOURCE_RUN_ID }}
           path: |
             launch_package/firebase-production-failure.json
             launch_package/firebase-production-failure.log
@@ -213,3 +265,10 @@ jobs:
           
           The deployment remains fail-closed. Fix only the identified software or operational requirement before another protected dispatch."
           gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+
+      - name: Close completed diagnostic request without merge
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/$REPOSITORY/pulls/$REQUEST_PR" -f state=closed >/dev/null

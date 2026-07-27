@@ -1,5 +1,4 @@
 name: Owner Privileged Account Cleanup Command
-run-name: Privileged account command · ${{ github.event.comment.body }}
 
 on:
   issue_comment:
@@ -16,56 +15,74 @@ concurrency:
 
 jobs:
   review-and-clean:
-    name: Review and conditionally clean privileged identities
-    if: >-
-      github.event.issue.number == 434 &&
-      !github.event.issue.pull_request &&
-      (
-        github.event.comment.user.login == github.repository_owner ||
-        (
-          github.event.comment.user.login == 'chatgpt-codex-connector[bot]' &&
-          github.event.comment.user.type == 'Bot' &&
-          github.event.comment.user.id == 199175422
-        )
-      ) &&
-      (github.event.comment.body == '/bin-launch review-privileged-accounts' ||
-       github.event.comment.body == '/bin-launch execute-privileged-cleanup')
+    name: Authorize, review, and conditionally clean privileged identities
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
-      ISSUE_NUMBER: '434'
-      COMMAND: ${{ github.event.comment.body }}
+      TARGET_ISSUE_NUMBER: '434'
 
     steps:
-      - name: Resolve stable exact current main
-        id: release
+      - name: Authorize exact issue command and resolve main
+        id: authorize
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PULL_REQUEST_URL: ${{ github.event.issue.pull_request.url }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         shell: bash
         run: |
           set -euo pipefail
-          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
-          sleep 3
-          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          [[ "$first_sha" == "$second_sha" ]]
-          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+          authorized='false'
+          execute='false'
+          release_sha=''
+
+          if [[ "$EVENT_NAME" == 'issue_comment' && "$EVENT_ISSUE_NUMBER" == "$TARGET_ISSUE_NUMBER" && -z "$PULL_REQUEST_URL" ]]; then
+            if [[ "$COMMENT_BODY" == '/bin-launch review-privileged-accounts' ]]; then
+              authorized='true'
+            elif [[ "$COMMENT_BODY" == '/bin-launch execute-privileged-cleanup' && "$COMMENT_AUTHOR" == "$REPOSITORY_OWNER" ]]; then
+              authorized='true'
+              execute='true'
+            fi
+          fi
+
+          if [[ "$authorized" == 'true' ]]; then
+            first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+            sleep 3
+            second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            [[ "$first_sha" == "$second_sha" ]]
+            release_sha="$second_sha"
+          else
+            echo 'Ignoring non-canonical or unauthorized issue comment.'
+          fi
+
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+          echo "execute=$execute" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout exact current main
+        if: steps.authorize.outputs.authorized == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.release.outputs.sha }}
+          ref: ${{ steps.authorize.outputs.release_sha }}
           persist-credentials: false
 
       - name: Use Node.js 22
+        if: steps.authorize.outputs.authorized == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Dispatch fresh exact-SHA privileged review
+        if: steps.authorize.outputs.authorized == 'true'
         id: review
         env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RELEASE_SHA: ${{ steps.authorize.outputs.release_sha }}
+          ISSUE_NUMBER: ${{ env.TARGET_ISSUE_NUMBER }}
         shell: bash
         run: |
           set -euo pipefail
@@ -159,6 +176,9 @@ jobs:
           eligible="$(jq -r '.executionEligible' "$report_path")"
           target_count="$(jq -r '.deletionTargetCount' "$report_path")"
           privileged_count="$(jq -r '.privilegedAccountCountBefore' "$report_path")"
+          email_verified="$(jq -r '.founderEmailVerified' "$report_path")"
+          phone_mfa="$(jq -r '.founderPhoneMfaReady' "$report_path")"
+          blockers="$(jq -r '.executionBlockers | join("; ") | if length == 0 then "none" else . end' "$report_path")"
 
           body="## Privileged-account review
           
@@ -178,27 +198,31 @@ jobs:
           echo "target_count=$target_count" >> "$GITHUB_OUTPUT"
 
       - name: Enforce destructive execution eligibility
-        if: github.event.comment.body == '/bin-launch execute-privileged-cleanup'
+        if: steps.authorize.outputs.execute == 'true'
         env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RELEASE_SHA: ${{ steps.authorize.outputs.release_sha }}
           FOUNDER_READY: ${{ steps.review.outputs.ready }}
           EXECUTION_ELIGIBLE: ${{ steps.review.outputs.eligible }}
           TARGET_COUNT: ${{ steps.review.outputs.target_count }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         shell: bash
         run: |
           set -euo pipefail
           latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
           [[ "$latest_main" == "$RELEASE_SHA" ]]
+          [[ "$COMMENT_AUTHOR" == "$REPOSITORY_OWNER" ]]
           [[ "$FOUNDER_READY" == 'true' ]]
           [[ "$EXECUTION_ELIGIBLE" == 'true' ]]
           [[ "$TARGET_COUNT" =~ ^[1-9][0-9]*$ ]]
 
       - name: Execute and verify exact-SHA privileged cleanup
-        if: github.event.comment.body == '/bin-launch execute-privileged-cleanup'
+        if: steps.authorize.outputs.execute == 'true'
         id: cleanup
         env:
-          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RELEASE_SHA: ${{ steps.authorize.outputs.release_sha }}
           EXPECTED_TARGET_COUNT: ${{ steps.review.outputs.target_count }}
+          ISSUE_NUMBER: ${{ env.TARGET_ISSUE_NUMBER }}
         shell: bash
         run: |
           set -euo pipefail

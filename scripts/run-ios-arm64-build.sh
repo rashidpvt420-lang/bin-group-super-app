@@ -6,6 +6,7 @@ IOS_BUILD_LOG="${IOS_BUILD_LOG:-ios-arm64-xcodebuild.log}"
 IOS_EVIDENCE_PATH="${IOS_EVIDENCE_PATH:-ios-arm64-build-evidence.json}"
 IOS_FAILURE_SUMMARY="${IOS_FAILURE_SUMMARY:-ios-arm64-failure-summary.txt}"
 EXPECTED_COCOAPODS_VERSION="1.16.2"
+COCOAPODS_INSTALL_ATTEMPTS="${COCOAPODS_INSTALL_ATTEMPTS:-4}"
 
 : > "$IOS_BUILD_LOG"
 exec > >(tee -a "$IOS_BUILD_LOG") 2>&1
@@ -57,9 +58,49 @@ fi
 echo "CocoaPods: $cocoapods_version"
 
 stage="cocoapods-install"
+if [[ ! "$COCOAPODS_INSTALL_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "COCOAPODS_INSTALL_ATTEMPTS must be a positive integer, got: $COCOAPODS_INSTALL_ATTEMPTS" >&2
+  exit 1
+fi
+
 (
   cd ios/App
-  pod _${EXPECTED_COCOAPODS_VERSION}_ install --deployment
+
+  install_succeeded='false'
+  for attempt in $(seq 1 "$COCOAPODS_INSTALL_ATTEMPTS"); do
+    attempt_log="../../../cocoapods-install-attempt-${attempt}.log"
+    echo "CocoaPods install attempt $attempt/$COCOAPODS_INSTALL_ATTEMPTS"
+
+    set +e
+    pod _${EXPECTED_COCOAPODS_VERSION}_ install --deployment 2>&1 | tee "$attempt_log"
+    pod_status=${PIPESTATUS[0]}
+    set -e
+
+    if [[ "$pod_status" -eq 0 ]]; then
+      install_succeeded='true'
+      break
+    fi
+
+    transient_pattern='HTTP (408|429|5[0-9][0-9])|The requested URL returned error: (408|429|5[0-9][0-9])|timed out|Timeout was reached|Could not resolve host|Connection reset|Recv failure|Failed to connect|network connection was lost'
+    if ! grep -Eiq "$transient_pattern" "$attempt_log"; then
+      echo "CocoaPods failed with a non-transient error; refusing blind retries." >&2
+      exit "$pod_status"
+    fi
+
+    if [[ "$attempt" -ge "$COCOAPODS_INSTALL_ATTEMPTS" ]]; then
+      echo "CocoaPods still failed after $COCOAPODS_INSTALL_ATTEMPTS transient-network attempts." >&2
+      exit "$pod_status"
+    fi
+
+    echo "Transient CocoaPods network failure detected. Cleaning incomplete caches before retry."
+    pod cache clean IONGeolocationLib --all >/dev/null 2>&1 || true
+    find "$HOME/Library/Caches/CocoaPods" -type f \( -name '*.tmp' -o -name '*.download' \) -delete 2>/dev/null || true
+    sleep_seconds=$((attempt * 15))
+    echo "Retrying CocoaPods in ${sleep_seconds}s."
+    sleep "$sleep_seconds"
+  done
+
+  [[ "$install_succeeded" == 'true' ]]
 )
 
 stage="xcodebuild"

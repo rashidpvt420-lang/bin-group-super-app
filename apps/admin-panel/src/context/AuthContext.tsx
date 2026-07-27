@@ -76,9 +76,16 @@ const stripBridgeHash = (key: 'bridge_token' | 'sso_failed') => {
     window.history.replaceState({}, document.title, cleanUrl);
 };
 
+const shouldBlockForInitialAuth = () => {
+    if (typeof window === 'undefined') return true;
+    return window.location.pathname !== '/login';
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [loading, setLoading] = useState(true);
+    // The login route must stay reachable while Firebase restores or rejects a stale
+    // persisted session. Protected routes remain fail-closed behind the loading gate.
+    const [loading, setLoading] = useState(shouldBlockForInitialAuth);
     const [error, setError] = useState<string | null>(null);
     const [user, setUser] = useState<any | null>(null);
     const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);

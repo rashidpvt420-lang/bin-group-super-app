@@ -44,6 +44,7 @@ interface Message {
   timestamp: Date;
   live?: boolean;
   provider?: string;
+  operationalStatus?: 'healthy' | 'degraded' | 'error' | 'ready';
 }
 
 type PromptAction = 'SUMMARIZE' | 'NAVIGATE' | 'MESSAGE';
@@ -56,7 +57,7 @@ type Prompt = {
 
 const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts: Prompt[] }> = {
   owner: {
-    greeting: 'Owner AI is ready. Ask about portfolio risk, contract status, payment approval, property health, or maintenance proof.',
+    greeting: 'Owner AI is ready for advisory guidance. Authoritative approvals, payments, and property records remain in the dashboard.',
     prompts: [
       { label: 'Summarize Page', action: 'SUMMARIZE', payload: 'Summarize my current owner dashboard and identify missing actions.' },
       { label: 'Pending Approvals', action: 'NAVIGATE', payload: '/dashboard' },
@@ -64,7 +65,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   tenant: {
-    greeting: 'Tenant AI is ready. Ask about repair status, room-rent onboarding, move-in readiness, or maintenance history.',
+    greeting: 'Tenant AI is ready for advisory guidance. Repair status and service records remain authoritative in the tenant portal.',
     prompts: [
       { label: 'Summarize Page', action: 'SUMMARIZE', payload: 'Summarize my tenant services and active requests.' },
       { label: 'Report Issue', action: 'NAVIGATE', payload: '/tenant' },
@@ -72,7 +73,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   technician: {
-    greeting: 'Technician AI is ready. Ask for mission briefing, SLA priority, proof requirements, or troubleshooting guidance.',
+    greeting: 'Technician AI is ready for advisory guidance. Assigned missions, safety controls, and completion authority remain in the operations system.',
     prompts: [
       { label: 'Mission Summary', action: 'SUMMARIZE', payload: 'Summarize my current technician assignment and proof requirements.' },
       { label: 'View Missions', action: 'NAVIGATE', payload: '/tech' },
@@ -80,7 +81,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   broker: {
-    greeting: 'Broker AI is ready. Ask about referral status, KYC, attribution, commission lock, or payout flow.',
+    greeting: 'Broker AI is ready for advisory guidance. KYC, attribution, commission, and payout decisions remain server-authoritative.',
     prompts: [
       { label: 'Pipeline Summary', action: 'SUMMARIZE', payload: 'Summarize my broker pipeline and commission status.' },
       { label: 'Submit Lead', action: 'NAVIGATE', payload: '/broker' },
@@ -88,7 +89,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   admin: {
-    greeting: 'Admin AI is ready. Ask about launch gates, HR, owners, tenants, technicians, payments, room-rent ops, or audit gaps.',
+    greeting: 'Admin AI is ready for advisory analysis. It cannot approve payments, create access, assign work, or clear launch gates.',
     prompts: [
       { label: 'War Room Summary', action: 'SUMMARIZE', payload: 'Summarize current admin bottlenecks and launch blockers.' },
       { label: 'Launch Gates', action: 'NAVIGATE', payload: '/ops/public-launch-command' },
@@ -96,7 +97,7 @@ const roleData: Record<SovereignAIChatProps['role'], { greeting: string; prompts
     ],
   },
   unknown: {
-    greeting: 'BIN GROUP AI is ready. Ask about the platform, maintenance, property management, or onboarding.',
+    greeting: 'BIN GROUP AI is ready for advisory product guidance. Provider status will be shown on every answer.',
     prompts: [
       { label: 'Platform Overview', action: 'MESSAGE', payload: 'Tell me what BIN GROUP does.' },
     ],
@@ -118,46 +119,65 @@ function reviveMessages(value: string | null): Message[] {
 }
 
 function deterministicSummary(role: SovereignAIChatProps['role'], pageContext: any) {
-  if (!pageContext) return 'No live page context is registered for this screen yet.';
+  if (!pageContext) return 'No page context is registered for this screen.';
   if (role === 'admin') {
     const pending = pageContext.pendingOnboardings?.length || 0;
     const orphans = pageContext.orphans?.length || 0;
     const openTickets = pageContext.stats?.openTickets || 0;
-    return `Admin scan: ${pending} pending onboarding item(s), ${orphans} orphan item(s), and ${openTickets} open mission(s).`;
+    return `Admin page scan: ${pending} pending onboarding item(s), ${orphans} orphan item(s), and ${openTickets} open mission(s).`;
   }
   if (role === 'owner') {
     const propertyCount = pageContext.properties?.length || 0;
     const risk = pageContext.riskAssets?.length || 0;
-    return `Owner scan: ${propertyCount} property record(s) and ${risk} risk item(s) found in the current context.`;
+    return `Owner page scan: ${propertyCount} property record(s) and ${risk} risk item(s) found in the current client context.`;
   }
   if (role === 'tenant') {
     const active = pageContext.activeTickets?.length || 0;
-    return `Tenant scan: ${active} active service request(s) in the current context.`;
+    return `Tenant page scan: ${active} active service request(s) in the current client context.`;
   }
   if (role === 'technician') {
     const active = pageContext.activeDispatches?.length || 0;
-    return `Technician scan: ${active} active dispatch item(s) in the current context.`;
+    return `Technician page scan: ${active} active dispatch item(s) in the current client context.`;
   }
   if (role === 'broker') {
     const leads = pageContext.leads?.length || 0;
-    return `Broker scan: ${leads} active lead/referral item(s) in the current context.`;
+    return `Broker page scan: ${leads} active lead/referral item(s) in the current client context.`;
   }
-  return 'Context registered, but this role does not have a mapped deterministic summary yet.';
+  return 'Client context is registered, but this role does not have a mapped local page summary.';
 }
 
 function explainCallableError(error: any) {
   const code = String(error?.code || '').toLowerCase();
   const message = String(error?.message || '').trim();
   if (code.includes('unauthenticated') || /unauthenticated/i.test(message)) {
-    return 'Firebase Auth session is not attached to the AI callable. Refresh the Admin panel after the latest deployment, then sign in again if the session is stale.';
+    return 'Firebase Auth is not attached to the AI callable. Refresh the portal and sign in again if the session is stale.';
+  }
+  if (code.includes('resource-exhausted') || /usage limit|quota/i.test(message)) {
+    return 'The daily AI allocation is exhausted. Failed or degraded provider attempts are not charged.';
   }
   if (code.includes('failed-precondition') || /secret|configured|precondition/i.test(message)) {
-    return 'AI provider secrets are not active on the deployed Firebase Function. Confirm OPENAI_API_KEY, IMAGE_GENERATION_API_KEY, and GEMINI_API_KEY secret versions, then redeploy through the protected production workflow.';
+    return 'The deployed live-provider configuration is incomplete.';
   }
   if (code.includes('permission-denied') || /permission|app check/i.test(message)) {
-    return 'AI callable was denied by App Check, role, or quota policy. Confirm Admin App Check and role claims are deployed for this session.';
+    return 'The request was denied by App Check, role, profile, or access policy.';
   }
-  return message || 'Live AI callable failed.';
+  if (code.includes('unavailable')) {
+    return 'The backend did not complete the request. No live AI answer was produced.';
+  }
+  return message || 'The live AI callable failed. No live AI answer was produced.';
+}
+
+function providerStatusLabel(message: Message) {
+  if (message.operationalStatus === 'error') return 'SERVICE ERROR';
+  if (message.live) return `LIVE · ${String(message.provider || 'PROVIDER').toUpperCase()}`;
+  if (message.operationalStatus === 'degraded') return `DEGRADED · ${String(message.provider || 'FALLBACK').toUpperCase()}`;
+  return String(message.provider || 'READY').toUpperCase();
+}
+
+function providerStatusColor(message: Message) {
+  if (message.operationalStatus === 'error') return '#ef4444';
+  if (message.live) return '#10b981';
+  return '#f59e0b';
 }
 
 export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
@@ -192,7 +212,15 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
   useEffect(() => {
     if (messages.length === 0 && open) {
-      setMessages([{ id: 'initial', type: 'ai', text: activeRole.greeting, timestamp: new Date(), live: false, provider: sessionBound ? 'ready' : 'auth-wait' }]);
+      setMessages([{
+        id: 'initial',
+        type: 'ai',
+        text: activeRole.greeting,
+        timestamp: new Date(),
+        live: false,
+        provider: sessionBound ? 'provider not called' : 'auth waiting',
+        operationalStatus: 'ready',
+      }]);
     }
   }, [open, messages.length, activeRole.greeting, sessionBound]);
 
@@ -204,7 +232,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
     const cleanText = text.trim();
     if (!cleanText || loading) return;
 
-    const fallbackSummary = isAutoSummary ? deterministicSummary(role, pageContext) : '';
+    const localSummary = isAutoSummary ? deterministicSummary(role, pageContext) : '';
     const userMessage: Message = {
       id: `user_${Date.now()}`,
       type: 'user',
@@ -218,18 +246,17 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
     try {
       if (!sessionBound) {
-        throw new Error('Admin Firebase Auth session is not ready for the AI launcher. Refresh or sign in again.');
+        throw new Error('The Firebase Auth session is not ready for the AI launcher. Refresh or sign in again.');
       }
       const runSovereignAI = httpsCallable(callableFunctions, 'runSovereignAI');
       const result: any = await runSovereignAI({
-        role,
-        text: isAutoSummary ? fallbackSummary || cleanText : cleanText,
+        text: isAutoSummary ? localSummary || cleanText : cleanText,
         pageContext,
-        fallbackSummary,
-        clientAuthBound: true,
+        fallbackSummary: localSummary,
       });
       const data = result.data || {};
-      const aiText = String(data.text || '').trim() || fallbackSummary || 'AI returned an empty response.';
+      const aiText = String(data.text || '').trim();
+      if (!aiText) throw new Error('The AI backend returned an empty response.');
       setMessages((previous) => [...previous, {
         id: `ai_${Date.now()}`,
         type: 'ai',
@@ -237,16 +264,21 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
         timestamp: new Date(),
         live: data.live === true,
         provider: data.provider || 'unknown',
+        operationalStatus: data.operationalStatus === 'healthy' ? 'healthy' : 'degraded',
       }]);
     } catch (error: any) {
       const message = explainCallableError(error);
+      const localContext = localSummary
+        ? `LOCAL PAGE SUMMARY — NOT AI OR AUTHORITATIVE\n${localSummary}\n\n`
+        : '';
       setMessages((previous) => [...previous, {
         id: `ai_${Date.now()}`,
         type: 'ai',
-        text: `${fallbackSummary || 'I can still guide you with deterministic platform rules.'}\n\nLive AI status: ${message}`,
+        text: `${localContext}AI SERVICE ERROR — NO LIVE ANSWER\n${message}`,
         timestamp: new Date(),
         live: false,
-        provider: 'fallback',
+        provider: 'function-error',
+        operationalStatus: 'error',
       }]);
     } finally {
       setLoading(false);
@@ -275,7 +307,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           </Avatar>
           <Box>
             <Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.gold }}>SOVEREIGN AI</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>LIVE EXECUTIVE ASSISTANT</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>ADVISORY ASSISTANT · PROVIDER STATUS SHOWN</Typography>
           </Box>
         </Stack>
         <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -292,9 +324,15 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
               </Avatar>
               <Paper sx={{ p: 2, bgcolor: message.type === 'user' ? 'rgba(255,255,255,0.05)' : 'rgba(198,167,94,0.05)', border: `1px solid ${message.type === 'user' ? 'rgba(255,255,255,0.1)' : 'rgba(198,167,94,0.2)'}`, borderRadius: message.type === 'user' ? '20px 4px 20px 20px' : '4px 20px 20px 20px' }}>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#FFF' }}>{message.text}</Typography>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, opacity: 0.55 }}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1, opacity: 0.7 }}>
                   <Typography variant="caption">{message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Typography>
-                  {message.provider && <Chip size="small" label={message.live ? `LIVE ${message.provider}` : message.provider.toUpperCase()} sx={{ height: 18, fontSize: 9, color: message.live ? '#10b981' : '#f59e0b', bgcolor: 'rgba(255,255,255,0.04)' }} />}
+                  {message.provider && (
+                    <Chip
+                      size="small"
+                      label={providerStatusLabel(message)}
+                      sx={{ height: 18, fontSize: 9, color: providerStatusColor(message), bgcolor: 'rgba(255,255,255,0.04)' }}
+                    />
+                  )}
                 </Stack>
               </Paper>
             </Stack>
@@ -322,7 +360,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
         <TextField
           fullWidth
-          placeholder={sessionBound ? 'Send a secure message...' : 'Admin session is loading. Refresh if this does not clear.'}
+          placeholder={sessionBound ? 'Send a secure advisory question...' : 'Auth session is loading. Refresh if this does not clear.'}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -336,17 +374,22 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton disabled={loading} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}>
+                <IconButton disabled={loading || !sessionBound} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}>
                   <Send size={18} />
                 </IconButton>
               </InputAdornment>
             ),
           }}
         />
-        <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: sessionBound ? 'rgba(255,255,255,0.25)' : '#f59e0b', fontWeight: 900 }}>
-          <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} />
-          {sessionBound ? 'FIREBASE CALLABLE AI SESSION' : 'ADMIN AUTH SESSION NOT YET BOUND'}
-        </Typography>
+        <Stack spacing={0.5} sx={{ mt: 2, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ color: sessionBound ? 'rgba(255,255,255,0.35)' : '#f59e0b', fontWeight: 900 }}>
+            <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} />
+            {sessionBound ? 'FIREBASE CALLABLE AI SESSION' : 'AUTH SESSION NOT YET BOUND'}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.28)', fontWeight: 800, lineHeight: 1.4 }}>
+            ADVISORY ONLY · APPROVALS, PAYMENTS, ASSIGNMENTS, QUOTATIONS AND COMPLIANCE REMAIN SERVER-AUTHORITATIVE
+          </Typography>
+        </Stack>
       </Box>
     </Box>
   );

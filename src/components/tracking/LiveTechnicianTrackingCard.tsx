@@ -1,36 +1,50 @@
 /**
  * BIN GROUP — LiveTechnicianTrackingCard
- * Shared UI component for owner and tenant portals.
- * Shows live ETA, technician identity, map preview, status timeline,
- * call and chat buttons.
- *
- * Mobile-safe: handles RTL, overflow, small screens.
+ * Shared Owner/Tenant tracking summary. This component does not render a
+ * street map or traffic-aware route; it displays verified points, freshness,
+ * straight-line distance and an external Google Maps route link.
  */
-
 import React from 'react';
 import {
-    Box, Typography, Stack, Avatar, IconButton, Paper,
-    LinearProgress, Chip, alpha, Divider, Button, Tooltip
+    Avatar,
+    Box,
+    Button,
+    Chip,
+    Divider,
+    IconButton,
+    LinearProgress,
+    Paper,
+    Stack,
+    Tooltip,
+    Typography,
+    alpha,
 } from '@mui/material';
 import {
-    Phone, MessageSquare, MapPin, CheckCircle, Navigation,
-    Play, Flag, Clock, AlertCircle, ExternalLink, Wifi, WifiOff
+    AlertCircle,
+    CheckCircle,
+    Clock,
+    ExternalLink,
+    Flag,
+    MapPin,
+    MessageSquare,
+    Navigation,
+    Phone,
+    Play,
+    Wifi,
+    WifiOff,
 } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import {
-    normalizeLocation,
+    buildGoogleMapsDirectionsUrl,
     calculateDistanceKm,
     calculateEtaMinutes,
-    getTicketJobLocation,
-    getTechnicianLocation,
-    buildGoogleMapsDirectionsUrl,
     getStaleLabel,
+    getTechnicianLocation,
+    getTicketJobLocation,
     isLocationStale,
     isTrackingActive,
     normalizeTicketStatus,
 } from '../../utils/liveTracking';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LiveTechnicianTrackingCardProps {
     ticket: any;
@@ -39,58 +53,54 @@ interface LiveTechnicianTrackingCardProps {
     showTimeline?: boolean;
 }
 
-// ─── Status Timeline Config ───────────────────────────────────────────────────
-
-const TIMELINE_STEPS = [
-    { key: 'open',          label: 'Complaint Created',  icon: Flag },
-    { key: 'accepted',      label: 'Assigned',           icon: CheckCircle },
-    { key: 'accepted',      label: 'Accepted',           icon: CheckCircle },
-    { key: 'on_the_way',    label: 'On The Way',         icon: Navigation },
-    { key: 'arrived',       label: 'Arrived',            icon: MapPin },
-    { key: 'in_progress',   label: 'Work Started',       icon: Play },
-    { key: 'completed',     label: 'Completed',          icon: CheckCircle },
-];
-
 const DISPLAY_STEPS = [
-    { key: 'open',          label: 'Complaint Created',  icon: Flag },
-    { key: 'accepted',      label: 'Technician Assigned', icon: CheckCircle },
-    { key: 'on_the_way',    label: 'On The Way',         icon: Navigation },
-    { key: 'arrived',       label: 'Arrived',            icon: MapPin },
-    { key: 'in_progress',   label: 'Work Started',       icon: Play },
-    { key: 'completed',     label: 'Completed',          icon: CheckCircle },
+    { key: 'open', label: 'Complaint Created', icon: Flag },
+    { key: 'accepted', label: 'Technician Assigned', icon: CheckCircle },
+    { key: 'on_the_way', label: 'On The Way', icon: Navigation },
+    { key: 'arrived', label: 'Arrived', icon: MapPin },
+    { key: 'in_progress', label: 'Work Started', icon: Play },
+    { key: 'completed', label: 'Completed', icon: CheckCircle },
 ];
 
-// ─── Progress Value ───────────────────────────────────────────────────────────
+const STEP_ORDER = DISPLAY_STEPS.map((step) => step.key);
 
 function getProgressValue(status: string): number {
     switch (normalizeTicketStatus(status)) {
-        case 'completed':    return 100;
-        case 'in_progress':  return 80;
-        case 'arrived':      return 65;
-        case 'on_the_way':   return 45;
-        case 'accepted':     return 20;
-        case 'open':         return 5;
-        default:             return 5;
+        case 'completed': return 100;
+        case 'in_progress': return 80;
+        case 'arrived': return 65;
+        case 'on_the_way': return 45;
+        case 'accepted': return 20;
+        case 'open': return 5;
+        default: return 5;
     }
 }
 
-// ─── Status Message ───────────────────────────────────────────────────────────
+function locationTimestamp(ticket: any, techLocation: any) {
+    return ticket?.technicianLocationUpdatedAt ||
+        techLocation?.serverUpdatedAt ||
+        techLocation?.updatedAt ||
+        techLocation?.timestamp ||
+        null;
+}
 
-function getStatusMessage(ticket: any, etaMin: number | null): string {
-    const s = normalizeTicketStatus(ticket?.status);
-    switch (s) {
-        case 'completed':   return 'Job Completed';
+function getStatusMessage(ticket: any, etaMin: number | null, trackingFresh: boolean, locationStale: boolean): string {
+    const status = normalizeTicketStatus(ticket?.status);
+    switch (status) {
+        case 'completed': return 'Job Completed';
         case 'in_progress': return 'Work in Progress';
-        case 'arrived':     return 'Technician Has Arrived';
+        case 'arrived': return 'Technician Has Arrived';
         case 'on_the_way':
-            if (etaMin !== null) return `Arrives in ~${etaMin} min`;
-            return 'Technician On The Way';
-        case 'accepted':    return ticket?.assignedTechnicianName ? `${ticket.assignedTechnicianName} Assigned` : 'Technician Assigned';
-        default:            return 'Awaiting Technician Assignment';
+            if (trackingFresh && etaMin !== null) return `Technician en route — approx. ${etaMin} min straight-line estimate`;
+            if (locationStale) return 'Technician en route — GPS location is stale';
+            return 'Technician en route — waiting for a fresh GPS point';
+        case 'accepted':
+            return ticket?.assignedTechnicianName
+                ? `${ticket.assignedTechnicianName} Assigned`
+                : 'Technician Assigned';
+        default: return 'Awaiting Technician Assignment';
     }
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LiveTechnicianTrackingCard({
     ticket,
@@ -100,253 +110,204 @@ export default function LiveTechnicianTrackingCard({
 }: LiveTechnicianTrackingCardProps) {
     if (!ticket) return null;
 
-    const techLoc = getTechnicianLocation(ticket);
-    const jobLoc  = getTicketJobLocation(ticket);
-
-    const distKm  = calculateDistanceKm(techLoc, jobLoc);
-    const etaMin  = calculateEtaMinutes(distKm);
-    const stale   = getStaleLabel(ticket.technicianLocationUpdatedAt);
-    const isStale = isLocationStale(ticket.technicianLocationUpdatedAt, 2);
-    const tracking = isTrackingActive(ticket.status, ticket.trackingStatus);
-    const normStatus = normalizeTicketStatus(ticket.status);
-    const progressVal = getProgressValue(ticket.status);
-    const statusMsg = getStatusMessage(ticket, etaMin);
-    const isAssigned = !!(ticket.assignedTechnicianId);
-    const isCompleted = normStatus === 'completed';
-
-    const mapsUrl = buildGoogleMapsDirectionsUrl(techLoc, jobLoc);
-    const jobMapsUrl = jobLoc
-        ? `https://www.google.com/maps/search/?api=1&query=${jobLoc.lat},${jobLoc.lng}`
+    const technicianLocation = getTechnicianLocation(ticket);
+    const jobLocation = getTicketJobLocation(ticket);
+    const locationUpdatedAt = locationTimestamp(ticket, technicianLocation);
+    const locationStale = isLocationStale(locationUpdatedAt, 2);
+    const trackingRequested = isTrackingActive(ticket.status, ticket.trackingStatus);
+    const trackingFresh = Boolean(trackingRequested && technicianLocation && !locationStale);
+    const straightLineDistanceKm = calculateDistanceKm(technicianLocation, jobLocation);
+    const straightLineEstimateMinutes = calculateEtaMinutes(straightLineDistanceKm);
+    const staleLabel = getStaleLabel(locationUpdatedAt);
+    const normalisedStatus = normalizeTicketStatus(ticket.status);
+    const isCompleted = normalisedStatus === 'completed';
+    const isAssigned = Boolean(ticket.assignedTechnicianId);
+    const progressValue = getProgressValue(ticket.status);
+    const statusMessage = getStatusMessage(ticket, straightLineEstimateMinutes, trackingFresh, locationStale);
+    const mapsUrl = buildGoogleMapsDirectionsUrl(technicianLocation, jobLocation);
+    const jobMapsUrl = jobLocation
+        ? `https://www.google.com/maps/search/?api=1&query=${jobLocation.lat},${jobLocation.lng}`
         : null;
 
-    // Progress bar color
     const progressColor = isCompleted
         ? '#10b981'
-        : tracking
-        ? '#22d3ee'
-        : binThemeTokens.gold;
+        : trackingFresh
+            ? '#22d3ee'
+            : binThemeTokens.gold;
 
     return (
-        <Paper sx={{
-            bgcolor: 'rgba(11, 11, 16, 0.9)',
-            border: `1px solid ${isCompleted ? 'rgba(16,185,129,0.3)' : tracking ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}`,
-            borderRadius: 5,
-            overflow: 'hidden',
-        }}>
-
-            {/* ── Map Preview Area ── */}
-            <Box sx={{
-                height: 180,
-                bgcolor: 'rgba(0,0,0,0.6)',
-                position: 'relative',
-                backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(34,211,238,0.08) 0%, transparent 70%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'column',
-                gap: 1,
-            }}>
-                {/* Live ping animation when tracking */}
-                {tracking && (
-                    <Box sx={{
+        <Paper
+            sx={{
+                bgcolor: 'rgba(11, 11, 16, 0.9)',
+                border: `1px solid ${isCompleted
+                    ? 'rgba(16,185,129,0.3)'
+                    : trackingFresh
+                        ? 'rgba(34,211,238,0.3)'
+                        : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: 5,
+                overflow: 'hidden',
+            }}
+        >
+            <Box
+                data-testid="technician-tracking-summary"
+                sx={{
+                    minHeight: 190,
+                    bgcolor: 'rgba(0,0,0,0.6)',
+                    position: 'relative',
+                    backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(34,211,238,0.08) 0%, transparent 70%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: 1.25,
+                    px: 2,
+                    py: 3,
+                }}
+            >
+                <Typography
+                    variant="caption"
+                    sx={{
                         position: 'absolute',
                         top: 12,
-                        right: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        bgcolor: 'rgba(0,0,0,0.7)',
-                        borderRadius: 3,
-                        px: 1.5,
-                        py: 0.5,
-                    }}>
-                        <Box sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: '#22d3ee',
-                            animation: 'liveTrackPulse 1.5s ease-in-out infinite',
-                            '@keyframes liveTrackPulse': {
-                                '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-                                '50%': { opacity: 0.4, transform: 'scale(1.4)' },
-                            },
-                        }} />
-                        <Typography variant="caption" fontWeight="900" sx={{ color: '#22d3ee', fontSize: '0.65rem', letterSpacing: 1 }}>
-                            LIVE
-                        </Typography>
-                    </Box>
+                        left: 12,
+                        color: 'rgba(255,255,255,0.45)',
+                        fontWeight: 900,
+                        letterSpacing: 1,
+                    }}
+                >
+                    TRACKING SUMMARY — NOT A STREET MAP
+                </Typography>
+
+                {trackingRequested && (
+                    <Chip
+                        size="small"
+                        data-testid="technician-gps-freshness"
+                        icon={trackingFresh ? <Wifi size={12} /> : <WifiOff size={12} />}
+                        label={trackingFresh ? 'FRESH FOREGROUND GPS' : locationStale ? 'GPS STALE' : 'GPS POINT PENDING'}
+                        sx={{
+                            position: 'absolute',
+                            top: 10,
+                            right: 10,
+                            bgcolor: trackingFresh ? 'rgba(16,185,129,0.16)' : 'rgba(239,68,68,0.14)',
+                            color: trackingFresh ? '#4ade80' : '#f87171',
+                            fontWeight: 950,
+                            fontSize: '0.62rem',
+                            '& .MuiChip-icon': { color: 'inherit' },
+                        }}
+                    />
                 )}
 
-                {techLoc && jobLoc ? (
+                {technicianLocation && jobLocation ? (
                     <>
-                        {/* Technician dot + Job dot */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <Tooltip title="Technician location">
-                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                                    <Box sx={{
-                                        width: 16, height: 16, borderRadius: '50%',
-                                        bgcolor: '#22d3ee',
-                                        boxShadow: '0 0 12px #22d3ee',
-                                        border: '2px solid #FFF',
-                                    }} />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 900 }}>TECH</Typography>
-                                </Box>
+                        <Stack direction="row" alignItems="center" spacing={2.5} sx={{ mt: 3, width: '100%', justifyContent: 'center' }}>
+                            <Tooltip title="Last verified Technician coordinate">
+                                <Stack alignItems="center" spacing={0.5}>
+                                    <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: trackingFresh ? '#22d3ee' : '#64748b', border: '2px solid #FFF' }} />
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 900 }}>TECH</Typography>
+                                </Stack>
                             </Tooltip>
-                            {/* Distance line */}
-                            <Box sx={{ flex: 1, minWidth: 40, maxWidth: 80, borderTop: '1.5px dashed rgba(255,255,255,0.15)' }} />
-                            {distKm !== null && (
-                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, fontSize: '0.7rem', bgcolor: 'rgba(0,0,0,0.5)', px: 1, borderRadius: 1 }}>
-                                    {distKm.toFixed(1)} km
-                                </Typography>
-                            )}
-                            <Box sx={{ flex: 1, minWidth: 40, maxWidth: 80, borderTop: '1.5px dashed rgba(255,255,255,0.15)' }} />
-                            <Tooltip title="Job location">
-                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                                    <Box sx={{
-                                        width: 16, height: 16, borderRadius: '50%',
-                                        bgcolor: binThemeTokens.gold,
-                                        boxShadow: `0 0 12px ${binThemeTokens.gold}`,
-                                        border: '2px solid #FFF',
-                                    }} />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 900 }}>JOB</Typography>
-                                </Box>
+                            <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
+                            <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, bgcolor: 'rgba(0,0,0,0.5)', px: 1, borderRadius: 1 }}>
+                                {straightLineDistanceKm === null ? 'Distance unavailable' : `${straightLineDistanceKm.toFixed(1)} km straight-line`}
+                            </Typography>
+                            <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
+                            <Tooltip title="Verified job/property coordinate">
+                                <Stack alignItems="center" spacing={0.5}>
+                                    <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: binThemeTokens.gold, border: '2px solid #FFF' }} />
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 900 }}>JOB</Typography>
+                                </Stack>
                             </Tooltip>
-                        </Box>
-
-                        {/* Open in Maps button */}
+                        </Stack>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700, textAlign: 'center' }}>
+                            In-app estimate uses straight-line distance and a fixed average speed. Traffic and road routing are available only in Google Maps.
+                        </Typography>
                         <Button
                             size="small"
                             startIcon={<ExternalLink size={13} />}
                             onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-                            sx={{
-                                mt: 1,
-                                color: '#22d3ee',
-                                borderColor: 'rgba(34,211,238,0.3)',
-                                border: '1px solid',
-                                borderRadius: 3,
-                                fontSize: '0.65rem',
-                                fontWeight: 900,
-                                py: 0.5,
-                                px: 1.5,
-                                textTransform: 'none',
-                                '&:hover': { bgcolor: 'rgba(34,211,238,0.08)' }
-                            }}
+                            sx={{ color: '#22d3ee', border: '1px solid rgba(34,211,238,0.3)', borderRadius: 3, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none' }}
                         >
-                            View Route in Maps
+                            Open Traffic-Aware Google Maps
                         </Button>
                     </>
-                ) : jobLoc ? (
+                ) : jobLocation ? (
                     <>
-                        <MapPin size={32} color={binThemeTokens.gold} style={{ opacity: 0.6 }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>
-                            Technician location pending…
+                        <MapPin size={32} color={binThemeTokens.gold} style={{ opacity: 0.7 }} />
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>
+                            Verified job pin available; Technician GPS point pending.
                         </Typography>
                         {jobMapsUrl && (
                             <Button
                                 size="small"
                                 startIcon={<ExternalLink size={13} />}
                                 onClick={() => window.open(jobMapsUrl, '_blank', 'noopener,noreferrer')}
-                                sx={{ color: binThemeTokens.gold, fontSize: '0.65rem', fontWeight: 900, textTransform: 'none' }}
+                                sx={{ color: binThemeTokens.gold, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none' }}
                             >
-                                View Job Location
+                                Open Job Pin in Google Maps
                             </Button>
                         )}
                     </>
                 ) : (
                     <>
-                        <AlertCircle size={28} color="rgba(255,255,255,0.2)" />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>
-                            Location not available
+                        <AlertCircle size={28} color="rgba(255,255,255,0.25)" />
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, textAlign: 'center' }}>
+                            Exact job coordinates are unavailable. Dispatch distance and route cannot be verified.
                         </Typography>
                     </>
                 )}
             </Box>
 
-            {/* ── Main Content ── */}
             <Box sx={{ p: { xs: 2.5, md: 3 }, pr: { xs: 9, md: 3 }, pb: { xs: 12, md: 3 } }}>
-
-                {/* Status Headline */}
-                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
-                    <Typography variant="h6" fontWeight="950" color="#FFF" sx={{
-                        minWidth: 0,
-                        wordBreak: 'break-word',
-                        overflowWrap: 'anywhere',
-                        lineHeight: 1.3,
-                    }}>
-                        {statusMsg}
+                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
+                    <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere', lineHeight: 1.3 }}>
+                        {statusMessage}
                     </Typography>
-                    {tracking && (
-                        isStale
-                            ? <Tooltip title="Location may be outdated"><WifiOff size={18} color="#f87171" /></Tooltip>
-                            : <Tooltip title="Live GPS active"><Wifi size={18} color="#22d3ee" /></Tooltip>
+                    {trackingRequested && (
+                        trackingFresh
+                            ? <Tooltip title="Foreground GPS point is fresh"><Wifi size={18} color="#22d3ee" /></Tooltip>
+                            : <Tooltip title="GPS point is missing or stale"><WifiOff size={18} color="#f87171" /></Tooltip>
                     )}
                 </Stack>
 
-                {/* Stale label */}
-                {techLoc && (
-                    <Typography variant="caption" sx={{
-                        color: isStale ? '#f87171' : 'rgba(255,255,255,0.4)',
-                        display: 'block',
-                        mb: 2,
-                        fontWeight: 700,
-                        fontSize: '0.7rem',
-                    }}>
-                        {stale}
+                {technicianLocation && (
+                    <Typography variant="caption" sx={{ color: locationStale ? '#f87171' : 'rgba(255,255,255,0.45)', display: 'block', mb: 2, fontWeight: 700 }}>
+                        {staleLabel} · Foreground-browser tracking only
                     </Typography>
                 )}
 
-                {/* ETA + Distance Chips */}
-                {(etaMin !== null || distKm !== null) && (
+                {(straightLineEstimateMinutes !== null || straightLineDistanceKm !== null) && (
                     <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2.5 }}>
-                        {etaMin !== null && (
+                        {straightLineEstimateMinutes !== null && (
                             <Chip
                                 icon={<Clock size={13} />}
-                                label={`~${etaMin} min ETA`}
+                                label={`~${straightLineEstimateMinutes} min straight-line estimate`}
                                 size="small"
-                                sx={{
-                                    bgcolor: alpha(binThemeTokens.gold, 0.12),
-                                    color: binThemeTokens.gold,
-                                    fontWeight: 900,
-                                    border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`,
-                                    '& .MuiChip-icon': { color: binThemeTokens.gold },
-                                }}
+                                sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900, border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
                             />
                         )}
-                        {distKm !== null && (
+                        {straightLineDistanceKm !== null && (
                             <Chip
                                 icon={<Navigation size={13} />}
-                                label={`${distKm.toFixed(1)} km away`}
+                                label={`${straightLineDistanceKm.toFixed(1)} km straight-line`}
                                 size="small"
-                                sx={{
-                                    bgcolor: 'rgba(255,255,255,0.04)',
-                                    color: 'rgba(255,255,255,0.6)',
-                                    fontWeight: 900,
-                                    border: '1px solid rgba(255,255,255,0.08)',
-                                    '& .MuiChip-icon': { color: 'rgba(255,255,255,0.4)' },
-                                }}
+                                sx={{ bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.65)', fontWeight: 900, border: '1px solid rgba(255,255,255,0.08)', '& .MuiChip-icon': { color: 'rgba(255,255,255,0.45)' } }}
                             />
                         )}
                     </Stack>
                 )}
 
-                {/* Progress Bar */}
                 <LinearProgress
                     variant="determinate"
-                    value={progressVal}
+                    value={progressValue}
                     sx={{
                         height: 5,
                         borderRadius: 3,
                         mb: 3,
                         bgcolor: 'rgba(255,255,255,0.06)',
-                        '& .MuiLinearProgress-bar': {
-                            bgcolor: progressColor,
-                            borderRadius: 3,
-                            transition: 'width 0.8s ease',
-                        },
+                        '& .MuiLinearProgress-bar': { bgcolor: progressColor, borderRadius: 3, transition: 'width 0.8s ease' },
                     }}
                 />
 
-                {/* Technician Profile */}
                 {isAssigned && (
                     <Box sx={{ mb: 3 }}>
                         <Divider sx={{ mb: 2.5, borderColor: 'rgba(255,255,255,0.05)' }} />
@@ -354,23 +315,12 @@ export default function LiveTechnicianTrackingCard({
                             <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
                                 <Avatar
                                     src={ticket.assignedTechnicianAvatar || ticket.technicianPhotoURL}
-                                    sx={{
-                                        width: 48,
-                                        height: 48,
-                                        bgcolor: alpha(binThemeTokens.gold, 0.15),
-                                        color: binThemeTokens.gold,
-                                        fontWeight: 900,
-                                        flexShrink: 0,
-                                    }}
+                                    sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.gold, fontWeight: 900, flexShrink: 0 }}
                                 >
                                     {(ticket.assignedTechnicianName || 'T').charAt(0)}
                                 </Avatar>
                                 <Box sx={{ minWidth: 0 }}>
-                                    <Typography variant="body2" fontWeight="950" color="#FFF" sx={{
-                                        minWidth: 0,
-                                        wordBreak: 'break-word',
-                                        overflowWrap: 'anywhere',
-                                    }}>
+                                    <Typography variant="body2" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>
                                         {ticket.assignedTechnicianName || 'Technician'}
                                     </Typography>
                                     <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700 }}>
@@ -383,40 +333,25 @@ export default function LiveTechnicianTrackingCard({
                                     )}
                                 </Box>
                             </Stack>
-
-                            {/* Call / Chat buttons */}
                             <Stack direction="row" spacing={1} flexShrink={0}>
                                 {onChatClick && (
-                                    <Tooltip title="Chat with technician">
-                                        <IconButton
-                                            size="small"
-                                            onClick={onChatClick}
-                                            sx={{
-                                                bgcolor: 'rgba(255,255,255,0.05)',
-                                                color: '#FFF',
-                                                '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
-                                            }}
-                                        >
+                                    <Tooltip title="Chat with Technician">
+                                        <IconButton size="small" onClick={onChatClick} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF' }}>
                                             <MessageSquare size={18} />
                                         </IconButton>
                                     </Tooltip>
                                 )}
-                                <Tooltip title="Call technician">
+                                <Tooltip title="Call Technician">
                                     <IconButton
                                         size="small"
                                         onClick={() => {
-                                            if (onCallClick) {
-                                                onCallClick();
-                                            } else {
+                                            if (onCallClick) onCallClick();
+                                            else {
                                                 const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
                                                 if (phone) window.open(`tel:${phone}`);
                                             }
                                         }}
-                                        sx={{
-                                            bgcolor: alpha(binThemeTokens.gold, 0.1),
-                                            color: binThemeTokens.gold,
-                                            '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.2) }
-                                        }}
+                                        sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }}
                                     >
                                         <Phone size={18} />
                                     </IconButton>
@@ -426,73 +361,27 @@ export default function LiveTechnicianTrackingCard({
                     </Box>
                 )}
 
-                {/* ── Status Timeline ── */}
                 {showTimeline && (
                     <>
                         <Divider sx={{ mb: 2.5, borderColor: 'rgba(255,255,255,0.05)' }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, letterSpacing: 2, mb: 2, display: 'block' }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900, letterSpacing: 2, mb: 2, display: 'block' }}>
                             STATUS TIMELINE
                         </Typography>
                         <Stack spacing={2}>
-                            {DISPLAY_STEPS.map((step, index) => {
-                                const norm = normalizeTicketStatus(ticket.status);
-                                const stepOrder = ['open', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed'];
-                                const currentIdx = stepOrder.indexOf(norm);
-                                const stepIdx = stepOrder.indexOf(step.key);
-                                const isDone = stepIdx <= currentIdx;
-                                const isCurrent = stepIdx === currentIdx;
-                                const Icon = step.icon;
-
+                            {DISPLAY_STEPS.map((step) => {
+                                const currentIndex = STEP_ORDER.indexOf(normalisedStatus);
+                                const stepIndex = STEP_ORDER.indexOf(step.key);
+                                const done = stepIndex <= currentIndex;
+                                const current = stepIndex === currentIndex;
+                                const StepIcon = step.icon;
                                 return (
-                                    <Stack key={index} direction="row" spacing={2} alignItems="center">
-                                        <Box sx={{
-                                            width: 28,
-                                            height: 28,
-                                            borderRadius: '50%',
-                                            bgcolor: isDone
-                                                ? (isCurrent ? progressColor : 'rgba(255,255,255,0.12)')
-                                                : 'rgba(255,255,255,0.04)',
-                                            border: `2px solid ${isDone ? progressColor : 'rgba(255,255,255,0.08)'}`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            transition: 'all 0.4s ease',
-                                        }}>
-                                            <Icon
-                                                size={13}
-                                                color={isDone ? (isCurrent ? '#000' : '#FFF') : 'rgba(255,255,255,0.2)'}
-                                            />
+                                    <Stack key={step.key} direction="row" spacing={2} alignItems="center">
+                                        <Box sx={{ width: 28, height: 28, borderRadius: '50%', bgcolor: done ? (current ? progressColor : 'rgba(255,255,255,0.12)') : 'rgba(255,255,255,0.04)', border: `2px solid ${done ? progressColor : 'rgba(255,255,255,0.08)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <StepIcon size={13} color={done ? (current ? '#000' : '#FFF') : 'rgba(255,255,255,0.2)'} />
                                         </Box>
-                                        <Typography
-                                            variant="caption"
-                                            fontWeight={isCurrent ? 950 : 700}
-                                            sx={{
-                                                color: isCurrent
-                                                    ? '#FFF'
-                                                    : isDone
-                                                    ? 'rgba(255,255,255,0.6)'
-                                                    : 'rgba(255,255,255,0.2)',
-                                                minWidth: 0,
-                                                wordBreak: 'break-word',
-                                                overflowWrap: 'anywhere',
-                                            }}
-                                        >
+                                        <Typography variant="caption" fontWeight={current ? 950 : 700} sx={{ color: current ? '#FFF' : done ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)', overflowWrap: 'anywhere' }}>
                                             {step.label}
                                         </Typography>
-                                        {isCurrent && (
-                                            <Box sx={{
-                                                width: 6,
-                                                height: 6,
-                                                borderRadius: '50%',
-                                                bgcolor: progressColor,
-                                                animation: 'currentStepPulse 1.5s infinite',
-                                                '@keyframes currentStepPulse': {
-                                                    '0%,100%': { opacity: 1 },
-                                                    '50%': { opacity: 0.3 },
-                                                },
-                                            }} />
-                                        )}
                                     </Stack>
                                 );
                             })}

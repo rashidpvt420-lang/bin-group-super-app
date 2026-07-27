@@ -60,13 +60,19 @@ export default function OwnerDamageEstimatePage() {
     if (!file) return;
     setLoading(true);
     setError(null);
+    setResult(null);
     try {
       const base64 = await fileToBase64(file);
       const fn = httpsCallable(functions, 'assessDamage');
       const res: any = await fn({ imageBase64: base64, mimeType: file.type });
-      setResult(res.data);
+      const data = res.data || {};
+      if (data.success !== true || !data.assessment) {
+        setError(data.message || 'Live image analysis is unavailable. No diagnosis or cost range was produced.');
+        return;
+      }
+      setResult(data);
     } catch (e: any) {
-      setError(e?.message || 'Analysis failed. Please try again.');
+      setError(e?.message || 'Damage pre-screening failed. No diagnosis or quotation was produced.');
     } finally {
       setLoading(false);
     }
@@ -80,40 +86,36 @@ export default function OwnerDamageEstimatePage() {
   }
 
   const dir = isRTL ? 'rtl' : 'ltr';
-  const assessment = result?.assessment;
+  const assessment = result?.success === true ? result.assessment : null;
   const severityColor = assessment ? (SEVERITY_COLORS[assessment.severity] || gold) : gold;
   const UrgencyIcon = assessment ? (URGENCY_ICONS[assessment.urgency] || Clock) : Clock;
 
   return (
     <Box sx={{ pb: 8, direction: dir }}>
-
-      {/* HEADER */}
       <Box sx={{ mb: 5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
           <Box sx={{ p: 1, bgcolor: alpha(gold, 0.12), borderRadius: 2, color: gold, display: 'inline-flex' }}>
             <Camera size={20} />
           </Box>
           <Typography variant="overline" sx={{ color: gold, fontWeight: 900, letterSpacing: 4 }}>
-            {tx('damage.overline', 'AI DAMAGE ASSESSMENT')}
+            {tx('damage.prescreen_overline', 'AI VISUAL PRE-SCREEN')}
           </Typography>
         </Stack>
         <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 1 }}>
-          {tx('damage.title', 'Photo → Instant Estimate')}
+          {tx('damage.prescreen_title', 'Photo → Advisory Pre-Screen')}
         </Typography>
-        <Typography variant="body2" sx={{ color: alpha('#fff', 0.45), maxWidth: 560, fontWeight: 700 }}>
-          {tx('damage.subtitle', 'Take or upload a photo of any damage. AI returns damage type, severity, trade needed, and UAE-market cost estimate in seconds.')}
+        <Typography variant="body2" sx={{ color: alpha('#fff', 0.52), maxWidth: 680, fontWeight: 700, lineHeight: 1.7 }}>
+          {tx('damage.prescreen_subtitle', 'Upload a damage photo for an AI visual pre-screen. Results are not an inspection, confirmed diagnosis, work approval, dispatch instruction, or commercial quotation.')}
         </Typography>
       </Box>
 
       <Grid container spacing={4}>
-        {/* LEFT: Upload panel */}
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 3.5, bgcolor: CARD, border: BORDER, borderRadius: 4 }}>
             <Typography variant="overline" sx={{ color: alpha(gold, 0.7), fontWeight: 900, letterSpacing: 2 }}>
-              UPLOAD PHOTO
+              UPLOAD DAMAGE PHOTO
             </Typography>
 
-            {/* Preview */}
             <Box
               onClick={() => !preview && fileRef.current?.click()}
               sx={{
@@ -141,18 +143,17 @@ export default function OwnerDamageEstimatePage() {
               )}
             </Box>
 
-            {/* Hidden file inputs */}
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               style={{ display: 'none' }}
               onChange={e => handleFileSelect(e.target.files?.[0] || null)}
             />
             <input
               ref={cameraRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               capture="environment"
               style={{ display: 'none' }}
               onChange={e => handleFileSelect(e.target.files?.[0] || null)}
@@ -185,7 +186,7 @@ export default function OwnerDamageEstimatePage() {
                   onClick={analyzeImage}
                   sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, py: 1.4, borderRadius: 3, boxShadow: `0 10px 28px ${alpha(gold, 0.35)}` }}
                 >
-                  Analyse Damage with AI
+                  Run AI Visual Pre-Screen
                 </Button>
               )}
 
@@ -193,7 +194,7 @@ export default function OwnerDamageEstimatePage() {
                 <Box sx={{ textAlign: 'center', py: 2 }}>
                   <CircularProgress size={28} sx={{ color: gold }} />
                   <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), display: 'block', mt: 1, fontWeight: 900 }}>
-                    RUNNING AI ANALYSIS…
+                    RUNNING ADVISORY PRE-SCREEN…
                   </Typography>
                   <LinearProgress sx={{ mt: 1.5, bgcolor: alpha(gold, 0.12), '& .MuiLinearProgress-bar': { bgcolor: gold } }} />
                 </Box>
@@ -208,34 +209,42 @@ export default function OwnerDamageEstimatePage() {
 
               {error && (
                 <Box sx={{ p: 2, bgcolor: alpha('#EF4444', 0.08), border: `1px solid ${alpha('#EF4444', 0.22)}`, borderRadius: 3 }}>
-                  <Typography sx={{ color: '#EF4444', fontWeight: 800, fontSize: '0.8rem' }}>{error}</Typography>
+                  <Typography sx={{ color: '#EF4444', fontWeight: 900, fontSize: '0.8rem', mb: 0.5 }}>NO LIVE AI ASSESSMENT</Typography>
+                  <Typography sx={{ color: alpha('#fff', 0.65), fontWeight: 700, fontSize: '0.8rem' }}>{error}</Typography>
                 </Box>
               )}
             </Stack>
           </Paper>
         </Grid>
 
-        {/* RIGHT: Results panel */}
         <Grid item xs={12} md={7}>
           {!assessment && !loading && (
             <Paper sx={{ p: 4, bgcolor: CARD, border: BORDER, borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
               <Camera size={48} color={alpha(gold, 0.25)} />
-              <Typography sx={{ color: alpha('#fff', 0.3), fontWeight: 800, textAlign: 'center' }}>
-                Upload a photo of the damage to get an instant AI assessment with cost estimate.
+              <Typography sx={{ color: alpha('#fff', 0.38), fontWeight: 800, textAlign: 'center' }}>
+                Upload a photo for an advisory visual pre-screen. A technician must inspect the property before diagnosis, pricing, approval, or work begins.
               </Typography>
-              <Typography variant="caption" sx={{ color: alpha('#fff', 0.2), fontWeight: 700, textAlign: 'center' }}>
-                Works on: water leaks · paint damage · tile cracks · AC issues · electrical faults · plumbing · structural damage
+              <Typography variant="caption" sx={{ color: alpha('#fff', 0.24), fontWeight: 700, textAlign: 'center' }}>
+                Supported examples: water leaks · paint damage · tile cracks · AC issues · electrical faults · plumbing · visible structural concerns
               </Typography>
             </Paper>
           )}
 
           {assessment && (
             <Stack spacing={2.5}>
-              {/* Severity + Urgency hero */}
+              <Paper sx={{ p: 2, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.28)}`, borderRadius: 3 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                  <Typography sx={{ color: '#F59E0B', fontWeight: 950, fontSize: '0.78rem', letterSpacing: 1.4 }}>
+                    AI PRE-SCREEN · NOT INSPECTED · NOT A QUOTATION
+                  </Typography>
+                  <Chip size="small" label={`LIVE · ${String(result.provider || 'AI').toUpperCase()}`} sx={{ color: '#10B981', bgcolor: alpha('#10B981', 0.08), fontWeight: 950 }} />
+                </Stack>
+              </Paper>
+
               <Paper sx={{ p: 3.5, bgcolor: alpha(severityColor, 0.07), border: `1px solid ${alpha(severityColor, 0.28)}`, borderRadius: 4 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                   <Box>
-                    <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.68rem', letterSpacing: 2 }}>DAMAGE TYPE</Typography>
+                    <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.68rem', letterSpacing: 2 }}>VISIBLE DAMAGE CATEGORY</Typography>
                     <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', mt: 0.3 }}>{assessment.damageType}</Typography>
                     <Typography variant="body2" sx={{ color: alpha('#fff', 0.55), mt: 1, lineHeight: 1.7, maxWidth: 420 }}>
                       {assessment.description}
@@ -248,39 +257,37 @@ export default function OwnerDamageEstimatePage() {
                 </Stack>
               </Paper>
 
-              {/* Cost + Trade */}
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: 3, bgcolor: CARD, border: BORDER, borderRadius: 3 }}>
                     <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
                       <DollarSign size={18} color={gold} />
-                      <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 900, letterSpacing: 2 }}>ESTIMATED COST</Typography>
+                      <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 900, letterSpacing: 1.5 }}>INDICATIVE PLANNING RANGE</Typography>
                     </Stack>
                     <Typography sx={{ color: gold, fontWeight: 950, fontSize: '1.6rem' }}>
-                      {assessment.estimatedCostMin.toLocaleString()} – {assessment.estimatedCostMax.toLocaleString()} AED
+                      {Number(assessment.estimatedCostMin).toLocaleString()} – {Number(assessment.estimatedCostMax).toLocaleString()} AED
                     </Typography>
-                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.3), fontWeight: 800 }}>UAE market rate · Al Ain / Abu Dhabi</Typography>
+                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), fontWeight: 800 }}>AI visual estimate only · not a commercial quotation</Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: 3, bgcolor: CARD, border: BORDER, borderRadius: 3 }}>
                     <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
                       <Wrench size={18} color={gold} />
-                      <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 900, letterSpacing: 2 }}>TRADE REQUIRED</Typography>
+                      <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 900, letterSpacing: 2 }}>SUGGESTED INSPECTION TRADE</Typography>
                     </Stack>
                     <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: '1.2rem' }}>{assessment.trade}</Typography>
-                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.3), fontWeight: 800 }}>Dispatch via BIN GROUP</Typography>
+                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), fontWeight: 800 }}>No technician has been assigned or dispatched</Typography>
                   </Paper>
                 </Grid>
               </Grid>
 
-              {/* Actions + Prevention */}
               <Paper sx={{ p: 3, bgcolor: CARD, border: BORDER, borderRadius: 3 }}>
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={1.5} alignItems="flex-start">
                     <CheckCircle2 size={18} color="#22C55E" style={{ flexShrink: 0, marginTop: 2 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ color: alpha('#22C55E', 0.7), fontWeight: 900, letterSpacing: 1.5 }}>RECOMMENDED ACTION</Typography>
+                      <Typography variant="caption" sx={{ color: alpha('#22C55E', 0.7), fontWeight: 900, letterSpacing: 1.5 }}>ADVISORY NEXT STEP</Typography>
                       <Typography sx={{ color: alpha('#fff', 0.78), fontWeight: 800, fontSize: '0.88rem', mt: 0.4 }}>{assessment.recommendedAction}</Typography>
                     </Box>
                   </Stack>
@@ -288,21 +295,20 @@ export default function OwnerDamageEstimatePage() {
                   <Stack direction="row" spacing={1.5} alignItems="flex-start">
                     <AlertTriangle size={16} color={gold} style={{ flexShrink: 0, marginTop: 2 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ color: alpha(gold, 0.65), fontWeight: 900, letterSpacing: 1.5 }}>PREVENTION</Typography>
+                      <Typography variant="caption" sx={{ color: alpha(gold, 0.65), fontWeight: 900, letterSpacing: 1.5 }}>PREVENTION GUIDANCE</Typography>
                       <Typography sx={{ color: alpha('#fff', 0.55), fontWeight: 800, fontSize: '0.85rem', mt: 0.4 }}>{assessment.preventionNote}</Typography>
                     </Box>
                   </Stack>
                 </Stack>
               </Paper>
 
-              {/* CTA */}
               <Stack direction="row" spacing={2}>
                 <Button
                   variant="contained"
                   onClick={() => navigate('/owner/tickets')}
                   sx={{ flex: 1, bgcolor: gold, color: '#111827', fontWeight: 950, py: 1.4, borderRadius: 3 }}
                 >
-                  Raise Maintenance Ticket
+                  Request On-Site Inspection
                 </Button>
                 <Button
                   variant="outlined"
@@ -313,9 +319,9 @@ export default function OwnerDamageEstimatePage() {
                 </Button>
               </Stack>
 
-              <Typography variant="caption" sx={{ color: alpha('#fff', 0.2), textAlign: 'center' }}>
-                AI estimates based on UAE market rates. Actual cost confirmed after on-site inspection.
-                {result?.provider && ` · Engine: ${result.provider}/${result.model}`}
+              <Typography variant="caption" sx={{ color: alpha('#fff', 0.28), textAlign: 'center', lineHeight: 1.5 }}>
+                This is an AI visual pre-screen only. Actual scope, safety classification, and price require an on-site inspection and verified BIN GROUP quotation.
+                {result?.provider && ` · Live engine: ${result.provider}${result.model ? `/${result.model}` : ''}`}
               </Typography>
             </Stack>
           )}

@@ -76,6 +76,26 @@ function validateAppCheckToken() {
   return [];
 }
 
+function validateFounderEvidence() {
+  if (!requireFounderEvidence) return [];
+  const founderEmail = String(process.env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase();
+  const founderPassword = String(process.env.E2E_FOUNDER_PASSWORD || '').trim();
+  const founderTotp = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').trim().toUpperCase().replace(/[\s=-]/g, '');
+  const founderRealPhoneCode = String(process.env.E2E_FOUNDER_REAL_MFA_CODE || '').trim();
+  const e2eAdminEmail = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+  const errors = [];
+  if (founderEmail !== 'ceo@bin-groups.com') errors.push('E2E_FOUNDER_EMAIL(canonical-founder-required)');
+  if (founderEmail && founderEmail === e2eAdminEmail) errors.push('E2E_FOUNDER_EMAIL(must-differ-from-ephemeral-admin)');
+  if (founderPassword.length < 8) errors.push('E2E_FOUNDER_PASSWORD(invalid)');
+  const validTotp = founderTotp.length >= 16 && /^[A-Z2-7]+$/.test(founderTotp);
+  const validRealPhoneCode = /^\d{6}$/.test(founderRealPhoneCode);
+  if (!validTotp && !validRealPhoneCode) errors.push('E2E_FOUNDER_TOTP_SECRET_or_REAL_MFA_CODE');
+  if (!errors.length) {
+    console.log(`[E2E_ENV_GUARD] FOUNDER: email=canonical credential=set mfa=${validTotp ? 'totp' : 'real-phone-code'}`);
+  }
+  return errors;
+}
+
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
@@ -83,7 +103,8 @@ for (const role of roles) {
 }
 
 const appCheckMissing = validateAppCheckToken();
-const allMissing = [...missing, ...appCheckMissing];
+const founderMissing = validateFounderEvidence();
+const allMissing = [...missing, ...appCheckMissing, ...founderMissing];
 
 const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
 const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
@@ -141,5 +162,8 @@ if (allMissing.length) {
   }
   console.warn('[E2E_ENV_GUARD] Continuing with missing values because E2E_ALLOW_MISSING_ENV=true. This must not be used for launch clearance.');
 } else {
+  if (requireMailboxEvidence) {
+    console.log('[E2E_ENV_GUARD] mailbox evidence inputs=set; live Gmail access is verified only by the dedicated consuming step.');
+  }
   console.log('[E2E_ENV_GUARD] ok');
 }

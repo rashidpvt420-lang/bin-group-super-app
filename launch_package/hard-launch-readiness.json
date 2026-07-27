@@ -1,65 +1,57 @@
 {
-  "version": "2026.07-hard-launch-v2",
+  "version": "2026.07-runtime-authority-v3",
   "product": "BIN GROUP Super App",
   "market": "United Arab Emirates",
-  "decision": "CONTROLLED_PILOT_ONLY",
-  "evidencePolicy": {
-    "canonicalRecord": "system_health/admin_summaries",
-    "founderAttestationAcceptedAsProductionProof": false,
-    "staticGreenBadgesAcceptedAsProductionProof": false,
-    "requiredProof": "Timestamped production evidence from the real five-profile workflow and external service consoles"
+  "decision": "NON_AUTHORITATIVE_GATE_CATALOGUE",
+  "authority": {
+    "authoritative": false,
+    "purpose": "Versioned catalogue of launch evidence requirements only",
+    "canonicalRuntimeRecord": "system_health/admin_summaries",
+    "runtimeStatusArtifact": "launch_package/hard-launch-status.json",
+    "finalDecisionRequirement": "Protected exact-SHA HMAC-signed hard-launch decision",
+    "staticScoresAccepted": false,
+    "staticStatusesAcceptedAsProductionProof": false,
+    "founderAttestationAcceptedAsProductionProof": false
   },
-  "founderAttestation": {
-    "fiveProfileLiveSmokeValidation": false,
-    "profiles": ["owner", "tenant", "technician", "broker", "admin"],
-    "note": "Previous founder-attested values were not backed by accepted production evidence. Re-run the complete live workflow and record evidence in system_health/admin_summaries."
-  },
-  "scores": {
-    "technicalDeploymentHealth": 9.2,
-    "fiveProfileArchitecture": 9.1,
-    "uaeMarketFit": 9.4,
-    "operationalReadinessSoftwareLayer": 9.0,
-    "controlledPilotReadiness": 9.1,
-    "hardPublicLaunchReadinessConditional": 9.0,
-    "hardPublicLaunchReadinessVerified": 5.5,
-    "overallConditional": 9.0,
-    "overallVerified": 5.5
-  },
-  "profileScores": {
-    "owner": { "conditional": 9.1, "verified": 5.5 },
-    "tenant": { "conditional": 9.0, "verified": 5.5 },
-    "technician": { "conditional": 9.0, "verified": 5.0 },
-    "broker": { "conditional": 9.0, "verified": 5.0 },
-    "admin": { "conditional": 9.2, "verified": 6.0 }
+  "paymentPolicy": {
+    "controlledPilot": {
+      "mode": "bank-pilot",
+      "authority": "Secured manual bank transfer, cheque or cash evidence followed by explicit Admin approval and exactly-once activation",
+      "stripeRequired": false,
+      "publicReleaseGate": false
+    },
+    "unrestrictedPublicLaunch": {
+      "mode": "full-payment-launch",
+      "stripeRequiredByCurrentRuntimeGate": true,
+      "requiredProof": [
+        "Live AED checkout",
+        "Signed webhook",
+        "Verified amount and currency",
+        "Duplicate-event idempotency",
+        "Failure and refund handling"
+      ],
+      "policyChangeRule": "Removing Stripe from unrestricted public launch requires a separate reviewed governance change to the runtime hard-launch gate; this static file cannot waive it."
+    }
   },
   "hardLaunchGates": [
-    { "id": "admin_login", "label": "Rotated production admin credential works after hard refresh", "status": "external_verification_required", "required": true, "canonicalGate": "adminCredentialLogin" },
-    { "id": "main_login", "label": "Main app login and role routing work after hard refresh", "status": "external_verification_required", "required": true },
-    { "id": "owner_onboarding", "label": "Owner onboarding, signed package, payment verification, admin approval, and dashboard unlock work", "status": "external_verification_required", "required": true, "canonicalGate": "fiveProfileSmoke" },
-    { "id": "tenant_photo_request", "label": "Tenant linked to a real unit creates a request with production photo upload and notification delivery", "status": "external_verification_required", "required": true, "canonicalGate": "tenantNotificationDelivery" },
-    { "id": "technician_evidence_completion", "label": "Technician receives a real job and completes GPS plus before/after evidence on a physical device", "status": "external_verification_required", "required": true, "canonicalGate": "technicianGpsStorageProof" },
-    { "id": "broker_commission_state", "label": "Broker referral survives onboarding, contract activation, and one non-duplicated commission lock", "status": "external_verification_required", "required": true, "canonicalGate": "brokerCommissionLock" },
-    { "id": "admin_core_pages", "label": "Admin sees and operates owners, tenants, technicians, tickets, SOS, payments, contracts, documents, and audit evidence", "status": "external_verification_required", "required": true, "canonicalGate": "fiveProfileSmoke" },
-    { "id": "admin_staff_create", "label": "Admin creates technician or staff with correct claims and least-privilege access", "status": "external_verification_required", "required": true },
-    { "id": "payment_unlock", "label": "Verified payment remains locked until explicit admin approval, then activates exactly once", "status": "external_verification_required", "required": true, "canonicalGate": "fiveProfileSmoke" },
-    { "id": "live_billing", "label": "Stripe live Secret Manager values, real AED charge, signed webhook, amount match, and idempotency are proven", "status": "external_verification_required", "required": true, "canonicalGate": "stripeLiveMode" },
-    { "id": "app_integrity", "label": "Production App Check keys and enforcement are active for the intended Firebase services", "status": "external_verification_required", "required": true, "canonicalGate": "appCheckProduction" },
-    { "id": "access_rotation", "label": "Admin password, service secrets, and privileged access have been rotated and recorded", "status": "external_verification_required", "required": true, "canonicalGate": "adminSecretRotation" },
-    { "id": "branded_email", "label": "Approved BIN GROUP branded sender delivers onboarding, payment, and operational email", "status": "external_verification_required", "required": true, "canonicalGate": "brandedEmailSender" },
-    { "id": "renewal_watch", "label": "Renewal scheduler creates the correct watch, document queue, and notification evidence", "status": "external_verification_required", "required": true, "canonicalGate": "renewalWatch" },
-    { "id": "legal_pages", "label": "Privacy, Terms, support, and service-scope pages are present in the software", "status": "software_gate_present", "required": true },
-    { "id": "pilot_no_p0_p1", "label": "A controlled 24-48 hour production pilot completes with no P0/P1 incident", "status": "external_verification_required", "required": true }
+    { "id": "adminCredentialLogin", "evidence": "Canonical Founder/Admin authentication with verified Firebase MFA", "source": "protected_runtime" },
+    { "id": "fiveProfileSmoke", "evidence": "Owner, Tenant, Technician, Broker, Admin and global mechanics on one deployed exact SHA", "source": "protected_runtime" },
+    { "id": "ownerAcquisitionActivation", "evidence": "Owner acquisition, quote, OTP signature, payment review and exactly-once activation", "source": "protected_runtime" },
+    { "id": "tenantNotificationDelivery", "evidence": "Tenant request, Storage proof, dispatch, completion, approval/dispute and physical delivery evidence", "source": "protected_runtime_and_device" },
+    { "id": "technicianGpsStorageProof", "evidence": "Physical-device GPS plus before/after evidence with canonical server location records", "source": "protected_runtime_and_device" },
+    { "id": "brokerCommissionLockExactlyOnce", "evidence": "Lead conversion, active contract, deterministic commission, OTP payout and Admin settlement", "source": "protected_runtime" },
+    { "id": "appCheckProduction", "evidence": "Valid production clients accepted and invalid or missing tokens rejected for intended Firebase services", "source": "protected_runtime_and_console" },
+    { "id": "brandedEmailSender", "evidence": "Provider delivery receipt and recipient mailbox evidence with SPF, DKIM and DMARC alignment", "source": "protected_provider" },
+    { "id": "aiProviderHealth", "evidence": "Gemini, OpenAI fallback, App Check rejection, redaction, quota, token, cost and latency evidence", "source": "protected_runtime" },
+    { "id": "renewalWatch", "evidence": "Production scheduler execution and resulting renewal records and delivery evidence", "source": "protected_runtime" },
+    { "id": "privilegedAccessRotation", "evidence": "Current secret versions, revoked prior credentials and canonical Founder access", "source": "protected_runtime_and_console" },
+    { "id": "stripeLiveMode", "evidence": "Required only by the current unrestricted public-launch policy", "source": "protected_runtime_and_provider" },
+    { "id": "controlledPilot", "evidence": "Frozen SHA, monitoring, rollback and at least 24 real hours with zero open P0/P1", "source": "protected_runtime_and_operator" },
+    { "id": "signedFinalDecision", "evidence": "Final protected HMAC-signed decision bound to evidence hashes and exact deployed SHA", "source": "protected_runtime" }
   ],
-  "marketPositioning": {
-    "dominanceThesis": "BIN GROUP can compete strongly in the UAE property operations market by combining no-call maintenance, owner proof, tenant service tracking, technician accountability, bilingual Arabic/English UX, and evidence-backed admin control.",
-    "primaryDifferentiators": [
-      "No-call maintenance and service tracking",
-      "Property passport and evidence vault",
-      "Payment approval unlock flow",
-      "Technician before-after proof discipline",
-      "Arabic-English RTL support",
-      "Evidence-backed Admin launch command center",
-      "Server-authoritative audit logs and role-based access"
-    ]
+  "interpretation": {
+    "controlledPilot": "May start only after every pilot-required runtime gate is green for the same frozen deployed SHA.",
+    "publicLaunch": "Remains NO-GO unless the protected signed decision explicitly returns hardLaunchClaim=true.",
+    "scores": "Removed. Numeric static readiness scores are not operational evidence and must not be displayed as current launch status."
   }
 }

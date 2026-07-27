@@ -18,6 +18,21 @@ function readFunction(name) {
   return null;
 }
 
+function readMatchBlock(marker) {
+  const start = rules.indexOf(marker);
+  if (start < 0) return '';
+  const open = rules.indexOf('{', start + marker.length - 1);
+  let depth = 0;
+  for (let index = open; index < rules.length; index += 1) {
+    if (rules[index] === '{') depth += 1;
+    if (rules[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return rules.slice(start, index + 1);
+    }
+  }
+  return '';
+}
+
 const legacyTicketUpdates = [
   'allow update: if isAdmin() || safeDispatcherTicketUpdate() || safeTenantEvidenceUpdate() || safeTechnicianTicketUpdate();',
   'allow update: if isAdmin() && isNotSuspended();',
@@ -31,6 +46,7 @@ const forbiddenFragments = [
   ['unrestricted notification creation', '      allow create: if signedIn();'],
   ['open mission pool exposes private tickets before dispatch', 'function openMissionPoolRead(data)'],
   ['tenant ticket create without unit/property validation', "ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);"],
+  ['direct Tenant browser ticket creation', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
   ['direct client-side technician mission claim helper', 'function safeOpenMissionClaim() {'],
   ['direct client-side mission assignment field helper', 'function missionClaimFieldsLookValid() {'],
   ['tickets update rule still permits direct technician claiming', '|| safeOpenMissionClaim()'],
@@ -39,7 +55,11 @@ const forbiddenFragments = [
   ['broad user-subcollection authorization', 'allow create: if isNotSuspended() && (isAdmin() || (signedIn() && request.auth.uid == userId));'],
   ['unbounded ticket read fallback', "allow read: if !(collection in ['system_secrets', 'users', 'tickets', 'maintenanceTickets', 'broker_kyc_submission_limits']) && hasAdminClaim();"],
   ['private HR omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();"],
+  ['canonical live location omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
   ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
+  ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['legacy Owner-only property geo create helper', 'function ownerCannotSupplyCanonicalPropertyGeo(data) {'],
+  ['legacy unbounded submitted property geo helper', 'function ownerSubmittedPropertyGeoIsUnverified(data) {'],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
 
@@ -50,11 +70,11 @@ const requiredFragments = [
   ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
   ['approved technician read helper', 'function isApprovedTechnician() {'],
   ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
-  ['tenant ticket unit/property binding helper', 'function canCreateTenantBoundTicket(data) {'],
-  ['tenant ticket create uses binding helper', 'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);'],
+  ['canonical ticket creation is Admin/server only', 'allow create: if isAdmin();'],
+  ['legacy tickets are read-only compatibility data', 'allow create, update, delete: if false;'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
-  ['single ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
+  ['single canonical ticket update gate', 'allow update: if safeTicketUpdateByActor();'],
   ['router caches authentication once', 'let authenticated = signedIn();'],
   ['router caches canonical role once', 'let role = authenticated'],
   ['router caches admin authority once', 'let admin = authenticated && ('],
@@ -63,6 +83,11 @@ const requiredFragments = [
   ['dispatcher branch uses cached authority', '(!admin && dispatcher && safeDispatcherTicketUpdate())'],
   ['tenant branch supports roleless legacy claims but excludes named non-tenant roles', "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())"],
   ['technician branch is role-discriminated', "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())"],
+  ['submitted property geo validates coordinates and unverified state', 'function submittedPropertyGeoIsUnverified(data) {'],
+  ['property creation excludes every canonical geo field', 'function propertyCreateHasNoCanonicalGeo(data) {'],
+  ['managed property updates preserve canonical geo', 'function safeManagedPropertyUpdate() {'],
+  ['property create uses shared canonical-geo guard', 'propertyCreateHasNoCanonicalGeo(request.resource.data) &&'],
+  ['Admin browser property update uses safe managed guard', '(canManageProperties() && safeManagedPropertyUpdate())'],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
   ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
@@ -71,24 +96,32 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket, Broker rate-limit, Admin-session and private-HR read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
+  ['ticket, Broker rate-limit, Admin-session, private-HR and live-location read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies and private HR', "'system_secrets',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
   ['private HR profiles are server-only', "match /private_hr_profiles/{profileId} {\n      allow read, write: if false;"],
+  ['canonical live locations are suspension-aware dispatch-readable only', "match /technician_live_locations/{technicianId} {\n      allow read: if canDispatchJobs();\n      allow create, update, delete: if false;"],
 ];
 
 const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
 
-if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 2) failures.push('Single ticket update gate must exist exactly twice.');
+const legacyBlock = readMatchBlock('    match /tickets/{ticketId} {');
+const canonicalBlock = readMatchBlock('    match /maintenanceTickets/{ticketId} {');
+if (!legacyBlock.includes('allow create, update, delete: if false;')) failures.push('Legacy /tickets must deny every browser write.');
+if (legacyBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Legacy /tickets still has an operational update gate.');
+if (!canonicalBlock.includes('allow create: if isAdmin();')) failures.push('Canonical /maintenanceTickets must reserve direct creates for Admin/server authority.');
+if (!canonicalBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Canonical /maintenanceTickets update router is missing.');
+if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 1) failures.push('Exactly one canonical ticket update gate is required.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
 if (rules.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) failures.push('Private HR profile rule must exist exactly once.');
+if (rules.split('match /technician_live_locations/{technicianId}').length - 1 !== 1) failures.push('Canonical live-location rule must exist exactly once.');
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
@@ -105,9 +138,7 @@ if (!router) {
   if (
     [authentication, role, adminClaim, dispatcherClaim, admin, dispatcher, tenant, technician].some((index) => index < 0) ||
     !(authentication < role && role < adminClaim && adminClaim < dispatcherClaim && dispatcherClaim < admin && admin < dispatcher && dispatcher < tenant && tenant < technician)
-  ) {
-    failures.push('Ticket update router must short-circuit in admin, dispatcher, tenant, technician order.');
-  }
+  ) failures.push('Ticket update router must short-circuit in admin, dispatcher, tenant, technician order.');
   for (const repeatedHelper of ['hasAdminClaim()', 'hasNonAdminDispatchClaimOnly()', 'claimedRole()']) {
     if (router.includes(repeatedHelper)) failures.push(`Ticket update router re-evaluates expensive actor helper: ${repeatedHelper}`);
   }

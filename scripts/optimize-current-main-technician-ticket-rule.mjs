@@ -45,6 +45,45 @@ if (!rules.includes('    function hasApprovedTechnicianRecord() {')) {
   console.log('[patched] dedicated technician write-approval helper');
 }
 
+const assignedListHelper = `    function canListAssignedTechnicianTicket(data) {
+      // This narrow predicate is intentionally separate from participantCanRead.
+      // Firestore can prove the assignment equality from the client query without
+      // evaluating every Owner, Tenant, Broker and dispatcher branch per result.
+      return signedIn() &&
+        claimedRole() in ['technician', 'tech'] &&
+        data.get('assignedTechnicianId', null) == request.auth.uid &&
+        hasApprovedTechnicianRecord() &&
+        isNotSuspended();
+    }`;
+
+if (!rules.includes('    function canListAssignedTechnicianTicket(data) {')) {
+  const marker = '    function participantCanRead(data) {';
+  const index = rules.indexOf(marker);
+  if (index < 0) throw new Error('Technician list helper insertion point not found.');
+  rules = `${rules.slice(0, index)}${assignedListHelper}\n\n${rules.slice(index)}`;
+  console.log('[patched] assignment-bound technician ticket list helper');
+}
+
+const assignedListRule = '      allow list: if canListAssignedTechnicianTicket(resource.data);';
+function ensureAssignedListRule(collectionName) {
+  const matchMarker = `    match /${collectionName}/{ticketId} {`;
+  const matchIndex = rules.indexOf(matchMarker);
+  if (matchIndex < 0) throw new Error(`Ticket collection block not found: ${collectionName}`);
+  const nextMatchIndex = rules.indexOf('\n    match /', matchIndex + matchMarker.length);
+  const blockEnd = nextMatchIndex < 0 ? rules.length : nextMatchIndex;
+  const block = rules.slice(matchIndex, blockEnd);
+  if (block.includes(assignedListRule)) {
+    console.log(`[already applied] ${collectionName} assigned list rule`);
+    return;
+  }
+  const insertionPoint = matchIndex + matchMarker.length;
+  rules = `${rules.slice(0, insertionPoint)}\n${assignedListRule}${rules.slice(insertionPoint)}`;
+  console.log(`[patched] ${collectionName} assigned list rule`);
+}
+
+ensureAssignedListRule('tickets');
+ensureAssignedListRule('maintenanceTickets');
+
 const optimized = `    function safeTechnicianTicketUpdate() {
       // The outer rule proves the technician claim and current assignment.
       // Reject unrelated fields before suspension and the single approval read.
@@ -125,6 +164,9 @@ for (const forbidden of [
 
 for (const required of [
   'function hasApprovedTechnicianRecord() {',
+  'function canListAssignedTechnicianTicket(data) {',
+  "claimedRole() in ['technician', 'tech']",
+  "data.get('assignedTechnicianId', null) == request.auth.uid",
   "'afterPhotos',",
   "'proofPhotos',",
   "'completionPhotos',",
@@ -137,6 +179,9 @@ for (const required of [
   if (!rules.includes(required)) throw new Error(`Required technician rule fragment missing: ${required}`);
 }
 
+if (rules.split(assignedListRule).length - 1 !== 2) {
+  throw new Error('Assignment-bound technician list rule must exist exactly twice.');
+}
 if (rules.split('match /technician_credential_renewals/{requestId}').length - 1 !== 1) {
   throw new Error('Technician credential-renewal rule block must exist exactly once.');
 }
@@ -145,4 +190,4 @@ if (rules.split("'technician_credential_renewals',").length - 1 !== 2) {
 }
 
 fs.writeFileSync(rulesPath, rules, 'utf8');
-console.log('[current-main-technician-budget] technician evidence and credential-renewal rules bounded');
+console.log('[current-main-technician-budget] technician assignment lists, evidence updates and credential-renewal rules bounded');

@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+import { normalizeMaintenanceTicketStatus } from "./shared/maintenanceTicketLifecycle";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -13,7 +14,7 @@ function cleanString(value: unknown): string {
 function normalizeStatus(value: unknown): string | null {
   const status = cleanString(value);
   if (!status) return null;
-  const upper = status.toUpperCase();
+  const upper = normalizeMaintenanceTicketStatus(status);
 
   if (["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"].includes(upper)) return "accepted";
   if (["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"].includes(upper)) return "on_the_way";

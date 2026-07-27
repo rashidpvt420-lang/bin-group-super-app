@@ -16,8 +16,8 @@ for (const envPath of [
 }
 
 const projectId = resolveFirebaseAdminProjectId();
-const brokerEmail = String(process.env.E2E_BROKER_EMAIL || '').trim().toLowerCase();
-if (!brokerEmail) throw new Error('E2E_BROKER_EMAIL is required for Broker payout OTP evidence.');
+const brokerEmail = String(process.env.E2E_BROKER_MAILBOX_EMAIL || '').trim().toLowerCase();
+if (!brokerEmail) throw new Error('E2E_BROKER_MAILBOX_EMAIL is required for Broker production evidence.');
 
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
@@ -32,11 +32,10 @@ const privateKycRef = db.collection('broker_kyc_profiles').doc(brokerUid);
 const profileSnap = await profileRef.get();
 const profile = profileSnap.data() || {};
 if (profile.e2eLaunchSeed !== true || String(profile.role || profile.userRole || '').toLowerCase() !== 'broker') {
-  throw new Error('Refusing Broker payout fixture reset for an account that is not the dedicated E2E Broker.');
+  throw new Error('Refusing Broker production fixture reset for an account that is not the dedicated E2E Broker.');
 }
 
 const safeId = String(brokerUid).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
-const commissionId = `e2e-live-broker-commission-${safeId}`;
 const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
 
@@ -84,33 +83,14 @@ batch.set(privateKycRef, {
   createdAt: profile.createdAt || now,
 }, { merge: true });
 
-batch.set(db.collection('broker_commissions').doc(commissionId), {
-  id: commissionId,
-  brokerId: brokerUid,
-  brokerUid,
-  brokerEmail,
-  linkedLeadName: 'E2E Payout OTP Attribution Fixture',
-  linkedProperty: 'E2E Live Role Tower',
-  amount: 500,
-  currency: 'AED',
-  percentage: 10,
-  status: 'APPROVED',
-  payoutStatus: 'NOT_REQUESTED',
-  payoutRequestId: admin.firestore.FieldValue.delete(),
-  payoutRequestedAt: admin.firestore.FieldValue.delete(),
-  attributionId: `e2e_attribution_${safeId}`,
-  commissionLockKey: `e2e_commission_lock_${safeId}`,
-  commissionLocked: true,
-  e2eLaunchSeed: true,
-  updatedAt: now,
-  createdAt: now,
-}, { merge: true });
-
+// Retire the request-only synthetic commission. The protected Broker runner must
+// now generate its commission from an ACTIVE attributed contract.
+batch.delete(db.collection('broker_commissions').doc(`e2e-live-broker-commission-${safeId}`));
 batch.delete(db.collection('broker_payout_otp_rate_limits').doc(brokerUid));
 for (const challenge of challengeSnapshot.docs) {
   const status = String(challenge.data().status || '').toUpperCase();
-  if (['PENDING', 'VERIFIED', 'EXPIRED'].includes(status)) batch.delete(challenge.ref);
+  if (['PENDING', 'VERIFIED', 'CONSUMED', 'EXPIRED'].includes(status)) batch.delete(challenge.ref);
 }
 
 await batch.commit();
-console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(`Prepared Broker KYC and OTP hygiene for ${brokerEmail}; no commission was seeded; cleared ${challengeSnapshot.size} challenge candidate(s).`);

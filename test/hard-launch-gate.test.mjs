@@ -54,6 +54,7 @@ function validOperational() {
     adminStaffClaims: 'workflow-artifact',
     stripeLiveBilling: 'production-transaction',
     appCheckEnforcement: 'workflow-artifact',
+    aiProviderHealth: 'workflow-artifact',
     privilegedAccessRotation: 'secret-rotation-record',
     brandedEmailDelivery: 'workflow-artifact',
     renewalScheduler: 'scheduler-run',
@@ -67,6 +68,7 @@ function validOperational() {
     adminStaffClaims: 'Firebase Auth and staff registries',
     stripeLiveBilling: 'stripe-live-api-and-webhook',
     appCheckEnforcement: 'Firebase App Check enforcement',
+    aiProviderHealth: 'Firebase Sovereign AI callable with Gemini and OpenAI',
     privilegedAccessRotation: 'Google Secret Manager and Firebase Authentication',
     brandedEmailDelivery: 'Postmark email delivery',
     renewalScheduler: 'Firebase contract renewal watcher',
@@ -171,6 +173,10 @@ test('operational readiness requires every current-commit provider and physical 
   const missing = validOperational();
   delete missing.gates.stripeLiveBilling;
   assert.ok(validateOperationalReadinessReport(missing, commitSha, { now }).includes('operational gate missing: stripeLiveBilling'));
+
+  const missingAi = validOperational();
+  delete missingAi.gates.aiProviderHealth;
+  assert.ok(validateOperationalReadinessReport(missingAi, commitSha, { now }).includes('operational gate missing: aiProviderHealth'));
 
   const stale = validOperational();
   stale.gates.appCheckEnforcement.verifiedAt = '2026-06-01T00:00:00.000Z';
@@ -345,15 +351,21 @@ test('App Check monitor requires browser authentication before a Firestore read 
 
 test('owner and tenant business proofs are mandatory and backend-verified', () => {
   const owner = readFileSync('tests/e2e/business-owner.spec.ts', 'utf8');
+  const broker = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
   const tenant = readFileSync('tests/e2e/business-tenant.spec.ts', 'utf8');
   assert.match(owner, /E2E_OWNER_EMAIL/);
   assert.match(owner, /E2E_OWNER_MAILBOX_EMAIL/);
   assert.doesNotMatch(owner, /const EMAIL = process\.env\.E2E_OWNER_MAILBOX_EMAIL/);
   assert.match(owner, /waitForURL\('\*\*\/owner\//);
   assert.doesNotMatch(owner, /page\.route\(/);
+  assert.match(tenant, /This suite deliberately does not seed a completed ticket/);
+  assert.match(tenant, /submitRealTenantRequest/);
+  assert.match(tenant, /completeThroughTechnicianUi/);
+  assert.match(tenant, /assertTenantDeliveryReceipt/);
   assert.match(tenant, /APPROVE, RATE & CLOSE/);
-  assert.match(tenant, /maintenanceTickets/);
-  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED/i);
+  assert.match(tenant, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\\\|true\/i/);
+  assert.match(tenant, /TENANT_DISPUTED_TICKET/);
+  assert.doesNotMatch(tenant, /APPROVAL_TICKET_ID|e2e-tenant-approval-ticket/);
   assert.doesNotMatch(tenant, /isVisible\(\).*catch\(\(\) => false\)[\s\S]*if \(/);
 });
 

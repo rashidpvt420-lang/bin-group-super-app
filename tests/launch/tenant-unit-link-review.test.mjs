@@ -15,12 +15,15 @@ test('Tenant unit-link Admin review requires rejection reason and preserves revi
   assert.match(source, /dir=\{isRTL \? 'rtl' : 'ltr'\}/);
 });
 
-test('Tenant unit-link rejection evidence is enforced by the exported server callable', async () => {
+test('Tenant unit-link rejection evidence is enforced atomically by the exported server callable', async () => {
   const guard = await read('functions/secureTenantUnitLinkOperations.ts');
   const runtime = await read('functions/runtime.ts');
-  assert.match(guard, /decision === 'REJECT' && reason\.length < 8/);
-  assert.match(guard, /HttpsError\(\s*'invalid-argument'/);
+  assert.match(guard, /decision === ["']REJECT["'] && reason\.length < 8/);
+  assert.match(guard, /HttpsError\(\s*["']invalid-argument["']/);
   assert.match(guard, /enforceAppCheck: true/);
-  assert.match(guard, /legacyAdminResolveTenantUnitLink as any\)\?\.run/);
+  assert.match(guard, /transaction\.set\(requestRef/);
+  assert.match(guard, /rejectionReason: reason/);
+  assert.match(guard, /ADMIN_REJECTED_TENANT_UNIT_LINK/);
+  assert.doesNotMatch(guard, /legacyAdminResolveTenantUnitLink/);
   assert.match(runtime, /adminResolveTenantUnitLink \} from "\.\/secureTenantUnitLinkOperations"/);
 });

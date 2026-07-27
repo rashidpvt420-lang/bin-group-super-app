@@ -1,13 +1,33 @@
 /**
- * business-technician.spec.ts
- * Deep E2E business flow for the Technician role.
- * Verifies: job acceptance, GPS/arrival actions, proof upload, and ticket resolution.
+ * Authenticated production business proof for the Technician role.
+ * Proves a dispatch-bound assignment, push delivery receipt, GPS controls,
+ * technician-owned before-work evidence, real network recovery during proof
+ * upload, completion, and automatic offline lifecycle replay.
  */
+import { config as loadDotenv } from 'dotenv';
+import { existsSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { test, expect, Page, Locator } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import admin from 'firebase-admin';
+import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(__dirname, '../../.env.e2e');
+if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
 const EMAIL = process.env.E2E_TECHNICIAN_EMAIL ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
+const proofImage = Buffer.from(
+  '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
+  'hex',
+);
+
+let technicianUid = '';
+let dispatchTicketId = '';
+let gpsDeniedTicketId = '';
+let gpsPoorTicketId = '';
+let offlineTicketId = '';
 
 function requireLaunchCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -15,75 +35,158 @@ function requireLaunchCredentials() {
   }
 }
 
-async function firstVisible(page: Page, selectors: string[], timeout = 15_000): Promise<Locator> {
-  const deadline = Date.now() + timeout;
-  let lastError = '';
-
-  while (Date.now() < deadline) {
-    for (const selector of selectors) {
-      const locator = page.locator(selector).first();
-      if (await locator.isVisible({ timeout: 500 }).catch((error) => {
-        lastError = String(error);
-        return false;
-      })) {
-        return locator;
-      }
-    }
-    await page.waitForTimeout(300);
-  }
-
-  const diagnostics = await page.evaluate(() => ({
-    href: window.location.href,
-    bodyPreview: document.body?.innerText?.slice(0, 1400),
-    buttons: Array.from(document.querySelectorAll('button, a')).map((el: any) => ({
-      text: el.innerText,
-      ariaLabel: el.getAttribute('aria-label'),
-      testId: el.getAttribute('data-testid'),
-      disabled: el.disabled === true,
-      visible: !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length),
-    })).slice(0, 100),
-  }));
-
-  throw new Error(`No visible target found for selectors: ${selectors.join(' | ')}. Last error: ${lastError}. Diagnostics: ${JSON.stringify(diagnostics)}`);
+function initializeAdminSdk() {
+  if (admin.apps.length) return;
+  const projectId = process.env.GCP_PROJECT_ID
+    || process.env.GCLOUD_PROJECT
+    || process.env.GOOGLE_CLOUD_PROJECT
+    || 'bin-group-57c60';
+  admin.initializeApp({ projectId });
 }
 
-async function clickRequired(page: Page, selectors: string[], label: string) {
-  const target = await firstVisible(page, selectors);
-  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: 10_000 });
-  await target.click();
+function fixtureTicket(id: string, status: string, assigned: boolean) {
+  const now = admin.firestore.Timestamp.now();
+  return {
+    id,
+    ticketId: id,
+    propertyId: 'e2e-live-role-property',
+    propertyName: 'E2E Live Role Tower',
+    unitId: `e2e-live-role-unit-${technicianUid.slice(0, 40)}`,
+    unitNumber: 'TECH-201',
+    tenantId: 'e2e-live-tenant-fixture',
+    tenantName: 'E2E Resident',
+    category: 'HVAC / AC systems',
+    description: `Protected Technician evidence fixture ${id}`,
+    priority: 'normal',
+    source: 'PROTECTED_TECHNICIAN_E2E',
+    status,
+    dispatchStatus: assigned ? 'ASSIGNED' : 'PENDING_ASSIGNMENT',
+    assignedTechnicianId: assigned ? technicianUid : null,
+    technicianId: assigned ? technicianUid : null,
+    assignedAt: assigned ? now : null,
+    assignmentSource: assigned ? 'PROTECTED_E2E_PREP' : null,
+    beforePhotoUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII=',
+    beforePhotos: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII='],
+    tenantPhotos: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII='],
+    evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
+    propertyLocation: { latitude: 25.2048, longitude: 55.2708, address: 'Dubai, UAE' },
+    serviceLocationDetail: 'Utility room beside unit entrance',
+    accessNotes: 'Call resident before entry.',
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
-async function attachRequiredImage(page: Page, selectors: string[], label: string) {
-  const input = await firstVisible(page, selectors, 20_000);
-  await input.setInputFiles({
-    name: `${label.toLowerCase().replace(/\s+/g, '-')}.png`,
-    mimeType: 'image/png',
-    buffer: Buffer.from(
-      '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea73581e20000000049454e44ae426082',
-      'hex'
-    ),
-  });
+async function clearAssignmentNotifications(ticketId: string) {
+  const db = admin.firestore();
+  const snap = await db.collection('notifications').where('ticketId', '==', ticketId).get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+  await batch.commit();
 }
 
 async function login(page: Page) {
   requireLaunchCredentials();
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.context().clearCookies();
+  await page.goto(`/login?intendedRole=technician&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.goto(`/login?intendedRole=technician&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL('**/technician/dashboard', { timeout: 20_000 });
+  await page.waitForURL('**/technician/dashboard', { timeout: 25_000 });
   await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error|identity fault/i, { timeout: 10_000 });
 }
 
+async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 10_000): Promise<Locator> {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    for (const selector of selectors) {
+      const target = page.locator(selector).first();
+      if (await target.isVisible({ timeout: 500 }).catch(() => false)) {
+        await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
+        await target.click();
+        return target;
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`${label} was not visible. Selectors: ${selectors.join(' | ')}`);
+}
+
+async function setImage(input: Locator, name: string) {
+  await input.setInputFiles({ name, mimeType: 'image/png', buffer: proofImage });
+}
+
+async function firestoreStatus(ticketId: string) {
+  const snap = await admin.firestore().collection('maintenanceTickets').doc(ticketId).get();
+  return String(snap.data()?.status || '').toUpperCase();
+}
+
 test.describe('Technician Business Workflow', () => {
-  test.use({ geolocation: { longitude: 55.2708, latitude: 25.2048 }, permissions: ['geolocation'] });
+  test.describe.configure({ mode: 'serial' });
+  test.use({
+    geolocation: { longitude: 55.2708, latitude: 25.2048, accuracy: 15 },
+    permissions: ['geolocation', 'notifications'],
+  });
+
+  test.beforeAll(async () => {
+    requireLaunchCredentials();
+    initializeAdminSdk();
+    const technician = await admin.auth().getUserByEmail(EMAIL);
+    technicianUid = technician.uid;
+    const suffix = technicianUid.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 48);
+    dispatchTicketId = `e2e-tech-dispatch-${suffix}`;
+    gpsDeniedTicketId = `e2e-tech-gps-denied-${suffix}`;
+    gpsPoorTicketId = `e2e-tech-gps-poor-${suffix}`;
+    offlineTicketId = `e2e-tech-offline-${suffix}`;
+
+    const db = admin.firestore();
+    const readiness = {
+      role: 'technician',
+      status: 'active',
+      approvalStatus: 'approved',
+      suspended: false,
+      onDuty: true,
+      dutyStatus: 'on_duty',
+      isAvailable: true,
+      available: true,
+      currentShiftId: 'protected-e2e-shift',
+      shiftStatus: 'active',
+      deviceRegistered: true,
+      deviceVerified: true,
+      registeredDeviceId: 'protected-e2e-browser',
+      medicalCardStatus: 'valid',
+      drivingLicenseStatus: 'valid',
+      certificationsStatus: 'valid',
+      lastGpsAt: admin.firestore.Timestamp.now(),
+      gpsMaxAgeMs: 60 * 60 * 1000,
+      activeJobCount: 0,
+      maxConcurrentJobs: 10,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await Promise.all([
+      db.collection('users').doc(technicianUid).set(readiness, { merge: true }),
+      db.collection('technicians').doc(technicianUid).set(readiness, { merge: true }),
+      db.collection('maintenanceTickets').doc(dispatchTicketId).set(fixtureTicket(dispatchTicketId, 'PENDING_ASSIGNMENT', false)),
+      db.collection('maintenanceTickets').doc(gpsDeniedTicketId).set(fixtureTicket(gpsDeniedTicketId, 'EN_ROUTE', true)),
+      db.collection('maintenanceTickets').doc(gpsPoorTicketId).set(fixtureTicket(gpsPoorTicketId, 'EN_ROUTE', true)),
+      db.collection('maintenanceTickets').doc(offlineTicketId).set(fixtureTicket(offlineTicketId, 'ACCEPTED', true)),
+    ]);
+    await clearAssignmentNotifications(dispatchTicketId);
+  });
 
   test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+    const monitor = await attachAuthenticatedAppCheckMonitor(page);
+    (page as any).__binAppCheckMonitor = monitor;
+    await monitor.assertTokenFingerprint();
     await login(page);
   });
+
   test.afterEach(async ({ page }) => {
     const monitor = (page as any).__binAppCheckMonitor;
     if (!monitor) return;
@@ -91,83 +194,112 @@ test.describe('Technician Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-
-  test('Technician can accept a job, upload proof, and resolve ticket', async ({ page }) => {
-    test.setTimeout(150_000);
+  test('dispatch assigns the job, push receipt succeeds, and technician completes through network recovery', async ({ page, context }) => {
+    test.setTimeout(240_000);
+    const db = admin.firestore();
+    const pushRegistrationStartedAt = Date.now();
 
     await page.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|application error|minified react error/i, { timeout: 10_000 });
-    await expect(page.locator('body')).toContainText(/ACTIVE ASSIGNMENTS|OPEN JOB POOL|My Jobs/i, { timeout: 20_000 });
+    await expect(page.getByTestId('technician-jobs-load-error')).not.toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('technician-dispatch-boundary')).toBeVisible();
+    await expect(page.locator(`[data-testid="technician-open-job-card"][data-ticket-id="${dispatchTicketId}"]`)).toHaveCount(0);
+    await expect(page.getByText(/OPEN JOB POOL|CLAIM MISSION|ACCEPT JOB/i)).toHaveCount(0);
 
-    const acceptFromPool = page.getByRole('button', { name: /ACCEPT JOB|ACCEPT MISSION|CLAIM MISSION/i }).first();
-    const openAssignedJob = page.getByRole('button', { name: /OPEN JOB CARD/i }).first();
+    await expect.poll(async () => {
+      const userSnap = await db.collection('users').doc(technicianUid).get();
+      const updatedAt = userSnap.data()?.pushUpdatedAt?.toMillis?.() || 0;
+      return Number(userSnap.data()?.pushTokenCount || 0) > 0 && updatedAt >= pushRegistrationStartedAt - 5_000;
+    }, { timeout: 60_000, message: 'A current production FCM token must register before dispatch.' }).toBe(true);
 
-    if (await acceptFromPool.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await expect(acceptFromPool).toBeEnabled({ timeout: 10_000 });
-      await acceptFromPool.click();
-    } else {
-      await expect(
-        openAssignedJob,
-        'Technician launch fixture must expose either an open pool job or an assigned active job.'
-      ).toBeVisible({ timeout: 20_000 });
-      await openAssignedJob.click();
-    }
+    await db.collection('maintenanceTickets').doc(dispatchTicketId).set({
+      assignedTechnicianId: technicianUid,
+      technicianId: technicianUid,
+      status: 'ASSIGNED',
+      dispatchStatus: 'ASSIGNED',
+      assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+      assignmentSource: 'PROTECTED_E2E_DISPATCH',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
 
-    await page.waitForURL('**/technician/job/**', { timeout: 20_000 });
-    await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 20_000 });
+    const openCard = page.locator(`[data-testid="technician-open-job-card"][data-ticket-id="${dispatchTicketId}"]`);
+    await expect(openCard).toBeVisible({ timeout: 35_000 });
+    const receipt = page.locator(`[data-testid="technician-job-notification-receipt"][data-ticket-id="${dispatchTicketId}"]`);
+    await expect(receipt).toHaveAttribute('data-delivery-state', /SUCCESS|PARTIAL/, { timeout: 60_000 });
+    await openCard.click();
+    await page.waitForURL(`**/technician/job/${dispatchTicketId}`, { timeout: 20_000 });
 
     const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
-    if (await acceptMission.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await expect(acceptMission).toBeEnabled({ timeout: 10_000 });
-      await acceptMission.click();
-      await expect(page.locator('body')).toContainText(/Mission accepted|ACCEPTED|ASSIGNED/i, { timeout: 15_000 });
-    }
+    await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
+    await acceptMission.click();
+    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 30_000 }).toBe('ACCEPTED');
 
-    await clickRequired(page, [
-      'button:has-text("On The Way")',
-      'button:has-text("Start Trip")',
-      'button:has-text("En Route")',
-    ], 'Start trip action');
-    await expect(page.locator('body')).toContainText(/EN ROUTE|On The Way|Status updated/i, { timeout: 20_000 });
+    await clickRequired(page, ['button:has-text("On The Way")'], 'Start trip action');
+    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('EN_ROUTE');
+    await clickRequired(page, ['button:has-text("Arrived")'], 'Arrival action', 35_000);
+    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ARRIVED');
 
-    await clickRequired(page, [
-      'button:has-text("Arrived")',
-      'button:has-text("I have arrived")',
-      'button:has-text("On Site")',
-    ], 'Arrival action');
-    await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 20_000 });
+    const beforeInput = page.getByTestId('technician-before-work-file');
+    await expect(beforeInput).toHaveCount(1);
+    await setImage(beforeInput, 'technician-before-work.png');
+    await expect(page.getByTestId('technician-before-work-success')).toBeVisible({ timeout: 45_000 });
 
-    const ppe = page.locator('#ppe');
-    const safety = page.locator('#safety');
-    await expect(ppe).toBeVisible({ timeout: 10_000 });
-    await expect(safety).toBeVisible({ timeout: 10_000 });
-    await ppe.check();
-    await safety.check();
-
+    await page.locator('#ppe').check();
+    await page.locator('#safety').check();
     await clickRequired(page, ['button:has-text("Start Work")'], 'Start work action');
-    await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated/i, { timeout: 20_000 });
+    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('IN_PROGRESS');
 
-    const notes = page.getByLabel(/Resolution notes/i).first();
-    await expect(notes).toBeVisible({ timeout: 10_000 });
-    await notes.fill('E2E completion proof: issue inspected, repaired, and verified operational.');
+    await page.getByLabel(/Resolution notes/i).first().fill('E2E completion proof: issue inspected, repaired, tested, and verified operational.');
+    await page.getByLabel(/Materials used|No parts required/i).first().fill('No parts required');
 
-    const materials = page.getByLabel(/Materials used|No parts required/i).first();
-    await expect(materials).toBeVisible({ timeout: 10_000 });
-    await materials.fill('No parts required');
-
-    await attachRequiredImage(page, [
-      'input[type="file"][accept*="image"]',
-      'input[type="file"]',
-    ], 'After Work Proof');
+    const afterInput = page.locator('input[type="file"][accept*="image"]').last();
+    await context.setOffline(true);
+    await expect(page.locator('body')).toContainText(/Offline mode/i, { timeout: 15_000 });
+    await setImage(afterInput, 'network-recovery-after-work-proof.png');
+    await page.waitForTimeout(1_000);
+    await context.setOffline(false);
 
     const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback/i }).first();
-    await expect(
-      complete,
-      'Completion must unlock after seeded tenant before-proof, resolution notes, materials disposition, and after-work proof.'
-    ).toBeEnabled({ timeout: 20_000 });
+    await expect(complete).toBeEnabled({ timeout: 60_000 });
     await complete.click();
 
-    await page.waitForURL('**/technician/jobs', { timeout: 30_000 });
-    await expect(page.locator('body')).not.toContainText(/failed|permission-denied|missing or insufficient permissions/i, { timeout: 5_000 });
+    await page.waitForURL('**/technician/jobs', { timeout: 60_000 });
+    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toMatch(/COMPLETED/);
+  });
+
+  test('location permission denial keeps arrival fail-closed', async ({ page, context }) => {
+    test.setTimeout(90_000);
+    await context.clearPermissions();
+    await page.goto(`/technician/job/${gpsDeniedTicketId}`, { waitUntil: 'domcontentloaded' });
+    await clickRequired(page, ['button:has-text("Arrived")'], 'Denied GPS arrival action', 20_000);
+    await expect(page.locator('body')).toContainText(/GPS permission is required|Arrival was not recorded/i, { timeout: 25_000 });
+    await expect.poll(() => firestoreStatus(gpsDeniedTicketId), { timeout: 15_000 }).toBe('EN_ROUTE');
+  });
+
+  test('poor GPS accuracy keeps arrival fail-closed', async ({ page, context }) => {
+    test.setTimeout(90_000);
+    await context.setGeolocation({ longitude: 55.2708, latitude: 25.2048, accuracy: 250 });
+    await page.goto(`/technician/job/${gpsPoorTicketId}`, { waitUntil: 'domcontentloaded' });
+    await clickRequired(page, ['button:has-text("Arrived")'], 'Poor accuracy arrival action', 20_000);
+    await expect(page.locator('body')).toContainText(/GPS signal is too weak|Move to an open area/i, { timeout: 25_000 });
+    await expect.poll(() => firestoreStatus(gpsPoorTicketId), { timeout: 15_000 }).toBe('EN_ROUTE');
+  });
+
+  test('offline EN_ROUTE action automatically replays after connectivity returns', async ({ page, context }) => {
+    test.setTimeout(120_000);
+    await page.goto(`/technician/job/${offlineTicketId}`, { waitUntil: 'domcontentloaded' });
+    await context.setOffline(true);
+    await expect(page.locator('body')).toContainText(/Offline mode/i, { timeout: 15_000 });
+    await clickRequired(page, ['button:has-text("On The Way")'], 'Offline start trip action');
+    await expect.poll(async () => page.evaluate(() => {
+      const queue = JSON.parse(localStorage.getItem('bin_offline_queue') || '[]');
+      return queue.some((item: any) => String(item.payload || '').includes('EN_ROUTE'));
+    }), { timeout: 15_000 }).toBe(true);
+
+    await context.setOffline(false);
+    await expect.poll(() => firestoreStatus(offlineTicketId), { timeout: 45_000 }).toBe('EN_ROUTE');
+    await expect.poll(async () => page.evaluate(() => {
+      const queue = JSON.parse(localStorage.getItem('bin_offline_queue') || '[]');
+      return queue.some((item: any) => String(item.payload || '').includes('EN_ROUTE'));
+    }), { timeout: 20_000 }).toBe(false);
   });
 });

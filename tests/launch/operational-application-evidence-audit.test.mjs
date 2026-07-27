@@ -5,9 +5,10 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('application evidence workflow is protected and auto-discovers fixed production records', async () => {
-  const [workflow, verifier, publisher] = await Promise.all([
+  const [workflow, verifier, wrapper, publisher] = await Promise.all([
     read('.github/workflows/operational-application-evidence.yml'),
     read('scripts/verify-operational-application-evidence.mjs'),
+    read('scripts/verify-operational-application-evidence-mfa.mjs'),
     read('scripts/publish-operational-application-evidence.mjs'),
   ]);
 
@@ -23,10 +24,19 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /Auto-discover, verify, and publish application evidence/);
-  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/verify-operational-application-evidence-mfa\.mjs/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-application-evidence\.mjs/);
   assert.match(workflow, /application-proofs\/\$\{gate\}\.json/);
   assert.match(workflow, /SELECTED_GATE.*all/s);
+  assert.doesNotMatch(workflow, /run-operational-application-evidence-paginated\.mjs|--prepare-in-place/);
+
+  assert.match(wrapper, /await import\('\.\/verify-operational-application-evidence\.mjs'\)/);
+  assert.match(wrapper, /const PAGE_SIZE = 250/);
+  assert.match(wrapper, /function installPaginatedQueryProxy/);
+  assert.match(wrapper, /readAllMatchingSnapshot/);
+  assert.match(wrapper, /restoreCollection\(\)/);
+  assert.match(wrapper, /globalThis\.fetch = originalFetch/);
+  assert.doesNotMatch(wrapper, /temporaryPath|renameSync|pathToFileURL/);
 
   const gates = [
     'ownerPaymentActivation',
@@ -53,9 +63,24 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(workflow, /technicianPhysicalGpsEvidence/);
 });
 
-test('payment and commission evidence auto-discovers records, uses the real callable and proves replay invariants', async () => {
-  const [verifier, approval, commission] = await Promise.all([
+test('pagination proxy expands bounded discovery and exact-count queries and restores Firestore', async () => {
+  const wrapper = await read('scripts/verify-operational-application-evidence-mfa.mjs');
+  assert.match(wrapper, /const PAGE_SIZE = 250/);
+  assert.match(wrapper, /async function readAllMatchingSnapshot/);
+  assert.match(wrapper, /FieldPath\.documentId\(\)/);
+  assert.match(wrapper, /startAfter\(cursor\)/);
+  assert.match(wrapper, /function installPaginatedQueryProxy/);
+  assert.match(wrapper, /property === 'limit'/);
+  assert.match(wrapper, /get: \(\) => readAllMatchingSnapshot\(target\)/);
+  assert.match(wrapper, /restoreCollection\(\)/);
+  assert.doesNotMatch(wrapper, /temporaryPath|renameSync|writeFileSync\([^\n]*\.mjs/);
+});
+
+test('payment and commission evidence uses real replay invariants and requires Founder TOTP publication', async () => {
+  const [verifier, wrapper, publisher, approval, commission] = await Promise.all([
     read('scripts/verify-operational-application-evidence.mjs'),
+    read('scripts/verify-operational-application-evidence-mfa.mjs'),
+    read('scripts/publish-operational-application-evidence.mjs'),
     read('functions/paymentTransactionApproval.ts'),
     read('functions/brokerCommissions.ts'),
   ]);
@@ -70,6 +95,9 @@ test('payment and commission evidence auto-discovers records, uses the real call
   assert.match(verifier, /`commission_\$\{contractId\}`/);
   assert.match(verifier, /commissionsAfterSnapshot\.size !== 1/);
   assert.match(verifier, /beforeHash !== afterHash/);
+  assert.match(wrapper, /replaySecondFactorHash = sha256\(verifiedMfa\.secondFactorIdentifier\)/);
+  const publisherChecks = publisher.match(/requiredHash\(e\.replaySecondFactorHash, 'replaySecondFactorHash', errors\)/g) || [];
+  assert.equal(publisherChecks.length, 2, 'both finance replay gates must require the Founder TOTP hash');
   assert.match(approval, /approvalWasIdempotent = true/);
   assert.match(commission, /\.doc\(`commission_\$\{contractId\}`\)/);
   assert.match(commission, /transaction\.create\(commissionRef/);
