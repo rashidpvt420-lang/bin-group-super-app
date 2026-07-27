@@ -70,13 +70,13 @@ function normalizeProtectedWorkflow(relativePath) {
     if (assignment && assignment[2] === 'E2E_OWNER_MAILBOX_EMAIL') {
       const indentation = assignment[1];
       if (!currentEnvBlockHas(output, indentation, 'E2E_OWNER_EMAIL')) {
-        output.push(`${indentation}E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}`);
+        output.push(indentation + 'E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}');
       }
     }
     if (assignment && assignment[2] === 'E2E_BROKER_MAILBOX_EMAIL') {
       const indentation = assignment[1];
       if (!currentEnvBlockHas(output, indentation, 'E2E_BROKER_EMAIL')) {
-        output.push(`${indentation}E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}`);
+        output.push(indentation + 'E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}');
       }
     }
 
