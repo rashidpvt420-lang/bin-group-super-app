@@ -114,6 +114,30 @@ for (const workflow of [
   '.github/workflows/live-role-smoke.yml',
 ]) normalizeProtectedWorkflow(workflow);
 
+const ownerLoginRunnerPath = path.join(process.cwd(), 'scripts/run-owner-onboarding-production-evidence.mjs');
+let ownerLoginRunner = readFileSync(ownerLoginRunnerPath, 'utf8');
+for (const [before, after] of [
+  [
+    'const ownerEmail = text(process.env.E2E_OWNER_MAILBOX_EMAIL).toLowerCase();',
+    'const ownerEmail = text(process.env.E2E_OWNER_EMAIL).toLowerCase();',
+  ],
+  [
+    '  E2E_OWNER_MAILBOX_EMAIL: ownerEmail,',
+    '  E2E_OWNER_EMAIL: ownerEmail,',
+  ],
+]) {
+  const beforeCount = ownerLoginRunner.split(before).length - 1;
+  const afterCount = ownerLoginRunner.split(after).length - 1;
+  if (beforeCount === 1) ownerLoginRunner = ownerLoginRunner.replace(before, after);
+  else if (!(beforeCount === 0 && afterCount === 1)) {
+    throw new Error(`Owner application login identity replacement is ambiguous: legacy=${beforeCount} canonical=${afterCount}.`);
+  }
+}
+if (ownerLoginRunner.includes('E2E_OWNER_MAILBOX_EMAIL')) {
+  throw new Error('Normal Owner production evidence runner still depends on the read-only mailbox identity.');
+}
+writeFileSync(ownerLoginRunnerPath, ownerLoginRunner, 'utf8');
+
 const payloadWrapper = readFileSync(
   path.join(process.cwd(), 'scripts/apply-final-launch-evidence-corrections.payload.mjs'),
   'utf8',
