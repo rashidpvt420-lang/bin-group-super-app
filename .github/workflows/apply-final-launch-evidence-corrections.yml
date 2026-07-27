@@ -54,6 +54,7 @@ jobs:
             tests/launch/workflow-mailbox-secret-scope.test.mjs \
             tests/launch/github-workflows-actionlint.test.mjs \
             tests/launch/broker-payout-otp-live-evidence.test.mjs \
+            tests/launch/broker-otp-hmac-evidence.test.mjs \
             tests/launch/owner-onboarding-production-proof.test.mjs \
             > /tmp/focused-launch-evidence-tests.log 2>&1
           status=$?
@@ -181,6 +182,7 @@ jobs:
             tests/e2e/business-broker.spec.ts \
             tests/e2e/business-owner.spec.ts \
             tests/launch/broker-payout-otp-live-evidence.test.mjs \
+            tests/launch/broker-otp-hmac-evidence.test.mjs \
             tests/launch/e2e-mailbox-env-contract.test.mjs \
             tests/launch/github-workflows-actionlint.test.mjs \
             tests/launch/gmail-otp-reader-hardening.test.mjs \
