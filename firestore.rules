@@ -2034,18 +2034,18 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
           'technician_live_locations',
           'properties',
           'users',
-          'staffRequests',
-          'hrAiConversations',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',
           'auditLogs',
           'analytics_events',
           'security_audit_logs',
@@ -2075,11 +2075,11 @@ service cloud.firestore {
           'technician_live_locations',
           'properties',
           'users',
-          'staffRequests',
-          'hrAiConversations',
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',
+          'staffRequests',
+          'hrAiConversations',
           'auditLogs',
           'analytics_events',
           'security_audit_logs',
