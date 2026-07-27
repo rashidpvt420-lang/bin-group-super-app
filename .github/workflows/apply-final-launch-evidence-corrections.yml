@@ -156,41 +156,87 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm \
-            .github/workflows/apply-final-launch-evidence-corrections.yml \
-            .github/workflows/diagnose-final-launch-evidence-apply.yml \
-            scripts/apply-final-launch-evidence-corrections.mjs \
-            scripts/apply-final-launch-evidence-corrections.payload.mjs \
+
+          temporary_files=(
+            .github/workflows/apply-final-launch-evidence-corrections.yml
+            .github/workflows/diagnose-final-launch-evidence-apply.yml
+            scripts/apply-final-launch-evidence-corrections.mjs
+            scripts/apply-final-launch-evidence-corrections.payload.mjs
             scripts/fix-launch-evidence-test-contracts.mjs
-          git add \
-            .env.e2e.example \
-            .github/workflows/admin-production-evidence.yml \
-            .github/workflows/firebase-production-deploy.yml \
-            .github/workflows/live-role-smoke.yml \
-            functions/contractSignatureOtpMailbox.ts \
-            functions/secureBrokerPayoutOperations.ts \
-            scripts/lib/gmail-otp-reader.mjs \
-            scripts/lib/production-otp-mailbox-preflight.mjs \
-            scripts/predeploy-approval-gate.mjs \
-            scripts/run-broker-production-evidence.mjs \
-            scripts/run-owner-onboarding-production-evidence.mjs \
-            scripts/run-owner-onboarding-production-evidence-secure.mjs \
-            scripts/verify-e2e-env.mjs \
-            scripts/verify-production-otp-mailboxes.mjs \
-            src/broker/pages/BrokerCommissionsPage.tsx \
-            src/owner/components/ContractSignatureOtpControl.tsx \
-            tests/e2e/business-broker.spec.ts \
-            tests/e2e/business-owner.spec.ts \
-            tests/launch/broker-payout-otp-live-evidence.test.mjs \
-            tests/launch/broker-otp-hmac-evidence.test.mjs \
-            tests/launch/e2e-mailbox-env-contract.test.mjs \
-            tests/launch/github-workflows-actionlint.test.mjs \
-            tests/launch/gmail-otp-reader-hardening.test.mjs \
-            tests/launch/otp-correlation-contract.test.mjs \
-            tests/launch/owner-onboarding-production-proof.test.mjs \
-            tests/launch/production-otp-mailbox-preflight.test.mjs \
-            tests/launch/workflow-mailbox-secret-scope.test.mjs
+          )
+          git rm --ignore-unmatch -- "${temporary_files[@]}"
+          git add -A
+
+          allowed_file() {
+            case "$1" in
+              .env.e2e.example|\
+              .github/workflows/admin-production-evidence.yml|\
+              .github/workflows/firebase-production-deploy.yml|\
+              .github/workflows/live-role-smoke.yml|\
+              functions/contractSignatureOtpMailbox.ts|\
+              functions/secureBrokerPayoutOperations.ts|\
+              scripts/lib/gmail-otp-reader.mjs|\
+              scripts/lib/production-otp-mailbox-preflight.mjs|\
+              scripts/predeploy-approval-gate.mjs|\
+              scripts/run-broker-production-evidence.mjs|\
+              scripts/run-owner-onboarding-production-evidence.mjs|\
+              scripts/run-owner-onboarding-production-evidence-secure.mjs|\
+              scripts/verify-e2e-env.mjs|\
+              scripts/verify-production-otp-mailboxes.mjs|\
+              src/broker/pages/BrokerCommissionsPage.tsx|\
+              src/owner/components/ContractSignatureOtpControl.tsx|\
+              tests/e2e/business-broker.spec.ts|\
+              tests/e2e/business-owner.spec.ts|\
+              tests/launch/broker-payout-otp-live-evidence.test.mjs|\
+              tests/launch/broker-otp-hmac-evidence.test.mjs|\
+              tests/launch/e2e-mailbox-env-contract.test.mjs|\
+              tests/launch/github-workflows-actionlint.test.mjs|\
+              tests/launch/gmail-otp-reader-hardening.test.mjs|\
+              tests/launch/otp-correlation-contract.test.mjs|\
+              tests/launch/owner-onboarding-production-proof.test.mjs|\
+              tests/launch/production-otp-mailbox-preflight.test.mjs|\
+              tests/launch/workflow-mailbox-secret-scope.test.mjs|\
+              .github/workflows/apply-final-launch-evidence-corrections.yml|\
+              .github/workflows/diagnose-final-launch-evidence-apply.yml|\
+              scripts/apply-final-launch-evidence-corrections.mjs|\
+              scripts/apply-final-launch-evidence-corrections.payload.mjs|\
+              scripts/fix-launch-evidence-test-contracts.mjs)
+                return 0
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+          }
+
+          changed_count=0
+          permanent_count=0
+          while IFS= read -r changed_file; do
+            [[ -n "$changed_file" ]] || continue
+            changed_count=$((changed_count + 1))
+            if ! allowed_file "$changed_file"; then
+              echo "::error::Unexpected file in permanent OTP/mailbox commit: $changed_file"
+              exit 1
+            fi
+            case "$changed_file" in
+              "${temporary_files[0]}"|"${temporary_files[1]}"|"${temporary_files[2]}"|"${temporary_files[3]}"|"${temporary_files[4]}") ;;
+              *) permanent_count=$((permanent_count + 1)) ;;
+            esac
+          done < <(git diff --cached --name-only)
+
+          if [[ "$changed_count" -eq 0 || "$permanent_count" -eq 0 ]]; then
+            echo "::error::Self-cleaning launch evidence commit has no permanent reviewed changes."
+            exit 1
+          fi
+          for temporary_file in "${temporary_files[@]}"; do
+            if [[ -e "$temporary_file" ]]; then
+              echo "::error::Temporary patch machinery remains in worktree: $temporary_file"
+              exit 1
+            fi
+          done
+
           git diff --cached --check
+          git status --short
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m 'fix(launch): harden OTP mailbox evidence'
