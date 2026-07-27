@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/apply-ticket-pr-review-fixes.yml
       - scripts/apply-ticket-pr-review-fixes.mjs
+      - scripts/apply-ticket-final-authority-test-fix.mjs
 
 permissions:
   contents: write
@@ -34,7 +35,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply reviewed ticket corrections
-        run: node scripts/apply-ticket-pr-review-fixes.mjs
+        run: |
+          node scripts/apply-ticket-pr-review-fixes.mjs
+          node scripts/apply-ticket-final-authority-test-fix.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -57,6 +60,7 @@ jobs:
             tests/launch/ticket-review-blockers.test.mjs \
             test/five-profile-audit-guards.test.mjs \
             tests/launch/property-geo-authority.test.mjs \
+            tests/launch/firestore-final-authority.test.mjs \
             tests/launch/canonical-ticket-authority.test.mjs
 
       - name: Capture complete launch-honesty suite
@@ -96,12 +100,14 @@ jobs:
           set -euo pipefail
           git rm \
             .github/workflows/apply-ticket-pr-review-fixes.yml \
-            scripts/apply-ticket-pr-review-fixes.mjs
+            scripts/apply-ticket-pr-review-fixes.mjs \
+            scripts/apply-ticket-final-authority-test-fix.mjs
           git add \
             functions/tenantTicketOperations.ts \
             src/lib/ticketSystemService.ts \
             src/tenant/pages/TenantRequestPage.tsx \
             test/five-profile-audit-guards.test.mjs \
+            tests/launch/firestore-final-authority.test.mjs \
             tests/launch/property-geo-authority.test.mjs \
             tests/launch/ticket-review-blockers.test.mjs
           git diff --cached --check
