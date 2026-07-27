@@ -9,7 +9,7 @@ const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 
 test('Broker fixture is restricted to the verified dedicated E2E Broker and does not seed a commission', () => {
-  assert.match(fixture, /E2E_BROKER_EMAIL is required/);
+  assert.match(fixture, /E2E_BROKER_MAILBOX_EMAIL is required/);
   assert.match(fixture, /brokerUser\.emailVerified/);
   assert.match(fixture, /profile\.e2eLaunchSeed !== true/);
   assert.match(fixture, /dedicated E2E Broker/);

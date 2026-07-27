@@ -80,15 +80,30 @@ test('production deployment remains approval-gated and same-run bound', () => {
 });
 
 test('protected production job receives every five-role credential and App Check UUID', () => {
+  const mailboxRoles = new Set(['OWNER', 'BROKER']);
   for (const role of ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER']) {
+    const emailKey = mailboxRoles.has(role)
+      ? `E2E_${role}_MAILBOX_EMAIL`
+      : `E2E_${role}_EMAIL`;
+    const emailMapping = `${emailKey}: \${{ secrets.${emailKey} }}`;
+    const variableOrSecretEmailMapping = `${emailKey}: \${{ vars.${emailKey} || secrets.${emailKey} }}`;
     assert.ok(
-      workflow.includes(`E2E_${role}_EMAIL: \${{ secrets.E2E_${role}_EMAIL }}`),
+      workflow.includes(emailMapping) || workflow.includes(variableOrSecretEmailMapping),
       `missing protected ${role} email mapping`,
     );
     assert.ok(
       workflow.includes(`E2E_${role}_PASSWORD: \${{ secrets.E2E_${role}_PASSWORD }}`),
       `missing protected ${role} password mapping`,
     );
+  }
+  for (const role of mailboxRoles) {
+    for (const suffix of ['CLIENT_ID', 'CLIENT_SECRET', 'REFRESH_TOKEN']) {
+      const key = `E2E_${role}_MAILBOX_${suffix}`;
+      assert.ok(
+        workflow.includes(`${key}: \${{ secrets.${key} }}`),
+        `missing protected ${role} mailbox ${suffix} mapping`,
+      );
+    }
   }
   assert.match(workflow, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN:\s*\$\{\{\s*secrets\.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
   assert.match(workflow, /E2E_STRICT_ROLES:\s*'true'/);

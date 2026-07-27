@@ -32,7 +32,7 @@ async function assertMobileNoHorizontalOverflow(page: Page) {
 const roleProfiles = [
   {
     role: 'owner' as const,
-    emailEnv: 'E2E_OWNER_EMAIL',
+    emailEnv: 'E2E_OWNER_MAILBOX_EMAIL',
     passwordEnv: 'E2E_OWNER_PASSWORD',
     heading: /Owner Profile|ملف المالك/i,
     save: /Save Owner Profile|حفظ ملف المالك/i,
@@ -62,7 +62,7 @@ const roleProfiles = [
   },
   {
     role: 'broker' as const,
-    emailEnv: 'E2E_BROKER_EMAIL',
+    emailEnv: 'E2E_BROKER_MAILBOX_EMAIL',
     passwordEnv: 'E2E_BROKER_PASSWORD',
     heading: /Broker Profile|ملف الوسيط/i,
     save: /Submit|Save|إرسال|حفظ/i,

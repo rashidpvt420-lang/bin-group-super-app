@@ -38,7 +38,7 @@ const safeId = (value, fallback = 'evidence') => text(value)
   .replace(/_+/g, '_')
   .slice(0, 150) || fallback;
 
-const brokerEmail = text(process.env.E2E_BROKER_EMAIL).toLowerCase();
+const brokerEmail = text(process.env.E2E_BROKER_MAILBOX_EMAIL).toLowerCase();
 const brokerPassword = text(process.env.E2E_BROKER_PASSWORD);
 function resolveBrokerMailboxSecret(name) {
   const configured = text(process.env[name]);
@@ -68,7 +68,7 @@ const commitSha = text(process.env.GITHUB_SHA) || (() => {
 })();
 
 for (const [name, value] of Object.entries({
-  E2E_BROKER_EMAIL: brokerEmail,
+  E2E_BROKER_MAILBOX_EMAIL: brokerEmail,
   E2E_BROKER_PASSWORD: brokerPassword,
   E2E_BROKER_MAILBOX_CLIENT_ID: mailboxClientId,
   E2E_BROKER_MAILBOX_CLIENT_SECRET: mailboxClientSecret,

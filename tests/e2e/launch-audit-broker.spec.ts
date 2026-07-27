@@ -7,7 +7,7 @@
 import { expect, Page, test } from '@playwright/test';
 import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
-const EMAIL    = process.env.E2E_BROKER_EMAIL    ?? '';
+const EMAIL    = process.env.E2E_BROKER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
@@ -16,7 +16,7 @@ const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
-    throw new Error('Launch audit blocked: missing E2E_BROKER_EMAIL/PASSWORD. Do not skip broker launch audit during clearance.');
+    throw new Error('Launch audit blocked: missing E2E_BROKER_MAILBOX_EMAIL/PASSWORD. Do not skip broker launch audit during clearance.');
   }
 }
 

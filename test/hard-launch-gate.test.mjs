@@ -352,7 +352,7 @@ test('App Check monitor requires browser authentication before a Firestore read 
 test('owner and tenant business proofs are mandatory and backend-verified', () => {
   const owner = readFileSync('tests/e2e/business-owner.spec.ts', 'utf8');
   const tenant = readFileSync('tests/e2e/business-tenant.spec.ts', 'utf8');
-  assert.match(owner, /E2E_OWNER_EMAIL/);
+  assert.match(owner, /E2E_OWNER_MAILBOX_EMAIL/);
   assert.match(owner, /waitForURL\('\*\*\/owner\//);
   assert.doesNotMatch(owner, /page\.route\(/);
   assert.match(tenant, /This suite deliberately does not seed a completed ticket/);

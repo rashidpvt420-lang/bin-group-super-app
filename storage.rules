@@ -40,7 +40,7 @@ service firebase.storage {
     }
 
     function isHrRole() {
-      return isAdmin() || hasAnyRole(['hr_admin', 'hr_manager', 'hr_staff', 'finance_admin', 'finance_staff', 'account_manager']);
+      return isAdmin() || hasAnyRole(['hr_admin', 'hr_manager', 'hr_staff']);
     }
 
     function isAuditor() {
@@ -326,8 +326,14 @@ service firebase.storage {
       allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
     }
 
-    match /{allPaths=**} {
-      allow read, write: if isAdmin();
+    match /privateHrDocuments/{staffId}/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Unknown paths remain Founder/Admin-only, except private HR documents,
+    // which are written and read only through Admin SDK callables.
+    match /{collection}/{allPaths=**} {
+      allow read, write: if isAdmin() && collection != 'privateHrDocuments';
     }
   }
 }
