@@ -66,6 +66,16 @@ const RoleGatewayPage: React.FC = () => {
         setNotice(null);
 
         if (roleId === 'admin') {
+            const normalizedRole = String(role || '').toLowerCase();
+            const adminEligible = isAdmin || ['admin', 'super_admin', 'ceo', 'manager'].includes(normalizedRole);
+            if (!auth.currentUser && !user) {
+                navigate('/login?intendedRole=admin&returnTo=%2Fadmin%2Fdashboard');
+                return;
+            }
+            if (!adminEligible) {
+                setNotice('Admin access requires an approved admin identity. Use the public role that matches your account or contact BIN GROUP support.');
+                return;
+            }
             navigate('/admin/dashboard');
             return;
         }
@@ -143,8 +153,7 @@ const RoleGatewayPage: React.FC = () => {
 
                 <Grid container spacing={3}>
                     {roles.map((r) => {
-                        const isAdminRole = r.id === 'admin';
-                        const disabled = savingRole !== null || (isAdminRole && !canShowAdminChip && !!user);
+                        const disabled = savingRole !== null;
                         return (
                             <Grid item xs={12} sm={6} md={4} key={r.id}>
                                 <Card sx={{ height: '100%', borderRadius: 5, border: '1px solid #E5E7EB', boxShadow: '0 18px 48px rgba(17,24,39,0.06)' }}>

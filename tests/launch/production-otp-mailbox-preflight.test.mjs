@@ -13,10 +13,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 import { readFileSync } from 'node:fs';
+
 
 // ─── Minimal fetch mock infrastructure ───────────────────────────────────────
 
