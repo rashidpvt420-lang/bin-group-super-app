@@ -1,0 +1,168 @@
+name: Apply Final Launch Evidence Corrections
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/apply-final-launch-evidence-corrections.yml
+      - scripts/apply-final-launch-evidence-corrections.mjs
+      - scripts/fix-launch-evidence-test-contracts.mjs
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: apply-final-launch-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  patch-test-commit:
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'agent/finalize-launch-evidence-sequence' &&
+      github.event.pull_request.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/finalize-launch-evidence-sequence
+          fetch-depth: 0
+
+      - name: Apply reviewed launch evidence corrections
+        run: |
+          node scripts/apply-final-launch-evidence-corrections.mjs
+          node scripts/fix-launch-evidence-test-contracts.mjs
+
+      - name: Capture focused OTP, mailbox, workflow and correlation contracts
+        id: focused_tests
+        shell: bash
+        run: |
+          set +e
+          node --test --test-reporter=spec \
+            tests/launch/gmail-otp-reader-hardening.test.mjs \
+            tests/launch/production-otp-mailbox-preflight.test.mjs \
+            tests/launch/e2e-mailbox-env-contract.test.mjs \
+            tests/launch/otp-correlation-contract.test.mjs \
+            tests/launch/workflow-mailbox-secret-scope.test.mjs \
+            tests/launch/github-workflows-actionlint.test.mjs \
+            tests/launch/broker-payout-otp-live-evidence.test.mjs \
+            tests/launch/owner-onboarding-production-proof.test.mjs \
+            > /tmp/focused-launch-evidence-tests.log 2>&1
+          status=$?
+          printf '%s\n' "$status" > /tmp/focused-launch-evidence-tests.status
+          tail -n 160 /tmp/focused-launch-evidence-tests.log
+          exit 0
+
+      - name: Upload focused test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-launch-evidence-tests-${{ github.sha }}
+          path: |
+            /tmp/focused-launch-evidence-tests.log
+            /tmp/focused-launch-evidence-tests.status
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce focused test result
+        shell: bash
+        run: test "$(cat /tmp/focused-launch-evidence-tests.status)" = "0"
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Use Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Build Firebase Functions
+        run: npm run build:functions
+
+      - name: Capture actionlint diagnostics
+        shell: bash
+        run: |
+          set +e
+          npx --yes github-actionlint \
+            .github/workflows/admin-production-evidence.yml \
+            .github/workflows/firebase-production-deploy.yml \
+            .github/workflows/live-role-smoke.yml \
+            > /tmp/actionlint.log 2>&1
+          status=$?
+          printf '%s\n' "$status" > /tmp/actionlint.status
+          cat /tmp/actionlint.log
+          exit 0
+
+      - name: Upload actionlint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: actionlint-${{ github.sha }}
+          path: |
+            /tmp/actionlint.log
+            /tmp/actionlint.status
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce actionlint result
+        shell: bash
+        run: test "$(cat /tmp/actionlint.status)" = "0"
+
+      - name: Run complete launch-honesty suite
+        run: npm run test:launch-honesty
+
+      - name: Commit permanent corrections and remove temporary patch machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm \
+            .github/workflows/apply-final-launch-evidence-corrections.yml \
+            scripts/apply-final-launch-evidence-corrections.mjs \
+            scripts/fix-launch-evidence-test-contracts.mjs
+          git add \
+            .env.e2e.example \
+            .github/workflows/admin-production-evidence.yml \
+            .github/workflows/firebase-production-deploy.yml \
+            .github/workflows/live-role-smoke.yml \
+            functions/contractSignatureOtpMailbox.ts \
+            functions/secureBrokerPayoutOperations.ts \
+            scripts/lib/gmail-otp-reader.mjs \
+            scripts/lib/production-otp-mailbox-preflight.mjs \
+            scripts/predeploy-approval-gate.mjs \
+            scripts/run-broker-production-evidence.mjs \
+            scripts/run-owner-onboarding-production-evidence-secure.mjs \
+            scripts/verify-e2e-env.mjs \
+            scripts/verify-production-otp-mailboxes.mjs \
+            src/broker/pages/BrokerCommissionsPage.tsx \
+            src/owner/components/ContractSignatureOtpControl.tsx \
+            tests/e2e/business-broker.spec.ts \
+            tests/e2e/business-owner.spec.ts \
+            tests/launch/broker-payout-otp-live-evidence.test.mjs \
+            tests/launch/e2e-mailbox-env-contract.test.mjs \
+            tests/launch/github-workflows-actionlint.test.mjs \
+            tests/launch/gmail-otp-reader-hardening.test.mjs \
+            tests/launch/otp-correlation-contract.test.mjs \
+            tests/launch/owner-onboarding-production-proof.test.mjs \
+            tests/launch/production-otp-mailbox-preflight.test.mjs \
+            tests/launch/workflow-mailbox-secret-scope.test.mjs
+          git diff --cached --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "fix(launch): harden OTP mailbox evidence"
+          git push origin HEAD:agent/finalize-launch-evidence-sequence
