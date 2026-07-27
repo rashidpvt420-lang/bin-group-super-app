@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +18,7 @@ const WIF_PROVIDER_RE = /^projects\/\d+\/locations\/global\/workloadIdentityPool
 const SERVICE_ACCOUNT_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PLACEHOLDER_RE = /(?:YOUR_|REPLACE(?:_ME)?|CHANGE_ME|CHANGEME|TODO|EXAMPLE|XXX+)/i;
+const PRODUCTION_ENV_WRITER = readFileSync(new URL('./write-production-env.mjs', import.meta.url), 'utf8');
 
 export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
   'GCP_PROJECT_ID',
@@ -49,6 +51,9 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
 ]);
 
 const value = (env, key) => String(env?.[key] || '').trim();
+const hrEnabledByProductionWriter = () =>
+  /\[['"]VITE_ENABLE_HR_MODULE['"],\s*['"]true['"]\]/.test(PRODUCTION_ENV_WRITER) &&
+  /\[['"]REACT_APP_ENABLE_HR_MODULE['"],\s*['"]true['"]\]/.test(PRODUCTION_ENV_WRITER);
 
 function requirePattern(failures, env, key, pattern, description) {
   const current = value(env, key);
@@ -59,6 +64,10 @@ export function validateProductionWorkflowEnv(env = process.env) {
   const failures = [];
   for (const key of REQUIRED_PRODUCTION_VALUES) {
     if (!value(env, key)) failures.push(`Missing required production value: ${key}`);
+  }
+
+  if (!hrEnabledByProductionWriter()) {
+    failures.push('write-production-env.mjs must enable both VITE_ENABLE_HR_MODULE and REACT_APP_ENABLE_HR_MODULE');
   }
 
   if (value(env, 'GCP_PROJECT_ID') && value(env, 'GCP_PROJECT_ID') !== EXPECTED_PROJECT_ID) {
@@ -146,6 +155,7 @@ export function productionWorkflowEnvSummary(env = process.env) {
     mainUrlMatched: value(env, 'E2E_BASE_URL').replace(/\/+$/, '') === EXPECTED_MAIN_URL,
     adminUrlMatched: value(env, 'E2E_ADMIN_BASE_URL').replace(/\/+$/, '') === EXPECTED_ADMIN_URL,
     appCheckEnabled: value(env, 'VITE_ENABLE_FIREBASE_APPCHECK') === 'true',
+    hrModuleEnabledByProductionWriter: hrEnabledByProductionWriter(),
     firebaseAndMapsKeysSeparated:
       Boolean(value(env, 'VITE_FIREBASE_API_KEY')) &&
       Boolean(value(env, 'VITE_GOOGLE_MAPS_API_KEY')) &&
@@ -165,7 +175,7 @@ if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
   }
   const summary = productionWorkflowEnvSummary(process.env);
   console.log(
-    '[production-preflight] PASS — deployment, five-role, App Check, Maps and Web Push values are configured '
-      + `(required=${summary.requiredValueCount}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
+    '[production-preflight] PASS — deployment, five-role, App Check, HR, Maps and Web Push values are configured '
+      + `(required=${summary.requiredValueCount}, hr=${summary.hrModuleEnabledByProductionWriter}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
   );
 }

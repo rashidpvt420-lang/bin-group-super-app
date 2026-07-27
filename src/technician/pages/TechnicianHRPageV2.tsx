@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun, Wallet } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
-import { addDoc, collection, db, doc, functions, getDoc, getDownloadURL, httpsCallable, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
+import { addDoc, collection, db, doc, functions, getDoc, httpsCallable, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES } from '../utils/blueCollarEssIntentRouter';
 import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
@@ -177,26 +177,33 @@ export default function TechnicianHRPageV2() {
       const label = documentTypes.find(([value]) => value === documentType)?.[1] || documentType;
       const path = `staffDocuments/${user.uid}/${documentType}/${Date.now()}-${safeFileName(file.name)}`;
       const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, file, { contentType: file.type || 'application/octet-stream' });
-      const fileUrl = await getDownloadURL(fileRef);
+      await uploadBytes(fileRef, file, {
+        contentType: file.type || 'application/octet-stream',
+        customMetadata: {
+          staffId: user.uid,
+          documentType,
+          accessMode: 'firebase_storage_rules',
+        },
+      });
       const common = {
         ...identity(),
         documentType,
         documentLabel: label,
         documentFileName: file.name,
-        documentFileUrl: fileUrl,
         fileName: file.name,
         filePath: path,
-        fileUrl,
         mimeType: file.type || 'application/octet-stream',
         sizeBytes: file.size,
+        sensitiveDocument: true,
+        accessMode: 'firebase_storage_rules',
+        downloadTokenPersisted: false,
         paperless: true,
         status: 'pending_hr_review',
         source: 'paperless_staff_document_vault',
       };
       await addDoc(collection(db, 'staffDocuments'), { ...common, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       await createAiCase(`Document update uploaded for HR review: ${label}`, common);
-      setUploadMessage('Document uploaded and sent to HR for review.');
+      setUploadMessage('Document uploaded securely and sent to HR for review. Access remains controlled by Firebase Storage rules.');
     } catch (error: any) {
       console.error('Staff document upload failed:', error);
       setUploadMessage(`Upload failed: ${error?.message || 'Permission or network issue'}`);
@@ -267,7 +274,8 @@ export default function TechnicianHRPageV2() {
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Staff Document Upload Vault</Typography></Stack>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.</Typography>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 1 }}>Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.</Typography>
+        <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', mb: 2 }}>Sensitive files remain behind authenticated Firebase Storage rules. Firestore stores the protected object path, not a reusable public download URL.</Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
           <TextField select label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}>
             {documentTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}

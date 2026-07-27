@@ -1,11 +1,12 @@
 /**
  * business-broker.spec.ts
- * Deep E2E business flow for the Broker role.
- * Verifies: authenticated broker identity, lead attribution, commission visibility,
- * and request-only payout OTP challenge issuance without reading or consuming the code.
+ * Deep production E2E for the Broker role.
+ * Proves both the Broker UI and the server-authoritative lead -> contract ->
+ * deterministic commission -> single-use payout lifecycle.
  */
 import { config as loadDotenv } from 'dotenv';
-import { existsSync } from 'fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { test, expect, Page } from '@playwright/test';
@@ -13,7 +14,9 @@ import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import { getLatestOtp } from './helpers/gmail-otp-reader';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '../../.env.e2e');
+const repositoryRoot = path.resolve(__dirname, '../..');
+const envPath = path.resolve(repositoryRoot, '.env.e2e');
+const lifecycleEvidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/broker-production-evidence.json');
 if (existsSync(envPath)) loadDotenv({ path: envPath, override: false });
 
 // Owner and Broker authenticate using their dedicated OAuth-verified mailboxes.
@@ -46,7 +49,35 @@ async function login(page: Page) {
   );
 }
 
+async function submitBrokerLead(page: Page, uniqueLead: string) {
+  await page.goto('/broker/leads/new', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+
+  const clientName = page.getByTestId('broker-lead-client-name');
+  await expect(clientName).toBeVisible({ timeout: 15_000 });
+  await clientName.fill(uniqueLead);
+
+  await page.getByLabel(/Phone Number/i).fill('+971501234567');
+  await page.getByLabel(/Email Address/i).fill(`broker-e2e-${Date.now()}@example.com`);
+  await page.getByLabel(/Property Interest|Requirement/i).fill('Full maintenance and property management for an E2E production villa');
+  await page.getByLabel(/Location|Emirate/i).fill('Al Ain');
+  await page.getByLabel(/Budget Range/i).fill('50000');
+  await page.getByLabel(/Mission Notes/i).fill('Exact-SHA verification of Broker attribution, conversion, commission idempotency, and payout authority.');
+
+  const submitLead = page.getByTestId('broker-lead-submit');
+  await expect(submitLead).toBeEnabled({ timeout: 10_000 });
+  await submitLead.click();
+
+  await expect(page.getByText(/Lead recorded with attribution/i)).toBeVisible({ timeout: 25_000 });
+  const createdLeadCard = page.getByTestId('broker-lead-card').filter({ hasText: uniqueLead }).first();
+  await expect(createdLeadCard).toBeVisible({ timeout: 20_000 });
+  await expect(createdLeadCard).toContainText(/ATTRIBUTION|broker_lead_/i, { timeout: 20_000 });
+  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|Lead could not be submitted/i, { timeout: 5_000 });
+}
+
 test.describe('Broker Business Workflow', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
     (page as any).__binAppCheckMonitor = appCheckMonitor;
@@ -61,33 +92,10 @@ test.describe('Broker Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-  test('Broker can submit a lead, view commissions, and request a payout OTP challenge', async ({ page }) => {
-    test.setTimeout(130_000);
+  test('Broker can submit a lead, view commissions, and complete a real mailbox OTP payout request', async ({ page }) => {
+    test.setTimeout(150_000);
     const uniqueLead = `E2E Lead ${Date.now()}`;
-
-    await page.goto('/broker/leads/new', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
-
-    const clientName = page.getByTestId('broker-lead-client-name');
-    await expect(clientName).toBeVisible({ timeout: 15_000 });
-    await clientName.fill(uniqueLead);
-
-    await page.getByLabel(/Phone Number/i).fill('+971501234567');
-    await page.getByLabel(/Email Address/i).fill(`broker-e2e-${Date.now()}@example.com`);
-    await page.getByLabel(/Property Interest|Requirement/i).fill('Full maintenance and property management for an E2E staging villa');
-    await page.getByLabel(/Location|Emirate/i).fill('Al Ain');
-    await page.getByLabel(/Budget Range/i).fill('50000');
-    await page.getByLabel(/Mission Notes/i).fill('Credentialed staging verification of broker attribution and lead creation.');
-
-    const submitLead = page.getByTestId('broker-lead-submit');
-    await expect(submitLead).toBeEnabled({ timeout: 10_000 });
-    await submitLead.click();
-
-    await expect(page.getByText(/Lead recorded with attribution/i)).toBeVisible({ timeout: 25_000 });
-    const createdLeadCard = page.getByTestId('broker-lead-card').filter({ hasText: uniqueLead }).first();
-    await expect(createdLeadCard).toBeVisible({ timeout: 20_000 });
-    await expect(createdLeadCard).toContainText(/ATTRIBUTION|broker_lead_/i, { timeout: 20_000 });
-    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|Lead could not be submitted/i, { timeout: 5_000 });
+    await submitBrokerLead(page, uniqueLead);
 
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
@@ -109,12 +117,10 @@ test.describe('Broker Business Workflow', () => {
     await expect(otpCode).toHaveValue('');
     await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
 
-    // Retrieve the real OTP from the broker Gmail mailbox via OAuth2 / Gmail API.
-    // The code is sent immediately after requestOtp.click(); allow up to 90 s for delivery.
     const otpStartMs = Date.now();
     const otp = await getLatestOtp('broker', {
-      timeoutMs:   90_000,
-      afterMs:     otpStartMs - 10_000, // tolerate small clock skew
+      timeoutMs: 90_000,
+      afterMs: otpStartMs - 10_000,
       subjectHint: 'payout verification',
     });
 
@@ -123,9 +129,58 @@ test.describe('Broker Business Workflow', () => {
     await expect(submitOtp).toBeEnabled({ timeout: 5_000 });
     await submitOtp.click();
 
-    // Verify payout was accepted by the app
     await expect(page.getByText(/Payout request submitted|Payout approved|payout successfully/i)).toBeVisible({ timeout: 30_000 });
     await expect(otpDialog).toBeHidden({ timeout: 15_000 });
     await expect(page.locator('body')).not.toContainText(/Unable to send payout verification code|payout verification or submission failed/i);
+  });
+
+  test('UI-created lead converts to one deterministic commission and one single-use payout request', async ({ page }, testInfo) => {
+    test.setTimeout(360_000);
+    const uniqueLead = `E2E Lifecycle Lead ${Date.now()}`;
+    await submitBrokerLead(page, uniqueLead);
+
+    execFileSync(process.execPath, ['scripts/run-broker-production-evidence.mjs'], {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        E2E_BROKER_LEAD_NAME: uniqueLead,
+      },
+      stdio: 'inherit',
+      timeout: 5 * 60 * 1000,
+    });
+
+    expect(existsSync(lifecycleEvidencePath), 'Broker lifecycle runner must create its exact-SHA evidence artifact.').toBe(true);
+    const evidence = JSON.parse(readFileSync(lifecycleEvidencePath, 'utf8'));
+
+    expect(evidence).toMatchObject({
+      status: 'passed',
+      projectId: 'bin-group-57c60',
+      hardLaunchClaim: false,
+      leadConversion: {
+        leadCreatedThroughUi: true,
+        converted: true,
+        contractActive: true,
+      },
+      commission: {
+        countAfterActivationReplay: 1,
+        deterministicIdPreserved: true,
+        payoutStatus: 'REQUESTED',
+      },
+      payout: {
+        mailboxReceiptVerified: true,
+        otpVerified: true,
+        otpConsumed: true,
+        commissionCount: 1,
+        replayRejected: true,
+      },
+    });
+    expect(evidence.commitSha).toMatch(/^[a-f0-9]{40}$/);
+    expect(evidence.commission.amount).toBe(500);
+    expect(evidence.commission.currency).toBe('AED');
+
+    await testInfo.attach('broker-contract-to-payout-production-evidence', {
+      path: lifecycleEvidencePath,
+      contentType: 'application/json',
+    });
   });
 });

@@ -241,7 +241,7 @@ function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   if (isRolePortalRoute) return null;
-  return <SovereignAIChat role="unknown" />;
+  return <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} />;
 }
 
 function AppContent() {
