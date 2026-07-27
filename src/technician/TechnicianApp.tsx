@@ -109,6 +109,7 @@ export default function TechnicianApp() {
                 <Route path="/map" element={<TechnicianMapPage />} />
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
+                <Route path="/hr" element={ENABLE_HR_MODULE ? <TechnicianHRPage /> : <HrComingSoon />} />
                 <Route path="/hr/*" element={ENABLE_HR_MODULE ? <TechnicianHRPage /> : <HrComingSoon />} />
                 <Route path="/offline" element={<TechnicianOfflinePage />} />
                 <Route path="/support" element={<SupportPage />} />
