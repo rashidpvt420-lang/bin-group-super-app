@@ -172,6 +172,7 @@ jobs:
             scripts/lib/production-otp-mailbox-preflight.mjs \
             scripts/predeploy-approval-gate.mjs \
             scripts/run-broker-production-evidence.mjs \
+            scripts/run-owner-onboarding-production-evidence.mjs \
             scripts/run-owner-onboarding-production-evidence-secure.mjs \
             scripts/verify-e2e-env.mjs \
             scripts/verify-production-otp-mailboxes.mjs \
