@@ -62,6 +62,7 @@ on:
       - 'tests/launch/firebase-functions-deploy-batching.test.mjs'
       - 'tests/launch/five-profile-completeness-audit.test.mjs'
       - 'tests/launch/hard-launch-blocker-remediation.test.mjs'
+      - 'tests/launch/hr-automation-integrity.test.mjs'
       - 'tests/launch/owner-property-proof-authority-audit.test.mjs'
       - 'tests/launch/privileged-account-cleanup-dry-run.test.mjs'
       - 'tests/launch/profile-lifecycle-commercial-audit.test.mjs'
@@ -75,6 +76,7 @@ on:
       - 'agent/five-profile-onboarding-hardening'
       - 'agent/profile-readiness-authority-hardening'
       - 'agent/hard-launch-blocker-remediation-*'
+      - 'agent/hr-audit-role-integrity-*'
 
 permissions:
   contents: read
@@ -145,6 +147,7 @@ jobs:
           tests/launch/tenant-readiness-authority-audit.test.mjs
           tests/launch/firebase-functions-deploy-batching.test.mjs
           tests/launch/hard-launch-blocker-remediation.test.mjs
+          tests/launch/hr-automation-integrity.test.mjs
 
       - name: Build main application
         run: npm run build
