@@ -225,13 +225,15 @@ jobs:
               founder_email:$founderEmail,
               launch_mode:"bank-pilot",
               run_public_release_gate:"false",
-              incident_active_json:"[]",
-              incident_requires_rollback:"false",
-              incident_rollback_reason:"",
-              incident_evidence_refs:$incidentReference,
-              hard_clearance_run_id:"",
-              stripe_live_checkout_session_id:"",
-              stripe_live_webhook_event_id:""
+              deployment_payload_json:({
+                incident_active_json:"[]",
+                incident_requires_rollback:"false",
+                incident_rollback_reason:"",
+                incident_evidence_refs:$incidentReference,
+                hard_clearance_run_id:"",
+                stripe_live_checkout_session_id:"",
+                stripe_live_webhook_event_id:""
+              } | tostring)
             }}' > bank-pilot-dispatch.json
 
           gh api --method POST \
@@ -345,7 +347,7 @@ jobs:
         run: bash scripts/run-owner-production-diagnosis.sh
 
       - name: Upload safe diagnostic evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.diagnosis.outputs.artifact_name }}
           path: |

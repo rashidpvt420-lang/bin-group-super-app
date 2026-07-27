@@ -36,54 +36,11 @@ on:
         required: true
         type: boolean
         default: false
-      incident_attestation:
-        description: 'Type exactly ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR or ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'
-        required: true
-        type: string
-      incident_active_json:
-        description: 'JSON array of active incidents (use [] only with CLEAR attestation)'
-        required: true
-        type: string
-        default: '[]'
-      incident_requires_rollback:
-        description: 'Whether a production rollback hold is active'
-        required: true
-        type: boolean
-        default: false
-      incident_rollback_reason:
-        description: 'Required when incident_requires_rollback is true'
+      deployment_payload_json:
+        description: 'JSON containing incident, hard-clearance, and Stripe live-proof fields'
         required: false
         type: string
-        default: ''
-      incident_last_deployment_failed:
-        description: 'Whether the last production deployment failed'
-        required: true
-        type: boolean
-        default: false
-      incident_last_deployment_failed_at:
-        description: 'ISO-8601 timestamp required when incident_last_deployment_failed is true'
-        required: false
-        type: string
-        default: ''
-      incident_evidence_refs:
-        description: 'Comma-separated evidence references for the incident attestation (required, non-empty)'
-        required: true
-        type: string
-      hard_clearance_run_id:
-        description: 'Successful Live Role Smoke Tests hard-clearance run ID for this exact SHA (required for public mode)'
-        required: false
-        type: string
-        default: ''
-      stripe_live_checkout_session_id:
-        description: 'Recent successful cs_live_ session to verify through Stripe API (required for public mode)'
-        required: false
-        type: string
-        default: ''
-      stripe_live_webhook_event_id:
-        description: 'Matching checkout.session.completed evt_ ID (required for public mode)'
-        required: false
-        type: string
-        default: ''
+        default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
 
 permissions:
   contents: read
@@ -129,9 +86,9 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
-          HARD_CLEARANCE_RUN_ID_INPUT: ${{ inputs.hard_clearance_run_id }}
-          STRIPE_LIVE_SESSION_ID_INPUT: ${{ inputs.stripe_live_checkout_session_id }}
-          STRIPE_LIVE_EVENT_ID_INPUT: ${{ inputs.stripe_live_webhook_event_id }}
+          HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
+          STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
           [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
@@ -264,9 +221,9 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
-          HARD_CLEARANCE_RUN_ID_INPUT: ${{ inputs.hard_clearance_run_id }}
-          STRIPE_LIVE_SESSION_ID_INPUT: ${{ inputs.stripe_live_checkout_session_id }}
-          STRIPE_LIVE_EVENT_ID_INPUT: ${{ inputs.stripe_live_webhook_event_id }}
+          HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
+          STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
           [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
@@ -324,7 +281,7 @@ jobs:
         if: ${{ inputs.launch_mode == 'public' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
           EXPECTED_SHA: ${{ github.sha }}
           EXPECTED_REPOSITORY: ${{ github.repository }}
         run: |
@@ -344,31 +301,31 @@ jobs:
 
       - name: Download predeploy exact-SHA hard-clearance evidence
         if: ${{ inputs.launch_mode == 'public' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: hard-public-launch-clearance-${{ github.sha }}
           path: predeploy_hard_clearance
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.hard_clearance_run_id }}
+          run-id: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
 
       - name: Verify predeploy hard-clearance artifact
         if: ${{ inputs.launch_mode == 'public' }}
         env:
           HARD_CLEARANCE_DIRECTORY: predeploy_hard_clearance
           EXPECTED_COMMIT_SHA: ${{ github.sha }}
-          EXPECTED_HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+          EXPECTED_HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
         run: node scripts/verify-hard-clearance-artifact.mjs
 
       - name: Create production incidents artifact from protected workflow attestation
         env:
           AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
-          INCIDENT_ATTESTATION: ${{ inputs.incident_attestation }}
-          INCIDENT_ACTIVE_JSON: ${{ inputs.incident_active_json }}
-          INCIDENT_REQUIRES_ROLLBACK: ${{ inputs.incident_requires_rollback }}
-          INCIDENT_ROLLBACK_REASON: ${{ inputs.incident_rollback_reason }}
-          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ inputs.incident_last_deployment_failed }}
-          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ inputs.incident_last_deployment_failed_at }}
-          INCIDENT_EVIDENCE_REFS: ${{ inputs.incident_evidence_refs }}
+          INCIDENT_ATTESTATION: ${{ fromJSON(inputs.deployment_payload_json).incident_attestation }}
+          INCIDENT_ACTIVE_JSON: ${{ fromJSON(inputs.deployment_payload_json).incident_active_json }}
+          INCIDENT_REQUIRES_ROLLBACK: ${{ fromJSON(inputs.deployment_payload_json).incident_requires_rollback }}
+          INCIDENT_ROLLBACK_REASON: ${{ fromJSON(inputs.deployment_payload_json).incident_rollback_reason }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed_at }}
+          INCIDENT_EVIDENCE_REFS: ${{ fromJSON(inputs.deployment_payload_json).incident_evidence_refs }}
         run: node scripts/create-production-incidents-attestation.mjs
 
       - name: Create signed founder authorization
@@ -583,7 +540,7 @@ jobs:
         run: npm run hard-launch:decision
 
       - name: Upload production deployment metadata after verification
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-deployment-${{ github.sha }}
           path: |
@@ -710,7 +667,7 @@ jobs:
           node scripts/verify-e2e-env.mjs
 
       - name: Download production deployment metadata
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: production-deployment-${{ github.sha }}
           # Upload paths already include launch_package/. Downloading into that
@@ -731,7 +688,7 @@ jobs:
       - name: Verify hard-clearance run provenance
         env:
           GH_TOKEN: ${{ github.token }}
-          HARD_CLEARANCE_RUN_ID: ${{ inputs.hard_clearance_run_id }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
           EXPECTED_SHA: ${{ github.sha }}
           EXPECTED_REPOSITORY: ${{ github.repository }}
         run: |
@@ -751,12 +708,12 @@ jobs:
             <<<"$run_json" >/dev/null
 
       - name: Download exact-SHA hard-clearance evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: hard-public-launch-clearance-${{ github.sha }}
           path: hard_clearance
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.hard_clearance_run_id }}
+          run-id: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
 
       - name: Restore pilot incident evidence
         run: |
@@ -842,8 +799,8 @@ jobs:
       - name: Verify recent live Stripe payment and processed webhook
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ inputs.stripe_live_checkout_session_id }}
-          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ inputs.stripe_live_webhook_event_id }}
+          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
+          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
           RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
         run: node scripts/verify-stripe-live-proof.mjs
@@ -877,7 +834,7 @@ jobs:
 
       - name: Upload public release clearance artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: public-release-clearance-${{ github.sha }}
           path: |

@@ -23,48 +23,11 @@ on:
         description: 'For hard-clearance: successful live-evidence run ID for the same SHA'
         required: false
         type: string
-      confirmation:
-        description: 'For hard-clearance: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
+      clearance_payload_json:
+        description: 'For hard-clearance: JSON containing confirmation, incident, rollback, and monitoring fields'
         required: false
         type: string
-      incident_confirmation:
-        description: 'For hard-clearance: NO_OPEN_P0_P1'
-        required: false
-        type: string
-      rollback_confirmation:
-        description: 'For hard-clearance: ROLLBACK_PLAN_VERIFIED'
-        required: false
-        type: string
-      pilot_started_at:
-        description: 'Deprecated: pilot start is derived from the successful live-evidence workflow run'
-        required: false
-        type: string
-      pilot_completed_at:
-        description: 'Deprecated: pilot completion is derived by the protected hard-clearance workflow'
-        required: false
-        type: string
-      open_p0:
-        description: 'For hard-clearance: open P0 count, must be 0'
-        required: false
-        default: '0'
-        type: string
-      open_p1:
-        description: 'For hard-clearance: open P1 count, must be 0'
-        required: false
-        default: '0'
-        type: string
-      incident_reference:
-        description: 'For hard-clearance: approved HTTPS incident register or operations log URL'
-        required: false
-        type: string
-      rollback_reference:
-        description: 'For hard-clearance: approved HTTPS rollback plan or rollback test URL'
-        required: false
-        type: string
-      monitoring_reference:
-        description: 'For hard-clearance: approved HTTPS monitoring dashboard or pilot report URL'
-        required: false
-        type: string
+        default: '{"confirmation":"","incident_confirmation":"","rollback_confirmation":"","open_p0":"0","open_p1":"0","incident_reference":"","rollback_reference":"","monitoring_reference":""}'
   schedule:
     - cron: '0 4 * * *'
 
@@ -122,7 +85,7 @@ jobs:
         run: npx playwright test --grep "production public smoke" --project=chromium-desktop
       - name: Upload scheduled smoke report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: scheduled-public-smoke-${{ github.sha }}
           path: |
@@ -185,7 +148,7 @@ jobs:
         run: bash scripts/npm-install-retry.sh
 
       - name: Download exact production deployment artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: production-deployment-${{ inputs.expected_commit_sha }}
           path: downloaded-production
@@ -246,7 +209,7 @@ jobs:
 
       - name: Upload live launch evidence
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
           path: |
@@ -273,11 +236,11 @@ jobs:
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
-          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
-          INCIDENT_CONFIRMATION_INPUT: ${{ inputs.incident_confirmation }}
-          ROLLBACK_CONFIRMATION_INPUT: ${{ inputs.rollback_confirmation }}
-          OPEN_P0_INPUT: ${{ inputs.open_p0 }}
-          OPEN_P1_INPUT: ${{ inputs.open_p1 }}
+          RELEASE_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
+          INCIDENT_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).incident_confirmation }}
+          ROLLBACK_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).rollback_confirmation }}
+          OPEN_P0_INPUT: ${{ fromJSON(inputs.clearance_payload_json).open_p0 }}
+          OPEN_P1_INPUT: ${{ fromJSON(inputs.clearance_payload_json).open_p1 }}
           CURRENT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
           CURRENT_ACTOR: ${{ github.actor }}
@@ -351,7 +314,7 @@ jobs:
         run: node scripts/resolve-live-pilot-window.mjs
 
       - name: Download exact live launch evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
           path: downloaded-live-evidence
@@ -386,20 +349,20 @@ jobs:
       - name: Write workflow-bound pilot incident report
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
-          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
-          INCIDENT_CONFIRMATION: ${{ inputs.incident_confirmation }}
-          ROLLBACK_CONFIRMATION: ${{ inputs.rollback_confirmation }}
-          OPEN_P0: ${{ inputs.open_p0 }}
-          OPEN_P1: ${{ inputs.open_p1 }}
-          INCIDENT_REFERENCE: ${{ inputs.incident_reference }}
-          ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
-          MONITORING_REFERENCE: ${{ inputs.monitoring_reference }}
+          HARD_LAUNCH_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
+          INCIDENT_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).incident_confirmation }}
+          ROLLBACK_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).rollback_confirmation }}
+          OPEN_P0: ${{ fromJSON(inputs.clearance_payload_json).open_p0 }}
+          OPEN_P1: ${{ fromJSON(inputs.clearance_payload_json).open_p1 }}
+          INCIDENT_REFERENCE: ${{ fromJSON(inputs.clearance_payload_json).incident_reference }}
+          ROLLBACK_REFERENCE: ${{ fromJSON(inputs.clearance_payload_json).rollback_reference }}
+          MONITORING_REFERENCE: ${{ fromJSON(inputs.clearance_payload_json).monitoring_reference }}
         run: node scripts/write-pilot-incident-report.mjs
 
       - name: Write founder-authorized hard launch approval
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
-          HARD_LAUNCH_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
         run: node scripts/write-hard-launch-approval.mjs
 
       - name: Verify final hard launch status
@@ -409,7 +372,7 @@ jobs:
 
       - name: Upload hard launch clearance evidence
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: hard-public-launch-clearance-${{ inputs.expected_commit_sha }}
           path: |

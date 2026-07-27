@@ -11,11 +11,12 @@ const [backend, ui, packageJson, firestoreHardener, storageHardener] = await Pro
 ]);
 
 function block(source, startToken, endToken) {
-  const start = source.indexOf(startToken);
+  const normalized = source.replace(/\r\n/g, '\n');
+  const start = normalized.indexOf(startToken);
   assert.ok(start >= 0, `missing block start: ${startToken}`);
-  const end = source.indexOf(endToken, start);
+  const end = normalized.indexOf(endToken, start);
   assert.ok(end > start, `missing block end: ${endToken}`);
-  return source.slice(start, end);
+  return normalized.slice(start, end);
 }
 
 test('Admin Staff Access UI has no ghost-account or client-password path', () => {
