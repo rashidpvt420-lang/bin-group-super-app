@@ -1,0 +1,85 @@
+name: Revert Red Launch Suite 728
+
+on:
+  push:
+    branches:
+      - fix/revert-red-launch-suite-728
+    paths:
+      - .github/workflows/revert-red-launch-suite-728.yml
+
+permissions:
+  contents: write
+
+jobs:
+  revert-validate-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/revert-red-launch-suite-728
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Setup Java 21
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Restore the last protected-green tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad='7147bac0b379985d1f0f13a0e864261b49090f77'
+          green='680d761128f9e23e5acaee547ba8abda1b840591'
+          git merge-base --is-ancestor "$green" "$bad"
+          parent_fields="$(git rev-list --parents -n 1 "$bad" | awk '{print NF}')"
+          if [[ "$parent_fields" -eq 2 ]]; then
+            git revert --no-commit "$bad"
+          else
+            git revert -m 1 --no-commit "$bad"
+          fi
+          git rm .github/workflows/revert-red-launch-suite-728.yml
+          git diff --exit-code "$green" -- .
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Validate launch honesty and application builds
+        run: |
+          npm run test:launch-honesty
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm run build:admin
+          npm run build:functions
+
+      - name: Validate deterministic Firestore authority
+        run: |
+          npm run normalize:rule-tests
+          npm run prepare:rules
+          npm run verify:rules-hardening
+          npx firebase emulators:exec --only firestore,storage --project bin-group-57c60 "node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js"
+
+      - name: Confirm no generated drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 680d761128f9e23e5acaee547ba8abda1b840591 -- .
+
+      - name: Commit the permanent rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'revert(launch): remove red verification-suite regression from PR 728'
+          git push origin HEAD:fix/revert-red-launch-suite-728
