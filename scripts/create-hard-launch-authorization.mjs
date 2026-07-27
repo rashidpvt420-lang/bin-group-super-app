@@ -20,6 +20,7 @@ const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const GITHUB_API_ROOT = `https://api.github.com/repos/${EXPECTED_REPOSITORY}`;
 const AUTOMATION_ACTOR = 'github-actions[bot]';
 const AUTOMATION_EMAIL_SENTINEL = 'authorized-founder@protected.invalid';
+const CANONICAL_AUTOMATED_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const OWNER_REQUEST_TITLE = 'Dispatch protected bank pilot workflow';
 const OWNER_REQUEST_BRANCH_PREFIX = 'ops/dispatch-bank-pilot-workflow-';
 const OWNER_REQUEST_MARKER = '.github/bank-pilot-dispatch-request';
@@ -138,8 +139,8 @@ function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, a
   if (!authorizedActors.includes(workflowActor)) {
     throw new Error('automation workflow actor is not authorized');
   }
-  if (authorizedEmails.length !== 1) {
-    throw new Error('automated Founder authorization requires exactly one protected Founder email');
+  if (!authorizedEmails.includes(CANONICAL_AUTOMATED_FOUNDER_EMAIL)) {
+    throw new Error('canonical automated Founder email is not authorized');
   }
 
   const incidents = readJson(
@@ -186,7 +187,7 @@ function resolveAutomatedFounder({ commitSha, workflowActor, authorizedActors, a
 
   return {
     founderActor,
-    founderEmail: authorizedEmails[0],
+    founderEmail: CANONICAL_AUTOMATED_FOUNDER_EMAIL,
     ownerRequestPullRequest: Number(pullNumber),
   };
 }
