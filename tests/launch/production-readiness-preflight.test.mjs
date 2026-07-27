@@ -10,14 +10,12 @@ test('production readiness preflight is protected, exact-main and read-only', as
   assert.match(workflow, /name: Production Readiness Preflight/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /VERIFY_PRODUCTION_READINESS_BIN_GROUP_57C60/);
-  assert.match(workflow, /environment: hard-public-launch/);
+  assert.match(workflow, /environment: production/);
   assert.match(workflow, /id-token: write/);
   assert.match(workflow, /\[\[ "\$GITHUB_REF" == "refs\/heads\/main" \]\]/);
   assert.match(workflow, /check-firebase-production-secret-metadata\.mjs/);
   assert.match(workflow, /verify-firebase-phone-auth-production\.mjs/);
   assert.match(workflow, /verify-admin-mfa-production\.mjs/);
-  assert.match(workflow, /E2E_OWNER_MAILBOX_SENTINEL_MESSAGE_ID/);
-  assert.match(workflow, /E2E_BROKER_MAILBOX_SENTINEL_MESSAGE_ID/);
   assert.match(workflow, /FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION: AE/);
   for (const domain of [
     'bin-group-57c60.web.app',

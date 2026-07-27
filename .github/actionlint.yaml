@@ -1,7 +1,0 @@
-self-hosted-runner:
-  labels:
-    - macos-26
-paths:
-  .github/workflows/*.yml:
-    ignore:
-      - 'maximum number of inputs for "workflow_dispatch" event is 10'

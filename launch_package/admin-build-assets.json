@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 2,
+  "status": "pass",
+  "buildDirectory": "apps/admin-panel/build",
+  "indexPresent": true,
+  "indexScriptAssetCount": 1,
+  "indexScriptAssets": [
+    {
+      "path": "static/js/main.06ed0376.js",
+      "size": 148758
+    }
+  ],
+  "generatedScriptAssetCount": 9,
+  "generatedScriptAssets": [
+    {
+      "path": "static/js/239.3f431156.chunk.js",
+      "size": 202928
+    },
+    {
+      "path": "static/js/374.ddaaff8f.chunk.js",
+      "size": 720750
+    },
+    {
+      "path": "static/js/428.c54e7130.chunk.js",
+      "size": 660364
+    },
+    {
+      "path": "static/js/455.1103bc91.chunk.js",
+      "size": 139972
+    },
+    {
+      "path": "static/js/614.63ade29d.chunk.js",
+      "size": 1186
+    },
+    {
+      "path": "static/js/67.610f348c.chunk.js",
+      "size": 235623
+    },
+    {
+      "path": "static/js/800.f2938e8a.chunk.js",
+      "size": 1880858
+    },
+    {
+      "path": "static/js/977.e75088cf.chunk.js",
+      "size": 27172
+    },
+    {
+      "path": "static/js/main.06ed0376.js",
+      "size": 148758
+    }
+  ],
+  "firebaseProjectId": "bin-group-57c60",
+  "firebaseAdminAppIdSuffix": "285cb53bc26626d699f3b6",
+  "productionAppCheckRequired": false,
+  "appCheckSiteKeyFingerprint": null,
+  "sourceLevelUnsafeMfaChecksRequired": true,
+  "sensitiveValuesExcluded": true,
+  "hardLaunchClaim": false
+}

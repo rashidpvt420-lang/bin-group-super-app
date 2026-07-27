@@ -59,18 +59,18 @@ jobs:
           set -euo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           body="## Protected Play Store certificate extraction
-          
-          - Status: \`WAITING_FOR_PRODUCTION_ENVIRONMENT\`
-          - Exact SHA: \`$RELEASE_SHA\`
-          - Workflow run ID: \`$GITHUB_RUN_ID\`
-          - Workflow run: $run_url
-          - Protected job: \`Export public Android upload certificate\`
-          - Artifact: pending
-          - Package: \`ae.bingroups.superapp\`
-          - Private key included: \`false\`
-          - Keystore included: \`false\`
-          - Passwords included: \`false\`
-          - Hard-launch claim: \`false\`"
+
+- Status: \`WAITING_FOR_PRODUCTION_ENVIRONMENT\`
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
+- Workflow run: $run_url
+- Protected job: \`Export public Android upload certificate\`
+- Artifact: pending
+- Package: \`ae.bingroups.superapp\`
+- Private key included: \`false\`
+- Keystore included: \`false\`
+- Passwords included: \`false\`
+- Hard-launch claim: \`false\`"
           gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
             -f state='open' \
             -f body="$body" >/dev/null
@@ -267,18 +267,18 @@ jobs:
 
           if [[ "$JOB_STATUS" == 'success' ]]; then
             body="## Protected Play Store certificate extraction
-            
-            - Status: \`SUCCESS\`
-            - Exact SHA: \`$RELEASE_SHA\`
-            - Workflow run ID: \`$GITHUB_RUN_ID\`
-            - Workflow run: $run_url
-            - Artifact: \`$ARTIFACT_NAME\`
-            - Package: \`ae.bingroups.superapp\`
-            - Certificate SHA-256: \`$CERTIFICATE_FINGERPRINT\`
-            - Private key included: \`false\`
-            - Keystore included: \`false\`
-            - Passwords included: \`false\`
-            - Hard-launch claim: \`false\`"
+
+- Status: \`SUCCESS\`
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
+- Workflow run: $run_url
+- Artifact: \`$ARTIFACT_NAME\`
+- Package: \`ae.bingroups.superapp\`
+- Certificate SHA-256: \`$CERTIFICATE_FINGERPRINT\`
+- Private key included: \`false\`
+- Keystore included: \`false\`
+- Passwords included: \`false\`
+- Hard-launch claim: \`false\`"
             gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
               -f state='closed' \
               -f state_reason='completed' \
@@ -287,18 +287,18 @@ jobs:
           else
             missing="${MISSING_INPUTS:-none-reported}"
             body="## Protected Play Store certificate extraction
-            
-            - Status: \`FAILURE\`
-            - Exact SHA: \`$RELEASE_SHA\`
-            - Workflow run ID: \`$GITHUB_RUN_ID\`
-            - Workflow run: $run_url
-            - Protected signing inputs ready: \`${SIGNING_READY:-unknown}\`
-            - Missing protected inputs: \`$missing\`
-            - Artifact: unavailable
-            - Private key included: \`false\`
-            - Keystore included: \`false\`
-            - Passwords included: \`false\`
-            - Hard-launch claim: \`false\`"
+
+- Status: \`FAILURE\`
+- Exact SHA: \`$RELEASE_SHA\`
+- Workflow run ID: \`$GITHUB_RUN_ID\`
+- Workflow run: $run_url
+- Protected signing inputs ready: \`${SIGNING_READY:-unknown}\`
+- Missing protected inputs: \`$missing\`
+- Artifact: unavailable
+- Private key included: \`false\`
+- Keystore included: \`false\`
+- Passwords included: \`false\`
+- Hard-launch claim: \`false\`"
             gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKING_ISSUE" \
               -f state='open' \
               -f body="$body" >/dev/null
