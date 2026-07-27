@@ -9,6 +9,38 @@ function replaceExact(path, before, after) {
   writeFileSync(path, source.replace(before, after), 'utf8');
 }
 
+function normalizeBrokerLoginMailbox(path) {
+  let source = readFileSync(path, 'utf8');
+  const legacyLogin = 'const brokerEmail = text(process.env.E2E_BROKER_MAILBOX_EMAIL).toLowerCase();';
+  const canonicalLogin = 'const brokerEmail = text(process.env.E2E_BROKER_EMAIL).toLowerCase();';
+  const mailboxDeclaration = 'const brokerMailboxEmail = text(process.env.E2E_BROKER_MAILBOX_EMAIL).toLowerCase();';
+
+  const legacyCount = source.split(legacyLogin).length - 1;
+  const canonicalCount = source.split(canonicalLogin).length - 1;
+  if (legacyCount === 1) source = source.replace(legacyLogin, canonicalLogin);
+  else if (!(legacyCount === 0 && canonicalCount === 1)) {
+    throw new Error(`${path}: Broker application login identity is ambiguous; legacy=${legacyCount} canonical=${canonicalCount}.`);
+  }
+
+  if (!source.includes(mailboxDeclaration)) {
+    source = source.replace(canonicalLogin, `${canonicalLogin}\n${mailboxDeclaration}`);
+  }
+
+  const legacyMapping = '  E2E_BROKER_MAILBOX_EMAIL: brokerEmail,';
+  const canonicalMappings = '  E2E_BROKER_EMAIL: brokerEmail,\n  E2E_BROKER_MAILBOX_EMAIL: brokerMailboxEmail,';
+  const legacyMappingCount = source.split(legacyMapping).length - 1;
+  const canonicalMappingCount = source.split(canonicalMappings).length - 1;
+  if (legacyMappingCount === 1) source = source.replace(legacyMapping, canonicalMappings);
+  else if (!(legacyMappingCount === 0 && canonicalMappingCount === 1)) {
+    throw new Error(`${path}: Broker environment validation mapping is ambiguous; legacy=${legacyMappingCount} canonical=${canonicalMappingCount}.`);
+  }
+
+  if (!source.includes('expectedMailboxEmail: brokerMailboxEmail')) {
+    throw new Error(`${path}: Broker Gmail verification is not bound to the dedicated mailbox identity.`);
+  }
+  writeFileSync(path, source, 'utf8');
+}
+
 function groupE2eEnvironmentWrites(path) {
   const source = readFileSync(path, 'utf8');
   const lines = source.split('\n');
@@ -31,6 +63,8 @@ function groupE2eEnvironmentWrites(path) {
   lines.splice(firstPrintf, lastPrintf - firstPrintf + 1, `${indent}{`, ...commands, `${indent}} > .env.e2e`);
   writeFileSync(path, lines.join('\n'), 'utf8');
 }
+
+normalizeBrokerLoginMailbox('scripts/run-broker-production-evidence.mjs');
 
 replaceExact(
   'tests/launch/broker-payout-otp-live-evidence.test.mjs',
@@ -66,4 +100,4 @@ replaceExact(
 
 groupE2eEnvironmentWrites('.github/workflows/firebase-production-deploy.yml');
 
-console.log('[fix-launch-evidence-test-contracts] aligned shared Gmail contracts and grouped .env.e2e writes.');
+console.log('[fix-launch-evidence-test-contracts] aligned login/mailbox identities, shared Gmail contracts, and grouped .env.e2e writes.');
