@@ -63,3 +63,25 @@ test('owner activation delegates to the complete server-confirmed policy', () =>
   assert.match(page, /const activated = isOwnerProfileActivated\(profile\);/);
   assert.doesNotMatch(page, /mobilization > 0\s*&&\s*adminApproved/);
 });
+
+test('five-profile coverage is runtime-backed and checked before live readiness', () => {
+  const output = execFileSync(process.execPath, ['scripts/verify-profile-evidence-coverage.mjs'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.match(output, /owner: 1 mapped gate\(s\), 1 protected-runtime gate\(s\)/);
+  assert.match(output, /tenant: 1 mapped gate\(s\), 1 protected-runtime gate\(s\)/);
+  assert.match(output, /technician: 1 mapped gate\(s\), 1 protected-runtime gate\(s\)/);
+  assert.match(output, /broker: 1 mapped gate\(s\), 1 protected-runtime gate\(s\)/);
+  assert.match(output, /admin: 1 mapped gate\(s\), 1 protected-runtime gate\(s\)/);
+
+  const coverageScript = readFileSync(join(root, 'scripts/verify-profile-evidence-coverage.mjs'), 'utf8');
+  assert.match(coverageScript, /Static readiness scores are prohibited/);
+  assert.doesNotMatch(coverageScript, /missing a numeric verified score/);
+
+  const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.match(
+    packageJson.scripts['test:hard-launch-readiness'],
+    /verify-profile-evidence-coverage\.mjs && node scripts\/verify-hard-launch-readiness\.mjs/,
+  );
+});
