@@ -281,17 +281,23 @@ jobs:
               '{incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}'
           )"
 
+          authorization_actor="$GITHUB_ACTOR"
+          if [[ "$FOUNDER_EMAIL" == "authorized-founder@protected.invalid" ]]; then
+            authorization_actor=''
+          fi
+
           jq -n \
             --arg ref main \
             --arg confirmation "$CONFIRMATION" \
             --arg hard "$HARD_CONFIRMATION" \
             --arg sha "$main_sha" \
+            --arg authorizationActor "$authorization_actor" \
             --arg founderName "$FOUNDER_NAME" \
             --arg founderEmail "$FOUNDER_EMAIL" \
             --arg launchMode "$LAUNCH_MODE" \
             --arg publicGate "$PUBLIC_GATE" \
             --arg deploymentPayload "$production_payload" \
-            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:env.GITHUB_ACTOR,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,deployment_payload_json:$deploymentPayload}}' \
+            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:$authorizationActor,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,deployment_payload_json:$deploymentPayload}}' \
             > dispatch.json
 
           gh api --method POST \
