@@ -664,8 +664,10 @@ service cloud.firestore {
     }
 
     function safeTechnicianTicketUpdate() {
-      // The outer rule proves the technician claim and current assignment.
-      // Reject unrelated fields before suspension and the single approval read.
+      // Technician browsers may append work evidence and notes only. Arrival and
+      // callable-only GPS coordinates are canonical server state written exclusively by
+      // App Check-protected callable Functions with assignment, accuracy, expiry
+      // and compare-and-set validation.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'updatedAt',
           'technicianNotes',
@@ -681,8 +683,7 @@ service cloud.firestore {
           'resolutionSummary',
           'materialsUsed',
           'partsDisposition',
-          'proofReadiness',
-          'arrivedLocation'
+          'proofReadiness'
         ]) &&
         isNotSuspended() &&
         hasApprovedTechnicianRecord() &&
@@ -702,13 +703,10 @@ service cloud.firestore {
     }
 
     function safeTechnicianProfileUpdate(techId) {
-      return signedIn() && request.auth.uid == techId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'lastLocation',
-          'activeTicketId',
-          'lastSeenAt',
-          'updatedAt'
-        ]);
+      // Availability, active-ticket state and all location fields are maintained
+      // by protected callable Functions. A browser must never spoof them through
+      // technicians/{uid}, even when it owns that document.
+      return false;
     }
 
     function safeBrokerLeadCreate(data) {
@@ -1943,7 +1941,7 @@ service cloud.firestore {
 
     match /payroll_entries/{entryId} {
       allow read: if isAdmin() || isTechnicianId(resource.data.get('technicianId', null));
-      allow write: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /support_chats/{messageId} {
@@ -2029,7 +2027,7 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
@@ -2048,6 +2046,7 @@ service cloud.firestore {
           'payment_transactions',
           'payments',
           'transactions',
+          'payroll_entries',
           'invoices',
           'invoice_registry',
           'commissions',
@@ -2082,6 +2081,7 @@ service cloud.firestore {
           'payment_transactions',
           'payments',
           'transactions',
+          'payroll_entries',
           'invoices',
           'invoice_registry',
           'commissions',

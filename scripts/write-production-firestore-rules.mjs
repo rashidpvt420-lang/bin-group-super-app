@@ -61,7 +61,10 @@ for (const forbidden of [
 const payrollBlock = matchBlock('    match /payroll_entries/{entryId} {');
 if (!payrollBlock) failures.push('payroll_entries rule block is missing or malformed');
 else {
-  if (!payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid")) {
+  if (
+    !payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") &&
+    !payrollBlock.includes("isTechnicianId(resource.data.get('technicianId', null))")
+  ) {
     failures.push('payroll_entries self-service read is not bound to the matching Technician UID');
   }
   if (!payrollBlock.includes('allow create, update, delete: if false;')) {

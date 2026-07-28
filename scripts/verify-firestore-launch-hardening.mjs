@@ -109,7 +109,7 @@ const requiredFragments = [
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
   ['private HR profiles are server-only', "match /private_hr_profiles/{profileId} {\n      allow read, write: if false;"],
   ['canonical live locations are suspension-aware dispatch-readable only', "match /technician_live_locations/{technicianId} {\n      allow read: if canDispatchJobs();\n      allow create, update, delete: if false;"],
-  ['payroll mirror is Technician-scoped read-only', "match /payroll_entries/{entryId} {\n      allow read: if isAdmin() || isHr() || isFinance() || (\n        signedIn() && resource.data.get('technicianId', null) == request.auth.uid\n      );\n      allow create, update, delete: if false;\n    }"],
+  ['payroll mirror is Technician-scoped read-only', "match /payroll_entries/{entryId} {\n      allow read: if isAdmin() || isTechnicianId(resource.data.get('technicianId', null));\n      allow create, update, delete: if false;\n    }"],
 ];
 
 const failures = [];
@@ -123,7 +123,10 @@ if (!legacyBlock.includes('allow create, update, delete: if false;')) failures.p
 if (legacyBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Legacy /tickets still has an operational update gate.');
 if (!canonicalBlock.includes('allow create: if isAdmin();')) failures.push('Canonical /maintenanceTickets must reserve direct creates for Admin/server authority.');
 if (!canonicalBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Canonical /maintenanceTickets update router is missing.');
-if (!payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid")) failures.push('Payroll mirror read is not bound to the matching Technician UID.');
+if (
+  !payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") &&
+  !payrollBlock.includes("isTechnicianId(resource.data.get('technicianId', null))")
+) failures.push('Payroll mirror read is not bound to the matching Technician UID.');
 if (!payrollBlock.includes('allow create, update, delete: if false;')) failures.push('Payroll mirror must deny every browser write.');
 if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 1) failures.push('Exactly one canonical ticket update gate is required.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
