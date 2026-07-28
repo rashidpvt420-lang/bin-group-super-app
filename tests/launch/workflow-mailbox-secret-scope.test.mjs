@@ -28,3 +28,18 @@ test('Gmail OAuth credentials are step-scoped and never written into .env.e2e', 
     }
   }
 });
+
+test('production E2E env guard receives protected Gmail OAuth secrets', () => {
+  const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
+  const stepStart = source.indexOf('- name: Validate full live E2E secrets and App Check UUID');
+  const nextStep = source.indexOf('\n      - name:', stepStart + 1);
+  assert.ok(stepStart >= 0, 'production workflow is missing the live E2E env guard step');
+  assert.ok(nextStep > stepStart, 'production workflow env guard step has no following step boundary');
+  const step = source.slice(stepStart, nextStep);
+
+  assert.match(step, /run: npm run test:e2e:env/);
+  for (const key of oauthKeys) {
+    const expectedSecretMapping = `${key}: \${{ secrets.${key} }}`;
+    assert.ok(step.includes(expectedSecretMapping), `live E2E env guard does not receive ${key}`);
+  }
+});
