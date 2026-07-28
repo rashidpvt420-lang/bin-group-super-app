@@ -7,9 +7,6 @@ let source = readFileSync(rulesPath, 'utf8');
 function matchBlockRange(text, header) {
   const start = text.indexOf(header);
   if (start < 0) return null;
-  // Match paths contain placeholder braces such as {entryId}. The opening rule
-  // brace is the final character of the complete reviewed header, not the first
-  // brace encountered after `match`.
   const open = start + header.length - 1;
   if (text[open] !== '{') throw new Error(`Malformed Firestore block header: ${header}`);
   let depth = 0;
@@ -112,35 +109,13 @@ if (existingPayrollRange) {
   changed = true;
 }
 
-const readAnchor = "'private_hr_profiles', 'technician_live_locations', 'invoice_registry'";
-const readReplacement = "'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'";
-if (!source.includes(readReplacement)) {
-  if (!source.includes(readAnchor)) throw new Error('Reviewed global read exclusion anchor is missing.');
-  source = source.replace(readAnchor, readReplacement);
-  changed = true;
-}
-
-const writeAnchor = "          'transactions',\n          'invoices',";
-const writeReplacement = "          'transactions',\n          'payroll_entries',\n          'invoices',";
-const writeCount = source.split(writeAnchor).length - 1;
-if (!source.includes(writeReplacement)) {
-  if (writeCount !== 2) throw new Error(`Expected two payroll write-exclusion anchors, found ${writeCount}.`);
-  source = source.replaceAll(writeAnchor, writeReplacement);
-  changed = true;
-}
-
 const installedRange = matchBlockRange(source, payrollHeader);
 const installedBlock = installedRange ? source.slice(installedRange.start, installedRange.end) : '';
-const payrollBlockInstalled = installedBlock === payrollRuleBlock;
-const payrollReadExcludedFromCatchAll = source.includes(readReplacement);
-const payrollWriteExclusions = source.split("          'payroll_entries',\n          'invoices',").length - 1;
-if (!payrollBlockInstalled || !payrollReadExcludedFromCatchAll || payrollWriteExclusions !== 2) {
-  throw new Error(
-    `Payroll compatibility authority is incomplete: block=${payrollBlockInstalled} readExclusion=${payrollReadExcludedFromCatchAll} writeExclusions=${payrollWriteExclusions}`,
-  );
+if (installedBlock !== payrollRuleBlock) {
+  throw new Error('Payroll compatibility rule was not canonicalized to server-only writes and scoped self-service reads.');
 }
 
 writeFileSync(rulesPath, source);
 console.log(changed
-  ? '[harden-hr-privacy-rules] hardened HR privacy and Technician payroll self-service authority'
-  : '[harden-hr-privacy-rules] HR privacy and payroll self-service rules already hardened');
+  ? '[harden-hr-privacy-rules] hardened HR privacy and canonicalized Technician payroll self-service block'
+  : '[harden-hr-privacy-rules] HR privacy and Technician payroll self-service block already hardened');
