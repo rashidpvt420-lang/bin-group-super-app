@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Chip, Container, LinearProgress, Stack, Step, StepLabel, Stepper, Typography, Button } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -26,8 +26,9 @@ const readable = (value: string | undefined, fallback: string) => (!value || val
 
 export default function PropertyOnboardingPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { t, isRTL, lang } = useLanguage();
-    const { step, nextStep, prevStep, setStep, properties, intakeId } = useOnboardingStore();
+    const { step, nextStep, prevStep, setStep, properties, intakeId, brokerAttribution, setBrokerAttribution } = useOnboardingStore();
     const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
     const [guardError, setGuardError] = React.useState('');
 
@@ -55,6 +56,19 @@ export default function PropertyOnboardingPage() {
         if (step !== safeStep) setStep(safeStep);
         setGuardError('');
     }, [safeStep, setStep, step]);
+
+    React.useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const rawBroker = params.get('broker') || params.get('brokerCode') || params.get('ref');
+        const referralCode = String(rawBroker || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
+        if (!referralCode || brokerAttribution?.referralCode === referralCode) return;
+        setBrokerAttribution({
+            referralCode,
+            source: 'PUBLIC_OWNER_ONBOARDING_URL',
+            capturedAt: new Date().toISOString(),
+            landingPath: `${location.pathname}${location.search}`.slice(0, 500),
+        });
+    }, [brokerAttribution?.referralCode, location.pathname, location.search, setBrokerAttribution]);
 
     const guardedAssetNext = () => {
         const property = properties[0];
@@ -101,6 +115,7 @@ export default function PropertyOnboardingPage() {
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                         <Chip icon={<ShieldCheck size={15} />} label={`${label('Step', 'الخطوة')} ${safeStep} / ${INTERNAL_STEP_COUNT}`} sx={{ fontWeight: 900 }} />
                         <Chip icon={<Save size={15} />} label={intakeId ? label('Resume reference saved', 'تم حفظ مرجع الاستكمال') : label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
+                        {brokerAttribution?.referralCode && <Chip label={`${label('Broker', 'الوسيط')} ${brokerAttribution.referralCode}`} variant="outlined" sx={{ fontWeight: 900 }} />}
                     </Stack>
                 </Stack>
                 <Box sx={{ mb: 2, textAlign: 'center' }}>

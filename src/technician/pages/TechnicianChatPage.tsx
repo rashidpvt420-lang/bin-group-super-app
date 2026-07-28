@@ -21,8 +21,14 @@ export default function TechnicianChatPage() {
             if (!ticketId || !user?.uid) return;
             const docRef = doc(db, 'maintenanceTickets', ticketId);
             const snap = await getDoc(docRef);
-            if (snap.exists() && snap.data().assignedTechnicianId === user.uid) {
-                setTicket({ id: snap.id, ...snap.data() });
+            const data = snap.exists() ? snap.data() : null;
+            const uid = String(user.uid);
+            const technicianCanRead = !!data && (
+                data.assignedTechnicianId === uid || data.technicianId === uid ||
+                data.technicianUid === uid || data.acceptedByUid === uid
+            );
+            if (technicianCanRead) {
+                setTicket({ id: snap.id, ...data });
             } else {
                 alert("Unauthorized");
                 navigate('/technician/jobs');

@@ -13,6 +13,7 @@ const trackingSummary = read('src/components/tracking/LiveTechnicianTrackingCard
 const liveTracking = read('src/utils/liveTracking.ts');
 const gpsRetryQueue = read('src/utils/gpsRetryQueue.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
+const firestoreRules = read('firestore.rules');
 const indexes = JSON.parse(read('firestore.indexes.json'));
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
 const packageJson = JSON.parse(read('package.json'));
@@ -175,10 +176,13 @@ test('Server watchdog clears only the exact still-expired canonical tracking ses
 });
 
 test('Canonical location rules are suspension-aware dispatch-read and browser-write denied', () => {
+  const technicianUpdate = firestoreRules.match(/function safeTechnicianTicketUpdate\(\) \{[\s\S]*?\n    \}/)?.[0] || '';
   assert.match(ruleHardener, /match \/technician_live_locations\/\{technicianId\} \{/);
   assert.match(ruleHardener, /allow read: if canDispatchJobs\(\);/);
   assert.match(ruleHardener, /allow create, update, delete: if false;/);
   assert.match(ruleHardener, /technician_live_locations'\]/);
+  assert.doesNotMatch(technicianUpdate, /'technicianLocation'|'technicianLocationUpdatedAt'/);
+  assert.doesNotMatch(technicianUpdate, /'currentLocation'|'isTracking'/);
   assert.equal(packageJson.scripts['harden:live-location-authority'], 'node scripts/harden-technician-live-location-authority.mjs');
   assert.match(packageJson.scripts['prepare:rules'], /harden:live-location-authority/);
 });

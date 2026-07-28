@@ -30,6 +30,7 @@ import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage
 import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContractDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
+import OwnerInspectionsPage from './pages/OwnerInspectionsPage';
 import OwnerReviewQueuePage from './pages/OwnerReviewQueuePage';
 import DesignStudioPage from '../pages/DesignStudioPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
@@ -108,7 +109,8 @@ export default function OwnerApp() {
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
                 <Route path="/documents" element={<OwnerDocumentsPage />} />
                 <Route path="/renewals" element={<PortfolioRenewalsPage />} />
-                <Route path="/inspections" element={<OwnerReviewQueuePage />} />
+                <Route path="/review-queue" element={<OwnerReviewQueuePage />} />
+                <Route path="/inspections" element={<OwnerInspectionsPage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 <Route path="/complaint" element={<OwnerComplaintPage />} />

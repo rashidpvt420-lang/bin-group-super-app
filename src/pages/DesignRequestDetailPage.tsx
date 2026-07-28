@@ -111,17 +111,6 @@ export default function DesignRequestDetailPage() {
         };
 
         if (approvalSnap.empty) {
-            const approvalRef = doc(collection(db, 'design_approvals'));
-            batch.set(approvalRef, {
-                requestId: id,
-                propertyId: request?.propertyId || null,
-                ownerId: user.uid,
-                ownerUid: user.uid,
-                tenantUid: request?.tenantUid || request?.userId || null,
-                tenantEmail: request?.tenantEmail || null,
-                createdAt: serverTimestamp(),
-                ...approvalPayload,
-            });
             return;
         }
 

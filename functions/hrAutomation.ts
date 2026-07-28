@@ -50,6 +50,35 @@ function safeText(value: unknown, fallback = "") {
     return text || fallback;
 }
 
+function payrollEntryProjection(input: {
+    payrollId: string;
+    techId: string;
+    techName: string;
+    amount: number;
+    currency?: unknown;
+    month: string;
+    status: "pending" | "paid";
+    timestamp: FirebaseFirestore.FieldValue;
+    paymentReference?: string;
+    payslipUrl?: string;
+    paidAt?: FirebaseFirestore.FieldValue;
+}) {
+    return {
+        payrollId: input.payrollId,
+        technicianId: input.techId,
+        techId: input.techId,
+        techName: safeText(input.techName, input.techId),
+        amount: input.amount,
+        currency: safeText(input.currency, "AED"),
+        month: input.month,
+        status: input.status,
+        ...(input.paymentReference ? { paymentReference: input.paymentReference } : {}),
+        ...(input.payslipUrl ? { payslipUrl: input.payslipUrl } : {}),
+        ...(input.paidAt ? { paidAt: input.paidAt } : {}),
+        updatedAt: input.timestamp,
+    };
+}
+
 function limitedText(value: unknown, max = 2000) {
     return safeText(value).slice(0, max);
 }
