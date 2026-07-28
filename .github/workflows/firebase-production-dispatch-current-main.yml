@@ -282,7 +282,9 @@ jobs:
           )"
 
           authorization_actor="$GITHUB_ACTOR"
-          if [[ "$FOUNDER_EMAIL" == "authorized-founder@protected.invalid" ]]; then
+          # Sentinel and bot workflow actors are not delegated Founder identities.
+          # Clear them so production gates treat the run as protected automation.
+          if [[ "$FOUNDER_EMAIL" == "authorized-founder@protected.invalid" || "$authorization_actor" == "github-actions[bot]" ]]; then
             authorization_actor=''
           fi
 

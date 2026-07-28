@@ -97,22 +97,36 @@ jobs:
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
-          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
-          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]]
-          [[ "$CURRENT_REF" == "refs/heads/main" ]]
-          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]] \
+            || fail "Production confirmation phrase does not match."
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]] \
+            || fail "Hard-launch confirmation phrase does not match."
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] \
+            || fail "Production deploy may only run on refs/heads/main."
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail "expected_commit_sha must be a full lowercase 40-character SHA."
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
+            || fail "expected_commit_sha must equal the workflow commit SHA."
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
-            [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]
-            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+$ ]]
+            [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
+              || fail "authorization_actor may only be supplied by github-actions[bot]."
+            # Keep in sync with scripts/create-hard-launch-authorization.mjs actor validation.
+            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+(\[[a-z]+\])?$ ]] \
+              || fail "authorization_actor must be a GitHub login or github-actions[bot]."
           fi
           if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
-            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]]
-            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]]
-            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]]
-            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]]
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]] \
+              || fail "Public mode requires run_public_release_gate=true."
+            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
+              || fail "Public mode requires a numeric hard-clearance run ID."
+            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
+              || fail "Public mode requires a live Stripe checkout session ID."
+            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
+              || fail "Public mode requires a Stripe webhook event ID."
           else
-            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]]
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
+              || fail "Bank-pilot mode requires run_public_release_gate=false."
           fi
 
       - name: Checkout repository
@@ -237,22 +251,36 @@ jobs:
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
         run: |
           set -euo pipefail
-          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]]
-          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]]
-          [[ "$CURRENT_REF" == "refs/heads/main" ]]
-          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]]
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]] \
+            || fail "Production confirmation phrase does not match."
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]] \
+            || fail "Hard-launch confirmation phrase does not match."
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] \
+            || fail "Production deploy may only run on refs/heads/main."
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail "expected_commit_sha must be a full lowercase 40-character SHA."
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
+            || fail "expected_commit_sha must equal the workflow commit SHA."
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
-            [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]
-            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+$ ]]
+            [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
+              || fail "authorization_actor may only be supplied by github-actions[bot]."
+            # Keep in sync with scripts/create-hard-launch-authorization.mjs actor validation.
+            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+(\[[a-z]+\])?$ ]] \
+              || fail "authorization_actor must be a GitHub login or github-actions[bot]."
           fi
           if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
-            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]]
-            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]]
-            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]]
-            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]]
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]] \
+              || fail "Public mode requires run_public_release_gate=true."
+            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
+              || fail "Public mode requires a numeric hard-clearance run ID."
+            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
+              || fail "Public mode requires a live Stripe checkout session ID."
+            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
+              || fail "Public mode requires a Stripe webhook event ID."
           else
-            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]]
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
+              || fail "Bank-pilot mode requires run_public_release_gate=false."
           fi
 
       - name: Checkout repository
