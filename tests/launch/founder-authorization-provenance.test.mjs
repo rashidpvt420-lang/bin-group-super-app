@@ -61,7 +61,8 @@ test('automated email binds to the canonical Founder only when allowlisted', () 
 });
 
 test('signed document preserves workflow actor and independently verified Founder actor', () => {
-  assert.match(signer, /actor: workflowActor/);
+  assert.match(signer, /authorizationActor/);
+  assert.match(signer, /actor: authorizationActor/);
   assert.match(signer, /workflowActor,/);
   assert.match(signer, /ownerRequestPullRequest,/);
   assert.match(signer, /founder:\s*\{[\s\S]*actor: founderActor/);
@@ -74,7 +75,8 @@ test('signed document preserves workflow actor and independently verified Founde
 test('all downstream gates continue validating the signed workflow actor', () => {
   assert.match(predeploy, /process\.env\.AUTHORIZATION_ACTOR \|\| workflowActor/);
   assert.match(predeploy, /authorization\.workflowActor/);
-  assert.match(sameRun, /const actor = requireText\(env, 'GITHUB_ACTOR'/);
-  assert.match(sameRun, /actor,\s*\n\s*authorizedActors/);
-  assert.match(decision, /actor: requiredContext\('GITHUB_ACTOR'\)/);
+  assert.match(sameRun, /env\.AUTHORIZATION_ACTOR \|\| workflowActor/);
+  assert.match(sameRun, /authorization\.workflowActor/);
+  assert.match(decision, /process\.env\.AUTHORIZATION_ACTOR \|\| workflowActor/);
+  assert.match(decision, /authorization\.workflowActor/);
 });

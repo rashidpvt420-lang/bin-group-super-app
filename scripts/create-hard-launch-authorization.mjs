@@ -199,6 +199,7 @@ try {
   const runId = requiredEnv('GITHUB_RUN_ID');
   const runAttempt = Number(requiredEnv('GITHUB_RUN_ATTEMPT'));
   const workflowActor = requiredEnv('GITHUB_ACTOR').toLowerCase();
+  const authorizationActor = String(process.env.AUTHORIZATION_ACTOR || workflowActor).trim().toLowerCase();
   const founderName = requiredEnv('FOUNDER_NAME');
   const requestedFounderEmail = normalizeAuthorizedEmail(requiredEnv('FOUNDER_EMAIL'));
   const deployConfirmation = requiredEnv('DEPLOYMENT_CONFIRMATION');
@@ -215,13 +216,25 @@ try {
 
   const authorizedActors = parseCsvRequired(authorizedActorsRaw, 'AUTHORIZED_FOUNDER_ACTORS');
   const authorizedEmails = parseCsvRequired(authorizedEmailsRaw, 'AUTHORIZED_FOUNDER_EMAILS');
-  if (!authorizedActors.includes(workflowActor)) throw new Error('workflow actor is not authorized');
+  if (!/^[a-z0-9-]+(?:\[[a-z]+\])?$/.test(authorizationActor)) {
+    throw new Error('authorization actor is invalid');
+  }
+  const delegatedAuthorization = authorizationActor !== workflowActor;
+  if (delegatedAuthorization && workflowActor !== AUTOMATION_ACTOR) {
+    throw new Error('delegated Founder authorization may only come from the protected GitHub Actions bot workflow');
+  }
+  if (!authorizedActors.includes(delegatedAuthorization ? authorizationActor : workflowActor)) {
+    throw new Error('authorization actor is not authorized');
+  }
 
-  let founderActor = workflowActor;
+  let founderActor = authorizationActor;
   let founderEmail = requestedFounderEmail;
   let ownerRequestPullRequest = null;
 
   if (requestedFounderEmail === AUTOMATION_EMAIL_SENTINEL) {
+    if (delegatedAuthorization) {
+      throw new Error('delegated Founder authorization must use a real authorized Founder email');
+    }
     const automated = resolveAutomatedFounder({
       commitSha,
       workflowActor,
@@ -232,7 +245,7 @@ try {
     founderEmail = automated.founderEmail;
     ownerRequestPullRequest = automated.ownerRequestPullRequest;
   } else {
-    if (workflowActor === AUTOMATION_ACTOR) {
+    if (workflowActor === AUTOMATION_ACTOR && !delegatedAuthorization) {
       throw new Error('automated Founder authorization requires the protected email sentinel and owner PR evidence');
     }
     if (!authorizedEmails.includes(founderEmail)) throw new Error('Founder email is not authorized');
@@ -249,7 +262,7 @@ try {
     repository,
     runId,
     runAttempt,
-    actor: workflowActor,
+    actor: authorizationActor,
     workflowActor,
     ownerRequestPullRequest,
     founder: {
@@ -269,7 +282,7 @@ try {
     ref,
     repository,
     runId,
-    actor: workflowActor,
+    actor: authorizationActor,
     authorizedActors: authorizedActorsRaw,
     authorizedEmails: authorizedEmailsRaw,
     hmacKey,
@@ -282,6 +295,7 @@ try {
   console.log(`[hard-launch-auth] wrote ${outputPath}`);
   console.log(`[hard-launch-auth] commitSha=${commitSha}`);
   console.log(`[hard-launch-auth] workflowActor=${workflowActor}`);
+  console.log(`[hard-launch-auth] authorizationActor=${authorizationActor}`);
   console.log(`[hard-launch-auth] founderActor=${founderActor}`);
   console.log('[hard-launch-auth] Founder authorization signed and bound to this workflow run');
 } catch (error) {
