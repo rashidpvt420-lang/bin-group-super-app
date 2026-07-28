@@ -4,6 +4,7 @@ export * from "./index";
 export * from "./contractActivation";
 export * from "./brokerCommissions";
 export * from "./brokerKycProfile";
+export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
