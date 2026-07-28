@@ -29,7 +29,8 @@ export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
-export * from "./aiDesignStudio";
+// Public AI Design Studio remains fail-closed until server-authoritative request
+// creation and protected render delivery replace the retired client workflow.
 export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtpMailbox";
 export * from "./ownerOnboardingLifecycleEmail";
