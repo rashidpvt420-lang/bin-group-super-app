@@ -7,8 +7,11 @@ let source = readFileSync(rulesPath, 'utf8');
 function matchBlockRange(text, header) {
   const start = text.indexOf(header);
   if (start < 0) return null;
-  const open = text.indexOf('{', start);
-  if (open < 0) throw new Error(`Malformed Firestore block: ${header}`);
+  // Match paths contain placeholder braces such as {entryId}. The opening rule
+  // brace is the final character of the complete reviewed header, not the first
+  // brace encountered after `match`.
+  const open = start + header.length - 1;
+  if (text[open] !== '{') throw new Error(`Malformed Firestore block header: ${header}`);
   let depth = 0;
   for (let index = open; index < text.length; index += 1) {
     if (text[index] === '{') depth += 1;
