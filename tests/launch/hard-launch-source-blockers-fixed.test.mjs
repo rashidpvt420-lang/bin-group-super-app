@@ -9,6 +9,7 @@ const brokerHook = read('src/broker/hooks/useBrokerAttributionSignals.ts');
 const onboarding = read('src/pages/PropertyOnboardingPage.tsx');
 const brokerCallable = read('functions/brokerReferralAttribution.ts');
 const runtime = read('functions/runtime.ts');
+const aiLaunchHold = read('functions/aiDesignStudioLaunchHold.ts');
 const ownerApp = read('src/owner/OwnerApp.tsx');
 const designStudio = read('src/pages/DesignStudioPage.tsx');
 const gpsHardener = read('scripts/harden-technician-live-location-authority.mjs');
@@ -28,10 +29,10 @@ test('production deploy preflight refuses any workflow that is not exact current
   assert.match(deployPreflight, /remoteMainSha !== githubSha/);
   assert.match(deployPreflight, /Refusing stale production mutation/);
   assert.match(deployPreflight, /exactMainVerifier\(\{ env \}\)/);
-  assert.ok(
-    deployPreflight.indexOf('exactMainVerifier({ env })') < deployPreflight.indexOf('requireAdminMfaDomainRepairContext'),
-    'exact-main verification must occur before any protected domain repair',
-  );
+  const verificationCall = deployPreflight.lastIndexOf('exactMainVerifier({ env })');
+  const repairCall = deployPreflight.lastIndexOf('requireAdminMfaDomainRepairContext({ env, approvalPath })');
+  assert.ok(verificationCall >= 0 && repairCall >= 0 && verificationCall < repairCall,
+    'exact-main verification must occur before any protected domain repair call');
   assert.doesNotMatch(deployPreflight, /merge-base.*--is-ancestor/s);
   assert.match(deployScript, /verifyFirebaseProductionSecrets/);
 });
@@ -56,12 +57,16 @@ test('Owner inspections route uses the full inspections workspace', () => {
   assert.match(ownerApp, /path="\/review-queue" element=\{<OwnerReviewQueuePage \/>\}/);
 });
 
-test('public AI Design Studio is fail-closed and unsafe callable is not deployed', () => {
+test('public AI Design Studio is fail-closed and old endpoint is overwritten safely', () => {
   assert.match(designStudio, /LAUNCH SAFETY HOLD/);
   assert.match(designStudio, /No design request, quote, approval, payment status or generated property image/);
   assert.doesNotMatch(designStudio, /addDoc|setDoc|uploadBytes|generateAIDesignConceptImages/);
   assert.doesNotMatch(runtime, /export \* from "\.\/aiDesignStudio";/);
-  assert.match(runtime, /server-authoritative request/);
+  assert.match(runtime, /export \* from "\.\/aiDesignStudioLaunchHold";/);
+  assert.match(aiLaunchHold, /export const generateAIDesignConceptImages/);
+  assert.match(aiLaunchHold, /enforceAppCheck: true/);
+  assert.match(aiLaunchHold, /failed-precondition/);
+  assert.doesNotMatch(aiLaunchHold, /images\.generate|makePublic|design_requests|design_quotes/);
 });
 
 test('Technician GPS browser writes are denied and orphan direct writer is removed', () => {
@@ -69,10 +74,11 @@ test('Technician GPS browser writes are denied and orphan direct writer is remov
   assert.match(gpsHardener, /safeTechnicianProfileUpdate/);
   assert.match(gpsHardener, /return false;/);
   assert.match(gpsHardener, /callable-only GPS/);
-  for (const field of ["'arrivedLocation'", "'technicianLocation'", "'technicianLocationUpdatedAt'", "'currentLocation'", "'lastLocation'", "'isTracking'"]) {
-    const helperStart = gpsHardener.indexOf('const evidenceOnlyTechnicianUpdate');
-    const helperEnd = gpsHardener.indexOf('const serverOnlyTechnicianProfileUpdate');
-    assert.doesNotMatch(gpsHardener.slice(helperStart, helperEnd), new RegExp(field.replace(/[']/g, '')));
+  const helperStart = gpsHardener.indexOf('const evidenceOnlyTechnicianUpdate');
+  const helperEnd = gpsHardener.indexOf('const serverOnlyTechnicianProfileUpdate');
+  const helper = gpsHardener.slice(helperStart, helperEnd);
+  for (const field of ['arrivedLocation', 'technicianLocation', 'technicianLocationUpdatedAt', 'currentLocation', 'lastLocation', 'isTracking']) {
+    assert.doesNotMatch(helper, new RegExp(`'${field}'`));
   }
 });
 
