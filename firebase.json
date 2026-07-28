@@ -1,7 +1,7 @@
 {
   "firestore": {
     "database": "(default)",
-    "rules": "firestore.rules",
+    "rules": "launch_generated/firestore.rules",
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
