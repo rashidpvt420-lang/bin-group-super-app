@@ -1,4 +1,4 @@
-const ACTOR_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const ACTOR_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\[bot\])?$/;
 
 export const AUTHORIZED_APPROVERS_ENV = 'AUTHORIZED_FOUNDER_ACTORS';
 
