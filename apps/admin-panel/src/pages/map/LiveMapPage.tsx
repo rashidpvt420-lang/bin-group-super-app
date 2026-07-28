@@ -48,6 +48,8 @@ import {
 const TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks();
 const UAE_CENTRE = { lat: 24.4009, lng: 54.6938 };
 const MAP_CLOCK_INTERVAL_MS = 15_000;
+const TECHNICIAN_MAP_LIMIT = 100;
+const LIVE_LOCATION_MAP_LIMIT = 200;
 
 type LiveLocation = {
   id: string;
@@ -167,14 +169,21 @@ export default function LiveMapPage() {
       });
     });
 
-    const technicianQuery = query(collection(db, 'technicians'), limit(100));
+    const technicianQuery = query(collection(db, 'technicians'), limit(TECHNICIAN_MAP_LIMIT + 1));
     const locationQuery = query(
       collection(db, 'technician_live_locations'),
       where('isTracking', '==', true),
-      limit(200),
+      limit(LIVE_LOCATION_MAP_LIMIT + 1),
     );
 
     const unsubscribeTechnicians = onSnapshot(technicianQuery, (snapshot) => {
+      if (snapshot.size > TECHNICIAN_MAP_LIMIT) {
+        setTechnicians([]);
+        setTechniciansError(
+          `Technician feed exceeds ${TECHNICIAN_MAP_LIMIT} records. Dispatch is disabled until the admin map uses a paginated or server-built dispatch snapshot.`,
+        );
+        return;
+      }
       const rows = snapshot.docs
         .map((item) => ({ id: item.id, ...item.data() } as any))
         .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase()));
@@ -187,6 +196,13 @@ export default function LiveMapPage() {
     });
 
     const unsubscribeLocations = onSnapshot(locationQuery, (snapshot) => {
+      if (snapshot.size > LIVE_LOCATION_MAP_LIMIT) {
+        setLiveLocations([]);
+        setLocationsError(
+          `Live GPS feed exceeds ${LIVE_LOCATION_MAP_LIMIT} active sessions. Operational markers are hidden until pagination or a server dispatch snapshot is available.`,
+        );
+        return;
+      }
       setLiveLocations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as LiveLocation)));
       setLocationsError('');
     }, (error) => {

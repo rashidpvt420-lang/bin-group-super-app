@@ -65,7 +65,13 @@ test('Admin map merges complete status listeners without ticket-row truncation',
   assert.match(adminMapSource, /where\('status', 'in', statuses\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\),\s*limit\(100\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\)[\s\S]{0,80}limit\(/);
-  assert.match(adminMapSource, /const technicianQuery = query\(collection\(db, 'technicians'\), limit\(100\)\)/);
+  assert.match(adminMapSource, /const TECHNICIAN_MAP_LIMIT = 100/);
+  assert.match(adminMapSource, /const technicianQuery = query\(collection\(db, 'technicians'\), limit\(TECHNICIAN_MAP_LIMIT \+ 1\)\)/);
+  assert.match(adminMapSource, /snapshot\.size > TECHNICIAN_MAP_LIMIT/);
+  assert.match(adminMapSource, /Technician feed exceeds \$\{TECHNICIAN_MAP_LIMIT\} records/);
+  assert.match(adminMapSource, /const LIVE_LOCATION_MAP_LIMIT = 200/);
+  assert.match(adminMapSource, /limit\(LIVE_LOCATION_MAP_LIMIT \+ 1\)/);
+  assert.match(adminMapSource, /snapshot\.size > LIVE_LOCATION_MAP_LIMIT/);
   assert.match(adminMapSource, /ticketSnapshots\.size !== TICKET_STATUS_QUERY_CHUNKS\.length/);
   assert.match(adminMapSource, /byId\.set\(String\(ticket\.id\), ticket\)/);
   assert.match(adminMapSource, /localeCompare\(String\(right\.id\)\)/);

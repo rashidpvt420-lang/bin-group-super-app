@@ -432,122 +432,136 @@ export const reconcileExpiredTechnicianLiveLocations = onSchedule(
   },
   async () => {
     const queryNow = admin.firestore.Timestamp.now();
-    const stale = await db.collection("technician_live_locations")
-      .where("isTracking", "==", true)
-      .where("expiresAt", "<=", queryNow)
-      .limit(50)
-      .get();
-
-    if (stale.empty) {
-      console.log("[technician-live-location-watchdog] no expired tracking session");
-      return;
-    }
-
+    const startedAt = Date.now();
+    const pageSize = 50;
+    const maxRuntimeMs = 240_000;
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
     let reconciled = 0;
     let skipped = 0;
+    let scanned = 0;
 
-    for (const snapshot of stale.docs) {
-      const queriedState = liveSessionState(snapshot.data() || {}, true);
-      const technicianUid = snapshot.id;
-      const auditRef = db.collection("audit_logs").doc();
+    while (Date.now() - startedAt < maxRuntimeMs) {
+      let staleQuery = db.collection("technician_live_locations")
+        .where("isTracking", "==", true)
+        .where("expiresAt", "<=", queryNow)
+        .orderBy("expiresAt", "asc")
+        .limit(pageSize);
+      if (cursor) staleQuery = staleQuery.startAfter(cursor);
+      const stale = await staleQuery.get();
 
-      const didReconcile = await db.runTransaction(async (tx) => {
-        const currentSnap = await tx.get(snapshot.ref);
-        const currentState = liveSessionState(currentSnap.data() || {}, currentSnap.exists);
-        const transactionNow = admin.firestore.Timestamp.now();
-        const decision = classifyWatchdogCandidate(
-          queriedState,
-          currentState,
-          transactionNow.toMillis(),
-        );
+      if (stale.empty) break;
+      scanned += stale.size;
+      cursor = stale.docs[stale.docs.length - 1] || null;
 
-        if (decision !== "RECONCILE") {
-          tx.set(auditRef, {
-            actorId: "system",
-            actorRole: "system",
-            action: "TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED",
-            targetType: "technician_live_locations",
-            targetId: snapshot.id,
-            technicianUid,
-            queriedTicketId: queriedState.activeTicketId || null,
-            queriedTrackingSessionId: queriedState.trackingSessionId || null,
-            queriedExpiresAtMs: queriedState.expiresAtMs,
-            currentTicketId: currentState.activeTicketId || null,
-            currentTrackingSessionId: currentState.trackingSessionId || null,
-            currentExpiresAtMs: currentState.expiresAtMs,
-            reason: decision,
-            createdAt: transactionNow,
-          });
-          return false;
-        }
+      for (const snapshot of stale.docs) {
+        const queriedState = liveSessionState(snapshot.data() || {}, true);
+        const technicianUid = snapshot.id;
+        const auditRef = db.collection("audit_logs").doc();
 
-        const ticketId = currentState.activeTicketId;
-        const trackingSessionId = currentState.trackingSessionId || null;
-        const ticketRef = ticketId ? db.collection("maintenanceTickets").doc(ticketId) : null;
-        const ticketSnap = ticketRef ? await tx.get(ticketRef) : null;
-        const technicianRef = db.collection("technicians").doc(technicianUid);
-        const userRef = db.collection("users").doc(technicianUid);
-        const diagnosticRef = technicianRef.collection("deviceReadiness").doc("gps");
+        const didReconcile = await db.runTransaction(async (tx) => {
+          const currentSnap = await tx.get(snapshot.ref);
+          const currentState = liveSessionState(currentSnap.data() || {}, currentSnap.exists);
+          const transactionNow = admin.firestore.Timestamp.now();
+          const decision = classifyWatchdogCandidate(
+            queriedState,
+            currentState,
+            transactionNow.toMillis(),
+          );
 
-        tx.set(snapshot.ref, {
-          activeTicketId: null,
-          isTracking: false,
-          lastStoppedTicketId: ticketId || null,
-          stopReason: "SERVER_EXPIRY_WATCHDOG",
-          stoppedAt: transactionNow,
-          reconciledAt: transactionNow,
-          serverUpdatedAt: transactionNow,
-          expiresAt: transactionNow,
-        }, { merge: true });
-        tx.set(technicianRef, {
-          activeTicketId: null,
-          isTracking: false,
-          locationUpdatedAt: transactionNow,
-          trackingReconciledAt: transactionNow,
-          updatedAt: transactionNow,
-        }, { merge: true });
-        tx.set(userRef, {
-          activeTicketId: null,
-          isTracking: false,
-          locationUpdatedAt: transactionNow,
-          trackingReconciledAt: transactionNow,
-          updatedAt: transactionNow,
-        }, { merge: true });
-        tx.set(diagnosticRef, {
-          ticketId: ticketId || null,
-          status: "STOPPED_STALE",
-          stopReason: "SERVER_EXPIRY_WATCHDOG",
-          trackingSessionId,
-          stoppedAt: transactionNow,
-          updatedAt: transactionNow,
-        }, { merge: true });
-        if (ticketRef && ticketSnap?.exists) {
-          tx.set(ticketRef, {
-            trackingStatus: "STOPPED_STALE",
-            technicianLocationExpiresAt: transactionNow,
+          if (decision !== "RECONCILE") {
+            tx.set(auditRef, {
+              actorId: "system",
+              actorRole: "system",
+              action: "TECHNICIAN_LIVE_LOCATION_EXPIRY_SKIPPED",
+              targetType: "technician_live_locations",
+              targetId: snapshot.id,
+              technicianUid,
+              queriedTicketId: queriedState.activeTicketId || null,
+              queriedTrackingSessionId: queriedState.trackingSessionId || null,
+              queriedExpiresAtMs: queriedState.expiresAtMs,
+              currentTicketId: currentState.activeTicketId || null,
+              currentTrackingSessionId: currentState.trackingSessionId || null,
+              currentExpiresAtMs: currentState.expiresAtMs,
+              reason: decision,
+              createdAt: transactionNow,
+            });
+            return false;
+          }
+
+          const ticketId = currentState.activeTicketId;
+          const trackingSessionId = currentState.trackingSessionId || null;
+          const ticketRef = ticketId ? db.collection("maintenanceTickets").doc(ticketId) : null;
+          const ticketSnap = ticketRef ? await tx.get(ticketRef) : null;
+          const technicianRef = db.collection("technicians").doc(technicianUid);
+          const userRef = db.collection("users").doc(technicianUid);
+          const diagnosticRef = technicianRef.collection("deviceReadiness").doc("gps");
+
+          tx.set(snapshot.ref, {
+            activeTicketId: null,
+            isTracking: false,
+            lastStoppedTicketId: ticketId || null,
+            stopReason: "SERVER_EXPIRY_WATCHDOG",
+            stoppedAt: transactionNow,
+            reconciledAt: transactionNow,
+            serverUpdatedAt: transactionNow,
+            expiresAt: transactionNow,
+          }, { merge: true });
+          tx.set(technicianRef, {
+            activeTicketId: null,
+            isTracking: false,
+            locationUpdatedAt: transactionNow,
             trackingReconciledAt: transactionNow,
             updatedAt: transactionNow,
           }, { merge: true });
-        }
-        tx.set(auditRef, {
-          actorId: "system",
-          actorRole: "system",
-          action: "TECHNICIAN_LIVE_LOCATION_EXPIRED",
-          targetType: ticketSnap?.exists ? "maintenanceTickets" : "technician_live_locations",
-          targetId: ticketSnap?.exists ? ticketId : snapshot.id,
-          requestedTicketId: ticketId || null,
-          ticketMissing: Boolean(ticketId) && ticketSnap?.exists !== true,
-          technicianUid,
-          trackingSessionId,
-          createdAt: transactionNow,
+          tx.set(userRef, {
+            activeTicketId: null,
+            isTracking: false,
+            locationUpdatedAt: transactionNow,
+            trackingReconciledAt: transactionNow,
+            updatedAt: transactionNow,
+          }, { merge: true });
+          tx.set(diagnosticRef, {
+            ticketId: ticketId || null,
+            status: "STOPPED_STALE",
+            stopReason: "SERVER_EXPIRY_WATCHDOG",
+            trackingSessionId,
+            stoppedAt: transactionNow,
+            updatedAt: transactionNow,
+          }, { merge: true });
+          if (ticketRef && ticketSnap?.exists) {
+            tx.set(ticketRef, {
+              trackingStatus: "STOPPED_STALE",
+              technicianLocationExpiresAt: transactionNow,
+              trackingReconciledAt: transactionNow,
+              updatedAt: transactionNow,
+            }, { merge: true });
+          }
+          tx.set(auditRef, {
+            actorId: "system",
+            actorRole: "system",
+            action: "TECHNICIAN_LIVE_LOCATION_EXPIRED",
+            targetType: ticketSnap?.exists ? "maintenanceTickets" : "technician_live_locations",
+            targetId: ticketSnap?.exists ? ticketId : snapshot.id,
+            requestedTicketId: ticketId || null,
+            ticketMissing: Boolean(ticketId) && ticketSnap?.exists !== true,
+            technicianUid,
+            trackingSessionId,
+            createdAt: transactionNow,
+          });
+          return true;
         });
-        return true;
-      });
 
-      if (didReconcile) reconciled += 1;
-      else skipped += 1;
+        if (didReconcile) reconciled += 1;
+        else skipped += 1;
+      }
+
+      if (stale.size < pageSize) break;
     }
 
-    console.log(`[technician-live-location-watchdog] reconciled=${reconciled} skipped=${skipped}`);
+    if (scanned === 0) {
+      console.log("[technician-live-location-watchdog] no expired tracking session");
+      return;
+    }
+    console.log(`[technician-live-location-watchdog] scanned=${scanned} reconciled=${reconciled} skipped=${skipped}`);
   },
 );

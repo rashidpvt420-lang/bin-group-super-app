@@ -31,7 +31,7 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
   const referralCode = React.useMemo(() => brokerKey(user?.uid, user?.email), [user?.uid, user?.email]);
   const referralUrl = React.useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bin-group-57c60.web.app';
-    return `${origin}/owner/onboarding?broker=${encodeURIComponent(referralCode)}`;
+    return `${origin}/onboarding?broker=${encodeURIComponent(referralCode)}`;
   }, [referralCode]);
 
   React.useEffect(() => {

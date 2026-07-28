@@ -135,7 +135,10 @@ test('owner onboarding is account-first, direct-to-Owner and location provenance
   assert.ok(page.indexOf('case 2: return <AccountCreationStep') < page.indexOf('case 3: return <AssetProfileStep'));
   assert.match(stateMachine, /account_created/);
   assert.match(store, /version:\s*4/);
-  assert.match(store, /partialize:\s*\(state\)\s*=>\s*\(\{\s*step:\s*state\.step,\s*intakeId:\s*state\.intakeId,?\s*\}\)/s);
+  assert.match(
+    store,
+    /partialize:\s*\(state\)\s*=>\s*\(\{\s*step:\s*state\.step,\s*intakeId:\s*state\.intakeId,\s*brokerAttribution:\s*state\.brokerAttribution,?\s*\}\)/s,
+  );
   assert.match(company, /Rent is paid directly to the Owner/);
   assert.match(company, /BIN GROUP does not hold owner rent funds/);
   assert.match(company, /الإيجار مباشرة للمالك/);

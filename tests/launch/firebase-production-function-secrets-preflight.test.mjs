@@ -74,13 +74,16 @@ test('protected production deploy imports mode-aware secret preflight before Fir
   assert.match(workflow, /run:\s*node scripts\/deploy-firebase-production\.mjs/);
 });
 
-test('production deploy allows deployment when GITHUB_SHA is an ancestor of origin/main (race-condition tolerance)', () => {
-  assert.match(deploy, /merge-base.*--is-ancestor/, 'ancestry check via git merge-base must be present');
-  assert.match(deploy, /FETCH_HEAD/, 'ancestry check must reference FETCH_HEAD after fetching origin/main');
-  assert.match(deploy, /fetch.*--depth.*origin.*main/s, 'must fetch origin main before ancestry check');
-  assert.match(deploy, /is a verified ancestor/, 'must log confirmation when ancestor check passes');
-  assert.match(deploy, /is not an ancestor of origin\/main/, 'must log reason when ancestry check fails');
+test('production deploy rejects any non-exact origin/main SHA before Firebase mutation', () => {
+  assert.match(deploy, /remoteMainSha !== githubSha/, 'origin/main must exactly match GITHUB_SHA');
+  assert.match(deploy, /must exactly match GITHUB_SHA/, 'stale SHA refusal must be explicit');
+  assert.doesNotMatch(deploy, /merge-base.*--is-ancestor/, 'ancestor deployment fallback must not exist');
+  assert.doesNotMatch(deploy, /FETCH_HEAD/, 'deploy must not fetch and tolerate advanced main');
+  assert.doesNotMatch(deploy, /is a verified ancestor/, 'ancestor success log must not exist');
+  assert.doesNotMatch(deploy, /proceeding with deployment/, 'advanced-main deployments must not proceed');
   const lsRemoteIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
-  const ancestorIndex = deploy.indexOf("'merge-base', '--is-ancestor'");
-  assert.ok(ancestorIndex > lsRemoteIndex, 'ancestry check must follow ls-remote probe');
+  const refusalIndex = deploy.indexOf('remoteMainSha !== githubSha');
+  const secretIndex = deploy.indexOf('await verifyFirebaseProductionSecrets({ projectId, launchMode });');
+  assert.ok(refusalIndex > lsRemoteIndex, 'exact-SHA refusal must follow ls-remote probe');
+  assert.ok(secretIndex > refusalIndex, 'exact-SHA refusal must happen before secret preflight and deployment');
 });
