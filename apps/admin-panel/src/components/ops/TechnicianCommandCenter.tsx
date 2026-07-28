@@ -14,6 +14,9 @@ import { useLanguage } from '@bin/shared';
 const Icon = ({ icon: IconComponent, size = 16, className = '' }: { icon: any; size?: number; className?: string }) => (
   <IconComponent size={size} className={className} />
 );
+const TECHNICIAN_FEED_LIMIT = 100;
+const LIVE_LOCATION_FEED_LIMIT = 100;
+const TODAY_JOB_FEED_LIMIT = 250;
 
 const timestampMs = (value: any): number | null => {
   if (!value) return null;
@@ -76,9 +79,9 @@ const TechnicianCommandCenter: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const technicianQuery = query(collection(db, 'technicians'), limit(100));
-    const jobsQuery = query(collection(db, 'maintenanceTickets'), where('createdAt', '>=', today), limit(250));
-    const locationsQuery = query(collection(db, 'technician_live_locations'), where('isTracking', '==', true), limit(100));
+    const technicianQuery = query(collection(db, 'technicians'), limit(TECHNICIAN_FEED_LIMIT + 1));
+    const jobsQuery = query(collection(db, 'maintenanceTickets'), where('createdAt', '>=', today), limit(TODAY_JOB_FEED_LIMIT + 1));
+    const locationsQuery = query(collection(db, 'technician_live_locations'), where('isTracking', '==', true), limit(LIVE_LOCATION_FEED_LIMIT + 1));
 
     const setSourceError = (source: string, message: string) => {
       setErrors((current) => [...current.filter((item) => !item.startsWith(`${source}:`)), `${source}: ${message}`]);
@@ -88,6 +91,12 @@ const TechnicianCommandCenter: React.FC = () => {
     };
 
     const unsubscribeTechnicians = onSnapshot(technicianQuery, (snapshot) => {
+      if (snapshot.size > TECHNICIAN_FEED_LIMIT) {
+        setTechList([]);
+        setSourceError('Technicians', `Technician feed exceeds ${TECHNICIAN_FEED_LIMIT} records. Metrics are hidden until pagination or a server snapshot is available.`);
+        setLoading(false);
+        return;
+      }
       setTechList(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
       clearSourceError('Technicians');
       setLoading(false);
@@ -99,6 +108,11 @@ const TechnicianCommandCenter: React.FC = () => {
     });
 
     const unsubscribeJobs = onSnapshot(jobsQuery, (snapshot) => {
+      if (snapshot.size > TODAY_JOB_FEED_LIMIT) {
+        setTodayJobs([]);
+        setSourceError('Jobs', `Today’s job feed exceeds ${TODAY_JOB_FEED_LIMIT} records. Metrics are hidden until pagination or a server snapshot is available.`);
+        return;
+      }
       setTodayJobs(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
       clearSourceError('Jobs');
     }, (error) => {
@@ -108,6 +122,11 @@ const TechnicianCommandCenter: React.FC = () => {
     });
 
     const unsubscribeLocations = onSnapshot(locationsQuery, (snapshot) => {
+      if (snapshot.size > LIVE_LOCATION_FEED_LIMIT) {
+        setLiveLocations([]);
+        setSourceError('GPS', `Canonical GPS feed exceeds ${LIVE_LOCATION_FEED_LIMIT} active sessions. Metrics are hidden until pagination or a server snapshot is available.`);
+        return;
+      }
       setLiveLocations(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
       clearSourceError('GPS');
     }, (error) => {

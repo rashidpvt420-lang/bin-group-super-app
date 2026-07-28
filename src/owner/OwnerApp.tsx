@@ -30,6 +30,7 @@ import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage
 import OwnerPropertyPassportDetailPage from './pages/OwnerPropertyPassportContractDetailPage';
 import OwnerDocumentsPage from './pages/OwnerDocumentsPage';
 import OwnerActivationPage from './pages/OwnerActivationPage';
+import OwnerInspectionsPage from './pages/OwnerInspectionsPage';
 import OwnerReviewQueuePage from './pages/OwnerReviewQueuePage';
 import OwnerInspectionsPage from './pages/OwnerInspectionsPage';
 import DesignStudioPage from '../pages/DesignStudioPage';

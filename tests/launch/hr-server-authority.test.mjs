@@ -47,6 +47,31 @@ test('Firestore rules make HR case and AI conversation writes server-only', () =
   assert.match(rules, /match \/hrAiConversations\/\{caseId\}[\s\S]*allow create, update, delete: if false;/);
 });
 
+test('raw HR documents and wellbeing check-ins do not leak to Finance', () => {
+  const staffDocumentsBlock = rules.match(/match \/staffDocuments\/\{documentId\} \{[\s\S]*?\n    \}/)?.[0] || '';
+  const moodBlock = rules.match(/match \/staffMoodCheckins\/\{checkinId\} \{[\s\S]*?\n    \}/)?.[0] || '';
+
+  assert.match(staffDocumentsBlock, /Passports, IDs, visas and medical files/);
+  assert.match(staffDocumentsBlock, /allow read: if isHr\(\) \|\| staffCanRead\(resource\.data\);/);
+  assert.doesNotMatch(staffDocumentsBlock, /isFinance\(\)/);
+  assert.match(moodBlock, /allow read: if isHrManagerTier\(\) \|\| staffCanRead\(resource\.data\);/);
+  assert.doesNotMatch(moodBlock, /allow read: if isHr\(\)/);
+});
+
+test('HR automation audit and new-hire role authority are fail-closed', () => {
+  assert.match(functions, /const TECHNICIAN_NEW_HIRE_ROLE = "technician"/);
+  assert.match(functions, /async function blockInvalidNewHireRole/);
+  assert.match(functions, /provisioningStatus: "blocked_invalid_role"/);
+  assert.match(functions, /requestedRole !== TECHNICIAN_NEW_HIRE_ROLE/);
+  assert.match(functions, /const role = TECHNICIAN_NEW_HIRE_ROLE/);
+  assert.match(functions, /const auditRef = db\.collection\("audit_logs"\)\.doc\(\)/);
+  assert.match(functions, /const batch = db\.batch\(\)/);
+  assert.match(functions, /batch\.set\(auditRef, payload\)/);
+  assert.match(functions, /batch\.set\(db\.collection\("auditLogs"\)\.doc\(auditRef\.id\), payload\)/);
+  assert.match(functions, /await batch\.commit\(\)/);
+  assert.doesNotMatch(functions, /Promise\.allSettled\(\[\s*db\.collection\("auditLogs"\)\.add\(payload\)/);
+});
+
 test('unknown HR classifications default to confidential human review', () => {
   assert.match(functions, /isHighRiskHrCase\(result\)/);
   assert.match(functions, /result\.privacyTier === "hr_manager_only"/);

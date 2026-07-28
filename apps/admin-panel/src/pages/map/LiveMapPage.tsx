@@ -47,6 +47,8 @@ import {
 const TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks();
 const UAE_CENTRE = { lat: 24.4009, lng: 54.6938 };
 const MAP_CLOCK_INTERVAL_MS = 15_000;
+const TECHNICIAN_MAP_LIMIT = 100;
+const LIVE_LOCATION_MAP_LIMIT = 200;
 
 type LiveLocation = {
   id: string;

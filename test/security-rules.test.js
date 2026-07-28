@@ -995,6 +995,33 @@ describe('Firestore Security Rules', () => {
     }
   });
 
+  it('raw HR document links and wellbeing mood records are not readable by Finance', async () => {
+    await seedServerDocument('staffDocuments/doc_private', {
+      uid: 'staff_user',
+      documentType: 'emirates_id',
+      fileUrl: 'https://firebasestorage.googleapis.com/v0/b/bin-group-57c60.appspot.com/o/staffDocuments%2Fstaff_user%2Femirates-id.pdf',
+      status: 'pending_hr_review',
+    });
+    await seedServerDocument('staffMoodCheckins/mood_private', {
+      uid: 'staff_user',
+      mood: 'stressed',
+      riskScore: 80,
+    });
+
+    const staffDb = testEnv.authenticatedContext('staff_user', { role: 'technician' }).firestore();
+    const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin' }).firestore();
+    const hrManagerDb = testEnv.authenticatedContext('hr_manager_user', { role: 'hr_manager' }).firestore();
+    const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
+
+    await assertSucceeds(getDoc(doc(staffDb, 'staffDocuments/doc_private')));
+    await assertSucceeds(getDoc(doc(hrDb, 'staffDocuments/doc_private')));
+    await assertFails(getDoc(doc(financeDb, 'staffDocuments/doc_private')));
+
+    await assertSucceeds(getDoc(doc(staffDb, 'staffMoodCheckins/mood_private')));
+    await assertSucceeds(getDoc(doc(hrManagerDb, 'staffMoodCheckins/mood_private')));
+    await assertFails(getDoc(doc(financeDb, 'staffMoodCheckins/mood_private')));
+  });
+
   it('production-shaped stale-token suspension blocks critical client writes', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });

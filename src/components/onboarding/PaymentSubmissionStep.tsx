@@ -95,6 +95,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
         paymentManifest,
         selectedPlan,
         selectedAddOns,
+        brokerAttribution,
         properties,
         portfolioSummary,
         isContractSigned,
@@ -360,6 +361,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
             signatureName: signatureName.trim(),
             otpVerificationId: contractOtpVerificationId,
             documentUrls,
+            brokerAttribution,
         });
 
         if (paymentMethod === 'STRIPE') {

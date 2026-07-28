@@ -49,13 +49,25 @@ const configuredRoleEmails = requiredRoleEmailVars.map((name) => ({
   name,
   email: String(process.env[name] || '').trim().toLowerCase(),
 }));
+function duplicateEmailGroups(entries) {
+  const byEmail = new Map();
+  for (const { name, email } of entries) {
+    const names = byEmail.get(email) || [];
+    names.push(name);
+    byEmail.set(email, names);
+  }
+  return [...byEmail.values()].filter((names) => names.length > 1);
+}
 if (configuredRoleEmails.some(({ email }) => email === CANONICAL_FOUNDER_EMAIL)) {
   console.error(`❌ E2E role accounts must never use the canonical Founder email ${CANONICAL_FOUNDER_EMAIL}.`);
   process.exit(1);
 }
 const uniqueRoleEmails = new Set(configuredRoleEmails.map(({ email }) => email));
 if (uniqueRoleEmails.size !== configuredRoleEmails.length) {
-  console.error('❌ Every E2E role must use a distinct email address.');
+  const duplicateGroups = duplicateEmailGroups(configuredRoleEmails)
+    .map((names) => names.join(' + '))
+    .join('; ');
+  console.error(`❌ Every E2E role must use a distinct email address. Duplicate variable groups: ${duplicateGroups}`);
   process.exit(1);
 }
 

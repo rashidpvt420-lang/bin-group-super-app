@@ -39,6 +39,7 @@ test('AI privacy scanner covers free text and nested innocent-looking fields', (
 test('Sovereign AI exposes healthy, degraded, and callable-error states honestly', () => {
   const assistant = read('functions/aiAssistant.ts');
   const chat = read('packages/shared/src/components/SovereignAIChat.tsx');
+  const rootChat = read('src/components/SovereignAIChat.tsx');
 
   assert.match(assistant, /operationalStatus: "healthy"/);
   assert.match(assistant, /operationalStatus: "degraded"/);
@@ -49,6 +50,14 @@ test('Sovereign AI exposes healthy, degraded, and callable-error states honestly
   assert.match(chat, /DEGRADED ·/);
   assert.match(chat, /ADVISORY ONLY · APPROVALS, PAYMENTS, ASSIGNMENTS, QUOTATIONS AND COMPLIANCE REMAIN SERVER-AUTHORITATIVE/);
   assert.doesNotMatch(chat, /I can still guide you with deterministic platform rules/);
+  assert.match(rootChat, /AI SERVICE ERROR — NO LIVE ANSWER/);
+  assert.match(rootChat, /DEGRADED AI - LOCAL RULE GUIDANCE ONLY/);
+  assert.match(rootChat, /LOCAL GUIDANCE — NOT AI OR AUTHORITATIVE/);
+  assert.match(rootChat, /ADVISORY ASSISTANT .* PROVIDER STATUS SHOWN/);
+  assert.match(rootChat, /AUTHENTICATED SESSION .* STATUS SHOWN/);
+  assert.match(rootChat, /LOCAL GUIDANCE ONLY .* SIGN IN FOR LIVE AI/);
+  assert.doesNotMatch(rootChat, /LIVE PROPERTY TRUTH ASSISTANT/);
+  assert.doesNotMatch(rootChat, /LIVE PROPERTY TRUTH SESSION/);
 });
 
 test('damage assessment is strict, App Check protected, and never returns fallback success or quotation', () => {

@@ -27,7 +27,10 @@ test('logout clears onboarding records and does not preserve the onboarding blob
 test('onboarding browser persistence contains only safe draft coordinates', async () => {
   const store = await read('src/store/onboardingStore.ts');
   assert.match(store, /version: 4/);
-  assert.match(store, /partialize: \(state\) => \(\{\s*step: state\.step,\s*intakeId: state\.intakeId,?\s*\}\)/s);
+  assert.match(
+    store,
+    /partialize: \(state\) => \(\{\s*step: state\.step,\s*intakeId: state\.intakeId,\s*brokerAttribution: state\.brokerAttribution,?\s*\}\)/s,
+  );
   const persistenceBlock = store.slice(store.indexOf('partialize:'));
   for (const forbidden of ['signupData', 'password', 'kycUrls', 'paymentManifest', 'proofDocuments', 'signatureName', 'properties: state.properties']) {
     assert.doesNotMatch(persistenceBlock, new RegExp(forbidden));

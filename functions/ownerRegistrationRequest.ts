@@ -49,6 +49,72 @@ function cleanReference(value: unknown) {
   return ref;
 }
 
+function cleanOptionalBrokerAttribution(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  const referralCode = String(input.referralCode || input.brokerCode || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "")
+    .slice(0, 40);
+  if (!referralCode) return null;
+  return {
+    referralCode,
+    brokerCode: referralCode,
+    source: String(input.source || "PUBLIC_OWNER_ONBOARDING_URL").trim().slice(0, 80),
+    capturedAt: String(input.capturedAt || "").trim().slice(0, 80),
+    landingPath: String(input.landingPath || "").trim().slice(0, 500),
+  };
+}
+
+async function resolveBrokerAttribution(input: ReturnType<typeof cleanOptionalBrokerAttribution>): Promise<any | null> {
+  if (!input) return null;
+  const fields = ["brokerCode", "affiliateCode", "referralCode"];
+  for (const field of fields) {
+    const snap = await db.collection("users")
+      .where(field, "==", input.referralCode)
+      .limit(1)
+      .get();
+    const brokerDoc = snap.docs.find((doc) => {
+      const data = doc.data() || {};
+      return String(data.role || "").trim().toLowerCase() === "broker";
+    });
+    if (brokerDoc) {
+      const broker = brokerDoc.data() || {};
+      return {
+        ...input,
+        status: "RESOLVED_BROKER_PROFILE",
+        brokerId: brokerDoc.id,
+        brokerUid: brokerDoc.id,
+        brokerEmail: String(broker.email || "").trim().toLowerCase(),
+        brokerName: String(broker.displayName || broker.name || broker.fullName || "BIN Broker").trim(),
+        resolvedByField: field,
+      };
+    }
+  }
+  return {
+    ...input,
+    status: "PENDING_ADMIN_ATTRIBUTION_REVIEW",
+  };
+}
+
+function brokerAttributionWriteFields(attribution: any | null) {
+  if (!attribution) return {};
+  return {
+    brokerAttribution: cleanPlainValue(attribution),
+    brokerCode: attribution.brokerCode,
+    brokerReferralCode: attribution.referralCode,
+    brokerAttributionSource: attribution.source,
+    brokerAttributionStatus: attribution.status,
+    ...(attribution.brokerId ? {
+      brokerId: attribution.brokerId,
+      brokerUid: attribution.brokerUid,
+      brokerEmail: attribution.brokerEmail,
+      brokerName: attribution.brokerName,
+    } : {}),
+  };
+}
+
 function cleanPlainValue(value: any): any {
   if (value === undefined) return null;
   if (value === null) return null;
@@ -364,6 +430,7 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
   const documentUrls = cleanPlainValue(data.documentUrls || {});
   const paymentManifest = cleanPlainValue(data.paymentManifest || {});
   const properties = cleanPlainValue(data.properties || []);
+  const brokerAttribution = await resolveBrokerAttribution(cleanOptionalBrokerAttribution(data.brokerAttribution));
   const signatureName = cleanText(data.signatureName, "signatureName", 120);
   const otpVerificationId = cleanText(data.otpVerificationId, "otpVerificationId", 180);
 
@@ -522,8 +589,13 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
   const timestamp = serverTimestamp();
   const contractRef = db.collection("contracts").doc(intakeId);
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
+  const brokerLeadRef = brokerAttribution?.brokerId
+    ? db.collection("brokerLeads").doc(`owner_onboarding_${intakeId}`)
+    : null;
+  const brokerFields = brokerAttributionWriteFields(brokerAttribution);
   const packageWasIdempotent = await db.runTransaction(async (transaction) => {
     const freshPaymentSnap = await transaction.get(paymentRef);
+    const freshBrokerLeadSnap = brokerLeadRef ? await transaction.get(brokerLeadRef) : null;
     const freshPayment = freshPaymentSnap.data() || {};
     if (freshPaymentSnap.exists) {
       if (String(freshPayment.ownerUid || "") !== ownerUid) {
@@ -577,6 +649,7 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
     serviceDetails,
     documentUrls,
     paymentManifest,
+    ...brokerFields,
     paymentReferenceId: manualPaymentReference || null,
     paymentProofUrl: manualReceiptUrl || null,
     paymentProofPath: manualReceiptPath || null,
@@ -613,6 +686,7 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
     quoteHash,
     quoteVersion: quoteSnapshot.version,
     quoteExpiresAt: admin.firestore.Timestamp.fromMillis(serverQuote.expiresAtMs),
+    ...brokerFields,
     ...(canRotateQuote && existing.quoteHash && existing.quoteHash !== quoteHash
       ? {
         previousQuoteHashes: FieldValue.arrayUnion(existing.quoteHash),
@@ -654,6 +728,7 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
     ownerEmail,
     proofDocuments: documentUrls,
     paymentManifest,
+    ...brokerFields,
     contractUrl,
     properties,
     updatedAt: timestamp
@@ -674,6 +749,7 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
       status: "PENDING_ADMIN_APPROVAL",
       activationStatus: "LOCKED_PENDING_PAYMENT_AND_ADMIN_APPROVAL",
       quoteHash,
+      ...brokerFields,
       updatedAt: timestamp,
       ...(existingPayment.exists ? {} : { createdAt: timestamp }),
     }, { merge: true });
@@ -701,6 +777,35 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
     updatedAt: timestamp,
   }, { merge: true });
 
+  if (brokerLeadRef && brokerAttribution?.brokerId) {
+    const existingLeadStatus = String(freshBrokerLeadSnap?.data()?.status || "").trim().toLowerCase();
+    const leadAlreadyConverted = existingLeadStatus === "converted";
+    transaction.set(brokerLeadRef, {
+      brokerId: brokerAttribution.brokerId,
+      brokerUid: brokerAttribution.brokerId,
+      brokerEmail: brokerAttribution.brokerEmail || "",
+      brokerName: brokerAttribution.brokerName || "BIN Broker",
+      brokerCode: brokerAttribution.brokerCode,
+      referralCode: brokerAttribution.referralCode,
+      attributionId: `broker_onboarding_${brokerAttribution.brokerId}_${intakeId}`,
+      leadName: companyProfile.name || signatureName || ownerEmail,
+      ownerName: companyProfile.name || signatureName || ownerEmail,
+      ownerEmail,
+      ownerPhone: companyProfile.phone || "",
+      propertyName: serviceDetails.properties > 1 ? "Portfolio" : "Property",
+      intakeId,
+      contractId: intakeId,
+      source: "OWNER_ONBOARDING_REFERRAL_URL",
+      attributionSource: brokerAttribution.source,
+      attributionProof: cleanPlainValue(brokerAttribution),
+      ...(leadAlreadyConverted ? {} : { status: "negotiation" }),
+      lifecycleStatus: "OWNER_PAYMENT_SUBMITTED",
+      attributionLocked: false,
+      updatedAt: timestamp,
+      ...(freshBrokerLeadSnap?.exists ? {} : { createdAt: timestamp }),
+    }, { merge: true });
+  }
+
   const auditRef = db.collection("audit_logs").doc();
   transaction.set(auditRef, {
     action: "ONBOARDING_PAYMENT_SUBMITTED",
@@ -717,7 +822,9 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
     annualContractValue,
     timestamp,
     createdAt: timestamp,
-    documentCount: Object.keys(documentUrls).length
+    documentCount: Object.keys(documentUrls).length,
+    brokerAttributionStatus: brokerAttribution?.status || null,
+    brokerReferralCode: brokerAttribution?.referralCode || null,
   });
 
     return false;

@@ -122,6 +122,7 @@ test('live launch audit recreates the Admin for evidence and retires it in final
 test('E2E seeding refuses Founder and cross-role email collisions', () => {
   assert.match(seedSource, /E2E role accounts must never use the canonical Founder email/);
   assert.match(seedSource, /Every E2E role must use a distinct email address/);
+  assert.match(seedSource, /Duplicate variable groups/);
   assert.match(seedSource, /E2E Technician B must use a distinct non-Founder email address/);
   assert.match(seedSource, /claims: \{ admin: true, role: 'admin', testAccount: true \}/);
 });

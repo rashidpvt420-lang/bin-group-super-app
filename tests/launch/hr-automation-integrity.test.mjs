@@ -19,6 +19,23 @@ test('HR automation mirrors audit events atomically under one document id', asyn
   assert.match(source, /transaction\.set\(auditRef, auditPayload\);\s*transaction\.set\(auditCompatRef, auditPayload\);/s);
 });
 
+test('HR payroll writes the technician-readable payroll_entries projection', async () => {
+  const [source, dashboard, rules] = await Promise.all([
+    read('functions/hrAutomation.ts'),
+    read('src/technician/pages/TechnicianDashboardPage.tsx'),
+    read('firestore.rules'),
+  ]);
+
+  assert.match(dashboard, /collection\(db,\s*['"]payroll_entries['"]\)/);
+  assert.match(dashboard, /where\(['"]technicianId['"],\s*['"]==['"],\s*user\.uid\)/);
+  assert.match(rules, /match \/payroll_entries\/\{entryId\} \{/);
+  assert.match(rules, /allow read: if isAdmin\(\) \|\| isTechnicianId\(resource\.data\.get\(['"]technicianId['"],\s*null\)\)/);
+  assert.match(source, /function payrollEntryProjection/);
+  assert.match(source, /batch\.create\(db\.collection\(["']payroll_entries["']\)\.doc\(payrollId\)/);
+  assert.match(source, /transaction\.set\(db\.collection\(["']payroll_entries["']\)\.doc\(payrollId\)/);
+  assert.match(source, /technicianId: input\.techId/);
+});
+
 test('HR self-service new-hire provisioning is Technician-only and blocks privileged roles', async () => {
   const [source, staffAccess] = await Promise.all([
     read('functions/hrAutomation.ts'),

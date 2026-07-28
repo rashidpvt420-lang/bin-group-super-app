@@ -124,9 +124,7 @@ const optimized = `    function safeTechnicianTicketUpdate() {
           'materialsUsed',
           'partsDisposition',
           'proofReadiness',
-          'arrivedLocation',
-          'technicianLocation',
-          'technicianLocationUpdatedAt'
+          'arrivedLocation'
         ]) &&
         isNotSuspended() &&
         hasApprovedTechnicianRecord() &&

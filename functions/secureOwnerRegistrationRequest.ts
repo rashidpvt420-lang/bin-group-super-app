@@ -196,6 +196,21 @@ function canonicalDocumentUrls(value: unknown) {
   };
 }
 
+function canonicalBrokerAttribution(value: unknown) {
+  const attribution = record(value);
+  const referralCode = boundedText(attribution.referralCode || attribution.brokerCode, 40)
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "");
+  if (!referralCode) return null;
+  return {
+    referralCode,
+    brokerCode: referralCode,
+    source: boundedText(attribution.source || "PUBLIC_OWNER_ONBOARDING_URL", 80),
+    capturedAt: boundedText(attribution.capturedAt, 80),
+    landingPath: boundedText(attribution.landingPath, 500),
+  };
+}
+
 function contractModeForProperty(property: UnknownRecord): ContractMode {
   const strategy = text(property.strategy).toLowerCase();
   if (["pm_only", "rent"].includes(strategy)) return "PM_ONLY";
@@ -286,6 +301,7 @@ function assertCanonicalCommercialTerms(rawData: unknown) {
       signatureName: boundedText(data.signatureName, 120),
       otpVerificationId: boundedText(data.otpVerificationId, 180),
       documentUrls: canonicalDocumentUrls(data.documentUrls),
+      brokerAttribution: canonicalBrokerAttribution(data.brokerAttribution),
       paymentPlan,
     },
     contractMode,
