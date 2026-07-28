@@ -297,17 +297,18 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       const responseText = String(data.text || '').trim();
       if (!responseText) throw new Error('Sovereign AI returned an empty response.');
       const live = data.live === true;
+      const visibleStatus = live ? '' : 'DEGRADED AI - LOCAL RULE GUIDANCE ONLY\n\n';
       setMessages((prev) => [...prev, {
         id: `ai_${Date.now()}`,
         type: 'ai',
-        text: responseText,
+        text: `${visibleStatus}${responseText}`,
         timestamp: new Date(),
         live,
         provider: String(data.provider || (live ? 'unknown-provider' : 'server-fallback')),
         operationalStatus: live && data.operationalStatus === 'healthy' ? 'healthy' : 'degraded',
       }]);
     } catch (error) {
-      console.warn('[SovereignAI] Live callable failed:', error);
+      console.warn('[SovereignAI] Live callable failed; local rules are clearly labelled:', error);
       const localText = generateSovereignAIResponse({ role, text: cleanText, pageContext, isAutoSummary, fallbackSummary });
       setMessages((prev) => [...prev, {
         id: `ai_${Date.now()}`,

@@ -87,6 +87,11 @@ test('payment and commission evidence uses real replay invariants and requires F
 
   assert.match(verifier, /latestApprovedPayment/);
   assert.match(verifier, /latestBrokerCommission/);
+  assert.match(verifier, /convertedBrokerLeadForCommission/);
+  assert.match(verifier, /collection\('brokerLeads'\)\.where\('commissionId', '==', commissionId\)/);
+  assert.match(verifier, /lower\(data\.status\) === 'converted'/);
+  assert.match(verifier, /commissionCreationStatus\) === 'COMMISSION_CREATED_SERVER_SIDE'/);
+  assert.match(verifier, /broker_attribution_\$\{brokerLead\.id\}_\$\{contractId\}/);
   assert.match(verifier, /cloudfunctions\.net\/adminApprovePayment/);
   assert.match(verifier, /payload\?\.idempotent !== true/);
   assert.match(verifier, /invoicesAfter\.length !== 1/);
@@ -95,6 +100,9 @@ test('payment and commission evidence uses real replay invariants and requires F
   assert.match(verifier, /`commission_\$\{contractId\}`/);
   assert.match(verifier, /commissionsAfterSnapshot\.size !== 1/);
   assert.match(verifier, /beforeHash !== afterHash/);
+  assert.match(publisher, /requiredText\(e\.brokerLeadId, 'brokerLeadId', errors\)/);
+  assert.match(publisher, /requiredText\(e\.attributionAuditId, 'attributionAuditId', errors\)/);
+  assert.match(publisher, /requiredHash\(e\.brokerLeadStateHash, 'brokerLeadStateHash', errors\)/);
   assert.match(wrapper, /replaySecondFactorHash = sha256\(verifiedMfa\.secondFactorIdentifier\)/);
   const publisherChecks = publisher.match(/requiredHash\(e\.replaySecondFactorHash, 'replaySecondFactorHash', errors\)/g) || [];
   assert.equal(publisherChecks.length, 2, 'both finance replay gates must require the Founder TOTP hash');

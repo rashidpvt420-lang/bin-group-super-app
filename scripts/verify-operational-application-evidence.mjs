@@ -105,6 +105,20 @@ async function latestBrokerCommission() {
   return commission;
 }
 
+async function convertedBrokerLeadForCommission(commissionId, contractId, brokerUid) {
+  const snapshot = await db.collection('brokerLeads').where('commissionId', '==', commissionId).get();
+  const matches = snapshot.docs
+    .map(docResult)
+    .filter(({ data }) =>
+      lower(data.status) === 'converted' &&
+      text(data.matchedContractId) === contractId &&
+      text(data.brokerId || data.brokerUid) === brokerUid &&
+      text(data.commissionCreationStatus) === 'COMMISSION_CREATED_SERVER_SIDE'
+    );
+  if (matches.length !== 1) fail('broker commission is not backed by exactly one converted broker lead');
+  return matches[0];
+}
+
 async function latestStaffCreationAudit() {
   const snapshot = await db.collection('audit_logs').where('action', '==', 'ADMIN_CREATE_STAFF_USER').limit(100).get();
   const candidates = sortedResults(snapshot, ['createdAt', 'timestamp']);
@@ -324,6 +338,18 @@ async function brokerCommissionProof() {
   const commissionId = `commission_${contractId}`;
   if (commissionBefore.id !== commissionId) fail('commission is not deterministically locked');
   const brokerUid = canonicalId(commissionBefore.data.brokerId || commissionBefore.data.brokerUid, 'broker_uid');
+  const brokerLead = await convertedBrokerLeadForCommission(commissionId, contractId, brokerUid);
+  const attributionAudit = await requireSnapshot(
+    db.collection('auditLogs').doc(`broker_attribution_${brokerLead.id}_${contractId}`),
+    `auditLogs/broker_attribution_${brokerLead.id}_${contractId}`,
+  );
+  if (
+    attributionAudit.data.action !== 'ADMIN_MATCH_BROKER_ATTRIBUTION' ||
+    attributionAudit.data.commissionId !== commissionId ||
+    attributionAudit.data.brokerId !== brokerUid
+  ) {
+    fail('broker attribution audit is missing or not bound to the commission');
+  }
   if (text(contractBefore.data.commissionId) !== commissionId || contractBefore.data.commissionGenerated !== true) fail('contract commission binding is incomplete');
   const commissionsBeforeSnapshot = await db.collection('broker_commissions').where('contractId', '==', contractId).limit(20).get();
   if (commissionsBeforeSnapshot.size !== 1) fail('commission is not locked exactly once before replay');
@@ -360,7 +386,16 @@ async function brokerCommissionProof() {
     paymentId,
     contractId,
     commissionId,
+    brokerLeadId: brokerLead.id,
     brokerUidHash: sha256(brokerUid),
+    brokerLeadStateHash: sha256(JSON.stringify({
+      id: brokerLead.id,
+      status: brokerLead.data.status,
+      matchedContractId: brokerLead.data.matchedContractId,
+      commissionId: brokerLead.data.commissionId,
+      commissionCreationStatus: brokerLead.data.commissionCreationStatus,
+    })),
+    attributionAuditId: attributionAudit.id,
     commissionCount: commissionsAfterSnapshot.size,
     commissionStateHash: afterHash,
     replayHttpStatus: replay.responseStatus,
