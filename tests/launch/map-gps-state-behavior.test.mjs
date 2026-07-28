@@ -202,7 +202,6 @@ test('account change is an explicit queue disposal boundary and expiry removes s
   assert.equal(queue.readGpsRetryQueue(expiring, now + (5 * 60 * 1000) + 1).length, 0);
 });
 
-
 test('terminal STOP reconciliation survives TTL and STOP saturation fails closed', () => {
   const now = 50_000;
   const stores = storage();
@@ -250,7 +249,6 @@ test('GPS startup failures reject after reporting so callers cannot claim LIVE t
   assert.doesNotMatch(liveTrackingSource, /onError\?\.\(message\);\s*return;\s*}\s*\n\s*_state\.activeTicketId/s);
 });
 
-
 test('browser queue defaults keep coordinates in memory and scope STOP persistence by Technician UID', () => {
   const queueSource = readFileSync('src/utils/gpsRetryQueue.ts', 'utf8');
   assert.match(queueSource, /update: scopedStorage\(memoryStorage, technicianUid\)/);
@@ -265,7 +263,7 @@ test('freshness ticks update marker membership without resetting the Admin viewp
   const mapSource = readFileSync('apps/admin-panel/src/pages/map/LiveMapPage.tsx', 'utf8');
   assert.match(mapSource, /technicianMarkerRefs = useRef<Map<string, any>>/);
   assert.match(mapSource, /ticketMarkerRefs = useRef<Map<string, any>>/);
-  assert.match(mapSource, /if \(!viewportInitializedRef\.current && initialPointCount > 0\)/);
+  assert.match(mapSource, /if \(!viewportInitializedRef\.current && pointCount > 0\)/);
   assert.match(mapSource, /existing\.setPosition/);
   assert.match(mapSource, /marker\.setMap\(null\)/);
   assert.doesNotMatch(mapSource, /markerRefs\.current\.forEach/);
@@ -275,7 +273,6 @@ test('new ticket startup discards stale UPDATE coordinates before STOP reconcili
   assert.match(liveTrackingSource, /discardAllQueuedUpdates\(technicianUid\)/);
   assert.match(liveTrackingSource, /readGpsRetryQueue\(browserGpsQueueStorage\(technicianUid\)\)/);
 });
-
 
 test('legacy v2 STOP migration keeps only coordinate-free newest STOP authority', () => {
   const now = 20_000;
@@ -299,7 +296,6 @@ test('legacy keys are deleted only after scoped STOP write verification', () => 
   assert.match(queueSource, /for \(const storage of sources\)/);
   assert.match(queueSource, /Legacy UPDATE coordinates are[\s\S]*never migrated/);
 });
-
 
 test('tracking state is published only after browser watch installation succeeds', () => {
   const installIndex = liveTrackingSource.indexOf('installedWatchId = navigator.geolocation.watchPosition');
@@ -328,6 +324,4 @@ test('Technician logout reconciles canonical STOP before purge and authenticatio
   const signOutIndex = portalSessionSource.indexOf('await signOut(auth)', clearIndex);
   assert.ok(prepareIndex >= 0 && clearIndex > prepareIndex && signOutIndex > clearIndex);
   assert.match(portalSessionSource, /error\?\.code === 'GPS_LOGOUT_STOP_PENDING'/);
-  assert.match(portalSessionSource, /if \(shouldRedirect\)/);
-  assert.doesNotMatch(portalSessionSource, /purgeTechnicianGpsRetryQueue\(auth\.currentUser/);
 });

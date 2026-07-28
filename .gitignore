@@ -11,6 +11,9 @@ functions.log
 # Firebase cache
 .firebase/
 
+# Generated hardened Firebase deployment artefacts
+launch_generated/
+
 # Firebase local config
 .firebaserc
 

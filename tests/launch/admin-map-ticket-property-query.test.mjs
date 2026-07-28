@@ -46,10 +46,10 @@ test('Admin map queries only ticket-referenced canonical property IDs', () => {
   assert.match(mapSource, /ticketReferencedPropertyIds\(tickets\)/);
   assert.match(mapSource, /propertyIdQueryChunks\(referencedPropertyIds\)/);
   assert.match(mapSource, /where\(documentId\(\), 'in', propertyIds\)/);
-  assert.match(mapSource, /propertySnapshots\.size !== chunks\.length/);
+  assert.match(mapSource, /snapshots\.size !== chunks\.length/);
   assert.match(mapSource, /missingReferencedPropertyIds/);
-  assert.match(mapSource, /Those tickets remain visible but receive no verified operational marker/);
-  assert.match(mapSource, /All ticket\/property markers are hidden until the exact canonical records can be loaded/);
+  assert.match(mapSource, /Those tickets remain visible but receive no verified marker/);
+  assert.match(mapSource, /All ticket\/property markers are hidden until the exact records can be loaded/);
   assert.doesNotMatch(mapSource, /collection\(db, 'properties'\), limit\(500\)/);
   assert.doesNotMatch(mapSource, /outside the returned set/);
 });
@@ -58,6 +58,6 @@ test('Admin map keeps first-load-only viewport authority and complete unresolved
   assert.match(mapSource, /TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks\(\)/);
   assert.match(mapSource, /isUnresolvedMaintenanceTicketStatus\(ticket\.status\)/);
   assert.match(mapSource, /viewportInitializedRef/);
-  assert.match(mapSource, /if \(!viewportInitializedRef\.current && initialPointCount > 0\)/);
-  assert.match(mapSource, /mapRef\.current\.fitBounds\(initialBounds, 72\)/);
+  assert.match(mapSource, /if \(!viewportInitializedRef\.current && pointCount > 0\)/);
+  assert.match(mapSource, /mapRef\.current\.fitBounds\(bounds, 72\)/);
 });

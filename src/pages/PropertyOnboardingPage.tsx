@@ -1,9 +1,10 @@
 import React from 'react';
 import { Alert, Box, Chip, Container, LinearProgress, Stack, Step, StepLabel, Stepper, Typography, Button } from '@mui/material';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useOnboardingStore } from '../store/onboardingStore';
+import { functions, httpsCallable } from '../lib/firebase';
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import AssetProfileStep from '../components/onboarding/AssetProfileStep';
@@ -24,13 +25,19 @@ const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampS
 const visibleStageProgress = (step: number) => Math.round((visibleStageForInternalStep(step) / VISIBLE_STAGE_COUNT) * 100);
 const readable = (value: string | undefined, fallback: string) => (!value || value.includes('.') ? fallback : value);
 
+type ReferralState = 'not_required' | 'waiting_for_owner' | 'capturing' | 'captured' | 'error';
+
 export default function PropertyOnboardingPage() {
     const navigate = useNavigate();
-    const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { t, isRTL, lang } = useLanguage();
-    const { step, nextStep, prevStep, setStep, properties, intakeId, brokerAttribution, setBrokerAttribution } = useOnboardingStore();
+    const { step, nextStep, prevStep, setStep, properties, intakeId, onboardingSessionId, ownerAccount } = useOnboardingStore();
     const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
+    const brokerUid = String(searchParams.get('broker') || '').trim();
+    const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
+    const [referralState, setReferralState] = React.useState<ReferralState>(brokerUid ? 'waiting_for_owner' : 'not_required');
+    const capturedReferralKey = React.useRef('');
 
     const visibleStages = [
         readable(t('onboarding.company'), label('Company', 'الشركة')),
@@ -58,17 +65,55 @@ export default function PropertyOnboardingPage() {
     }, [safeStep, setStep, step]);
 
     React.useEffect(() => {
-        const params = new URLSearchParams(location.search);
-        const rawBroker = params.get('broker') || params.get('brokerCode') || params.get('ref');
-        const referralCode = String(rawBroker || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
-        if (!referralCode || brokerAttribution?.referralCode === referralCode) return;
-        setBrokerAttribution({
-            referralCode,
-            source: 'PUBLIC_OWNER_ONBOARDING_URL',
-            capturedAt: new Date().toISOString(),
-            landingPath: `${location.pathname}${location.search}`.slice(0, 500),
+        if (!brokerUid) {
+            setReferralState('not_required');
+            return;
+        }
+        if (!validBrokerUid) {
+            setReferralState('error');
+            setGuardError(label('The Broker referral link is invalid. Ask the Broker to share a new link.', 'رابط إحالة الوسيط غير صالح. اطلب من الوسيط إرسال رابط جديد.'));
+            return;
+        }
+        if (!ownerAccount?.uid) {
+            setReferralState('waiting_for_owner');
+            return;
+        }
+
+        const captureKey = `${brokerUid}:${ownerAccount.uid}`;
+        if (capturedReferralKey.current === captureKey || referralState === 'capturing' || referralState === 'captured') return;
+        capturedReferralKey.current = captureKey;
+        setReferralState('capturing');
+        setGuardError('');
+
+        const captureReferral = httpsCallable(functions, 'captureBrokerReferralAttribution');
+        captureReferral({
+            brokerUid,
+            intakeId: intakeId || onboardingSessionId,
+            onboardingSubmissionId: intakeId || onboardingSessionId,
+            ownerName: ownerAccount.fullName,
+        }).then(() => {
+            setReferralState('captured');
+        }).catch((error: any) => {
+            console.error('[OwnerOnboarding] Broker referral capture failed:', { code: error?.code, message: error?.message });
+            capturedReferralKey.current = '';
+            setReferralState('error');
+            setGuardError(label(
+                'Your Owner account was created, but the Broker referral could not be verified. Continue is locked so the referral is not lost. Retry or request a new link.',
+                'تم إنشاء حساب المالك، لكن تعذر التحقق من إحالة الوسيط. تم إيقاف المتابعة حتى لا تضيع الإحالة. أعد المحاولة أو اطلب رابطاً جديداً.',
+            ));
         });
-    }, [brokerAttribution?.referralCode, location.pathname, location.search, setBrokerAttribution]);
+    }, [brokerUid, intakeId, label, onboardingSessionId, ownerAccount, referralState, validBrokerUid]);
+
+    const guardedAccountNext = () => {
+        if (brokerUid && referralState !== 'captured') {
+            setGuardError(referralState === 'capturing'
+                ? label('Broker referral verification is still running. Please wait a moment.', 'لا يزال التحقق من إحالة الوسيط جارياً. انتظر لحظة.')
+                : label('Broker referral verification must complete before continuing.', 'يجب إكمال التحقق من إحالة الوسيط قبل المتابعة.'));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+        nextStep();
+    };
 
     const guardedAssetNext = () => {
         const property = properties[0];
@@ -93,7 +138,7 @@ export default function PropertyOnboardingPage() {
     const renderStepContent = (stepIndex: number) => {
         switch (stepIndex) {
             case 1: return <CompanyProfileStep onNext={nextStep} />;
-            case 2: return <AccountCreationStep onNext={nextStep} onBack={prevStep} />;
+            case 2: return <AccountCreationStep onNext={guardedAccountNext} onBack={prevStep} />;
             case 3: return <AssetProfileStep onNext={guardedAssetNext} onBack={prevStep} />;
             case 4: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
             case 5: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
@@ -115,7 +160,7 @@ export default function PropertyOnboardingPage() {
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                         <Chip icon={<ShieldCheck size={15} />} label={`${label('Step', 'الخطوة')} ${safeStep} / ${INTERNAL_STEP_COUNT}`} sx={{ fontWeight: 900 }} />
                         <Chip icon={<Save size={15} />} label={intakeId ? label('Resume reference saved', 'تم حفظ مرجع الاستكمال') : label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
-                        {brokerAttribution?.referralCode && <Chip label={`${label('Broker', 'الوسيط')} ${brokerAttribution.referralCode}`} variant="outlined" sx={{ fontWeight: 900 }} />}
+                        {brokerUid && <Chip label={referralState === 'captured' ? label('Broker referral locked', 'تم تثبيت إحالة الوسيط') : label('Broker referral pending', 'إحالة الوسيط قيد التحقق')} color={referralState === 'captured' ? 'success' : 'warning'} variant="outlined" />}
                     </Stack>
                 </Stack>
                 <Box sx={{ mb: 2, textAlign: 'center' }}>

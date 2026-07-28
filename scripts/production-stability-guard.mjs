@@ -28,6 +28,8 @@ const paymentEvidence = read('functions/paymentEvidence.ts');
 const runtime = read('functions/runtime.ts');
 const payrollPage = read('apps/admin-panel/src/pages/financials/PayrollManagementPage.tsx');
 const firestoreRules = read('firestore.rules');
+const generatedFirestoreRules = read('launch_generated/firestore.rules');
+const firestoreRulesWriter = read('scripts/write-production-firestore-rules.mjs');
 const storageRules = read('storage.rules');
 
 const ownerActivationIsAdminControlled =
@@ -70,7 +72,12 @@ const workflowWithoutOptionalFunctionsTolerance = workflow.replace(
 );
 
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
-assert(firebaseJson.includes('"rules": "firestore.rules"'), 'Firebase must reference firestore.rules.');
+assert(firebaseJson.includes('"rules": "launch_generated/firestore.rules"'), 'Firebase must deploy the generated hardened Firestore rules artefact.');
+assert(packageJson.includes('"write:production-rules": "node scripts/write-production-firestore-rules.mjs"'), 'Package scripts must expose the production rules artefact writer.');
+assert(packageJson.includes('npm run harden:live-location-authority && npm run write:production-rules'), 'The generated rules artefact must be written only after the final GPS authority hardener.');
+assert(firestoreRulesWriter.includes("const outputPath = `${outputDirectory}/firestore.rules`"), 'Rules writer must target launch_generated/firestore.rules.');
+assert(firestoreRulesWriter.includes("createHash('sha256')"), 'Rules writer must record a SHA-256 digest.');
+assert(generatedFirestoreRules === firestoreRules, 'Generated Firestore deploy artefact must exactly equal the fully hardened source produced in this run.');
 assert(firebaseJson.includes('"rules": "storage.rules"'), 'Firebase must reference storage.rules.');
 assert(firebaseJson.includes('"target": "app"'), 'Firebase public hosting must use explicit app target.');
 assert(firebaseJson.includes('"target": "admin"'), 'Firebase admin hosting must use explicit admin target.');
@@ -127,7 +134,7 @@ for (const requiredFlag of [
 
 assert(!firestoreRules.includes('function paymentDraftCreate'), 'Legacy client-authored payment drafts must remain removed.');
 assert(
-  firestoreRules.includes("match /payment_transactions/{paymentId}") &&
+  firestoreRules.includes('match /payment_transactions/{paymentId}') &&
     firestoreRules.includes('// Financial evidence is always created by a validated Cloud Function.') &&
     firestoreRules.includes('allow create: if false;'),
   'Firestore rules must keep payment transactions server-authored.',

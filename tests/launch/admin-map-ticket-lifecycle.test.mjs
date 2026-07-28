@@ -59,19 +59,15 @@ test('Admin and Functions consume the same executable lifecycle module', () => {
   assert.doesNotMatch(lifecycleSource, /\bas const\b|:\s*readonly\b|:\s*string\b/);
 });
 
-test('Admin map merges complete status listeners without ticket-row truncation', () => {
+test('Admin map merges complete status, Technician and GPS listeners without silent truncation', () => {
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS = unresolvedMaintenanceTicketStatusQueryChunks\(\)/);
   assert.match(adminMapSource, /TICKET_STATUS_QUERY_CHUNKS\.map\(\(statuses, chunkIndex\)/);
   assert.match(adminMapSource, /where\('status', 'in', statuses\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\),\s*limit\(100\)/);
   assert.doesNotMatch(adminMapSource, /where\('status', 'in', statuses\)[\s\S]{0,80}limit\(/);
-  assert.match(adminMapSource, /const TECHNICIAN_MAP_LIMIT = 100/);
-  assert.match(adminMapSource, /const technicianQuery = query\(collection\(db, 'technicians'\), limit\(TECHNICIAN_MAP_LIMIT \+ 1\)\)/);
-  assert.match(adminMapSource, /snapshot\.size > TECHNICIAN_MAP_LIMIT/);
-  assert.match(adminMapSource, /Technician feed exceeds \$\{TECHNICIAN_MAP_LIMIT\} records/);
-  assert.match(adminMapSource, /const LIVE_LOCATION_MAP_LIMIT = 200/);
-  assert.match(adminMapSource, /limit\(LIVE_LOCATION_MAP_LIMIT \+ 1\)/);
-  assert.match(adminMapSource, /snapshot\.size > LIVE_LOCATION_MAP_LIMIT/);
+  assert.match(adminMapSource, /onSnapshot\(collection\(db, 'technicians'\)/);
+  assert.match(adminMapSource, /query\(collection\(db, 'technician_live_locations'\), where\('isTracking', '==', true\)\)/);
+  assert.doesNotMatch(adminMapSource, /limit\(100\)|limit\(200\)|limit\(101\)|limit\(201\)/);
   assert.match(adminMapSource, /ticketSnapshots\.size !== TICKET_STATUS_QUERY_CHUNKS\.length/);
   assert.match(adminMapSource, /byId\.set\(String\(ticket\.id\), ticket\)/);
   assert.match(adminMapSource, /localeCompare\(String\(right\.id\)\)/);
@@ -84,7 +80,7 @@ test('Admin map fails closed on any chunk error and distinguishes loading, empty
   assert.match(adminMapSource, /setTickets\(\[\]\)/);
   assert.match(adminMapSource, /Unresolved ticket query \$\{chunkIndex \+ 1\} of \$\{TICKET_STATUS_QUERY_CHUNKS\.length\} failed/);
   assert.match(adminMapSource, /const \[ticketsLoading, setTicketsLoading\] = useState\(true\)/);
-  assert.match(adminMapSource, /ticketsLoading && !ticketsError/);
-  assert.match(adminMapSource, /!ticketsLoading && !tickets\.length && !ticketsError/);
+  assert.match(adminMapSource, /ticketsLoading \? <Box/);
+  assert.match(adminMapSource, /!tickets\.length && !ticketsError/);
   assert.doesNotMatch(adminMapSource, /const ACTIVE_TICKET_STATUSES/);
 });

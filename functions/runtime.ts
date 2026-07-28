@@ -4,6 +4,7 @@ export * from "./index";
 export * from "./contractActivation";
 export * from "./brokerCommissions";
 export * from "./brokerKycProfile";
+export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
@@ -21,6 +22,7 @@ export * from "./technicianDispatchNotifications";
 export * from "./technicianBeforeWorkEvidence";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
+export * from "./technicianPayrollCompatibility";
 export * from "./adminUserProvisioning";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
@@ -28,7 +30,9 @@ export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
-export * from "./aiDesignStudio";
+// Preserve the public callable name as an App Check-protected fail-closed hold so
+// no earlier deployed implementation remains reachable while the replacement is reviewed.
+export * from "./aiDesignStudioLaunchHold";
 export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtpMailbox";
 export * from "./ownerOnboardingLifecycleEmail";
@@ -50,6 +54,7 @@ export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
 export * from "./ownerProfileReadiness";
 export * from "./technicianLiveLocation";
+export * from "./technicianLiveLocationOverflow";
 export * from "./proofVerification";
 
 export {

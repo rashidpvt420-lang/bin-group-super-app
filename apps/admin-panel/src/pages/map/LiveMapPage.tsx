@@ -22,7 +22,7 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import RoomIcon from '@mui/icons-material/Room';
-import { collection, documentId, limit, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, documentId, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   isUnresolvedMaintenanceTicketStatus,
@@ -41,7 +41,6 @@ import {
   mapCoordinate,
   recordedTicketCoordinate,
   verifiedPinForTicket,
-  type MapCoordinate,
   type VerifiedPropertyPin,
 } from '../../lib/verifiedPropertyPin';
 
@@ -63,10 +62,7 @@ type LiveLocation = {
   accuracy?: number;
 };
 
-type TicketPinRow = {
-  ticket: any;
-  pin: VerifiedPropertyPin;
-};
+type TicketPinRow = { ticket: any; pin: VerifiedPropertyPin };
 
 const displayStatus = (ticket: any) => {
   const status = normalizeMaintenanceTicketStatus(ticket.status);
@@ -90,11 +86,7 @@ const displayStatus = (ticket: any) => {
 };
 
 const verificationDate = (verifiedAtMs: number) => {
-  try {
-    return new Date(verifiedAtMs).toLocaleString();
-  } catch {
-    return 'recorded verification time';
-  }
+  try { return new Date(verifiedAtMs).toLocaleString(); } catch { return 'recorded verification time'; }
 };
 
 export default function LiveMapPage() {
@@ -133,83 +125,59 @@ export default function LiveMapPage() {
     const publishTickets = () => {
       if (ticketListenerFailed || ticketSnapshots.size !== TICKET_STATUS_QUERY_CHUNKS.length) return;
       const byId = new Map<string, any>();
-      for (let chunkIndex = 0; chunkIndex < TICKET_STATUS_QUERY_CHUNKS.length; chunkIndex += 1) {
-        for (const ticket of ticketSnapshots.get(chunkIndex) || []) {
-          if (!isUnresolvedMaintenanceTicketStatus(ticket.status)) continue;
-          byId.set(String(ticket.id), ticket);
+      for (let index = 0; index < TICKET_STATUS_QUERY_CHUNKS.length; index += 1) {
+        for (const ticket of ticketSnapshots.get(index) || []) {
+          if (isUnresolvedMaintenanceTicketStatus(ticket.status)) byId.set(String(ticket.id), ticket);
         }
       }
-      const rows = [...byId.values()].sort((left, right) => String(left.id).localeCompare(String(right.id)));
-      setTickets(rows);
+      setTickets([...byId.values()].sort((left, right) => String(left.id).localeCompare(String(right.id))));
       setTicketsError('');
       setTicketsLoading(false);
     };
 
-    const unsubscribeTickets = TICKET_STATUS_QUERY_CHUNKS.map((statuses, chunkIndex) => {
-      const ticketQuery = query(
-        collection(db, 'maintenanceTickets'),
-        where('status', 'in', statuses),
-      );
-      return onSnapshot(ticketQuery, (snapshot) => {
+    const unsubscribeTickets = TICKET_STATUS_QUERY_CHUNKS.map((statuses, chunkIndex) => onSnapshot(
+      query(collection(db, 'maintenanceTickets'), where('status', 'in', statuses)),
+      (snapshot) => {
         if (ticketListenerFailed) return;
-        ticketSnapshots.set(
-          chunkIndex,
-          snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
-        );
+        ticketSnapshots.set(chunkIndex, snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
         publishTickets();
-      }, (error) => {
+      },
+      (error) => {
         ticketListenerFailed = true;
         console.error(`[AdminMap] Unresolved ticket listener ${chunkIndex + 1} failed:`, error);
         setTickets([]);
         setTicketsLoading(false);
-        setTicketsError(
-          `Unresolved ticket query ${chunkIndex + 1} of ${TICKET_STATUS_QUERY_CHUNKS.length} failed. ` +
-          'The operational feed is hidden until App Check, permissions, network and Firestore indexes recover.',
-        );
-      });
-    });
+        setTicketsError(`Unresolved ticket query ${chunkIndex + 1} of ${TICKET_STATUS_QUERY_CHUNKS.length} failed. The operational feed is hidden until App Check, permissions, network and indexes recover.`);
+      },
+    ));
 
-    const technicianQuery = query(collection(db, 'technicians'), limit(TECHNICIAN_MAP_LIMIT + 1));
-    const locationQuery = query(
-      collection(db, 'technician_live_locations'),
-      where('isTracking', '==', true),
-      limit(LIVE_LOCATION_MAP_LIMIT + 1),
-    );
-
-    const unsubscribeTechnicians = onSnapshot(technicianQuery, (snapshot) => {
-      if (snapshot.size > TECHNICIAN_MAP_LIMIT) {
-        setTechnicians([]);
-        setTechniciansError(
-          `Technician feed exceeds ${TECHNICIAN_MAP_LIMIT} records. Dispatch is disabled until the admin map uses a paginated or server-built dispatch snapshot.`,
-        );
-        return;
-      }
-      const rows = snapshot.docs
+    // These operational listeners deliberately have no silent client-side caps.
+    // When the portfolio grows beyond practical real-time listener size, the
+    // replacement must be a server snapshot with an authoritative total count —
+    // never a hidden limit that makes active people or GPS sessions disappear.
+    const unsubscribeTechnicians = onSnapshot(collection(db, 'technicians'), (snapshot) => {
+      setTechnicians(snapshot.docs
         .map((item) => ({ id: item.id, ...item.data() } as any))
-        .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase()));
-      setTechnicians(rows);
+        .filter((item) => item.suspended !== true && !['SUSPENDED', 'DISABLED', 'REJECTED'].includes(String(item.status || '').toUpperCase())));
       setTechniciansError('');
     }, (error) => {
       console.error('[AdminMap] Technician listener failed:', error);
       setTechnicians([]);
-      setTechniciansError('Technician readiness data could not be loaded. Dispatch is disabled until the data source recovers.');
+      setTechniciansError('Technician readiness data could not be loaded. Dispatch is disabled until the complete source recovers.');
     });
 
-    const unsubscribeLocations = onSnapshot(locationQuery, (snapshot) => {
-      if (snapshot.size > LIVE_LOCATION_MAP_LIMIT) {
+    const unsubscribeLocations = onSnapshot(
+      query(collection(db, 'technician_live_locations'), where('isTracking', '==', true)),
+      (snapshot) => {
+        setLiveLocations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as LiveLocation)));
+        setLocationsError('');
+      },
+      (error) => {
+        console.error('[AdminMap] Canonical location listener failed:', error);
         setLiveLocations([]);
-        setLocationsError(
-          `Live GPS feed exceeds ${LIVE_LOCATION_MAP_LIMIT} active sessions. Operational markers are hidden until pagination or a server dispatch snapshot is available.`,
-        );
-        return;
-      }
-      setLiveLocations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as LiveLocation)));
-      setLocationsError('');
-    }, (error) => {
-      console.error('[AdminMap] Canonical location listener failed:', error);
-      setLiveLocations([]);
-      setLocationsError('Canonical live GPS data could not be loaded. The map will not simulate or infer Technician positions.');
-    });
+        setLocationsError('Canonical live GPS data could not be loaded. The map will not simulate, infer or silently truncate Technician positions.');
+      },
+    );
 
     return () => {
       unsubscribeTickets.forEach((unsubscribe) => unsubscribe());
@@ -218,203 +186,107 @@ export default function LiveMapPage() {
     };
   }, []);
 
-  const referencedPropertyIds = useMemo(
-    () => ticketReferencedPropertyIds(tickets),
-    [tickets],
-  );
+  const referencedPropertyIds = useMemo(() => ticketReferencedPropertyIds(tickets), [tickets]);
 
   useEffect(() => {
     const chunks = propertyIdQueryChunks(referencedPropertyIds);
-    if (chunks.length === 0) {
+    if (!chunks.length) {
       setProperties([]);
       setPropertiesError('');
       return undefined;
     }
-
     let cancelled = false;
-    let propertyListenerFailed = false;
-    const propertySnapshots = new Map<number, any[]>();
-    setProperties([]);
-    setPropertiesError('');
+    let failed = false;
+    const snapshots = new Map<number, any[]>();
 
-    const publishProperties = () => {
-      if (cancelled || propertyListenerFailed || propertySnapshots.size !== chunks.length) return;
+    const publish = () => {
+      if (cancelled || failed || snapshots.size !== chunks.length) return;
       const byId = new Map<string, any>();
-      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
-        for (const property of propertySnapshots.get(chunkIndex) || []) {
-          byId.set(String(property.id), property);
-        }
+      for (let index = 0; index < chunks.length; index += 1) {
+        for (const property of snapshots.get(index) || []) byId.set(String(property.id), property);
       }
       const rows = [...byId.values()].sort((left, right) => String(left.id).localeCompare(String(right.id)));
-      const missingIds = missingReferencedPropertyIds(
-        referencedPropertyIds,
-        rows.map((property) => String(property.id)),
-      );
+      const missing = missingReferencedPropertyIds(referencedPropertyIds, rows.map((property) => String(property.id)));
       setProperties(rows);
-      setPropertiesError(missingIds.length > 0
-        ? `${missingIds.length} unresolved ticket property record${missingIds.length === 1 ? ' is' : 's are'} missing. ` +
-          'Those tickets remain visible but receive no verified operational marker.'
-        : '');
+      setPropertiesError(missing.length ? `${missing.length} unresolved ticket property record${missing.length === 1 ? ' is' : 's are'} missing. Those tickets remain visible but receive no verified marker.` : '');
     };
 
-    const unsubscribeProperties = chunks.map((propertyIds, chunkIndex) => {
-      const propertyQuery = query(
-        collection(db, 'properties'),
-        where(documentId(), 'in', propertyIds),
-      );
-      return onSnapshot(propertyQuery, (snapshot) => {
-        if (cancelled || propertyListenerFailed) return;
-        propertySnapshots.set(
-          chunkIndex,
-          snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
-        );
-        publishProperties();
-      }, (error) => {
+    const unsubscribers = chunks.map((propertyIds, chunkIndex) => onSnapshot(
+      query(collection(db, 'properties'), where(documentId(), 'in', propertyIds)),
+      (snapshot) => {
+        if (cancelled || failed) return;
+        snapshots.set(chunkIndex, snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        publish();
+      },
+      (error) => {
         if (cancelled) return;
-        propertyListenerFailed = true;
+        failed = true;
         console.error(`[AdminMap] Referenced property listener ${chunkIndex + 1} failed:`, error);
         setProperties([]);
-        setPropertiesError(
-          `Referenced property query ${chunkIndex + 1} of ${chunks.length} failed. ` +
-          'All ticket/property markers are hidden until the exact canonical records can be loaded.',
-        );
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribeProperties.forEach((unsubscribe) => unsubscribe());
-    };
+        setPropertiesError(`Referenced property query ${chunkIndex + 1} of ${chunks.length} failed. All ticket/property markers are hidden until the exact records can be loaded.`);
+      },
+    ));
+    return () => { cancelled = true; unsubscribers.forEach((unsubscribe) => unsubscribe()); };
   }, [referencedPropertyIds]);
 
   useEffect(() => {
     let cancelled = false;
-    loadAdminGoogleMaps()
-      .then((maps) => {
-        if (cancelled || !mapElementRef.current) return;
-        mapRef.current = new maps.Map(mapElementRef.current, {
-          center: UAE_CENTRE,
-          zoom: 7,
-          mapTypeControl: true,
-          streetViewControl: false,
-          fullscreenControl: true,
-          gestureHandling: 'greedy',
-        });
-        setMapReady(true);
-        setMapError('');
-      })
-      .catch((error) => {
-        console.error('[AdminMap] Google Maps failed to initialise:', error);
-        if (!cancelled) {
-          setMapReady(false);
-          setMapError(`Google Maps is unavailable: ${String(error?.message || error)}.`);
-        }
-      });
+    loadAdminGoogleMaps().then((maps) => {
+      if (cancelled || !mapElementRef.current) return;
+      mapRef.current = new maps.Map(mapElementRef.current, { center: UAE_CENTRE, zoom: 7, mapTypeControl: true, streetViewControl: false, fullscreenControl: true, gestureHandling: 'greedy' });
+      setMapReady(true);
+      setMapError('');
+    }).catch((error) => {
+      console.error('[AdminMap] Google Maps failed to initialise:', error);
+      if (!cancelled) { setMapReady(false); setMapError(`Google Maps is unavailable: ${String(error?.message || error)}.`); }
+    });
     return () => { cancelled = true; };
   }, []);
 
-  const propertiesById = useMemo(
-    () => new Map(properties.map((property) => [String(property.id), property])),
-    [properties],
-  );
-
-  const freshLocations = useMemo(
-    () => liveLocations.filter((location) => liveLocationIsFreshAt(location, nowMs)),
-    [liveLocations, nowMs],
-  );
-
-  const ticketsWithVerifiedPins = useMemo(
-    () => tickets
-      .map((ticket) => ({ ticket, pin: verifiedPinForTicket(ticket, propertiesById) }))
-      .filter((row): row is TicketPinRow => Boolean(row.pin)),
-    [propertiesById, tickets],
-  );
+  const propertiesById = useMemo(() => new Map(properties.map((property) => [String(property.id), property])), [properties]);
+  const freshLocations = useMemo(() => liveLocations.filter((location) => liveLocationIsFreshAt(location, nowMs)), [liveLocations, nowMs]);
+  const ticketsWithVerifiedPins = useMemo(() => tickets
+    .map((ticket) => ({ ticket, pin: verifiedPinForTicket(ticket, propertiesById) }))
+    .filter((row): row is TicketPinRow => Boolean(row.pin)), [propertiesById, tickets]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const maps = (window as any).google?.maps;
     if (!maps) return;
-
     const visibleTechnicianIds = new Set<string>();
     const visibleTicketIds = new Set<string>();
-    const initialBounds = new maps.LatLngBounds();
-    let initialPointCount = 0;
+    const bounds = new maps.LatLngBounds();
+    let pointCount = 0;
 
     for (const location of freshLocations) {
       const point = mapCoordinate(location.location);
       if (!point) continue;
       visibleTechnicianIds.add(location.id);
-      initialBounds.extend(point);
-      initialPointCount += 1;
+      bounds.extend(point);
+      pointCount += 1;
       const title = `${location.technicianName || 'Technician'} — fresh canonical GPS`;
       const existing = technicianMarkerRefs.current.get(location.id);
-      if (existing) {
-        existing.setPosition(point);
-        existing.setTitle(title);
-      } else {
-        technicianMarkerRefs.current.set(location.id, new maps.Marker({
-          map: mapRef.current,
-          position: point,
-          title,
-          icon: {
-            path: maps.SymbolPath.CIRCLE,
-            scale: 9,
-            fillColor: '#10b981',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-          },
-        }));
-      }
+      if (existing) { existing.setPosition(point); existing.setTitle(title); }
+      else technicianMarkerRefs.current.set(location.id, new maps.Marker({ map: mapRef.current, position: point, title, icon: { path: maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#10b981', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 } }));
     }
-    technicianMarkerRefs.current.forEach((marker, id) => {
-      if (!visibleTechnicianIds.has(id)) {
-        marker.setMap(null);
-        technicianMarkerRefs.current.delete(id);
-      }
-    });
+    technicianMarkerRefs.current.forEach((marker, id) => { if (!visibleTechnicianIds.has(id)) { marker.setMap(null); technicianMarkerRefs.current.delete(id); } });
 
     for (const { ticket, pin } of ticketsWithVerifiedPins) {
       visibleTicketIds.add(ticket.id);
-      initialBounds.extend(pin.point);
-      initialPointCount += 1;
+      bounds.extend(pin.point);
+      pointCount += 1;
       const priority = String(ticket.priority || ticket.severity || '').toUpperCase();
       const title = `${ticket.propertyName || ticket.unit || ticket.id} — verified canonical property pin — ${displayStatus(ticket)}`;
-      const icon = {
-        path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-        scale: 6,
-        fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6',
-        fillOpacity: 1,
-        strokeColor: '#ffffff',
-        strokeWeight: 1.5,
-      };
+      const icon = { path: maps.SymbolPath.BACKWARD_CLOSED_ARROW, scale: 6, fillColor: ['EMERGENCY', 'CRITICAL', 'P0'].includes(priority) ? '#ef4444' : '#3b82f6', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 1.5 };
       const existing = ticketMarkerRefs.current.get(ticket.id);
-      if (existing) {
-        existing.setPosition(pin.point);
-        existing.setTitle(title);
-        existing.setIcon(icon);
-      } else {
-        ticketMarkerRefs.current.set(ticket.id, new maps.Marker({
-          map: mapRef.current,
-          position: pin.point,
-          title,
-          icon,
-        }));
-      }
+      if (existing) { existing.setPosition(pin.point); existing.setTitle(title); existing.setIcon(icon); }
+      else ticketMarkerRefs.current.set(ticket.id, new maps.Marker({ map: mapRef.current, position: pin.point, title, icon }));
     }
-    ticketMarkerRefs.current.forEach((marker, id) => {
-      if (!visibleTicketIds.has(id)) {
-        marker.setMap(null);
-        ticketMarkerRefs.current.delete(id);
-      }
-    });
+    ticketMarkerRefs.current.forEach((marker, id) => { if (!visibleTicketIds.has(id)) { marker.setMap(null); ticketMarkerRefs.current.delete(id); } });
 
-    // Freshness ticks may remove markers, but they must never override an
-    // Admin's manual pan or zoom. Auto-fit is restricted to the first non-empty
-    // canonical source set after map initialisation.
-    if (!viewportInitializedRef.current && initialPointCount > 0) {
-      mapRef.current.fitBounds(initialBounds, 72);
-      if (initialPointCount === 1) mapRef.current.setZoom(15);
+    if (!viewportInitializedRef.current && pointCount > 0) {
+      mapRef.current.fitBounds(bounds, 72);
+      if (pointCount === 1) mapRef.current.setZoom(15);
       viewportInitializedRef.current = true;
     }
   }, [freshLocations, mapReady, ticketsWithVerifiedPins]);
@@ -426,31 +298,18 @@ export default function LiveMapPage() {
     ticketMarkerRefs.current.clear();
   }, []);
 
-  const unassignedCount = tickets.filter((ticket) => [
-    'UNASSIGNED',
-    'OPEN',
-    'PENDING',
-    'PENDING_ASSIGNMENT',
-  ].includes(normalizeMaintenanceTicketStatus(ticket.status))).length;
-  const assignedCount = Math.max(0, tickets.length - unassignedCount);
-
+  const unassignedCount = tickets.filter((ticket) => ['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(normalizeMaintenanceTicketStatus(ticket.status))).length;
   const dispatch = async (technician: any) => {
     if (!selectedTicket || dispatchBusy || techniciansError) return;
     setDispatchBusy(true);
     setDispatchError('');
     try {
-      const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
-      await assignTechnician({
-        ticketId: selectedTicket.id,
-        technicianId: technician.id,
-      });
+      await httpsCallable(functions, 'adminAssignTechnician')({ ticketId: selectedTicket.id, technicianId: technician.id });
       setSelectedTicket(null);
     } catch (error: any) {
       console.error('[AdminMap] Dispatch failed:', error);
       setDispatchError(error?.message || 'Dispatch failed. No assignment state was claimed.');
-    } finally {
-      setDispatchBusy(false);
-    }
+    } finally { setDispatchBusy(false); }
   };
 
   return (
@@ -458,164 +317,63 @@ export default function LiveMapPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 900 }}>Operational Dispatch Map</Typography>
-          <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-            Google Maps with every canonical unresolved ticket state, exact ticket-referenced property records and fresh Technician GPS. Legacy or unreviewed ticket coordinates are never labelled verified.
-          </Typography>
+          <Typography variant="body2" sx={{ color: '#94a3b8' }}>Complete canonical unresolved tickets, exact referenced properties and every active canonical GPS session. No silent record caps are used.</Typography>
         </Box>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Chip label={`${tickets.length} unresolved tickets`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${unassignedCount} awaiting assignment`} sx={{ color: '#fff', bgcolor: '#172033' }} />
-          <Chip label={`${assignedCount} assigned / exceptional`} sx={{ color: '#fff', bgcolor: '#172033' }} />
+          <Chip label={`${technicians.length} active technicians`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${ticketsWithVerifiedPins.length} verified property pins`} sx={{ color: '#fff', bgcolor: '#1e3a8a' }} />
           <Chip label={`${freshLocations.length} fresh GPS sessions`} sx={{ color: '#fff', bgcolor: '#064e3b' }} />
         </Stack>
       </Stack>
 
-      {[ticketsError, techniciansError, propertiesError, locationsError].filter(Boolean).map((message) => (
-        <Alert key={message} severity="error" sx={{ mb: 1 }}>{message}</Alert>
-      ))}
+      {[ticketsError, techniciansError, propertiesError, locationsError, mapError].filter(Boolean).map((message) => <Alert key={message} severity="error" sx={{ mb: 1 }}>{message}</Alert>)}
 
       <Grid container spacing={2}>
         <Grid item xs={12} lg={4}>
           <Paper sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', maxHeight: { lg: '76vh' }, overflow: 'auto' }}>
             <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <Typography sx={{ fontWeight: 900 }}>Unresolved ticket feed</Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8' }}>All canonical unresolved lifecycle classes. Verification labels come only from the exact canonical property records referenced by those tickets.</Typography>
+              <Typography variant="caption" sx={{ color: '#94a3b8' }}>All canonical unresolved lifecycle classes. Only verified property records become markers.</Typography>
             </Box>
-            <List disablePadding>
+            {ticketsLoading ? <Box sx={{ p: 5, textAlign: 'center' }}><CircularProgress /></Box> : <List disablePadding>
               {tickets.map((ticket) => {
                 const verifiedPin = verifiedPinForTicket(ticket, propertiesById);
                 const recordedPoint = recordedTicketCoordinate(ticket);
-                const normalizedStatus = normalizeMaintenanceTicketStatus(ticket.status);
-                const canAssign = ['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(normalizedStatus);
-                const avatarColour = verifiedPin ? '#1d4ed8' : recordedPoint ? '#b45309' : '#475569';
-                return (
-                  <ListItem key={ticket.id} alignItems="flex-start" divider secondaryAction={
-                    canAssign ? (
-                      <Button size="small" variant="contained" onClick={() => setSelectedTicket(ticket)} disabled={Boolean(techniciansError)}>
-                        Assign
-                      </Button>
-                    ) : undefined
-                  }>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: avatarColour }}><RoomIcon /></Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={ticket.propertyName || ticket.unit || ticket.id}
-                      secondary={
-                        <Box component="span" sx={{ display: 'block', color: '#94a3b8', pr: canAssign ? 8 : 0 }}>
-                          {displayStatus(ticket)}<br />
-                          {ticket.issueDescription || ticket.issue || 'Maintenance request'}<br />
-                          {verifiedPin ? (
-                            <>
-                              <Typography component="span" variant="caption" sx={{ display: 'block', color: '#93c5fd', mt: 0.5 }}>
-                                Canonical property pin verified by {verifiedPin.verifiedBy} on {verificationDate(verifiedPin.verifiedAtMs)}.
-                              </Typography>
-                              <Button
-                                size="small"
-                                endIcon={<OpenInNewIcon />}
-                                href={googleMapsSearchUrl(verifiedPin.point.lat, verifiedPin.point.lng)}
-                                target="_blank"
-                                rel="noreferrer"
-                                sx={{ px: 0, mt: 0.5 }}
-                              >
-                                Open verified property pin
-                              </Button>
-                            </>
-                          ) : recordedPoint ? (
-                            <>
-                              <Typography component="span" variant="caption" sx={{ display: 'block', color: '#fbbf24', mt: 0.5 }}>
-                                Recorded coordinate is unverified and is not rendered as an operational map marker.
-                              </Typography>
-                              <Button
-                                size="small"
-                                endIcon={<OpenInNewIcon />}
-                                href={googleMapsSearchUrl(recordedPoint.lat, recordedPoint.lng)}
-                                target="_blank"
-                                rel="noreferrer"
-                                sx={{ px: 0, mt: 0.5, color: '#fbbf24' }}
-                              >
-                                Open recorded coordinate (unverified)
-                              </Button>
-                            </>
-                          ) : 'Exact verified property pin missing — dispatch distance cannot be verified.'}
-                        </Box>
-                      }
-                    />
-                  </ListItem>
-                );
+                const canAssign = ['UNASSIGNED', 'OPEN', 'PENDING', 'PENDING_ASSIGNMENT'].includes(normalizeMaintenanceTicketStatus(ticket.status));
+                return <ListItem key={ticket.id} alignItems="flex-start" divider secondaryAction={canAssign ? <Button size="small" variant="contained" onClick={() => setSelectedTicket(ticket)} disabled={Boolean(techniciansError)}>Assign</Button> : undefined}>
+                  <ListItemAvatar><Avatar sx={{ bgcolor: verifiedPin ? '#1d4ed8' : recordedPoint ? '#b45309' : '#475569' }}><RoomIcon /></Avatar></ListItemAvatar>
+                  <ListItemText primary={ticket.propertyName || ticket.unit || ticket.id} secondary={<Box component="span" sx={{ display: 'block', color: '#94a3b8', pr: canAssign ? 8 : 0 }}>
+                    {displayStatus(ticket)}<br />{ticket.issueDescription || ticket.issue || 'Maintenance request'}
+                    {verifiedPin ? <><Typography component="span" variant="caption" sx={{ display: 'block', color: '#93c5fd', mt: 0.5 }}>Canonical property pin verified by {verifiedPin.verifiedBy} on {verificationDate(verifiedPin.verifiedAtMs)}.</Typography><Button size="small" endIcon={<OpenInNewIcon />} href={googleMapsSearchUrl(verifiedPin.point.lat, verifiedPin.point.lng)} target="_blank" rel="noreferrer" sx={{ px: 0, mt: 0.5 }}>Open verified property pin</Button></> : recordedPoint ? <Typography component="span" variant="caption" sx={{ display: 'block', color: '#fbbf24', mt: 0.5 }}>Recorded coordinate is unverified and is not rendered as an operational marker.</Typography> : <Typography component="span" variant="caption" sx={{ display: 'block', color: '#94a3b8', mt: 0.5 }}>No verified or recorded coordinate is available.</Typography>}
+                  </Box>} />
+                </ListItem>;
               })}
-              {ticketsLoading && !ticketsError && (
-                <ListItem><ListItemText primary="Loading every bounded unresolved ticket-status query…" /></ListItem>
-              )}
-              {!ticketsLoading && !tickets.length && !ticketsError && (
-                <ListItem><ListItemText primary="No unresolved tickets returned by the complete bounded production query set." /></ListItem>
-              )}
-            </List>
+              {!tickets.length && !ticketsError && <ListItem><ListItemText primary="No unresolved tickets" secondary="The complete authenticated query returned no unresolved records. No markers have been fabricated." /></ListItem>}
+            </List>}
           </Paper>
         </Grid>
-
         <Grid item xs={12} lg={8}>
-          <Paper sx={{ position: 'relative', minHeight: { xs: 520, lg: '76vh' }, overflow: 'hidden', bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <Paper sx={{ position: 'relative', minHeight: { xs: 480, lg: '76vh' }, overflow: 'hidden', bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)' }}>
             <Box ref={mapElementRef} data-testid="admin-live-google-map" sx={{ position: 'absolute', inset: 0 }} />
-            {!mapReady && !mapError && (
-              <Stack alignItems="center" justifyContent="center" sx={{ position: 'absolute', inset: 0, bgcolor: '#0f172a' }}>
-                <CircularProgress />
-                <Typography sx={{ mt: 2 }}>Loading Google Maps…</Typography>
-              </Stack>
-            )}
-            {mapError && (
-              <Alert data-testid="admin-live-map-error" severity="error" sx={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 5 }}>
-                {mapError} Check the Maps key, billing, enabled APIs and production referrer restrictions.
-              </Alert>
-            )}
-            {mapReady && freshLocations.length === 0 && ticketsWithVerifiedPins.length === 0 && (
-              <Alert severity="warning" sx={{ position: 'absolute', bottom: 16, left: 16, right: 16, zIndex: 5 }}>
-                No fresh canonical GPS session or verified canonical property pin is available. No markers have been fabricated.
-              </Alert>
-            )}
-            {mapReady && (
-              <Paper sx={{ position: 'absolute', top: 16, right: 16, zIndex: 4, p: 1.5, bgcolor: 'rgba(15,23,42,0.92)', color: '#fff' }}>
-                <Stack spacing={0.5}>
-                  <Typography variant="caption"><Box component="span" sx={{ color: '#10b981' }}>●</Box> Fresh Technician GPS</Typography>
-                  <Typography variant="caption"><Box component="span" sx={{ color: '#3b82f6' }}>◆</Box> Canonical verified property pin</Typography>
-                  <Typography variant="caption"><Box component="span" sx={{ color: '#ef4444' }}>◆</Box> Critical verified property pin</Typography>
-                </Stack>
-              </Paper>
-            )}
+            {!mapReady && !mapError && <Stack alignItems="center" justifyContent="center" spacing={2} sx={{ position: 'absolute', inset: 0 }}><CircularProgress /><Typography>Loading Google Maps…</Typography></Stack>}
           </Paper>
         </Grid>
       </Grid>
 
       <Dialog open={Boolean(selectedTicket)} onClose={() => !dispatchBusy && setSelectedTicket(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Assign Technician</DialogTitle>
+        <DialogTitle>Assign {selectedTicket?.propertyName || selectedTicket?.id}</DialogTitle>
         <DialogContent dividers>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Ticket: {selectedTicket?.propertyName || selectedTicket?.unit || selectedTicket?.id}
-          </Typography>
           {dispatchError && <Alert severity="error" sx={{ mb: 2 }}>{dispatchError}</Alert>}
-          <List>
-            {technicians.map((technician) => (
-              <ListItem key={technician.id} divider secondaryAction={
-                <Button onClick={() => dispatch(technician)} disabled={dispatchBusy}>Assign</Button>
-              }>
-                <ListItemAvatar>
-                  <Avatar><PersonPinCircleIcon /></Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={technician.displayName || technician.name || technician.id}
-                  secondary={`${technician.onDuty === true ? 'On duty' : 'Duty state not verified'} · ${technician.isAvailable === false ? 'Unavailable' : 'Availability requires server validation'}`}
-                />
-              </ListItem>
-            ))}
-            {!technicians.length && !techniciansError && (
-              <ListItem><ListItemText primary="No eligible Technician records are available." /></ListItem>
-            )}
-          </List>
+          {!technicians.length ? <Alert severity="warning">No active Technician records are available. Dispatch remains disabled.</Alert> : <List>
+            {technicians.map((technician) => <ListItem key={technician.id} divider secondaryAction={<Button onClick={() => dispatch(technician)} disabled={dispatchBusy}>Assign</Button>}>
+              <ListItemAvatar><Avatar><PersonPinCircleIcon /></Avatar></ListItemAvatar>
+              <ListItemText primary={technician.displayName || technician.fullName || technician.email || technician.id} secondary={`${technician.specialization || technician.trade || 'General Maintenance'} · ${technician.available === false ? 'Not available' : 'Available'}`} />
+            </ListItem>)}
+          </List>}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedTicket(null)} disabled={dispatchBusy}>Cancel</Button>
-        </DialogActions>
+        <DialogActions><Button onClick={() => setSelectedTicket(null)} disabled={dispatchBusy}>Cancel</Button></DialogActions>
       </Dialog>
     </Box>
   );

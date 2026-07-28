@@ -30,9 +30,12 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
 
   const referralCode = React.useMemo(() => brokerKey(user?.uid, user?.email), [user?.uid, user?.email]);
   const referralUrl = React.useMemo(() => {
+    if (!user?.uid) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bin-group-57c60.web.app';
-    return `${origin}/onboarding?broker=${encodeURIComponent(referralCode)}`;
-  }, [referralCode]);
+    // The public owner acquisition route is /onboarding. The Broker UID is used
+    // only as an opaque lookup key; the server resolves and validates the Broker.
+    return `${origin}/onboarding?broker=${encodeURIComponent(user.uid)}`;
+  }, [user?.uid]);
 
   React.useEffect(() => {
     if (!user?.uid) {
@@ -107,8 +110,8 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
 
   return {
     loading,
-    referralLinkReady: Boolean(referralCode),
-    qrReady: Boolean(referralUrl),
+    referralLinkReady: Boolean(user?.uid && referralUrl),
+    qrReady: Boolean(user?.uid && referralUrl),
     activeLeads,
     attributedContracts,
     pendingCommissionAmount,
