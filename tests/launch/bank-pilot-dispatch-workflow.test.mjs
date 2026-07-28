@@ -61,6 +61,14 @@ test('bank-pilot validates Private-HR and dispatches only bank-pilot mode', () =
   assert.match(workflow, /stripe_live_webhook_event_id:""/);
 });
 
+test('bank-pilot forwards verified Owner provenance and canonical Founder email', () => {
+  assert.match(workflow, /FOUNDER_EMAIL: ceo@bin-groups\.com/);
+  assert.doesNotMatch(workflow, /FOUNDER_EMAIL: authorized-founder@protected\.invalid/);
+  assert.match(workflow, /AUTHORIZATION_ACTOR: \$\{\{ github\.event\.pull_request\.user\.login \}\}/);
+  assert.match(workflow, /authorization_actor:\$authorizationActor/);
+  assert.match(workflow, /authorization_source_pr:\$authorizationSourcePr/);
+});
+
 test('bank-pilot correlates exact wrapper and production runs and publishes sanitized evidence', () => {
   assert.match(workflow, /owner_snapshot_workflow_run_ids[\s\S]*firebase-production-dispatch-current-main\.yml/);
   assert.match(workflow, /owner_snapshot_workflow_run_ids[\s\S]*firebase-production-deploy\.yml/);
