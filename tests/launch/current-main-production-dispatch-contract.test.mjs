@@ -17,6 +17,16 @@ test('production dispatcher binds a stable current main before one protected dis
   assert.equal((source.match(/firebase-production-deploy\.yml\/dispatches/g) || []).length, 1);
 });
 
+test('production dispatcher only delegates Founder actor for real Founder email inputs', async () => {
+  const source = await read(workflowPath);
+
+  assert.match(source, /authorization_actor="\$GITHUB_ACTOR"/);
+  assert.match(source, /if \[\[ "\$FOUNDER_EMAIL" == "authorized-founder@protected\.invalid" \]\]; then\s+authorization_actor=''/);
+  assert.match(source, /--arg authorizationActor "\$authorization_actor"/);
+  assert.match(source, /authorization_actor:\$authorizationActor/);
+  assert.doesNotMatch(source, /authorization_actor:env\.GITHUB_ACTOR/);
+});
+
 test('operator form cannot mistype incident attestation or manually misreport the latest deployment result', async () => {
   const source = await read(workflowPath);
   const inputSection = source.slice(source.indexOf('    inputs:'), source.indexOf('\npermissions:'));
