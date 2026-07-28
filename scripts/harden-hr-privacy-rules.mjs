@@ -86,11 +86,11 @@ for (const [label, before, after] of transformations) {
 
 const payrollHeader = '    match /payroll_entries/{entryId} {';
 const payrollRuleBlock = `    match /payroll_entries/{entryId} {
-      allow read: if isAdmin() || isHr() || isFinance() || (
-        signedIn() && resource.data.get('technicianId', null) == request.auth.uid
-      );
+      allow read: if isAdmin() || isTechnicianId(resource.data.get('technicianId', null));
       allow create, update, delete: if false;
     }`;
+// isTechnicianId(resource.data.get('technicianId', null)) expands to
+// resource.data.get('technicianId', null) == request.auth.uid with signed-in gating.
 const payrollComment = `    // Canonical payroll is generated in /payroll. This read-only mirror exposes
     // only payroll-safe fields to the matching Technician while all writes remain
     // Admin SDK authority through trigger/backfill functions.\n`;

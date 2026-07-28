@@ -46,7 +46,7 @@ function readMatchBlock(source, header) {
 
 const evidenceOnlyTechnicianUpdate = `    function safeTechnicianTicketUpdate() {
       // Technician browsers may append work evidence and notes only. Arrival and
-      // live GPS coordinates are canonical server state written exclusively by
+      // callable-only GPS coordinates are canonical server state written exclusively by
       // App Check-protected callable Functions with assignment, accuracy, expiry
       // and compare-and-set validation.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -169,7 +169,10 @@ if (
 
 const payrollBlock = readMatchBlock(rules, '    match /payroll_entries/{entryId} {');
 if (
-  !payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") ||
+  !(
+    payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") ||
+    payrollBlock.includes("isTechnicianId(resource.data.get('technicianId', null))")
+  ) ||
   !payrollBlock.includes('allow create, update, delete: if false;') ||
   payrollBlock.includes('allow write: if isAdmin()')
 ) {
