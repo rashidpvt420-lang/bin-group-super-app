@@ -20,7 +20,7 @@ const oauthKeys = [
 function workflowStep(source, name) {
   const marker = `- name: ${name}`;
   const stepStart = source.indexOf(marker);
-  assert.ok(stepStart >= 0, `production workflow is missing step: ${name}`);
+  assert.ok(stepStart >= 0, `workflow is missing step: ${name}`);
   const nextStep = source.indexOf('\n      - name:', stepStart + marker.length);
   return source.slice(stepStart, nextStep > stepStart ? nextStep : source.length);
 }
@@ -44,7 +44,7 @@ test('Gmail OAuth credentials are step-scoped and never written into .env.e2e', 
   }
 });
 
-test('every strict-live production consumer receives protected Gmail OAuth secrets', () => {
+test('every Firebase production strict-live consumer receives protected Gmail OAuth secrets', () => {
   const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const consumers = [
     {
@@ -73,6 +73,26 @@ test('every strict-live production consumer receives protected Gmail OAuth secre
     const step = workflowStep(source, consumer.name);
     assert.match(step, consumer.command, `${consumer.name} no longer invokes the expected strict-live guard path`);
     assertOAuthMappings(step, consumer.name);
+  }
+});
+
+test('every Admin production strict-live consumer receives protected Gmail OAuth secrets', () => {
+  const source = readFileSync('.github/workflows/admin-production-evidence.yml', 'utf8');
+  const consumers = [
+    {
+      name: 'Validate protected credentials and App Check',
+      command: /node scripts\/verify-e2e-env\.mjs/,
+    },
+    {
+      name: 'Run full Admin operational evidence suite',
+      command: /node scripts\/run-critical-evidence\.mjs --suite adminCredentialLogin/,
+    },
+  ];
+
+  for (const consumer of consumers) {
+    const step = workflowStep(source, consumer.name);
+    assert.match(step, consumer.command, `${consumer.name} no longer invokes the expected strict-live guard path`);
+    assertOAuthMappings(step, `Admin Production Evidence: ${consumer.name}`);
   }
 });
 
