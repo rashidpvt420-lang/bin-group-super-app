@@ -24,15 +24,16 @@ test('Admin operational map renders only canonical verified property pins', () =
   assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
   assert.match(adminMap, /collection\(db, 'properties'\)/);
   assert.match(adminMap, /verifiedPinForTicket\(ticket, propertiesById\)/);
-  assert.match(adminMap, /Recorded coordinate is unverified and is not rendered as an operational map marker/);
-  assert.match(adminMap, /Open recorded coordinate \(unverified\)/);
+  assert.match(adminMap, /Recorded coordinate is unverified and is not rendered as an operational marker/);
   assert.match(adminMap, /No markers have been fabricated/);
   assert.match(adminMap, /data-testid="admin-live-google-map"/);
   assert.doesNotMatch(adminMap, /ticketCoordinate\(ticket\)/);
   assert.doesNotMatch(adminMap, /Open verified pin/);
+  assert.doesNotMatch(adminMap, /Open recorded coordinate/);
   assert.doesNotMatch(adminMap, /AI Autonomous|AI INTERCEPTING|Marina Bridges|DUBAI-HQ|Streaming live telemetry/i);
   assert.doesNotMatch(adminMap, /55\.12|55\.42|25\.3 - loc\.lat|const positions = \[/);
   assert.doesNotMatch(adminMap, /Auto-SMS Triggered/);
+  assert.doesNotMatch(adminMap, /limit\(100\)|limit\(200\)|limit\(500\)/);
 });
 
 test('Canonical property verification contract is fail-closed and metadata-complete', () => {
@@ -86,7 +87,7 @@ test('Technician mission map distinguishes data failure from an empty authentica
   assert.match(technicianMap, /approximate straight-line estimates/);
   assert.match(technicianMap, /road routing not included/);
   assert.match(technicianMap, /FOREGROUND GPS FRESH/);
-  assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*\}\);/);
+  assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*}\);/);
 });
 
 test('Owner and Tenant tracking card identifies schematic and freshness limitations', () => {
