@@ -285,6 +285,7 @@ jobs:
         run: |
           set -euo pipefail
           source scripts/owner-launch-run-correlation.sh
+          trap 'rc=$?; if [[ "$rc" -ne 0 ]]; then jq -n --arg commitSha "$RELEASE_SHA" --arg reviewWorkflowRunId "$REVIEW_RUN_ID" --arg privateHrWorkflowRunId "$PRIVATE_HR_RUN_ID" --arg ownerRequestPullRequest "$REQUEST_PR" "{schemaVersion:1,commitSha:\$commitSha,reviewWorkflowRunId:\$reviewWorkflowRunId,privateHrWorkflowRunId:\$privateHrWorkflowRunId,ownerRequestPullRequest:\$ownerRequestPullRequest,launchMode:\"bank-pilot\",publicReleaseGate:false,hardLaunchClaim:false,correlationStatus:\"FAILED_CLOSED\",wrapperBaseline:\"bank-pilot-wrapper-baseline-run-ids.json\",productionBaseline:\"firebase-production-baseline-run-ids.json\",secretValuesLogged:false}" > bank-pilot-dispatch-correlation-failure.json; fi; exit "$rc"' EXIT
 
           wrapper_record="$(
             owner_locate_new_exact_sha_workflow_run \
@@ -334,4 +335,13 @@ jobs:
           name: bank-pilot-dispatch-${{ steps.release.outputs.sha }}-${{ steps.correlate.outputs.production_run_id }}
           path: bank-pilot-dispatch-evidence.json
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload sanitized bank-pilot correlation failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bank-pilot-dispatch-correlation-failure-${{ steps.release.outputs.sha }}-${{ github.run_id }}
+          path: bank-pilot-dispatch-correlation-failure.json
+          if-no-files-found: ignore
           retention-days: 14

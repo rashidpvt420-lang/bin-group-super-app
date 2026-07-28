@@ -83,7 +83,10 @@ const manifests = Object.freeze({
       requiredText(e.paymentId, 'paymentId', errors);
       requiredText(e.contractId, 'contractId', errors);
       requiredText(e.commissionId, 'commissionId', errors);
+      requiredText(e.brokerLeadId, 'brokerLeadId', errors);
+      requiredText(e.attributionAuditId, 'attributionAuditId', errors);
       requiredHash(e.brokerUidHash, 'brokerUidHash', errors);
+      requiredHash(e.brokerLeadStateHash, 'brokerLeadStateHash', errors);
       requiredHash(e.commissionStateHash, 'commissionStateHash', errors);
       requiredHash(e.replayActorUidHash, 'replayActorUidHash', errors);
       requiredHash(e.replaySecondFactorHash, 'replaySecondFactorHash', errors);

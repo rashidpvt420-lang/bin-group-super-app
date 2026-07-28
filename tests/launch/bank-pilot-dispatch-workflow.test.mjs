@@ -67,6 +67,9 @@ test('bank-pilot correlates exact wrapper and production runs and publishes sani
   assert.match(workflow, /owner_locate_new_exact_sha_workflow_run[\s\S]*firebase-production-dispatch-current-main\.yml/);
   assert.match(workflow, /owner_locate_new_exact_sha_workflow_run[\s\S]*firebase-production-deploy\.yml/);
   assert.match(workflow, /bank-pilot-dispatch-evidence\.json/);
+  assert.match(workflow, /bank-pilot-dispatch-correlation-failure\.json/);
+  assert.match(workflow, /correlationStatus:\\"FAILED_CLOSED\\"/);
+  assert.match(workflow, /secretValuesLogged:false/);
   assert.match(workflow, /launchMode:"bank-pilot"/);
   assert.match(workflow, /publicReleaseGate:false/);
   assert.match(workflow, /hardLaunchClaim:false/);

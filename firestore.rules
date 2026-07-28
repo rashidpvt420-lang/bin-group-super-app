@@ -1263,14 +1263,17 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /staffMoodCheckins/{checkinId} {
-      allow read: if isHr() || staffCanRead(resource.data);
-      allow create: if isHr() || staffCanCreate(request.resource.data);
-      allow update: if isHr();
-      allow delete: if isHr();
+      // Wellbeing and distress signals are restricted to the employee and HR-manager tier.
+      allow read: if isHrManagerTier() || staffCanRead(resource.data);
+      allow create: if isHrManagerTier() || staffCanCreate(request.resource.data);
+      allow update: if isHrManagerTier();
+      allow delete: if isHrManagerTier();
     }
 
     match /staffDocuments/{documentId} {
-      allow read: if isHr() || isFinance() || staffCanRead(resource.data);
+      // Passports, IDs, visas and medical files are not a general Finance data source.
+      // Finance consumes payroll-safe records from staffPayslips/payroll instead.
+      allow read: if isHr() || staffCanRead(resource.data);
       allow create: if isHr() || staffRequestCreate(request.resource.data);
       allow update: if isHr();
       allow delete: if isHr();
