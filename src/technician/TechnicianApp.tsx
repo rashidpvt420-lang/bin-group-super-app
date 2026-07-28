@@ -27,12 +27,14 @@ import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvide
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import SupportPage from '../pages/public/SupportPage';
 
-const ENABLE_HR_MODULE = import.meta.env.VITE_ENABLE_HR_MODULE === 'true';
+// HR is an implemented operational module and is available by default. The flag
+// is now an explicit emergency kill switch instead of a hidden launch dependency.
+const ENABLE_HR_MODULE = import.meta.env.VITE_ENABLE_HR_MODULE !== 'false';
 
 const HrComingSoon = () => (
     <Box sx={{ p: 4, textAlign: 'center', mt: 4 }}>
-        <Typography variant="h5" sx={{ color: '#111827', fontWeight: 900, mb: 2 }}>HR Module Offline</Typography>
-        <Typography variant="body1" sx={{ color: '#667085' }}>The HR & Requests module is currently disabled for this pilot phase. Please contact your supervisor directly for HR matters.</Typography>
+        <Typography variant="h5" sx={{ color: '#111827', fontWeight: 900, mb: 2 }}>HR Module Temporarily Disabled</Typography>
+        <Typography variant="body1" sx={{ color: '#667085' }}>The HR & Requests module has been disabled by the production emergency switch. Please contact your supervisor directly for HR matters.</Typography>
     </Box>
 );
 const shell = { ink: '#111827', muted: '#667085', canvas: '#FFFFFF', soft: '#F8F9FB', border: '#E5E7EB', gold: binThemeTokens.gold };
@@ -77,9 +79,9 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 {!isDashboard && <Box sx={{ mb: 4, display: 'flex', gap: 1, alignItems: 'center', color: shell.muted, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Button variant="text" onClick={() => navigate('/technician')} sx={{ color: shell.muted, fontWeight: 800 }}>{label('nav.dashboard', 'DASHBOARD', 'لوحة التحكم')}</Button>
                     {pathnames.slice(1).map((value, index) => {
-                        const normalized = value.toLowerCase().replaceAll('-', '_');
+                        const normalizedPath = value.toLowerCase().replaceAll('-', '_');
                         const fallback = value.replaceAll('-', ' ').toUpperCase();
-                        const labelText = lang === 'ar' ? breadcrumbArabic[normalized] || fallback : tx(`nav.${normalized}`, fallback);
+                        const labelText = lang === 'ar' ? breadcrumbArabic[normalizedPath] || fallback : tx(`nav.${normalizedPath}`, fallback);
                         return <Typography key={`${value}-${index}`} sx={{ color: shell.gold, fontWeight: 900, fontSize: '0.75rem' }}><SafeIcon icon={ChevronRight} size={12} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /> {labelText}</Typography>;
                     })}
                 </Box>}
