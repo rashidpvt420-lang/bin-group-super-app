@@ -85,27 +85,27 @@ for (const [label, before, after] of transformations) {
 }
 
 const payrollHeader = '    match /payroll_entries/{entryId} {';
-const payrollBlock = `    // Canonical payroll is generated in /payroll. This read-only mirror exposes
-    // only payroll-safe fields to the matching Technician while all writes remain
-    // Admin SDK authority through trigger/backfill functions.
-    match /payroll_entries/{entryId} {
+const payrollRuleBlock = `    match /payroll_entries/{entryId} {
       allow read: if isAdmin() || isHr() || isFinance() || (
         signedIn() && resource.data.get('technicianId', null) == request.auth.uid
       );
       allow create, update, delete: if false;
     }`;
+const payrollComment = `    // Canonical payroll is generated in /payroll. This read-only mirror exposes
+    // only payroll-safe fields to the matching Technician while all writes remain
+    // Admin SDK authority through trigger/backfill functions.\n`;
 const existingPayrollRange = matchBlockRange(source, payrollHeader);
 if (existingPayrollRange) {
   const current = source.slice(existingPayrollRange.start, existingPayrollRange.end);
-  if (current !== payrollBlock) {
-    source = `${source.slice(0, existingPayrollRange.start)}${payrollBlock}${source.slice(existingPayrollRange.end)}`;
+  if (current !== payrollRuleBlock) {
+    source = `${source.slice(0, existingPayrollRange.start)}${payrollRuleBlock}${source.slice(existingPayrollRange.end)}`;
     changed = true;
   }
 } else {
   const marker = '    match /hrProfiles/{profileId} {';
   const index = source.indexOf(marker);
   if (index < 0) throw new Error('HR profile insertion marker is missing.');
-  source = `${source.slice(0, index)}${payrollBlock}\n\n${source.slice(index)}`;
+  source = `${source.slice(0, index)}${payrollComment}${payrollRuleBlock}\n\n${source.slice(index)}`;
   changed = true;
 }
 
@@ -128,7 +128,7 @@ if (!source.includes(writeReplacement)) {
 
 const installedRange = matchBlockRange(source, payrollHeader);
 const installedBlock = installedRange ? source.slice(installedRange.start, installedRange.end) : '';
-const payrollBlockInstalled = installedBlock === payrollBlock;
+const payrollBlockInstalled = installedBlock === payrollRuleBlock;
 const payrollReadExcludedFromCatchAll = source.includes(readReplacement);
 const payrollWriteExclusions = source.split("          'payroll_entries',\n          'invoices',").length - 1;
 if (!payrollBlockInstalled || !payrollReadExcludedFromCatchAll || payrollWriteExclusions !== 2) {
