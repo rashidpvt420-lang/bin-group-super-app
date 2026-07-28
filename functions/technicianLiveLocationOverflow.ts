@@ -7,6 +7,13 @@ const PAGE_SIZE = 100;
 const MAX_PAGES_PER_RUN = 5;
 
 const text = (value: unknown) => String(value || "").trim();
+const assignedTechnicianId = (ticket: FirebaseFirestore.DocumentData) => text(
+  ticket.assignedTechnicianId ||
+  ticket.technicianId ||
+  ticket.assignedTechId ||
+  ticket.technicianUid ||
+  ticket.techId,
+);
 
 export const reconcileExpiredTechnicianLiveLocationsOverflow = onSchedule(
   {
@@ -52,6 +59,15 @@ export const reconcileExpiredTechnicianLiveLocationsOverflow = onSchedule(
           const auditRef = db.collection("audit_logs").doc();
           const ticketRef = ticketId ? db.collection("maintenanceTickets").doc(ticketId) : null;
           const ticketSnap = ticketRef ? await tx.get(ticketRef) : null;
+          const ticket = ticketSnap?.data() || {};
+          const ticketExpiryMs = ticket.technicianLocationExpiresAt?.toMillis?.() || 0;
+          const ticketStillOwnedByExpiredSession = Boolean(
+            ticketSnap?.exists &&
+            assignedTechnicianId(ticket) === technicianUid &&
+            text(ticket.technicianLocationRef) === snapshot.ref.path &&
+            ticketExpiryMs > 0 &&
+            ticketExpiryMs <= transactionNow.toMillis(),
+          );
 
           tx.set(snapshot.ref, {
             activeTicketId: null,
@@ -85,7 +101,7 @@ export const reconcileExpiredTechnicianLiveLocationsOverflow = onSchedule(
             stoppedAt: transactionNow,
             updatedAt: transactionNow,
           }, { merge: true });
-          if (ticketRef && ticketSnap?.exists) {
+          if (ticketRef && ticketStillOwnedByExpiredSession) {
             tx.set(ticketRef, {
               trackingStatus: "STOPPED_STALE",
               technicianLocationExpiresAt: transactionNow,
@@ -97,11 +113,17 @@ export const reconcileExpiredTechnicianLiveLocationsOverflow = onSchedule(
             actorId: "system",
             actorRole: "system",
             action: "TECHNICIAN_LIVE_LOCATION_EXPIRED_PAGED",
-            targetType: ticketSnap?.exists ? "maintenanceTickets" : "technician_live_locations",
-            targetId: ticketSnap?.exists ? ticketId : technicianUid,
+            targetType: ticketStillOwnedByExpiredSession ? "maintenanceTickets" : "technician_live_locations",
+            targetId: ticketStillOwnedByExpiredSession ? ticketId : technicianUid,
             technicianUid,
             requestedTicketId: ticketId || null,
             ticketMissing: Boolean(ticketId) && ticketSnap?.exists !== true,
+            ticketUpdateApplied: ticketStillOwnedByExpiredSession,
+            ticketUpdateSkippedReason: ticketId && !ticketStillOwnedByExpiredSession
+              ? "TICKET_REASSIGNED_OR_LOCATION_SESSION_CHANGED"
+              : null,
+            currentTicketAssignee: assignedTechnicianId(ticket) || null,
+            currentTicketLocationRef: text(ticket.technicianLocationRef) || null,
             trackingSessionId,
             createdAt: transactionNow,
           });
