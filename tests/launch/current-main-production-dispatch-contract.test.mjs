@@ -21,7 +21,10 @@ test('production dispatcher only delegates Founder actor for real Founder email 
   const source = await read(workflowPath);
 
   assert.match(source, /authorization_actor="\$GITHUB_ACTOR"/);
-  assert.match(source, /if \[\[ "\$FOUNDER_EMAIL" == "authorized-founder@protected\.invalid" \]\]; then\s+authorization_actor=''/);
+  assert.match(
+    source,
+    /if \[\[ "\$FOUNDER_EMAIL" == "authorized-founder@protected\.invalid" \|\| "\$authorization_actor" == "github-actions\[bot\]" \]\]; then\s+authorization_actor=''/,
+  );
   assert.match(source, /--arg authorizationActor "\$authorization_actor"/);
   assert.match(source, /authorization_actor:\$authorizationActor/);
   assert.doesNotMatch(source, /authorization_actor:env\.GITHUB_ACTOR/);
