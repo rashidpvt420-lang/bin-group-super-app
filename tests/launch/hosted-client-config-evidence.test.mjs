@@ -171,6 +171,10 @@ test('hosted client evidence rejects missing flags, tampering, stale proof and s
 test('postdeploy verification recursively scans same-origin JS assets and records clientRuntimeConfig', async () => {
   const source = await read('scripts/verify-production-deployment.mjs');
   assert.match(source, /MAX_BUNDLE_ASSETS = 250/);
+  assert.match(source, /discoverManifestJavascriptUrls/);
+  assert.match(source, /asset-manifest\.json/);
+  assert.match(source, /manifest\?\.entrypoints/);
+  assert.match(source, /queue\.push\(\.\.\.await discoverManifestJavascriptUrls\(siteUrl, origin\)\)/);
   assert.match(source, /discoverJavascriptUrls/);
   assert.match(source, /crawlJavascriptAssets/);
   assert.match(source, /resolved\.origin === origin/);
