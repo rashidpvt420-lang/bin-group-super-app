@@ -10,9 +10,12 @@ const [dispatcher, signer, predeploy, sameRun, decision] = await Promise.all([
   readFile(new URL('../../scripts/hard-launch-decision-gate.mjs', import.meta.url), 'utf8'),
 ]);
 
-test('bank-pilot automation never puts the canonical Founder email in dispatch inputs', () => {
-  assert.match(dispatcher, /FOUNDER_EMAIL: authorized-founder@protected\.invalid/);
-  assert.doesNotMatch(dispatcher, /FOUNDER_EMAIL: ceo@bin-groups\.com/);
+test('bank-pilot forwards verified Owner provenance and canonical Founder email', () => {
+  assert.match(dispatcher, /FOUNDER_EMAIL: ceo@bin-groups\.com/);
+  assert.doesNotMatch(dispatcher, /FOUNDER_EMAIL: authorized-founder@protected\.invalid/);
+  assert.match(dispatcher, /AUTHORIZATION_ACTOR: \$\{\{ github\.event\.pull_request\.user\.login \}\}/);
+  assert.match(dispatcher, /authorization_actor:\$authorizationActor/);
+  assert.match(dispatcher, /authorization_source_pr:\$authorizationSourcePr/);
   assert.match(dispatcher, /owner_request_reference="https:\/\/github\.com\/\$REPOSITORY\/pull\/\$REQUEST_PR"/);
   assert.match(dispatcher, /incident_references="\$INCIDENT_REFERENCE,\$owner_request_reference"/);
   assert.match(dispatcher, /incident_evidence_refs:\$incidentReferences/);
