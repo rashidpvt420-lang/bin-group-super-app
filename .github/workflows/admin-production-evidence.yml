@@ -127,6 +127,13 @@ jobs:
         run: node scripts/resolve-production-mailbox-identities.mjs
 
       - name: Validate protected credentials and App Check
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: |
           node scripts/verify-e2e-env.mjs
           node scripts/ensure-appcheck.mjs
@@ -145,6 +152,13 @@ jobs:
         run: node scripts/verify-founder-totp-readiness.mjs
 
       - name: Run full Admin operational evidence suite
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: node scripts/run-critical-evidence.mjs --suite adminCredentialLogin
 
       - name: Upload exact-SHA Admin evidence
