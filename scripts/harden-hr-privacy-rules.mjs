@@ -4,6 +4,22 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const rulesPath = 'firestore.rules';
 let source = readFileSync(rulesPath, 'utf8');
 
+function matchBlockRange(text, header) {
+  const start = text.indexOf(header);
+  if (start < 0) return null;
+  const open = text.indexOf('{', start);
+  if (open < 0) throw new Error(`Malformed Firestore block: ${header}`);
+  let depth = 0;
+  for (let index = open; index < text.length; index += 1) {
+    if (text[index] === '{') depth += 1;
+    else if (text[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return { start, end: index + 1 };
+    }
+  }
+  throw new Error(`Unclosed Firestore block: ${header}`);
+}
+
 const legacy = `    match /hrProfiles/{profileId} {
       allow read: if isHr() || isFinance() || isOps() || (signedIn() && request.auth.uid == profileId) || staffCanRead(resource.data);
       allow create: if isHr();
@@ -68,6 +84,7 @@ for (const [label, before, after] of transformations) {
   changed = true;
 }
 
+const payrollHeader = '    match /payroll_entries/{entryId} {';
 const payrollBlock = `    // Canonical payroll is generated in /payroll. This read-only mirror exposes
     // only payroll-safe fields to the matching Technician while all writes remain
     // Admin SDK authority through trigger/backfill functions.
@@ -76,14 +93,19 @@ const payrollBlock = `    // Canonical payroll is generated in /payroll. This re
         signedIn() && resource.data.get('technicianId', null) == request.auth.uid
       );
       allow create, update, delete: if false;
-    }
-
-`;
-if (!source.includes('match /payroll_entries/{entryId} {')) {
+    }`;
+const existingPayrollRange = matchBlockRange(source, payrollHeader);
+if (existingPayrollRange) {
+  const current = source.slice(existingPayrollRange.start, existingPayrollRange.end);
+  if (current !== payrollBlock) {
+    source = `${source.slice(0, existingPayrollRange.start)}${payrollBlock}${source.slice(existingPayrollRange.end)}`;
+    changed = true;
+  }
+} else {
   const marker = '    match /hrProfiles/{profileId} {';
   const index = source.indexOf(marker);
   if (index < 0) throw new Error('HR profile insertion marker is missing.');
-  source = `${source.slice(0, index)}${payrollBlock}${source.slice(index)}`;
+  source = `${source.slice(0, index)}${payrollBlock}\n\n${source.slice(index)}`;
   changed = true;
 }
 
@@ -104,9 +126,9 @@ if (!source.includes(writeReplacement)) {
   changed = true;
 }
 
-const payrollBlockInstalled = source.includes('match /payroll_entries/{entryId} {') &&
-  source.includes("resource.data.get('technicianId', null) == request.auth.uid") &&
-  source.includes('allow create, update, delete: if false;');
+const installedRange = matchBlockRange(source, payrollHeader);
+const installedBlock = installedRange ? source.slice(installedRange.start, installedRange.end) : '';
+const payrollBlockInstalled = installedBlock === payrollBlock;
 const payrollReadExcludedFromCatchAll = source.includes(readReplacement);
 const payrollWriteExclusions = source.split("          'payroll_entries',\n          'invoices',").length - 1;
 if (!payrollBlockInstalled || !payrollReadExcludedFromCatchAll || payrollWriteExclusions !== 2) {
