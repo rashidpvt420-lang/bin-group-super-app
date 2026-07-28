@@ -13,6 +13,11 @@ const CLEAR_PHRASE = 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR';
 const HOLDS_PHRASE = 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const EXPECTED_REF = 'refs/heads/main';
+const EXPECTED_WORKFLOW = 'Firebase Production Deploy';
+const EXPECTED_WORKFLOW_REF = `${EXPECTED_REPOSITORY}/.github/workflows/firebase-production-deploy.yml@${EXPECTED_REF}`;
+const EXPECTED_AUTOMATION_JOB = 'deploy-firebase-production-stack';
+const EXPECTED_AUTOMATION_EVENT = 'workflow_dispatch';
+const AUTOMATION_ACTOR = 'github-actions[bot]';
 const RETRY_COOLDOWN_MS = 30 * 60 * 1000;
 
 function fail(message) {
@@ -24,6 +29,10 @@ function required(name) {
   const value = String(process.env[name] || '').trim();
   if (!value) fail(`${name} is required`);
   return value;
+}
+
+function optional(name) {
+  return String(process.env[name] || '').trim();
 }
 
 function parseBool(name) {
@@ -70,9 +79,27 @@ const authorizedActors = authorizedActorsRaw
 if (authorizedActors.length === 0) {
   fail('AUTHORIZED_FOUNDER_ACTORS must contain at least one actor');
 }
-if (!authorizedActors.includes(actor.toLowerCase())) {
+
+const normalizedActor = actor.toLowerCase();
+if (normalizedActor === AUTOMATION_ACTOR) {
+  const workflowRef = optional('GITHUB_WORKFLOW_REF');
+  const job = optional('GITHUB_JOB');
+  const eventName = optional('GITHUB_EVENT_NAME');
+  const trustedAutomationContext =
+    workflow === EXPECTED_WORKFLOW
+    && workflowRef === EXPECTED_WORKFLOW_REF
+    && job === EXPECTED_AUTOMATION_JOB
+    && eventName === EXPECTED_AUTOMATION_EVENT;
+
+  if (!trustedAutomationContext) {
+    fail(
+      `GITHUB_ACTOR ${actor} is not authorized outside the exact protected Firebase Production Deploy context`,
+    );
+  }
+} else if (!authorizedActors.includes(normalizedActor)) {
   fail(`GITHUB_ACTOR ${actor} is not authorized to attest production incidents`);
 }
+
 if (attestation !== CLEAR_PHRASE && attestation !== HOLDS_PHRASE) {
   fail(
     `INCIDENT_ATTESTATION must be exactly ${CLEAR_PHRASE} or ${HOLDS_PHRASE}`,
