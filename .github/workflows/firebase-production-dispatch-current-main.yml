@@ -196,32 +196,32 @@ jobs:
             latest_created_at="$(jq -r '.created_at // empty' <<<"$latest_run")"
             latest_updated_at="$(jq -r '.updated_at // empty' <<<"$latest_run")"
 
-            if [[ "$latest_conclusion" == "failure" ]]; then
+            if [[ "$latest_conclusion" =~ ^(failure|cancelled|timed_out)$ ]]; then
               incident_failed='true'
               resolved_failed_at="${latest_updated_at:-$latest_created_at}"
               [[ -n "$resolved_failed_at" ]] || {
-                echo "::error::The latest failed Firebase Production Deploy run has no usable timestamp."
+                echo "::error::The latest unsuccessful Firebase Production Deploy run has no usable timestamp."
                 exit 1
               }
               failed_epoch="$(date -d "$resolved_failed_at" +%s 2>/dev/null || true)"
               [[ -n "$failed_epoch" ]] || {
-                echo "::error::The latest failed deployment timestamp is not valid ISO-8601."
+                echo "::error::The latest unsuccessful deployment timestamp is not valid ISO-8601."
                 exit 1
               }
               now_epoch="$(date -u +%s)"
               failure_age=$((now_epoch - failed_epoch))
               if (( failure_age < 0 )); then
-                echo "::error::The latest failed deployment timestamp cannot be in the future."
+                echo "::error::The latest unsuccessful deployment timestamp cannot be in the future."
                 exit 1
               fi
               if (( failure_age < 1800 )); then
                 remaining=$((1800 - failure_age))
-                echo "::error::The failed deployment is still inside the mandatory 30-minute cooling period. Retry after approximately $(((remaining + 59) / 60)) minute(s)."
+                echo "::error::The unsuccessful deployment is still inside the mandatory 30-minute cooling period. Retry after approximately $(((remaining + 59) / 60)) minute(s)."
                 exit 1
               fi
-              echo "Automatically detected failed Firebase Production Deploy run $latest_run_id at $resolved_failed_at."
+              echo "Automatically detected unsuccessful Firebase Production Deploy run $latest_run_id ($latest_conclusion) at $resolved_failed_at."
             else
-              echo "Latest completed Firebase Production Deploy run $latest_run_id concluded '$latest_conclusion'; failed-state recovery is not required."
+              echo "Latest completed Firebase Production Deploy run $latest_run_id concluded '$latest_conclusion'; unsuccessful-state recovery is not required."
             fi
           else
             echo "No completed Firebase Production Deploy run exists; treating this as the first protected deployment."
