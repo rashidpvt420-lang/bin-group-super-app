@@ -76,6 +76,7 @@ jobs:
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
           AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}
           AUTHORIZATION_SOURCE_PR_INPUT: ${{ inputs.authorization_source_pr }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
           FOUNDER_NAME: ${{ inputs.founder_name }}
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -126,7 +127,13 @@ jobs:
           fi
           if [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]; then
             [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+$ ]] || fail "Automated dispatch requires a valid verified Founder actor."
-            [[ "$AUTHORIZATION_SOURCE_PR_INPUT" =~ ^[1-9][0-9]*$ ]] || fail "Automated dispatch requires a numeric Owner request PR."
+            [[ "$AUTHORIZATION_ACTOR_INPUT" == "$REPOSITORY_OWNER" ]] || fail "Delegated Founder actor must equal the repository owner."
+            if [[ -n "$AUTHORIZATION_SOURCE_PR_INPUT" ]]; then
+              [[ "$AUTHORIZATION_SOURCE_PR_INPUT" =~ ^[1-9][0-9]*$ ]] || fail "Automated dispatch requires a numeric Owner request PR."
+            else
+              [[ "$FOUNDER_EMAIL" == "ceo@bin-groups.com" ]] || fail "Owner-delegated automation without a request PR requires the canonical Founder email."
+              [[ "$LAUNCH_MODE" == "bank-pilot" ]] || fail "Owner-delegated automation without a request PR is limited to bank-pilot mode."
+            fi
           else
             [[ -z "${AUTHORIZATION_ACTOR_INPUT}${AUTHORIZATION_SOURCE_PR_INPUT}" ]] || fail "Manual dispatch cannot supply delegated Founder provenance."
             [[ "$GITHUB_ACTOR" =~ ^[a-z0-9-]+$ ]] || fail "Manual dispatch actor is invalid."
@@ -174,18 +181,23 @@ jobs:
           authorization_actor="$GITHUB_ACTOR"
           if [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]; then
             [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+$ ]]
-            [[ "$AUTHORIZATION_SOURCE_PR_INPUT" =~ ^[1-9][0-9]*$ ]]
-            source_pr="$(gh api "repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT")"
-            [[ "$(jq -r '.state' <<<"$source_pr")" == "open" ]]
-            [[ "$(jq -r '.draft' <<<"$source_pr")" == "true" ]]
-            [[ "$(jq -r '.title' <<<"$source_pr")" == "Dispatch protected bank pilot workflow" ]]
-            [[ "$(jq -r '.base.ref' <<<"$source_pr")" == "main" ]]
-            [[ "$(jq -r '.head.repo.full_name' <<<"$source_pr")" == "$REPOSITORY" ]]
-            [[ "$(jq -r '.user.login' <<<"$source_pr")" == "$AUTHORIZATION_ACTOR_INPUT" ]]
             [[ "$AUTHORIZATION_ACTOR_INPUT" == "$REPOSITORY_OWNER" ]]
-            [[ "$(jq -r '.head.ref' <<<"$source_pr")" == ops/dispatch-bank-pilot-workflow-* ]]
-            mapfile -t source_files < <(gh api --paginate "repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT/files" --jq '.[].filename')
-            [[ "${#source_files[@]}" -eq 1 && "${source_files[0]}" == '.github/bank-pilot-dispatch-request' ]]
+            if [[ -n "$AUTHORIZATION_SOURCE_PR_INPUT" ]]; then
+              [[ "$AUTHORIZATION_SOURCE_PR_INPUT" =~ ^[1-9][0-9]*$ ]]
+              source_pr="$(gh api "repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT")"
+              [[ "$(jq -r '.state' <<<"$source_pr")" == "open" ]]
+              [[ "$(jq -r '.draft' <<<"$source_pr")" == "true" ]]
+              [[ "$(jq -r '.title' <<<"$source_pr")" == "Dispatch protected bank pilot workflow" ]]
+              [[ "$(jq -r '.base.ref' <<<"$source_pr")" == "main" ]]
+              [[ "$(jq -r '.head.repo.full_name' <<<"$source_pr")" == "$REPOSITORY" ]]
+              [[ "$(jq -r '.user.login' <<<"$source_pr")" == "$AUTHORIZATION_ACTOR_INPUT" ]]
+              [[ "$(jq -r '.head.ref' <<<"$source_pr")" == ops/dispatch-bank-pilot-workflow-* ]]
+              mapfile -t source_files < <(gh api --paginate "repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT/files" --jq '.[].filename')
+              [[ "${#source_files[@]}" -eq 1 && "${source_files[0]}" == '.github/bank-pilot-dispatch-request' ]]
+            else
+              [[ "$FOUNDER_EMAIL" == "ceo@bin-groups.com" ]]
+              [[ "$LAUNCH_MODE" == "bank-pilot" ]]
+            fi
             authorization_actor="$AUTHORIZATION_ACTOR_INPUT"
           else
             [[ -z "${AUTHORIZATION_ACTOR_INPUT}${AUTHORIZATION_SOURCE_PR_INPUT}" ]]

@@ -30,7 +30,8 @@ test('automated dispatcher binds delegated Founder actor to the exact open Owner
   assert.match(source, /authorization_actor:\$authorizationActor/);
   assert.doesNotMatch(source, /authorization_actor:env\.GITHUB_ACTOR/);
   assert.match(source, /Manual dispatch cannot supply delegated Founder provenance/);
-  assert.doesNotMatch(source, /authorized-founder@protected\.invalid/);
+  assert.match(source, /Owner-delegated automation without a request PR requires the canonical Founder email/);
+  assert.match(source, /ceo@bin-groups\.com/);
 });
 
 test('operator form cannot mistype incident attestation or manually misreport the latest deployment result', async () => {
