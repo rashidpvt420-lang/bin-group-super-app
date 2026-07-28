@@ -51,6 +51,18 @@ test('Broker referral link reaches public onboarding and locks attribution serve
   assert.match(runtime, /export \* from "\.\/brokerReferralAttribution"/);
 });
 
+test('Broker referral replay preserves matched lifecycle and commission authority', () => {
+  assert.match(brokerCallable, /existingBrokerUid === brokerUid/);
+  assert.match(brokerCallable, /same-Broker replay is a true no-op/);
+  const noOpStart = brokerCallable.indexOf('if (existingBrokerUid === brokerUid)');
+  const noOpEnd = brokerCallable.indexOf('const kyc =', noOpStart);
+  const noOp = brokerCallable.slice(noOpStart, noOpEnd);
+  assert.match(noOp, /idempotent: true/);
+  assert.doesNotMatch(noOp, /tx\.set|commissionEligible: false|status: "SUBMITTED"/);
+  assert.match(brokerCallable, /status: text\(existingLead\.status/);
+  assert.match(brokerCallable, /commissionStatus: text\(existingLead\.commissionStatus/);
+});
+
 test('Owner inspections route uses the full inspections workspace', () => {
   assert.match(ownerApp, /import OwnerInspectionsPage/);
   assert.match(ownerApp, /path="\/inspections" element=\{<OwnerInspectionsPage \/>\}/);
@@ -98,12 +110,16 @@ test('Admin map uses complete listeners instead of silent technician and GPS cap
   assert.match(adminMap, /collection\(db, 'technician_live_locations'\)/);
 });
 
-test('expired GPS sessions are drained in bounded pages with transactional rechecks', () => {
+test('expired GPS sessions are drained in bounded pages with assignment-safe transactional rechecks', () => {
   assert.match(gpsOverflow, /PAGE_SIZE = 100/);
   assert.match(gpsOverflow, /MAX_PAGES_PER_RUN = 5/);
   assert.match(gpsOverflow, /while \(page < MAX_PAGES_PER_RUN\)/);
   assert.match(gpsOverflow, /db\.runTransaction/);
   assert.match(gpsOverflow, /expiryMs > transactionNow\.toMillis\(\)/);
+  assert.match(gpsOverflow, /assignedTechnicianId\(ticket\) === technicianUid/);
+  assert.match(gpsOverflow, /text\(ticket\.technicianLocationRef\) === snapshot\.ref\.path/);
+  assert.match(gpsOverflow, /ticketStillOwnedByExpiredSession/);
+  assert.match(gpsOverflow, /TICKET_REASSIGNED_OR_LOCATION_SESSION_CHANGED/);
   assert.match(runtime, /export \* from "\.\/technicianLiveLocationOverflow"/);
 });
 
@@ -113,6 +129,11 @@ test('Technician HR and payroll self-service no longer default to an empty path'
   assert.match(payrollBridge, /payroll\/\{payrollId\}/);
   assert.match(payrollBridge, /collection\("payroll_entries"\)/);
   assert.match(payrollBridge, /backfillTechnicianPayrollEntries/);
+  assert.match(payrollBridge, /data\.netSalary/);
+  assert.match(payrollBridge, /data\.netPay/);
+  assert.match(payrollBridge, /data\.grossSalary/);
+  assert.match(payrollBridge, /data\.baseSalary/);
+  assert.ok(payrollBridge.indexOf('data.netSalary') < payrollBridge.indexOf('data.amount'), 'net salary must take precedence over generic amount');
   assert.match(hrRules, /match \/payroll_entries\/\{entryId\}/);
   assert.match(hrRules, /resource\.data\.get\('technicianId', null\) == request\.auth\.uid/);
   assert.match(hrRules, /allow create, update, delete: if false/);
