@@ -77,3 +77,11 @@ test('bank-pilot correlates exact wrapper and production runs and publishes sani
   assert.doesNotMatch(workflow, /bank-pilot-dispatch-evidence[\s\S]*password/i);
   assert.doesNotMatch(workflow, /bank-pilot-dispatch-evidence[\s\S]*privateKey/i);
 });
+
+test('bank-pilot forwards verified Owner provenance and canonical Founder email', () => {
+  assert.match(workflow, /FOUNDER_EMAIL: ceo@bin-groups\.com/);
+  assert.doesNotMatch(workflow, /FOUNDER_EMAIL: authorized-founder@protected\.invalid/);
+  assert.match(workflow, /AUTHORIZATION_ACTOR: \$\{\{ github\.event\.pull_request\.user\.login \}\}/);
+  assert.match(workflow, /authorization_actor:\$authorizationActor/);
+  assert.match(workflow, /authorization_source_pr:\$authorizationSourcePr/);
+});

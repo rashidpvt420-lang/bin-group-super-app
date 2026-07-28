@@ -17,6 +17,16 @@ on:
         required: false
         type: string
         default: ''
+      authorization_actor:
+        description: 'Automation-only verified Founder actor; leave blank for normal manual dispatch'
+        required: false
+        type: string
+        default: ''
+      authorization_source_pr:
+        description: 'Automation-only open draft Owner request PR paired with authorization_actor'
+        required: false
+        type: string
+        default: ''
       founder_name:
         description: 'Founder/CEO legal name'
         required: true
@@ -47,6 +57,7 @@ on:
 permissions:
   contents: read
   actions: write
+  pull-requests: read
 
 concurrency:
   group: firebase-production-current-main-dispatch
@@ -63,6 +74,8 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
           HARD_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}
+          AUTHORIZATION_SOURCE_PR_INPUT: ${{ inputs.authorization_source_pr }}
           FOUNDER_NAME: ${{ inputs.founder_name }}
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -111,6 +124,13 @@ jobs:
           if [[ -n "$EXPECTED_COMMIT_SHA" ]]; then
             [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "expected_commit_sha must be blank or a full lowercase 40-character SHA."
           fi
+          if [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]; then
+            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+$ ]] || fail "Automated dispatch requires a valid verified Founder actor."
+            [[ "$AUTHORIZATION_SOURCE_PR_INPUT" =~ ^[1-9][0-9]*$ ]] || fail "Automated dispatch requires a numeric Owner request PR."
+          else
+            [[ -z "${AUTHORIZATION_ACTOR_INPUT}${AUTHORIZATION_SOURCE_PR_INPUT}" ]] || fail "Manual dispatch cannot supply delegated Founder provenance."
+            [[ "$GITHUB_ACTOR" =~ ^[a-z0-9-]+$ ]] || fail "Manual dispatch actor is invalid."
+          fi
           [[ -n "${FOUNDER_NAME// }" ]] || fail "Founder name is required."
           [[ "$FOUNDER_EMAIL" == *@*.* ]] || fail "Founder email must be a valid authorized email address."
           [[ -n "${INCIDENT_EVIDENCE_REFS// }" ]] || fail "At least one incident evidence reference is required."
@@ -140,6 +160,9 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
           HARD_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}
+          AUTHORIZATION_SOURCE_PR_INPUT: ${{ inputs.authorization_source_pr }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
           FOUNDER_NAME: ${{ inputs.founder_name }}
           FOUNDER_EMAIL: ${{ inputs.founder_email }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
@@ -147,6 +170,27 @@ jobs:
           DEPLOYMENT_PAYLOAD_JSON: ${{ inputs.deployment_payload_json }}
         run: |
           set -euo pipefail
+
+          authorization_actor="$GITHUB_ACTOR"
+          if [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]]; then
+            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+$ ]]
+            [[ "$AUTHORIZATION_SOURCE_PR_INPUT" =~ ^[1-9][0-9]*$ ]]
+            source_pr="$(gh api "repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT")"
+            [[ "$(jq -r '.state' <<<"$source_pr")" == "open" ]]
+            [[ "$(jq -r '.draft' <<<"$source_pr")" == "true" ]]
+            [[ "$(jq -r '.title' <<<"$source_pr")" == "Dispatch protected bank pilot workflow" ]]
+            [[ "$(jq -r '.base.ref' <<<"$source_pr")" == "main" ]]
+            [[ "$(jq -r '.head.repo.full_name' <<<"$source_pr")" == "$REPOSITORY" ]]
+            [[ "$(jq -r '.user.login' <<<"$source_pr")" == "$AUTHORIZATION_ACTOR_INPUT" ]]
+            [[ "$AUTHORIZATION_ACTOR_INPUT" == "$REPOSITORY_OWNER" ]]
+            [[ "$(jq -r '.head.ref' <<<"$source_pr")" == ops/dispatch-bank-pilot-workflow-* ]]
+            mapfile -t source_files < <(gh api --paginate "repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT/files" --jq '.[].filename')
+            [[ "${#source_files[@]}" -eq 1 && "${source_files[0]}" == '.github/bank-pilot-dispatch-request' ]]
+            authorization_actor="$AUTHORIZATION_ACTOR_INPUT"
+          else
+            [[ -z "${AUTHORIZATION_ACTOR_INPUT}${AUTHORIZATION_SOURCE_PR_INPUT}" ]]
+            [[ "$GITHUB_ACTOR" =~ ^[a-z0-9-]+$ ]]
+          fi
 
           if [[ "$LAUNCH_MODE" == "bank-pilot" && -z "${DEPLOYMENT_PAYLOAD_JSON// }" ]]; then
             normalized_payload='{"incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
@@ -281,13 +325,6 @@ jobs:
               '{incident_attestation:$incidentAttestation,incident_active_json:$incidentActive,incident_requires_rollback:$incidentRollback,incident_rollback_reason:$incidentRollbackReason,incident_last_deployment_failed:$incidentFailed,incident_last_deployment_failed_at:$incidentFailedAt,incident_evidence_refs:$evidenceRefs,hard_clearance_run_id:$clearanceRun,stripe_live_checkout_session_id:$stripeSession,stripe_live_webhook_event_id:$stripeEvent}'
           )"
 
-          authorization_actor="$GITHUB_ACTOR"
-          # Sentinel and bot workflow actors are not delegated Founder identities.
-          # Clear them so production gates treat the run as protected automation.
-          if [[ "$FOUNDER_EMAIL" == "authorized-founder@protected.invalid" || "$authorization_actor" == "github-actions[bot]" ]]; then
-            authorization_actor=''
-          fi
-
           jq -n \
             --arg ref main \
             --arg confirmation "$CONFIRMATION" \
@@ -346,3 +383,4 @@ jobs:
           }
 
           echo "Protected Firebase Production Deploy run $run_id is bound to exact SHA $main_sha."
+          echo "Delegated Founder authorization actor: $authorization_actor"
