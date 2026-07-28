@@ -50,6 +50,35 @@ function safeText(value: unknown, fallback = "") {
     return text || fallback;
 }
 
+function payrollEntryProjection(input: {
+    payrollId: string;
+    techId: string;
+    techName: string;
+    amount: number;
+    currency?: unknown;
+    month: string;
+    status: "pending" | "paid";
+    timestamp: FirebaseFirestore.FieldValue;
+    paymentReference?: string;
+    payslipUrl?: string;
+    paidAt?: FirebaseFirestore.FieldValue;
+}) {
+    return {
+        payrollId: input.payrollId,
+        technicianId: input.techId,
+        techId: input.techId,
+        techName: safeText(input.techName, input.techId),
+        amount: input.amount,
+        currency: safeText(input.currency, "AED"),
+        month: input.month,
+        status: input.status,
+        ...(input.paymentReference ? { paymentReference: input.paymentReference } : {}),
+        ...(input.payslipUrl ? { payslipUrl: input.payslipUrl } : {}),
+        ...(input.paidAt ? { paidAt: input.paidAt } : {}),
+        updatedAt: input.timestamp,
+    };
+}
+
 function limitedText(value: unknown, max = 2000) {
     return safeText(value).slice(0, max);
 }
@@ -175,6 +204,19 @@ export const adminGeneratePayrollBatch = onCall(
                 createdAt: now,
                 updatedAt: now,
             });
+            batch.create(db.collection("payroll_entries").doc(payrollId), {
+                ...payrollEntryProjection({
+                    payrollId,
+                    techId: tech.id,
+                    techName: safeText((tech as any).displayName || (tech as any).email || tech.id),
+                    amount,
+                    currency: "AED",
+                    month,
+                    status: "pending",
+                    timestamp: now,
+                }),
+                createdAt: now,
+            });
             batch.create(db.collection("transactions").doc(`payroll_${payrollId}`), {
                 transactionId: `payroll_${payrollId}`,
                 techId: tech.id,
@@ -289,6 +331,22 @@ export const adminSettlePayrollRecord = onCall(
                 paidAt: now,
                 paidBy: request.auth!.uid,
                 updatedAt: now,
+            }, { merge: true });
+            transaction.set(db.collection("payroll_entries").doc(payrollId), {
+                ...payrollEntryProjection({
+                    payrollId,
+                    techId,
+                    techName,
+                    amount,
+                    currency: freshPayroll.currency,
+                    month,
+                    status: "paid",
+                    timestamp: now,
+                    paymentReference,
+                    payslipUrl: pdfUrl,
+                    paidAt: now,
+                }),
+                createdAt: freshPayroll.createdAt || now,
             }, { merge: true });
             transaction.set(transactionRef, {
                 status: "PAID",
