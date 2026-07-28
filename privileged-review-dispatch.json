@@ -1,7 +1,0 @@
-{
-  "ref": "main",
-  "inputs": {
-    "expected_commit_sha": "fac8509d4f13f852e3f4875ca9c66ba799dae070",
-    "confirmation": "REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP"
-  }
-}
