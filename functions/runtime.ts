@@ -30,8 +30,9 @@ export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
-// Public AI Design Studio remains fail-closed until server-authoritative request
-// creation and protected render delivery replace the retired client workflow.
+// Preserve the public callable name as an App Check-protected fail-closed hold so
+// no earlier deployed implementation remains reachable while the replacement is reviewed.
+export * from "./aiDesignStudioLaunchHold";
 export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtpMailbox";
 export * from "./ownerOnboardingLifecycleEmail";
