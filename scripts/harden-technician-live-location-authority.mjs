@@ -28,6 +28,22 @@ function replaceFunction(source, name, replacement) {
   return `${source.slice(0, current.start)}${replacement}${source.slice(current.end)}`;
 }
 
+function readMatchBlock(source, header) {
+  const start = source.indexOf(header);
+  if (start < 0) throw new Error(`Required Firestore match block is missing: ${header}`);
+  const open = start + header.length - 1;
+  if (source[open] !== '{') throw new Error(`Malformed Firestore match block header: ${header}`);
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`Unclosed Firestore match block: ${header}`);
+}
+
 const evidenceOnlyTechnicianUpdate = `    function safeTechnicianTicketUpdate() {
       // Technician browsers may append work evidence and notes only. Arrival and
       // live GPS coordinates are canonical server state written exclusively by
@@ -105,11 +121,13 @@ if (!rules.includes('match /technician_live_locations/{technicianId} {')) {
 }
 
 const readCandidates = [
+  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])",
+  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry'])",
   "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations'])",
   "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles'])",
   "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'])",
 ];
-const strongestReadReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry'])";
+const strongestReadReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])";
 if (!rules.includes(strongestReadReplacement)) {
   const candidate = readCandidates.find((value) => rules.includes(value));
   if (!candidate) {
@@ -124,9 +142,19 @@ while (rules.includes(protectedCollectionAnchor)) {
   rules = rules.replace(protectedCollectionAnchor, protectedCollectionReplacement);
 }
 
+const payrollWriteAnchor = "          'transactions',\n          'invoices',";
+const payrollWriteReplacement = "          'transactions',\n          'payroll_entries',\n          'invoices',";
+while (rules.includes(payrollWriteAnchor)) {
+  rules = rules.replace(payrollWriteAnchor, payrollWriteReplacement);
+}
+
 const protectedOccurrences = rules.match(/'technician_live_locations'/g)?.length || 0;
 if (protectedOccurrences !== 3) {
   throw new Error(`Expected read-fallback, create and update exclusions for ${collectionName}; found ${protectedOccurrences} quoted references.`);
+}
+const payrollReadOccurrences = rules.match(/'payroll_entries'/g)?.length || 0;
+if (payrollReadOccurrences !== 3) {
+  throw new Error(`Expected read-fallback, create and update exclusions for payroll_entries; found ${payrollReadOccurrences} quoted references.`);
 }
 
 const blockStart = rules.indexOf('match /technician_live_locations/{technicianId} {');
@@ -137,6 +165,15 @@ if (
   !block.includes('allow create, update, delete: if false;')
 ) {
   throw new Error('Canonical live-location rule block is malformed.');
+}
+
+const payrollBlock = readMatchBlock(rules, '    match /payroll_entries/{entryId} {');
+if (
+  !payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") ||
+  !payrollBlock.includes('allow create, update, delete: if false;') ||
+  payrollBlock.includes('allow write: if isAdmin()')
+) {
+  throw new Error('Canonical payroll compatibility block is not scoped read-only authority.');
 }
 
 const technicianTicketHelper = readFunction(rules, 'safeTechnicianTicketUpdate').text;
@@ -157,4 +194,4 @@ if (!readFunction(rules, 'safeTechnicianProfileUpdate').text.includes('return fa
 }
 
 writeFileSync(rulesPath, rules, 'utf8');
-console.log('Technician live-location and profile authority hardened to callable-only GPS.');
+console.log('Technician live-location, profile and payroll catch-all authority hardened to server-only writes.');
