@@ -175,6 +175,22 @@ export const adminGeneratePayrollBatch = onCall(
                 createdAt: now,
                 updatedAt: now,
             });
+            // Mirror into payroll_entries so the technician dashboard (which reads
+            // payroll_entries where technicianId == uid) can show earnings. The
+            // `payroll` collection is admin-only per Firestore rules; payroll_entries
+            // is the technician-readable projection (rules: read own by technicianId).
+            batch.create(db.collection("payroll_entries").doc(payrollId), {
+                payrollId,
+                technicianId: tech.id,
+                techId: tech.id,
+                techName: safeText((tech as any).displayName || (tech as any).email || tech.id),
+                amount,
+                currency: "AED",
+                month,
+                status: "pending",
+                createdAt: now,
+                updatedAt: now,
+            });
             batch.create(db.collection("transactions").doc(`payroll_${payrollId}`), {
                 transactionId: `payroll_${payrollId}`,
                 techId: tech.id,
@@ -288,6 +304,22 @@ export const adminSettlePayrollRecord = onCall(
                 payslipUrl: pdfUrl,
                 paidAt: now,
                 paidBy: request.auth!.uid,
+                updatedAt: now,
+            }, { merge: true });
+            // Keep the technician-readable payroll_entries projection in sync on settle
+            // (creates it if the batch path did not run for this record).
+            transaction.set(db.collection("payroll_entries").doc(payrollId), {
+                payrollId,
+                technicianId: techId,
+                techId,
+                techName,
+                amount,
+                currency: safeText(freshPayroll.currency, "AED"),
+                month,
+                status: "paid",
+                paymentReference,
+                payslipUrl: pdfUrl,
+                paidAt: now,
                 updatedAt: now,
             }, { merge: true });
             transaction.set(transactionRef, {
