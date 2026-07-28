@@ -24,7 +24,7 @@ env:
   REQUEST_PR: ${{ github.event.pull_request.number }}
   REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   FOUNDER_NAME: Rashid Abdul Ghani Abdul Ghani
-  FOUNDER_EMAIL: authorized-founder@protected.invalid
+  FOUNDER_EMAIL: ceo@bin-groups.com
 
 jobs:
   dispatch:
@@ -238,6 +238,7 @@ jobs:
         env:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           INCIDENT_REFERENCE: ${{ steps.request.outputs.incident_reference }}
+          AUTHORIZATION_ACTOR: ${{ github.event.pull_request.user.login }}
         shell: bash
         run: |
           set -euo pipefail
@@ -249,6 +250,8 @@ jobs:
             --arg confirmation DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
             --arg hard AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP \
             --arg expectedSha "$RELEASE_SHA" \
+            --arg authorizationActor "$AUTHORIZATION_ACTOR" \
+            --arg authorizationSourcePr "$REQUEST_PR" \
             --arg founderName "$FOUNDER_NAME" \
             --arg founderEmail "$FOUNDER_EMAIL" \
             --arg incidentReferences "$incident_references" \
@@ -256,6 +259,8 @@ jobs:
               confirmation:$confirmation,
               hard_launch_confirmation:$hard,
               expected_commit_sha:$expectedSha,
+              authorization_actor:$authorizationActor,
+              authorization_source_pr:$authorizationSourcePr,
               founder_name:$founderName,
               founder_email:$founderEmail,
               launch_mode:"bank-pilot",

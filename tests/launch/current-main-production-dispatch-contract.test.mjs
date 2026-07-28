@@ -17,17 +17,20 @@ test('production dispatcher binds a stable current main before one protected dis
   assert.equal((source.match(/firebase-production-deploy\.yml\/dispatches/g) || []).length, 1);
 });
 
-test('production dispatcher only delegates Founder actor for real Founder email inputs', async () => {
+test('automated dispatcher binds delegated Founder actor to the exact open Owner request PR', async () => {
   const source = await read(workflowPath);
 
-  assert.match(source, /authorization_actor="\$GITHUB_ACTOR"/);
-  assert.match(
-    source,
-    /if \[\[ "\$FOUNDER_EMAIL" == "authorized-founder@protected\.invalid" \|\| "\$authorization_actor" == "github-actions\[bot\]" \]\]; then\s+authorization_actor=''/,
-  );
-  assert.match(source, /--arg authorizationActor "\$authorization_actor"/);
+  assert.match(source, /^\s+authorization_actor:/m);
+  assert.match(source, /^\s+authorization_source_pr:/m);
+  assert.match(source, /GITHUB_ACTOR.*github-actions\[bot\]/);
+  assert.match(source, /repos\/\$REPOSITORY\/pulls\/\$AUTHORIZATION_SOURCE_PR_INPUT/);
+  assert.match(source, /\.user\.login/);
+  assert.match(source, /AUTHORIZATION_ACTOR_INPUT.*REPOSITORY_OWNER/);
+  assert.match(source, /Dispatch protected bank pilot workflow/);
   assert.match(source, /authorization_actor:\$authorizationActor/);
   assert.doesNotMatch(source, /authorization_actor:env\.GITHUB_ACTOR/);
+  assert.match(source, /Manual dispatch cannot supply delegated Founder provenance/);
+  assert.doesNotMatch(source, /authorized-founder@protected\.invalid/);
 });
 
 test('operator form cannot mistype incident attestation or manually misreport the latest deployment result', async () => {
