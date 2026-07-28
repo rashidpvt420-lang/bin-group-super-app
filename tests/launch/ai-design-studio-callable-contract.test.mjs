@@ -51,6 +51,37 @@ test('Admin AI Design Studio uses the hardened callable without client-side refe
   assert.doesNotMatch(source, /Maximum supported size is 50MB/);
 });
 
+test('Owner and Tenant AI Design Studio is server-authoritative and private-rendered', async () => {
+  const [client, callable, rules] = await Promise.all([
+    read('src/pages/DesignStudioPage.tsx'),
+    read('functions/aiDesignStudio.ts'),
+    read('firestore.rules'),
+  ]);
+
+  assert.match(client, /submitAIDesignRequest/);
+  assert.match(client, /MAX_IMAGE_SIZE_BYTES = 5 \* 1024 \* 1024/);
+  assert.match(client, /MAX_REFERENCE_IMAGES = 3/);
+  assert.doesNotMatch(client, /setDoc\(requestRef/);
+  assert.doesNotMatch(client, /addDoc\(collection\(db, 'design_(quotes|concepts|approvals)'/);
+
+  assert.match(callable, /export const submitAIDesignRequest = onCall/);
+  assert.match(callable, /enforceAppCheck:\s*true/);
+  assert.match(callable, /cleanStoragePath/);
+  assert.match(callable, /SERVER_CALCULATED_DESIGN_STUDIO_V1/);
+  assert.match(callable, /transaction\.create\(requestRef, requestPayload\)/);
+  assert.match(callable, /cacheControl: "private,no-store"/);
+  assert.match(callable, /getSignedUrl/);
+  assert.doesNotMatch(callable, /makePublic\(/);
+
+  for (const collectionName of ['design_requests', 'design_quotes', 'design_concepts', 'design_approvals']) {
+    const start = rules.indexOf(`match /${collectionName}/`);
+    assert.ok(start >= 0, `${collectionName} rule must exist`);
+    const nextMatch = rules.indexOf('\n    match /', start + 1);
+    const block = rules.slice(start, nextMatch > start ? nextMatch : undefined);
+    assert.match(block, /allow create: if false;/, `${collectionName} must be callable/server-created only`);
+  }
+});
+
 test('Sovereign AI binds role server-side, redacts all client context, and exposes degradation', async () => {
   const source = await read('functions/aiAssistant.ts');
   const safety = await read('functions/aiSafety.ts');

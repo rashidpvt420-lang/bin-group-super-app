@@ -682,9 +682,7 @@ service cloud.firestore {
           'materialsUsed',
           'partsDisposition',
           'proofReadiness',
-          'arrivedLocation',
-          'technicianLocation',
-          'technicianLocationUpdatedAt'
+          'arrivedLocation'
         ]) &&
         isNotSuspended() &&
         hasApprovedTechnicianRecord() &&
@@ -706,11 +704,8 @@ service cloud.firestore {
     function safeTechnicianProfileUpdate(techId) {
       return signedIn() && request.auth.uid == techId &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'currentLocation',
           'lastLocation',
-          'locationUpdatedAt',
           'activeTicketId',
-          'isTracking',
           'lastSeenAt',
           'updatedAt'
         ]);
@@ -907,11 +902,8 @@ service cloud.firestore {
           'lastLoginAt',
           'lastSeenAt',
           'onboardingLastSeenAt',
-          'currentLocation',
           'lastLocation',
-          'locationUpdatedAt',
           'activeTicketId',
-          'isTracking',
           'requestedTrade',
           'serviceZonePreference',
           'emergencyContact',
@@ -1700,7 +1692,7 @@ service cloud.firestore {
 
     match /design_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('createdByUid', null) == request.auth.uid);
+      allow create: if false;
       allow update: if isAdmin() || (signedIn() && (
         (resource.data.get('ownerId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvalStatus', 'quoteStatus', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt'])) ||
         ((resource.data.get('userId', null) == request.auth.uid || resource.data.get('payerId', null) == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt']))
@@ -1710,21 +1702,21 @@ service cloud.firestore {
 
     match /design_quotes/{quoteId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('createdByUid', null) == request.auth.uid);
+      allow create: if false;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /design_concepts/{conceptId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantId', null) == request.auth.uid);
+      allow create: if false;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /design_approvals/{approvalId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.get('tenantUid', null) == request.auth.uid || request.resource.data.get('ownerId', null) == request.auth.uid);
+      allow create: if false;
       allow update: if isAdmin() || (
         signedIn() &&
         (resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid) &&

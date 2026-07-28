@@ -111,6 +111,12 @@ export interface OnboardingState {
     onboardingSessionId: string;
     paymentManifest: any | null;
     paymentMethod: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'STRIPE' | null;
+    brokerAttribution: {
+        referralCode: string;
+        source: string;
+        capturedAt: string;
+        landingPath: string;
+    } | null;
     companyProfile: { name: string; licenseNumber: string; contactPerson: string; phone: string; email: string };
     signupData: { name: string; email: string; phone: string; password?: string };
     isContractSigned: boolean;
@@ -149,6 +155,7 @@ export interface OnboardingState {
     setValuationResult: (result: any) => void;
     setPaymentManifest: (manifest: any) => void;
     setPaymentMethod: (method: OnboardingState['paymentMethod']) => void;
+    setBrokerAttribution: (attribution: OnboardingState['brokerAttribution']) => void;
     setOwnerAccount: (account: OnboardingState['ownerAccount']) => void;
     setProofDocument: (key: keyof Omit<OnboardingState['proofDocuments'], 'labels'>, file: { name: string; size: number; type: string } | null) => void;
     updatePropertyData: (data: Partial<PropertyData>) => void;
@@ -262,6 +269,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             onboardingSessionId: createOnboardingSessionId(),
             paymentManifest: null,
             paymentMethod: null,
+            brokerAttribution: null,
             companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
             signupData: { name: '', email: '', phone: '' },
             isContractSigned: false,
@@ -319,6 +327,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             setValuationResult: (valuationResult) => set({ valuationResult }),
             setPaymentManifest: (paymentManifest) => set({ paymentManifest }),
             setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+            setBrokerAttribution: (brokerAttribution) => set({ brokerAttribution }),
             setOwnerAccount: (ownerAccount) => set({ ownerAccount, accountCreated: Boolean(ownerAccount) }),
             updatePropertyData: (data) => {
                 set((state) => ({ propertyData: { ...state.propertyData, ...data } }));
@@ -369,6 +378,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                 onboardingSessionId: createOnboardingSessionId(),
                 paymentManifest: null,
                 paymentMethod: null,
+                brokerAttribution: null,
                 companyProfile: { name: '', licenseNumber: '', contactPerson: '', phone: '', email: '' },
                 signupData: { name: '', email: '', phone: '' },
                 isContractSigned: false,
@@ -388,6 +398,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             partialize: (state) => ({
                 step: state.step,
                 intakeId: state.intakeId,
+                brokerAttribution: state.brokerAttribution,
             }),
         },
     ),

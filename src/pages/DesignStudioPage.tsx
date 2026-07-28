@@ -29,31 +29,18 @@ import {
   DESIGN_STYLES,
   buildDesignConcepts,
   buildDesignExecutionDetails,
-  getApprovalRequired,
   getDepositAmount,
-  getInitialDesignStatus,
   type DesignConcept,
   type DesignExecutionDetail,
 } from '../utils/aiDesignStudioWorkflow';
 import {
-  addDoc,
-  collection,
-  db,
-  doc,
   functions,
-  getDoc,
-  getDocs,
   getDownloadURL,
   httpsCallable,
-  query,
   ref,
-  serverTimestamp,
-  setDoc,
   storage,
   uploadBytes,
-  where,
 } from '../lib/firebase';
-import { logAuditAction } from '../utils/auditLogger';
 
 type ReferenceImage = {
   file: File;
@@ -62,17 +49,10 @@ type ReferenceImage = {
   size: number;
 };
 
-type RenderResult = {
-  aiProvider: string;
-  renderStatus: string;
-  generatedImages: string[];
-  concepts: DesignConcept[];
-  executionDetails: DesignExecutionDetail[];
-};
-
 const WHATSAPP_URL = 'https://wa.me/971552423233';
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
-const MAX_IMAGE_SIZE_BYTES = 50 * 1024 * 1024;
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_REFERENCE_IMAGES = 3;
 
 const isSupportedImage = (file: File) => {
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
@@ -89,38 +69,18 @@ const readImageAsDataUrl = (file: File) => new Promise<string>((resolve, reject)
 
 const safeFileName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_');
 
-async function resolveTenantContext(user: any) {
-  if (!user?.uid) return {} as any;
-
-  const lookups = [
-    query(collection(db, 'units'), where('tenantId', '==', user.uid)),
-    query(collection(db, 'units'), where('tenantUid', '==', user.uid)),
-  ];
-  if (user.email) lookups.push(query(collection(db, 'units'), where('tenantEmail', '==', String(user.email).toLowerCase())));
-
-  for (const unitQuery of lookups) {
-    try {
-      const snap = await getDocs(unitQuery);
-      if (!snap.empty) {
-        const unit: any = { id: snap.docs[0].id, ...snap.docs[0].data() };
-        let property: any = null;
-        if (unit.propertyId) {
-          try {
-            const propertySnap = await getDoc(doc(db, 'properties', unit.propertyId));
-            if (propertySnap.exists()) property = { id: propertySnap.id, ...propertySnap.data() };
-          } catch (error) {
-            console.warn('[AI Studio] property lookup failed:', error);
-          }
-        }
-        return { unit, property };
-      }
-    } catch (error) {
-      console.warn('[AI Studio] tenant unit lookup failed:', error);
-    }
+const createDesignRequestId = () => {
+  const browserCrypto = globalThis.crypto;
+  if (browserCrypto && typeof browserCrypto.randomUUID === 'function') {
+    return `design_${browserCrypto.randomUUID()}`.replace(/[^A-Za-z0-9_-]/g, '_');
   }
-
-  return {} as any;
-}
+  if (!browserCrypto || typeof browserCrypto.getRandomValues !== 'function') {
+    throw new Error('Secure browser randomness is unavailable for this submission.');
+  }
+  const bytes = new Uint8Array(16);
+  browserCrypto.getRandomValues(bytes);
+  return `design_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+};
 
 function designErrorMessage(error: any) {
   const code = String(error?.code || '').toLowerCase();
@@ -129,7 +89,7 @@ function designErrorMessage(error: any) {
     return 'Image upload blocked by Storage rules. Check design_requests/{uid}/{fileName} rule.';
   }
   if (code.includes('permission-denied') || message.includes('permission')) {
-    return 'Submission blocked by Firestore rules. Please check design_requests, design_quotes, design_concepts, and design_approvals rules.';
+    return 'Submission blocked by the server authority checks. Please check sign-in, App Check, and assigned property access.';
   }
   return 'Design request could not be submitted. Please retry.';
 }
@@ -224,7 +184,11 @@ export default function DesignStudioPage() {
     if (!files.length) return;
     const invalid = files.find((file) => !isSupportedImage(file) || file.size > MAX_IMAGE_SIZE_BYTES);
     if (invalid) {
-      setSnackbar({ open: true, message: 'Upload JPG, PNG, WEBP, HEIC, or HEIF images only. Maximum size is 50 MB per image.', severity: 'error' });
+      setSnackbar({ open: true, message: 'Upload JPG, PNG, or WEBP images only. Maximum size is 5 MB per image.', severity: 'error' });
+      return;
+    }
+    if (referenceImages.length + files.length > MAX_REFERENCE_IMAGES) {
+      setSnackbar({ open: true, message: `Submit up to ${MAX_REFERENCE_IMAGES} reference images for one design request.`, severity: 'error' });
       return;
     }
 
@@ -235,7 +199,7 @@ export default function DesignStudioPage() {
         name: file.name,
         size: file.size,
       })));
-      setReferenceImages((current) => [...current, ...previews].slice(0, 8));
+      setReferenceImages((current) => [...current, ...previews].slice(0, MAX_REFERENCE_IMAGES));
       setRenderedConcepts([]);
       setRenderStatus('AI_RENDER_PENDING');
       setRenderError('');
@@ -252,78 +216,18 @@ export default function DesignStudioPage() {
   };
 
   const uploadReferenceImages = async (requestId: string) => {
-    if (!user?.uid) return [] as string[];
-    const urls: string[] = [];
+    if (!user?.uid) return [] as Array<{ url: string; path: string; name: string; size: number; contentType: string }>;
+    const uploaded: Array<{ url: string; path: string; name: string; size: number; contentType: string }> = [];
     for (let index = 0; index < referenceImages.length; index += 1) {
       const image = referenceImages[index];
       const path = `design_requests/${user.uid}/${requestId}_${index}_${Date.now()}_${safeFileName(image.name)}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, image.file, { contentType: image.file.type || 'image/jpeg' });
       const url = await getDownloadURL(storageRef);
-      urls.push(url);
+      uploaded.push({ url, path, name: image.name, size: image.size, contentType: image.file.type || 'image/jpeg' });
       setUploadProgress(Math.round(((index + 1) / referenceImages.length) * 100));
     }
-    return urls;
-  };
-
-  const buildFallbackRender = (imageUrl: string): RenderResult => ({
-    aiProvider: 'fallback',
-    renderStatus: 'AI_RENDER_PENDING',
-    generatedImages: [],
-    concepts: buildDesignConcepts({
-      zoneType: scope.zoneType,
-      designStyle,
-      designObjective,
-      uploadedImageUrl: imageUrl,
-      notes: scopeDescription,
-      finishTier: scope.finishTier,
-      quoteTotal: quote.finalTotal,
-      mobilizationAmount: mobilization,
-    }),
-    executionDetails,
-  });
-
-  const runAIDesignRender = async (requestId: string, imageUrl: string): Promise<RenderResult> => {
-    setRendering(true);
-    setRenderError('');
-    try {
-      const callable = httpsCallable(functions, 'generateAIDesignConceptImages');
-      const result: any = await callable({
-        requestId,
-        imageUrl,
-        zoneType: scope.zoneType,
-        designStyle,
-        designObjective,
-        finishTier: scope.finishTier,
-        dimensions: scope.dimensions,
-        notes: scopeDescription,
-        quoteTotal: quote.finalTotal,
-        mobilizationAmount: mobilization,
-      });
-      const data = result?.data || {};
-      const fallback = buildFallbackRender(imageUrl);
-      const nextConcepts = Array.isArray(data.concepts) && data.concepts.length ? data.concepts : fallback.concepts;
-      const nextResult: RenderResult = {
-        aiProvider: data.aiProvider || data.provider || 'server',
-        renderStatus: data.renderStatus || 'AI_RENDER_PENDING',
-        generatedImages: Array.isArray(data.generatedImages) ? data.generatedImages : nextConcepts.map((concept: any) => concept.afterImageUrl).filter(Boolean),
-        concepts: nextConcepts,
-        executionDetails: Array.isArray(data.executionDetails) ? data.executionDetails : executionDetails,
-      };
-      setRenderedConcepts(nextResult.concepts);
-      setRenderStatus(nextResult.renderStatus);
-      if (nextResult.renderStatus === 'AI_RENDER_PENDING') setRenderError('AI render pending — scope is still saved');
-      return nextResult;
-    } catch (error: any) {
-      console.error('[AI Studio] render failed:', { code: error?.code, message: error?.message, error });
-      const fallback = buildFallbackRender(imageUrl);
-      setRenderedConcepts(fallback.concepts);
-      setRenderStatus(fallback.renderStatus);
-      setRenderError('AI render pending — scope is still saved');
-      return fallback;
-    } finally {
-      setRendering(false);
-    }
+    return uploaded;
   };
 
   const handleCreateConcept = async () => {
@@ -340,126 +244,32 @@ export default function DesignStudioPage() {
     setSubmitting(true);
     setUploadProgress(0);
     try {
-      const tenantContext = tenantMode ? await resolveTenantContext(user) : {};
-      const unit = tenantContext.unit || {};
-      const property = tenantContext.property || {};
-      const ownerId = tenantMode ? (property.ownerId || property.ownerUid || unit.ownerId || unit.ownerUid || null) : user.uid;
-      const ownerEmail = tenantMode ? (property.ownerEmail || unit.ownerEmail || null) : (user.email || null);
-      const status = getInitialDesignStatus(normalizedRole, true);
-      const requestRef = doc(collection(db, 'design_requests'));
-      const uploadedUrls = await uploadReferenceImages(requestRef.id);
-      const aiResult = await runAIDesignRender(requestRef.id, uploadedUrls[0]);
-      const persistedConcepts = aiResult.concepts;
-
-      const requestPayload = {
-        userId: user.uid,
-        createdByUid: user.uid,
-        authUid: user.uid,
-        role: normalizedRole || 'owner',
-        userName: user.displayName || user.email || 'BIN GROUP user',
-        userEmail: user.email || null,
-        ownerId,
-        ownerUid: ownerId,
-        ownerEmail,
-        tenantId: tenantMode ? user.uid : null,
-        tenantUid: tenantMode ? user.uid : null,
-        tenantEmail: tenantMode ? (user.email || null) : null,
-        propertyId: property.id || unit.propertyId || null,
-        propertyName: property.name || property.propertyName || unit.propertyName || (tenantMode ? 'Tenant assigned unit' : 'Owner design request'),
-        propertyLocation: property.address || property.location || unit.propertyLocation || null,
-        unitId: unit.id || null,
-        roomType: scope.zoneType,
-        theme: designStyle,
-        budget: quote.finalTotal,
-        referenceImages: uploadedUrls,
-        generatedImages: aiResult.generatedImages,
-        renderStatus: aiResult.renderStatus,
-        aiProvider: aiResult.aiProvider,
-        mobilizationAmount: mobilization,
-        executionDetails: aiResult.executionDetails,
-        scope: {
-          ...scope,
-          scopeDescription,
-          requiredWork: scopeDescription,
-          designObjective,
-          referenceImages: uploadedUrls,
-          generatedImages: aiResult.generatedImages,
-          unitNumber: unit.unitNumber || '',
-          floorLevel: unit.floorNumber || '',
-          imageCount: uploadedUrls.length,
-        },
+      const requestId = createDesignRequestId();
+      const referencePayload = await uploadReferenceImages(requestId);
+      setRendering(true);
+      const submitDesign = httpsCallable(functions, 'submitAIDesignRequest');
+      const result: any = await submitDesign({
+        requestId,
+        referenceImages: referencePayload,
+        scope,
         designStyle,
         designObjective,
-        quote,
-        concepts: persistedConcepts,
-        conceptPrompt: persistedConcepts[0]?.prompt || quote.conceptDesignResult,
-        status,
-        workflowStage: status,
-        approvalStatus: getApprovalRequired(normalizedRole) ? 'PENDING_OWNER_APPROVAL' : 'OWNER_CREATED',
-        quoteStatus: tenantMode ? 'PENDING_OWNER_APPROVAL' : 'DEPOSIT_PENDING',
-        paymentStatus: 'NOT_STARTED',
-        adminHandoffStatus: tenantMode ? 'WAITING_OWNER_APPROVAL' : 'PAYMENT_NOT_STARTED',
-        engineerHandoffStatus: 'WAITING_PAYMENT',
-        source: 'AI_DESIGN_STUDIO_PUBLIC_PORTAL',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      await setDoc(requestRef, { ...requestPayload, id: requestRef.id });
-      await addDoc(collection(db, 'design_quotes'), { requestId: requestRef.id, ...requestPayload, createdAt: serverTimestamp() });
-      await Promise.all(persistedConcepts.map((concept) => addDoc(collection(db, 'design_concepts'), {
-        requestId: requestRef.id,
-        ownerId,
-        ownerUid: ownerId,
-        tenantId: tenantMode ? user.uid : null,
-        tenantUid: tenantMode ? user.uid : null,
-        userId: user.uid,
-        role: normalizedRole || 'owner',
-        ...concept,
-        createdAt: serverTimestamp(),
-      })));
-
-      if (tenantMode) {
-        await addDoc(collection(db, 'design_approvals'), {
-          requestId: requestRef.id,
-          ownerId,
-          ownerUid: ownerId,
-          tenantUid: user.uid,
-          tenantEmail: user.email || null,
-          propertyId: property.id || unit.propertyId || null,
-          status: 'PENDING_OWNER_APPROVAL',
-          approvalStatus: 'PENDING_OWNER_APPROVAL',
-          decision: 'pending',
-          payerRole: 'tenant',
-          payerId: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      await logAuditAction({
-        actorId: user.uid,
-        actorRole: normalizedRole || 'owner',
-        action: 'AI_DESIGN_REQUEST_SUBMITTED',
-        targetType: 'design_requests',
-        targetId: requestRef.id,
-        metadata: {
-          imageCount: uploadedUrls.length,
-          quoteTotal: quote.finalTotal,
-          tenantMode,
-          ownerId,
-          renderStatus: aiResult.renderStatus,
-          aiProvider: aiResult.aiProvider,
-        },
+        notes: scopeDescription,
       });
+      const data = result?.data || {};
+      const serverConcepts = Array.isArray(data.concepts) ? data.concepts : [];
+      setRenderedConcepts(serverConcepts);
+      setRenderStatus(data.renderStatus || 'AI_RENDER_PENDING');
+      if ((data.renderStatus || 'AI_RENDER_PENDING') === 'AI_RENDER_PENDING') setRenderError('AI render pending — scope is still saved');
 
       setSnackbar({ open: true, message: tenantMode ? 'Design request submitted for owner approval.' : 'Design request created. Deposit workflow is ready.', severity: 'success' });
       const prefix = tenantMode ? '/tenant' : '/owner';
-      navigate(`${prefix}/design-studio/request/${requestRef.id}`);
+      navigate(`${prefix}/design-studio/request/${data.requestId || requestId}`);
     } catch (error: any) {
       console.error('[AI Studio] request submission failed:', { code: error?.code, message: error?.message, error });
       setSnackbar({ open: true, message: designErrorMessage(error), severity: 'error' });
     } finally {
+      setRendering(false);
       setSubmitting(false);
       setUploadProgress(0);
     }
@@ -486,7 +296,7 @@ export default function DesignStudioPage() {
           <Typography variant="h3" fontWeight={950} color="#FFF" sx={{ mt: 1 }}>{labels.title}</Typography>
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', maxWidth: 920, lineHeight: 1.8 }}>{labels.subtitle}</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2, gap: 1 }}>
-            <Chip icon={<Sparkles size={16} />} label="Server-side AI design workflow active" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 900 }} />
+            <Chip icon={<Sparkles size={16} />} label={`Server authority · ${renderStatus.replace(/_/g, ' ').toLowerCase()}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
             <Chip label={tenantMode ? 'Tenant approval flow' : 'Owner quote flow'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
         </Box>
@@ -590,7 +400,7 @@ export default function DesignStudioPage() {
         </Paper>
 
         <Alert severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
-          AI Studio saves uploaded images, generated redesign images when available, full execution details, quote, approval state, and handoff record into the BIN GROUP workflow ledger. Current render status: {renderStatus}.
+          AI Studio saves protected reference paths, private generated render paths when available, full execution details, server quote, approval state, and handoff record into the BIN GROUP workflow ledger. Current render status: {renderStatus}.
         </Alert>
       </Stack>
 

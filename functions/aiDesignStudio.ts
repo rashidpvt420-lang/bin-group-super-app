@@ -10,6 +10,8 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const db = admin.firestore();
+
 function getStorageBucket() {
   return admin.storage().bucket();
 }
@@ -43,6 +45,8 @@ type ExecutionDetail = {
 type GeneratePayload = {
   requestId?: string;
   imageUrl?: string;
+  referenceImages?: Array<{ url?: string; path?: string; name?: string; size?: number; contentType?: string }>;
+  scope?: Record<string, unknown>;
   zoneType?: string;
   designStyle?: string;
   designObjective?: string;
@@ -61,6 +65,95 @@ function cleanText(value: unknown, fallback = "") {
 function safeNumber(value: unknown, fallback = 0) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function boundedText(value: unknown, fallback = "", maxLength = 500) {
+  return cleanText(value, fallback).slice(0, maxLength);
+}
+
+function cleanStoragePath(value: unknown, uid: string) {
+  const path = String(value || "").trim();
+  if (!path.startsWith(`design_requests/${uid}/`) || path.includes("..")) {
+    throw new HttpsError("permission-denied", "Reference image path is not scoped to the signed-in user.");
+  }
+  return path.slice(0, 1000);
+}
+
+function cleanReferenceImages(value: unknown, uid: string) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new HttpsError("invalid-argument", "At least one reference image is required.");
+  }
+  if (value.length > 3) {
+    throw new HttpsError("invalid-argument", "Submit up to three reference images for one design request.");
+  }
+  return value.map((entry) => {
+    const record = entry && typeof entry === "object" && !Array.isArray(entry)
+      ? entry as Record<string, unknown>
+      : {};
+    return {
+      url: boundedText(record.url, "", 2000),
+      path: cleanStoragePath(record.path, uid),
+      name: boundedText(record.name, "reference-image", 160),
+      size: Math.max(0, safeNumber(record.size, 0)),
+      contentType: boundedText(record.contentType, "image/jpeg", 80),
+    };
+  });
+}
+
+function cleanScope(value: unknown) {
+  const scope = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    dimensions: Math.max(1, Math.min(10000, safeNumber(scope.dimensions, 50))),
+    isMetric: scope.isMetric === true,
+    zoneType: boundedText(scope.zoneType, "living room", 120),
+    propertyType: boundedText(scope.propertyType, "Residential", 120),
+    finishTier: boundedText(scope.finishTier, "Premium", 80),
+    furnitureBudget: Math.max(0, Math.min(500000, safeNumber(scope.furnitureBudget, 0))),
+    hasMEP: scope.hasMEP === true,
+    hasStructural: scope.hasStructural === true,
+    accessLevel: boundedText(scope.accessLevel, "Standard", 80),
+    emirate: boundedText(scope.emirate, "Dubai", 80),
+    isNightWork: scope.isNightWork === true,
+    isMallEnvironment: scope.isMallEnvironment === true,
+    addons: Array.isArray(scope.addons)
+      ? scope.addons.map((item) => boundedText(item, "", 80)).filter(Boolean).slice(0, 20)
+      : [],
+  };
+}
+
+function calculateServerDesignQuote(scope: ReturnType<typeof cleanScope>) {
+  const area = scope.isMetric ? scope.dimensions * 10.7639 : scope.dimensions;
+  const tierMultiplier = scope.finishTier.toLowerCase().includes("luxury")
+    ? 1.45
+    : scope.finishTier.toLowerCase().includes("basic")
+      ? 0.82
+      : 1;
+  const mepAllowance = scope.hasMEP ? 8500 : 0;
+  const structuralAllowance = scope.hasStructural ? 15000 : 0;
+  const logisticsAllowance = scope.isMallEnvironment || scope.isNightWork ? 4500 : 1800;
+  const materialsEstimate = Math.round(area * 180 * tierMultiplier);
+  const laborEstimate = Math.round(area * 95 * tierMultiplier);
+  const finalTotal = Math.max(
+    2500,
+    materialsEstimate + laborEstimate + mepAllowance + structuralAllowance + logisticsAllowance + scope.furnitureBudget,
+  );
+  return {
+    currency: "AED",
+    materialsEstimate,
+    laborEstimate,
+    approvalsAllowance: scope.hasStructural || scope.hasMEP ? 2500 : 0,
+    logisticsAllowance,
+    contingency: Math.round(finalTotal * 0.08),
+    binMargin: Math.round(finalTotal * 0.12),
+    finalTotal,
+    quoteAuthority: "SERVER_CALCULATED_DESIGN_STUDIO_V1",
+  };
+}
+
+function initialDesignStatus(role: string) {
+  return role === "tenant" ? "AWAITING_OWNER_APPROVAL" : "AI_CONCEPT_READY";
 }
 
 function needsPlumbing(zoneType: string) {
@@ -280,11 +373,42 @@ async function saveRender(uid: string, requestId: string, conceptId: string, buf
     contentType: "image/png",
     resumable: false,
     metadata: {
-      cacheControl: "public,max-age=31536000"
+      cacheControl: "private,no-store",
+      metadata: {
+        ownerUid: uid,
+        requestId,
+        conceptId,
+      },
     }
   });
-  await file.makePublic().catch(() => undefined);
-  return `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath).replace(/%2F/g, "/")}`;
+  const [signedUrl] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + 15 * 60 * 1000,
+  });
+  return {
+    storagePath: filePath,
+    signedUrl,
+  };
+}
+
+async function resolveTenantContext(uid: string, email: string) {
+  const lookups = [
+    db.collection("units").where("tenantId", "==", uid).limit(1),
+    db.collection("units").where("tenantUid", "==", uid).limit(1),
+  ];
+  if (email) lookups.push(db.collection("units").where("tenantEmail", "==", email).limit(1));
+  for (const lookup of lookups) {
+    const snap = await lookup.get();
+    if (!snap.empty) {
+      const unitDoc = snap.docs[0];
+      const unit = { id: unitDoc.id, ...unitDoc.data() };
+      const propertyId = String((unit as any).propertyId || "").trim();
+      const propertySnap = propertyId ? await db.collection("properties").doc(propertyId).get() : null;
+      const property = propertySnap?.exists ? { id: propertySnap.id, ...propertySnap.data() } : null;
+      return { unit, property };
+    }
+  }
+  return { unit: null, property: null };
 }
 
 export const generateAIDesignConceptImages = onCall({
@@ -355,13 +479,14 @@ export const generateAIDesignConceptImages = onCall({
     const prompt = buildPrompt(data, concept);
     try {
       const buffer = await generateImageWithOpenAI(apiKey, prompt);
-      const afterImageUrl = await saveRender(uid, requestId, concept.id, buffer);
-      generatedImages.push(afterImageUrl);
+      const render = await saveRender(uid, requestId, concept.id, buffer);
+      generatedImages.push(render.signedUrl);
       concepts.push({
         id: concept.id,
         title: concept.title,
         beforeImageUrl: imageUrl,
-        afterImageUrl,
+        afterImageUrl: render.signedUrl,
+        afterImageStoragePath: render.storagePath,
         renderStatus: "AI_RENDER_COMPLETE",
         generationStatus: "AI_RENDER_COMPLETE",
         renderEngineRequired: false,
@@ -396,5 +521,256 @@ export const generateAIDesignConceptImages = onCall({
     executionDetails,
     generatedImages,
     concepts
+  };
+});
+
+export const submitAIDesignRequest = onCall({
+  cors: true,
+  enforceAppCheck: true,
+  timeoutSeconds: 180,
+  memory: "1GiB",
+  secrets: [openAiKey, imageGenerationKey],
+}, async (request) => {
+  const auth = request.auth;
+  const uid = auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in before submitting an AI Design Studio request.");
+
+  const quota = await enforceAiUsageQuota(
+    auth,
+    "design",
+    new Set(["owner", "tenant", "admin", "super_admin", "ceo"]),
+    3,
+  );
+  const role = String(quota.role || auth.token?.role || "").trim().toLowerCase();
+  if (!["owner", "tenant", "admin", "super_admin", "ceo"].includes(role)) {
+    throw new HttpsError("permission-denied", "This role cannot submit design requests.");
+  }
+
+  const data = (request.data || {}) as GeneratePayload;
+  const requestedId = cleanText(data.requestId).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
+  const requestRef = requestedId
+    ? admin.firestore().collection("design_requests").doc(requestedId)
+    : admin.firestore().collection("design_requests").doc();
+  const requestId = requestRef.id;
+  const referenceImages = cleanReferenceImages(data.referenceImages, uid);
+  const scope = cleanScope(data.scope || data);
+  const designStyle = boundedText(data.designStyle, "Modern", 120);
+  const designObjective = boundedText(data.designObjective, "refresh", 120);
+  const notes = boundedText(data.notes, "", 1000);
+  const quote = calculateServerDesignQuote(scope);
+  const mobilizationAmount = Math.round(quote.finalTotal * 0.15);
+  const primaryImageUrl = referenceImages[0]?.url || "";
+  const status = initialDesignStatus(role);
+  const email = String(auth.token?.email || "").trim().toLowerCase();
+  const tenantContext = role === "tenant" ? await resolveTenantContext(uid, email) : { unit: null, property: null };
+  const unit: any = tenantContext.unit || {};
+  const property: any = tenantContext.property || {};
+  const ownerId = role === "tenant"
+    ? String(property.ownerId || property.ownerUid || unit.ownerId || unit.ownerUid || "").trim() || null
+    : uid;
+  const ownerEmail = role === "tenant"
+    ? String(property.ownerEmail || unit.ownerEmail || "").trim().toLowerCase() || null
+    : email || null;
+
+  const executionDetails = buildExecutionDetails({
+    zoneType: scope.zoneType,
+    designStyle,
+    designObjective,
+    finishTier: scope.finishTier,
+    dimensions: scope.dimensions,
+    notes,
+    quoteTotal: quote.finalTotal,
+    mobilizationAmount,
+  });
+
+  const apiKey = imageGenerationKey.value() || openAiKey.value();
+  const concepts: any[] = [];
+  const generatedImages: string[] = [];
+  const generatedImagePaths: string[] = [];
+  const errors: string[] = [];
+  for (const concept of DESIGN_CONCEPTS) {
+    const prompt = buildPrompt({
+      ...data,
+      zoneType: scope.zoneType,
+      designStyle,
+      designObjective,
+      finishTier: scope.finishTier,
+      dimensions: scope.dimensions,
+      notes,
+      quoteTotal: quote.finalTotal,
+      mobilizationAmount,
+    }, concept);
+    if (!apiKey) {
+      concepts.push({
+        id: concept.id,
+        title: concept.title,
+        beforeImageUrl: primaryImageUrl,
+        afterImageUrl: "",
+        renderStatus: "AI_RENDER_PENDING",
+        generationStatus: "AI_RENDER_PENDING",
+        renderEngineRequired: true,
+        scopeSummary: concept.summary,
+        executionDetails,
+        prompt,
+      });
+      continue;
+    }
+    try {
+      const buffer = await generateImageWithOpenAI(apiKey, prompt);
+      const render = await saveRender(uid, requestId, concept.id, buffer);
+      generatedImages.push(render.signedUrl);
+      generatedImagePaths.push(render.storagePath);
+      concepts.push({
+        id: concept.id,
+        title: concept.title,
+        beforeImageUrl: primaryImageUrl,
+        afterImageUrl: render.signedUrl,
+        afterImageStoragePath: render.storagePath,
+        renderStatus: "AI_RENDER_COMPLETE",
+        generationStatus: "AI_RENDER_COMPLETE",
+        renderEngineRequired: false,
+        scopeSummary: concept.summary,
+        executionDetails,
+        prompt,
+      });
+    } catch (error: any) {
+      errors.push(`${concept.id}: ${error?.message || "generation failed"}`);
+      concepts.push({
+        id: concept.id,
+        title: concept.title,
+        beforeImageUrl: primaryImageUrl,
+        afterImageUrl: "",
+        renderStatus: "AI_RENDER_PENDING",
+        generationStatus: "AI_RENDER_PENDING",
+        renderEngineRequired: true,
+        scopeSummary: concept.summary,
+        executionDetails,
+        prompt,
+        renderErrorCode: "PROVIDER_RENDER_PENDING",
+      });
+    }
+  }
+
+  const renderStatus = generatedImages.length > 0 ? "AI_RENDER_COMPLETE" : "AI_RENDER_PENDING";
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const requestPayload = {
+    id: requestId,
+    userId: uid,
+    createdByUid: uid,
+    authUid: uid,
+    role,
+    userName: String(auth.token?.name || email || "BIN GROUP user").slice(0, 160),
+    userEmail: email || null,
+    ownerId,
+    ownerUid: ownerId,
+    ownerEmail,
+    tenantId: role === "tenant" ? uid : null,
+    tenantUid: role === "tenant" ? uid : null,
+    tenantEmail: role === "tenant" ? email || null : null,
+    propertyId: property.id || unit.propertyId || null,
+    propertyName: property.name || property.propertyName || unit.propertyName || (role === "tenant" ? "Tenant assigned unit" : "Owner design request"),
+    propertyLocation: property.address || property.location || unit.propertyLocation || null,
+    unitId: unit.id || null,
+    roomType: scope.zoneType,
+    theme: designStyle,
+    budget: quote.finalTotal,
+    referenceImages: referenceImages.map((image) => image.url).filter(Boolean),
+    referenceImagePaths: referenceImages.map((image) => image.path),
+    generatedImages,
+    generatedImagePaths,
+    renderStatus,
+    aiProvider: apiKey ? "openai" : "fallback",
+    mobilizationAmount,
+    executionDetails,
+    scope: {
+      ...scope,
+      scopeDescription: notes,
+      requiredWork: notes,
+      designObjective,
+      referenceImages: referenceImages.map((image) => image.url).filter(Boolean),
+      referenceImagePaths: referenceImages.map((image) => image.path),
+      generatedImages,
+      generatedImagePaths,
+      unitNumber: unit.unitNumber || "",
+      floorLevel: unit.floorNumber || "",
+      imageCount: referenceImages.length,
+    },
+    designStyle,
+    designObjective,
+    quote,
+    concepts,
+    conceptPrompt: concepts[0]?.prompt || "",
+    status,
+    workflowStage: status,
+    approvalStatus: role === "tenant" ? "PENDING_OWNER_APPROVAL" : "OWNER_CREATED",
+    quoteStatus: role === "tenant" ? "PENDING_OWNER_APPROVAL" : "DEPOSIT_PENDING",
+    paymentStatus: "NOT_STARTED",
+    adminHandoffStatus: role === "tenant" ? "WAITING_OWNER_APPROVAL" : "PAYMENT_NOT_STARTED",
+    engineerHandoffStatus: "WAITING_PAYMENT",
+    source: "AI_DESIGN_STUDIO_SERVER_CALLABLE",
+    authority: "SERVER_AUTHORITATIVE",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.runTransaction(async (transaction: FirebaseFirestore.Transaction) => {
+    transaction.create(requestRef, requestPayload);
+    transaction.create(db.collection("design_quotes").doc(requestId), {
+      requestId,
+      ...requestPayload,
+      createdAt: now,
+    });
+    concepts.forEach((concept) => {
+      transaction.create(db.collection("design_concepts").doc(`${requestId}_${concept.id}`), {
+        requestId,
+        ownerId,
+        ownerUid: ownerId,
+        tenantId: role === "tenant" ? uid : null,
+        tenantUid: role === "tenant" ? uid : null,
+        userId: uid,
+        role,
+        ...concept,
+        createdAt: now,
+      });
+    });
+    if (role === "tenant") {
+      transaction.create(db.collection("design_approvals").doc(requestId), {
+        requestId,
+        ownerId,
+        ownerUid: ownerId,
+        tenantUid: uid,
+        tenantEmail: email || null,
+        propertyId: property.id || unit.propertyId || null,
+        status: "PENDING_OWNER_APPROVAL",
+        approvalStatus: "PENDING_OWNER_APPROVAL",
+        decision: "pending",
+        payerRole: "tenant",
+        payerId: uid,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    transaction.create(db.collection("audit_logs").doc(), {
+      action: "AI_DESIGN_REQUEST_SUBMITTED_SERVER",
+      actorId: uid,
+      actorRole: role,
+      targetType: "design_requests",
+      targetId: requestId,
+      renderStatus,
+      aiProvider: apiKey ? "openai" : "fallback",
+      createdAt: now,
+    });
+  });
+
+  return {
+    status: "SUCCESS",
+    requestId,
+    renderStatus,
+    aiProvider: apiKey ? "openai" : "fallback",
+    generatedImages,
+    generatedImagePaths,
+    concepts,
+    executionDetails,
+    errors: errors.slice(0, 3),
   };
 });
