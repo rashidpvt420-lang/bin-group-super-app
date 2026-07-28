@@ -68,10 +68,47 @@ for (const [label, before, after] of transformations) {
   changed = true;
 }
 
-if (!changed) {
-  console.log('[harden-hr-privacy-rules] HR profile, staff document and wellbeing rules already hardened');
-  process.exit(0);
+const payrollBlock = `    // Canonical payroll is generated in /payroll. This read-only mirror exposes
+    // only payroll-safe fields to the matching Technician while all writes remain
+    // Admin SDK authority through trigger/backfill functions.
+    match /payroll_entries/{entryId} {
+      allow read: if isAdmin() || isHr() || isFinance() || (
+        signedIn() && resource.data.get('technicianId', null) == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+
+`;
+if (!source.includes('match /payroll_entries/{entryId} {')) {
+  const marker = '    match /hrProfiles/{profileId} {';
+  const index = source.indexOf(marker);
+  if (index < 0) throw new Error('HR profile insertion marker is missing.');
+  source = `${source.slice(0, index)}${payrollBlock}${source.slice(index)}`;
+  changed = true;
+}
+
+const readAnchor = "'private_hr_profiles', 'technician_live_locations', 'invoice_registry'";
+const readReplacement = "'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'";
+if (!source.includes(readReplacement)) {
+  if (!source.includes(readAnchor)) throw new Error('Reviewed global read exclusion anchor is missing.');
+  source = source.replace(readAnchor, readReplacement);
+  changed = true;
+}
+
+const writeAnchor = "          'transactions',\n          'invoices',";
+const writeReplacement = "          'transactions',\n          'payroll_entries',\n          'invoices',";
+const writeCount = source.split(writeAnchor).length - 1;
+if (!source.includes(writeReplacement)) {
+  if (writeCount !== 2) throw new Error(`Expected two payroll write-exclusion anchors, found ${writeCount}.`);
+  source = source.replaceAll(writeAnchor, writeReplacement);
+  changed = true;
+}
+
+if (!source.includes('match /payroll_entries/{entryId} {') || source.split("'payroll_entries',").length - 1 < 3) {
+  throw new Error('Payroll compatibility authority is incomplete.');
 }
 
 writeFileSync(rulesPath, source);
-console.log('[harden-hr-privacy-rules] hardened private HR, staff document and wellbeing access');
+console.log(changed
+  ? '[harden-hr-privacy-rules] hardened HR privacy and Technician payroll self-service authority'
+  : '[harden-hr-privacy-rules] HR privacy and payroll self-service rules already hardened');
