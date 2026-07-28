@@ -22,6 +22,7 @@ export * from "./technicianDispatchNotifications";
 export * from "./technicianBeforeWorkEvidence";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
+export * from "./technicianPayrollCompatibility";
 export * from "./adminUserProvisioning";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
@@ -52,6 +53,7 @@ export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
 export * from "./ownerProfileReadiness";
 export * from "./technicianLiveLocation";
+export * from "./technicianLiveLocationOverflow";
 export * from "./proofVerification";
 
 export {
