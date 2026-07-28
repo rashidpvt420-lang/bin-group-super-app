@@ -1,0 +1,54 @@
+name: One-shot trigger privileged review
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/zz-one-shot-trigger-privileged-review.yml
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: one-shot-trigger-privileged-review
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post protected review command on issue 434
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$REPOSITORY/issues/434/comments" \
+            -f body='/bin-launch review-privileged-accounts'
+          echo "Posted /bin-launch review-privileged-accounts on issue 434"
+
+      - name: Remove one-shot workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/zz-one-shot-trigger-privileged-review.yml
+          if git diff --quiet; then
+            echo "Already removed"
+            exit 0
+          fi
+          git add -A
+          git commit -m "chore: remove one-shot privileged review trigger"
+          git push origin HEAD:main
