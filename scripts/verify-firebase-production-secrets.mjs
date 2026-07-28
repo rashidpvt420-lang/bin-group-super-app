@@ -1,4 +1,5 @@
 import firebaseTools from 'firebase-tools';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { ensureAdminMfaAuthorizedDomains } from './ensure-admin-mfa-authorized-domains.mjs';
 
@@ -32,6 +33,38 @@ export function requiredFirebaseProductionSecretsForMode(launchMode) {
   return normalizedMode === 'public'
     ? requiredFirebasePublicSecrets
     : requiredFirebaseBankPilotSecrets;
+}
+
+export function assertExactCurrentMain({
+  env = process.env,
+  cwd = process.cwd(),
+  git = spawnSync,
+} = {}) {
+  const githubSha = String(env.GITHUB_SHA || '').trim();
+  if (env.GITHUB_ACTIONS !== 'true' || env.GITHUB_REF !== 'refs/heads/main') {
+    throw new Error('Exact-main production verification requires protected GitHub Actions on refs/heads/main.');
+  }
+  if (!/^[0-9a-f]{40}$/.test(githubSha)) {
+    throw new Error('Exact-main production verification requires a lowercase 40-character GITHUB_SHA.');
+  }
+
+  const result = git(
+    'git',
+    ['ls-remote', '--exit-code', 'origin', 'refs/heads/main'],
+    { cwd, encoding: 'utf8', shell: false },
+  );
+  const remoteMainSha = String(result?.stdout || '').trim().split(/\s+/)[0] || '';
+  if ((result?.status ?? 1) !== 0 || !/^[0-9a-f]{40}$/.test(remoteMainSha)) {
+    throw new Error('Refusing production mutation: current origin/main could not be resolved.');
+  }
+  if (remoteMainSha !== githubSha) {
+    throw new Error(
+      `Refusing stale production mutation: origin/main is ${remoteMainSha}, but this workflow is ${githubSha}. Start a fresh exact-SHA deployment.`,
+    );
+  }
+
+  console.log(`[firebase-production-preflight] exact current main verified: ${githubSha}`);
+  return remoteMainSha;
 }
 
 function readWorkflowInputs(env) {
@@ -148,10 +181,13 @@ export async function verifyFirebaseProductionSecrets({
   env = process.env,
   approvalPath = 'launch_package/predeploy-approval.json',
   domainRepair = ensureAdminMfaAuthorizedDomains,
+  exactMainVerifier = assertExactCurrentMain,
 } = {}) {
   if (projectId !== expectedProjectId) {
     throw new Error(`GCP_PROJECT_ID must equal ${expectedProjectId}.`);
   }
+
+  exactMainVerifier({ env });
 
   if (requireAdminMfaDomainRepairContext({ env, approvalPath })) {
     await domainRepair({ projectId: expectedProjectId });
