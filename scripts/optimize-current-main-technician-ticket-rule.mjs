@@ -3,6 +3,27 @@ import fs from 'node:fs';
 const rulesPath = 'firestore.rules';
 let rules = fs.readFileSync(rulesPath, 'utf8').replace(/\r\n?/g, '\n');
 
+// This optimiser is imported by the final Firestore authority stage. Payroll
+// catch-all exclusions belong to the later live-location/payroll authority stage,
+// so strip only those later-stage tokens before final-stage canonicalisation.
+// The explicit payroll_entries block remains intact throughout, and the final
+// hardener deterministically restores and verifies every generic exclusion before
+// the generated deployment artefact is written.
+const laterStagePayrollRead = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])";
+const finalStageInvoiceRead = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry'])";
+if (rules.includes(laterStagePayrollRead)) {
+  rules = rules.replace(laterStagePayrollRead, finalStageInvoiceRead);
+  console.log('[normalized] deferred payroll read catch-all exclusion to final live-location/payroll authority stage');
+}
+const laterStagePayrollWrite = "          'transactions',\n          'payroll_entries',\n          'invoices',";
+const finalStageInvoiceWrite = "          'transactions',\n          'invoices',";
+if (rules.includes(laterStagePayrollWrite)) {
+  const count = rules.split(laterStagePayrollWrite).length - 1;
+  if (count !== 2) throw new Error(`Expected two later-stage payroll write exclusions, found ${count}.`);
+  rules = rules.replaceAll(laterStagePayrollWrite, finalStageInvoiceWrite);
+  console.log('[normalized] deferred payroll write catch-all exclusions to final live-location/payroll authority stage');
+}
+
 function readFunction(source, name) {
   const needle = `    function ${name}(`;
   const start = source.indexOf(needle);
