@@ -1,0 +1,140 @@
+name: One-shot Owner actor provenance repair
+
+on:
+  push:
+    branches:
+      - fix/owner-actor-production-wrapper
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-owner-actor-provenance
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/owner-actor-production-wrapper
+          fetch-depth: 0
+
+      - name: Apply exact provenance repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              target.write_text(text.replace(old, new), encoding='utf-8')
+
+          wrapper = '.github/workflows/firebase-production-dispatch-current-main.yml'
+          bank = '.github/workflows/bank-pilot-dispatch.yml'
+          wrapper_test = 'tests/launch/current-main-production-dispatch-contract.test.mjs'
+          bank_test = 'tests/launch/bank-pilot-dispatch-workflow.test.mjs'
+
+          replace_once(
+              wrapper,
+              """      expected_commit_sha:\n        description: 'Optional automation-only exact current main SHA; leave blank for normal manual dispatch'\n        required: false\n        type: string\n        default: ''\n      founder_name:\n""",
+              """      expected_commit_sha:\n        description: 'Optional automation-only exact current main SHA; leave blank for normal manual dispatch'\n        required: false\n        type: string\n        default: ''\n      authorization_actor:\n        description: 'Automation-only verified Founder actor; leave blank for normal manual dispatch'\n        required: false\n        type: string\n        default: ''\n      authorization_source_pr:\n        description: 'Automation-only open draft Owner request PR paired with authorization_actor'\n        required: false\n        type: string\n        default: ''\n      founder_name:\n""",
+          )
+
+          replace_once(
+              wrapper,
+              """permissions:\n  contents: read\n  actions: write\n""",
+              """permissions:\n  contents: read\n  actions: write\n  pull-requests: read\n""",
+          )
+
+          replace_once(
+              wrapper,
+              """          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}\n          FOUNDER_NAME: ${{ inputs.founder_name }}\n""",
+              """          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}\n          AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}\n          AUTHORIZATION_SOURCE_PR_INPUT: ${{ inputs.authorization_source_pr }}\n          FOUNDER_NAME: ${{ inputs.founder_name }}\n""",
+          )
+
+          replace_once(
+              wrapper,
+              """          if [[ -n \"$EXPECTED_COMMIT_SHA\" ]]; then\n            [[ \"$EXPECTED_COMMIT_SHA\" =~ ^[0-9a-f]{40}$ ]] || fail \"expected_commit_sha must be blank or a full lowercase 40-character SHA.\"\n          fi\n          [[ -n \"${FOUNDER_NAME// }\" ]] || fail \"Founder name is required.\"\n""",
+              """          if [[ -n \"$EXPECTED_COMMIT_SHA\" ]]; then\n            [[ \"$EXPECTED_COMMIT_SHA\" =~ ^[0-9a-f]{40}$ ]] || fail \"expected_commit_sha must be blank or a full lowercase 40-character SHA.\"\n          fi\n          if [[ \"$GITHUB_ACTOR\" == \"github-actions[bot]\" ]]; then\n            [[ \"$AUTHORIZATION_ACTOR_INPUT\" =~ ^[a-z0-9-]+$ ]] || fail \"Automated dispatch requires a valid verified Founder actor.\"\n            [[ \"$AUTHORIZATION_SOURCE_PR_INPUT\" =~ ^[1-9][0-9]*$ ]] || fail \"Automated dispatch requires a numeric Owner request PR.\"\n          else\n            [[ -z \"${AUTHORIZATION_ACTOR_INPUT}${AUTHORIZATION_SOURCE_PR_INPUT}\" ]] || fail \"Manual dispatch cannot supply delegated Founder provenance.\"\n            [[ \"$GITHUB_ACTOR\" =~ ^[a-z0-9-]+$ ]] || fail \"Manual dispatch actor is invalid.\"\n          fi\n          [[ -n \"${FOUNDER_NAME// }\" ]] || fail \"Founder name is required.\"\n""",
+          )
+
+          replace_once(
+              wrapper,
+              """          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}\n          FOUNDER_NAME: ${{ inputs.founder_name }}\n          FOUNDER_EMAIL: ${{ inputs.founder_email }}\n          LAUNCH_MODE: ${{ inputs.launch_mode }}\n""",
+              """          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}\n          AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}\n          AUTHORIZATION_SOURCE_PR_INPUT: ${{ inputs.authorization_source_pr }}\n          REPOSITORY_OWNER: ${{ github.repository_owner }}\n          FOUNDER_NAME: ${{ inputs.founder_name }}\n          FOUNDER_EMAIL: ${{ inputs.founder_email }}\n          LAUNCH_MODE: ${{ inputs.launch_mode }}\n""",
+          )
+
+          replace_once(
+              wrapper,
+              """        run: |\n          set -euo pipefail\n\n          if [[ \"$LAUNCH_MODE\" == \"bank-pilot\" && -z \"${DEPLOYMENT_PAYLOAD_JSON// }\" ]]; then\n""",
+              """        run: |\n          set -euo pipefail\n\n          authorization_actor=\"$GITHUB_ACTOR\"\n          if [[ \"$GITHUB_ACTOR\" == \"github-actions[bot]\" ]]; then\n            [[ \"$AUTHORIZATION_ACTOR_INPUT\" =~ ^[a-z0-9-]+$ ]]\n            [[ \"$AUTHORIZATION_SOURCE_PR_INPUT\" =~ ^[1-9][0-9]*$ ]]\n            source_pr=\"$(gh api \"repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT\")\"\n            [[ \"$(jq -r '.state' <<<\"$source_pr\")\" == \"open\" ]]\n            [[ \"$(jq -r '.draft' <<<\"$source_pr\")\" == \"true\" ]]\n            [[ \"$(jq -r '.title' <<<\"$source_pr\")\" == \"Dispatch protected bank pilot workflow\" ]]\n            [[ \"$(jq -r '.base.ref' <<<\"$source_pr\")\" == \"main\" ]]\n            [[ \"$(jq -r '.head.repo.full_name' <<<\"$source_pr\")\" == \"$REPOSITORY\" ]]\n            [[ \"$(jq -r '.user.login' <<<\"$source_pr\")\" == \"$AUTHORIZATION_ACTOR_INPUT\" ]]\n            [[ \"$AUTHORIZATION_ACTOR_INPUT\" == \"$REPOSITORY_OWNER\" ]]\n            [[ \"$(jq -r '.head.ref' <<<\"$source_pr\")\" == ops/dispatch-bank-pilot-workflow-* ]]\n            mapfile -t source_files < <(gh api --paginate \"repos/$REPOSITORY/pulls/$AUTHORIZATION_SOURCE_PR_INPUT/files\" --jq '.[].filename')\n            [[ \"${#source_files[@]}\" -eq 1 && \"${source_files[0]}\" == '.github/bank-pilot-dispatch-request' ]]\n            authorization_actor=\"$AUTHORIZATION_ACTOR_INPUT\"\n          else\n            [[ -z \"${AUTHORIZATION_ACTOR_INPUT}${AUTHORIZATION_SOURCE_PR_INPUT}\" ]]\n            [[ \"$GITHUB_ACTOR\" =~ ^[a-z0-9-]+$ ]]\n          fi\n\n          if [[ \"$LAUNCH_MODE\" == \"bank-pilot\" && -z \"${DEPLOYMENT_PAYLOAD_JSON// }\" ]]; then\n""",
+          )
+
+          replace_once(
+              wrapper,
+              """            --arg publicGate \"$PUBLIC_GATE\" \\\n            --arg deploymentPayload \"$production_payload\" \\\n            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:env.GITHUB_ACTOR,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,deployment_payload_json:$deploymentPayload}}' \\\n""",
+              """            --arg publicGate \"$PUBLIC_GATE\" \\\n            --arg authorizationActor \"$authorization_actor\" \\\n            --arg deploymentPayload \"$production_payload\" \\\n            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:$authorizationActor,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,deployment_payload_json:$deploymentPayload}}' \\\n""",
+          )
+
+          replace_once(
+              bank,
+              """  FOUNDER_NAME: Rashid Abdul Ghani Abdul Ghani\n  FOUNDER_EMAIL: authorized-founder@protected.invalid\n""",
+              """  FOUNDER_NAME: Rashid Abdul Ghani Abdul Ghani\n  FOUNDER_EMAIL: ceo@bin-groups.com\n""",
+          )
+
+          replace_once(
+              bank,
+              """        env:\n          RELEASE_SHA: ${{ steps.release.outputs.sha }}\n          INCIDENT_REFERENCE: ${{ steps.request.outputs.incident_reference }}\n""",
+              """        env:\n          RELEASE_SHA: ${{ steps.release.outputs.sha }}\n          INCIDENT_REFERENCE: ${{ steps.request.outputs.incident_reference }}\n          AUTHORIZATION_ACTOR: ${{ github.event.pull_request.user.login }}\n""",
+          )
+
+          replace_once(
+              bank,
+              """            --arg expectedSha \"$RELEASE_SHA\" \\\n            --arg founderName \"$FOUNDER_NAME\" \\\n            --arg founderEmail \"$FOUNDER_EMAIL\" \\\n            --arg incidentReferences \"$incident_references\" \\\n""",
+              """            --arg expectedSha \"$RELEASE_SHA\" \\\n            --arg authorizationActor \"$AUTHORIZATION_ACTOR\" \\\n            --arg authorizationSourcePr \"$REQUEST_PR\" \\\n            --arg founderName \"$FOUNDER_NAME\" \\\n            --arg founderEmail \"$FOUNDER_EMAIL\" \\\n            --arg incidentReferences \"$incident_references\" \\\n""",
+          )
+
+          replace_once(
+              bank,
+              """              expected_commit_sha:$expectedSha,\n              founder_name:$founderName,\n""",
+              """              expected_commit_sha:$expectedSha,\n              authorization_actor:$authorizationActor,\n              authorization_source_pr:$authorizationSourcePr,\n              founder_name:$founderName,\n""",
+          )
+
+          with Path(wrapper_test).open('a', encoding='utf-8') as handle:
+              handle.write("""\n\ntest('automated dispatcher binds delegated Founder actor to the exact open Owner request PR', async () => {\n  const source = await read(workflowPath);\n  assert.match(source, /^\\s+authorization_actor:/m);\n  assert.match(source, /^\\s+authorization_source_pr:/m);\n  assert.match(source, /GITHUB_ACTOR.*github-actions\\[bot\\]/);\n  assert.match(source, /repos\\/\\$REPOSITORY\\/pulls\\/\\$AUTHORIZATION_SOURCE_PR_INPUT/);\n  assert.match(source, /\\.user\\.login/);\n  assert.match(source, /AUTHORIZATION_ACTOR_INPUT.*REPOSITORY_OWNER/);\n  assert.match(source, /Request protected bank pilot|Dispatch protected bank pilot workflow/);\n  assert.match(source, /authorization_actor:\\$authorizationActor/);\n  assert.doesNotMatch(source, /authorization_actor:env\\.GITHUB_ACTOR/);\n  assert.match(source, /Manual dispatch cannot supply delegated Founder provenance/);\n});\n""")
+
+          with Path(bank_test).open('a', encoding='utf-8') as handle:
+              handle.write("""\n\ntest('bank-pilot forwards verified Owner provenance and canonical Founder email', () => {\n  assert.match(workflow, /FOUNDER_EMAIL: ceo@bin-groups\\.com/);\n  assert.doesNotMatch(workflow, /FOUNDER_EMAIL: authorized-founder@protected\\.invalid/);\n  assert.match(workflow, /AUTHORIZATION_ACTOR: \\${{ github\\.event\\.pull_request\\.user\\.login }}/);\n  assert.match(workflow, /authorization_actor:\\$authorizationActor/);\n  assert.match(workflow, /authorization_source_pr:\\$authorizationSourcePr/);\n});\n""")
+          PY
+
+      - name: Run focused launch regressions
+        run: >-
+          node --test
+          tests/launch/current-main-production-dispatch-contract.test.mjs
+          tests/launch/bank-pilot-dispatch-workflow.test.mjs
+          tests/launch/founder-authorization-provenance.test.mjs
+          tests/launch/firebase-production-workflow-coherence.test.mjs
+
+      - name: Commit repaired source and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git rm .github/workflows/zz-one-shot-owner-actor-provenance.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/firebase-production-dispatch-current-main.yml \
+                  .github/workflows/bank-pilot-dispatch.yml \
+                  tests/launch/current-main-production-dispatch-contract.test.mjs \
+                  tests/launch/bank-pilot-dispatch-workflow.test.mjs
+          git commit -m "fix: bind Owner actor through production wrapper"
+          git push origin HEAD:fix/owner-actor-production-wrapper
