@@ -61,10 +61,11 @@ export const captureBrokerReferralAttribution = onCall(
     const auditRef = db.collection("audit_logs").doc();
 
     const result = await db.runTransaction(async (tx) => {
-      const [brokerSnap, brokerKycSnap, existingAttributionSnap] = await Promise.all([
+      const [brokerSnap, brokerKycSnap, existingAttributionSnap, existingLeadSnap] = await Promise.all([
         tx.get(brokerRef),
         tx.get(brokerKycRef),
         tx.get(attributionRef),
+        tx.get(leadRef),
       ]);
 
       if (!brokerSnap.exists) throw new HttpsError("not-found", "The Broker referral account was not found.");
@@ -76,9 +77,25 @@ export const captureBrokerReferralAttribution = onCall(
       }
 
       const existing = existingAttributionSnap.data() || {};
+      const existingLead = existingLeadSnap.data() || {};
       const existingBrokerUid = text(existing.brokerUid || existing.brokerId, 128);
       if (existingBrokerUid && existingBrokerUid !== brokerUid) {
         throw new HttpsError("already-exists", "This Owner is already locked to another Broker referral.");
+      }
+
+      const referralCode = text(existing.referralCode || existingLead.referralCode, 160) || `BIN-${brokerUid}`;
+      if (existingBrokerUid === brokerUid) {
+        // A same-Broker replay is a true no-op. In particular it must never rewind
+        // converted/matched lead state or reset commission eligibility and payout
+        // lifecycle fields established later by protected Admin workflows.
+        return {
+          attributionId: text(existing.attributionId, 160) || leadId,
+          leadId,
+          referralCode,
+          kycStatus: normalized(existing.kycStatusAtCapture || "already_captured"),
+          idempotent: true,
+          preservedLifecycleStatus: text(existingLead.lifecycleStatus || existingLead.status, 160) || null,
+        };
       }
 
       const kyc = brokerKycSnap.data() || {};
@@ -86,7 +103,6 @@ export const captureBrokerReferralAttribution = onCall(
       const kycApproved = ["approved", "verified", "active"].includes(kycStatus);
       const now = serverTimestamp();
       const attributionId = leadId;
-      const referralCode = `BIN-${brokerUid}`;
 
       tx.set(attributionRef, {
         attributionId,
@@ -105,7 +121,7 @@ export const captureBrokerReferralAttribution = onCall(
         attributionStatus: "LOCKED",
         commissionEligibilityStatus: kycApproved ? "BROKER_KYC_APPROVED" : "BROKER_KYC_REVIEW_REQUIRED",
         kycStatusAtCapture: kycStatus,
-        createdAt: existing.createdAt || now,
+        createdAt: now,
         updatedAt: now,
       }, { merge: true });
 
@@ -123,21 +139,21 @@ export const captureBrokerReferralAttribution = onCall(
         ownerName,
         intakeId,
         referralCode,
-        status: "SUBMITTED",
-        lifecycleStatus: "OWNER_REGISTERED",
-        source: "BROKER_REFERRAL_LINK",
+        status: text(existingLead.status, 80) || "SUBMITTED",
+        lifecycleStatus: text(existingLead.lifecycleStatus, 80) || "OWNER_REGISTERED",
+        source: text(existingLead.source, 120) || "BROKER_REFERRAL_LINK",
         attributionLocked: true,
-        requiresAdminAttribution: false,
-        commissionEligible: false,
-        commissionStatus: kycApproved ? "PENDING_CONTRACT_ACTIVATION" : "HOLD_BROKER_KYC",
-        createdAt: existing.createdAt || now,
+        requiresAdminAttribution: existingLead.requiresAdminAttribution === true,
+        commissionEligible: existingLead.commissionEligible === true,
+        commissionStatus: text(existingLead.commissionStatus, 120) || (kycApproved ? "PENDING_CONTRACT_ACTIVATION" : "HOLD_BROKER_KYC"),
+        createdAt: existingLead.createdAt || now,
         updatedAt: now,
       }, { merge: true });
 
       tx.set(auditRef, {
         actorId: ownerUid,
         actorRole: "owner",
-        action: existingBrokerUid ? "BROKER_REFERRAL_ATTRIBUTION_RECONFIRMED" : "BROKER_REFERRAL_ATTRIBUTION_CAPTURED",
+        action: "BROKER_REFERRAL_ATTRIBUTION_CAPTURED",
         targetType: "broker_attributions",
         targetId: ownerUid,
         metadata: {
@@ -150,7 +166,7 @@ export const captureBrokerReferralAttribution = onCall(
         createdAt: now,
       });
 
-      return { attributionId, leadId, referralCode, kycStatus, idempotent: Boolean(existingBrokerUid) };
+      return { attributionId, leadId, referralCode, kycStatus, idempotent: false };
     });
 
     return {
