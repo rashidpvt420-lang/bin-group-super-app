@@ -1,4 +1,7 @@
-const ACTOR_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const HUMAN_ACTOR_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const BOT_ACTOR_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\[bot\]$/;
+
+const isValidAuthorizedActor = (actor) => HUMAN_ACTOR_RE.test(actor) || BOT_ACTOR_RE.test(actor);
 
 export const AUTHORIZED_APPROVERS_ENV = 'AUTHORIZED_FOUNDER_ACTORS';
 
@@ -10,7 +13,7 @@ export function parseAuthorizedApprovers(value) {
       .filter(Boolean),
   )];
 
-  const invalid = actors.filter((actor) => !ACTOR_RE.test(actor));
+  const invalid = actors.filter((actor) => !isValidAuthorizedActor(actor));
   if (invalid.length) {
     throw new Error(`Invalid authorized GitHub actor value(s): ${invalid.join(', ')}`);
   }
