@@ -156,7 +156,8 @@ export function runSameRunDeploymentArtifactVerification({
   const repository = requireText(env, 'GITHUB_REPOSITORY', failures);
   const ref = requireText(env, 'GITHUB_REF', failures);
   const runId = requireText(env, 'GITHUB_RUN_ID', failures);
-  const actor = requireText(env, 'GITHUB_ACTOR', failures);
+  const workflowActor = requireText(env, 'GITHUB_ACTOR', failures);
+  const actor = String(env.AUTHORIZATION_ACTOR || workflowActor).trim();
   const sha = requireFullSha(env.GITHUB_SHA, 'GITHUB_SHA', failures);
   const runAttempt = requirePositiveAttempt(
     env.GITHUB_RUN_ATTEMPT,
@@ -424,6 +425,9 @@ export function runSameRunDeploymentArtifactVerification({
       'authorization workflow run attempt',
       failures,
     );
+    if (authorization.workflowActor && String(authorization.workflowActor).toLowerCase() !== workflowActor.toLowerCase()) {
+      failures.push('authorization workflow actor mismatch');
+    }
   }
 
   let provisionalDecisionWritten = false;

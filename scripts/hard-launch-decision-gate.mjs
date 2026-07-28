@@ -29,12 +29,15 @@ function requiredContext(name) {
   return value;
 }
 
+const workflowActor = requiredContext('GITHUB_ACTOR');
+const authorizationActor = String(process.env.AUTHORIZATION_ACTOR || workflowActor).trim();
+
 const context = {
   commitSha: requiredContext('GITHUB_SHA'),
   ref: requiredContext('GITHUB_REF'),
   repository: requiredContext('GITHUB_REPOSITORY'),
   runId: requiredContext('GITHUB_RUN_ID'),
-  actor: requiredContext('GITHUB_ACTOR'),
+  actor: authorizationActor,
   authorizedActors: requiredContext('AUTHORIZED_FOUNDER_ACTORS'),
   authorizedEmails: requiredContext('AUTHORIZED_FOUNDER_EMAILS'),
   hmacKey: requiredContext('HARD_LAUNCH_APPROVAL_HMAC_KEY'),
@@ -61,6 +64,9 @@ let launchStatus;
 try {
   authorization = readJsonStrict(paths.authorization, 'hard-launch-authorization.json');
   failures.push(...validateAuthorizationDocument(authorization, context));
+  if (authorization.workflowActor && String(authorization.workflowActor).toLowerCase() !== workflowActor.toLowerCase()) {
+    failures.push('authorization workflow actor mismatch');
+  }
 } catch (error) {
   failures.push(error.message);
 }
