@@ -291,7 +291,7 @@ jobs:
             --arg launchMode "$LAUNCH_MODE" \
             --arg publicGate "$PUBLIC_GATE" \
             --arg deploymentPayload "$production_payload" \
-            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,deployment_payload_json:$deploymentPayload}}' \
+            '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:env.GITHUB_ACTOR,founder_name:$founderName,founder_email:$founderEmail,launch_mode:$launchMode,run_public_release_gate:$publicGate,deployment_payload_json:$deploymentPayload}}' \
             > dispatch.json
 
           gh api --method POST \
