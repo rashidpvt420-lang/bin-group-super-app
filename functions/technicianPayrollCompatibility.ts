@@ -6,20 +6,42 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const PAGE_SIZE = 200;
 
+function firstPositiveAmount(...values: unknown[]) {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
 function canonicalPayrollEntry(id: string, data: FirebaseFirestore.DocumentData) {
-  const technicianId = String(data.techId || data.technicianId || data.uid || "").trim();
+  const technicianId = String(data.techId || data.technicianId || data.staffId || data.uid || "").trim();
   if (!technicianId) return null;
+  // Net pay is the employee-facing amount. Fall back through the legacy aliases
+  // accepted by payroll settlement and provisioning without turning valid records
+  // into AED 0 simply because they predate the canonical `amount` field.
+  const amount = firstPositiveAmount(
+    data.netSalary,
+    data.netPay,
+    data.amount,
+    data.grossSalary,
+    data.baseSalary,
+  );
   return {
     payrollId: String(data.payrollId || id),
     technicianId,
     techId: technicianId,
-    technicianName: String(data.techName || data.technicianName || "Technician"),
-    month: String(data.month || ""),
-    amount: Number(data.amount || 0),
+    technicianName: String(data.techName || data.technicianName || data.displayName || "Technician"),
+    month: String(data.month || data.payPeriod || ""),
+    amount,
+    netSalary: firstPositiveAmount(data.netSalary, data.netPay, amount),
+    grossSalary: firstPositiveAmount(data.grossSalary, data.amount, data.baseSalary, amount),
+    baseSalary: firstPositiveAmount(data.baseSalary, data.amount, amount),
     currency: String(data.currency || "AED"),
     status: String(data.status || "pending"),
     paymentReference: data.paymentReference || null,
     paidAt: data.paidAt || null,
+    payslipUrl: data.payslipUrl || null,
     sourceCollection: "payroll",
     sourceDocumentId: id,
     createdAt: data.createdAt || admin.firestore.FieldValue.serverTimestamp(),
