@@ -24,7 +24,7 @@ test('operator form cannot mistype incident attestation or manually misreport th
   assert.doesNotMatch(inputSection, /^\s+incident_attestation:/m);
   assert.doesNotMatch(inputSection, /^\s+incident_last_deployment_failed:/m);
   assert.doesNotMatch(inputSection, /^\s+incident_last_deployment_failed_at:/m);
-  assert.match(source, /latest_conclusion.*==.*failure/);
+  assert.match(source, /latest_conclusion.*failure\|cancelled\|timed_out/);
   assert.match(source, /incident_failed='true'/);
   assert.match(source, /mandatory 30-minute cooling period/);
 });
