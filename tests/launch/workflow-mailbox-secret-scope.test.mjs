@@ -48,6 +48,10 @@ test('every Firebase production strict-live consumer receives protected Gmail OA
   const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const consumers = [
     {
+      name: 'Validate resolved E2E role identity isolation before deploy',
+      command: /run: npm run test:e2e:env/,
+    },
+    {
       name: 'Validate full live E2E secrets and App Check UUID',
       command: /run: npm run test:e2e:env/,
     },
