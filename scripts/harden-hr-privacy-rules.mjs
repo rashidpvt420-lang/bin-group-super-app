@@ -104,8 +104,15 @@ if (!source.includes(writeReplacement)) {
   changed = true;
 }
 
-if (!source.includes('match /payroll_entries/{entryId} {') || source.split("'payroll_entries',").length - 1 < 3) {
-  throw new Error('Payroll compatibility authority is incomplete.');
+const payrollBlockInstalled = source.includes('match /payroll_entries/{entryId} {') &&
+  source.includes("resource.data.get('technicianId', null) == request.auth.uid") &&
+  source.includes('allow create, update, delete: if false;');
+const payrollReadExcludedFromCatchAll = source.includes(readReplacement);
+const payrollWriteExclusions = source.split("          'payroll_entries',\n          'invoices',").length - 1;
+if (!payrollBlockInstalled || !payrollReadExcludedFromCatchAll || payrollWriteExclusions !== 2) {
+  throw new Error(
+    `Payroll compatibility authority is incomplete: block=${payrollBlockInstalled} readExclusion=${payrollReadExcludedFromCatchAll} writeExclusions=${payrollWriteExclusions}`,
+  );
 }
 
 writeFileSync(rulesPath, source);
