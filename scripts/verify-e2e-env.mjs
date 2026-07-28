@@ -25,6 +25,7 @@ for (const envPath of possibleConfigPaths) {
 }
 
 const roles = ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER'];
+const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const mailboxEmailEnv = (role) =>
   role === 'OWNER' || role === 'BROKER'
     ? `E2E_${role}_MAILBOX_EMAIL`
@@ -128,6 +129,46 @@ function validateFounderEvidence() {
   return errors;
 }
 
+function duplicateEmailGroups(entries) {
+  const byEmail = new Map();
+  for (const { key, email } of entries) {
+    if (!email) continue;
+    const keys = byEmail.get(email) || [];
+    keys.push(key);
+    byEmail.set(email, keys);
+  }
+  return [...byEmail.values()].filter((keysForEmail) => keysForEmail.length > 1);
+}
+
+function validateStrictRoleIdentityIsolation() {
+  if (!strictRoles) return [];
+  const entries = roles.map((role) => ({
+    key: EMAIL_KEY(role),
+    email: String(process.env[EMAIL_KEY(role)] || '').trim().toLowerCase(),
+  }));
+  const errors = [];
+  const founderKeys = entries
+    .filter(({ email }) => email === CANONICAL_FOUNDER_EMAIL)
+    .map(({ key }) => key);
+  if (founderKeys.length) {
+    console.error(
+      '[E2E_ENV_GUARD] E2E role accounts must never use the canonical Founder email; offending variables: '
+        + founderKeys.join(', '),
+    );
+    errors.push(...founderKeys.map((key) => `${key}(canonical-founder-forbidden)`));
+  }
+
+  const duplicateGroups = duplicateEmailGroups(entries);
+  if (duplicateGroups.length) {
+    console.error(
+      '[E2E_ENV_GUARD] Every strict E2E role must use a distinct email address; duplicate variable groups: '
+        + duplicateGroups.map((keysForEmail) => keysForEmail.join(' + ')).join('; '),
+    );
+    errors.push('E2E_ROLE_EMAILS(distinct-required)');
+  }
+  return errors;
+}
+
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
@@ -136,7 +177,8 @@ for (const role of roles) {
 
 const appCheckMissing = validateAppCheckToken();
 const founderMissing = validateFounderEvidence();
-const allMissing = [...missing, ...appCheckMissing, ...founderMissing];
+const roleIdentityErrors = validateStrictRoleIdentityIsolation();
+const allMissing = [...missing, ...appCheckMissing, ...founderMissing, ...roleIdentityErrors];
 
 const techBEmail = String(process.env.E2E_TECHNICIAN_B_EMAIL || '').trim();
 const techBPassword = String(process.env.E2E_TECHNICIAN_B_PASSWORD || '').trim();
