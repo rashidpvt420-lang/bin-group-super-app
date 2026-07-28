@@ -54,6 +54,34 @@ export async function resolveProductionMailboxIdentities(env = process.env) {
     resolveMailbox({ role: 'Broker', prefix: 'E2E_BROKER', env }),
   ]);
 
+  // Fail fast (this step runs before the ~2h production deploy) if any two E2E
+  // role accounts resolve to the same address. The late seed step (seed-e2e-auth)
+  // enforces the same rule, but only after the full deploy has already run and
+  // reports a generic "Every E2E role must use a distinct email address" — most
+  // commonly the Owner and Broker Gmail OAuth refresh tokens point at the same
+  // inbox. Surfacing it here names the colliding roles and saves a wasted run.
+  // Role names only are reported; email values are never printed.
+  const roleEmails = [
+    ['admin', lower(env.E2E_ADMIN_EMAIL)],
+    ['owner', ownerEmail],
+    ['tenant', lower(env.E2E_TENANT_EMAIL)],
+    ['technician', lower(env.E2E_TECHNICIAN_EMAIL)],
+    ['broker', brokerEmail],
+  ].filter(([, email]) => EMAIL_RE.test(email));
+  const seenRoleByEmail = new Map();
+  for (const [role, email] of roleEmails) {
+    const priorRole = seenRoleByEmail.get(email);
+    if (priorRole) {
+      throw new Error(
+        `E2E role email collision: "${priorRole}" and "${role}" resolve to the same mailbox address. ` +
+        'Every role needs a distinct account. Owner and Broker come from Gmail OAuth, so this usually means ' +
+        'their MAILBOX_REFRESH_TOKEN (client id/secret) point at the same Gmail inbox — provision a separate ' +
+        'Gmail mailbox and OAuth credentials for the affected role so all five E2E emails are unique.'
+      );
+    }
+    seenRoleByEmail.set(email, role);
+  }
+
   for (const mailboxEmail of [ownerEmail, brokerEmail]) console.log(`::add-mask::${mailboxEmail}`);
   appendFileSync(githubEnv, `E2E_OWNER_MAILBOX_EMAIL=${ownerEmail}\nE2E_BROKER_MAILBOX_EMAIL=${brokerEmail}\n`, 'utf8');
   console.log('Resolved protected Owner and Broker Gmail mailbox identities from authenticated profiles.');
