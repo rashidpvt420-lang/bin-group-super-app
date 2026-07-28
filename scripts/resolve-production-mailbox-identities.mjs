@@ -8,7 +8,6 @@ import { exchangeGmailAccessToken } from './lib/gmail-otp-reader.mjs';
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MAILBOX_OAUTH_ATTESTATION = 'owner+broker-profile-verified';
 
 async function readMailboxProfile({ accessToken, label, fetchImpl = globalThis.fetch }) {
   if (typeof fetchImpl !== 'function') throw new Error(`${label} requires a fetch implementation.`);
@@ -56,9 +55,9 @@ export async function resolveProductionMailboxIdentities(env = process.env) {
   ]);
 
   for (const mailboxEmail of [ownerEmail, brokerEmail]) console.log(`::add-mask::${mailboxEmail}`);
-  appendFileSync(githubEnv, `E2E_OWNER_MAILBOX_EMAIL=${ownerEmail}\nE2E_BROKER_MAILBOX_EMAIL=${brokerEmail}\nE2E_MAILBOX_OAUTH_VERIFIED=${MAILBOX_OAUTH_ATTESTATION}\n`, 'utf8');
-  console.log('Resolved and attested protected Owner and Broker Gmail OAuth identities from authenticated profiles.');
-  return { ownerEmail, brokerEmail, oauthAttestation: MAILBOX_OAUTH_ATTESTATION };
+  appendFileSync(githubEnv, `E2E_OWNER_MAILBOX_EMAIL=${ownerEmail}\nE2E_BROKER_MAILBOX_EMAIL=${brokerEmail}\n`, 'utf8');
+  console.log('Resolved protected Owner and Broker Gmail mailbox identities from authenticated profiles.');
+  return { ownerEmail, brokerEmail };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
