@@ -40,7 +40,6 @@ const mailboxOauthKeys = [
   'E2E_BROKER_MAILBOX_CLIENT_SECRET',
   'E2E_BROKER_MAILBOX_REFRESH_TOKEN',
 ];
-const MAILBOX_OAUTH_ATTESTATION = 'owner+broker-profile-verified';
 const strictRoles = process.env.E2E_STRICT_ROLES === 'true';
 const requireMailboxEvidence = process.env.E2E_REQUIRE_MAILBOX_EVIDENCE === 'true';
 const mailboxEvidenceKeys = [
@@ -79,7 +78,6 @@ const PLACEHOLDER_PATTERNS = [
 ];
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function maskToken(token) {
   if (!token || token.length < 12) return '(invalid)';
@@ -130,17 +128,6 @@ function validateFounderEvidence() {
   return errors;
 }
 
-function hasTrustedMailboxOAuthAttestation() {
-  const ownerEmail = String(process.env.E2E_OWNER_MAILBOX_EMAIL || '').trim().toLowerCase();
-  const brokerEmail = String(process.env.E2E_BROKER_MAILBOX_EMAIL || '').trim().toLowerCase();
-  return process.env.GITHUB_ACTIONS === 'true' &&
-    process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
-    process.env.GITHUB_REF === 'refs/heads/main' &&
-    process.env.E2E_MAILBOX_OAUTH_VERIFIED === MAILBOX_OAUTH_ATTESTATION &&
-    EMAIL_RE.test(ownerEmail) &&
-    EMAIL_RE.test(brokerEmail);
-}
-
 console.log('[E2E_ENV_GUARD] target=' + (process.env.E2E_BASE_URL || '(missing)'));
 console.log('[E2E_ENV_GUARD] admin_target=' + (process.env.E2E_ADMIN_BASE_URL || (strictRoles ? '(missing)' : '(not required for this run)')));
 for (const role of roles) {
@@ -169,16 +156,12 @@ if (process.env.E2E_STRICT_LIVE === 'true') {
   console.log('[E2E_ENV_GUARD] live_build_site_key=set');
 
   const missingMailboxOauth = mailboxOauthKeys.filter((key) => !String(process.env[key] || '').trim());
-  if (missingMailboxOauth.length && !hasTrustedMailboxOAuthAttestation()) {
+  if (missingMailboxOauth.length) {
     console.error('[E2E_ENV_GUARD] Missing mailbox OAuth secrets: ' + missingMailboxOauth.join(', '));
-    console.error('[E2E_ENV_GUARD] Protected live OTP evidence requires both Owner and Broker read-only Gmail mailbox credentials or a same-job authenticated mailbox attestation.');
+    console.error('[E2E_ENV_GUARD] Protected live OTP evidence requires both Owner and Broker read-only Gmail mailbox credentials.');
     process.exit(1);
   }
-  if (missingMailboxOauth.length) {
-    console.log('[E2E_ENV_GUARD] mailbox_oauth_attestation=verified (owner+broker authenticated profiles)');
-  } else {
-    console.log('[E2E_ENV_GUARD] mailbox_oauth_secrets=set (owner+broker)');
-  }
+  console.log('[E2E_ENV_GUARD] mailbox_oauth_secrets=set (owner+broker)');
 }
 
 if (process.env.E2E_STRICT_BUSINESS === 'true') {
