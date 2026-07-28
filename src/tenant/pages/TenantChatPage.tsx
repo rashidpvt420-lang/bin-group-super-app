@@ -21,8 +21,19 @@ export default function TenantChatPage() {
             if (!ticketId || !user?.uid) return;
             const docRef = doc(db, 'maintenanceTickets', ticketId);
             const snap = await getDoc(docRef);
-            if (snap.exists() && snap.data().tenantId === user.uid) {
-                setTicket({ id: snap.id, ...snap.data() });
+            const data = snap.exists() ? snap.data() : null;
+            const uid = String(user.uid);
+            const email = String(user.email || '').trim().toLowerCase();
+            const tenantCanRead = !!data && (
+                data.tenantId === uid || data.tenantUid === uid || data.userId === uid ||
+                data.createdBy === uid || data.createdByUid === uid || data.requesterId === uid ||
+                (!!email && (String(data.tenantEmail || '').trim().toLowerCase() === email ||
+                    String(data.reporterEmail || '').trim().toLowerCase() === email ||
+                    String(data.requesterEmail || '').trim().toLowerCase() === email ||
+                    String(data.email || '').trim().toLowerCase() === email))
+            );
+            if (tenantCanRead) {
+                setTicket({ id: snap.id, ...data });
             } else {
                 alert("Unauthorized");
                 navigate('/tenant/tickets');
