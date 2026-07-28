@@ -37,6 +37,31 @@ async function fetchText(url) {
   return { ok: response.ok, status: response.status, text: await response.text() };
 }
 
+async function discoverManifestJavascriptUrls(siteUrl, origin) {
+  const manifestUrl = new URL('/asset-manifest.json', siteUrl).toString();
+  try {
+    const result = await fetchText(manifestUrl);
+    if (!result.ok) return [];
+    const manifest = JSON.parse(result.text);
+    const candidates = [
+      ...Object.values(manifest?.files || {}),
+      ...(Array.isArray(manifest?.entrypoints) ? manifest.entrypoints : []),
+    ];
+    return candidates
+      .filter((value) => /\.(?:js|mjs)(?:\?[^"'`\s]*)?$/.test(String(value || '')))
+      .map((value) => {
+        try {
+          return new URL(String(value), siteUrl).toString();
+        } catch {
+          return '';
+        }
+      })
+      .filter((url) => url && new URL(url).origin === origin);
+  } catch {
+    return [];
+  }
+}
+
 function extractConfig(text) {
   const found = {};
   if (text.includes(PRODUCTION.projectId)) found.projectId = PRODUCTION.projectId;
@@ -71,6 +96,7 @@ function discoverJavascriptUrls(source, baseUrl, origin) {
 async function crawlJavascriptAssets(html, siteUrl) {
   const origin = new URL(siteUrl).origin;
   const queue = discoverJavascriptUrls(html, siteUrl, origin);
+  queue.push(...await discoverManifestJavascriptUrls(siteUrl, origin));
   const visited = new Set();
   const texts = [];
 
