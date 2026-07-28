@@ -361,6 +361,9 @@ jobs:
       - name: Create strict production environment files
         run: node scripts/write-production-env.mjs
 
+      - name: Validate resolved E2E role identity isolation before deploy
+        run: npm run test:e2e:env
+
       - name: Use Java 21 for Firestore rules emulator
         uses: actions/setup-java@v4
         with:

@@ -31,3 +31,14 @@ test('protected workflows resolve identities before strict environment checks', 
     assert.doesNotMatch(source, /^\s{10,}E2E_BROKER_MAILBOX_EMAIL:/m);
   }
 });
+
+test('production deploy validates resolved role identity isolation before Firebase deploy', () => {
+  const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
+  const envFileIndex = source.indexOf('Create strict production environment files');
+  const isolationIndex = source.indexOf('Validate resolved E2E role identity isolation before deploy');
+  const deployIndex = source.indexOf('Deploy and verify Firebase production stack');
+  assert.ok(envFileIndex >= 0, 'production env files step must exist');
+  assert.ok(isolationIndex > envFileIndex, 'identity isolation guard must run after env files are written');
+  assert.ok(deployIndex > isolationIndex, 'identity isolation guard must run before Firebase deploy');
+  assert.match(source.slice(isolationIndex, deployIndex), /npm run test:e2e:env/);
+});
