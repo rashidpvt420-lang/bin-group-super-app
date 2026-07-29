@@ -13,6 +13,11 @@ test('application login identities remain separate from read-only Gmail mailbox 
   assert.match(ownerSecure, /E2E_OWNER_MAILBOX_EMAIL/);
   assert.match(broker, /const brokerEmail = text\(process\.env\.E2E_BROKER_EMAIL\)/);
   assert.match(broker, /const brokerMailboxEmail = text\(process\.env\.E2E_BROKER_MAILBOX_EMAIL\)/);
+  assert.match(broker, /const brokerAuthEmail = brokerMailboxEmail/);
+  assert.match(broker, /auth\.getUserByEmail\(brokerMailboxEmail\)/);
+  assert.match(broker, /signIn\(brokerAuthEmail, brokerPassword\)/);
+  assert.doesNotMatch(broker, /auth\.getUserByEmail\(brokerEmail\)/);
+  assert.doesNotMatch(broker, /signIn\(brokerEmail, brokerPassword\)/);
   assert.match(envGuard, /E2E_\$\{role\}_EMAIL/);
   assert.match(envGuard, /E2E_REQUIRE_MAILBOX_EVIDENCE/);
 });
