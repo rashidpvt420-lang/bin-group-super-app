@@ -330,7 +330,9 @@ export function runSameRunDeploymentArtifactVerification({
     ) {
       failures.push('incidents attestation is missing or invalid.');
     }
-    requireExact(incidents.actor, actor, 'incidents actor', failures);
+    // Incidents are attested by the workflow runner (GITHUB_ACTOR). Delegated
+    // Founder authorization (AUTHORIZATION_ACTOR) must not be required here.
+    requireExact(incidents.actor, workflowActor, 'incidents actor', failures);
     if (!String(incidents.workflow || '').trim()) {
       failures.push('incidents workflow is required.');
     }

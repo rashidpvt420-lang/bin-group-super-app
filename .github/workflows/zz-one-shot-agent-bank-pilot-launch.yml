@@ -29,7 +29,7 @@ jobs:
     name: Review, Private-HR, and dispatch bank-pilot
     if: contains(fromJSON('["cursor[bot]","rashidpvt420-lang","github-actions[bot]"]'), github.actor)
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     steps:
       - name: Checkout current main
         uses: actions/checkout@v4
@@ -388,7 +388,8 @@ jobs:
           set -euo pipefail
           [[ "$PRODUCTION_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           echo "Waiting for Firebase Production Deploy run $PRODUCTION_RUN_ID (SHA $RELEASE_SHA)"
-          for _ in $(seq 1 240); do
+          # Quota-safe Functions deploys can exceed two hours; poll for up to 5h.
+          for _ in $(seq 1 600); do
             run_json="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID")"
             status="$(jq -r '.status' <<<"$run_json")"
             conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"

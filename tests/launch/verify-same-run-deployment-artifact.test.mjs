@@ -317,4 +317,19 @@ describe('same-run production deployment artifact verifier', () => {
       rejected(verify(fixture), /releaseId/i);
     });
   });
+
+  it('binds incidents actor to the workflow runner under delegated Founder authorization', () => {
+    withFixture((fixture) => {
+      const workflowActor = 'github-actions[bot]';
+      fixture.env.GITHUB_ACTOR = workflowActor;
+      fixture.env.AUTHORIZATION_ACTOR = ACTOR;
+      fixture.env.AUTHORIZED_FOUNDER_ACTORS = `${ACTOR},${workflowActor}`;
+      mutate(fixture.root, 'production-incidents.json', (doc) => {
+        doc.actor = workflowActor;
+        doc.updatedBy = workflowActor;
+      });
+      const result = verify(fixture);
+      assert.equal(result.ok, true, result.failures.join('\n'));
+    });
+  });
 });
