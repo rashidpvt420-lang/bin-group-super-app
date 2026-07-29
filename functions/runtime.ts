@@ -9,6 +9,7 @@ export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
 export * from "./inspectionFirstOwnerOnboarding";
+export * from "./ownerInspectionAdminLink";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
