@@ -8,6 +8,7 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
+export * from "./inspectionFirstOwnerOnboarding";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
