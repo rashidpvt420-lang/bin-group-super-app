@@ -91,6 +91,7 @@ initializeFirebaseAdmin(admin, PROJECT_ID);
 const db = admin.firestore();
 const auth = admin.auth();
 const serverTimestamp = () => admin.firestore.FieldValue.serverTimestamp();
+const brokerAuthEmail = brokerMailboxEmail;
 
 async function jsonRequest(url, options, label) {
   const response = await fetch(url, options);
@@ -130,7 +131,7 @@ async function waitForMailboxOtp({
     accessToken,
     expectedMailboxEmail: brokerMailboxEmail,
     sender: 'ceo@bin-groups.com',
-    recipient: brokerEmail,
+    recipient: brokerAuthEmail,
     subject: 'BIN GROUP payout verification code',
     correlationId,
     providerMessageId,
@@ -270,7 +271,7 @@ async function inspectOtpDelivery(challengeId) {
 async function main() {
   const startedAt = new Date().toISOString();
   const runId = safeId(process.env.GITHUB_RUN_ID || Date.now(), 'local');
-  const brokerRecord = await auth.getUserByEmail(brokerEmail);
+  const brokerRecord = await auth.getUserByEmail(brokerMailboxEmail);
   assert(brokerRecord.emailVerified, 'The protected Broker email must be verified.');
 
   const brokerUid = brokerRecord.uid;
@@ -313,7 +314,7 @@ async function main() {
     attributionId: text(lead.attributionId),
     brokerId: brokerUid,
     brokerUid,
-    brokerEmail,
+    brokerEmail: brokerAuthEmail,
     brokerName: text(profile.displayName || profile.name || brokerRecord.displayName || 'E2E Broker'),
     brokerCode: text(profile.brokerCode || profile.affiliateCode) || `BIN-${brokerUid.slice(0, 8).toUpperCase()}`,
     brokerCommissionRate: 0.05,
@@ -365,7 +366,7 @@ async function main() {
   }, { merge: true });
 
   const appCheckToken = await exchangeAppCheckToken();
-  const brokerSession = await signIn(brokerEmail, brokerPassword);
+  const brokerSession = await signIn(brokerAuthEmail, brokerPassword);
   assert(brokerSession.uid === brokerUid, 'Broker Auth UID does not match the dedicated production fixture.');
 
   const otpRequestedAt = Date.now();
@@ -438,7 +439,7 @@ async function main() {
     finishedAt: new Date().toISOString(),
     broker: {
       uid: brokerUid,
-      emailDomain: brokerEmail.split('@')[1] || '',
+      emailDomain: brokerAuthEmail.split('@')[1] || '',
       authenticated: true,
       privateKycVerified: true,
       commissionAgreementAccepted: true,
