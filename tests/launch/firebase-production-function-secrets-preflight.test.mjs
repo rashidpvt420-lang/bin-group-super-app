@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   requiredFirebaseAiSecrets,
   requiredFirebaseBankPilotSecrets,
+  requiredFirebasePhase1PublicSecrets,
   requiredFirebasePublicSecrets,
   requiredFirebaseProductionSecretsForMode,
 } from '../../scripts/verify-firebase-production-secrets.mjs';
@@ -24,6 +25,8 @@ const expectedBankPilotSecrets = [
   'OWNER_CONTRACT_OTP_PEPPER',
   ...expectedAiSecrets,
 ];
+
+const expectedPhase1PublicSecrets = [...expectedBankPilotSecrets];
 
 const expectedPublicSecrets = [
   ...expectedBankPilotSecrets,
@@ -46,15 +49,19 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('bank-pilot requires SMTP, Owner OTP pepper, and AI while public mode additionally requires Stripe', () => {
+test('Phase 1 public requires SMTP, Owner OTP pepper and AI but never requires Stripe', () => {
   assert.deepEqual(requiredFirebaseAiSecrets, expectedAiSecrets);
   assert.deepEqual(requiredFirebaseBankPilotSecrets, expectedBankPilotSecrets);
+  assert.deepEqual(requiredFirebasePhase1PublicSecrets, expectedPhase1PublicSecrets);
   assert.deepEqual(requiredFirebasePublicSecrets, expectedPublicSecrets);
   assert.deepEqual(requiredFirebaseProductionSecretsForMode('bank-pilot'), expectedBankPilotSecrets);
+  assert.deepEqual(requiredFirebaseProductionSecretsForMode('phase1-public'), expectedPhase1PublicSecrets);
   assert.deepEqual(requiredFirebaseProductionSecretsForMode('public'), expectedPublicSecrets);
+  assert.ok(!requiredFirebaseProductionSecretsForMode('phase1-public').includes('STRIPE_SECRET_KEY'));
+  assert.ok(!requiredFirebaseProductionSecretsForMode('phase1-public').includes('STRIPE_WEBHOOK_SECRET'));
   assert.throws(
     () => requiredFirebaseProductionSecretsForMode('staging'),
-    /LAUNCH_MODE must be bank-pilot or public/,
+    /LAUNCH_MODE must be bank-pilot, phase1-public, or public/,
   );
 });
 
