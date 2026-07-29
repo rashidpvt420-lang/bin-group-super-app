@@ -5,7 +5,8 @@ import * as admin from "firebase-admin";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const STORAGE_BUCKET = "bin-group-57c60.firebasestorage.app";
+const bucket = admin.storage().bucket(STORAGE_BUCKET);
 const geminiKey = defineSecret("GEMINI_API_KEY");
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
