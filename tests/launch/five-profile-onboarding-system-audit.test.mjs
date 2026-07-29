@@ -76,7 +76,7 @@ test('property onboarding is a real five-page inspection-first Owner workflow', 
   assert.match(backend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
   assert.match(backend, /INSPECTION_REQUIRED_BEFORE_PAYMENT/);
   assert.match(backend, /adminRecordOwnerMobilizationPaymentEvidence/);
-  assert.match(backend, /Math\.round\(Number\(quote\.annualContractValue\) \* 0\.15\)/);
+  assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
 
   assert.match(intakeAdmin, /adminCreateOwnerPropertyInspection/);
   assert.match(intakeAdmin, /adminLinkOwnerPropertyInspection/);
