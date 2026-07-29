@@ -212,7 +212,7 @@ function Section({ chip, title, children, dark = false, subtitle }: { chip: stri
 
 export default function SimpleStartPage() {
   const navigate = useNavigate();
-  const { isRTL, lang } = useLanguage();
+  const { isRTL, lang, setLang } = useLanguage();
   const ar = lang === 'ar';
   const c = companyContent[ar ? 'ar' : 'en'];
   const whatsappDigits = CONTACT.whatsapp.replace(/[^0-9]/g, '');
@@ -230,6 +230,24 @@ export default function SimpleStartPage() {
             {/* Top Banner */}
             <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, background: `linear-gradient(135deg, ${alpha(binThemeTokens.gold, 0.11)}, #FFFFFF)`, boxShadow: '0 22px 56px rgba(17,24,39,0.08)' }}>
               <Stack spacing={2} alignItems="flex-start">
+                <Button
+                  type="button"
+                  data-testid="language-toggle"
+                  aria-label={ar ? 'Switch language to English' : 'Switch language to Arabic'}
+                  startIcon={<Globe size={16} />}
+                  onClick={() => setLang(ar ? 'en' : 'ar')}
+                  sx={{
+                    alignSelf: isRTL ? 'flex-start' : 'flex-end',
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(gold, 0.35)}`,
+                    color: gold,
+                    bgcolor: '#fff',
+                    fontWeight: 950,
+                    textTransform: 'none',
+                  }}
+                >
+                  {ar ? 'EN' : 'AR'}
+                </Button>
                 <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.goldHover, fontWeight: 950 }} />
                 <Typography variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
                   {ar ? 'كيف تريد أن نساعدك اليوم؟' : 'How can we help you today?'}

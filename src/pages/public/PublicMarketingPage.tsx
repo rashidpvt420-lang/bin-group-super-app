@@ -4,6 +4,7 @@ import { Camera, FileText, Globe, LogIn, MessageCircle, ShieldCheck } from 'luci
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrandWatermark from '../../components/BrandWatermark';
+import UaePropertyMap from '../../components/maps/UaePropertyMap';
 
 type PublicMarketingPageKey =
   | 'home'
@@ -302,6 +303,7 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
         <Container maxWidth="xl" sx={{ pb: 8 }}>
           <Trust />
           <CompanyProfileBlock c={c} />
+          {page === 'contact' ? <ContactMapSection /> : null}
           <Inquiry c={c} />
         </Container>
       </Box>
@@ -309,12 +311,30 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
   );
 }
 
-function ActionButton({ children, href, icon, contained = false, onClick }: { children: React.ReactNode; href?: string; icon?: React.ReactNode; contained?: boolean; onClick?: () => void }) {
+function ActionButton({
+  children,
+  href,
+  icon,
+  contained = false,
+  onClick,
+  testId,
+  ariaLabel,
+}: {
+  children: React.ReactNode;
+  href?: string;
+  icon?: React.ReactNode;
+  contained?: boolean;
+  onClick?: () => void;
+  testId?: string;
+  ariaLabel?: string;
+}) {
   return (
     <Button
       component={href ? "a" : "button"}
       href={href}
       onClick={onClick}
+      data-testid={testId}
+      aria-label={ariaLabel}
       startIcon={icon}
       sx={{
         minHeight: 48,
@@ -349,7 +369,12 @@ function Nav({ c }: { c: CopyShape }) {
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>          
           <ActionButton href="/security" icon={<ShieldCheck size={17} />}>{c.navSecurity}</ActionButton>
           <ActionButton href={LOGIN_URL} icon={<LogIn size={17} />}>{c.login}</ActionButton>
-          <ActionButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} icon={<Globe size={17} />}>
+          <ActionButton
+            onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+            icon={<Globe size={17} />}
+            testId="language-toggle"
+            ariaLabel={lang === 'ar' ? 'Switch language to English' : 'Switch language to Arabic'}
+          >
             {lang === 'ar' ? 'EN' : 'AR'}
           </ActionButton>
         </Stack>
@@ -631,6 +656,30 @@ function Inquiry({ c }: { c: CopyShape }) {
           </Stack>
         </Grid>
       </Grid>
+    </SectionPaper>
+  );
+}
+
+function ContactMapSection() {
+  return (
+    <SectionPaper sx={{ overflow: 'hidden' }}>
+      <Stack spacing={2.5}>
+        <Box>
+          <Chip label="UAE OFFICE" sx={{ borderRadius: 1.25, bgcolor: alpha(gold, .12), color: '#6F5522', fontWeight: 950, mb: 1.5 }} />
+          <Typography variant="h4" fontWeight={950} sx={{ color: ink }}>BIN GROUP contact location</Typography>
+          <Typography sx={{ color: muted, lineHeight: 1.7, fontWeight: 700, maxWidth: 820, mt: 1 }}>
+            Al Ain, Abu Dhabi, United Arab Emirates
+          </Typography>
+        </Box>
+        <UaePropertyMap
+          testId="contact-map"
+          title="BIN GROUP UAE office"
+          address="BIN GROUP, Al Ain"
+          emirate="Abu Dhabi"
+          locationQuality="ADDRESS_ONLY"
+          height={360}
+        />
+      </Stack>
     </SectionPaper>
   );
 }
