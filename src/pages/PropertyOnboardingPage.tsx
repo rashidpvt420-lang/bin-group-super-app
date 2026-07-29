@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Chip, Container, LinearProgress, Stack, Step, StepLabel, Stepper, Typography, Button } from '@mui/material';
+import { Alert, Box, Button, Chip, Container, LinearProgress, Stack, Step, StepLabel, Stepper, Typography } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -14,15 +14,10 @@ import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
 import ProofUploadStep from '../components/onboarding/ProofUploadStep';
 import ReviewBeforeSubmitStep from '../components/onboarding/ReviewBeforeSubmitStep';
 import ContractSignatureStep from '../components/onboarding/ContractSignatureStep';
-import PaymentSummaryStep from '../components/onboarding/PaymentSummaryStep';
-import PaymentSubmissionStep from '../components/onboarding/PaymentSubmissionStep';
+import InspectionSubmissionStep from '../components/onboarding/InspectionSubmissionStep';
 
-const INTERNAL_STEP_COUNT = 11;
-const VISIBLE_STAGE_COUNT = 5;
-const stageByInternalStep = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5];
-const clampStep = (value: number, max: number) => Math.min(Math.max(value, 1), max);
-const visibleStageForInternalStep = (step: number) => stageByInternalStep[clampStep(step, INTERNAL_STEP_COUNT) - 1] || 1;
-const visibleStageProgress = (step: number) => Math.round((visibleStageForInternalStep(step) / VISIBLE_STAGE_COUNT) * 100);
+const PAGE_COUNT = 5;
+const clampPage = (value: number) => Math.min(Math.max(Number(value) || 1, 1), PAGE_COUNT);
 const readable = (value: string | undefined, fallback: string) => (!value || value.includes('.') ? fallback : value);
 
 type ReferralState = 'not_required' | 'waiting_for_owner' | 'capturing' | 'captured' | 'error';
@@ -32,37 +27,37 @@ export default function PropertyOnboardingPage() {
     const [searchParams] = useSearchParams();
     const { t, isRTL, lang } = useLanguage();
     const { step, nextStep, prevStep, setStep, properties, intakeId, onboardingSessionId, ownerAccount } = useOnboardingStore();
-    const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
+    const label = React.useCallback((en: string, ar: string) => lang === 'ar' ? ar : en, [lang]);
     const brokerUid = String(searchParams.get('broker') || '').trim();
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
     const [referralState, setReferralState] = React.useState<ReferralState>(brokerUid ? 'waiting_for_owner' : 'not_required');
+    const [section, setSection] = React.useState(0);
     const capturedReferralKey = React.useRef('');
 
-    const visibleStages = [
-        readable(t('onboarding.company'), label('Company', 'الشركة')),
-        readable(t('onboarding.verification'), label('Account', 'الحساب')),
-        readable(t('onboarding.property'), label('Property', 'العقار')),
-        readable(t('onboarding.service_plan'), label('Service & Proof', 'الخدمة والإثبات')),
-        readable(t('onboarding.contract_payment'), label('Contract & Payment', 'العقد والدفع')),
+    const safePage = clampPage(step);
+    const pageProgress = safePage * 20;
+    const pageLabels = [
+        label('Owner Account', 'حساب المالك'),
+        label('Property Details', 'بيانات العقار'),
+        label('Service & Documents', 'الخدمة والمستندات'),
+        label('Review & Sign', 'المراجعة والتوقيع'),
+        label('Submit for Visit', 'الإرسال للزيارة'),
     ];
-    const internalStepLabels = [
-        label('Legal identity', 'الهوية القانونية'), label('Account verification', 'التحقق من الحساب'),
-        label('Asset profile', 'ملف العقار'), label('Property location', 'موقع العقار'), label('Systems and facilities', 'الأنظمة والمرافق'),
-        label('Commercial terms', 'الشروط التجارية'), label('Protected documents', 'المستندات المحمية'), label('Review', 'المراجعة'),
-        label('Contract signature', 'توقيع العقد'), label('Payment method', 'طريقة الدفع'), label('Final submission', 'الإرسال النهائي'),
-    ];
-
-    const safeStep = clampStep(step, INTERNAL_STEP_COUNT);
-    const visibleStage = visibleStageForInternalStep(safeStep);
-    const activeVisibleStageIndex = clampStep(visibleStage, VISIBLE_STAGE_COUNT) - 1;
-    const currentStageProgress = visibleStageProgress(safeStep);
-    const exactProgress = Math.round((safeStep / INTERNAL_STEP_COUNT) * 100);
+    const sectionLabels: Record<number, string[]> = {
+        1: [label('Owner or company details', 'بيانات المالك أو الشركة'), label('Secure account verification', 'التحقق من الحساب الآمن')],
+        2: [label('Property profile', 'ملف العقار'), label('Property location and GPS', 'موقع العقار وGPS'), label('Systems and facilities', 'الأنظمة والمرافق')],
+        3: [label('Service plan and commercial terms', 'خطة الخدمة والشروط التجارية'), label('Protected documents', 'المستندات المحمية')],
+        4: [label('Review all details', 'مراجعة جميع البيانات'), label('Sign the property application', 'توقيع طلب العقار')],
+        5: [label('Final five-page submission', 'الإرسال النهائي للصفحات الخمس')],
+    };
 
     React.useEffect(() => {
-        if (step !== safeStep) setStep(safeStep);
+        if (step !== safePage) setStep(safePage);
+        setSection(0);
         setGuardError('');
-    }, [safeStep, setStep, step]);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [safePage, setStep, step]);
 
     React.useEffect(() => {
         if (!brokerUid) {
@@ -98,11 +93,40 @@ export default function PropertyOnboardingPage() {
             capturedReferralKey.current = '';
             setReferralState('error');
             setGuardError(label(
-                'Your Owner account was created, but the Broker referral could not be verified. Continue is locked so the referral is not lost. Retry or request a new link.',
-                'تم إنشاء حساب المالك، لكن تعذر التحقق من إحالة الوسيط. تم إيقاف المتابعة حتى لا تضيع الإحالة. أعد المحاولة أو اطلب رابطاً جديداً.',
+                'Your Owner account was created, but the Broker referral could not be verified. Retry or request a new Broker link before continuing.',
+                'تم إنشاء حساب المالك، لكن تعذر التحقق من إحالة الوسيط. أعد المحاولة أو اطلب رابط وسيط جديد قبل المتابعة.',
             ));
         });
     }, [brokerUid, intakeId, label, onboardingSessionId, ownerAccount, referralState, validBrokerUid]);
+
+    const advancePage = () => {
+        setGuardError('');
+        setSection(0);
+        nextStep();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const goBackPage = () => {
+        setGuardError('');
+        setSection(0);
+        prevStep();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const advanceSection = () => {
+        setGuardError('');
+        setSection((current) => current + 1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const backSectionOrPage = () => {
+        if (section > 0) {
+            setSection((current) => Math.max(0, current - 1));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+        goBackPage();
+    };
 
     const guardedAccountNext = () => {
         if (brokerUid && referralState !== 'captured') {
@@ -112,13 +136,14 @@ export default function PropertyOnboardingPage() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
-        nextStep();
+        advancePage();
     };
 
     const guardedAssetNext = () => {
         const property = properties[0];
-        const isMosque = property?.propertyType === 'Mosque / Masjid';
-        if (!isMosque) { nextStep(); return; }
+        const descriptor = `${property?.propertyType || ''} ${property?.subType || ''}`.toLowerCase();
+        const isMosque = descriptor.includes('mosque') || descriptor.includes('masjid');
+        if (!isMosque) { advanceSection(); return; }
         const mosque = property?.mosqueProfile || {};
         const missing = [
             !String(mosque.mosqueName || '').trim() ? label('mosque name', 'اسم المسجد') : '',
@@ -132,24 +157,31 @@ export default function PropertyOnboardingPage() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
-        nextStep();
+        advanceSection();
     };
 
-    const renderStepContent = (stepIndex: number) => {
-        switch (stepIndex) {
-            case 1: return <CompanyProfileStep onNext={nextStep} />;
-            case 2: return <AccountCreationStep onNext={guardedAccountNext} onBack={prevStep} />;
-            case 3: return <AssetProfileStep onNext={guardedAssetNext} onBack={prevStep} />;
-            case 4: return <PropertyLocationStep onNext={nextStep} onBack={prevStep} />;
-            case 5: return <SystemsDataStep onNext={nextStep} onBack={prevStep} />;
-            case 6: return <CommercialTermsStep onNext={nextStep} onBack={prevStep} />;
-            case 7: return <ProofUploadStep onNext={nextStep} onBack={prevStep} />;
-            case 8: return <ReviewBeforeSubmitStep onNext={nextStep} onBack={prevStep} />;
-            case 9: return <ContractSignatureStep onNext={nextStep} onBack={prevStep} />;
-            case 10: return <PaymentSummaryStep onNext={nextStep} onBack={prevStep} />;
-            case 11: return <PaymentSubmissionStep onBack={prevStep} />;
-            default: return <CompanyProfileStep onNext={nextStep} />;
+    const renderPage = () => {
+        if (safePage === 1) {
+            return section === 0
+                ? <CompanyProfileStep onNext={advanceSection} />
+                : <AccountCreationStep onNext={guardedAccountNext} onBack={backSectionOrPage} />;
         }
+        if (safePage === 2) {
+            if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} />;
+            if (section === 1) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} />;
+            return <SystemsDataStep onNext={advancePage} onBack={backSectionOrPage} />;
+        }
+        if (safePage === 3) {
+            return section === 0
+                ? <CommercialTermsStep onNext={advanceSection} onBack={backSectionOrPage} />
+                : <ProofUploadStep onNext={advancePage} onBack={backSectionOrPage} />;
+        }
+        if (safePage === 4) {
+            return section === 0
+                ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage} />
+                : <ContractSignatureStep onNext={advancePage} onBack={backSectionOrPage} />;
+        }
+        return <InspectionSubmissionStep onBack={goBackPage} />;
     };
 
     return (
@@ -158,20 +190,20 @@ export default function PropertyOnboardingPage() {
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={2} sx={{ mb: 3 }}>
                     <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate('/')} sx={{ color: '#B8932F', fontWeight: 900 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                        <Chip icon={<ShieldCheck size={15} />} label={`${label('Step', 'الخطوة')} ${safeStep} / ${INTERNAL_STEP_COUNT}`} sx={{ fontWeight: 900 }} />
-                        <Chip icon={<Save size={15} />} label={intakeId ? label('Resume reference saved', 'تم حفظ مرجع الاستكمال') : label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
+                        <Chip icon={<ShieldCheck size={15} />} label={`${label('Page', 'الصفحة')} ${safePage} / ${PAGE_COUNT}`} sx={{ fontWeight: 900 }} />
+                        <Chip icon={<Save size={15} />} label={intakeId ? label('Application reference saved', 'تم حفظ مرجع الطلب') : label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
                         {brokerUid && <Chip label={referralState === 'captured' ? label('Broker referral locked', 'تم تثبيت إحالة الوسيط') : label('Broker referral pending', 'إحالة الوسيط قيد التحقق')} color={referralState === 'captured' ? 'success' : 'warning'} variant="outlined" />}
                     </Stack>
                 </Stack>
                 <Box sx={{ mb: 2, textAlign: 'center' }}>
-                    <Typography variant="h6" fontWeight={950}>{internalStepLabels[safeStep - 1]}</Typography>
-                    <Typography variant="caption" color="text.secondary">{label('Only the current step and intake reference are retained for safe recovery.', 'يتم الاحتفاظ بالخطوة الحالية ومرجع التسجيل فقط للاستكمال الآمن.')}</Typography>
+                    <Typography variant="h6" fontWeight={950}>{sectionLabels[safePage]?.[section] || pageLabels[safePage - 1]}</Typography>
+                    <Typography variant="caption" color="text.secondary">{label('Five clear pages. Payment is requested only after BIN GROUP completes the property visit.', 'خمس صفحات واضحة. يتم طلب الدفع فقط بعد إكمال BIN GROUP زيارة العقار.')}</Typography>
                 </Box>
-                <Stepper activeStep={activeVisibleStageIndex} alternativeLabel sx={{ mb: 3 }}>{visibleStages.map((stage) => <Step key={stage}><StepLabel>{stage}</StepLabel></Step>)}</Stepper>
-                <LinearProgress variant="determinate" value={currentStageProgress} sx={{ mb: 1, height: 8, borderRadius: 99 }} />
-                <Typography variant="caption" display="block" textAlign="center" color="text.secondary" mb={3}>{exactProgress}% · {label('exact workflow progress', 'التقدم الفعلي للمسار')}</Typography>
+                <Stepper activeStep={safePage - 1} alternativeLabel sx={{ mb: 3 }}>{pageLabels.map((pageLabel) => <Step key={pageLabel}><StepLabel>{pageLabel}</StepLabel></Step>)}</Stepper>
+                <LinearProgress variant="determinate" value={pageProgress} sx={{ mb: 1, height: 8, borderRadius: 99 }} />
+                <Typography variant="caption" display="block" textAlign="center" color="text.secondary" mb={3}>{pageProgress}% · {label('five-page application progress', 'تقدم الطلب المكون من خمس صفحات')}</Typography>
                 {guardError && <Alert severity="warning" sx={{ mb: 3 }}>{guardError}</Alert>}
-                {renderStepContent(safeStep)}
+                {renderPage()}
             </Container>
         </Box>
     );
