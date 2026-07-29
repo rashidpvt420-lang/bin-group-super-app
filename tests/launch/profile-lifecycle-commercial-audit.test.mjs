@@ -74,7 +74,7 @@ test('Interrupted five-page onboarding recovery persists safe non-secret applica
   expectAll(store, [/name:\s*['"]bin-group-onboarding-v3['"]/, /version:\s*5/, /OWNER_PAGE_COUNT = 5/, /intakeId:\s*state\.intakeId/, /properties:\s*state\.properties/, /proofDocuments:\s*state\.proofDocuments/], 'Safe five-page onboarding recovery');
   const persistence = store.slice(store.indexOf('partialize:'));
   assert.doesNotMatch(persistence, /password|paymentManifest:\s*state\.paymentManifest|paymentMethod:\s*state\.paymentMethod/);
-  expectAll(page, [/PAGE_COUNT = 5/, /clampPage/, /if \(step !== safePage\) setStep\(safePage\)/, /safePage === 1/, /safePage === 5/], 'Five-page onboarding recovery');
+  expectAll(page, [/PAGE_COUNT = 5/, /clampPage/, /if \(step !== safePage\) setStep\(safePage\)/, /safePage === 1/, /return <InspectionSubmissionStep/], 'Five-page onboarding recovery');
 });
 
 test('Arabic contracts exist on payment, onboarding and role-profile surfaces', async () => {
