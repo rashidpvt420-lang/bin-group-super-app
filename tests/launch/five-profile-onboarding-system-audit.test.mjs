@@ -39,7 +39,7 @@ test('all five roles expose protected, bilingual personal profile surfaces', asy
 });
 
 test('property onboarding is a real five-page evidence-backed Phase 1 Owner workflow', async () => {
-  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset, inspectionAdmin, inspectionEvidence, runtime] = await Promise.all([
+  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset, inspectionAdmin, inspectionEvidence, runtime, adminFirebase] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/store/onboardingStore.ts'),
     read('src/components/onboarding/AccountCreationStep.tsx'),
@@ -49,8 +49,9 @@ test('property onboarding is a real five-page evidence-backed Phase 1 Owner work
     read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'),
     read('src/components/onboarding/AssetProfileStep.tsx'),
     read('functions/ownerInspectionAdminLink.ts'),
-    read('functions/ownerInspectionEvidence.ts'),
+    read('functions/phase1OwnerVisitEvidenceHardened.ts'),
     read('functions/runtime.ts'),
+    read('apps/admin-panel/src/lib/firebase.ts'),
   ]);
 
   assert.match(page, /PAGE_COUNT = 5/);
@@ -91,15 +92,22 @@ test('property onboarding is a real five-page evidence-backed Phase 1 Owner work
   assert.match(intakeAdmin, /adminLinkOwnerPropertyInspection/);
   assert.match(intakeAdmin, /adminRecordOwnerPortfolioVisitEvidence/);
   assert.match(intakeAdmin, /adminCompleteOwnerPortfolioInspections/);
-  assert.match(intakeAdmin, /Use current device GPS/);
   assert.match(intakeAdmin, /Attach current property photo/);
   assert.match(intakeAdmin, /Complete verified visits & request 15%/);
   assert.doesNotMatch(intakeAdmin, /COMPLETE ALL VISITS|approveOwnerSubmissionOperationalFlow/);
   assert.match(inspectionAdmin, /paymentCollectionRequired: false/);
   assert.match(inspectionAdmin, /AFTER_ALL_PORTFOLIO_VISITS_COMPLETE/);
-  assert.match(inspectionEvidence, /MAX_ARRIVAL_DISTANCE_METRES = 750/);
+  assert.match(inspectionEvidence, /MAX_ARRIVAL_DISTANCE_METRES = 250/);
+  assert.match(inspectionEvidence, /MAX_ARRIVAL_ACCURACY_METRES = 100/);
+  assert.match(inspectionEvidence, /MAX_GPS_CAPTURE_AGE_MS = 2 \* 60 \* 1000/);
+  assert.match(inspectionEvidence, /BROWSER_GEOLOCATION_AT_SUBMISSION/);
+  assert.match(inspectionEvidence, /gpsAccuracyVerified: true/);
+  assert.match(inspectionEvidence, /gpsCaptureFresh: true/);
   assert.match(inspectionEvidence, /checklistComplete: true/);
   assert.match(inspectionEvidence, /photoCount: 1/);
+  assert.match(adminFirebase, /captureFreshAdminBrowserGps/);
+  assert.match(adminFirebase, /arrivalAccuracyMetres/);
+  assert.match(adminFirebase, /positionCapturedAtMs/);
 
   assert.match(paymentAdmin, /adminRecordOwnerMobilizationPaymentEvidence/);
   assert.match(paymentAdmin, /adminApprovePayment/);
@@ -109,7 +117,9 @@ test('property onboarding is a real five-page evidence-backed Phase 1 Owner work
   assert.doesNotMatch(paymentAdmin, /BANK_TRANSFER|STRIPE/);
 
   assert.match(runtime, /submitOwnerInspectionFirstOnboardingPhase1 as submitOwnerInspectionFirstOnboarding/);
-  assert.match(runtime, /adminCompleteOwnerPortfolioInspectionsPhase1 as adminCompleteOwnerPortfolioInspections/);
+  assert.match(runtime, /adminRecordOwnerPortfolioVisitEvidenceHardened as adminRecordOwnerPortfolioVisitEvidence/);
+  assert.match(runtime, /adminCompleteOwnerPortfolioInspectionsPhase1Hardened as adminCompleteOwnerPortfolioInspections/);
+  assert.match(runtime, /from "\.\/phase1OwnerVisitEvidenceHardened"/);
 
   assert.match(store, /OWNER_PAGE_COUNT = 5/);
   assert.match(store, /version: 5/);
