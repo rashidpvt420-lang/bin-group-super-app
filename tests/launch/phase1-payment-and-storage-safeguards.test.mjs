@@ -24,24 +24,35 @@ test('logout clears onboarding records and does not preserve the onboarding blob
   assert.doesNotMatch(source, /setItem\('bin-group-onboarding-v3'/);
 });
 
-test('onboarding browser persistence contains only safe draft coordinates', async () => {
+test('five-page browser recovery persists only non-secret application state', async () => {
   const store = await read('src/store/onboardingStore.ts');
-  assert.match(store, /version: 4/);
-  assert.match(
-    store,
-    /partialize: \(state\) => \(\{\s*step: state\.step,\s*intakeId: state\.intakeId,\s*brokerAttribution: state\.brokerAttribution,?\s*\}\)/s,
-  );
+  assert.match(store, /OWNER_PAGE_COUNT = 5/);
+  assert.match(store, /version: 5/);
   const persistenceBlock = store.slice(store.indexOf('partialize:'));
-  for (const forbidden of ['signupData', 'password', 'kycUrls', 'paymentManifest', 'proofDocuments', 'signatureName', 'properties: state.properties']) {
-    assert.doesNotMatch(persistenceBlock, new RegExp(forbidden));
-  }
+  for (const required of [
+    'companyProfile: state.companyProfile',
+    'ownerAccount: state.ownerAccount',
+    'properties: state.properties',
+    'proofDocuments: state.proofDocuments',
+    'signatureName: state.signatureName',
+  ]) assert.match(persistenceBlock, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  for (const forbidden of [
+    'signupData: state.signupData',
+    'password',
+    'kycUrls: state.kycUrls',
+    'paymentManifest: state.paymentManifest',
+    'paymentMethod: state.paymentMethod',
+    'paymentReceipt',
+  ]) assert.doesNotMatch(persistenceBlock, new RegExp(forbidden));
 });
 
-test('payment instructions are server-authoritative and versioned', async () => {
+test('legacy payment instructions remain server-authoritative while five-page acquisition defers payment until inspection', async () => {
   const server = await read('functions/paymentConfiguration.ts');
   const packageGate = await read('functions/secureOwnerRegistrationRequest.ts');
-  const client = await read('src/components/onboarding/PaymentSummaryStep.tsx');
-  const submission = await read('src/components/onboarding/PaymentSubmissionStep.tsx');
+  const legacyClient = await read('src/components/onboarding/PaymentSummaryStep.tsx');
+  const legacySubmission = await read('src/components/onboarding/PaymentSubmissionStep.tsx');
+  const fivePageSubmission = await read('src/components/onboarding/InspectionSubmissionStep.tsx');
+  const fivePageBackend = await read('functions/inspectionFirstOwnerOnboarding.ts');
   const runtime = await read('functions/runtime.ts');
 
   assert.match(server, /system_payment_config/);
@@ -52,14 +63,26 @@ test('payment instructions are server-authoritative and versioned', async () => 
   assert.match(packageGate, /submittedVersion !== activeConfiguration\.version/);
   assert.match(packageGate, /submittedHash !== activeConfiguration\.configHash/);
   assert.match(packageGate, /submitted bank-transfer instructions do not match/);
-  assert.match(client, /getOwnerPaymentConfiguration/);
-  assert.match(client, /configVersion: configuration\.version/);
-  assert.match(client, /configHash: configuration\.configHash/);
-  assert.doesNotMatch(client, /BIN GROUP \/ BIN Construction/);
-  assert.match(submission, /verifiedPaymentManifest/);
-  assert.match(submission, /paymentConfigVersion: paymentManifest\.configVersion/);
-  assert.match(submission, /paymentConfigHash: paymentManifest\.configHash/);
-  assert.match(submission, /reset\(\)/);
+  assert.match(legacyClient, /getOwnerPaymentConfiguration/);
+  assert.match(legacyClient, /configVersion: configuration\.version/);
+  assert.match(legacyClient, /configHash: configuration\.configHash/);
+  assert.doesNotMatch(legacyClient, /BIN GROUP \/ BIN Construction/);
+  assert.match(legacySubmission, /verifiedPaymentManifest/);
+  assert.match(legacySubmission, /paymentConfigVersion: paymentManifest\.configVersion/);
+  assert.match(legacySubmission, /paymentConfigHash: paymentManifest\.configHash/);
+
+  assert.match(fivePageSubmission, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(fivePageSubmission, /No payment is collected now/);
+  assert.doesNotMatch(fivePageSubmission, /getOwnerPaymentConfiguration|paymentManifest|createStripeCheckoutSession/);
+  assert.match(fivePageBackend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
+  assert.match(fivePageBackend, /adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(fivePageBackend, /inspectionVerified !== true/);
+  assert.match(runtime, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(runtime, /adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(runtime, /from "\.\/inspectionFirstOwnerOnboarding"/);
+  assert.doesNotMatch(runtime, /^export \* from "\.\/inspectionFirstOwnerOnboarding";/m);
+  assert.match(runtime, /export \* from "\.\/ownerInspectionAdminLink"/);
+  assert.match(runtime, /export \* from "\.\/ownerInspectionCompletion"/);
   assert.match(runtime, /export \* from "\.\/secureOwnerRegistrationRequest"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/ownerRegistrationRequest"/);
 });
@@ -78,14 +101,17 @@ test('owner activation geo gate fails closed', async () => {
   assert.doesNotMatch(runtime, /export \* from "\.\/paymentTransactionApproval"/);
 });
 
-test('owner account creation precedes property upload and OCR', async () => {
+test('owner account page precedes property details and OCR', async () => {
   const page = await read('src/pages/PropertyOnboardingPage.tsx');
   const clientMachine = await read('src/lib/onboardingStateMachine.ts');
   const serverMachine = await read('functions/onboardingStateMachine.ts');
 
-  const accountStep = page.indexOf('case 2: return <AccountCreationStep');
-  const assetStep = page.indexOf('case 3: return <AssetProfileStep');
-  assert.ok(accountStep >= 0 && assetStep > accountStep, 'Account creation must precede property upload and OCR.');
+  const accountPage = page.indexOf("safePage === 1");
+  const accountStep = page.indexOf('<AccountCreationStep');
+  const propertyPage = page.indexOf("safePage === 2");
+  const assetStep = page.indexOf('<AssetProfileStep');
+  assert.ok(accountPage >= 0 && accountStep > accountPage, 'Page 1 must include Owner account creation.');
+  assert.ok(propertyPage > accountPage && assetStep > propertyPage, 'Property details and OCR must follow the Owner account page.');
   for (const machine of [clientMachine, serverMachine]) {
     assert.match(machine, /'account_created'/);
     assert.match(machine, /draft: \['account_created', 'expired', 'suspended'\]/);

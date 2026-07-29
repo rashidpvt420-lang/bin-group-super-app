@@ -53,9 +53,15 @@ test('Broker KYC callable binds current terms, masked summaries and private bank
   expectAll(secure, [/reraLicenseMasked/, /bankIbanMasked/, /KYC_APPROVAL_NOT_BOUND_TO_CURRENT_SUBMISSION/, /authDisplayNameChangeDeferredUntilApproval/], 'Masked Broker authority');
 });
 
-test('Payment summary is server-configured, AED-only, versioned and mathematically consistent', async () => {
-  const source = await read('src/components/onboarding/PaymentSummaryStep.tsx');
-  expectAll(source, [/getOwnerPaymentConfiguration/, /nextConfiguration\.currency !== ['"]AED['"]/, /configVersion/, /configHash/, /configEffectiveAtMs/, /Math\.round\(annualTotal \* 0\.15\)/, /annualContractValue:\s*annualTotal/, /activationDeposit/, /approvedMethods/, /Payment initiation is disabled/], 'Payment summary authority');
+test('Legacy payment summary remains server-configured and five-page acquisition defers collection until inspection', async () => {
+  const [legacy, finalSubmission, backend] = await Promise.all([
+    read('src/components/onboarding/PaymentSummaryStep.tsx'),
+    read('src/components/onboarding/InspectionSubmissionStep.tsx'),
+    read('functions/inspectionFirstOwnerOnboarding.ts'),
+  ]);
+  expectAll(legacy, [/getOwnerPaymentConfiguration/, /nextConfiguration\.currency !== ['"]AED['"]/, /configVersion/, /configHash/, /configEffectiveAtMs/, /Math\.round\(annualTotal \* 0\.15\)/, /annualContractValue:\s*annualTotal/, /activationDeposit/, /approvedMethods/, /Payment initiation is disabled/], 'Legacy payment summary authority');
+  expectAll(finalSubmission, [/No payment is collected now/, /submitOwnerInspectionFirstOnboarding/, /activationDeposit/], 'Five-page final submission');
+  expectAll(backend, [/NOT_DUE_UNTIL_INSPECTION_COMPLETE/, /INSPECTION_REQUIRED_BEFORE_PAYMENT/, /adminRecordOwnerMobilizationPaymentEvidence/], 'Inspection-first payment authority');
 });
 
 test('Onboarding store and quote calculation support monthly, quarterly, annual and multi-property portfolios', async () => {
@@ -63,15 +69,18 @@ test('Onboarding store and quote calculation support monthly, quarterly, annual 
   expectAll(store, [/paymentPlan\?: ['"]annual['"] \| ['"]quarterly['"] \| ['"]monthly['"]/, /properties:\s*PropertyData\[\]/, /bulkAddProperties/, /totalProperties/, /totalUnits/, /quoteResults/, /Object\.values\(quoteResults\)\.reduce/, /paymentPlan:\s*property\.paymentPlan/], 'Multi-property and payment-plan calculation');
 });
 
-test('Interrupted onboarding recovery persists only safe coordinates and clamps every stage', async () => {
+test('Interrupted five-page onboarding recovery persists safe non-secret application state and clamps every page', async () => {
   const [store, page] = await Promise.all([read('src/store/onboardingStore.ts'), read('src/pages/PropertyOnboardingPage.tsx')]);
-  expectAll(store, [/name:\s*['"]bin-group-onboarding-v3['"]/, /version:\s*4/, /step:\s*state\.step/, /intakeId:\s*state\.intakeId/], 'Safe onboarding recovery');
-  expectAll(page, [/INTERNAL_STEP_COUNT = 11/, /clampStep/, /if \(step !== safeStep\) setStep\(safeStep\)/, /case 1:/, /case 11:/], 'Onboarding stage recovery');
+  expectAll(store, [/name:\s*['"]bin-group-onboarding-v3['"]/, /version:\s*5/, /OWNER_PAGE_COUNT = 5/, /intakeId:\s*state\.intakeId/, /properties:\s*state\.properties/, /proofDocuments:\s*state\.proofDocuments/], 'Safe five-page onboarding recovery');
+  const persistence = store.slice(store.indexOf('partialize:'));
+  assert.doesNotMatch(persistence, /password|paymentManifest:\s*state\.paymentManifest|paymentMethod:\s*state\.paymentMethod/);
+  expectAll(page, [/PAGE_COUNT = 5/, /clampPage/, /if \(step !== safePage\) setStep\(safePage\)/, /safePage === 1/, /return <InspectionSubmissionStep/], 'Five-page onboarding recovery');
 });
 
 test('Arabic contracts exist on payment, onboarding and role-profile surfaces', async () => {
   const paths = [
-    'src/components/onboarding/PaymentSummaryStep.tsx',
+    'src/components/onboarding/InspectionSubmissionStep.tsx',
+    'src/components/onboarding/ContractSignatureStep.tsx',
     'src/components/onboarding/PropertyLocationStep.tsx',
     'src/pages/PropertyOnboardingPage.tsx',
     'src/owner/pages/OwnerProfilePage.tsx',

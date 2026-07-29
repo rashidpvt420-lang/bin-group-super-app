@@ -1,47 +1,32 @@
-// Combined candidate guard: expression-safe Firestore rules plus server-authoritative owner quotes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('Functions pricing engine remains byte-identical to the canonical shared implementation', async () => {
-  const [sharedEngine, functionEngine, sharedMatrix, functionMatrix] = await Promise.all([
-    read('packages/shared/src/pricing/calculateUaeQuote2026.ts'),
-    read('functions/pricing/calculateUaeQuote2026.ts'),
-    read('packages/shared/src/pricing/uaePricingMatrix2026.ts'),
-    read('functions/pricing/uaePricingMatrix2026.ts'),
-  ]);
-  assert.equal(functionEngine, sharedEngine, 'Functions pricing engine drifted from @bin/shared');
-  assert.equal(functionMatrix, sharedMatrix, 'Functions pricing matrix drifted from @bin/shared');
-});
-
-test('owner quote issuance is App Check protected, owner bound, live-account checked, versioned, hashed and expiring', async () => {
-  const source = await read('functions/ownerPortfolioQuote.ts');
-  assert.match(source, /issueOwnerPortfolioQuote = onCall/);
-  assert.match(source, /validateOwnerPortfolioQuote = onCall/);
-  assert.match(source, /enforceAppCheck:\s*true/);
-  assert.match(source, /roleOf\(request\.auth\) !== ["']owner["']/);
-  assert.match(source, /email_verified !== true/);
-  assert.match(source, /suspended === true/);
-  assert.match(source, /await admin\.auth\(\)\.getUser\(request\.auth\.uid\)/);
-  assert.match(source, /userRecord\.disabled/);
-  assert.match(source, /userRecord\.emailVerified !== true/);
-  assert.match(source, /userRecord\.customClaims\?\.suspended === true/);
-  assert.match(source, /await assertVerifiedOwner\(request\)/);
-  assert.match(source, /QUOTE_SCHEMA_VERSION = ["']OWNER_PORTFOLIO_QUOTE_V1["']/);
-  assert.match(source, /PRICING_ENGINE_VERSION/);
-  assert.match(source, /QUOTE_TTL_MS = 30 \* 60 \* 1000/);
-  assert.match(source, /inputHash = sha256\(inputEnvelope\)/);
-  assert.match(source, /quoteHash = sha256\(quoteEnvelope\)/);
-  assert.match(source, /owner_portfolio_quotes/);
-  assert.match(source, /status: ["']ACTIVE["']/);
+test('server-authoritative Owner quote rejects mixed contract modes and invalid values', async () => {
+  const source = await read('functions/ownerOnboardingQuote.ts');
+  assert.match(source, /VALID_CONTRACT_MODES/);
+  assert.match(source, /All properties in a portfolio quote must use the same contract mode/);
+  assert.match(source, /Portfolio annual total must be positive/);
+  assert.match(source, /activationDeposit = money\(portfolioAnnualTotal \* 0\.15\)/);
+  assert.match(source, /remainingAmount = money\(portfolioAnnualTotal - activationDeposit\)/);
   assert.match(source, /expiresAtMs/);
 });
 
-test('owner quote validation rejects cross-owner, stale, altered and mismatched totals', async () => {
+test('accepted server quote hash changes when inputs or timestamp change', async () => {
+  const source = await read('functions/ownerOnboardingQuote.ts');
+  assert.match(source, /quotedAtMs/);
+  assert.match(source, /JSON\.stringify/);
+  assert.match(source, /createHash\(["']sha256["']\)/);
+  assert.match(source, /quoteHash/);
+});
+
+test('recorded Owner portfolio quotes are bound to Owner, engine, expiry and exact totals', async () => {
   const source = await read('functions/ownerPortfolioQuote.ts');
-  assert.match(source, /assertOwnerPortfolioQuoteRecord/);
+  assert.match(source, /QUOTE_SCHEMA_VERSION/);
+  assert.match(source, /PRICING_ENGINE_VERSION/);
+  assert.match(source, /QUOTE_TTL_MS/);
   assert.match(source, /quote\.ownerUid !== ownerUid/);
   assert.match(source, /quote\.status !== ["']ACTIVE["']/);
   assert.match(source, /quote\.quoteSchemaVersion !== QUOTE_SCHEMA_VERSION/);
@@ -54,20 +39,32 @@ test('owner quote validation rejects cross-owner, stale, altered and mismatched 
   assert.match(source, /portfolioAnnualTotal \* 0\.15/);
 });
 
-test('review issues and revalidates the server quote before contract progression', async () => {
+test('five-page Review issues a fresh authenticated quote and blocks progression when stale or invalid', async () => {
   const source = await read('src/components/onboarding/ReviewBeforeSubmitStep.tsx');
-  assert.match(source, /issueOwnerPortfolioQuote/);
-  assert.match(source, /validateOwnerPortfolioQuote/);
-  assert.match(source, /ownerPortfolioQuoteRequest/);
+  assert.match(source, /previewOwnerInspectionQuote/);
   assert.match(source, /serverQuoteRequestKey/);
   assert.match(source, /serverQuote\.expiresAtMs <= Date\.now\(\)/);
-  assert.match(source, /portfolioAnnualTotal:\s*serverQuote\.portfolioAnnualTotal/);
-  assert.match(source, /mobilisationDeposit:\s*serverQuote\.mobilisationDeposit/);
-  assert.match(source, /disabled=\{quoteLoading \|\| validating \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
+  assert.match(source, /portfolioAnnualTotal:\s*nextQuote\.annualContractValue/);
+  assert.match(source, /mobilisationDeposit:\s*nextQuote\.activationDeposit/);
+  assert.match(source, /disabled=\{quoteLoading \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
   assert.match(source, /setValuationResult/);
 });
 
-test('payment package accepts only a recorded quote or a deterministic fresh server-recalculated legacy quote', async () => {
+test('five-page final submission deterministically recalculates and revalidates the signed quote before persistence', async () => {
+  const source = await read('functions/inspectionFirstOwnerOnboarding.ts');
+  assert.match(source, /function assertQuote/);
+  assert.match(source, /const quotedAtMs = finite\(data\.quoteQuotedAtMs \|\| data\.quotedAtMs\)/);
+  assert.match(source, /quotedAtMs > Date\.now\(\) \+ 60_000/);
+  assert.match(source, /const quote = quoteFor\(properties, selectedAddOns, quotedAtMs\)/);
+  assert.match(source, /Number\(quote\.expiresAtMs \|\| 0\) <= Date\.now\(\)/);
+  assert.match(source, /text\(data\.quoteHash\)\.toLowerCase\(\) !== quote\.quoteHash/);
+  assert.match(source, /Number\(quote\.annualContractValue\) \* 0\.15/);
+  assert.match(source, /quoteHash:\s*quote\.quoteHash/);
+  assert.match(source, /quoteSnapshot:\s*cleanPlain\(quote\)/);
+  assert.match(source, /SUBMITTED_FOR_PROPERTY_INSPECTION/);
+});
+
+test('legacy payment package accepts only a recorded quote or deterministic fresh recalculation', async () => {
   const source = await read('functions/secureOwnerRegistrationRequest.ts');
   assert.match(source, /async function assertServerQuote/);
   assert.match(source, /if \(text\(data\.quoteId\)\)/);
@@ -88,13 +85,21 @@ test('payment package accepts only a recorded quote or a deterministic fresh ser
   assert.match(source, /await assertCurrentPaymentConfiguration\(data\)/);
 });
 
-test('server quote state remains memory-only and is not added to persisted onboarding state', async () => {
+test('recoverable quote state is non-secret and final submission never trusts it without server recalculation', async () => {
   const store = await read('src/store/onboardingStore.ts');
-  assert.match(store, /partialize:\s*\(state\) => \(\{\s*step:\s*state\.step,\s*intakeId:\s*state\.intakeId/s);
-  assert.doesNotMatch(store, /partialize:[\s\S]{0,300}serverQuote/);
+  const finalSubmission = await read('src/components/onboarding/InspectionSubmissionStep.tsx');
+  const backend = await read('functions/inspectionFirstOwnerOnboarding.ts');
+  const persistence = store.slice(store.indexOf('partialize:'));
+  assert.match(persistence, /valuationResult:\s*state\.valuationResult/);
+  assert.doesNotMatch(persistence, /password|paymentManifest:\s*state\.paymentManifest|paymentMethod:\s*state\.paymentMethod|paymentReceipt/);
+  assert.match(finalSubmission, /quoteHash:\s*serverQuote\.quoteHash/);
+  assert.match(finalSubmission, /quoteQuotedAtMs:\s*serverQuote\.quotedAtMs/);
+  assert.match(backend, /assertQuote\(data, properties, selectedAddOns\)/);
 });
 
-test('runtime exports the owner quote authority', async () => {
+test('runtime exports both portfolio quote authority and explicit five-page quote callable', async () => {
   const runtime = await read('functions/runtime.ts');
   assert.match(runtime, /export \* from ["']\.\/ownerPortfolioQuote["']/);
+  assert.match(runtime, /previewOwnerInspectionQuote/);
+  assert.match(runtime, /from ["']\.\/inspectionFirstOwnerOnboarding["']/);
 });

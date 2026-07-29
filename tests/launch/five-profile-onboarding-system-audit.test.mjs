@@ -38,25 +38,69 @@ test('all five roles expose protected, bilingual personal profile surfaces', asy
   assert.match(adminPage, ARABIC);
 });
 
-test('property onboarding preserves account-first, eleven-step, Arabic and recovery contracts', async () => {
-  const [page, store, payment, asset] = await Promise.all([
+test('property onboarding is a real five-page inspection-first Owner workflow', async () => {
+  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset, inspectionAdmin] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/store/onboardingStore.ts'),
-    read('src/components/onboarding/PaymentSummaryStep.tsx'),
+    read('src/components/onboarding/AccountCreationStep.tsx'),
+    read('src/components/onboarding/InspectionSubmissionStep.tsx'),
+    read('functions/inspectionFirstOwnerOnboarding.ts'),
+    read('apps/admin-panel/src/pages/admin/IntakeVaultPage.tsx'),
+    read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'),
     read('src/components/onboarding/AssetProfileStep.tsx'),
+    read('functions/ownerInspectionAdminLink.ts'),
   ]);
 
-  assert.match(page, /INTERNAL_STEP_COUNT = 11/);
-  assert.ok(page.indexOf('case 2: return <AccountCreationStep') < page.indexOf('case 3: return <AssetProfileStep'));
+  assert.match(page, /PAGE_COUNT = 5/);
+  assert.match(page, /pageProgress = safePage \* 20/);
+  assert.match(page, /InspectionSubmissionStep/);
+  assert.doesNotMatch(page, /PaymentSummaryStep|PaymentSubmissionStep|INTERNAL_STEP_COUNT\s*=\s*11/);
+  assert.ok(page.indexOf('<CompanyProfileStep') < page.indexOf('<AccountCreationStep'));
+  assert.ok(page.indexOf('<AccountCreationStep') < page.indexOf('<AssetProfileStep'));
+  assert.match(page, /Submit for Visit/);
   assert.match(page, /dir=\{isRTL \? ['"]rtl['"] : ['"]ltr['"]\}/);
   assert.match(page, ARABIC);
-  assert.match(page, /if \(step !== safeStep\) setStep\(safeStep\)/);
-  assert.match(store, /partialize:\s*\(state\)\s*=>\s*\(\{\s*step:\s*state\.step,\s*intakeId:\s*state\.intakeId/);
-  assert.doesNotMatch(store.slice(store.indexOf('partialize:'), store.indexOf('partialize:') + 260), /password|kycUrls|paymentManifest|signatureName|proofDocuments/);
-  assert.match(payment, /getOwnerPaymentConfiguration/);
-  assert.match(payment, /Math\.round\(annualTotal \* 0\.15\)/);
-  assert.match(payment, /configHash/);
-  assert.match(payment, ARABIC);
+
+  assert.match(account, /createUserWithEmailAndPassword/);
+  assert.match(account, /sendEmailVerification/);
+  assert.match(account, /upsertOwnerOnboardingProfile/);
+  assert.doesNotMatch(account, /submitPendingOwnerRegistration/);
+  assert.match(account, /No payment is collected on these five pages/);
+
+  assert.match(finalSubmission, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(finalSubmission, /uploadOwnerInspectionProofDocument/);
+  assert.match(finalSubmission, /No payment is collected now/);
+  assert.doesNotMatch(finalSubmission, /paymentReceipt|createStripeCheckoutSession/);
+
+  assert.match(backend, /OWNER_FIVE_PAGE_INSPECTION_FIRST_V1/);
+  assert.match(backend, /SUBMITTED_FOR_PROPERTY_INSPECTION/);
+  assert.match(backend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
+  assert.match(backend, /INSPECTION_REQUIRED_BEFORE_PAYMENT/);
+  assert.match(backend, /adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
+
+  assert.match(intakeAdmin, /adminCreateOwnerPortfolioPropertyInspection/);
+  assert.match(intakeAdmin, /adminLinkOwnerPropertyInspection/);
+  assert.match(intakeAdmin, /adminCompleteOwnerPortfolioInspections/);
+  assert.match(intakeAdmin, /RECORD 15% & APPROVE/);
+  assert.doesNotMatch(intakeAdmin, /adminCreateOwnerPropertyInspection|approveOwnerSubmissionOperationalFlow/);
+  assert.match(inspectionAdmin, /paymentCollectionRequired: false/);
+  assert.match(inspectionAdmin, /AFTER_ALL_PORTFOLIO_VISITS_COMPLETE/);
+
+  assert.match(paymentAdmin, /adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(paymentAdmin, /adminApprovePayment/);
+  assert.match(paymentAdmin, /inspectionVerified/);
+  assert.match(paymentAdmin, /Verify 15% & Approve Owner/);
+
+  assert.match(store, /OWNER_PAGE_COUNT = 5/);
+  assert.match(store, /version: 5/);
+  const persistence = store.slice(store.indexOf('partialize:'), store.indexOf('partialize:') + 1400);
+  assert.match(persistence, /companyProfile/);
+  assert.match(persistence, /ownerAccount/);
+  assert.match(persistence, /properties/);
+  assert.match(persistence, /proofDocuments/);
+  assert.doesNotMatch(persistence, /password|paymentManifest|paymentMethod/);
+
   assert.match(asset, /Mosque \/ Masjid/);
   assert.match(asset, /ASSESSMENT_REQUIRED/);
   assert.match(asset, /اسم المسجد/);

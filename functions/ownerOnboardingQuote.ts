@@ -1,7 +1,11 @@
-const QUOTE_VERSION = "uae-owner-onboarding-2026-v2-server";
+import { createHash } from "crypto";
+
+const QUOTE_VERSION = "uae-owner-onboarding-2026-v3-server-authority";
 const QUOTE_TTL_MS = 72 * 60 * 60 * 1000;
+const VALID_CONTRACT_MODES = new Set(["FM_ONLY", "PM_ONLY", "BOTH"]);
 
 type PropertyInput = Record<string, any>;
+type ContractMode = "FM_ONLY" | "PM_ONLY" | "BOTH";
 
 type AssetPrice = {
   minimum: number;
@@ -77,6 +81,10 @@ function number(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? Math.max(parsed, 0) : fallback;
 }
 
+function money(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 function text(value: unknown) {
   return String(value || "").trim();
 }
@@ -104,11 +112,23 @@ function assetId(property: PropertyInput): string {
   return "apt-std";
 }
 
-function contractType(property: PropertyInput) {
-  const strategy = text(property.strategy).toLowerCase();
-  if (strategy === "pm_only" || strategy === "rent") return "PM_ONLY";
-  if (strategy === "fm_only" || strategy === "fm") return "FM_ONLY";
-  return "BOTH";
+function contractType(property: PropertyInput): ContractMode {
+  const strategy = text(
+    property.strategy ||
+    property.serviceModel ||
+    property.contractMode ||
+    property.contractType ||
+    property.selectedPlan?.type ||
+    property.selectedPlan?.id,
+  ).toLowerCase();
+  let mode = "";
+  if (["pm", "pm_only", "rent", "property_management"].includes(strategy)) mode = "PM_ONLY";
+  if (["fm", "fm_only", "maintenance", "maintenance_only"].includes(strategy)) mode = "FM_ONLY";
+  if (["both", "hybrid", "combined", "total_care", "total-care"].includes(strategy)) mode = "BOTH";
+  if (!VALID_CONTRACT_MODES.has(mode)) {
+    throw new Error("Every property requires a valid Maintenance, Property Management, or Hybrid contract mode.");
+  }
+  return mode as ContractMode;
 }
 
 function emirateMultiplier(property: PropertyInput) {
@@ -175,7 +195,6 @@ function calculateMosque(property: PropertyInput, selectedAddOns: string[]) {
   const softServices = sqft * 8 * capacityMultiplier;
   const wuduAreaProxySqft = Math.min(Math.max(Math.ceil(capacity * 0.12), 35), 650);
   const wuduCleaning = wuduAreaProxySqft * 35 * 26;
-  // The onboarding UI treats mosque HVAC coverage as mandatory.
   const ramadanSurge = 15500 + 2500;
   const compliancePremium = Math.max(baseQuote * 0.04, 2500);
   const complexityPremium = (baseQuote + softServices) * 0.1;
@@ -224,9 +243,19 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
   if (!Array.isArray(properties) || properties.length < 1 || properties.length > 100) {
     throw new Error("One to 100 properties are required.");
   }
+  if (!Number.isFinite(nowMs) || nowMs <= 0) throw new Error("A valid quotation timestamp is required.");
+
   const selectedAddOns = Array.isArray(addOns) ? addOns.map(text).filter(Boolean) : [];
-  const propertyQuotes = properties.map((property, index) => {
-    const cleanProperty = property && typeof property === "object" ? property as PropertyInput : {};
+  const normalizedProperties: PropertyInput[] = properties.map((property: unknown) => (
+    property && typeof property === "object" ? property as PropertyInput : {}
+  ));
+  const contractModes = normalizedProperties.map((property: PropertyInput) => contractType(property));
+  if (contractModes.some((mode: ContractMode) => mode !== contractModes[0])) {
+    throw new Error("All properties in a portfolio quote must use the same contract mode.");
+  }
+  const contractMode = contractModes[0];
+
+  const propertyQuotes = normalizedProperties.map((cleanProperty: PropertyInput, index: number) => {
     if (!text(cleanProperty.emirate) || !text(cleanProperty.propertyType)) {
       throw new Error(`Property ${index + 1} is missing emirate or property type.`);
     }
@@ -235,24 +264,35 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
     }
     return {
       propertyId: text(cleanProperty.id || cleanProperty.propertyId || `property_${index + 1}`),
-      annualTotal: calculateProperty(cleanProperty, selectedAddOns),
+      contractMode,
+      annualTotal: money(calculateProperty(cleanProperty, selectedAddOns)),
     };
   });
-  const annualContractValue = Math.round(propertyQuotes.reduce((sum, quote) => sum + quote.annualTotal, 0));
-  const activationDeposit = Math.round(annualContractValue * 0.15);
-  if (annualContractValue <= 0 || activationDeposit <= 0) throw new Error("Server quote is invalid.");
-  return {
+
+  const portfolioAnnualTotal = money(propertyQuotes.reduce((sum: number, quote) => sum + quote.annualTotal, 0));
+  if (portfolioAnnualTotal <= 0) throw new Error("Portfolio annual total must be positive.");
+  const activationDeposit = money(portfolioAnnualTotal * 0.15);
+  const remainingAmount = money(portfolioAnnualTotal - activationDeposit);
+  if (activationDeposit <= 0) throw new Error("Server quotation mobilisation deposit must be positive.");
+
+  const quotedAtMs = nowMs;
+  const expiresAtMs = quotedAtMs + QUOTE_TTL_MS;
+  const unsignedQuote = {
     version: QUOTE_VERSION,
     currency: "AED",
-    annualContractValue,
+    contractMode,
+    portfolioAnnualTotal,
+    annualContractValue: portfolioAnnualTotal,
     mobilizationPercent: 15,
     activationDeposit,
-    remainingAmount: annualContractValue - activationDeposit,
+    remainingAmount,
     vatAmount: 0,
     vatTreatment: "NOT_APPLIED",
     selectedAddOns,
     propertyQuotes,
-    quotedAtMs: nowMs,
-    expiresAtMs: nowMs + QUOTE_TTL_MS,
+    quotedAtMs,
+    expiresAtMs,
   };
+  const quoteHash = createHash("sha256").update(JSON.stringify(unsignedQuote)).digest("hex");
+  return { ...unsignedQuote, quoteHash };
 }

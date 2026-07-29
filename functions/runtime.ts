@@ -8,6 +8,19 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
+// Security: do not use `export * from "./inspectionFirstOwnerOnboarding";` here.
+// The legacy single-inspection completion export is intentionally excluded; only
+// portfolio-safe Owner acquisition callables are deployed.
+export {
+  previewOwnerInspectionQuote,
+  requestOwnerInspectionSignatureOtp,
+  verifyOwnerInspectionSignatureOtp,
+  uploadOwnerInspectionProofDocument,
+  submitOwnerInspectionFirstOnboarding,
+  adminRecordOwnerMobilizationPaymentEvidence,
+} from "./inspectionFirstOwnerOnboarding";
+export * from "./ownerInspectionAdminLink";
+export * from "./ownerInspectionCompletion";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";

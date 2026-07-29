@@ -3,10 +3,12 @@ import { persist } from 'zustand/middleware';
 import { calculateUaeQuote2026 } from '../utils/calculateUaeQuote2026';
 import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
 
+const OWNER_PAGE_COUNT = 5;
 const createOnboardingSessionId = () => {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
     return `onb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 };
+const clampOwnerPage = (value: number) => Math.min(Math.max(Number(value) || 1, 1), OWNER_PAGE_COUNT);
 
 export interface PropertyData {
     id: string;
@@ -279,8 +281,8 @@ export const useOnboardingStore = create<OnboardingState>()(
             ownerAccount: null,
             proofDocuments: emptyProofDocuments(),
             propertyData: { ...defaultProperty, id: 'prop-1' },
-            setStep: (step) => set({ step }),
-            nextStep: () => set((state) => ({ step: state.step + 1 })),
+            setStep: (step) => set({ step: clampOwnerPage(step) }),
+            nextStep: () => set((state) => ({ step: Math.min(OWNER_PAGE_COUNT, state.step + 1) })),
             prevStep: () => set((state) => ({ step: Math.max(1, state.step - 1) })),
             setIntakeId: (intakeId) => set({ intakeId }),
             addProperty: (data) => {
@@ -392,13 +394,26 @@ export const useOnboardingStore = create<OnboardingState>()(
         }),
         {
             name: 'bin-group-onboarding-v3',
-            // Version bump intentionally invalidates legacy browser blobs that
-            // persisted passwords, KYC URLs, payment manifests and property data.
-            version: 4,
+            // Persist only recoverable, non-secret application state. Passwords,
+            // payment manifests, receipt files and payment methods never enter storage.
+            version: 5,
             partialize: (state) => ({
-                step: state.step,
+                step: clampOwnerPage(state.step),
                 intakeId: state.intakeId,
+                onboardingSessionId: state.onboardingSessionId,
                 brokerAttribution: state.brokerAttribution,
+                companyProfile: state.companyProfile,
+                ownerAccount: state.ownerAccount,
+                properties: state.properties,
+                propertyData: state.propertyData,
+                portfolioSummary: state.portfolioSummary,
+                selectedPlan: state.selectedPlan,
+                selectedAddOns: state.selectedAddOns,
+                valuationResult: state.valuationResult,
+                isContractSigned: state.isContractSigned,
+                signatureName: state.signatureName,
+                contractOtpVerificationId: state.contractOtpVerificationId,
+                proofDocuments: state.proofDocuments,
             }),
         },
     ),

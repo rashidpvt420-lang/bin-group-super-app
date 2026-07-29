@@ -121,24 +121,27 @@ test('Broker browser receives masked KYC only and payout readiness is server-aut
   assert.match(payout, /status: "CONSUMED"/);
 });
 
-test('owner onboarding is account-first, direct-to-Owner and location provenance safe', async () => {
-  const [page, store, stateMachine, company, location, geo, payment, quote] = await Promise.all([
+test('Owner onboarding is five-page, account-first, inspection-first and location-provenance safe', async () => {
+  const [page, store, stateMachine, company, location, geo, finalSubmission, backend] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/store/onboardingStore.ts'),
     read('src/lib/onboardingStateMachine.ts'),
     read('src/components/onboarding/CompanyProfileStep.tsx'),
     read('src/components/onboarding/PropertyLocationStep.tsx'),
     read('src/utils/geoAnchor.ts'),
-    read('src/components/onboarding/PaymentSummaryStep.tsx'),
-    read('functions/ownerPortfolioQuote.ts'),
+    read('src/components/onboarding/InspectionSubmissionStep.tsx'),
+    read('functions/inspectionFirstOwnerOnboarding.ts'),
   ]);
-  assert.ok(page.indexOf('case 2: return <AccountCreationStep') < page.indexOf('case 3: return <AssetProfileStep'));
+  assert.match(page, /PAGE_COUNT = 5/);
+  assert.ok(page.indexOf('<AccountCreationStep') < page.indexOf('<AssetProfileStep'));
+  assert.doesNotMatch(page, /PaymentSummaryStep|PaymentSubmissionStep/);
   assert.match(stateMachine, /account_created/);
-  assert.match(store, /version:\s*4/);
-  assert.match(
-    store,
-    /partialize:\s*\(state\)\s*=>\s*\(\{\s*step:\s*state\.step,\s*intakeId:\s*state\.intakeId,\s*brokerAttribution:\s*state\.brokerAttribution,?\s*\}\)/s,
-  );
+  assert.match(store, /version:\s*5/);
+  assert.match(store, /OWNER_PAGE_COUNT = 5/);
+  const persistence = store.slice(store.indexOf('partialize:'));
+  assert.match(persistence, /companyProfile:\s*state\.companyProfile/);
+  assert.match(persistence, /properties:\s*state\.properties/);
+  assert.doesNotMatch(persistence, /password|paymentManifest:\s*state\.paymentManifest|paymentMethod:\s*state\.paymentMethod/);
   assert.match(company, /Rent is paid directly to the Owner/);
   assert.match(company, /BIN GROUP does not hold owner rent funds/);
   assert.match(company, /الإيجار مباشرة للمالك/);
@@ -149,8 +152,8 @@ test('owner onboarding is account-first, direct-to-Owner and location provenance
   assert.match(location, /البحث عن عنوان العقار/);
   assert.match(geo, /"device_gps"/);
   assert.match(geo, /dispatchReady/);
-  assert.match(payment, /getOwnerPaymentConfiguration/);
-  assert.match(payment, /Math\.round\(annualTotal \* 0\.15\)/);
-  assert.match(quote, /QUOTE_TTL_MS/);
-  assert.match(quote, /assertOwnerPortfolioQuoteRecord/);
+  assert.match(finalSubmission, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(finalSubmission, /No payment is collected now/);
+  assert.match(backend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
+  assert.match(backend, /INSPECTION_REQUIRED_BEFORE_PAYMENT/);
 });

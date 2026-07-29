@@ -11,7 +11,7 @@ const highRiskSurfaces = [
   'src/components/onboarding/PropertyLocationStep.tsx',
   'src/components/onboarding/ProofUploadStep.tsx',
   'src/components/onboarding/ContractSignatureStep.tsx',
-  'src/components/onboarding/PaymentSummaryStep.tsx',
+  'src/components/onboarding/InspectionSubmissionStep.tsx',
   'src/owner/components/OwnerProfileReadinessCard.tsx',
   'src/tenant/components/TenantProfileReadinessCard.tsx',
   'src/technician/pages/TechnicianProfilePage.tsx',
@@ -85,16 +85,19 @@ test('Admin and Broker map technical states before displaying them in Arabic', a
   assert.match(broker, /رخصة ريرا غير موثقة/);
 });
 
-test('portfolio contract and payment Arabic copy are tied to server-authoritative totals', async () => {
-  const [contract, payment] = await Promise.all([
+test('five-page Owner contract and final submission tie Arabic copy to the inspection-first server quote', async () => {
+  const [contract, finalSubmission, backend] = await Promise.all([
     read('src/components/onboarding/ContractSignatureStep.tsx'),
-    read('src/components/onboarding/PaymentSummaryStep.tsx'),
+    read('src/components/onboarding/InspectionSubmissionStep.tsx'),
+    read('functions/inspectionFirstOwnerOnboarding.ts'),
   ]);
-  assert.match(contract, /القيمة السنوية للمحفظة/);
+  assert.match(contract, /القيمة السنوية قبل الفحص/);
   assert.match(contract, /لا تحتفظ BIN GROUP بأموال إيجار المالك/);
-  assert.match(contract, /previewOwnerOnboardingQuote/);
-  assert.match(payment, /خيارات دفع المحفظة/);
-  assert.match(payment, /دفعة التعبئة الإلزامية 15٪/);
-  assert.match(payment, /previewOwnerOnboardingQuote/);
-  assert.match(payment, /portfolioPropertyCount/);
+  assert.match(contract, /previewOwnerInspectionQuote/);
+  assert.match(contract, /دفعة 15٪ بعد الزيارة/);
+  assert.match(finalSubmission, /لا يتم تحصيل الدفع الآن/);
+  assert.match(finalSubmission, /15٪ بعد الزيارة/);
+  assert.match(finalSubmission, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(backend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
+  assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
 });
