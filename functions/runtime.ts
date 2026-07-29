@@ -8,7 +8,14 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
-export * from "./inspectionFirstOwnerOnboarding";
+export {
+  previewOwnerInspectionQuote,
+  requestOwnerInspectionSignatureOtp,
+  verifyOwnerInspectionSignatureOtp,
+  uploadOwnerInspectionProofDocument,
+  submitOwnerInspectionFirstOnboarding,
+  adminRecordOwnerMobilizationPaymentEvidence,
+} from "./inspectionFirstOwnerOnboarding";
 export * from "./ownerInspectionAdminLink";
 export * from "./ownerInspectionCompletion";
 export * from "./ownerFinancialOperations";
