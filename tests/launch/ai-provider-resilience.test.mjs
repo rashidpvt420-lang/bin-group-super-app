@@ -30,6 +30,12 @@ test('title deed OCR is App Check protected, user-scoped and never auto-verifies
   assert.match(ocr, /autoVerified: false/);
   assert.match(ocr, /finally \{/);
   assert.match(ocr, /file\.delete\(\{ ignoreNotFound: true \}\)/);
+  const protectedBodyStart = ocr.indexOf('const file = bucket.file(storagePath);');
+  const outerTry = ocr.indexOf('try {', protectedBodyStart);
+  const unconfiguredBranch = ocr.indexOf('if (!key)', outerTry);
+  const cleanupFinally = ocr.lastIndexOf('} finally {');
+  assert.ok(protectedBodyStart >= 0 && outerTry > protectedBodyStart, 'OCR temp-file lifecycle must start before provider selection');
+  assert.ok(unconfiguredBranch > outerTry && cleanupFinally > unconfiguredBranch, 'missing-key return must remain inside the cleanup try/finally');
   assert.doesNotMatch(ocr, /fetch\(request\.data|fetch\(fileUrl|autoVerified: true/);
   assert.doesNotMatch(ocr, /legal validity.*verified/i);
 });
