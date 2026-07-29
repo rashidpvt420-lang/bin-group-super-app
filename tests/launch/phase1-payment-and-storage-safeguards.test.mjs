@@ -77,7 +77,12 @@ test('legacy payment instructions remain server-authoritative while five-page ac
   assert.match(fivePageBackend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
   assert.match(fivePageBackend, /adminRecordOwnerMobilizationPaymentEvidence/);
   assert.match(fivePageBackend, /inspectionVerified !== true/);
-  assert.match(runtime, /export \* from "\.\/inspectionFirstOwnerOnboarding"/);
+  assert.match(runtime, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(runtime, /adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(runtime, /from "\.\/inspectionFirstOwnerOnboarding"/);
+  assert.doesNotMatch(runtime, /^export \* from "\.\/inspectionFirstOwnerOnboarding";/m);
+  assert.match(runtime, /export \* from "\.\/ownerInspectionAdminLink"/);
+  assert.match(runtime, /export \* from "\.\/ownerInspectionCompletion"/);
   assert.match(runtime, /export \* from "\.\/secureOwnerRegistrationRequest"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/ownerRegistrationRequest"/);
 });
