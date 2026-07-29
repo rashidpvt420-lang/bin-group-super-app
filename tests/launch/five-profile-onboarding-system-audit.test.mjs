@@ -39,7 +39,7 @@ test('all five roles expose protected, bilingual personal profile surfaces', asy
 });
 
 test('property onboarding is a real five-page inspection-first Owner workflow', async () => {
-  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset] = await Promise.all([
+  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset, inspectionAdmin] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/store/onboardingStore.ts'),
     read('src/components/onboarding/AccountCreationStep.tsx'),
@@ -48,6 +48,7 @@ test('property onboarding is a real five-page inspection-first Owner workflow', 
     read('apps/admin-panel/src/pages/admin/IntakeVaultPage.tsx'),
     read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'),
     read('src/components/onboarding/AssetProfileStep.tsx'),
+    read('functions/ownerInspectionAdminLink.ts'),
   ]);
 
   assert.match(page, /PAGE_COUNT = 5/);
@@ -78,11 +79,13 @@ test('property onboarding is a real five-page inspection-first Owner workflow', 
   assert.match(backend, /adminRecordOwnerMobilizationPaymentEvidence/);
   assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
 
-  assert.match(intakeAdmin, /adminCreateOwnerPropertyInspection/);
+  assert.match(intakeAdmin, /adminCreateOwnerPortfolioPropertyInspection/);
   assert.match(intakeAdmin, /adminLinkOwnerPropertyInspection/);
   assert.match(intakeAdmin, /adminCompleteOwnerPortfolioInspections/);
   assert.match(intakeAdmin, /RECORD 15% & APPROVE/);
-  assert.doesNotMatch(intakeAdmin, /approveOwnerSubmissionOperationalFlow/);
+  assert.doesNotMatch(intakeAdmin, /adminCreateOwnerPropertyInspection|approveOwnerSubmissionOperationalFlow/);
+  assert.match(inspectionAdmin, /paymentCollectionRequired: false/);
+  assert.match(inspectionAdmin, /AFTER_ALL_PORTFOLIO_VISITS_COMPLETE/);
 
   assert.match(paymentAdmin, /adminRecordOwnerMobilizationPaymentEvidence/);
   assert.match(paymentAdmin, /adminApprovePayment/);
