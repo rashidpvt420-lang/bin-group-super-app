@@ -1,52 +1,103 @@
 import React, { useMemo, useState } from 'react';
-import { 
+import {
     Alert,
-    Box, Typography, Grid, Paper, Button, Stack, Container, Divider, Chip, LinearProgress
+    Box, Typography, Grid, Paper, Button, Stack, Container, Chip, LinearProgress
 } from '@mui/material';
-import { FileText, Upload, CheckCircle2, ArrowRight, ArrowLeft, ScanLine, LockKeyhole, AlertTriangle } from 'lucide-react';
+import { FileText, Upload, CheckCircle2, ArrowRight, ArrowLeft, ScanLine, LockKeyhole } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { auth, functions, storage, ref, uploadBytes, httpsCallable } from '../../lib/firebase';
+
+type ScannerState = 'idle' | 'scanning' | 'review' | 'manual' | 'error';
+
+type OcrResponse = {
+    status?: string;
+    provider?: string;
+    data?: Record<string, any> | null;
+    message?: string;
+    verificationState?: string;
+    autoVerified?: boolean;
+};
 
 const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { proofDocuments, setProofDocument } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
-    const [scannerState, setScannerState] = useState<'idle' | 'scanning' | 'review' | 'error'>('idle');
-    const [ocrData, setOcrData] = useState<any>(null);
+    const [scannerState, setScannerState] = useState<ScannerState>('idle');
+    const [ocrData, setOcrData] = useState<Record<string, any> | null>(null);
+    const [scannerMessage, setScannerMessage] = useState('');
+    const [uploadError, setUploadError] = useState('');
 
     const requiredDocs = [
         { key: 'propertyProof' as const, label: t('onboarding.doc.title_deed') },
-        { key: 'emiratesId' as const, label: t('onboarding.doc.passport') }, // Reusing keys for simplicity
+        { key: 'emiratesId' as const, label: isRTL ? 'الهوية الإماراتية' : 'Emirates ID' },
         { key: 'passport' as const, label: t('onboarding.doc.passport') },
     ];
 
-    const canProceed = proofDocuments.propertyProof && proofDocuments.emiratesId && proofDocuments.passport;
-    const stagedCount = requiredDocs.filter((doc) => proofDocuments[doc.key]).length;
+    const canProceed = Boolean(proofDocuments.propertyProof && proofDocuments.emiratesId && proofDocuments.passport);
+    const stagedCount = requiredDocs.filter((document) => proofDocuments[document.key]).length;
     const progress = Math.round((stagedCount / requiredDocs.length) * 100);
-    
+
     const titleDeedPreview = useMemo(() => {
         const file = proofDocuments.propertyProof;
         if (!file) return null;
-        return {
-            fileName: file.name,
-            status: scannerState === 'review' ? t('onboarding.scanned') : (scannerState === 'error' ? t('onboarding.scanner_retry') : t('onboarding.docs_ready')),
-            confidence: scannerState === 'review' ? `${Math.round((ocrData?.confidenceScore || 0.95) * 100)}% ${t('onboarding.scanner_match')}` : t('onboarding.docs_awaiting')
-        };
-    }, [proofDocuments.propertyProof, scannerState, ocrData, t]);
+        const status = scannerState === 'review'
+            ? t('onboarding.scanned')
+            : scannerState === 'manual'
+                ? (isRTL ? 'تحتاج مراجعة يدوية' : 'Manual review required')
+                : scannerState === 'error'
+                    ? t('onboarding.scanner_retry')
+                    : t('onboarding.docs_ready');
+        const confidence = scannerState === 'review'
+            ? `${Math.round(Number(ocrData?.confidenceScore || 0) * 100)}% ${t('onboarding.scanner_match')}`
+            : t('onboarding.docs_awaiting');
+        return { fileName: file.name, status, confidence };
+    }, [proofDocuments.propertyProof, scannerState, ocrData, t, isRTL]);
 
     const handleScan = async () => {
-        if (!proofDocuments.propertyProof) return;
-        setScannerState('scanning');
-        try {
-            const analyzeFn = httpsCallable(functions, 'processTitleDeedOCR');
-            const result = await analyzeFn({ fileUrl: 'https://storage.googleapis.com/bin-group-public/sample-title-deed.pdf' });
-            setOcrData(result.data);
-            setScannerState('review');
-        } catch (err) {
-            console.error("OCR Analysis failed:", err);
+        const file = proofDocuments.propertyProof;
+        if (!file) return;
+        const uid = auth.currentUser?.uid;
+        if (!uid) {
             setScannerState('error');
+            setScannerMessage(isRTL ? 'سجّل الدخول قبل فحص سند الملكية.' : 'Sign in before scanning the title deed.');
+            return;
+        }
+
+        setScannerState('scanning');
+        setScannerMessage('');
+        setOcrData(null);
+        try {
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 180) || 'title-deed';
+            const fileReference = ref(storage, `temp_kyc/${uid}/${Date.now()}_${safeName}`);
+            await uploadBytes(fileReference, file, { contentType: file.type || 'application/pdf' });
+
+            const analyzeTitleDeed = httpsCallable(functions, 'processTitleDeedOCR');
+            const result = await analyzeTitleDeed({
+                storagePath: fileReference.fullPath,
+                contentType: file.type || 'application/pdf',
+            });
+            const response = (result.data || {}) as OcrResponse;
+
+            if (response.status === 'SUCCESS' && response.data) {
+                setOcrData(response.data);
+                setScannerState('review');
+                setScannerMessage(isRTL
+                    ? 'تم استخراج البيانات آلياً. تبقى مراجعة المسؤول مطلوبة قبل الاعتماد.'
+                    : 'Fields were extracted. Admin review remains required before verification.');
+                return;
+            }
+
+            setScannerState('manual');
+            setScannerMessage(response.message || (isRTL
+                ? 'تعذر الاستخراج الآلي. أكمل الإدخال اليدوي ومراجعة المسؤول.'
+                : 'Automated extraction is unavailable. Continue with manual entry and Admin review.'));
+        } catch (error: any) {
+            console.error('Title deed OCR failed:', error);
+            setScannerState('error');
+            setScannerMessage(error?.message || (isRTL
+                ? 'تعذر فحص سند الملكية. أعد المحاولة أو أكمل المراجعة اليدوية.'
+                : 'Title deed scan failed. Retry or continue with manual review.'));
         }
     };
 
@@ -67,6 +118,7 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                         <Alert icon={<LockKeyhole size={18} />} severity="info" sx={{ bgcolor: 'rgba(198,167,94,0.08)', color: binThemeTokens.gold, border: '1px solid rgba(198,167,94,0.24)' }}>
                             {t('onboarding.docs_staged')}
                         </Alert>
+                        {uploadError && <Alert severity="error" onClose={() => setUploadError('')}>{uploadError}</Alert>}
 
                         <Box>
                             <Stack direction="row" justifyContent="space-between" sx={{ mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -103,7 +155,13 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                     {scannerState === 'scanning' ? t('onboarding.scanner_analyzing') : (scannerState === 'error' ? t('onboarding.scanner_retry') : t('onboarding.scanner_analyze_btn'))}
                                 </Button>
                             </Stack>
-                            
+
+                            {scannerMessage && (
+                                <Alert severity={scannerState === 'review' ? 'success' : scannerState === 'manual' ? 'warning' : 'error'} sx={{ mt: 2 }}>
+                                    {scannerMessage}
+                                </Alert>
+                            )}
+
                             {ocrData && scannerState === 'review' && (
                                 <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(198, 167, 94, 0.05)', borderRadius: 2, border: '1px solid rgba(198, 167, 94, 0.2)' }}>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>
@@ -123,20 +181,20 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                             )}
                         </Paper>
 
-                        {requiredDocs.map((doc) => {
-                            const file = proofDocuments[doc.key];
+                        {requiredDocs.map((document) => {
+                            const file = proofDocuments[document.key];
                             return (
-                                <Box key={doc.key}>
+                                <Box key={document.key}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block' }}>
-                                            {doc.label}
+                                            {document.label}
                                         </Typography>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>
                                             {t('onboarding.docs_max_size')}
                                         </Typography>
                                     </Box>
-                                    <Paper sx={{ 
-                                        p: 3, border: `1px dashed ${file ? '#10b981' : 'rgba(198, 167, 94, 0.3)'}`, 
+                                    <Paper sx={{
+                                        p: 3, border: `1px dashed ${file ? '#10b981' : 'rgba(198, 167, 94, 0.3)'}`,
                                         bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4,
                                         display: 'flex', flexDirection: 'column', gap: 2
                                     }}>
@@ -154,11 +212,20 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                                 sx={{ borderRadius: 100, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, whiteSpace: 'nowrap', ml: isRTL ? 0 : 2, mr: isRTL ? 2 : 0 }}
                                             >
                                                 {file ? t('onboarding.docs_change') : t('onboarding.docs_select')}
-                                                <input type="file" accept=".pdf,image/png,image/jpeg" hidden onChange={(e) => {
-                                                    const f = e.target.files?.[0];
-                                                    if (f) {
-                                                        if (f.size > 10 * 1024 * 1024) { alert("File size exceeds 10MB limit."); return; }
-                                                        setProofDocument(doc.key, f);
+                                                <input type="file" accept=".pdf,image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+                                                    const selected = event.target.files?.[0];
+                                                    event.target.value = '';
+                                                    if (!selected) return;
+                                                    if (selected.size > 10 * 1024 * 1024) {
+                                                        setUploadError(isRTL ? 'حجم الملف يتجاوز الحد الأقصى 10 ميغابايت.' : 'File size exceeds the 10 MB limit.');
+                                                        return;
+                                                    }
+                                                    setUploadError('');
+                                                    setProofDocument(document.key, selected);
+                                                    if (document.key === 'propertyProof') {
+                                                        setScannerState('idle');
+                                                        setScannerMessage('');
+                                                        setOcrData(null);
                                                     }
                                                 }} />
                                             </Button>
@@ -171,7 +238,7 @@ const ProofUploadStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                             <Button variant="outlined" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF' }}>{t('onboarding.back')}</Button>
                             <Button
-                                variant="contained" size="large" 
+                                variant="contained" size="large"
                                 onClick={onNext} disabled={!canProceed}
                                 endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
                                 sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}

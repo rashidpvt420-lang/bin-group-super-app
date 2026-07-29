@@ -48,6 +48,10 @@ export * from "./aiAssistant";
 export * from "./aiDesignStudioLaunchHold";
 export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
+// Explicit aliases replace the legacy hard-failing implementations re-exported
+// from index.ts without creating duplicate public callable names.
+export { processTitleDeedOCRV2 as processTitleDeedOCR } from "./titleDeedOcrV2";
+export { getMissionGuidanceV2 as getMissionGuidance } from "./missionGuidanceV2";
 export * from "./contractSignatureOtpMailbox";
 export * from "./ownerOnboardingLifecycleEmail";
 export * from "./tenantHandoverInspections";
