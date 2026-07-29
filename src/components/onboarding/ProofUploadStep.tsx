@@ -13,18 +13,18 @@ interface ProofUploadStepProps { onNext: () => void; onBack: () => void }
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport';
 type LocalText = { en: string; ar: string };
 const tx = (text: LocalText, ar: boolean) => ar ? text.ar : text.en;
+const MAX_DOCUMENT_SIZE = 8 * 1024 * 1024;
 
 const copy = {
     title: { en: 'Protected Documents', ar: 'المستندات المحمية' },
     desc: { en: 'Upload property proof and the correct legal-identity evidence for the contracting Owner.', ar: 'ارفع إثبات العقار ومستندات الهوية القانونية الصحيحة للمالك المتعاقد.' },
-    secure: { en: 'Documents are staged only in this browser session, then uploaded to protected storage during final submission.', ar: 'تُجهز المستندات داخل جلسة المتصفح فقط، ثم تُرفع إلى التخزين المحمي أثناء الإرسال النهائي.' },
+    secure: { en: 'Documents are staged only in this browser session, then uploaded to protected storage during page 5 submission.', ar: 'تُجهز المستندات داخل جلسة المتصفح فقط، ثم تُرفع إلى التخزين المحمي أثناء إرسال الصفحة الخامسة.' },
     identityRule: { en: 'Identity rule: Emirates ID + passport for an individual Owner, or a trade licence for a company/government entity.', ar: 'قاعدة الهوية: الهوية الإماراتية مع جواز السفر للمالك الفرد، أو الرخصة التجارية للشركة/الجهة الحكومية.' },
     drop: { en: 'Drop file here or click to browse', ar: 'اسحب الملف هنا أو اضغط للاختيار' },
-    max: { en: 'PDF, JPG or PNG · max 15 MB', ar: 'PDF أو JPG أو PNG · بحد أقصى 15 ميجابايت' },
+    max: { en: 'PDF, JPG or PNG · max 8 MB', ar: 'PDF أو JPG أو PNG · بحد أقصى 8 ميجابايت' },
     ready: { en: 'Ready for protected submission', ar: 'جاهز للإرسال المحمي' },
     remove: { en: 'Remove', ar: 'إزالة' },
     summary: { en: 'Document readiness', ar: 'جاهزية المستندات' },
-    uploaded: { en: 'documents selected', ar: 'مستندات محددة' },
     propertyRequired: { en: 'Property proof is required.', ar: 'إثبات العقار مطلوب.' },
     identityRequired: { en: 'Add Emirates ID plus passport, or add a trade licence.', ar: 'أضف الهوية الإماراتية مع جواز السفر، أو أضف الرخصة التجارية.' },
     back: { en: 'Back', ar: 'رجوع' },
@@ -32,7 +32,7 @@ const copy = {
     removeTitle: { en: 'Remove document?', ar: 'إزالة المستند؟' },
     removeBody: { en: 'Remove this staged document? It must be selected again before final submission.', ar: 'هل تريد إزالة هذا المستند المجهز؟ يجب اختياره مرة أخرى قبل الإرسال النهائي.' },
     cancel: { en: 'Cancel', ar: 'إلغاء' },
-    fileTooLarge: { en: 'File is larger than 15 MB.', ar: 'حجم الملف أكبر من 15 ميجابايت.' },
+    fileTooLarge: { en: 'File is larger than the secure 8 MB limit.', ar: 'حجم الملف أكبر من الحد الآمن البالغ 8 ميجابايت.' },
     invalidType: { en: 'Only PDF, JPG and PNG files are accepted.', ar: 'يتم قبول ملفات PDF وJPG وPNG فقط.' },
     stageFailed: { en: 'Failed to stage file', ar: 'فشل تجهيز الملف' },
     removeFailed: { en: 'Failed to remove file', ar: 'فشل إزالة الملف' },
@@ -58,7 +58,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
     const handleFileSelect = async (key: ProofKey, file: File | null) => {
         setError(null);
         if (!file) return;
-        if (file.size > 15 * 1024 * 1024) { setError(tx(copy.fileTooLarge, ar)); return; }
+        if (file.size > MAX_DOCUMENT_SIZE) { setError(tx(copy.fileTooLarge, ar)); return; }
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
         if (!allowedTypes.includes(file.type) && !/\.(pdf|jpg|jpeg|png)$/i.test(file.name)) { setError(tx(copy.invalidType, ar)); return; }
         try {
