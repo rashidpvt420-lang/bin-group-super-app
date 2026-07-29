@@ -13,9 +13,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp
 const ADMIN_DESIGN_ROLES = new Set(["admin", "super_admin", "ceo", "operations_admin"]);
 const PUBLIC_DESIGN_ROLES = new Set(["owner", "tenant", ...ADMIN_DESIGN_ROLES]);
 
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
@@ -52,15 +50,9 @@ function extensionForMimeType(mimeType: string) {
 }
 
 function hasExpectedImageSignature(buffer: Buffer, mimeType: string) {
-  if (mimeType === "image/jpeg") {
-    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  }
-  if (mimeType === "image/png") {
-    return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  }
-  if (mimeType === "image/webp") {
-    return buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
-  }
+  if (mimeType === "image/jpeg") return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === "image/png") return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mimeType === "image/webp") return buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
   return false;
 }
 
@@ -68,24 +60,15 @@ function decodeReferenceImage(value: unknown, mimeType: string) {
   const encoded = String(value ?? "")
     .replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, "")
     .replace(/\s/g, "");
-
   if (!encoded || encoded.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
     throw new HttpsError("invalid-argument", "Reference image payload is not valid base64.");
   }
-
   const buffer = Buffer.from(encoded, "base64");
   const canonicalInput = encoded.replace(/=+$/, "");
   const canonicalDecoded = buffer.toString("base64").replace(/=+$/, "");
-  if (!buffer.length || canonicalInput !== canonicalDecoded) {
-    throw new HttpsError("invalid-argument", "Reference image payload is malformed.");
-  }
-  if (buffer.length > MAX_REFERENCE_IMAGE_BYTES) {
-    throw new HttpsError("invalid-argument", "Reference image must be 5MB or smaller.");
-  }
-  if (!hasExpectedImageSignature(buffer, mimeType)) {
-    throw new HttpsError("invalid-argument", "Reference image content does not match its MIME type.");
-  }
-
+  if (!buffer.length || canonicalInput !== canonicalDecoded) throw new HttpsError("invalid-argument", "Reference image payload is malformed.");
+  if (buffer.length > MAX_REFERENCE_IMAGE_BYTES) throw new HttpsError("invalid-argument", "Reference image must be 5MB or smaller.");
+  if (!hasExpectedImageSignature(buffer, mimeType)) throw new HttpsError("invalid-argument", "Reference image content does not match its MIME type.");
   return {
     buffer,
     base64: buffer.toString("base64"),
@@ -95,13 +78,10 @@ function decodeReferenceImage(value: unknown, mimeType: string) {
 }
 
 function buildAdminDesignPrompt(data: any) {
-  const scope = data?.scope && typeof data.scope === "object" && !Array.isArray(data.scope)
-    ? data.scope
-    : {};
+  const scope = data?.scope && typeof data.scope === "object" && !Array.isArray(data.scope) ? data.scope : {};
   const zoneType = cleanText(data?.zoneType || scope.zoneType || scope.propertyType, "interior space", 120);
   const style = cleanText(data?.designStyle || data?.theme, "Sovereign Elite gold and graphite", 160);
   const notes = cleanText(data?.customPrompt || data?.prompt || data?.notes, "", 600);
-
   return [
     `Edit the supplied reference image into one photorealistic UAE property redesign for a ${zoneType}.`,
     `Design style: ${style}.`,
@@ -113,9 +93,7 @@ function buildAdminDesignPrompt(data: any) {
 }
 
 function cleanPublicScope(value: unknown) {
-  const scope = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+  const scope = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   return {
     dimensions: Math.max(1, Math.min(10000, safeNumber(scope.dimensions, 50))),
     isMetric: scope.isMetric === true,
@@ -130,9 +108,7 @@ function cleanPublicScope(value: unknown) {
     isNightWork: scope.isNightWork === true,
     isMallEnvironment: scope.isMallEnvironment === true,
     scopeDescription: cleanText(scope.scopeDescription || scope.requiredWork, "", 1000),
-    addons: Array.isArray(scope.addons)
-      ? scope.addons.map((item) => cleanText(item, "", 80)).filter(Boolean).slice(0, 20)
-      : [],
+    addons: Array.isArray(scope.addons) ? scope.addons.map((item) => cleanText(item, "", 80)).filter(Boolean).slice(0, 20) : [],
   };
 }
 
@@ -144,10 +120,7 @@ function calculatePublicDesignQuote(scope: ReturnType<typeof cleanPublicScope>) 
   const laborEstimate = Math.round(areaSqft * 95 * tierMultiplier);
   const approvalsAllowance = scope.hasStructural || scope.hasMEP ? 2500 : 0;
   const logisticsAllowance = scope.isMallEnvironment || scope.isNightWork ? 4500 : 1800;
-  const subtotal = Math.max(
-    2500,
-    materialsEstimate + laborEstimate + approvalsAllowance + logisticsAllowance + scope.furnitureBudget,
-  );
+  const subtotal = Math.max(2500, materialsEstimate + laborEstimate + approvalsAllowance + logisticsAllowance + scope.furnitureBudget);
   const contingency = Math.round(subtotal * 0.08);
   const binMargin = Math.round(subtotal * 0.12);
   const finalTotal = subtotal + contingency + binMargin;
@@ -165,10 +138,7 @@ function calculatePublicDesignQuote(scope: ReturnType<typeof cleanPublicScope>) 
     mobilizationAmount,
     quoteAuthority: "SERVER_CALCULATED_DESIGN_STUDIO_V2",
   };
-  return {
-    ...unsigned,
-    quoteHash: createHash("sha256").update(JSON.stringify(unsigned)).digest("hex"),
-  };
+  return { ...unsigned, quoteHash: createHash("sha256").update(JSON.stringify(unsigned)).digest("hex") };
 }
 
 function buildPublicExecutionDetails(scope: ReturnType<typeof cleanPublicScope>, quote: ReturnType<typeof calculatePublicDesignQuote>) {
@@ -214,16 +184,11 @@ function buildPublicDesignPrompt(data: any, scope: ReturnType<typeof cleanPublic
   ].filter(Boolean).join(" ");
 }
 
-async function editImageWithOpenAI(
-  apiKey: string,
-  prompt: string,
-  imageBase64: string,
-  mimeType: string,
-) {
+async function editImageWithOpenAI(apiKey: string, prompt: string, imageBase64: string, mimeType: string) {
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({ apiKey, timeout: 150_000 });
   const response: any = await client.responses.create({
-    model: process.env.OPENAI_IMAGE_ORCHESTRATOR_MODEL || "gpt-5.6-luna",
+    model: process.env.OPENAI_IMAGE_ORCHESTRATOR_MODEL || "gpt-5",
     input: [{
       role: "user",
       content: [
@@ -234,7 +199,7 @@ async function editImageWithOpenAI(
     tools: [{
       type: "image_generation",
       action: "edit",
-      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-2",
+      model: process.env.OPENAI_IMAGE_MODEL || "gpt-image-1",
       input_fidelity: "high",
       output_format: "jpeg",
       output_compression: 85,
@@ -243,20 +208,11 @@ async function editImageWithOpenAI(
     }],
     tool_choice: "required",
   } as any);
-
-  const imageCall = Array.isArray(response.output)
-    ? response.output.find((item: any) => item?.type === "image_generation_call")
-    : null;
+  const imageCall = Array.isArray(response.output) ? response.output.find((item: any) => item?.type === "image_generation_call") : null;
   const generatedImage = String(imageCall?.result || "").trim();
-  if (!generatedImage) {
-    throw new Error("OpenAI image editing returned no image payload.");
-  }
-
+  if (!generatedImage) throw new Error("OpenAI image editing returned no image payload.");
   const outputBuffer = Buffer.from(generatedImage, "base64");
-  if (!outputBuffer.length || outputBuffer.length > MAX_GENERATED_IMAGE_BYTES) {
-    throw new Error("OpenAI image editing returned an invalid or oversized image payload.");
-  }
-
+  if (!outputBuffer.length || outputBuffer.length > MAX_GENERATED_IMAGE_BYTES) throw new Error("OpenAI image editing returned an invalid or oversized image payload.");
   return {
     outputBuffer,
     generatedImage: outputBuffer.toString("base64"),
@@ -267,22 +223,18 @@ async function editImageWithOpenAI(
 
 async function savePrivateMedia(path: string, buffer: Buffer, contentType: string, metadata: Record<string, string>) {
   const file = bucket.file(path);
+  await file.save({
+    resumable: false,
+  } as any).catch(() => undefined);
   await file.save(buffer, {
     resumable: false,
-    metadata: {
-      contentType,
-      cacheControl: "private,no-store",
-      metadata,
-    },
+    metadata: { contentType, cacheControl: "private,no-store", metadata },
   });
   return path;
 }
 
 async function signPrivateMedia(path: string) {
-  const [signedUrl] = await bucket.file(path).getSignedUrl({
-    action: "read",
-    expires: Date.now() + PRIVATE_MEDIA_URL_TTL_MS,
-  });
+  const [signedUrl] = await bucket.file(path).getSignedUrl({ action: "read", expires: Date.now() + PRIVATE_MEDIA_URL_TTL_MS });
   return signedUrl;
 }
 
@@ -308,13 +260,13 @@ async function resolveTenantContext(uid: string, email: string) {
 
 function canReadDesignRequest(auth: any, requestData: any) {
   const role = cleanText(auth?.token?.role || auth?.token?.userRole || auth?.token?.primaryRole).toLowerCase();
-  return ADMIN_DESIGN_ROLES.has(role) ||
-    requestData.userId === auth?.uid ||
-    requestData.createdByUid === auth?.uid ||
-    requestData.ownerId === auth?.uid ||
-    requestData.ownerUid === auth?.uid ||
-    requestData.tenantId === auth?.uid ||
-    requestData.tenantUid === auth?.uid;
+  return ADMIN_DESIGN_ROLES.has(role)
+    || requestData.userId === auth?.uid
+    || requestData.createdByUid === auth?.uid
+    || requestData.ownerId === auth?.uid
+    || requestData.ownerUid === auth?.uid
+    || requestData.tenantId === auth?.uid
+    || requestData.tenantUid === auth?.uid;
 }
 
 async function mediaResponseForRequest(requestId: string, requestData: any) {
@@ -328,12 +280,7 @@ async function mediaResponseForRequest(requestId: string, requestData: any) {
     Promise.all(referencePaths.map(signPrivateMedia)),
     Promise.all(generatedPaths.map(signPrivateMedia)),
   ]);
-  return {
-    requestId,
-    referenceImages,
-    generatedImages,
-    expiresAtMs: Date.now() + PRIVATE_MEDIA_URL_TTL_MS,
-  };
+  return { requestId, referenceImages, generatedImages, expiresAtMs: Date.now() + PRIVATE_MEDIA_URL_TTL_MS };
 }
 
 export const generateDesignConceptCompat = onCall({
@@ -343,31 +290,15 @@ export const generateDesignConceptCompat = onCall({
   memory: "1GiB",
   secrets: [openAiKey, imageGenerationKey],
 }, async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "Sign in before using AI Design Studio.");
-  }
-
-  const quota = await enforceAiUsageQuota(
-    request.auth,
-    "design",
-    ADMIN_DESIGN_ROLES,
-    3,
-  );
-
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before using AI Design Studio.");
+  const quota = await enforceAiUsageQuota(request.auth, "design", ADMIN_DESIGN_ROLES, 3);
   const payload = request.data || {};
   const requestId = cleanRequestId(payload.requestId);
   const mimeType = normalizeMimeType(payload.mimeType);
   const reference = decodeReferenceImage(payload.imageBase64, mimeType);
   const prompt = buildAdminDesignPrompt(payload);
   const apiKey = imageGenerationKey.value() || openAiKey.value();
-
-  if (!apiKey) {
-    throw new HttpsError(
-      "failed-precondition",
-      "AI image generation is not configured in Firebase Functions secrets.",
-    );
-  }
-
+  if (!apiKey) throw new HttpsError("failed-precondition", "AI image generation is not configured in Firebase Functions secrets.");
   try {
     const result = await editImageWithOpenAI(apiKey, prompt, reference.base64, mimeType);
     const concept = {
@@ -375,13 +306,10 @@ export const generateDesignConceptCompat = onCall({
       provider: "openai",
       live: true,
       renderStatus: "AI_RENDER_COMPLETE",
-      scope: payload.scope && typeof payload.scope === "object" && !Array.isArray(payload.scope)
-        ? payload.scope
-        : null,
+      scope: payload.scope && typeof payload.scope === "object" && !Array.isArray(payload.scope) ? payload.scope : null,
       designStyle: cleanText(payload.designStyle || payload.theme, "Sovereign Elite", 160),
       createdAt: new Date().toISOString(),
     };
-
     await db.collection("design_requests").add({
       userId: request.auth.uid,
       createdBy: request.auth.uid,
@@ -403,7 +331,6 @@ export const generateDesignConceptCompat = onCall({
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
     return {
       status: "SUCCESS",
       provider: "openai",
@@ -415,15 +342,8 @@ export const generateDesignConceptCompat = onCall({
     };
   } catch (error: any) {
     const message = cleanText(error?.message, "AI image provider did not complete the request.", 300);
-    console.error("generateDesignConceptCompat failed", {
-      requestId,
-      uid: request.auth.uid,
-      message,
-    });
-    throw new HttpsError(
-      "unavailable",
-      "AI image rendering is temporarily unavailable. Retry after checking the Functions secret and provider status.",
-    );
+    console.error("generateDesignConceptCompat failed", { requestId, uid: request.auth.uid, message });
+    throw new HttpsError("unavailable", "AI image rendering is temporarily unavailable. Retry after checking the Functions secret and provider status.");
   }
 });
 
@@ -480,32 +400,17 @@ export const submitAIDesignRequest = onCall({
     ? cleanText(property.ownerId || property.ownerUid || unit.ownerId || unit.ownerUid, "", 160)
     : uid;
   if (!ownerId) throw new HttpsError("failed-precondition", "The canonical property owner could not be resolved.");
-  const ownerEmail = role === "tenant"
-    ? cleanText(property.ownerEmail || unit.ownerEmail).toLowerCase() || null
-    : email || null;
+  const ownerEmail = role === "tenant" ? cleanText(property.ownerEmail || unit.ownerEmail).toLowerCase() || null : email || null;
 
   try {
     const rendered = await editImageWithOpenAI(apiKey, prompt, reference.base64, mimeType);
     const inputPath = `design_requests/${uid}/${requestId}/reference.${extensionForMimeType(mimeType)}`;
     const outputPath = `ai_design_renders/${uid}/${requestId}/primary.jpg`;
     await Promise.all([
-      savePrivateMedia(inputPath, reference.buffer, mimeType, {
-        ownerUid: uid,
-        requestId,
-        kind: "reference",
-        sha256: reference.sha256,
-      }),
-      savePrivateMedia(outputPath, rendered.outputBuffer, rendered.mimeType, {
-        ownerUid: uid,
-        requestId,
-        kind: "generated",
-        providerRequestId: rendered.providerRequestId || "",
-      }),
+      savePrivateMedia(inputPath, reference.buffer, mimeType, { ownerUid: uid, requestId, kind: "reference", sha256: reference.sha256 }),
+      savePrivateMedia(outputPath, rendered.outputBuffer, rendered.mimeType, { ownerUid: uid, requestId, kind: "generated", providerRequestId: rendered.providerRequestId || "" }),
     ]);
-    const media = await mediaResponseForRequest(requestId, {
-      referenceImagePaths: [inputPath],
-      generatedImagePaths: [outputPath],
-    });
+    const media = await mediaResponseForRequest(requestId, { referenceImagePaths: [inputPath], generatedImagePaths: [outputPath] });
     const status = role === "tenant" ? "AWAITING_OWNER_APPROVAL" : "AI_CONCEPT_READY";
     const approvalStatus = role === "tenant" ? "PENDING_OWNER_APPROVAL" : "OWNER_CREATED";
     const concept = {
@@ -545,12 +450,7 @@ export const submitAIDesignRequest = onCall({
       unitId: unit.id || null,
       designStyle: cleanText(payload.designStyle, "Modern", 120),
       designObjective: cleanText(payload.designObjective, "refresh", 120),
-      scope: {
-        ...scope,
-        referenceImages: media.referenceImages,
-        referenceImagePaths: [inputPath],
-        imageCount: 1,
-      },
+      scope: { ...scope, referenceImages: media.referenceImages, referenceImagePaths: [inputPath], imageCount: 1 },
       quote,
       concepts: [concept],
       conceptPrompt: prompt,
