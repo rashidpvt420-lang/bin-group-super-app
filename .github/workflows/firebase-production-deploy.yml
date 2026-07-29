@@ -593,6 +593,19 @@ jobs:
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: npm run test:e2e:business
 
+      - name: Upload failed business evidence diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: business-evidence-diagnostics-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            launch_package/artifacts/*.json
+            launch_package/artifacts/*.stdio.log
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Run current-commit live launch audit
         env:
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}

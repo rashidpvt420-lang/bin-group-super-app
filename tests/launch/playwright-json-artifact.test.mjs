@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   evaluatePlaywrightJsonRun,
   readPlaywrightJsonArtifact,
+  summarizePlaywrightJsonReport,
 } from '../../scripts/lib/playwright-json-artifact.mjs';
 import {
   revalidatePlaywrightArtifact,
@@ -171,5 +172,39 @@ describe('playwright JSON artifact handling', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('summarizes failed and skipped Playwright tests for launch diagnostics', () => {
+    const report = {
+      stats: { expected: 0, unexpected: 1, skipped: 1, flaky: 0, interrupted: 0 },
+      suites: [{
+        title: 'tests/e2e/business-global.spec.ts',
+        specs: [
+          {
+            title: 'Google Maps integration loads successfully',
+            tests: [{
+              projectName: 'chromium-desktop',
+              status: 'failed',
+              results: [{ status: 'failed', error: { message: 'Timed out waiting for contact-map' } }],
+            }],
+          },
+          {
+            title: 'Arabic/English language toggle switches RTL/LTR mode',
+            tests: [{
+              projectName: 'chromium-desktop',
+              status: 'skipped',
+              results: [],
+            }],
+          },
+        ],
+      }],
+    };
+
+    const summary = summarizePlaywrightJsonReport(report);
+    assert.equal(summary.failures.length, 1);
+    assert.equal(summary.skipped.length, 1);
+    assert.match(summary.lines.join('\n'), /Google Maps integration loads successfully/);
+    assert.match(summary.lines.join('\n'), /Timed out waiting for contact-map/);
+    assert.match(summary.lines.join('\n'), /Arabic\/English language toggle/);
   });
 });

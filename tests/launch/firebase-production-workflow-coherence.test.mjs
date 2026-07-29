@@ -355,6 +355,23 @@ test('deployment metadata is uploaded only after deploy verification', () => {
   assert.ok(verify < upload);
 });
 
+test('failed business evidence uploads Playwright diagnostics before later gates', () => {
+  const business = lineOf('Run current-commit five-role business evidence');
+  const diagnostics = lineOf('Upload failed business evidence diagnostics');
+  const launchAudit = lineOf('Run current-commit live launch audit');
+  assert.ok(business < diagnostics);
+  assert.ok(diagnostics < launchAudit);
+
+  const block = workflow.slice(
+    workflow.indexOf('      - name: Upload failed business evidence diagnostics'),
+    workflow.indexOf('      - name: Run current-commit live launch audit'),
+  );
+  assert.match(block, /if:\s*\$\{\{\s*failure\(\)\s*\}\}/);
+  assert.match(block, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
+  assert.match(block, /launch_package\/artifacts\/\*\.json/);
+  assert.match(block, /launch_package\/artifacts\/\*\.stdio\.log/);
+});
+
 test('postdeploy download is bound to current workflow run and SHA', () => {
   assert.match(workflow, /Verify downloaded deployment artifact is bound to this run and SHA/);
   assert.match(workflow, /node scripts\/verify-same-run-deployment-artifact\.mjs/);

@@ -9,6 +9,73 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parsePlaywrightJsonReport, sha256File } from './launch-honesty.mjs';
 
+function compactText(value, max = 260) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+function testTitle(suiteTitle, spec, test) {
+  const parts = [
+    suiteTitle,
+    spec?.title,
+    test?.projectName ? `[${test.projectName}]` : '',
+  ].filter(Boolean);
+  return parts.join(' > ') || '(untitled Playwright test)';
+}
+
+function firstResultMessage(results = []) {
+  for (const result of results) {
+    const direct = compactText(result?.error?.message);
+    if (direct) return direct;
+    for (const err of result?.errors || []) {
+      const message = compactText(err?.message || err?.value);
+      if (message) return message;
+    }
+  }
+  return '';
+}
+
+export function summarizePlaywrightJsonReport(report, { limit = 8 } = {}) {
+  const failures = [];
+  const skipped = [];
+
+  function walk(suite, parents = []) {
+    const suiteTitle = [...parents, suite?.title].filter(Boolean).join(' > ');
+    for (const spec of suite?.specs || []) {
+      for (const test of spec?.tests || []) {
+        const results = test?.results || [];
+        const last = results[results.length - 1];
+        const status = last?.status || test?.status || 'unknown';
+        const entry = {
+          title: testTitle(suiteTitle, spec, test),
+          status,
+          message: firstResultMessage(results),
+        };
+        if (status === 'skipped') skipped.push(entry);
+        else if (status !== 'passed' && status !== 'expected') failures.push(entry);
+      }
+    }
+    for (const child of suite?.suites || []) walk(child, [...parents, suite?.title].filter(Boolean));
+  }
+
+  for (const suite of report?.suites || []) walk(suite);
+
+  const format = (label, entries) => entries
+    .slice(0, limit)
+    .map((entry) => {
+      const suffix = entry.message ? ` — ${entry.message}` : '';
+      return `${label}: ${entry.title}${suffix}`;
+    });
+
+  return {
+    failures,
+    skipped,
+    lines: [...format('failed', failures), ...format('skipped', skipped)],
+  };
+}
+
 /**
  * Read and validate a Playwright JSON report file (fail-closed).
  */
@@ -75,8 +142,9 @@ export function evaluatePlaywrightJsonRun({ exitCode, reportPath }) {
   }
 
   const parsed = parsePlaywrightJsonReport(loaded.report);
+  const summary = summarizePlaywrightJsonReport(loaded.report);
   if (!parsed.ok) {
-    return { ok: false, reason: parsed.reason, exitCode: exitCode ?? 1, parsed };
+    return { ok: false, reason: parsed.reason, exitCode: exitCode ?? 1, parsed, summary };
   }
 
   if (Number(exitCode) !== 0) {
@@ -85,6 +153,7 @@ export function evaluatePlaywrightJsonRun({ exitCode, reportPath }) {
       reason: `Playwright exitCode=${exitCode}`,
       exitCode,
       parsed,
+      summary,
     };
   }
 

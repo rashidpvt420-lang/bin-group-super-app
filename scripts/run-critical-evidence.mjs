@@ -206,6 +206,11 @@ function runPlaywrightSuite(suiteKey, def) {
   const evaluation = evaluatePlaywrightJsonRun({ exitCode, reportPath });
   if (!evaluation.ok) {
     console.error(`[critical-evidence] ${evaluation.reason} — evidence not recorded`);
+    for (const line of evaluation.summary?.lines || []) {
+      console.error(`[critical-evidence] ${line}`);
+    }
+    console.error(`[critical-evidence] playwright_report=${path.relative(root, reportPath).replace(/\\/g, '/')}`);
+    console.error(`[critical-evidence] playwright_stdio=${path.relative(root, diagPath).replace(/\\/g, '/')}`);
     return {
       ok: false,
       exitCode: (evaluation.exitCode ?? exitCode) || 1,

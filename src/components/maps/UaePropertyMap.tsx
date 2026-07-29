@@ -15,6 +15,7 @@ type UaePropertyMapProps = {
   requireExactPin?: boolean;
   onUpdateGps?: () => void;
   height?: number;
+  testId?: string;
 };
 
 const toCoord = (value: number | string | null | undefined) => {
@@ -38,7 +39,8 @@ export default function UaePropertyMap({
   locationQuality,
   requireExactPin = false,
   onUpdateGps,
-  height = 280
+  height = 280,
+  testId
 }: UaePropertyMapProps) {
   const apiKey = readMapsKey();
   const latitude = toCoord(lat);
@@ -71,8 +73,10 @@ export default function UaePropertyMap({
     } else {
       query = [address, emirate, 'United Arab Emirates'].filter(Boolean).join(', ');
     }
-    if (apiKey && query) {
-      embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`;
+    if (query) {
+      embedUrl = apiKey
+        ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`
+        : `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
     }
   }
 
@@ -85,7 +89,8 @@ export default function UaePropertyMap({
   };
 
   return (
-    <Paper 
+    <Paper
+      data-testid={testId}
       sx={{ 
         overflow: 'hidden', 
         bgcolor: 'rgba(15,23,42,0.55)', 
@@ -167,7 +172,7 @@ export default function UaePropertyMap({
       )}
 
       {embedUrl ? (
-        <Box component="iframe" title={title} src={embedUrl} sx={{ width: '100%', height, border: 0, display: 'block', filter: 'saturate(0.9)' }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+        <Box component="iframe" data-testid={testId ? `${testId}-iframe` : undefined} title={title} src={embedUrl} sx={{ width: '100%', height, border: 0, display: 'block', filter: 'saturate(0.9)' }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
       ) : (
         <Box sx={{ height, display: 'grid', placeItems: 'center', p: 3, background: 'linear-gradient(135deg, rgba(198,167,94,0.12), rgba(15,23,42,0.6))' }}>
           <Stack spacing={2} alignItems="center" textAlign="center" maxWidth={560}>
