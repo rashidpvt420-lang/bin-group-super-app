@@ -16,6 +16,12 @@ const MIN_RETRY_RECOVERY_SECONDS = 120;
 const text = (value) => String(value ?? '').trim();
 const sortedUnique = (values) => [...new Set(values.map(text).filter(Boolean))].sort();
 const identityDescriptor = (entry) => `${entry.codebase || 'unknown'}|${entry.region || 'unknown'}|${entry.name}`;
+const compareIdentityDescriptors = (left, right) => {
+  const leftDescriptor = identityDescriptor(left);
+  const rightDescriptor = identityDescriptor(right);
+  return leftDescriptor < rightDescriptor ? -1 : leftDescriptor > rightDescriptor ? 1 : 0;
+};
+const sortByIdentity = (entries) => [...entries].sort(compareIdentityDescriptors);
 
 function boundedInteger(raw, fallback, minimum, maximum) {
   const parsed = Number.parseInt(text(raw), 10);
@@ -80,7 +86,7 @@ function normalizeCurrentIdentities(currentIdentities) {
   if (byDescriptor.size !== normalized.length) {
     throw new Error('Current compiled Firebase Function identities contain duplicates');
   }
-  return [...byDescriptor.values()].sort((left, right) => identityDescriptor(left).localeCompare(identityDescriptor(right)));
+  return sortByIdentity(byDescriptor.values());
 }
 
 export function parseRemoteFunctionList(raw) {
@@ -110,7 +116,7 @@ export function parseRemoteFunctionList(raw) {
   const invalid = parsed.filter(({ name, region }) => !FUNCTION_NAME_PATTERN.test(name) || !REGION_PATTERN.test(region));
   if (invalid.length > 0) throw new Error('Firebase functions:list returned invalid function names or regions');
 
-  return parsed.sort((left, right) => identityDescriptor(left).localeCompare(identityDescriptor(right)));
+  return sortByIdentity(parsed);
 }
 
 export function parseCompiledFunctionIdentities(raw) {
@@ -164,9 +170,9 @@ export function buildFunctionReconciliationPlan(currentIdentities, remoteEntries
     .filter((entry) => entry.codebase !== OWNED_CODEBASE)
     .map(identityDescriptor)
     .sort();
-  const obsoleteOwned = owned
-    .filter((entry) => !currentDescriptors.has(identityDescriptor(entry)))
-    .sort((left, right) => identityDescriptor(left).localeCompare(identityDescriptor(right)));
+  const obsoleteOwned = sortByIdentity(
+    owned.filter((entry) => !currentDescriptors.has(identityDescriptor(entry))),
+  );
   const unsafeObsolete = obsoleteOwned.filter((entry) => !entry.region);
   if (unsafeObsolete.length > 0) {
     throw new Error('Obsolete owned Firebase Functions are missing region metadata');

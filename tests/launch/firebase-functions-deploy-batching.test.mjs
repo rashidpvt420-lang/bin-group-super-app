@@ -214,22 +214,22 @@ test('region moves delete the stale regional copy and require the new regional i
   ]);
 });
 
-test('reconciliation no-op is deterministic when remote owned identities match source', () => {
+test('reconciliation uses code-point identity ordering for verifier-compatible evidence', () => {
   const plan = buildFunctionReconciliationPlan(
-    [currentIdentity('alphaFunction'), currentIdentity('betaFunction')],
+    [currentIdentity('alphaFunction'), currentIdentity('BetaFunction')],
     [
-      { name: 'betaFunction', region: 'europe-west3', codebase: 'default' },
+      { name: 'BetaFunction', region: 'europe-west3', codebase: 'default' },
       { name: 'alphaFunction', region: 'europe-west3', codebase: 'default' },
     ],
   );
   assert.deepEqual(plan.obsoleteOwned, []);
   assert.deepEqual(plan.compiledEndpointIdentities, [
+    'default|europe-west3|BetaFunction',
     'default|europe-west3|alphaFunction',
-    'default|europe-west3|betaFunction',
   ]);
   assert.deepEqual(plan.remoteBefore, [
+    'default|europe-west3|BetaFunction',
     'default|europe-west3|alphaFunction',
-    'default|europe-west3|betaFunction',
   ]);
 });
 
