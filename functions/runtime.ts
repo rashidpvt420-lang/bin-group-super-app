@@ -30,9 +30,10 @@ export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
-// Preserve the public callable name as an App Check-protected fail-closed hold so
-// no earlier deployed implementation remains reachable while the replacement is reviewed.
+// Keep the retired generateAIDesignConceptImages callable fail-closed while
+// exporting the separately reviewed Owner/Tenant and Admin replacement callables.
 export * from "./aiDesignStudioLaunchHold";
+export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
 export * from "./contractSignatureOtpMailbox";
 export * from "./ownerOnboardingLifecycleEmail";
