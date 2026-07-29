@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs';
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 const repair = read('functions/phase1OwnerLaunchRepair.ts');
-const visits = read('functions/ownerInspectionEvidence.ts');
+const visits = read('functions/phase1OwnerVisitEvidenceHardened.ts');
 const approval = read('functions/securePaymentApproval.ts');
 const brokerCommissions = read('functions/brokerCommissions.ts');
 const runtime = read('functions/runtime.ts');
+const adminFirebase = read('apps/admin-panel/src/lib/firebase.ts');
 const account = read('src/components/onboarding/AccountCreationStep.tsx');
 const submission = read('src/components/onboarding/InspectionSubmissionStep.tsx');
 const intakeAdmin = read('apps/admin-panel/src/pages/admin/IntakeVaultPage.tsx');
@@ -57,16 +58,25 @@ test('Admin final approval requires MFA, verified visit evidence and receipt int
   assert.match(approval, /PHASE1_PAYMENT_METHODS/);
 });
 
-test('every property visit requires bounded browser GPS, checklist timestamps findings and photo evidence', () => {
+test('every property visit requires fresh accurate browser GPS, checklist timestamps findings and photo evidence', () => {
   for (const key of ['accessVerified', 'exteriorReviewed', 'utilitiesReviewed', 'safetyReviewed', 'occupancyConfirmed']) {
     assert.ok(visits.includes(`"${key}"`), `missing checklist control ${key}`);
   }
-  assert.match(visits, /MAX_ARRIVAL_DISTANCE_METRES/);
+  assert.match(visits, /MAX_ARRIVAL_DISTANCE_METRES = 250/);
+  assert.match(visits, /MAX_ARRIVAL_ACCURACY_METRES = 100/);
+  assert.match(visits, /MAX_GPS_CAPTURE_AGE_MS = 2 \* 60 \* 1000/);
+  assert.match(visits, /BROWSER_GEOLOCATION_AT_SUBMISSION/);
+  assert.match(visits, /gpsAccuracyVerified: true/);
+  assert.match(visits, /gpsCaptureFresh: true/);
+  assert.match(visits, /verificationSource: "ADMIN_BROWSER_GPS_SITE_VISIT"/);
+  assert.match(visits, /point: new admin\.firestore\.GeoPoint\(verifiedLat, verifiedLng\)/);
   assert.match(visits, /durationMs < 60_000 \|\| durationMs > 12 \* 60 \* 60 \* 1000/);
   assert.match(visits, /Visit photo is empty or exceeds 6 MB/);
-  assert.match(visits, /evidenceVerified: true/);
-  assert.match(visits, /adminCompleteOwnerPortfolioInspectionsPhase1/);
-  assert.match(intakeAdmin, /Use current device GPS/);
+  assert.match(visits, /adminCompleteOwnerPortfolioInspectionsPhase1Hardened/);
+  assert.match(adminFirebase, /captureFreshAdminBrowserGps/);
+  assert.match(adminFirebase, /name === 'adminRecordOwnerPortfolioVisitEvidence'/);
+  assert.match(adminFirebase, /arrivalAccuracyMetres/);
+  assert.match(adminFirebase, /positionCapturedAtMs/);
   assert.match(intakeAdmin, /Attach current property photo/);
   assert.match(intakeAdmin, /Complete verified visits & request 15%/);
   assert.doesNotMatch(intakeAdmin, /COMPLETE ALL VISITS/);
@@ -88,11 +98,13 @@ test('Broker commission creation is deterministic and has a contract-activation 
   assert.match(brokerCommissions, /createBrokerCommissionForContract/);
 });
 
-test('runtime deploys only repaired submission payment and visit completion handlers', () => {
+test('runtime deploys only repaired submission payment and hardened visit handlers', () => {
   assert.match(runtime, /uploadOwnerInspectionProofDocumentPhase1 as uploadOwnerInspectionProofDocument/);
   assert.match(runtime, /submitOwnerInspectionFirstOnboardingPhase1 as submitOwnerInspectionFirstOnboarding/);
   assert.match(runtime, /adminRecordOwnerMobilizationPaymentEvidencePhase1 as adminRecordOwnerMobilizationPaymentEvidence/);
-  assert.match(runtime, /adminCompleteOwnerPortfolioInspectionsPhase1 as adminCompleteOwnerPortfolioInspections/);
+  assert.match(runtime, /adminRecordOwnerPortfolioVisitEvidenceHardened as adminRecordOwnerPortfolioVisitEvidence/);
+  assert.match(runtime, /adminCompleteOwnerPortfolioInspectionsPhase1Hardened as adminCompleteOwnerPortfolioInspections/);
+  assert.match(runtime, /from "\.\/phase1OwnerVisitEvidenceHardened"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/ownerInspectionCompletion"/);
   assert.doesNotMatch(runtime, /adminCompleteOwnerPropertyInspection,/);
 });
