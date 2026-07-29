@@ -7,7 +7,8 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const STORAGE_BUCKET = "bin-group-57c60.firebasestorage.app";
+const bucket = admin.storage().bucket(STORAGE_BUCKET);
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const imageGenerationKey = defineSecret("IMAGE_GENERATION_API_KEY");
 
