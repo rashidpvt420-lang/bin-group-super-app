@@ -23,8 +23,8 @@ function requireOwner(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Owner login is required.");
   const role = normalized(auth.token?.role || auth.token?.userRole || auth.token?.primaryRole);
   if (role !== "owner") throw new HttpsError("permission-denied", "Only an Owner account can capture a Broker referral.");
-  if (auth.token?.suspended === true || auth.token?.disabled === true) {
-    throw new HttpsError("permission-denied", "This Owner account is suspended or disabled.");
+  if (auth.token?.email_verified !== true || auth.token?.suspended === true || auth.token?.disabled === true) {
+    throw new HttpsError("permission-denied", "This Owner account is not verified and active.");
   }
   return auth.uid as string;
 }
@@ -41,8 +41,11 @@ function referralLeadId(brokerUid: string, ownerUid: string) {
   return crypto.createHash("sha256").update(`${brokerUid}:${ownerUid}`).digest("hex");
 }
 
+// Referral capture is available to a verified Firebase Owner even when a public
+// browser cannot obtain an App Check token. Authorization remains bound to the
+// verified Owner token and every write is server-side.
 export const captureBrokerReferralAttribution = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  { cors: true, region: "europe-west3", enforceAppCheck: false },
   async (request) => {
     const ownerUid = requireOwner(request.auth);
     const brokerUid = validBrokerUid(request.data?.brokerUid || request.data?.broker);
@@ -85,9 +88,6 @@ export const captureBrokerReferralAttribution = onCall(
 
       const referralCode = text(existing.referralCode || existingLead.referralCode, 160) || `BIN-${brokerUid}`;
       if (existingBrokerUid === brokerUid) {
-        // A same-Broker replay is a true no-op. In particular it must never rewind
-        // converted/matched lead state or reset commission eligibility and payout
-        // lifecycle fields established later by protected Admin workflows.
         return {
           attributionId: text(existing.attributionId, 160) || leadId,
           leadId,
