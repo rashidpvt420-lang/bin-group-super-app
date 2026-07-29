@@ -37,13 +37,17 @@ test('production deploy preflight refuses any workflow that is not exact current
   assert.match(deployScript, /verifyFirebaseProductionSecrets/);
 });
 
-test('Broker referral link reaches public onboarding and locks attribution server-side', () => {
+test('Broker referral link reaches public onboarding and locks attribution server-side for a verified Owner', () => {
   assert.match(brokerHook, /\/onboarding\?broker=\$\{encodeURIComponent\(user\.uid\)\}/);
   assert.doesNotMatch(brokerHook, /\/owner\/onboarding/);
   assert.match(onboarding, /searchParams\.get\('broker'\)/);
   assert.match(onboarding, /captureBrokerReferralAttribution/);
   assert.match(onboarding, /referralState !== 'captured'/);
-  assert.match(brokerCallable, /enforceAppCheck: true/);
+  assert.match(brokerCallable, /enforceAppCheck:\s*false/);
+  assert.match(brokerCallable, /if \(!auth\?\.uid\)/);
+  assert.match(brokerCallable, /role !== "owner"/);
+  assert.match(brokerCallable, /email_verified !== true/);
+  assert.match(brokerCallable, /auth\.token\?\.suspended === true/);
   assert.match(brokerCallable, /db\.runTransaction/);
   assert.match(brokerCallable, /broker_attributions/);
   assert.match(brokerCallable, /attributionLocked: true/);
@@ -51,13 +55,13 @@ test('Broker referral link reaches public onboarding and locks attribution serve
   assert.match(runtime, /export \* from "\.\/brokerReferralAttribution"/);
 });
 
-test('Broker referral replay preserves matched lifecycle and commission authority', () => {
+test('Broker referral replay preserves matched lifecycle and commission authority as a true no-op', () => {
   assert.match(brokerCallable, /existingBrokerUid === brokerUid/);
-  assert.match(brokerCallable, /same-Broker replay is a true no-op/);
   const noOpStart = brokerCallable.indexOf('if (existingBrokerUid === brokerUid)');
   const noOpEnd = brokerCallable.indexOf('const kyc =', noOpStart);
   const noOp = brokerCallable.slice(noOpStart, noOpEnd);
   assert.match(noOp, /idempotent: true/);
+  assert.match(noOp, /preservedLifecycleStatus/);
   assert.doesNotMatch(noOp, /tx\.set|commissionEligible: false|status: "SUBMITTED"/);
   assert.match(brokerCallable, /status: text\(existingLead\.status/);
   assert.match(brokerCallable, /commissionStatus: text\(existingLead\.commissionStatus/);
