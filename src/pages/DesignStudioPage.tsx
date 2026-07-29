@@ -37,6 +37,23 @@ type PreviewImage = {
   previewUrl: string;
   name: string;
   size: number;
+  contentType: string;
+};
+
+type ServerQuote = {
+  currency?: string;
+  finalTotal?: number;
+  mobilizationAmount?: number;
+  quoteHash?: string;
+  quoteAuthority?: string;
+};
+
+type SubmitDesignResponse = {
+  requestId?: string;
+  renderStatus?: string;
+  aiProvider?: string;
+  concepts?: DesignConcept[];
+  quote?: ServerQuote;
 };
 
 type SnackbarState = {
@@ -48,11 +65,7 @@ type SnackbarState = {
 const WHATSAPP_URL = 'https://wa.me/971552423233';
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const MAX_REFERENCE_IMAGES = 3;
-// LAUNCH SAFETY HOLD: the legacy public image-render endpoint remains disabled.
-// Authenticated Owner/Tenant requests use submitAIDesignRequest only.
-// No design request, quote, approval, payment status or generated property image
-// is created by the retired browser-authoritative workflow.
+const MAX_REFERENCE_IMAGES = 1;
 
 const defaultScope: DesignScope = {
   dimensions: 50,
@@ -72,7 +85,16 @@ const defaultScope: DesignScope = {
 
 const isSupportedImage = (file: File) => {
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
-  return (file.type ? ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) : false) || IMAGE_EXTENSIONS.includes(extension);
+  return (file.type ? ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) : false)
+    || IMAGE_EXTENSIONS.includes(extension);
+};
+
+const mimeFromFile = (file: File) => {
+  if (['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return file.type;
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  if (extension === 'png') return 'image/png';
+  if (extension === 'webp') return 'image/webp';
+  return 'image/jpeg';
 };
 
 const readImageAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
@@ -93,12 +115,15 @@ const createDesignRequestId = () => {
 };
 
 function designErrorMessage(error: unknown) {
-  const details = error as { code?: string; message?: string };
+  const details = error as { code?: string; message?: string; details?: string };
   const code = String(details?.code || '').toLowerCase();
-  const message = String(details?.message || '').toLowerCase();
+  const message = String(details?.details || details?.message || '').toLowerCase();
   if (code.includes('unauthenticated') || message.includes('sign in')) return 'Please sign in before submitting a design request.';
   if (code.includes('permission-denied') || message.includes('permission')) return 'Submission blocked by server authority checks.';
-  if (code.includes('failed-precondition') || message.includes('app check')) return 'Submission requires verified App Check and production callable access.';
+  if (code.includes('resource-exhausted')) return 'AI Design Studio request limit reached. Please retry later.';
+  if (code.includes('failed-precondition') && message.includes('unit')) return 'A verified tenant unit link is required before submitting this design request.';
+  if (code.includes('failed-precondition') || message.includes('app check')) return 'Submission requires production App Check and configured AI provider access.';
+  if (code.includes('unavailable')) return 'AI image rendering is temporarily unavailable. No design workflow record was created.';
   return 'Design request could not be submitted. Please retry.';
 }
 
@@ -130,11 +155,12 @@ export default function DesignStudioPage() {
   const [designStyle, setDesignStyle] = useState('Modern');
   const [designObjective, setDesignObjective] = useState('refresh');
   const [submitting, setSubmitting] = useState(false);
-  const [renderStatus, setRenderStatus] = useState('AI_RENDER_PENDING');
+  const [renderStatus, setRenderStatus] = useState('REFERENCE_IMAGE_REQUIRED');
   const [renderedConcepts, setRenderedConcepts] = useState<DesignConcept[]>([]);
+  const [serverQuote, setServerQuote] = useState<ServerQuote | null>(null);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'success' });
 
-  const quote = useMemo(() => calculateDesignStudioQuote({
+  const preliminaryQuote = useMemo(() => calculateDesignStudioQuote({
     ...scope,
     addons: [],
     hasMEP: tenantMode ? false : scope.hasMEP,
@@ -142,7 +168,9 @@ export default function DesignStudioPage() {
     isNightWork: tenantMode ? false : scope.isNightWork,
   }), [scope, tenantMode]);
 
-  const mobilization = getDepositAmount(quote.finalTotal, 15);
+  const preliminaryMobilization = getDepositAmount(preliminaryQuote.finalTotal, 15);
+  const displayedQuoteTotal = Number(serverQuote?.finalTotal || preliminaryQuote.finalTotal);
+  const displayedMobilization = Number(serverQuote?.mobilizationAmount || preliminaryMobilization);
 
   const executionDetails = useMemo(() => buildDesignExecutionDetails({
     zoneType: scope.zoneType,
@@ -151,9 +179,9 @@ export default function DesignStudioPage() {
     finishTier: scope.finishTier,
     dimensions: scope.dimensions,
     notes: scopeDescription,
-    quoteTotal: quote.finalTotal,
-    mobilizationAmount: mobilization,
-  }), [scope.zoneType, scope.finishTier, scope.dimensions, designStyle, designObjective, scopeDescription, quote.finalTotal, mobilization]);
+    quoteTotal: displayedQuoteTotal,
+    mobilizationAmount: displayedMobilization,
+  }), [scope.zoneType, scope.finishTier, scope.dimensions, designStyle, designObjective, scopeDescription, displayedQuoteTotal, displayedMobilization]);
 
   const fallbackConcepts = useMemo(() => buildDesignConcepts({
     zoneType: scope.zoneType,
@@ -162,48 +190,47 @@ export default function DesignStudioPage() {
     uploadedImageUrl: referenceImages[0]?.previewUrl,
     notes: scopeDescription,
     finishTier: scope.finishTier,
-    quoteTotal: quote.finalTotal,
-    mobilizationAmount: mobilization,
-  }), [scope.zoneType, scope.finishTier, designStyle, designObjective, referenceImages, scopeDescription, quote.finalTotal, mobilization]);
+    quoteTotal: displayedQuoteTotal,
+    mobilizationAmount: displayedMobilization,
+  }), [scope.zoneType, scope.finishTier, designStyle, designObjective, referenceImages, scopeDescription, displayedQuoteTotal, displayedMobilization]);
 
   const concepts = renderedConcepts.length ? renderedConcepts : fallbackConcepts;
 
   const labels = {
     eyebrow: tx('design.eyebrow', 'AI PROPERTY DESIGN'),
     title: tx('design.title', 'AI Design Studio'),
-    subtitle: tx('design.subtitle', 'Create a private, server-authoritative design request. BIN GROUP calculates quote, workflow state and protected render metadata on the backend.'),
+    subtitle: tx('design.subtitle', 'Upload one real property image. The protected backend edits that image, resolves property authority, calculates the quote and creates the approval workflow.'),
     objective: tx('design.objective', 'Redesign objective'),
     objectivePlaceholder: tx('design.objective_placeholder', 'Describe what you want to improve, repair, redesign, or upgrade...'),
     zone: tx('design.zone', 'Design zone'),
     style: tx('design.style', 'Design style'),
-    action: tx('design.action', tenantMode ? 'Submit for owner approval' : 'Create concept and quote'),
-    estimate: tx('design.estimate', 'Estimated execution quote'),
+    action: tx('design.action', tenantMode ? 'Submit for owner approval' : 'Create private concept and quote'),
+    estimate: tx('design.estimate', serverQuote ? 'Server-calculated execution quote' : 'Preliminary execution estimate'),
     mobilization: tx('design.mobilization', '15% mobilization'),
     protected: tx('design.protected', 'Protected BIN GROUP design workflow'),
-    protectedDesc: tx('design.protected_desc', 'The browser can preview local images, but design requests, quotes, approvals and render records are created only by the callable backend.'),
+    protectedDesc: tx('design.protected_desc', 'The reference and generated property images remain private. Authoritative quote, ownership, approval and workflow records are created only by the App Check-protected callable.'),
   };
 
   const handleImageFiles = async (files: File[]) => {
     if (!files.length) return;
-    const invalid = files.find((file) => !isSupportedImage(file) || file.size > MAX_IMAGE_SIZE_BYTES);
-    if (invalid) {
-      setSnackbar({ open: true, message: 'Use JPG, PNG, or WEBP images only. Maximum size is 5 MB per image.', severity: 'error' });
-      return;
-    }
-    if (referenceImages.length + files.length > MAX_REFERENCE_IMAGES) {
-      setSnackbar({ open: true, message: `Preview up to ${MAX_REFERENCE_IMAGES} reference images for one request.`, severity: 'error' });
+    const file = files[0];
+    if (!isSupportedImage(file) || file.size > MAX_IMAGE_SIZE_BYTES) {
+      setSnackbar({ open: true, message: 'Use one JPG, PNG, or WEBP image no larger than 5 MB.', severity: 'error' });
       return;
     }
 
     try {
-      const previews = await Promise.all(files.map(async (file) => ({
+      const preview: PreviewImage = {
         previewUrl: await readImageAsDataUrl(file),
         name: file.name,
         size: file.size,
-      })));
-      setReferenceImages((current) => [...current, ...previews].slice(0, MAX_REFERENCE_IMAGES));
+        contentType: mimeFromFile(file),
+      };
+      setReferenceImages([preview]);
       setRenderedConcepts([]);
-      setRenderStatus('AI_RENDER_PENDING');
+      setServerQuote(null);
+      setRenderStatus('READY_FOR_PRIVATE_RENDER');
+      setSnackbar({ open: true, message: 'Reference image secured locally. Submit when the design scope is ready.', severity: 'info' });
     } catch {
       setSnackbar({ open: true, message: 'Image preview failed. Please retry with another image.', severity: 'error' });
     }
@@ -212,7 +239,7 @@ export default function DesignStudioPage() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
-    await handleImageFiles(files);
+    await handleImageFiles(files.slice(0, MAX_REFERENCE_IMAGES));
   };
 
   const handleCreateConcept = async () => {
@@ -220,39 +247,46 @@ export default function DesignStudioPage() {
       setSnackbar({ open: true, message: 'Please sign in before submitting a design request.', severity: 'error' });
       return;
     }
+    const reference = referenceImages[0];
+    if (!reference) {
+      setSnackbar({ open: true, message: 'Take or upload one real property image before creating a design request.', severity: 'error' });
+      return;
+    }
 
     setSubmitting(true);
+    setRenderStatus('AI_RENDER_IN_PROGRESS');
     try {
       const requestId = createDesignRequestId();
       const submitDesign = httpsCallable(functions, 'submitAIDesignRequest');
       const result = await submitDesign({
         requestId,
-        referenceImages: [],
+        imageBase64: reference.previewUrl,
+        mimeType: reference.contentType,
         scope: {
           ...scope,
           scopeDescription,
           requiredWork: scopeDescription,
-          imageCount: referenceImages.length,
+          imageCount: 1,
         },
         designStyle,
         designObjective,
         notes: scopeDescription,
       });
-      const data = (result?.data || {}) as {
-        requestId?: string;
-        renderStatus?: string;
-        concepts?: DesignConcept[];
-      };
+      const data = (result?.data || {}) as SubmitDesignResponse;
       setRenderedConcepts(Array.isArray(data.concepts) ? data.concepts : []);
-      setRenderStatus(data.renderStatus || 'AI_RENDER_PENDING');
+      setServerQuote(data.quote || null);
+      setRenderStatus(data.renderStatus || 'AI_RENDER_COMPLETE');
       setSnackbar({
         open: true,
-        message: tenantMode ? 'Design request submitted for owner approval.' : 'Design request created. Deposit workflow is ready.',
+        message: tenantMode
+          ? 'Private design request submitted for the canonical property owner approval.'
+          : 'Private design concept and server quote created.',
         severity: 'success',
       });
       const prefix = tenantMode ? '/tenant' : '/owner';
       navigate(`${prefix}/design-studio/request/${data.requestId || requestId}`);
     } catch (error) {
+      setRenderStatus('AI_RENDER_FAILED');
       setSnackbar({ open: true, message: designErrorMessage(error), severity: 'error' });
     } finally {
       setSubmitting(false);
@@ -268,31 +302,31 @@ export default function DesignStudioPage() {
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', maxWidth: 920, lineHeight: 1.8 }}>{labels.subtitle}</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2, gap: 1 }}>
             <Chip icon={<Sparkles size={16} />} label={`Server authority - ${renderStatus.replace(/_/g, ' ').toLowerCase()}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
-            <Chip label={tenantMode ? 'Tenant approval flow' : 'Owner quote flow'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
+            <Chip label={tenantMode ? 'Tenant-to-owner approval flow' : 'Owner private quote flow'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
         </Box>
 
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.1fr 1fr 0.85fr' }, gap: 4 }}>
           <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}><Camera color={binThemeTokens.gold} /> Reference images</Typography>
+            <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}><Camera color={binThemeTokens.gold} /> One private reference image</Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
               <Button component="label" variant="contained" disabled={submitting} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                 Take photo
                 <input type="file" hidden accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleImageUpload} />
               </Button>
               <Button component="label" variant="outlined" disabled={submitting} sx={{ py: 2, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
-                Preview from gallery
-                <input type="file" hidden accept="image/jpeg,image/png,image/webp" multiple onChange={handleImageUpload} />
+                Upload from gallery
+                <input type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} />
               </Button>
             </Box>
 
-            <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1.5 }}>
-              {referenceImages.map((image, index) => (
-                <Box key={`${image.name}-${index}`} component="img" src={image.previewUrl} alt={`Reference ${index + 1}`} sx={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: 2, border: `1px solid ${binThemeTokens.gold}` }} />
+            <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: '1fr', gap: 1.5 }}>
+              {referenceImages.map((image) => (
+                <Box key={image.name} component="img" src={image.previewUrl} alt="Private property reference" sx={{ width: '100%', maxHeight: 320, objectFit: 'cover', borderRadius: 2, border: `1px solid ${binThemeTokens.gold}` }} />
               ))}
               {!referenceImages.length && (
-                <Box sx={{ gridColumn: '1 / -1', height: 118, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.56)' }}>
-                  <ImageIcon />
+                <Box sx={{ height: 180, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.56)' }}>
+                  <Stack alignItems="center" spacing={1}><ImageIcon /><Typography variant="caption">Reference image required</Typography></Stack>
                 </Box>
               )}
             </Box>
@@ -324,9 +358,10 @@ export default function DesignStudioPage() {
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, textAlign: 'center' }}>
               <Sparkles size={46} color={binThemeTokens.gold} />
               <Typography variant="h6" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>{labels.estimate}</Typography>
-              <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>AED {quote.finalTotal.toLocaleString()}</Typography>
-              <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1 }}>{labels.mobilization}: AED {mobilization.toLocaleString()}</Typography>
-              <Button variant="contained" fullWidth onClick={handleCreateConcept} disabled={submitting} sx={{ mt: 3, py: 1.6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? 'Submitting...' : labels.action}</Button>
+              <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>AED {displayedQuoteTotal.toLocaleString()}</Typography>
+              <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1 }}>{labels.mobilization}: AED {displayedMobilization.toLocaleString()}</Typography>
+              {!serverQuote && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.52)', mt: 1 }}>The protected backend recalculates and locks the final quote.</Typography>}
+              <Button variant="contained" fullWidth onClick={handleCreateConcept} disabled={submitting || !referenceImages.length} sx={{ mt: 3, py: 1.6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? 'Creating private render...' : labels.action}</Button>
               <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" fullWidth startIcon={<MessageCircle size={17} />} sx={{ mt: 1.5, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>WhatsApp BIN GROUP</Button>
             </Paper>
 
@@ -351,12 +386,12 @@ export default function DesignStudioPage() {
                   </Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">After</Typography>
-                    {concept.afterImageUrl ? <Box component="img" src={concept.afterImageUrl} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2 }} /> : <Box sx={{ height: 120, borderRadius: 2, bgcolor: 'rgba(245,158,11,0.08)', display: 'grid', placeItems: 'center', p: 1, textAlign: 'center' }}><Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 900 }}>AI render pending - scope is still saved</Typography></Box>}
+                    {concept.afterImageUrl ? <Box component="img" src={concept.afterImageUrl} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2 }} /> : <Box sx={{ height: 120, borderRadius: 2, bgcolor: 'rgba(245,158,11,0.08)', display: 'grid', placeItems: 'center', p: 1, textAlign: 'center' }}><Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 900 }}>Private AI render not created yet</Typography></Box>}
                   </Box>
                 </Stack>
                 <Typography variant="caption" sx={{ display: 'block', color: '#FFF' }}>Finish tier: {concept.finishTier || scope.finishTier}</Typography>
-                <Typography variant="caption" sx={{ display: 'block', color: '#FFF' }}>Estimated quote: AED {quote.finalTotal.toLocaleString()}</Typography>
-                <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 900 }}>15% mobilization: AED {mobilization.toLocaleString()}</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: '#FFF' }}>Quote: AED {displayedQuoteTotal.toLocaleString()}</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 900 }}>15% mobilization: AED {displayedMobilization.toLocaleString()}</Typography>
                 <Box sx={{ mt: 2, maxHeight: 360, overflow: 'auto' }}><DetailList details={concept.executionDetails || executionDetails} /></Box>
               </Paper>
             ))}
@@ -364,7 +399,7 @@ export default function DesignStudioPage() {
         </Paper>
 
         <Alert severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
-          AI Studio uses server-created requests, quotes, approvals and audit records. Current render status: {renderStatus}.
+          The server creates the request, canonical owner/property binding, quote, approval record, audit log and private media paths. Current render status: {renderStatus}.
         </Alert>
       </Stack>
 

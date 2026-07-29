@@ -4,21 +4,29 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('AI Design Studio exports distinct legacy and compatibility callables', async () => {
-  const [legacy, compat, runtime] = await Promise.all([
+test('AI Design Studio exports distinct legacy hold, public and Admin compatibility callables', async () => {
+  const [legacy, publicAi, compat, hold, runtime] = await Promise.all([
     read('functions/index.ts'),
+    read('functions/aiDesignStudio.ts'),
     read('functions/aiDesignStudioCompat.ts'),
+    read('functions/aiDesignStudioLaunchHold.ts'),
     read('functions/runtime.ts'),
   ]);
 
   assert.match(legacy, /export const generateDesignConcept = onCall/);
+  assert.match(publicAi, /export const submitAIDesignRequest = onCall/);
+  assert.match(publicAi, /export const getAIDesignRequestMedia = onCall/);
+  assert.doesNotMatch(publicAi, /export const generateAIDesignConceptImages/);
   assert.match(compat, /export const generateDesignConceptCompat = onCall/);
   assert.doesNotMatch(compat, /export const generateDesignConcept = onCall/);
+  assert.match(hold, /export const generateAIDesignConceptImages/);
   assert.match(runtime, /export \* from "\.\/index"/);
+  assert.match(runtime, /export \* from "\.\/aiDesignStudioLaunchHold"/);
+  assert.match(runtime, /export \* from "\.\/aiDesignStudio"/);
   assert.match(runtime, /export \* from "\.\/aiDesignStudioCompat"/);
 });
 
-test('AI Design Studio compatibility callable is fail-closed and reference-image bound', async () => {
+test('AI Design Studio Admin compatibility callable stays fail-closed and reference-image bound', async () => {
   const source = await read('functions/aiDesignStudioCompat.ts');
 
   assert.match(source, /enforceAppCheck:\s*true/);
@@ -51,7 +59,7 @@ test('Admin AI Design Studio uses the hardened callable without client-side refe
   assert.doesNotMatch(source, /Maximum supported size is 50MB/);
 });
 
-test('Owner and Tenant AI Design Studio is server-authoritative and private-rendered', async () => {
+test('Owner and Tenant AI Design Studio is server-authoritative, one-image bound and private-rendered', async () => {
   const [client, callable, rules] = await Promise.all([
     read('src/pages/DesignStudioPage.tsx'),
     read('functions/aiDesignStudio.ts'),
@@ -60,18 +68,24 @@ test('Owner and Tenant AI Design Studio is server-authoritative and private-rend
 
   assert.match(client, /submitAIDesignRequest/);
   assert.match(client, /MAX_IMAGE_SIZE_BYTES = 5 \* 1024 \* 1024/);
-  assert.match(client, /MAX_REFERENCE_IMAGES = 3/);
+  assert.match(client, /MAX_REFERENCE_IMAGES = 1/);
+  assert.match(client, /imageBase64: reference\.previewUrl/);
+  assert.match(client, /mimeType: reference\.contentType/);
   assert.doesNotMatch(client, /setDoc\(requestRef/);
   assert.doesNotMatch(client, /addDoc\(collection\(db, 'design_(quotes|concepts|approvals)'/);
 
   assert.match(callable, /export const submitAIDesignRequest = onCall/);
+  assert.match(callable, /export const getAIDesignRequestMedia = onCall/);
   assert.match(callable, /enforceAppCheck:\s*true/);
   assert.match(callable, /cleanStoragePath/);
   assert.match(callable, /SERVER_CALCULATED_DESIGN_STUDIO_V1/);
   assert.match(callable, /transaction\.create\(requestRef, requestPayload\)/);
   assert.match(callable, /cacheControl: "private,no-store"/);
   assert.match(callable, /getSignedUrl/);
+  assert.match(callable, /type: "input_image"/);
+  assert.match(callable, /action: "edit"/);
   assert.doesNotMatch(callable, /makePublic\(/);
+  assert.doesNotMatch(callable, /export const generateAIDesignConceptImages/);
 
   for (const collectionName of ['design_requests', 'design_quotes', 'design_concepts', 'design_approvals']) {
     const start = rules.indexOf(`match /${collectionName}/`);

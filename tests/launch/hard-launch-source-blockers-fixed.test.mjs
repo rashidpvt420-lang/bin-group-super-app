@@ -9,6 +9,7 @@ const brokerHook = read('src/broker/hooks/useBrokerAttributionSignals.ts');
 const onboarding = read('src/pages/PropertyOnboardingPage.tsx');
 const brokerCallable = read('functions/brokerReferralAttribution.ts');
 const runtime = read('functions/runtime.ts');
+const publicAiDesign = read('functions/aiDesignStudio.ts');
 const aiLaunchHold = read('functions/aiDesignStudioLaunchHold.ts');
 const ownerApp = read('src/owner/OwnerApp.tsx');
 const designStudio = read('src/pages/DesignStudioPage.tsx');
@@ -73,12 +74,19 @@ test('Owner inspections route uses the full inspections workspace', () => {
   assert.match(ownerApp, /path="\/review-queue" element=\{<OwnerReviewQueuePage \/>\}/);
 });
 
-test('public AI Design Studio is fail-closed and old endpoint is overwritten safely', () => {
-  assert.match(designStudio, /LAUNCH SAFETY HOLD/);
-  assert.match(designStudio, /No design request, quote, approval, payment status or generated property image/);
+test('public AI Design Studio uses reviewed server authority while the retired endpoint remains fail-closed', () => {
+  assert.match(designStudio, /submitAIDesignRequest/);
+  assert.match(designStudio, /imageBase64: reference\.previewUrl/);
+  assert.match(designStudio, /MAX_REFERENCE_IMAGES = 1/);
   assert.doesNotMatch(designStudio, /addDoc|setDoc|uploadBytes|generateAIDesignConceptImages/);
-  assert.doesNotMatch(runtime, /export \* from "\.\/aiDesignStudio";/);
+  assert.match(runtime, /export \* from "\.\/aiDesignStudio";/);
   assert.match(runtime, /export \* from "\.\/aiDesignStudioLaunchHold";/);
+  assert.match(publicAiDesign, /export const submitAIDesignRequest/);
+  assert.match(publicAiDesign, /export const getAIDesignRequestMedia/);
+  assert.match(publicAiDesign, /enforceAppCheck: true/);
+  assert.match(publicAiDesign, /SERVER_CALCULATED_DESIGN_STUDIO_V1/);
+  assert.match(publicAiDesign, /cacheControl: "private,no-store"/);
+  assert.doesNotMatch(publicAiDesign, /makePublic|export const generateAIDesignConceptImages/);
   assert.match(aiLaunchHold, /export const generateAIDesignConceptImages/);
   assert.match(aiLaunchHold, /enforceAppCheck: true/);
   assert.match(aiLaunchHold, /failed-precondition/);
