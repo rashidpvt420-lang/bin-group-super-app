@@ -19,6 +19,10 @@ export const requiredFirebaseBankPilotSecrets = Object.freeze([
   ...requiredFirebaseAiSecrets,
 ]);
 
+export const requiredFirebasePhase1PublicSecrets = Object.freeze([
+  ...requiredFirebaseBankPilotSecrets,
+]);
+
 export const requiredFirebasePublicSecrets = Object.freeze([
   ...requiredFirebaseBankPilotSecrets,
   'STRIPE_SECRET_KEY',
@@ -27,12 +31,12 @@ export const requiredFirebasePublicSecrets = Object.freeze([
 
 export function requiredFirebaseProductionSecretsForMode(launchMode) {
   const normalizedMode = String(launchMode || '').trim();
-  if (!['bank-pilot', 'public'].includes(normalizedMode)) {
-    throw new Error('LAUNCH_MODE must be bank-pilot or public.');
+  if (!['bank-pilot', 'phase1-public', 'public'].includes(normalizedMode)) {
+    throw new Error('LAUNCH_MODE must be bank-pilot, phase1-public, or public.');
   }
-  return normalizedMode === 'public'
-    ? requiredFirebasePublicSecrets
-    : requiredFirebaseBankPilotSecrets;
+  if (normalizedMode === 'public') return requiredFirebasePublicSecrets;
+  if (normalizedMode === 'phase1-public') return requiredFirebasePhase1PublicSecrets;
+  return requiredFirebaseBankPilotSecrets;
 }
 
 export async function assertExactCurrentMain({
