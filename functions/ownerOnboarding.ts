@@ -57,7 +57,8 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
     phone: mobile,
     mobile,
     role: "owner",
-    status: "pending_admin_approval",
+    status: "pending_property_application",
+    onboardingStatus: "FIVE_PAGE_APPLICATION_IN_PROGRESS",
     dashboardLocked: true,
     dashboardUnlocked: false,
     adminApproved: false,
@@ -68,9 +69,7 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
     updatedAt: now
   };
 
-  if (!existingSnapExists) {
-    ownerProfile.createdAt = now;
-  }
+  if (!existingSnapExists) ownerProfile.createdAt = now;
 
   const batch = db.batch();
   batch.set(userRef, ownerProfile, { merge: true });
@@ -81,7 +80,9 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
       ownerUid: uid,
       ownerEmail: email,
       accountCreated: true,
+      accountVerified: true,
       accountCreatedAt: now,
+      workflowVersion: "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1",
       updatedAt: now
     }, { merge: true });
   }
@@ -89,7 +90,7 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
   batch.set(db.collection("audit_logs").doc(), {
     actorId: uid,
     actorRole: "owner",
-    action: "REGISTER_OWNER_ONBOARDING_ACCOUNT",
+    action: "REGISTER_OWNER_FIVE_PAGE_ACCOUNT",
     targetType: "users",
     targetId: uid,
     metadata: { intakeId: intakeId || null, previousRole: existingRole || null },
@@ -106,7 +107,10 @@ export const registerOwnerOnboardingAccount = onCall({ cors: true, enforceAppChe
   );
 });
 
-export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+// This callable intentionally relies on verified Firebase Auth rather than App Check.
+// It is used only after the customer has proved control of the email address and it
+// cannot create Auth users or grant an admin role.
+export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck: false }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
 
   const uid = request.auth.uid;
@@ -147,7 +151,8 @@ export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck
     status: "SUCCESS",
     uid,
     role: "owner",
-    profileStatus: "pending_admin_approval",
+    profileStatus: "pending_property_application",
+    workflowVersion: "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1",
     dashboardLocked: true
   };
 });
