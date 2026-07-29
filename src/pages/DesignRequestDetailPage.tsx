@@ -30,10 +30,21 @@ import { NotificationEvents } from '@bin/shared';
 import { logAuditAction } from '../utils/auditLogger';
 
 const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED'];
+const PRIVATE_MEDIA_REFRESH_MS = 10 * 60 * 1000;
+
+type ProtectedMedia = {
+    referenceImages: string[];
+    generatedImages: string[];
+    expiresAtMs: number;
+};
 
 function text(value: unknown, fallback = '—') {
     const resolved = String(value ?? '').trim();
     return resolved || fallback;
+}
+
+function stringArray(value: unknown) {
+    return Array.isArray(value) ? value.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
 }
 
 function buildExecutionScope(request: any) {
@@ -52,7 +63,7 @@ function buildExecutionScope(request: any) {
         requiredWork: text(scope.requiredWork, 'Not declared'),
         scopeDescription: text(scope.scopeDescription, 'Not declared'),
         keepConstraints: text(scope.keepConstraints, 'No constraints declared'),
-        imageCount: Array.isArray(scope.referenceImages) ? scope.referenceImages.length : 0,
+        imageCount: Array.isArray(scope.referenceImagePaths) ? scope.referenceImagePaths.length : 0,
         finalTotal: Number(quote.finalTotal || 0),
         materialsEstimate: Number(quote.materialsEstimate || 0),
         laborEstimate: Number(quote.laborEstimate || 0),
@@ -69,7 +80,9 @@ export default function DesignRequestDetailPage() {
     const { tx } = useLanguage();
     const navigate = useNavigate();
     const [request, setRequest] = useState<any>(null);
+    const [protectedMedia, setProtectedMedia] = useState<ProtectedMedia>({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
     const [loading, setLoading] = useState(true);
+    const [mediaLoading, setMediaLoading] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [actionError, setActionError] = useState('');
 
@@ -94,6 +107,45 @@ export default function DesignRequestDetailPage() {
         return () => unsub();
     }, [id]);
 
+    useEffect(() => {
+        if (!id || !user?.uid) {
+            setProtectedMedia({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
+            return undefined;
+        }
+        let cancelled = false;
+        let timer: number | undefined;
+        const refreshMedia = async () => {
+            setMediaLoading(true);
+            try {
+                const getMedia = httpsCallable(functions, 'getAIDesignRequestMedia');
+                const result: any = await getMedia({ requestId: id });
+                const data = result?.data || {};
+                if (!cancelled) {
+                    setProtectedMedia({
+                        referenceImages: stringArray(data.referenceImages),
+                        generatedImages: stringArray(data.generatedImages),
+                        expiresAtMs: Number(data.expiresAtMs || 0),
+                    });
+                    setActionError((current) => current.startsWith('Protected design media') ? '' : current);
+                }
+            } catch (error: any) {
+                console.error('Protected design media refresh failed:', error);
+                if (!cancelled) {
+                    setProtectedMedia({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
+                    setActionError(`Protected design media could not be loaded: ${error?.message || 'authorisation or App Check failed.'}`);
+                }
+            } finally {
+                if (!cancelled) setMediaLoading(false);
+            }
+        };
+        void refreshMedia();
+        timer = window.setInterval(() => void refreshMedia(), PRIVATE_MEDIA_REFRESH_MS);
+        return () => {
+            cancelled = true;
+            if (timer !== undefined) window.clearInterval(timer);
+        };
+    }, [id, user?.uid]);
+
     const syncApprovalDocs = async (batch: ReturnType<typeof writeBatch>, action: 'APPROVE' | 'REJECT' | 'TAKEOVER', status: string, approvalStatus: string, payerRole: string, payerId: string | null) => {
         if (!id || !user?.uid) return;
         const approvalSnap = await getDocs(query(collection(db, 'design_approvals'), where('requestId', '==', id)));
@@ -110,10 +162,7 @@ export default function DesignRequestDetailPage() {
             ...(action === 'REJECT' ? { rejectedAt: serverTimestamp() } : { approvedAt: serverTimestamp() }),
         };
 
-        if (approvalSnap.empty) {
-            return;
-        }
-
+        if (approvalSnap.empty) return;
         approvalSnap.docs.forEach((approvalDoc) => {
             batch.update(doc(db, 'design_approvals', approvalDoc.id), approvalPayload);
         });
@@ -239,7 +288,9 @@ export default function DesignRequestDetailPage() {
     const canApprove = isOwner && ['PENDING_OWNER_NOC', 'AWAITING_OWNER_APPROVAL'].includes(String(request.status || ''));
     const canCreatePayment = isPayer && !terminalStatuses.includes(String(request.status || '')) && ['OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'DEPOSIT_PENDING', 'AI_CONCEPT_READY', 'PAYMENT_PENDING'].includes(String(request.status || ''));
     const canAdminHandoff = isAdmin && ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID', 'APPROVED_FOR_EXECUTION', 'READY_FOR_EXECUTION'].includes(String(request.status || ''));
-    const referenceImages: string[] = Array.isArray(scope.referenceImages) ? scope.referenceImages : [];
+    const referenceImages = protectedMedia.referenceImages;
+    const generatedImages = protectedMedia.generatedImages;
+    const primaryVisual = generatedImages[0] || referenceImages[0] || '';
     const executionScope = request.executionScope || buildExecutionScope(request);
 
     return (
@@ -248,6 +299,7 @@ export default function DesignRequestDetailPage() {
                 BACK TO STUDIO
             </Button>
             {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
+            {mediaLoading && <Alert severity="info" sx={{ mb: 3 }}>Refreshing authorised private design media…</Alert>}
 
             <Grid container spacing={6}>
                 <Grid item xs={12} lg={7}>
@@ -261,14 +313,14 @@ export default function DesignRequestDetailPage() {
                         </Box>
 
                         <Box sx={{ p: 0, minHeight: 360, bgcolor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                            {referenceImages[0] ? (
-                                <Box component="img" src={referenceImages[0]} sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.85 }} />
+                            {primaryVisual ? (
+                                <Box component="img" src={primaryVisual} sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.9 }} />
                             ) : (
                                 <Box sx={{ width: '100%', minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.72)' }}>
                                     <Stack spacing={2} alignItems="center">
                                         <ImageIcon size={48} color="rgba(255,255,255,0.35)" />
-                                        <Typography variant="h6" fontWeight={950} sx={{ color: 'rgba(255,255,255,0.78)' }}>NO VISUAL EVIDENCE PROVIDED</Typography>
-                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.48)', maxWidth: 420 }}>Upload before photos before execution handoff. No demo or stock image is used for production evidence.</Typography>
+                                        <Typography variant="h6" fontWeight={950} sx={{ color: 'rgba(255,255,255,0.78)' }}>PROTECTED VISUAL UNAVAILABLE</Typography>
+                                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.48)', maxWidth: 420 }}>A fresh authorised media URL is required. No public, demo or stock image is substituted.</Typography>
                                     </Stack>
                                 </Box>
                             )}
@@ -316,7 +368,7 @@ export default function DesignRequestDetailPage() {
                                 ))}
                                 {referenceImages.length === 0 && (
                                     <Grid item xs={12}>
-                                        <Alert icon={<ImageIcon size={18} />} severity="warning" sx={{ bgcolor: 'rgba(245,158,11,0.08)', color: '#fbbf24' }}>No reference images uploaded. Execution cannot be treated as visual-evidence complete.</Alert>
+                                        <Alert icon={<ImageIcon size={18} />} severity="warning" sx={{ bgcolor: 'rgba(245,158,11,0.08)', color: '#fbbf24' }}>Protected reference media is unavailable. Execution cannot be treated as visual-evidence complete.</Alert>
                                     </Grid>
                                 )}
                             </Grid>
@@ -332,7 +384,7 @@ export default function DesignRequestDetailPage() {
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>EXECUTION QUOTE</Typography>
                                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{formatAED(quote.finalTotal || 0)}</Typography>
                                     <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900, display: 'block', mt: 0.5 }}>
-                                        15% Upfront Deposit Required: {formatAED(Math.round(Number(quote.finalTotal || 0) * 0.15))}
+                                        15% Upfront Deposit Required: {formatAED(Number(quote.mobilizationAmount || Math.round(Number(quote.finalTotal || 0) * 0.15)))}
                                     </Typography>
                                 </Box>
                                 <Chip label={String(request.status || 'DRAFT').replace(/_/g, ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, maxWidth: 220 }} />
@@ -347,7 +399,7 @@ export default function DesignRequestDetailPage() {
                             </Stack>
 
                             <Alert icon={<ShieldCheck size={20} />} severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.1)', color: '#60A5FA', mb: 4, '& .MuiAlert-message': { fontSize: '0.75rem', lineHeight: 1.4 } }}>
-                                {quote.bindingClause || 'Scope locked quote. Any hidden condition or owner/admin variation requires updated approval.'}
+                                {quote.bindingClause || 'Server-calculated scope quote. Any hidden condition or owner/admin variation requires updated approval.'}
                             </Alert>
 
                             {canApprove && (
@@ -368,7 +420,7 @@ export default function DesignRequestDetailPage() {
 
                             {canCreatePayment && request.status !== 'PAYMENT_PENDING' && (
                                 <Button variant="contained" fullWidth size="large" onClick={handleCreatePaymentRequest} disabled={processing} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                                    PAY 15% DEPOSIT ({formatAED(Math.round(Number(quote.finalTotal || 0) * 0.15))})
+                                    PAY 15% DEPOSIT ({formatAED(Number(quote.mobilizationAmount || Math.round(Number(quote.finalTotal || 0) * 0.15)))})
                                 </Button>
                             )}
 
