@@ -130,11 +130,53 @@ const expireStaleAdminSession = () => {
     });
 };
 
+type AdminBrowserGpsEvidence = {
+    arrivalLat: number;
+    arrivalLng: number;
+    arrivalAccuracyMetres: number;
+    positionCapturedAtMs: number;
+};
+
+const captureFreshAdminBrowserGps = (): Promise<AdminBrowserGpsEvidence> => new Promise((resolve, reject) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        reject(new Error('Current browser GPS is required for Owner property visit evidence.'));
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const accuracy = Number(position.coords.accuracy);
+            if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100) {
+                reject(new Error('Current browser GPS accuracy must be 100 metres or better. Move outdoors and try again.'));
+                return;
+            }
+            resolve({
+                arrivalLat: position.coords.latitude,
+                arrivalLng: position.coords.longitude,
+                arrivalAccuracyMetres: accuracy,
+                positionCapturedAtMs: position.timestamp || Date.now(),
+            });
+        },
+        (error) => reject(new Error(error.message || 'Unable to capture current browser GPS.')),
+        { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
+    );
+});
+
 const httpsCallable: typeof firebaseHttpsCallable = ((functionsInstance: any, name: string, options?: any) => {
     const callable: any = firebaseHttpsCallable(functionsInstance, name, options);
     const wrapped: any = async (data?: unknown) => {
         try {
-            return await callable(data);
+            let payload = data;
+            if (name === 'adminRecordOwnerPortfolioVisitEvidence') {
+                const gps = await captureFreshAdminBrowserGps();
+                const source = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+                const requestedCompletedAt = Number(source.completedAtMs || 0);
+                payload = {
+                    ...source,
+                    ...gps,
+                    completedAtMs: Math.max(requestedCompletedAt, gps.positionCapturedAtMs),
+                };
+            }
+            return await callable(payload);
         } catch (error) {
             if (isUnauthenticatedCallableError(error)) expireStaleAdminSession();
             throw error;
