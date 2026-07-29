@@ -31,6 +31,7 @@ const RUN_ID = '991122';
 const RUN_ATTEMPT = 2;
 const RELEASE_ID = `${RUN_ID}-${RUN_ATTEMPT}`;
 const ACTOR = 'founder-actor';
+const WORKFLOW_ACTOR = 'github-actions[bot]';
 const FOUNDER_EMAIL = 'founder@example.com';
 const DIGEST = `sha256:${'ab'.repeat(32)}`;
 const HMAC_KEY = 'test-only-hmac-key-that-is-more-than-32-characters';
@@ -111,10 +112,11 @@ function createFixture() {
     GITHUB_SHA: SHA,
     GITHUB_RUN_ID: RUN_ID,
     GITHUB_RUN_ATTEMPT: String(RUN_ATTEMPT),
-    GITHUB_ACTOR: ACTOR,
+    GITHUB_ACTOR: WORKFLOW_ACTOR,
+    AUTHORIZATION_ACTOR: ACTOR,
     VALIDATED_ARTIFACT_DIGEST: DIGEST,
     RELEASE_ID,
-    AUTHORIZED_FOUNDER_ACTORS: ACTOR,
+    AUTHORIZED_FOUNDER_ACTORS: `${ACTOR},${WORKFLOW_ACTOR}`,
     AUTHORIZED_FOUNDER_EMAILS: FOUNDER_EMAIL,
     HARD_LAUNCH_APPROVAL_HMAC_KEY: HMAC_KEY,
   };
@@ -169,9 +171,9 @@ function createFixture() {
     workflowRunId: RUN_ID,
     workflowRunAttempt: RUN_ATTEMPT,
     workflow: 'Firebase Production Deploy',
-    actor: ACTOR,
+    actor: WORKFLOW_ACTOR,
     updatedAt: nowIso,
-    updatedBy: ACTOR,
+    updatedBy: WORKFLOW_ACTOR,
     attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR',
     evidenceReferences: ['ops://ticket/INC-REVIEW-1'],
     activeIncidents: [],
@@ -207,6 +209,7 @@ function createFixture() {
     runId: RUN_ID,
     runAttempt: RUN_ATTEMPT,
     actor: ACTOR,
+    workflowActor: WORKFLOW_ACTOR,
     founder: { name: 'Test Founder', email: FOUNDER_EMAIL },
     issuedAt: nowIso,
     expiresAt: new Date(now + 30 * 60 * 1000).toISOString(),

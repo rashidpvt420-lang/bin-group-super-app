@@ -330,7 +330,7 @@ export function runSameRunDeploymentArtifactVerification({
     ) {
       failures.push('incidents attestation is missing or invalid.');
     }
-    requireExact(incidents.actor, actor, 'incidents actor', failures);
+    requireExact(incidents.actor, workflowActor, 'incidents actor', failures);
     if (!String(incidents.workflow || '').trim()) {
       failures.push('incidents workflow is required.');
     }
