@@ -124,6 +124,8 @@ assert(inspectionWorkflow.includes('INSPECTION_REQUIRED_BEFORE_PAYMENT'), 'Payme
 assert(inspectionWorkflow.includes('Number(quote.annualContractValue) * 0.15'), 'Backend must lock the exact 15% mobilisation amount.');
 assert(inspectionWorkflow.includes('adminRecordOwnerMobilizationPaymentEvidence'), 'Admin must record immutable 15% receipt evidence before approval.');
 assert(inspectionWorkflow.includes('payment.inspectionVerified !== true'), 'Receipt recording must reject payment before completed inspections.');
+assert(inspectionLink.includes('adminCreateOwnerPortfolioPropertyInspection'), 'Admin must create portfolio-safe inspections.');
+assert(inspectionLink.includes('paymentCollectionRequired: false'), 'Property visits must never collect Owner payment.');
 assert(inspectionLink.includes('Expected ${propertyCount}, received ${inspectionIds.length}'), 'Admin must create one linked inspection per property.');
 assert(inspectionCompletion.includes('Every property requires a linked site inspection'), 'Portfolio completion must require every property inspection.');
 assert(inspectionCompletion.includes('PENDING_ADMIN_PAYMENT_VERIFICATION'), 'Completed visits must make the exact 15% ready for Admin verification.');
@@ -173,7 +175,11 @@ assert(storageRules.includes('onboarding-proof'), 'Storage rules must cover onbo
 assert(storageRules.includes('function hasVerifiedEmail()'), 'Storage email ACLs must require a verified email claim.');
 assert(storageRules.includes('hasTenantReceiptMetadata(tenantId)'), 'Tenant receipt uploads must bind immutable hash metadata.');
 assert(paymentEvidence.includes('assertStoredTenantReceipt'), 'Tenant payment proof must verify stored receipt metadata server-side.');
-assert(runtime.includes('export * from "./inspectionFirstOwnerOnboarding";'), 'Runtime must export five-page Owner inspection callables.');
+assert(runtime.includes('submitOwnerInspectionFirstOnboarding'), 'Runtime must explicitly export five-page Owner submission.');
+assert(runtime.includes('adminRecordOwnerMobilizationPaymentEvidence'), 'Runtime must explicitly export immutable Owner payment evidence recording.');
+assert(runtime.includes('from "./inspectionFirstOwnerOnboarding"'), 'Runtime must source the explicit five-page Owner callables.');
+assert(!/^export \* from "\.\/inspectionFirstOwnerOnboarding";/m.test(runtime), 'Runtime must not deploy the unsafe legacy single-property completion export.');
+assert(runtime.includes('export * from "./ownerInspectionAdminLink";'), 'Runtime must export portfolio inspection creation/linking.');
 assert(runtime.includes('export * from "./ownerInspectionCompletion";'), 'Runtime must export portfolio inspection completion.');
 assert(runtime.includes('export * from "./paymentEvidence";'), 'Runtime must export tenant and design payment callables.');
 assert(runtime.includes('export * from "./ticketDispatchOperations";'), 'Runtime must export dispatch and dispute callables.');
