@@ -325,6 +325,7 @@ export const submitOwnerInspectionFirstOnboardingPhase1 = onCall(
           intakeId,
           contractId,
           quoteHash: quote.quoteHash,
+          units: finite(property.units),
           geo: normalizeGeo(property),
           status: "PENDING_PROPERTY_INSPECTION",
           activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
