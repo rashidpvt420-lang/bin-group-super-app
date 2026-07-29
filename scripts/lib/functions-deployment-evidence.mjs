@@ -186,7 +186,7 @@ export function buildFunctionReconciliationPlan(currentIdentities, remoteEntries
     .sort();
   return {
     current,
-    compiledEndpointIdentities: current.map(identityDescriptor),
+    compiledEndpointIdentities: current.map(identityDescriptor).sort(),
     remoteBefore: remoteEntries.map(identityDescriptor).sort(),
     obsoleteOwned,
     preservedUnowned,
