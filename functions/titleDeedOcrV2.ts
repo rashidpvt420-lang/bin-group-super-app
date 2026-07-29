@@ -20,8 +20,31 @@ function roleOf(token: any) {
   return text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
 }
 
-function scopedPath(value: unknown, uid: string) {
-  const path = text(value, "", 1000);
+function storagePathFromUrl(value: unknown) {
+  const raw = text(value, "", 4000);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return "";
+    if (url.hostname === "firebasestorage.googleapis.com") {
+      const marker = "/o/";
+      const index = url.pathname.indexOf(marker);
+      if (index < 0) return "";
+      return decodeURIComponent(url.pathname.slice(index + marker.length));
+    }
+    if (url.hostname === "storage.googleapis.com") {
+      const segments = url.pathname.split("/").filter(Boolean);
+      if (segments.length < 2) return "";
+      return decodeURIComponent(segments.slice(1).join("/"));
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function scopedPath(data: any, uid: string) {
+  const path = text(data?.storagePath, "", 1000) || storagePathFromUrl(data?.fileUrl);
   if (!path.startsWith(`temp_kyc/${uid}/`) || path.includes("..") || path.includes("\\")) {
     throw new HttpsError("permission-denied", "Title deed document is not scoped to the signed-in user.");
   }
@@ -112,7 +135,7 @@ export const processTitleDeedOCRV2 = onCall({
   }
 
   const uid = request.auth.uid;
-  const storagePath = scopedPath(request.data?.storagePath, uid);
+  const storagePath = scopedPath(request.data, uid);
   const expectedType = contentType(request.data?.contentType);
   const file = bucket.file(storagePath);
   let buffer: Buffer;
