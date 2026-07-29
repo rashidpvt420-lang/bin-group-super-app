@@ -455,6 +455,14 @@ test.describe('Tenant Business Workflow', () => {
       unitSnap = byUid.docs[0] || null;
     }
     if (!unitSnap?.exists) {
+      const byTenantUid = await db.collection('units').where('tenantUid', '==', tenantUid).limit(1).get();
+      unitSnap = byTenantUid.docs[0] || null;
+    }
+    if (!unitSnap?.exists) {
+      const byCurrentTenant = await db.collection('units').where('currentTenantId', '==', tenantUid).limit(1).get();
+      unitSnap = byCurrentTenant.docs[0] || null;
+    }
+    if (!unitSnap?.exists) {
       const byEmail = await db.collection('units').where('tenantEmail', '==', TENANT_EMAIL.toLowerCase()).limit(1).get();
       unitSnap = byEmail.docs[0] || null;
     }
@@ -466,6 +474,46 @@ test.describe('Tenant Business Workflow', () => {
     }
     const propertyId = String(unit.propertyId || '');
     const propertySnap = propertyId ? await db.collection('properties').doc(propertyId).get() : null;
+    if (!propertyId || !propertySnap?.exists) throw new Error('Protected Tenant fixture has no linked property for the recovery request target.');
+    const normalizedTenantEmail = TENANT_EMAIL.toLowerCase();
+    await Promise.all([
+      db.collection('users').doc(tenantUid).set({
+        unitId: unitSnap.id,
+        assignedUnitId: unitSnap.id,
+        propertyId,
+        tenantEmail: normalizedTenantEmail,
+        email: normalizedTenantEmail,
+        role: 'tenant',
+        userRole: 'tenant',
+        primaryRole: 'tenant',
+        status: 'active',
+        approvalStatus: 'approved',
+        suspended: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }),
+      db.collection('tenants').doc(tenantUid).set({
+        unitId: unitSnap.id,
+        assignedUnitId: unitSnap.id,
+        propertyId,
+        tenantEmail: normalizedTenantEmail,
+        email: normalizedTenantEmail,
+        role: 'tenant',
+        status: 'active',
+        approvalStatus: 'approved',
+        suspended: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }),
+      db.collection('units').doc(unitSnap.id).set({
+        tenantId: tenantUid,
+        tenantUid,
+        currentTenantId: tenantUid,
+        userId: tenantUid,
+        authUid: tenantUid,
+        tenantEmail: normalizedTenantEmail,
+        propertyId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }),
+    ]);
     recoveryTarget = {
       propertyId,
       propertyName: String(propertySnap?.data()?.name || unit.propertyName || 'E2E Live Role Tower'),
