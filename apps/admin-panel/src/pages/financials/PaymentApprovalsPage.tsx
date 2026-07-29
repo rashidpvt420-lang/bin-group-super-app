@@ -50,10 +50,10 @@ const FIVE_PAGE_WORKFLOW = 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1';
 const PENDING_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
 const PHASE1_METHODS = ['CASH', 'CHEQUE'];
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
-const amountDue = (row: PaymentRecord) => Number(row.activationDeposit || row.amount || row.amountReceived || row.amountPaid || row.rentPaid || 0);
+const amountDue = (row: Partial<PaymentRecord>) => Number(row.activationDeposit || row.amount || row.amountReceived || row.amountPaid || row.rentPaid || 0);
 const formatMoney = (value: number, currency = 'AED') => `${currency} ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const isRentPayment = (row: PaymentRecord) => ['OWNER_RENT_PAYMENT', 'TENANT_RENT_PAYMENT_PROOF'].includes(upper(row.recordType)) || ['RENT_COLLECTION', 'RENT_PAYMENT_PROOF'].includes(upper(row.transactionType)) || upper(row.paymentType) === 'RENT_COLLECTION';
-const hasImmutableReceipt = (row: PaymentRecord) => Boolean((row.paymentProofPath || row.receiptPath) && /^[a-f0-9]{64}$/i.test(String(row.paymentProofHash || row.receiptHash || '')) && (row.paymentProofGeneration || row.receiptGeneration));
+const isRentPayment = (row: Partial<PaymentRecord>) => ['OWNER_RENT_PAYMENT', 'TENANT_RENT_PAYMENT_PROOF'].includes(upper(row.recordType)) || ['RENT_COLLECTION', 'RENT_PAYMENT_PROOF'].includes(upper(row.transactionType)) || upper(row.paymentType) === 'RENT_COLLECTION';
+const hasImmutableReceipt = (row: Partial<PaymentRecord>) => Boolean((row.paymentProofPath || row.receiptPath) && /^[a-f0-9]{64}$/i.test(String(row.paymentProofHash || row.receiptHash || '')) && (row.paymentProofGeneration || row.receiptGeneration));
 const timestampMillis = (row: PaymentRecord) => row.updatedAt?.toMillis?.() || row.createdAt?.toMillis?.() || Date.parse(String(row.updatedAt || row.createdAt || '')) || 0;
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
