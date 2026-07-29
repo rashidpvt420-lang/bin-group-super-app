@@ -8,19 +8,27 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
-// Security: do not use `export * from "./inspectionFirstOwnerOnboarding";` here.
-// The legacy single-inspection completion export is intentionally excluded; only
-// portfolio-safe Owner acquisition callables are deployed.
+// Security: keep the legacy single-inspection and public-document handlers private.
+// Only the quotation and OTP primitives remain exported from the original module.
 export {
   previewOwnerInspectionQuote,
   requestOwnerInspectionSignatureOtp,
   verifyOwnerInspectionSignatureOtp,
-  uploadOwnerInspectionProofDocument,
-  submitOwnerInspectionFirstOnboarding,
-  adminRecordOwnerMobilizationPaymentEvidence,
 } from "./inspectionFirstOwnerOnboarding";
+export {
+  uploadOwnerInspectionProofDocumentPhase1 as uploadOwnerInspectionProofDocument,
+  submitOwnerInspectionFirstOnboardingPhase1 as submitOwnerInspectionFirstOnboarding,
+  adminRecordOwnerMobilizationPaymentEvidencePhase1 as adminRecordOwnerMobilizationPaymentEvidence,
+  adminCreateOwnerDocumentAccessUrl,
+  adminCreateOwnerPaymentEvidenceAccessUrl,
+  verifyProductionAppCheckAttestation,
+} from "./phase1OwnerLaunchRepair";
 export * from "./ownerInspectionAdminLink";
-export * from "./ownerInspectionCompletion";
+export {
+  adminGetOwnerPortfolioInspectionReadiness,
+  adminRecordOwnerPortfolioVisitEvidence,
+  adminCompleteOwnerPortfolioInspectionsPhase1 as adminCompleteOwnerPortfolioInspections,
+} from "./ownerInspectionEvidence";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
