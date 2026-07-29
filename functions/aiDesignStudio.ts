@@ -311,7 +311,7 @@ function canReadRequest(auth: any, data: any) {
     || data.tenantUid === auth?.uid;
 }
 
-async function resolveMedia(requestId: string, data: any) {
+async function resolveMedia(data: any) {
   const referencePaths = Array.isArray(data.referenceImagePaths)
     ? data.referenceImagePaths.map(cleanStoragePath)
     : [];
@@ -323,7 +323,6 @@ async function resolveMedia(requestId: string, data: any) {
     Promise.all(generatedPaths.map(signedMediaUrl)),
   ]);
   return {
-    requestId,
     referenceImages,
     generatedImages,
     expiresAtMs: Date.now() + PRIVATE_MEDIA_URL_TTL_MS,
@@ -351,7 +350,7 @@ export const submitAIDesignRequest = onCall({
     if (!canReadRequest(request.auth, existingData) || existingData.userId !== uid) {
       throw new HttpsError("already-exists", "This design request ID belongs to another user.");
     }
-    const media = await resolveMedia(requestId, existingData);
+    const media = await resolveMedia(existingData);
     return {
       status: "SUCCESS",
       idempotent: true,
@@ -405,7 +404,7 @@ export const submitAIDesignRequest = onCall({
       rendered.mimeType,
       { ownerUid: uid, requestId, kind: "generated", providerRequestId: rendered.providerRequestId || "" },
     );
-    const media = await resolveMedia(requestId, {
+    const media = await resolveMedia({
       referenceImagePaths: [referencePath],
       generatedImagePaths: [generatedPath],
     });
@@ -565,5 +564,8 @@ export const getAIDesignRequestMedia = onCall({
   if (!canReadRequest(request.auth, data)) {
     throw new HttpsError("permission-denied", "You cannot access this design request media.");
   }
-  return resolveMedia(requestId, data);
+  return {
+    requestId,
+    ...(await resolveMedia(data)),
+  };
 });
