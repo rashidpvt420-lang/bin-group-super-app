@@ -29,6 +29,7 @@ const readable = (value: string | undefined, fallback: string) => {
 };
 
 const normalizePhone = (value: string) => value.replace(/[^0-9+]/g, '').trim();
+const tokenRole = (claims: Record<string, unknown>) => String(claims.role || claims.userRole || claims.primaryRole || '').trim().toLowerCase();
 
 export default function AccountCreationStep({ onBack, onNext }: AccountCreationStepProps) {
     const { companyProfile, setOwnerAccount, intakeId, setIntakeId, onboardingSessionId } = useOnboardingStore();
@@ -74,7 +75,6 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
 
         setLoading(true);
         const email = formData.email.trim().toLowerCase();
-        const mobile = normalizePhone(formData.mobile);
         const fullName = formData.fullName.trim();
 
         try {
@@ -88,19 +88,24 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 } catch (signInError: any) {
                     const methods = await fetchSignInMethodsForEmail(auth, email).catch(() => [] as string[]);
                     if (methods.includes('google.com') && !methods.includes('password')) {
-                        setError({ message: copy('This email uses Google sign-in. Sign in first, then resume owner onboarding.', 'هذا البريد يستخدم تسجيل الدخول عبر Google. سجّل الدخول أولاً ثم استأنف تسجيل المالك.'), type: 'info', action: 'signin' });
+                        setError({
+                            message: copy('This email uses Google sign-in. Sign in first, then resume Owner onboarding.', 'هذا البريد يستخدم تسجيل الدخول عبر Google. سجّل الدخول أولاً ثم استأنف تسجيل المالك.'),
+                            type: 'info',
+                            action: 'signin',
+                        });
                     } else {
-                        setError({ message: errorText('onboarding.error.email_exists', 'This email already exists. Sign in with the existing password or use another email.'), type: 'warning', action: 'signin' });
+                        setError({
+                            message: errorText('onboarding.error.email_exists', 'This email already exists. Sign in with the existing password or use another email.'),
+                            type: 'warning',
+                            action: 'signin',
+                        });
                     }
                     return;
                 }
             }
 
             if (!credential.user.displayName) await updateProfile(credential.user, { displayName: fullName });
-            const resolvedIntakeId = intakeId || onboardingSessionId || credential.user.uid;
-            setIntakeId(resolvedIntakeId);
-            setOwnerAccount({ uid: credential.user.uid, fullName, email, mobile });
-
+            setIntakeId(intakeId || onboardingSessionId || credential.user.uid);
             if (!credential.user.emailVerified) await sendEmailVerification(credential.user);
             setAccountReady(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -121,24 +126,41 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
         setError(null);
         try {
             const currentUser = auth.currentUser;
-            if (!currentUser) throw new Error(copy('Sign in again to verify the owner email.', 'سجّل الدخول مرة أخرى للتحقق من بريد المالك.'));
+            if (!currentUser) throw new Error(copy('Sign in again to verify the Owner email.', 'سجّل الدخول مرة أخرى للتحقق من بريد المالك.'));
             await currentUser.reload();
             if (!currentUser.emailVerified) {
-                setError({ message: copy('Email is not verified yet. Open the verification link, then return and try again.', 'لم يتم التحقق من البريد الإلكتروني بعد. افتح رابط التحقق ثم عد وحاول مرة أخرى.'), type: 'warning' });
+                setError({
+                    message: copy('Email is not verified yet. Open the verification link, then return and try again.', 'لم يتم التحقق من البريد الإلكتروني بعد. افتح رابط التحقق ثم عد وحاول مرة أخرى.'),
+                    type: 'warning',
+                });
                 return;
             }
+
             await currentUser.getIdToken(true);
+            const resolvedIntakeId = intakeId || onboardingSessionId || currentUser.uid;
             const upsertProfile = httpsCallable(functions, 'upsertOwnerOnboardingProfile');
             await upsertProfile({
                 fullName: formData.fullName.trim(),
                 email: formData.email.trim().toLowerCase(),
                 mobile: normalizePhone(formData.mobile),
-                intakeId: intakeId || onboardingSessionId,
+                intakeId: resolvedIntakeId,
             });
-            await currentUser.getIdToken(true);
+
+            const tokenResult = await currentUser.getIdTokenResult(true);
+            if (tokenRole(tokenResult.claims as Record<string, unknown>) !== 'owner') {
+                throw new Error(copy('The verified Owner role is still synchronising. Wait a moment and try again.', 'لا يزال دور المالك الموثق قيد المزامنة. انتظر لحظة ثم حاول مرة أخرى.'));
+            }
+
+            setIntakeId(resolvedIntakeId);
+            setOwnerAccount({
+                uid: currentUser.uid,
+                fullName: formData.fullName.trim(),
+                email: formData.email.trim().toLowerCase(),
+                mobile: normalizePhone(formData.mobile),
+            });
             onNext();
         } catch (err: any) {
-            setError({ message: err?.message || copy('Email verification could not be confirmed.', 'تعذر تأكيد البريد الإلكتروني.'), type: 'error' });
+            setError({ message: err?.details || err?.message || copy('Email verification could not be confirmed.', 'تعذر تأكيد البريد الإلكتروني.'), type: 'error' });
         } finally {
             setCheckingVerification(false);
         }
@@ -149,13 +171,13 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             <Container maxWidth="md" sx={{ py: { xs: 4, md: 8 }, textAlign: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
                 <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22,22,24,0.82)', border: '1px solid #4ADE80' }}>
                     <Lock sx={{ color: '#4ADE80', fontSize: 52, mb: 2 }} />
-                    <Typography variant="h4" fontWeight={950} color="#FFF">{copy('Owner account created', 'تم إنشاء حساب المالك')}</Typography>
+                    <Typography variant="h4" fontWeight={950} color="#FFF">{copy('Verify the Owner email', 'تحقق من بريد المالك')}</Typography>
                     <Typography sx={{ color: '#4ADE80', fontWeight: 800, mt: 2 }}>
-                        {copy('Open the verification email, verify the address, then continue. Your dashboard stays locked until the property visit, 15% mobilisation payment, and Admin approval are complete.', 'افتح رسالة التحقق، أكد البريد، ثم تابع. تبقى لوحة التحكم مقفلة حتى زيارة العقار ودفع 15٪ والموافقة الإدارية.')}
+                        {copy('Open the verification email, confirm the address, then continue. Broker attribution and page 2 remain locked until the verified Owner profile and refreshed security claims are ready.', 'افتح رسالة التحقق، أكد البريد، ثم تابع. تبقى إحالة الوسيط والصفحة الثانية مقفلتين حتى يصبح ملف المالك الموثق وصلاحيات الأمان المحدثة جاهزة.')}
                     </Typography>
-                    {error && <Alert severity={error.type} sx={{ mt: 3, textAlign: 'left' }}>{error.message}</Alert>}
+                    {error && <Alert severity={error.type} sx={{ mt: 3, textAlign: isRTL ? 'right' : 'left' }}>{error.message}</Alert>}
                     <Button variant="contained" onClick={confirmEmailVerification} disabled={checkingVerification} sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5 }}>
-                        {checkingVerification ? <CircularProgress size={22} color="inherit" /> : copy('I verified my email — Continue', 'تم التحقق من بريدي — متابعة')}
+                        {checkingVerification ? <CircularProgress size={22} color="inherit" /> : copy('Email verified — Secure and continue', 'تم التحقق — تأمين ومتابعة')}
                     </Button>
                 </Paper>
             </Container>
@@ -170,7 +192,7 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             </Box>
             <Paper sx={{ p: { xs: 2.5, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.68)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <Alert icon={<Info sx={{ color: binThemeTokens.gold }} />} sx={{ mb: 3, bgcolor: 'rgba(212,175,55,0.06)', color: binThemeTokens.gold, border: '1px solid rgba(212,175,55,0.22)' }}>
-                    {copy('No payment is collected on these five pages. BIN GROUP reviews the submission, visits the property, then requests the 15% mobilisation payment before Admin approval.', 'لا يتم تحصيل أي دفعة في هذه الصفحات الخمس. تراجع BIN GROUP الطلب وتزور العقار ثم تطلب دفعة التعبئة 15٪ قبل الموافقة الإدارية.')}
+                    {copy('No payment is collected on these five pages. BIN GROUP reviews the submission, records verified evidence for every property visit, then requests the exact 15% mobilisation payment before final Admin approval.', 'لا يتم تحصيل أي دفعة في هذه الصفحات الخمس. تراجع BIN GROUP الطلب وتسجل أدلة موثقة لكل زيارة عقار ثم تطلب دفعة التعبئة الدقيقة بنسبة 15٪ قبل الموافقة الإدارية النهائية.')}
                 </Alert>
                 {error && <Alert severity={error.type} sx={{ mb: 3 }} action={error.action === 'signin' ? <Button color="inherit" size="small" onClick={() => { window.location.href = '/login'; }} startIcon={<Login />}>{readable(t('login.signin'), 'Sign in')}</Button> : undefined}>{error.message}</Alert>}
                 <Stack spacing={2.5}>

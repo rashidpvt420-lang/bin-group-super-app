@@ -1,10 +1,10 @@
 import React from 'react';
 import {
     Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
-    DialogTitle, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer,
+    DialogTitle, IconButton, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
-import { CheckCircle, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-react';
+import { CheckCircle, Eye, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-react';
 import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 
 type PaymentRecord = {
@@ -13,10 +13,6 @@ type PaymentRecord = {
     ownerName?: string;
     companyName?: string;
     ownerEmail?: string;
-    ownerId?: string;
-    ownerUid?: string;
-    contractId?: string;
-    intakeId?: string;
     recordType?: string;
     transactionType?: string;
     paymentType?: string;
@@ -26,83 +22,43 @@ type PaymentRecord = {
     adminApprovalRequired?: boolean;
     unlocksDashboard?: boolean;
     inspectionVerified?: boolean;
-    inspectionStatus?: string;
     paymentMethod?: string;
     method?: string;
     paymentReference?: string;
     paymentReferenceId?: string;
     referenceId?: string;
-    receiptUrl?: string;
     receiptPath?: string;
     receiptHash?: string;
     receiptGeneration?: string;
-    paymentProofUrl?: string;
     paymentProofPath?: string;
     paymentProofHash?: string;
     paymentProofGeneration?: string;
-    proofUrl?: string;
-    attachmentUrl?: string;
-    proofFileName?: string;
-    referenceFileUrl?: string;
-    referenceFilePath?: string;
-    referenceFileName?: string;
-    referenceFileType?: string;
-    referenceFileSize?: number;
-    referenceUploadError?: string;
     notes?: string;
     adminNotes?: string;
-    tenantName?: string;
-    propertyName?: string;
-    propertyId?: string;
-    unitNumber?: string;
-    annualValue?: number;
     annualContractValue?: number;
-    totalAnnualValue?: number;
     activationDeposit?: number;
     amount?: number;
+    amountReceived?: number;
     amountPaid?: number;
     rentPaid?: number;
-    amountReceived?: number;
-    mobilizationAmount?: number;
-    rentDue?: number;
-    balance?: number;
     currency?: string;
     createdAt?: any;
     updatedAt?: any;
-    activationRequestedAt?: any;
 };
 
 const FIVE_PAGE_WORKFLOW = 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1';
-const PENDING_PAYMENT_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
-const MANUAL_METHODS = ['CASH', 'CHEQUE', 'BANK_TRANSFER'];
-const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
+const PENDING_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
+const PHASE1_METHODS = ['CASH', 'CHEQUE'];
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
-const isRentPayment = (row: PaymentRecord) =>
-    ['OWNER_RENT_PAYMENT', 'TENANT_RENT_PAYMENT_PROOF'].includes(upper(row.recordType)) ||
-    ['RENT_COLLECTION', 'RENT_PAYMENT_PROOF'].includes(upper(row.transactionType)) ||
-    upper(row.paymentType) === 'RENT_COLLECTION';
-const proofText = (row: PaymentRecord) => row.paymentReference || row.paymentReferenceId || row.referenceId || row.referenceFileName || row.receiptUrl || row.paymentProofUrl || row.proofUrl || row.attachmentUrl || row.proofFileName || 'No reference recorded';
-const referenceUrl = (row: PaymentRecord) => row.paymentProofUrl || row.referenceFileUrl || row.receiptUrl || row.proofUrl || row.attachmentUrl || '';
-const submittedAmount = (row: PaymentRecord) => row.amountReceived || row.activationDeposit || row.mobilizationAmount || row.amountPaid || row.rentPaid || row.amount || 0;
-const hasImmutableReceipt = (row: PaymentRecord) => Boolean(
-    (row.paymentProofPath || row.receiptPath || row.referenceFilePath) &&
-    /^[a-f0-9]{64}$/i.test(String(row.paymentProofHash || row.receiptHash || '')) &&
-    (row.paymentProofGeneration || row.receiptGeneration || isRentPayment(row)),
-);
-const timestampMillis = (row: PaymentRecord) => {
-    const value = row.createdAt || row.updatedAt || row.activationRequestedAt;
-    if (value && typeof value.toMillis === 'function') return value.toMillis();
-    const parsed = Date.parse(String(value || ''));
-    return Number.isFinite(parsed) ? parsed : 0;
-};
+const amountDue = (row: Partial<PaymentRecord>) => Number(row.activationDeposit || row.amount || row.amountReceived || row.amountPaid || row.rentPaid || 0);
+const formatMoney = (value: number, currency = 'AED') => `${currency} ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const isRentPayment = (row: Partial<PaymentRecord>) => ['OWNER_RENT_PAYMENT', 'TENANT_RENT_PAYMENT_PROOF'].includes(upper(row.recordType)) || ['RENT_COLLECTION', 'RENT_PAYMENT_PROOF'].includes(upper(row.transactionType)) || upper(row.paymentType) === 'RENT_COLLECTION';
+const hasImmutableReceipt = (row: Partial<PaymentRecord>) => Boolean((row.paymentProofPath || row.receiptPath) && /^[a-f0-9]{64}$/i.test(String(row.paymentProofHash || row.receiptHash || '')) && (row.paymentProofGeneration || row.receiptGeneration));
+const timestampMillis = (row: PaymentRecord) => row.updatedAt?.toMillis?.() || row.createdAt?.toMillis?.() || Date.parse(String(row.updatedAt || row.createdAt || '')) || 0;
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-        const result = String(reader.result || '');
-        resolve(result.includes(',') ? result.split(',').pop() || '' : result);
-    };
-    reader.onerror = () => reject(reader.error || new Error('Unable to read payment evidence.'));
+    reader.onload = () => { const value = String(reader.result || ''); resolve(value.includes(',') ? value.split(',').pop() || '' : value); };
+    reader.onerror = () => reject(reader.error || new Error('Unable to read payment receipt.'));
     reader.readAsDataURL(file);
 });
 
@@ -114,226 +70,135 @@ export default function PaymentApprovalsPage() {
     const [notice, setNotice] = React.useState<string | null>(null);
     const [approvalTarget, setApprovalTarget] = React.useState<PaymentRecord | null>(null);
     const [rejectTarget, setRejectTarget] = React.useState<PaymentRecord | null>(null);
-    const [paymentReferenceId, setPaymentReferenceId] = React.useState('');
-    const [paymentMethod, setPaymentMethod] = React.useState('');
-    const [amountReceived, setAmountReceived] = React.useState('');
-    const [internalNotes, setInternalNotes] = React.useState('');
-    const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
+    const [reference, setReference] = React.useState('');
+    const [method, setMethod] = React.useState('');
+    const [notes, setNotes] = React.useState('Verified after all evidence-backed BIN GROUP property visits.');
+    const [receipt, setReceipt] = React.useState<File | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
 
     React.useEffect(() => {
-        let pendingRows: PaymentRecord[] = [];
-        let paidAwaitingApprovalRows: PaymentRecord[] = [];
+        let pending: PaymentRecord[] = [];
+        let paid: PaymentRecord[] = [];
         let pendingReady = false;
         let paidReady = false;
-
         const publish = () => {
             if (!pendingReady || !paidReady) return;
             const merged = new Map<string, PaymentRecord>();
-            [...pendingRows, ...paidAwaitingApprovalRows].forEach((row) => merged.set(row.id, row));
+            [...pending, ...paid].forEach((row) => merged.set(row.id, row));
             setRows([...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a)));
             setLoading(false);
-            setError(null);
         };
-        const handleError = (err: any) => {
-            console.error('[ADMIN_PAYMENTS] stream failed', err);
-            setLoading(false);
-            setError(err?.message || 'Payment approvals stream failed.');
-        };
-
-        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
-        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
-        const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
-            pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
-            pendingReady = true;
-            publish();
-        }, handleError);
-        const unsubscribePaidAwaitingApproval = onSnapshot(paidAwaitingApprovalQuery, (snapshot) => {
-            paidAwaitingApprovalRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => row.unlocksDashboard !== true);
-            paidReady = true;
-            publish();
-        }, handleError);
-
-        return () => { unsubscribePending(); unsubscribePaidAwaitingApproval(); };
+        const handleError = (value: any) => { setLoading(false); setError(value?.message || 'Payment approvals stream failed.'); };
+        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_STATUSES), orderBy('createdAt', 'desc'), limit(50));
+        const paidQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
+        const stopPending = onSnapshot(pendingQuery, (snapshot) => { pending = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) })); pendingReady = true; publish(); }, handleError);
+        const stopPaid = onSnapshot(paidQuery, (snapshot) => { paid = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) })).filter((row) => row.unlocksDashboard !== true); paidReady = true; publish(); }, handleError);
+        return () => { stopPending(); stopPaid(); };
     }, []);
 
     React.useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const paymentId = params.get('paymentId');
-        if (!paymentId || !rows.length || approvalTarget) return;
-        const target = rows.find((row) => row.id === paymentId);
-        if (target) openApproveDialog(target);
-    }, [rows]);
+        const paymentId = new URLSearchParams(window.location.search).get('paymentId');
+        if (!paymentId || approvalTarget || !rows.length) return;
+        const row = rows.find((item) => item.id === paymentId);
+        if (row) openApproval(row);
+    }, [rows, approvalTarget]);
 
-    const openApproveDialog = (row: PaymentRecord) => {
+    const openApproval = (row: PaymentRecord) => {
         setApprovalTarget(row);
-        setPaymentReferenceId(String(row.paymentReferenceId || row.paymentReference || row.referenceId || ''));
-        setPaymentMethod(upper(row.paymentMethod || row.method || ''));
-        setAmountReceived(String(submittedAmount(row) || ''));
-        setInternalNotes(row.notes || 'Verified after completed BIN GROUP property visit.');
-        setReceiptFile(null);
+        setReference(String(row.paymentReferenceId || row.paymentReference || row.referenceId || ''));
+        setMethod(upper(row.paymentMethod || row.method || (isRentPayment(row) ? '' : 'CASH')));
+        setNotes(row.notes || 'Verified after all evidence-backed BIN GROUP property visits.');
+        setReceipt(null);
         setError(null);
         setNotice(null);
     };
 
-    const openRejectDialog = (row: PaymentRecord) => {
-        setRejectTarget(row);
-        setRejectReason(row.adminNotes || '');
-        setError(null);
-        setNotice(null);
-    };
-
-    const approvePayment = async () => {
+    const approve = async () => {
         if (!approvalTarget) return;
         const rent = isRentPayment(approvalTarget);
-        const reference = paymentReferenceId.trim();
-        const received = toNumber(amountReceived);
-        const selectedMethod = upper(paymentMethod);
-        if (!rent && approvalTarget.workflowVersion === FIVE_PAGE_WORKFLOW && approvalTarget.inspectionVerified !== true) {
-            setError('All linked property visits must be completed before recording or approving the 15% mobilisation payment.');
-            return;
-        }
-        if (!rent && !MANUAL_METHODS.includes(selectedMethod)) {
-            setError('Select Cash, Cheque, or Bank Transfer for the received 15% mobilisation payment.');
-            return;
-        }
-        if (!reference || received <= 0) {
-            setError('Enter the exact payment reference and amount received.');
-            return;
-        }
-        if (!rent && !hasImmutableReceipt(approvalTarget) && !receiptFile) {
-            setError('Upload the official 15% payment receipt before final Owner approval.');
-            return;
-        }
-        if (receiptFile && receiptFile.size > 10 * 1024 * 1024) {
-            setError('Payment receipt exceeds the secure 10 MB limit.');
-            return;
-        }
+        const expected = amountDue(approvalTarget);
+        const selectedMethod = upper(method);
+        if (!rent && approvalTarget.workflowVersion === FIVE_PAGE_WORKFLOW && approvalTarget.inspectionVerified !== true) { setError('Verified visit evidence is incomplete. Return to Owner Applications and finish every property visit first.'); return; }
+        if (!rent && !PHASE1_METHODS.includes(selectedMethod)) { setError('Phase 1 accepts only Cash or Cheque.'); return; }
+        if (!reference.trim()) { setError('Enter the official receipt or cheque reference.'); return; }
+        if (!rent && !hasImmutableReceipt(approvalTarget) && !receipt) { setError('Attach the official 15% Cash/Cheque receipt.'); return; }
+        if (receipt && receipt.size > 10 * 1024 * 1024) { setError('Receipt exceeds the secure 10 MB limit.'); return; }
 
         setBusyId(approvalTarget.id);
         setError(null);
-        setNotice(null);
         try {
             if (!rent && !hasImmutableReceipt(approvalTarget)) {
-                const recordEvidence = httpsCallable(functions, 'adminRecordOwnerMobilizationPaymentEvidence');
-                await recordEvidence({
+                await httpsCallable(functions, 'adminRecordOwnerMobilizationPaymentEvidence')({
                     paymentId: approvalTarget.id,
-                    paymentReferenceId: reference,
-                    amountReceived: received,
+                    paymentReferenceId: reference.trim(),
+                    amountReceived: expected,
                     paymentMethod: selectedMethod,
-                    filename: receiptFile?.name.replace(/[^A-Za-z0-9._-]/g, '_'),
-                    contentType: receiptFile?.type || 'application/pdf',
-                    encodedDocument: receiptFile ? await fileToBase64(receiptFile) : '',
+                    filename: receipt?.name.replace(/[^A-Za-z0-9._-]/g, '_'),
+                    contentType: receipt?.type || 'application/pdf',
+                    encodedDocument: receipt ? await fileToBase64(receipt) : '',
                 });
             }
-            const callable = httpsCallable(functions, 'adminApprovePayment');
-            await callable({
+            await httpsCallable(functions, 'adminApprovePayment')({
                 paymentId: approvalTarget.id,
-                paymentReferenceId: reference,
-                amountReceived: received,
+                paymentReferenceId: reference.trim(),
+                amountReceived: expected,
                 method: rent ? upper(approvalTarget.paymentMethod || approvalTarget.method) : selectedMethod,
-                internalNotes: internalNotes.trim(),
+                internalNotes: notes.trim(),
             });
-            setNotice(rent ? 'Rent payment verified.' : '15% mobilisation verified. Contract and properties activated; Owner dashboard unlocked.');
+            setNotice(rent ? 'Rent payment verified.' : 'Exact 15% payment verified. Contract and properties activated; Owner dashboard unlocked.');
             setApprovalTarget(null);
-            setReceiptFile(null);
-        } catch (err: any) {
-            console.error('[ADMIN_PAYMENTS] approval failed', err);
-            setError(err?.details || err?.message || 'Approval failed.');
-        } finally {
-            setBusyId(null);
-        }
-    };
-
-    const rejectPayment = async () => {
-        if (!rejectTarget) return;
-        const reason = rejectReason.trim();
-        if (reason.length < 8) { setError('Enter a clear return reason before rejecting this payment.'); return; }
-        setBusyId(rejectTarget.id);
-        setError(null);
-        setNotice(null);
-        try {
-            const callable = httpsCallable(functions, 'adminRejectPayment');
-            await callable({ paymentId: rejectTarget.id, reason, returnReason: reason, reviewNote: reason, internalNotes: reason });
-            setNotice('Payment evidence returned to the Owner with the Admin reason.');
-            setRejectTarget(null);
-            setRejectReason('');
-        } catch (err: any) {
-            console.error('[ADMIN_PAYMENTS] rejection failed', err);
-            setError(err?.details || err?.message || 'Rejection failed.');
+            setReceipt(null);
+        } catch (value: any) {
+            setError(value?.details || value?.message || 'Approval failed. A fresh Admin MFA login may be required.');
         } finally { setBusyId(null); }
     };
 
-    const openReference = (row: PaymentRecord) => {
-        const url = referenceUrl(row);
-        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    const reject = async () => {
+        if (!rejectTarget) return;
+        if (rejectReason.trim().length < 8) { setError('Enter a clear return reason.'); return; }
+        setBusyId(rejectTarget.id);
+        try {
+            await httpsCallable(functions, 'adminRejectPayment')({ paymentId: rejectTarget.id, reason: rejectReason.trim(), returnReason: rejectReason.trim(), internalNotes: rejectReason.trim() });
+            setNotice('Payment evidence returned with the Admin reason.');
+            setRejectTarget(null);
+            setRejectReason('');
+        } catch (value: any) { setError(value?.details || value?.message || 'Rejection failed.'); }
+        finally { setBusyId(null); }
+    };
+
+    const openReceipt = async (row: PaymentRecord) => {
+        setError(null);
+        try {
+            const result = await httpsCallable(functions, 'adminCreateOwnerPaymentEvidenceAccessUrl')({ paymentId: row.id });
+            const url = String((result.data as any)?.url || '');
+            if (!url) throw new Error('Short-lived receipt URL was not returned.');
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (value: any) { setError(value?.details || value?.message || 'Unable to open protected receipt.'); }
     };
 
     return (
         <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff' }}>
             <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" gap={2} sx={{ mb: 4 }}>
-                <Box>
-                    <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>FINANCE COMMAND</Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1 }}>15% Payment Verification & Final Approval</Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>Record immutable receipt evidence only after property visits, then approve and unlock the Owner dashboard.</Typography>
-                </Box>
-                <Button startIcon={<RefreshCw size={16} />} onClick={() => window.location.reload()} sx={{ color: '#DAA520', borderColor: 'rgba(218,165,32,0.35)' }} variant="outlined">Refresh</Button>
+                <Box><Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>FINANCE COMMAND</Typography><Typography variant="h3" sx={{ fontWeight: 900 }}>Phase 1 Cash / Cheque Approval</Typography><Typography sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>The amount is locked. Admin selects Cash or Cheque, enters the reference, uploads the receipt, then completes one MFA-backed approval.</Typography></Box>
+                <Button startIcon={<RefreshCw size={16} />} onClick={() => window.location.reload()} variant="outlined">Refresh</Button>
             </Stack>
-
-            <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
+            <Alert severity="warning" sx={{ mb: 3 }}>Bank Transfer and Stripe are disabled for Phase 1 Owner activation. Final approval is blocked until all verified visit evidence, the exact 15% amount, active payment-configuration binding and immutable receipt evidence are present.</Alert>
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
             {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice}</Alert>}
+            <TableContainer component={Paper} sx={{ bgcolor: 'rgba(15,23,42,0.72)' }}><Table><TableHead><TableRow><TableCell>OWNER</TableCell><TableCell>TYPE</TableCell><TableCell>LOCKED AMOUNT</TableCell><TableCell>STATE</TableCell><TableCell align="right">ACTION</TableCell></TableRow></TableHead><TableBody>
+                {loading ? <TableRow><TableCell colSpan={5} align="center" sx={{ py: 8 }}><CircularProgress /></TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={5} align="center" sx={{ py: 8 }}>No pending payment approvals.</TableCell></TableRow> : rows.map((row) => <TableRow key={row.id}><TableCell><Typography fontWeight={900}>{row.ownerName || row.companyName || row.ownerEmail || 'Owner'}</Typography><Typography variant="caption">{row.id}</Typography></TableCell><TableCell>{isRentPayment(row) ? 'RENT' : 'OWNER 15%'}</TableCell><TableCell>{formatMoney(amountDue(row), row.currency || 'AED')}</TableCell><TableCell><Chip size="small" label={row.verificationState || row.status || 'PENDING'} color={row.inspectionVerified || isRentPayment(row) ? 'warning' : 'default'} /></TableCell><TableCell align="right"><Stack direction="row" spacing={1} justifyContent="flex-end">{hasImmutableReceipt(row) && <IconButton onClick={() => void openReceipt(row)}><Eye size={17} /></IconButton>}<Button size="small" variant="contained" startIcon={<CheckCircle size={15} />} onClick={() => openApproval(row)}>Verify & approve</Button><Button size="small" color="error" startIcon={<XCircle size={15} />} onClick={() => { setRejectTarget(row); setRejectReason(''); }}>Return</Button></Stack></TableCell></TableRow>)}
+            </TableBody></Table></TableContainer>
 
-            <Paper sx={{ bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
-                {loading ? <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: '#DAA520' }} /></Box> : rows.length === 0 ? (
-                    <Box sx={{ p: 8, textAlign: 'center' }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 900 }}>No pending payment submissions</Typography><Typography sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>Owner 15% payments appear here only after Admin completes the site visits.</Typography></Box>
-                ) : (
-                    <TableContainer>
-                        <Table>
-                            <TableHead><TableRow><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Type</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Owner / Tenant</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Contract</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Method</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Evidence</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Amount</TableCell><TableCell sx={{ color: '#DAA520', fontWeight: 900 }}>Status</TableCell><TableCell align="right" sx={{ color: '#DAA520', fontWeight: 900 }}>Action</TableCell></TableRow></TableHead>
-                            <TableBody>
-                                {rows.map((row) => {
-                                    const rent = isRentPayment(row);
-                                    const hasReferenceFile = Boolean(referenceUrl(row));
-                                    const inspectionReady = row.workflowVersion !== FIVE_PAGE_WORKFLOW || row.inspectionVerified === true;
-                                    return <TableRow key={row.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.07)', color: '#fff' } }}>
-                                        <TableCell><Chip label={rent ? 'Rent Collection' : 'Owner 15%'} size="small" sx={{ bgcolor: rent ? 'rgba(16,185,129,0.16)' : 'rgba(218,165,32,0.16)', color: rent ? '#10b981' : '#DAA520', fontWeight: 900 }} /></TableCell>
-                                        <TableCell><Typography sx={{ fontWeight: 900 }}>{rent ? (row.tenantName || 'Tenant') : (row.companyName || row.ownerName || 'Owner')}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{row.ownerEmail || row.ownerId || row.ownerUid || row.id}</Typography></TableCell>
-                                        <TableCell>{row.contractId || row.intakeId || '—'}</TableCell>
-                                        <TableCell>{row.paymentMethod || row.method || 'Not recorded'}</TableCell>
-                                        <TableCell><Typography variant="body2" sx={{ maxWidth: 220, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><FileCheck2 size={13} color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'} /><Typography variant="caption" color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'}>{hasImmutableReceipt(row) ? 'Immutable receipt recorded' : 'Receipt required'}</Typography></Stack>{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open evidence</Button>}</TableCell>
-                                        <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
-                                        <TableCell><Chip label={!inspectionReady ? 'INSPECTION INCOMPLETE' : (row.status || row.paymentStatus || row.verificationState || 'pending')} size="small" sx={{ bgcolor: !inspectionReady ? 'rgba(239,68,68,0.16)' : 'rgba(218,165,32,0.16)', color: !inspectionReady ? '#F87171' : '#DAA520', fontWeight: 900 }} /></TableCell>
-                                        <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id || !inspectionReady} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{rent ? 'Verify Rent' : 'Record 15% & Approve'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Return</Button></Stack></TableCell>
-                                    </TableRow>;
-                                })}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                )}
-            </Paper>
+            <Dialog open={Boolean(approvalTarget)} onClose={() => !busyId && setApprovalTarget(null)} fullWidth maxWidth="sm"><DialogTitle>{isRentPayment(approvalTarget || {}) ? 'Verify rent payment' : 'Verify exact 15% and activate Owner'}</DialogTitle><DialogContent><Stack spacing={2.2} sx={{ pt: 1 }}>
+                <Alert severity="info">Locked amount: <b>{formatMoney(amountDue(approvalTarget || {}), approvalTarget?.currency || 'AED')}</b>. It cannot be edited.</Alert>
+                {!isRentPayment(approvalTarget || {}) && <TextField select fullWidth label="Phase 1 payment method" value={method} onChange={(event) => setMethod(event.target.value)}>{PHASE1_METHODS.map((item) => <MenuItem key={item} value={item}>{item === 'CASH' ? 'Cash received at HQ' : 'Cheque received at HQ'}</MenuItem>)}</TextField>}
+                <TextField fullWidth label="Receipt / cheque reference" value={reference} onChange={(event) => setReference(event.target.value)} />
+                {!isRentPayment(approvalTarget || {}) && !hasImmutableReceipt(approvalTarget || {}) && <Button component="label" variant="outlined" startIcon={<Upload size={17} />}>{receipt ? receipt.name : 'Attach official receipt'}<input hidden type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setReceipt(event.target.files?.[0] || null)} /></Button>}
+                <TextField fullWidth multiline minRows={3} label="Internal verification notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+                <Alert severity="warning">A fresh Admin MFA session is mandatory. Approval activates the contract, properties and Owner dashboard immediately.</Alert>
+            </Stack></DialogContent><DialogActions><Button onClick={() => setApprovalTarget(null)}>Cancel</Button><Button variant="contained" onClick={() => void approve()} disabled={Boolean(busyId)} startIcon={busyId ? <CircularProgress size={18} /> : <FileCheck2 size={17} />}>Verify exact payment & approve</Button></DialogActions></Dialog>
 
-            <Dialog open={Boolean(approvalTarget)} onClose={() => !busyId && setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Record 15% Payment & Give Final Approval'}</DialogTitle>
-                <DialogContent>
-                    <Stack spacing={2.5} sx={{ mt: 1 }}>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isRentPayment(approvalTarget) ? 'This verifies the rent payment only.' : 'This records immutable receipt evidence, verifies the exact 15%, activates the contract and properties, and unlocks the Owner dashboard.'}</Typography>
-                        {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>LOCKED PAYMENT</Typography><Typography fontWeight={900}>{formatMoney(submittedAmount(approvalTarget), approvalTarget.currency)}</Typography><Typography variant="body2" sx={{ overflowWrap: 'anywhere', mt: 1 }}>{proofText(approvalTarget)}</Typography>{referenceUrl(approvalTarget) && <Button size="small" onClick={() => openReference(approvalTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open recorded evidence</Button>}</Paper>}
-                        {approvalTarget && !isRentPayment(approvalTarget) && <TextField select label="Payment method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }}>{MANUAL_METHODS.map((method) => <MenuItem key={method} value={method}>{method.replace('_', ' ')}</MenuItem>)}</TextField>}
-                        <TextField label="Official payment / receipt reference" value={paymentReferenceId} onChange={(event) => setPaymentReferenceId(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
-                        <TextField label="Exact amount received" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
-                        {approvalTarget && !isRentPayment(approvalTarget) && !hasImmutableReceipt(approvalTarget) && <Button component="label" variant="outlined" startIcon={<Upload size={17} />} sx={{ color: receiptFile ? '#4ADE80' : '#DAA520', borderColor: receiptFile ? '#4ADE80' : 'rgba(218,165,32,0.45)', justifyContent: 'flex-start' }}>{receiptFile ? `${receiptFile.name} · ${(receiptFile.size / 1024 / 1024).toFixed(2)} MB` : 'Upload official receipt (PDF or image)'}<input hidden type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} /></Button>}
-                        <TextField label="Internal verification notes" value={internalNotes} onChange={(event) => setInternalNotes(event.target.value)} fullWidth multiline minRows={3} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
-                    </Stack>
-                </DialogContent>
-                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button onClick={() => void approvePayment()} disabled={!approvalTarget || busyId === approvalTarget?.id} startIcon={busyId === approvalTarget?.id ? <CircularProgress size={16} /> : <CheckCircle size={16} />} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Verify 15% & Approve Owner'}</Button></DialogActions>
-            </Dialog>
-
-            <Dialog open={Boolean(rejectTarget)} onClose={() => !busyId && setRejectTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-                <DialogTitle sx={{ color: '#f87171', fontWeight: 950 }}>Return / Reject Payment Evidence</DialogTitle>
-                <DialogContent><Stack spacing={2.5} sx={{ mt: 1 }}><Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>Record the exact reason the payment or receipt evidence is being returned.</Typography>{rejectTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>REFERENCE</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(rejectTarget)}</Typography>{referenceUrl(rejectTarget) && <Button size="small" onClick={() => openReference(rejectTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open evidence</Button>}</Paper>}<TextField label="Return reason / Admin review note" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} fullWidth multiline minRows={4} required InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} /></Stack></DialogContent>
-                <DialogActions sx={{ p: 3 }}><Button onClick={() => setRejectTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button onClick={() => void rejectPayment()} disabled={!rejectTarget || busyId === rejectTarget?.id || rejectReason.trim().length < 8} sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 950 }}>Return / Reject</Button></DialogActions>
-            </Dialog>
+            <Dialog open={Boolean(rejectTarget)} onClose={() => !busyId && setRejectTarget(null)} fullWidth maxWidth="sm"><DialogTitle>Return payment evidence</DialogTitle><DialogContent><TextField autoFocus fullWidth multiline minRows={4} label="Clear return reason" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} sx={{ mt: 1 }} /></DialogContent><DialogActions><Button onClick={() => setRejectTarget(null)}>Cancel</Button><Button color="error" variant="contained" onClick={() => void reject()} disabled={Boolean(busyId)}>Return evidence</Button></DialogActions></Dialog>
         </Box>
     );
 }

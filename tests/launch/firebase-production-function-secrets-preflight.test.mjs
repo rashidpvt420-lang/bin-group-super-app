@@ -46,12 +46,16 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('bank-pilot requires SMTP, Owner OTP pepper, and AI while public mode additionally requires Stripe', () => {
+test('bank-pilot requires SMTP, Owner OTP pepper and AI while public mode additionally requires Stripe', () => {
   assert.deepEqual(requiredFirebaseAiSecrets, expectedAiSecrets);
   assert.deepEqual(requiredFirebaseBankPilotSecrets, expectedBankPilotSecrets);
   assert.deepEqual(requiredFirebasePublicSecrets, expectedPublicSecrets);
   assert.deepEqual(requiredFirebaseProductionSecretsForMode('bank-pilot'), expectedBankPilotSecrets);
   assert.deepEqual(requiredFirebaseProductionSecretsForMode('public'), expectedPublicSecrets);
+  assert.throws(
+    () => requiredFirebaseProductionSecretsForMode('phase1-public'),
+    /LAUNCH_MODE must be bank-pilot or public/,
+  );
   assert.throws(
     () => requiredFirebaseProductionSecretsForMode('staging'),
     /LAUNCH_MODE must be bank-pilot or public/,

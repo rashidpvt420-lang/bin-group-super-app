@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions, DialogContent,
-  DialogTitle, Paper, Stack, TextField, Typography,
+  DialogTitle, LinearProgress, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { Building2, CheckCircle, ClipboardCheck, MapPinned, ShieldCheck, WalletCards } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, type User as FirebaseUser } from 'firebase/auth';
@@ -13,7 +13,14 @@ import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
 import { formatAED } from '../../utils/formatters';
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport';
-type UploadedDocument = { downloadUrl?: string; storagePath?: string };
+type UploadedDocument = {
+  storagePath: string;
+  sha256: string;
+  generation: string;
+  filename?: string;
+  contentType?: string;
+  size?: number;
+};
 type SubmissionResult = {
   intakeId: string;
   contractId: string;
@@ -62,6 +69,9 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   const effectiveIntakeId = intakeId || onboardingSessionId || ownerAccount?.uid || '';
   const ownerEmail = ownerAccount?.email || companyProfile.email || '';
   const readyDocuments = useMemo(() => documents.filter((item) => Boolean(proofDocuments[item.key])), [proofDocuments]);
+  const totalProgress = readyDocuments.length
+    ? Math.round(readyDocuments.reduce((sum, item) => sum + Number(uploadProgress[item.key] || 0), 0) / readyDocuments.length)
+    : 0;
 
   const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => new Promise((resolve) => {
     if (auth.currentUser) { resolve(auth.currentUser); return; }
@@ -80,9 +90,13 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     }, timeoutMs);
   });
 
-  const validate = (user: FirebaseUser) => {
+  const validate = async (user: FirebaseUser) => {
     if (!ownerAccount?.uid || user.uid !== ownerAccount.uid) throw new Error(copy('The signed-in Owner does not match this application.', 'حساب المالك المسجل لا يطابق هذا الطلب.'));
+    await user.reload();
     if (!user.emailVerified) throw new Error(copy('Verify the Owner email before final submission.', 'تحقق من بريد المالك قبل الإرسال النهائي.'));
+    const token = await user.getIdTokenResult(true);
+    const role = String(token.claims.role || token.claims.userRole || token.claims.primaryRole || '').toLowerCase();
+    if (role !== 'owner') throw new Error(copy('The verified Owner security role is not ready. Return to page 1 and confirm verification again.', 'دور أمان المالك الموثق غير جاهز. ارجع إلى الصفحة الأولى وأكد التحقق مرة أخرى.'));
     if (!properties.length) throw new Error(copy('Add at least one property.', 'أضف عقاراً واحداً على الأقل.'));
     if (!properties.every((property) => Number.isFinite(Number(property.geo?.lat)) && Number.isFinite(Number(property.geo?.lng)))) throw new Error(copy('Every property must include a valid GPS location.', 'يجب أن يحتوي كل عقار على موقع GPS صالح.'));
     if (!isContractSigned || signatureName.trim().length < 3 || !contractOtpVerificationId) throw new Error(copy('Complete the signed email-OTP agreement before submission.', 'أكمل الاتفاقية الموقعة والمتحقق منها عبر البريد قبل الإرسال.'));
@@ -92,7 +106,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   };
 
   const uploadDocuments = async (user: FirebaseUser) => {
-    const urls: Record<string, string> = {};
+    const evidence: Record<string, UploadedDocument> = {};
     for (const document of readyDocuments) {
       const staged = await getStagedFile(document.key);
       if (!staged) throw new Error(copy(`${document.en} is missing from this browser. Upload it again.`, `ملف ${document.ar} غير موجود في هذا المتصفح. ارفعه مرة أخرى.`));
@@ -110,17 +124,18 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
         encodedDocument: await fileToBase64(staged),
       });
       const uploaded = result.data as UploadedDocument;
-      if (!uploaded.downloadUrl) throw new Error(copy(`Secure upload failed for ${document.en}.`, `فشل الرفع الآمن لملف ${document.ar}.`));
-      urls[document.key] = uploaded.downloadUrl;
+      if (!uploaded.storagePath || !/^[a-f0-9]{64}$/i.test(uploaded.sha256 || '') || !uploaded.generation) {
+        throw new Error(copy(`Protected upload failed for ${document.en}.`, `فشل الرفع المحمي لملف ${document.ar}.`));
+      }
+      evidence[document.key] = uploaded;
       setUploadProgress((current) => ({ ...current, [document.key]: 100 }));
     }
-    return urls;
+    return evidence;
   };
 
   const submitWithUser = async (user: FirebaseUser) => {
-    validate(user);
-    await user.getIdToken(true);
-    const documentUrls = await uploadDocuments(user);
+    await validate(user);
+    const documentEvidence = await uploadDocuments(user);
     const callable = httpsCallable(functions, 'submitOwnerInspectionFirstOnboarding');
     const response = await callable({
       ownerUid: user.uid,
@@ -137,7 +152,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       contractOtpVerificationId,
       quoteHash: serverQuote.quoteHash,
       quoteQuotedAtMs: serverQuote.quotedAtMs,
-      documentUrls,
+      documentEvidence,
     });
     const result = response.data as SubmissionResult;
     if (!result?.intakeId || !result?.contractId || !result?.paymentId) throw new Error(copy('The server did not return the protected application references.', 'لم يُرجع الخادم مراجع الطلب المحمية.'));
@@ -156,7 +171,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       }
       await submitWithUser(user);
     } catch (submissionError: any) {
-      setError(submissionError?.message || String(submissionError));
+      setError(submissionError?.details || submissionError?.message || String(submissionError));
     } finally { setLoading(false); }
   };
 
@@ -169,7 +184,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       setReauthOpen(false);
       await submitWithUser(credential.user);
     } catch (reauthError: any) {
-      setError(reauthError?.message || copy('Owner sign-in failed.', 'فشل تسجيل دخول المالك.'));
+      setError(reauthError?.details || reauthError?.message || copy('Owner sign-in failed.', 'فشل تسجيل دخول المالك.'));
     } finally { setLoading(false); }
   };
 
@@ -178,15 +193,15 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       <Container maxWidth="md" sx={{ py: { xs: 3, md: 8 } }} dir={isRTL ? 'rtl' : 'ltr'}>
         <Paper sx={{ p: { xs: 3, md: 6 }, textAlign: 'center', borderRadius: 6, bgcolor: 'rgba(22,22,24,0.82)', border: '1px solid #4ADE80' }}>
           <CheckCircle size={62} color="#4ADE80" />
-          <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>{copy('Five-page application submitted', 'تم إرسال الطلب المكون من خمس صفحات')}</Typography>
+          <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>{copy('Five-page application submitted securely', 'تم إرسال الطلب المكون من خمس صفحات بأمان')}</Typography>
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>
-            {copy('BIN GROUP Admin will review the documents and property details, arrange the property visit, and only after the visit request the exact 15% mobilisation payment. Final Admin approval unlocks the Owner dashboard.', 'سيقوم مسؤول BIN GROUP بمراجعة المستندات وبيانات العقار وترتيب زيارة العقار، وبعد الزيارة فقط سيطلب دفعة التعبئة 15٪ كاملة. تفتح الموافقة الإدارية النهائية لوحة المالك.')}
+            {copy('Your documents are private and no permanent download links were created. Admin must record verified GPS, checklist, findings, timestamps and photo evidence for every property visit. Only then can the exact 15% Cash or Cheque payment be recorded and finally approved.', 'مستنداتك خاصة ولم يتم إنشاء روابط تنزيل دائمة. يجب على المسؤول تسجيل GPS موثق وقائمة فحص ونتائج وأوقات وصورة لكل زيارة عقار. بعد ذلك فقط يمكن تسجيل دفعة 15٪ الدقيقة نقداً أو بشيك واعتمادها نهائياً.')}
           </Typography>
           <Stack spacing={1.2} sx={{ mt: 4, textAlign: isRTL ? 'right' : 'left', p: 3, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }}>
             <Typography color="#FFF"><b>{copy('Application reference', 'مرجع الطلب')}:</b> {success.intakeId}</Typography>
             <Typography color="#FFF"><b>{copy('Annual value', 'القيمة السنوية')}:</b> AED {formatAED(success.annualContractValue)}</Typography>
-            <Typography color="#FFF"><b>{copy('15% after visit', '15٪ بعد الزيارة')}:</b> AED {formatAED(success.activationDeposit)}</Typography>
-            <Typography color="#4ADE80" fontWeight={900}>{copy('Current status: Awaiting Admin review and property visit', 'الحالة الحالية: بانتظار مراجعة المسؤول وزيارة العقار')}</Typography>
+            <Typography color="#FFF"><b>{copy('Exact 15% after verified visits', '15٪ الدقيقة بعد الزيارات الموثقة')}:</b> AED {formatAED(success.activationDeposit)}</Typography>
+            <Typography color="#4ADE80" fontWeight={900}>{copy('Current status: Awaiting Admin review and verified property visits', 'الحالة الحالية: بانتظار مراجعة المسؤول وزيارات العقارات الموثقة')}</Typography>
           </Stack>
           <Button variant="contained" sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} onClick={() => { window.location.href = '/login'; }}>{copy('Go to Owner Login', 'الانتقال إلى دخول المالك')}</Button>
         </Paper>
@@ -197,31 +212,33 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   return (
     <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 980, mx: 'auto', width: '100%', pb: 10 }}>
       <Box sx={{ textAlign: 'center', mb: 4 }}>
-        <Typography variant="h4" fontWeight={950} color="#FFF">{copy('Submit for Admin Review & Property Visit', 'الإرسال لمراجعة المسؤول وزيارة العقار')}</Typography>
+        <Typography variant="h4" fontWeight={950} color="#FFF">{copy('Submit for Admin Review & Verified Property Visits', 'الإرسال لمراجعة المسؤول وزيارات العقارات الموثقة')}</Typography>
         <Typography color="rgba(255,255,255,0.6)" sx={{ mt: 1 }}>{copy('This is page 5 of 5. No payment is collected now.', 'هذه الصفحة 5 من 5. لا يتم تحصيل الدفع الآن.')}</Typography>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-      <Paper sx={{ p: { xs: 2.5, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)' }}>
-        <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 4 }}>
-          {copy('Payment order: application submitted → Admin document review → property visit → exact 15% mobilisation payment received → final Admin approval → dashboard unlocked.', 'ترتيب الدفع: إرسال الطلب ← مراجعة المستندات إدارياً ← زيارة العقار ← استلام دفعة التعبئة 15٪ كاملة ← الموافقة النهائية ← فتح لوحة التحكم.')}
-        </Alert>
-        <Stack spacing={2.2}>
-          <Stack direction="row" spacing={2} alignItems="center"><ClipboardCheck color={binThemeTokens.gold} /><Box><Typography color="#FFF" fontWeight={900}>{copy('Application and signed agreement ready', 'الطلب والاتفاقية الموقعة جاهزان')}</Typography><Typography variant="caption" color="rgba(255,255,255,0.55)">{effectiveIntakeId}</Typography></Box></Stack>
-          <Stack direction="row" spacing={2} alignItems="center"><Building2 color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{properties.length} {copy('property records', 'سجلات عقارية')}</Typography></Stack>
-          <Stack direction="row" spacing={2} alignItems="center"><MapPinned color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy('GPS will be verified during the Admin site visit', 'سيتم التحقق من GPS خلال زيارة الموقع الإدارية')}</Typography></Stack>
-          <Stack direction="row" spacing={2} alignItems="center"><WalletCards color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy(`AED ${formatAED(activationDeposit)} is not due until the visit is completed`, `مبلغ ${formatAED(activationDeposit)} درهم غير مستحق حتى اكتمال الزيارة`)}</Typography></Stack>
-          {readyDocuments.map((document) => <Typography key={document.key} variant="caption" color={uploadProgress[document.key] === 100 ? '#4ADE80' : 'rgba(255,255,255,0.58)'}>{uploadProgress[document.key] === 100 ? '✓' : '•'} {copy(document.en, document.ar)} {uploadProgress[document.key] ? `· ${uploadProgress[document.key]}%` : ''}</Typography>)}
-        </Stack>
-        <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 5 }}>
-          <Button variant="outlined" fullWidth onClick={onBack} disabled={loading} sx={{ py: 1.5, borderRadius: 100, fontWeight: 950 }}>{copy('Back', 'رجوع')}</Button>
-          <Button variant="contained" fullWidth onClick={() => void submit()} disabled={loading} sx={{ py: 1.5, borderRadius: 100, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} color="inherit" /> : copy('Submit All 5 Pages', 'إرسال الصفحات الخمس')}</Button>
+      {loading && <Box sx={{ mb: 3 }}><LinearProgress variant="determinate" value={Math.max(totalProgress, 8)} /><Typography variant="caption" color="rgba(255,255,255,0.55)">{copy(`Protected upload and submission: ${Math.max(totalProgress, 8)}%`, `الرفع والإرسال المحمي: ${Math.max(totalProgress, 8)}٪`)}</Typography></Box>}
+      <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.76)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <Stack spacing={2.5}>
+          <Alert icon={<ShieldCheck size={20} />} severity="success">{copy('Documents are stored privately with SHA-256 and immutable Storage generation evidence. Admin receives only short-lived signed access.', 'تُخزن المستندات بشكل خاص مع SHA-256 ودليل إصدار تخزين غير قابل للتغيير. يحصل المسؤول فقط على وصول موقع قصير المدة.')}</Alert>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <Paper sx={{ p: 2.5, flex: 1, bgcolor: 'rgba(255,255,255,0.03)' }}><Building2 /><Typography fontWeight={900} color="#FFF">{properties.length} {copy('properties', 'عقارات')}</Typography></Paper>
+            <Paper sx={{ p: 2.5, flex: 1, bgcolor: 'rgba(255,255,255,0.03)' }}><MapPinned /><Typography fontWeight={900} color="#FFF">{copy('GPS pending Admin verification', 'GPS بانتظار تحقق المسؤول')}</Typography></Paper>
+            <Paper sx={{ p: 2.5, flex: 1, bgcolor: 'rgba(255,255,255,0.03)' }}><WalletCards /><Typography fontWeight={900} color="#FFF">AED {formatAED(activationDeposit)} · {copy('Cash/Cheque after visits', 'نقد/شيك بعد الزيارات')}</Typography></Paper>
+          </Stack>
+          <Alert icon={<ClipboardCheck size={20} />} severity="info">{copy('Sequence: secure submission → Admin document review → one evidence-backed visit per property → exact 15% Cash/Cheque receipt → MFA final approval → dashboard unlock.', 'التسلسل: إرسال آمن ← مراجعة المستندات ← زيارة موثقة لكل عقار ← إيصال 15٪ نقداً/بشيك ← موافقة نهائية عبر MFA ← فتح لوحة التحكم.')}</Alert>
+          <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
+            <Button variant="outlined" fullWidth onClick={onBack} disabled={loading}>{copy('Back', 'رجوع')}</Button>
+            <Button variant="contained" fullWidth onClick={submit} disabled={loading} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+              {loading ? <CircularProgress size={22} color="inherit" /> : copy('Submit all 5 pages securely', 'إرسال الصفحات الخمس بأمان')}
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
-      <Dialog open={reauthOpen} onClose={() => setReauthOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{copy('Reconnect secure Owner session', 'إعادة ربط جلسة المالك الآمنة')}</DialogTitle>
-        <DialogContent><TextField autoFocus margin="dense" fullWidth type="password" label={copy('Owner password', 'كلمة مرور المالك')} value={reauthPassword} onChange={(event) => setReauthPassword(event.target.value)} /></DialogContent>
-        <DialogActions><Button onClick={() => setReauthOpen(false)}>{copy('Cancel', 'إلغاء')}</Button><Button variant="contained" onClick={() => void reconnectAndSubmit()} disabled={loading}>{copy('Reconnect & Submit', 'إعادة الربط والإرسال')}</Button></DialogActions>
+      <Dialog open={reauthOpen} onClose={() => !loading && setReauthOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{copy('Reconnect secure Owner session', 'إعادة اتصال جلسة المالك الآمنة')}</DialogTitle>
+        <DialogContent><TextField autoFocus fullWidth type="password" label={copy('Owner password', 'كلمة مرور المالك')} value={reauthPassword} onChange={(event) => setReauthPassword(event.target.value)} sx={{ mt: 1 }} /></DialogContent>
+        <DialogActions><Button onClick={() => setReauthOpen(false)}>{copy('Cancel', 'إلغاء')}</Button><Button variant="contained" onClick={reconnectAndSubmit} disabled={loading}>{copy('Reconnect and submit', 'إعادة الاتصال والإرسال')}</Button></DialogActions>
       </Dialog>
     </Box>
   );

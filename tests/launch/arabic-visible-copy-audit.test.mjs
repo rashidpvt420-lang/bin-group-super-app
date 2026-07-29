@@ -85,19 +85,21 @@ test('Admin and Broker map technical states before displaying them in Arabic', a
   assert.match(broker, /رخصة ريرا غير موثقة/);
 });
 
-test('five-page Owner contract and final submission tie Arabic copy to the inspection-first server quote', async () => {
+test('five-page Owner contract and final submission tie Arabic copy to the evidence-backed Phase 1 server quote', async () => {
   const [contract, finalSubmission, backend] = await Promise.all([
     read('src/components/onboarding/ContractSignatureStep.tsx'),
     read('src/components/onboarding/InspectionSubmissionStep.tsx'),
-    read('functions/inspectionFirstOwnerOnboarding.ts'),
+    read('functions/phase1OwnerLaunchRepair.ts'),
   ]);
   assert.match(contract, /القيمة السنوية قبل الفحص/);
   assert.match(contract, /لا تحتفظ BIN GROUP بأموال إيجار المالك/);
   assert.match(contract, /previewOwnerInspectionQuote/);
   assert.match(contract, /دفعة 15٪ بعد الزيارة/);
   assert.match(finalSubmission, /لا يتم تحصيل الدفع الآن/);
-  assert.match(finalSubmission, /15٪ بعد الزيارة/);
+  assert.match(finalSubmission, /15٪ الدقيقة بعد الزيارات الموثقة/);
   assert.match(finalSubmission, /submitOwnerInspectionFirstOnboarding/);
+  assert.match(finalSubmission, /مستنداتك خاصة/);
   assert.match(backend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
   assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
+  assert.match(backend, /PHASE1_PAYMENT_METHODS/);
 });

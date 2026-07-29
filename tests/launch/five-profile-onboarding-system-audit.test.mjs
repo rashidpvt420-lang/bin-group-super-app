@@ -38,17 +38,19 @@ test('all five roles expose protected, bilingual personal profile surfaces', asy
   assert.match(adminPage, ARABIC);
 });
 
-test('property onboarding is a real five-page inspection-first Owner workflow', async () => {
-  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset, inspectionAdmin] = await Promise.all([
+test('property onboarding is a real five-page evidence-backed Phase 1 Owner workflow', async () => {
+  const [page, store, account, finalSubmission, backend, intakeAdmin, paymentAdmin, asset, inspectionAdmin, inspectionEvidence, runtime] = await Promise.all([
     read('src/pages/PropertyOnboardingPage.tsx'),
     read('src/store/onboardingStore.ts'),
     read('src/components/onboarding/AccountCreationStep.tsx'),
     read('src/components/onboarding/InspectionSubmissionStep.tsx'),
-    read('functions/inspectionFirstOwnerOnboarding.ts'),
+    read('functions/phase1OwnerLaunchRepair.ts'),
     read('apps/admin-panel/src/pages/admin/IntakeVaultPage.tsx'),
     read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'),
     read('src/components/onboarding/AssetProfileStep.tsx'),
     read('functions/ownerInspectionAdminLink.ts'),
+    read('functions/ownerInspectionEvidence.ts'),
+    read('functions/runtime.ts'),
   ]);
 
   assert.match(page, /PAGE_COUNT = 5/);
@@ -64,33 +66,50 @@ test('property onboarding is a real five-page inspection-first Owner workflow', 
   assert.match(account, /createUserWithEmailAndPassword/);
   assert.match(account, /sendEmailVerification/);
   assert.match(account, /upsertOwnerOnboardingProfile/);
+  assert.match(account, /getIdTokenResult\(true\)/);
+  assert.ok(account.indexOf('setOwnerAccount({') > account.indexOf('getIdTokenResult(true)'));
   assert.doesNotMatch(account, /submitPendingOwnerRegistration/);
   assert.match(account, /No payment is collected on these five pages/);
 
   assert.match(finalSubmission, /submitOwnerInspectionFirstOnboarding/);
   assert.match(finalSubmission, /uploadOwnerInspectionProofDocument/);
+  assert.match(finalSubmission, /documentEvidence/);
   assert.match(finalSubmission, /No payment is collected now/);
-  assert.doesNotMatch(finalSubmission, /paymentReceipt|createStripeCheckoutSession/);
+  assert.doesNotMatch(finalSubmission, /downloadUrl|documentUrls|paymentReceipt|createStripeCheckoutSession/);
 
   assert.match(backend, /OWNER_FIVE_PAGE_INSPECTION_FIRST_V1/);
   assert.match(backend, /SUBMITTED_FOR_PROPERTY_INSPECTION/);
   assert.match(backend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
-  assert.match(backend, /INSPECTION_REQUIRED_BEFORE_PAYMENT/);
-  assert.match(backend, /adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(backend, /VERIFIED_INSPECTION_EVIDENCE_REQUIRED_BEFORE_PAYMENT/);
+  assert.match(backend, /adminRecordOwnerMobilizationPaymentEvidencePhase1/);
   assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
+  assert.match(backend, /canonicalPropertyId/);
+  assert.match(backend, /transaction\.create\(db\.collection\("properties"\)/);
+  assert.doesNotMatch(backend, /firebaseStorageDownloadTokens/);
 
   assert.match(intakeAdmin, /adminCreateOwnerPortfolioPropertyInspection/);
   assert.match(intakeAdmin, /adminLinkOwnerPropertyInspection/);
+  assert.match(intakeAdmin, /adminRecordOwnerPortfolioVisitEvidence/);
   assert.match(intakeAdmin, /adminCompleteOwnerPortfolioInspections/);
-  assert.match(intakeAdmin, /RECORD 15% & APPROVE/);
-  assert.doesNotMatch(intakeAdmin, /adminCreateOwnerPropertyInspection|approveOwnerSubmissionOperationalFlow/);
+  assert.match(intakeAdmin, /Use current device GPS/);
+  assert.match(intakeAdmin, /Attach current property photo/);
+  assert.match(intakeAdmin, /Complete verified visits & request 15%/);
+  assert.doesNotMatch(intakeAdmin, /COMPLETE ALL VISITS|approveOwnerSubmissionOperationalFlow/);
   assert.match(inspectionAdmin, /paymentCollectionRequired: false/);
   assert.match(inspectionAdmin, /AFTER_ALL_PORTFOLIO_VISITS_COMPLETE/);
+  assert.match(inspectionEvidence, /MAX_ARRIVAL_DISTANCE_METRES = 750/);
+  assert.match(inspectionEvidence, /checklistComplete: true/);
+  assert.match(inspectionEvidence, /photoCount: 1/);
 
   assert.match(paymentAdmin, /adminRecordOwnerMobilizationPaymentEvidence/);
   assert.match(paymentAdmin, /adminApprovePayment/);
   assert.match(paymentAdmin, /inspectionVerified/);
-  assert.match(paymentAdmin, /Verify 15% & Approve Owner/);
+  assert.match(paymentAdmin, /Phase 1 accepts only Cash or Cheque/);
+  assert.match(paymentAdmin, /Verify exact payment & approve/);
+  assert.doesNotMatch(paymentAdmin, /BANK_TRANSFER|STRIPE/);
+
+  assert.match(runtime, /submitOwnerInspectionFirstOnboardingPhase1 as submitOwnerInspectionFirstOnboarding/);
+  assert.match(runtime, /adminCompleteOwnerPortfolioInspectionsPhase1 as adminCompleteOwnerPortfolioInspections/);
 
   assert.match(store, /OWNER_PAGE_COUNT = 5/);
   assert.match(store, /version: 5/);
