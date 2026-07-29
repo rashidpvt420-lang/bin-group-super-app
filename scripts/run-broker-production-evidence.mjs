@@ -10,10 +10,10 @@ import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './fireba
 import { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
-const PROJECT_NUMBER = '123413252227';
 const API_KEY = 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s';
 const APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const FUNCTIONS_BASE = `https://europe-west3-${PROJECT_ID}.cloudfunctions.net`;
+const WEB_REFERER = 'https://bin-group-57c60.web.app/';
 const OUTPUT_PATH = path.resolve('launch_package/artifacts/broker-production-evidence.json');
 const EVIDENCE_TYPE = 'broker-contract-to-payout-production-proof';
 const OTP_HASH_VERSION = 'HMAC_SHA256_V1';
@@ -147,11 +147,12 @@ async function waitForMailboxOtp({
 }
 
 async function exchangeAppCheckToken() {
-  const url = `https://firebaseappcheck.googleapis.com/v1/projects/${PROJECT_NUMBER}/apps/${encodeURIComponent(APP_ID)}:exchangeDebugToken?key=${API_KEY}`;
+  const url = new URL(`https://content-firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}/apps/${encodeURIComponent(APP_ID)}:exchangeDebugToken`);
+  url.searchParams.set('key', API_KEY);
   const body = await jsonRequest(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ debug_token: appCheckDebugToken }),
+    headers: { 'Content-Type': 'application/json', Referer: WEB_REFERER },
+    body: JSON.stringify({ debugToken: appCheckDebugToken }),
   }, 'App Check debug-token exchange');
   assert(text(body.token), 'App Check exchange did not return a token.');
   return text(body.token);
@@ -162,7 +163,7 @@ async function signIn(email, password) {
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Referer: WEB_REFERER },
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
     'Firebase Auth sign-in',

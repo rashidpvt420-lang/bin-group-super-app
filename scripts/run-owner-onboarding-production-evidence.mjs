@@ -7,11 +7,11 @@ import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
-const PROJECT_NUMBER = '123413252227';
 const API_KEY = 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s';
 const APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const STORAGE_BUCKET = 'bin-group-57c60.firebasestorage.app';
 const FUNCTIONS_BASE = `https://europe-west3-${PROJECT_ID}.cloudfunctions.net`;
+const WEB_REFERER = 'https://bin-group-57c60.web.app/';
 const BRANDED_FROM = 'BIN GROUP <ceo@bin-groups.com>';
 const BRANDED_REPLY_TO = 'BIN GROUP Admin <ceo@bin-groups.com>';
 const OUTPUT_PATH = path.resolve('launch_package/artifacts/owner-onboarding-production-evidence.json');
@@ -68,11 +68,12 @@ async function jsonRequest(url, options, label) {
 }
 
 async function exchangeAppCheckToken() {
-  const url = `https://firebaseappcheck.googleapis.com/v1/projects/${PROJECT_NUMBER}/apps/${encodeURIComponent(APP_ID)}:exchangeDebugToken?key=${API_KEY}`;
+  const url = new URL(`https://content-firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}/apps/${encodeURIComponent(APP_ID)}:exchangeDebugToken`);
+  url.searchParams.set('key', API_KEY);
   const body = await jsonRequest(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ debug_token: appCheckDebugToken }),
+    headers: { 'Content-Type': 'application/json', Referer: WEB_REFERER },
+    body: JSON.stringify({ debugToken: appCheckDebugToken }),
   }, 'App Check debug-token exchange');
   assert(text(body.token), 'App Check exchange did not return a token.');
   return text(body.token);
@@ -83,7 +84,7 @@ async function signIn(email, password) {
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Referer: WEB_REFERER },
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
     `Firebase Auth sign-in for ${email}`,
