@@ -35,6 +35,7 @@ if (missing.length) {
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 const now = admin.firestore.FieldValue.serverTimestamp();
+const verifiedGeoAt = admin.firestore.Timestamp.now();
 
 function safeId(value) {
   return String(value || 'unknown').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
@@ -110,6 +111,29 @@ const gpsPayload = {
   propertyLocation: gps,
 };
 
+const canonicalGeo = {
+  lat: gps.lat,
+  lng: gps.lng,
+  latitude: gps.latitude,
+  longitude: gps.longitude,
+  address: gps.address,
+  source: 'admin_manual',
+  verified: true,
+  dispatchReady: true,
+  requiresGeoReview: false,
+  verificationVersion: 1,
+  verifiedBy: ownerUid,
+  verifiedAt: verifiedGeoAt,
+};
+
+const canonicalGeoVerification = {
+  state: 'VERIFIED',
+  source: 'FOUNDER_MFA_REVIEW',
+  verifiedBy: ownerUid,
+  verifiedAt: verifiedGeoAt,
+  verificationVersion: 1,
+};
+
 await db.collection('properties').doc(propertyId).set({
   id: propertyId,
   name: 'E2E Live Role Tower',
@@ -129,6 +153,8 @@ await db.collection('properties').doc(propertyId).set({
   floors: 1,
   status: 'ACTIVE',
   contractStatus: 'ACTIVE',
+  geo: canonicalGeo,
+  geoVerification: canonicalGeoVerification,
   e2eLaunchSeed: true,
   updatedAt: now,
   createdAt: now,
@@ -242,6 +268,8 @@ await db.collection('users').doc(tenantUid).set({
   primaryRole: 'tenant',
   status: 'active',
   onboardingComplete: true,
+  propertyId,
+  unitId,
   assignedPropertyId: propertyId,
   assignedUnitId: unitId,
   activeContractId: contractId,

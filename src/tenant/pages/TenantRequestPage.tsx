@@ -171,22 +171,57 @@ export default function TenantRequestPage() {
                 return;
             }
             try {
-                let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid)));
-                if (unitSnap.empty && user.email) {
-                    unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())));
+                const unitCandidates = new Map<string, any>();
+                const addUnit = (id: string, data: any) => {
+                    if (!id || unitCandidates.has(id)) return;
+                    unitCandidates.set(id, { id, ...data });
+                };
+                const queryUnits = async (field: string, value: string) => {
+                    if (!value) return;
+                    const snapshot = await getDocs(query(collection(db, 'units'), where(field, '==', value)));
+                    snapshot.docs.forEach((unitDoc) => addUnit(unitDoc.id, unitDoc.data()));
+                };
+
+                const profileSnap = await getDoc(doc(db, 'users', user.uid));
+                const profile = profileSnap.exists() ? profileSnap.data() : {};
+                const profileUnitId = String(profile?.unitId || profile?.assignedUnitId || '').trim();
+                if (profileUnitId) {
+                    const profileUnitSnap = await getDoc(doc(db, 'units', profileUnitId));
+                    if (profileUnitSnap.exists()) addUnit(profileUnitSnap.id, profileUnitSnap.data());
                 }
-                if (unitSnap.empty) return;
 
-                const unit: any = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
-                setUnitData(unit);
-                if (!unit.propertyId) return;
+                await queryUnits('tenantId', user.uid);
+                await queryUnits('tenantUid', user.uid);
+                await queryUnits('currentTenantId', user.uid);
+                if (user.email) await queryUnits('tenantEmail', user.email.toLowerCase());
 
-                const propertySnap = await getDoc(doc(db, 'properties', unit.propertyId));
-                if (!propertySnap.exists()) return;
-                const property: any = { id: propertySnap.id, ...propertySnap.data() };
-                setPropertyData(property);
+                let selectedUnit: any = null;
+                let selectedProperty: any = null;
+                for (const unit of unitCandidates.values()) {
+                    const propertyId = String(unit.propertyId || '').trim();
+                    if (!propertyId) {
+                        if (!selectedUnit) selectedUnit = unit;
+                        continue;
+                    }
+                    const propertySnap = await getDoc(doc(db, 'properties', propertyId));
+                    const property = propertySnap.exists() ? { id: propertySnap.id, ...propertySnap.data() } : null;
+                    if (!selectedUnit) {
+                        selectedUnit = unit;
+                        selectedProperty = property;
+                    }
+                    if (property && hasCanonicalDispatchGeo(property)) {
+                        selectedUnit = unit;
+                        selectedProperty = property;
+                        break;
+                    }
+                }
+                if (!selectedUnit) return;
 
-                const ownerId = property.ownerId || property.ownerUid;
+                setUnitData(selectedUnit);
+                if (!selectedProperty) return;
+                setPropertyData(selectedProperty);
+
+                const ownerId = selectedProperty.ownerId || selectedProperty.ownerUid;
                 if (ownerId) {
                     const ownerSnap = await getDoc(doc(db, 'users', ownerId));
                     const ownerStatus = ownerSnap.exists() ? String(ownerSnap.data()?.status || '').toLowerCase() : '';
