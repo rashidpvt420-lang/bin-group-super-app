@@ -63,3 +63,33 @@ test('Tenant unit-link request and Admin decision are protected and retain rejec
   assert.match(fallback, /data-testid="tenant-unit-link-fallback"/);
   assert.match(fallback, /data-testid="tenant-unit-link-submit"/);
 });
+
+test('Tenant live-role fixture seeds dispatch-ready canonical property geo', () => {
+  const seed = read('scripts/seed-live-role-test-data.mjs');
+  assert.match(seed, /const canonicalGeo = \{/);
+  assert.match(seed, /source: 'admin_manual'/);
+  assert.match(seed, /verified: true/);
+  assert.match(seed, /dispatchReady: true/);
+  assert.match(seed, /requiresGeoReview: false/);
+  assert.match(seed, /verificationVersion: 1/);
+  assert.match(seed, /const canonicalGeoVerification = \{/);
+  assert.match(seed, /state: 'VERIFIED'/);
+  assert.match(seed, /source: 'FOUNDER_MFA_REVIEW'/);
+  assert.match(seed, /geo: canonicalGeo/);
+  assert.match(seed, /geoVerification: canonicalGeoVerification/);
+  assert.match(seed, /propertyId,\s*\n\s*unitId,/);
+  assert.match(seed, /assignedPropertyId: propertyId/);
+  assert.match(seed, /assignedUnitId: unitId/);
+});
+
+test('Tenant request page resolves the canonical dispatch-ready linked unit', () => {
+  const page = read('src/tenant/pages/TenantRequestPage.tsx');
+  assert.match(page, /profile\?\.unitId \|\| profile\?\.assignedUnitId/);
+  assert.match(page, /await queryUnits\('tenantId', user\.uid\)/);
+  assert.match(page, /await queryUnits\('tenantUid', user\.uid\)/);
+  assert.match(page, /await queryUnits\('currentTenantId', user\.uid\)/);
+  assert.match(page, /await queryUnits\('tenantEmail', user\.email\.toLowerCase\(\)\)/);
+  assert.match(page, /if \(property && hasCanonicalDispatchGeo\(property\)\)/);
+  assert.match(page, /setUnitData\(selectedUnit\)/);
+  assert.match(page, /setPropertyData\(selectedProperty\)/);
+});
