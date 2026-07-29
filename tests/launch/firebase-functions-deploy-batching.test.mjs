@@ -233,6 +233,43 @@ test('reconciliation no-op is deterministic when remote owned identities match s
   ]);
 });
 
+test('reconciliation evidence sorts compiled endpoint identities with verifier ordering', () => {
+  const plan = buildFunctionReconciliationPlan(
+    [
+      currentIdentity('submitAIDesignRequest'),
+      currentIdentity('stripeWebhook'),
+      currentIdentity('submitBrokerPayoutRequest'),
+    ],
+    [
+      currentIdentity('stripeWebhook'),
+      currentIdentity('submitBrokerPayoutRequest'),
+      currentIdentity('submitAIDesignRequest'),
+    ],
+  );
+
+  assert.deepEqual(plan.compiledEndpointIdentities, [
+    'default|europe-west3|stripeWebhook',
+    'default|europe-west3|submitAIDesignRequest',
+    'default|europe-west3|submitBrokerPayoutRequest',
+  ]);
+  assert.deepEqual(validateFunctionsDeploymentEvidence({
+    ...validEvidence(),
+    functionCount: 3,
+    batchCount: 1,
+    deployedFunctions: [
+      'stripeWebhook',
+      'submitAIDesignRequest',
+      'submitBrokerPayoutRequest',
+    ],
+    reconciliation: {
+      ...validEvidence().reconciliation,
+      compiledEndpointIdentities: plan.compiledEndpointIdentities,
+      remoteBefore: plan.remoteBefore,
+      remoteAfter: plan.remoteBefore,
+    },
+  }), []);
+});
+
 test('obsolete owned Functions without region metadata fail closed', () => {
   assert.throws(
     () => buildFunctionReconciliationPlan(
