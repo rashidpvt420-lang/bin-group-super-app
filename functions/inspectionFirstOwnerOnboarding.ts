@@ -22,13 +22,24 @@ const OTP_HASH_ALGORITHM = "HMAC_SHA256_OWNER_INSPECTION_V1";
 const BRANDED_FROM = "BIN GROUP <ceo@bin-groups.com>";
 const BRANDED_REPLY_TO = "BIN GROUP Admin <ceo@bin-groups.com>";
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
-const CONTRACT_NAMES = new Map([
+const CONTRACT_NAMES = new Map<string, string>([
   ["FM_ONLY", "MAINTENANCE ONLY"],
   ["PM_ONLY", "PROPERTY MANAGEMENT"],
   ["BOTH", "TOTAL CARE HYBRID"],
 ]);
 
 type PlainRecord = Record<string, any>;
+type ContractMode = "FM_ONLY" | "PM_ONLY" | "BOTH";
+
+type OwnerIdentity = {
+  uid: string;
+  email: string;
+};
+
+type AdminIdentity = {
+  uid: string;
+  email: string;
+};
 
 const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
@@ -67,7 +78,7 @@ function roleOf(token: PlainRecord | undefined) {
   return lower(token?.role || token?.userRole || token?.primaryRole);
 }
 
-async function requireOwner(request: any) {
+async function requireOwner(request: any): Promise<OwnerIdentity> {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
   if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
     throw new HttpsError("permission-denied", "A verified, active Owner account is required.");
@@ -81,7 +92,7 @@ async function requireOwner(request: any) {
   };
 }
 
-async function requireAdmin(request: any) {
+async function requireAdmin(request: any): Promise<AdminIdentity> {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   const token = request.auth.token || {};
   const role = roleOf(token);
@@ -94,15 +105,15 @@ async function requireAdmin(request: any) {
   return { uid: request.auth.uid, email: lower(request.auth.token?.email || user.email) };
 }
 
-function propertyMode(property: PlainRecord) {
-  const strategy = lower(property.strategy || property.serviceModel || property.contractMode);
+function propertyMode(property: PlainRecord): ContractMode {
+  const strategy = lower(property.strategy || property.serviceModel || property.contractMode || property.contractType);
   if (["fm", "fm_only", "maintenance", "maintenance_only"].includes(strategy)) return "FM_ONLY";
   if (["pm", "pm_only", "rent", "property_management"].includes(strategy)) return "PM_ONLY";
-  if (["both", "hybrid", "combined"].includes(strategy)) return "BOTH";
+  if (["both", "hybrid", "combined", "total_care", "total-care"].includes(strategy)) return "BOTH";
   throw new HttpsError("invalid-argument", "Select Maintenance, Property Management, or Hybrid service for every property.");
 }
 
-function normalizeGeo(value: any) {
+function normalizeGeo(value: PlainRecord) {
   const lat = finite(value?.geo?.lat ?? value?.geo?.point?.latitude ?? value?.lat, NaN);
   const lng = finite(value?.geo?.lng ?? value?.geo?.point?.longitude ?? value?.lng, NaN);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
@@ -114,16 +125,14 @@ function normalizeGeo(value: any) {
     lat,
     lng,
     verified: false,
-    dispatchReady: true,
+    dispatchReady: false,
     requiresGeoReview: true,
     source: text(value?.geo?.source || "owner_five_page_submission"),
   };
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
-  const quote = calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs);
-  const quoteHash = crypto.createHash("sha256").update(JSON.stringify(cleanPlain(quote))).digest("hex");
-  return { ...quote, quoteHash };
+  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs);
 }
 
 function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOns: string[]) {
@@ -161,7 +170,12 @@ async function createTransporter() {
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
   if (!user || !pass) throw new HttpsError("failed-precondition", "SMTP email service is not configured.");
   const port = Number(process.env.SMTP_PORT || 465);
-  return nodemailer.createTransport({ host: process.env.SMTP_HOST || "smtp.sendgrid.net", port, secure: port === 465, auth: { user, pass } });
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.sendgrid.net",
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
 }
 
 async function sendOtpEmail(to: string, otp: string, contractId: string, propertyName: string, requestId: string) {
@@ -177,8 +191,8 @@ async function sendOtpEmail(to: string, otp: string, contractId: string, propert
     html: `<div style="font-family:Arial,sans-serif;color:#111827"><h2>BIN GROUP Signature Verification</h2><p>Use this code to sign the five-page property application for <b>${propertyName || "your property"}</b>.</p><p style="font-size:30px;font-weight:800;letter-spacing:5px">${otp}</p><p>Expires in ${OTP_TTL_MINUTES} minutes.</p><p>Application reference: ${contractId}</p><p>Verification reference: ${requestId}</p></div>`,
   });
   const messageId = text(info.messageId);
-  const accepted = Array.isArray(info.accepted) ? info.accepted.map((entry) => lower(entry)) : [];
-  if (!messageId || !accepted.includes(lower(to))) throw new HttpsError("internal", "SMTP provider did not accept the Owner email.");
+  const accepted = Array.isArray(info.accepted) ? info.accepted.map((entry: unknown) => lower(entry)) : [];
+  if (!messageId || !accepted.includes(lower(to))) throw new HttpsError("internal", "Owner signature email could not be delivered.");
   return { messageId, accepted, from, replyTo };
 }
 
@@ -215,17 +229,21 @@ function assertVerifiedOtp(data: PlainRecord, args: { uid: string; contractId: s
   if (consumedFor && consumedFor !== args.contractId) throw new HttpsError("failed-precondition", "Signature OTP evidence was already used for another application.");
 }
 
-export const previewOwnerInspectionQuote = onCall({ cors: true, enforceAppCheck: false }, async (request) => {
+export const previewOwnerInspectionQuote = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireOwner(request);
-  const properties = Array.isArray(request.data?.properties) ? request.data.properties.map(cleanPlain) : [];
+  const properties: PlainRecord[] = Array.isArray(request.data?.properties)
+    ? request.data.properties.map((property: unknown) => cleanPlain(property))
+    : [];
   if (!properties.length || properties.length > 100) throw new HttpsError("invalid-argument", "One to 100 properties are required.");
-  const selectedAddOns = Array.isArray(request.data?.selectedAddOns) ? request.data.selectedAddOns.map(text).filter(Boolean).slice(0, 50) : [];
+  const selectedAddOns: string[] = Array.isArray(request.data?.selectedAddOns)
+    ? request.data.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
+    : [];
   return quoteFor(properties, selectedAddOns);
 });
 
 export const requestOwnerInspectionSignatureOtp = onCall({
   cors: true,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   secrets: [smtpUser, smtpPass, otpPepper],
 }, async (request) => {
   const owner = await requireOwner(request);
@@ -262,7 +280,7 @@ export const requestOwnerInspectionSignatureOtp = onCall({
 
 export const verifyOwnerInspectionSignatureOtp = onCall({
   cors: true,
-  enforceAppCheck: false,
+  enforceAppCheck: true,
   secrets: [otpPepper],
 }, async (request) => {
   const owner = await requireOwner(request);
@@ -311,7 +329,7 @@ export const verifyOwnerInspectionSignatureOtp = onCall({
   return { ok: true, verificationId: requestId, contractId: text(result.data.contractId), verifiedAt: Date.now() };
 });
 
-export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAppCheck: false, memory: "512MiB" }, async (request) => {
+export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
   const owner = await requireOwner(request);
   const requestedUid = text(request.data?.ownerUid || owner.uid);
   const requestedEmail = validEmail(request.data?.ownerEmail || owner.email);
@@ -329,35 +347,49 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
   const bucket = admin.storage().bucket();
   await bucket.file(storagePath).save(buffer, {
     resumable: false,
-    metadata: { contentType, metadata: { firebaseStorageDownloadTokens: downloadToken, ownerUid: owner.uid, intakeId, docType, uploadedBy: owner.email, uploadedAt: new Date().toISOString() } },
+    metadata: {
+      contentType,
+      metadata: {
+        firebaseStorageDownloadTokens: downloadToken,
+        ownerUid: owner.uid,
+        intakeId,
+        docType,
+        uploadedBy: owner.email,
+        uploadedAt: new Date().toISOString(),
+      },
+    },
   });
   const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
   return { success: true, downloadUrl, storagePath, docType, size: buffer.length };
 });
 
-export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforceAppCheck: false }, async (request) => {
+export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const owner = await requireOwner(request);
-  const data = request.data || {};
+  const data: PlainRecord = request.data || {};
   const intakeId = safeId(data.intakeId || data.onboardingSessionId, `owner_${owner.uid}`);
   const ownerEmail = validEmail(data.ownerEmail || owner.email);
   if (ownerEmail !== owner.email || text(data.ownerUid || owner.uid) !== owner.uid) throw new HttpsError("permission-denied", "Owner identity does not match the signed-in account.");
-  const properties = Array.isArray(data.properties) ? data.properties.map(cleanPlain) : [];
+  const properties: PlainRecord[] = Array.isArray(data.properties)
+    ? data.properties.map((property: unknown) => cleanPlain(property))
+    : [];
   if (!properties.length || properties.length > 100) throw new HttpsError("invalid-argument", "One to 100 properties are required.");
-  const modes = properties.map(propertyMode);
-  if (modes.some((mode) => mode !== modes[0])) throw new HttpsError("failed-precondition", "One application cannot mix different contract service modes.");
+  const modes: ContractMode[] = properties.map((property: PlainRecord) => propertyMode(property));
+  if (modes.some((mode: ContractMode) => mode !== modes[0])) throw new HttpsError("failed-precondition", "One application cannot mix different contract service modes.");
   const contractMode = modes[0];
   const canonicalPlanName = CONTRACT_NAMES.get(contractMode);
   if (!canonicalPlanName) throw new HttpsError("failed-precondition", "The contract service mode could not be resolved.");
-  const selectedAddOns = Array.isArray(data.selectedAddOns) ? data.selectedAddOns.map(text).filter(Boolean).slice(0, 50) : [];
+  const selectedAddOns: string[] = Array.isArray(data.selectedAddOns)
+    ? data.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
+    : [];
   const quote = assertQuote(data, properties, selectedAddOns);
   const signatureName = text(data.signatureName).slice(0, 180);
   const verificationId = text(data.otpVerificationId || data.contractOtpVerificationId);
   if (signatureName.length < 3 || !verificationId) throw new HttpsError("failed-precondition", "A verified digital signature is required.");
-  const documentUrls = cleanPlain(data.documentUrls || {});
+  const documentUrls: PlainRecord = cleanPlain(data.documentUrls || {});
   if (!text(documentUrls.propertyProof) || !((text(documentUrls.emiratesId) && text(documentUrls.passport)) || text(documentUrls.tradeLicense))) {
     throw new HttpsError("failed-precondition", "Property proof and Owner identity documents are required.");
   }
-  const companyProfile = cleanPlain(data.companyProfile || {});
+  const companyProfile: PlainRecord = cleanPlain(data.companyProfile || {});
   const fullName = text(data.ownerName || companyProfile.contactPerson || data.signatureName).slice(0, 160);
   const mobile = text(data.ownerMobile || companyProfile.phone).slice(0, 60);
   const contractId = intakeId;
@@ -379,7 +411,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     assertVerifiedOtp(otpData, { uid: owner.uid, contractId, contractHash: quote.quoteHash, signature: signatureName });
     transaction.set(otpRef, { consumedFor: contractId, consumedAt: otpData.consumedAt || now, updatedAt: now }, { merge: true });
 
-    const normalizedProperties = properties.map((property, index) => {
+    const normalizedProperties: PlainRecord[] = properties.map((property: PlainRecord, index: number) => {
       const propertyId = safeId(property.id || property.propertyId, `${intakeId}_property_${index + 1}`);
       return {
         ...property,
@@ -434,12 +466,16 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       mobilizationAmount: money(quote.activationDeposit),
       portfolioSummary: {
         totalProperties: normalizedProperties.length,
-        totalUnits: normalizedProperties.reduce((sum, property) => sum + finite(property.units), 0),
+        totalUnits: normalizedProperties.reduce((sum: number, property: PlainRecord) => sum + finite(property.units), 0),
         estimatedACV: money(quote.annualContractValue),
         recommendedTier: canonicalPlanName,
       },
       documentUrls,
-      proofDocuments: Object.fromEntries(Object.entries(documentUrls).filter(([, url]) => text(url)).map(([key, url]) => [key, { label: key, url }])),
+      proofDocuments: Object.fromEntries(
+        Object.entries(documentUrls)
+          .filter(([, url]) => Boolean(text(url)))
+          .map(([key, url]) => [key, { label: key, url }]),
+      ),
       payment: {
         paymentId: intakeId,
         contractId,
@@ -463,7 +499,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       ownerId: owner.uid,
       ownerEmail,
       ownerName: fullName,
-      propertyIds: normalizedProperties.map((property) => property.propertyId),
+      propertyIds: normalizedProperties.map((property: PlainRecord) => property.propertyId),
       properties: normalizedProperties,
       status: "SIGNED_PENDING_PROPERTY_INSPECTION",
       contractStatus: "signed_pending_inspection",
@@ -517,7 +553,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       updatedAt: now,
     }, { merge: true });
 
-    normalizedProperties.forEach((property) => {
+    normalizedProperties.forEach((property: PlainRecord) => {
       transaction.set(db.collection("properties").doc(property.propertyId), { ...property, createdAt: now }, { merge: true });
     });
 
@@ -540,7 +576,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       toRole: "owner",
       type: "OWNER_APPLICATION_SUBMITTED_FOR_INSPECTION",
       title: "Property application submitted",
-      body: "BIN GROUP will review your five-page application and arrange a property visit. The 15% mobilisation payment becomes due only after the visit is completed.",
+      body: "BIN GROUP will review your five-page application and arrange a property visit. The 15% mobilisation payment becomes due only after every required visit is completed.",
       read: false,
       createdAt: now,
     });
@@ -574,34 +610,73 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
   const notes = text(request.data?.notes || request.data?.inspectionNotes);
   if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");
   if (notes.length < 8) throw new HttpsError("invalid-argument", "Record clear property inspection notes.");
+
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
   const paymentRef = db.collection("payment_transactions").doc(intakeId);
   const contractRef = db.collection("contracts").doc(intakeId);
-  const inspectionQuery = await db.collection("property_inspections").where("intakeId", "==", intakeId).limit(10).get();
-  if (inspectionQuery.empty) throw new HttpsError("failed-precondition", "Create the site inspection before marking the visit complete.");
-  const inspectionDoc = inspectionQuery.docs.find((document) => upper(document.data()?.status) !== "CANCELLED") || inspectionQuery.docs[0];
   const [intakeSnap, paymentSnap, contractSnap] = await Promise.all([intakeRef.get(), paymentRef.get(), contractRef.get()]);
   if (!intakeSnap.exists || !paymentSnap.exists || !contractSnap.exists) throw new HttpsError("failed-precondition", "The inspection-first onboarding package is incomplete.");
   const intake = intakeSnap.data() || {};
   if (text(intake.workflowVersion) !== OWNER_WORKFLOW_VERSION) throw new HttpsError("failed-precondition", "This action is only for the five-page inspection-first workflow.");
+
   const ownerUid = text(intake.ownerUid || intake.ownerId);
   const amount = money(paymentSnap.data()?.activationDeposit || paymentSnap.data()?.amount);
-  if (!ownerUid || amount <= 0) throw new HttpsError("failed-precondition", "Owner binding or 15% mobilisation amount is missing.");
+  const properties: PlainRecord[] = Array.isArray(intake.properties) ? intake.properties.map((property: unknown) => cleanPlain(property)) : [];
+  if (!ownerUid || amount <= 0 || !properties.length) throw new HttpsError("failed-precondition", "Owner binding, portfolio properties, or 15% mobilisation amount is missing.");
+
+  const linkedIds: string[] = Array.isArray(intake.inspectionIds)
+    ? Array.from(new Set(intake.inspectionIds.map((value: unknown) => text(value)).filter(Boolean)))
+    : [];
+  const inspectionSnaps = linkedIds.length
+    ? await Promise.all(linkedIds.map((inspectionId: string) => db.collection("property_inspections").doc(inspectionId).get()))
+    : (await db.collection("property_inspections").where("intakeId", "==", intakeId).limit(100).get()).docs;
+  const validInspections = inspectionSnaps.filter((snapshot) => snapshot.exists && upper(snapshot.data()?.status) !== "CANCELLED");
+  if (validInspections.length !== properties.length) {
+    throw new HttpsError("failed-precondition", `Complete one linked site inspection for every property. Expected ${properties.length}, found ${validInspections.length}.`);
+  }
+  validInspections.forEach((snapshot) => {
+    if (text(snapshot.data()?.intakeId) !== intakeId) throw new HttpsError("failed-precondition", "A linked inspection belongs to another Owner application.");
+  });
+
+  const inspectionByPropertyId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot>();
+  validInspections.forEach((snapshot) => {
+    const propertyId = text(snapshot.data()?.propertyId);
+    if (propertyId) inspectionByPropertyId.set(propertyId, snapshot);
+  });
+  if (inspectionByPropertyId.size !== properties.length) {
+    throw new HttpsError("failed-precondition", "Every property must have one unique linked inspection before payment becomes due.");
+  }
+
   const propertyQuery = await db.collection("properties").where("intakeId", "==", intakeId).limit(100).get();
-  if (propertyQuery.empty) throw new HttpsError("failed-precondition", "No property records are bound to this application.");
+  if (propertyQuery.size !== properties.length) throw new HttpsError("failed-precondition", "Canonical property records do not match the submitted portfolio.");
+
+  const inspectionIds = validInspections.map((snapshot) => snapshot.id).sort();
+  const now = ts();
   const batch = db.batch();
-  batch.set(inspectionDoc.ref, { status: "COMPLETED", inspectionStatus: "COMPLETED", notes, completedBy: actor.uid, completedByEmail: actor.email, completedAt: ts(), updatedAt: ts() }, { merge: true });
+  validInspections.forEach((snapshot) => {
+    batch.set(snapshot.ref, {
+      status: "COMPLETED",
+      inspectionStatus: "COMPLETED",
+      notes,
+      completedBy: actor.uid,
+      completedByEmail: actor.email,
+      completedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+  });
   batch.set(intakeRef, {
-    inspectionId: inspectionDoc.id,
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionCount: inspectionIds.length,
     inspectionStatus: "COMPLETED",
     adminReviewState: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
     activationState: "LOCKED_PENDING_15_PERCENT_PAYMENT",
     paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    paymentCollectionStage: "15_PERCENT_DUE_AFTER_COMPLETED_VISIT",
+    paymentCollectionStage: "15_PERCENT_DUE_AFTER_COMPLETED_VISITS",
     inspectionNotes: notes,
-    inspectionCompletedAt: ts(),
+    inspectionCompletedAt: now,
     inspectionCompletedBy: actor.uid,
-    updatedAt: ts(),
+    updatedAt: now,
   }, { merge: true });
   batch.set(paymentRef, {
     status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
@@ -609,39 +684,86 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
     verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED",
     adminApprovalRequired: true,
     unlocksDashboard: false,
-    inspectionId: inspectionDoc.id,
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionCount: inspectionIds.length,
     inspectionVerified: true,
     paymentDueAfterInspection: true,
-    updatedAt: ts(),
+    updatedAt: now,
   }, { merge: true });
   batch.set(contractRef, {
     status: "SIGNED_AWAITING_15_PERCENT_PAYMENT",
     contractStatus: "signed_awaiting_payment",
     activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
-    inspectionId: inspectionDoc.id,
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionCount: inspectionIds.length,
     inspectionVerified: true,
     paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    updatedAt: ts(),
+    updatedAt: now,
   }, { merge: true });
   propertyQuery.docs.forEach((document) => {
     const property = document.data() || {};
+    const inspection = inspectionByPropertyId.get(document.id) || inspectionByPropertyId.get(text(property.propertyId));
+    if (!inspection) throw new HttpsError("failed-precondition", `No linked inspection exists for property ${document.id}.`);
     batch.set(document.ref, {
       status: "AWAITING_15_PERCENT_PAYMENT",
       activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
       inspectionStatus: "COMPLETED",
-      inspectionId: inspectionDoc.id,
+      inspectionId: inspection.id,
       locationVerified: true,
       adminSiteVisitVerified: true,
-      geo: { ...(property.geo || {}), verified: true, requiresGeoReview: false, dispatchReady: true, verifiedBy: actor.uid },
-      updatedAt: ts(),
+      geo: {
+        ...(property.geo || {}),
+        verified: true,
+        requiresGeoReview: false,
+        dispatchReady: true,
+        verifiedBy: actor.uid,
+        verifiedAt: now,
+      },
+      updatedAt: now,
     }, { merge: true });
   });
-  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_activation_payment", onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT", dashboardLocked: true, dashboardUnlocked: false, updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_ACTIVATION_PAYMENT", onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT", updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("notifications").doc(), { userId: ownerUid, toRole: "owner", type: "OWNER_INSPECTION_COMPLETE_PAYMENT_DUE", title: "Property visit completed", body: `The property visit is complete. The 15% mobilisation payment of AED ${amount.toLocaleString("en-AE")} is now due for Admin verification.`, read: false, createdAt: ts() });
-  batch.set(db.collection("audit_logs").doc(), { actorId: actor.uid, actorRole: "admin", action: "COMPLETE_OWNER_PROPERTY_INSPECTION", targetType: "property_inspections", targetId: inspectionDoc.id, metadata: { intakeId, paymentId: intakeId, amount }, createdAt: ts() });
+  batch.set(db.collection("users").doc(ownerUid), {
+    status: "awaiting_activation_payment",
+    onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
+    dashboardLocked: true,
+    dashboardUnlocked: false,
+    updatedAt: now,
+  }, { merge: true });
+  batch.set(db.collection("owners").doc(ownerUid), {
+    status: "AWAITING_ACTIVATION_PAYMENT",
+    onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
+    updatedAt: now,
+  }, { merge: true });
+  batch.set(db.collection("notifications").doc(), {
+    userId: ownerUid,
+    toRole: "owner",
+    type: "OWNER_INSPECTION_COMPLETE_PAYMENT_DUE",
+    title: "Property visits completed",
+    body: `All required property visits are complete. The 15% mobilisation payment of AED ${amount.toLocaleString("en-AE")} is now due for Admin verification.`,
+    read: false,
+    createdAt: now,
+  });
+  batch.set(db.collection("audit_logs").doc(), {
+    actorId: actor.uid,
+    actorRole: "admin",
+    action: "COMPLETE_OWNER_PORTFOLIO_PROPERTY_INSPECTIONS",
+    targetType: "intake_submissions",
+    targetId: intakeId,
+    metadata: { intakeId, paymentId: intakeId, amount, inspectionIds, propertyCount: properties.length },
+    createdAt: now,
+  });
   await batch.commit();
-  return { status: "COMPLETED", intakeId, inspectionId: inspectionDoc.id, paymentId: intakeId, activationDeposit: amount, nextState: "AWAITING_15_PERCENT_PAYMENT" };
+  return {
+    status: "COMPLETED",
+    intakeId,
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    paymentId: intakeId,
+    activationDeposit: amount,
+    nextState: "AWAITING_15_PERCENT_PAYMENT",
+  };
 });
 
 export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
@@ -661,7 +783,7 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   const paymentSnap = await paymentRef.get();
   if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
   const payment = paymentSnap.data() || {};
-  if (text(payment.workflowVersion) !== OWNER_WORKFLOW_VERSION || payment.inspectionVerified !== true) throw new HttpsError("failed-precondition", "Complete the Admin property visit before recording the 15% payment.");
+  if (text(payment.workflowVersion) !== OWNER_WORKFLOW_VERSION || payment.inspectionVerified !== true) throw new HttpsError("failed-precondition", "Complete every Admin property visit before recording the 15% payment.");
   const ownerUid = text(payment.ownerUid || payment.ownerId);
   const intakeId = text(payment.intakeId || paymentId);
   const expectedAmount = money(payment.activationDeposit || payment.amount);
@@ -712,8 +834,21 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
     receiptGeneration: generation,
     updatedAt: ts(),
   }, { merge: true });
-  batch.set(db.collection("intake_submissions").doc(intakeId), { paymentStatus: "PENDING_ADMIN_APPROVAL", paymentEvidenceRecorded: true, paymentReferenceId: reference, updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("audit_logs").doc(), { actorId: actor.uid, actorRole: "admin", action: "RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE", targetType: "payment_transactions", targetId: paymentId, metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation }, createdAt: ts() });
+  batch.set(db.collection("intake_submissions").doc(intakeId), {
+    paymentStatus: "PENDING_ADMIN_APPROVAL",
+    paymentEvidenceRecorded: true,
+    paymentReferenceId: reference,
+    updatedAt: ts(),
+  }, { merge: true });
+  batch.set(db.collection("audit_logs").doc(), {
+    actorId: actor.uid,
+    actorRole: "admin",
+    action: "RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE",
+    targetType: "payment_transactions",
+    targetId: paymentId,
+    metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation },
+    createdAt: ts(),
+  });
   await batch.commit();
   return { status: "RECORDED", paymentId, intakeId, amountReceived, method, paymentReferenceId: reference, receiptUrl, receiptHash, generation };
 });
