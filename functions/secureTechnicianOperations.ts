@@ -244,3 +244,5 @@ export const updateTicketLifecycle = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => runSecured(legacyUpdateTicketLifecycle, request, "UPDATE_LIFECYCLE"),
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

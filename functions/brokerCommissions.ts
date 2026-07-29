@@ -424,3 +424,5 @@ export const adminMatchBrokerAttribution = onCall(
     return { ...commission, status: "SUCCESS", leadId, contractId, idempotent: false };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

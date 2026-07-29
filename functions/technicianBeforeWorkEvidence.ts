@@ -147,3 +147,5 @@ export const submitTechnicianBeforeWorkEvidence = onCall(
     };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

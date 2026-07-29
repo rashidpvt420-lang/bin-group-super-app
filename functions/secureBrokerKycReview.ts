@@ -284,3 +284,5 @@ export const adminReviewBrokerKyc = onCall(
     };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

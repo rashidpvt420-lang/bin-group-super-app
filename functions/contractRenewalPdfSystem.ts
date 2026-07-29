@@ -378,3 +378,5 @@ export const rebuildContractRenewalWatch = onCall({ cors: true }, async (request
   }
   return { status: "SUCCESS", scanned: records.length, processed: results.filter((r) => !r.skipped).length, results };
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

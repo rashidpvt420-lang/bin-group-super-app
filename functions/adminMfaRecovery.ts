@@ -510,3 +510,5 @@ export const finalizeOwnAdminMfaRecovery = onCall(
     return { status: "SUCCESS", recoveryStatus: "REENROLLED", idempotent: false };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

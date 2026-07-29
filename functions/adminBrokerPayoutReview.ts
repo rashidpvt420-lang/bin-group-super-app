@@ -226,3 +226,5 @@ export const adminReviewBrokerPayoutRequest = onCall(
     };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

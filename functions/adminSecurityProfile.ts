@@ -328,3 +328,5 @@ export const lockOwnAdminAccount = onCall(
     return { locked: true };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

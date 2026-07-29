@@ -1039,3 +1039,5 @@ export const submitBrokerKycProfile = onCall({ cors: true, region: "europe-west3
 
   return { status: "SUCCESS", uid, brokerKycStatus, profileCompletionScore };
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

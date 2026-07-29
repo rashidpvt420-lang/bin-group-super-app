@@ -110,3 +110,5 @@ export const backfillTechnicianPayrollEntries = onSchedule(
     console.log(`[payroll-compatibility] scanned=${scanned} mirrored=${mirrored} invalid=${invalid}`);
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

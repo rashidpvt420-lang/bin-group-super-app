@@ -365,3 +365,5 @@ export async function assertVerifiedContractSignatureOtp(args: VerifiedOtpArgs) 
     consumeVerifiedContractSignatureOtp(transaction, args)
   );
 }
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

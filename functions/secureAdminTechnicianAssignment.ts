@@ -169,3 +169,5 @@ export const adminAssignTechnician = onCall(
     return { ok: true, ticketId, technicianId, status: "ASSIGNED", idempotent, readinessVersion: "TECH_READINESS_V2" };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

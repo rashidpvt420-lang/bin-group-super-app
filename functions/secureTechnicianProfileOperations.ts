@@ -216,3 +216,5 @@ export const listTechnicianCredentialRenewals = onCall(
     return { status: "SUCCESS", requests };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

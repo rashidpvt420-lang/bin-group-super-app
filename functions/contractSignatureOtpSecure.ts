@@ -455,3 +455,5 @@ export {
   consumeVerifiedContractSignatureOtp,
   validateVerifiedContractSignatureOtp,
 } from "./contractSignatureOtp";
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

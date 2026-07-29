@@ -260,3 +260,5 @@ export const updateVerifiedOwnerProfile = onCall(
     };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

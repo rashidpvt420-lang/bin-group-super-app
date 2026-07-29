@@ -568,3 +568,5 @@ export const createNextRecurringScheduledService = onDocumentUpdated(
     });
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

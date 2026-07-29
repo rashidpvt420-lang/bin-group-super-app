@@ -560,3 +560,5 @@ export const adminResolveTenantCorrectionRequest = onCall(
     };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

@@ -299,3 +299,5 @@ export const ownerSuspendPropertyReporter = onCall(
     return { ok: true, reporterId };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";
