@@ -852,3 +852,5 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   await batch.commit();
   return { status: "RECORDED", paymentId, intakeId, amountReceived, method, paymentReferenceId: reference, receiptUrl, receiptHash, generation };
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

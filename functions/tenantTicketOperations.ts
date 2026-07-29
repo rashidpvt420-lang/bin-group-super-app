@@ -299,3 +299,5 @@ export const createTenantServiceTicket = onCall(
     return { status: "SUCCESS", ticketId, idempotent: result.idempotent };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

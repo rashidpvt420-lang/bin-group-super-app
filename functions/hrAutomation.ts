@@ -953,3 +953,5 @@ export const dailyHrComplianceSweep = onSchedule("every 24 hours", async () => {
 
     await writeHrAudit("DAILY_HR_COMPLIANCE_SWEEP", todayKey, { scanned: staffUsers.length });
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

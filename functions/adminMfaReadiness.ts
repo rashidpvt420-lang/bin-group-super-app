@@ -258,3 +258,5 @@ export const getAdminMfaReadinessOverview = onCall(
     return overview;
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

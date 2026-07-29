@@ -565,3 +565,5 @@ export const reconcileExpiredTechnicianLiveLocations = onSchedule(
     console.log(`[technician-live-location-watchdog] scanned=${scanned} reconciled=${reconciled} skipped=${skipped}`);
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

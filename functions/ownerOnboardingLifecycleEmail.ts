@@ -243,3 +243,5 @@ export const onOwnerOnboardingPaymentLifecycleUpdated = onDocumentUpdated(
     }
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

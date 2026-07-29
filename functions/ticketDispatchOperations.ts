@@ -567,3 +567,5 @@ export const adminProcessWhatsAppIntake = onCall(
     return { ok: true, intakeId, ticketId: action === "convert" ? ticketRef.id : null, action, idempotent };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

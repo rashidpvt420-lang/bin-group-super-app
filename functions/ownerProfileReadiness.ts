@@ -76,3 +76,5 @@ export const getOwnerProfileReadiness = onCall(
     };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

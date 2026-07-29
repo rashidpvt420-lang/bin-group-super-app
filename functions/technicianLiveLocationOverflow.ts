@@ -150,3 +150,5 @@ export const reconcileExpiredTechnicianLiveLocationsOverflow = onSchedule(
     console.log(`[technician-live-location-paged-watchdog] pages=${page} reconciled=${reconciled} skipped=${skipped}`);
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

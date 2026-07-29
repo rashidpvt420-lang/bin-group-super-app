@@ -281,3 +281,5 @@ export const tenantReviewTicketCompletion = onCall(
     return { success: true };
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

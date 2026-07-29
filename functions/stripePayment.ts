@@ -891,3 +891,5 @@ export const stripeWebhook = onRequest({
     response.status(500).json({ received: false, retry: true });
   }
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

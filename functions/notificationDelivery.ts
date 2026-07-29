@@ -549,3 +549,5 @@ export const deliverNotificationPush = onDocumentCreated("notifications/{notific
 
     return null;
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

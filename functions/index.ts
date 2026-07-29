@@ -3536,3 +3536,5 @@ export const onBinGptEngineerCommandCreated = onDocumentCreated(
 // ─── NEW FEATURES ─────────────────────────────────────────────────────────
 export { assessDamage } from "./damageAssessment";
 export * from "./adminReports";
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";

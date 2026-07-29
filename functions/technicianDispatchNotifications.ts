@@ -146,3 +146,5 @@ export const notifyTechnicianOnTicketAssignment = onDocumentUpdated(
     );
   },
 );
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";
