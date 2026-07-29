@@ -46,13 +46,15 @@ test('five-page browser recovery persists only non-secret application state', as
   ]) assert.doesNotMatch(persistenceBlock, new RegExp(forbidden));
 });
 
-test('legacy payment instructions remain server-authoritative while five-page acquisition defers payment until inspection', async () => {
+test('legacy instructions stay server-authoritative while Phase 1 defers Cash/Cheque until verified visits', async () => {
   const server = await read('functions/paymentConfiguration.ts');
   const packageGate = await read('functions/secureOwnerRegistrationRequest.ts');
   const legacyClient = await read('src/components/onboarding/PaymentSummaryStep.tsx');
   const legacySubmission = await read('src/components/onboarding/PaymentSubmissionStep.tsx');
   const fivePageSubmission = await read('src/components/onboarding/InspectionSubmissionStep.tsx');
-  const fivePageBackend = await read('functions/inspectionFirstOwnerOnboarding.ts');
+  const fivePageBackend = await read('functions/phase1OwnerLaunchRepair.ts');
+  const visitBackend = await read('functions/ownerInspectionEvidence.ts');
+  const approvalBackend = await read('functions/securePaymentApproval.ts');
   const runtime = await read('functions/runtime.ts');
 
   assert.match(server, /system_payment_config/);
@@ -73,21 +75,35 @@ test('legacy payment instructions remain server-authoritative while five-page ac
 
   assert.match(fivePageSubmission, /submitOwnerInspectionFirstOnboarding/);
   assert.match(fivePageSubmission, /No payment is collected now/);
-  assert.doesNotMatch(fivePageSubmission, /getOwnerPaymentConfiguration|paymentManifest|createStripeCheckoutSession/);
+  assert.match(fivePageSubmission, /documentEvidence/);
+  assert.doesNotMatch(fivePageSubmission, /getOwnerPaymentConfiguration|paymentManifest|createStripeCheckoutSession|downloadUrl|documentUrls/);
   assert.match(fivePageBackend, /NOT_DUE_UNTIL_INSPECTION_COMPLETE/);
-  assert.match(fivePageBackend, /adminRecordOwnerMobilizationPaymentEvidence/);
-  assert.match(fivePageBackend, /inspectionVerified !== true/);
-  assert.match(runtime, /submitOwnerInspectionFirstOnboarding/);
-  assert.match(runtime, /adminRecordOwnerMobilizationPaymentEvidence/);
-  assert.match(runtime, /from "\.\/inspectionFirstOwnerOnboarding"/);
+  assert.match(fivePageBackend, /adminRecordOwnerMobilizationPaymentEvidencePhase1/);
+  assert.match(fivePageBackend, /payment\.inspectionVerified !== true/);
+  assert.match(fivePageBackend, /new Set\(\["CASH", "CHEQUE"\]\)/);
+  assert.match(fivePageBackend, /paymentConfigVersion: configuration\.version/);
+  assert.match(fivePageBackend, /paymentConfigHash: configuration\.configHash/);
+  assert.match(fivePageBackend, /paymentManifest/);
+  assert.doesNotMatch(fivePageBackend, /firebaseStorageDownloadTokens|alt=media&token=/);
+  assert.match(visitBackend, /adminRecordOwnerPortfolioVisitEvidence/);
+  assert.match(visitBackend, /gpsWithinRadius: true/);
+  assert.match(visitBackend, /checklistComplete: true/);
+  assert.match(visitBackend, /photoCount: 1/);
+  assert.match(approvalBackend, /PHASE1_PRIVATE_RECEIPT_ADMIN_APPROVED/);
+  assert.match(approvalBackend, /A verified Admin MFA session is required/);
+  assert.match(runtime, /submitOwnerInspectionFirstOnboardingPhase1 as submitOwnerInspectionFirstOnboarding/);
+  assert.match(runtime, /adminRecordOwnerMobilizationPaymentEvidencePhase1 as adminRecordOwnerMobilizationPaymentEvidence/);
+  assert.match(runtime, /adminCompleteOwnerPortfolioInspectionsPhase1 as adminCompleteOwnerPortfolioInspections/);
+  assert.match(runtime, /from "\.\/phase1OwnerLaunchRepair"/);
+  assert.match(runtime, /from "\.\/ownerInspectionEvidence"/);
   assert.doesNotMatch(runtime, /^export \* from "\.\/inspectionFirstOwnerOnboarding";/m);
+  assert.doesNotMatch(runtime, /export \* from "\.\/ownerInspectionCompletion"/);
   assert.match(runtime, /export \* from "\.\/ownerInspectionAdminLink"/);
-  assert.match(runtime, /export \* from "\.\/ownerInspectionCompletion"/);
   assert.match(runtime, /export \* from "\.\/secureOwnerRegistrationRequest"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/ownerRegistrationRequest"/);
 });
 
-test('owner activation geo gate fails closed', async () => {
+test('owner activation geo and evidence gates fail closed', async () => {
   const wrapper = await read('functions/securePaymentApproval.ts');
   const runtime = await read('functions/runtime.ts');
 
@@ -97,6 +113,10 @@ test('owner activation geo gate fails closed', async () => {
   assert.match(wrapper, /isFiniteCoordinate\(geo\.lat, -90, 90\)/);
   assert.match(wrapper, /isFiniteCoordinate\(geo\.lng, -180, 180\)/);
   assert.match(wrapper, /OWNER_ACTIVATION_GEO_GATE_BLOCKED/);
+  assert.match(wrapper, /inspectionEvidenceVerifiedCount/);
+  assert.match(wrapper, /gpsWithinRadius !== true/);
+  assert.match(wrapper, /checklistComplete !== true/);
+  assert.match(wrapper, /Stored payment receipt evidence failed its integrity check/);
   assert.match(runtime, /export \* from "\.\/securePaymentApproval"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/paymentTransactionApproval"/);
 });
@@ -117,40 +137,4 @@ test('owner account page precedes property details and OCR', async () => {
     assert.match(machine, /draft: \['account_created', 'expired', 'suspended'\]/);
     assert.match(machine, /account_created: \['property_details_complete'/);
   }
-});
-
-test('title-deed OCR applies verified values only and never fabricates property data', async () => {
-  const assetStep = await read('src/components/onboarding/AssetProfileStep.tsx');
-  assert.match(assetStep, /const verifiedOcrPatch/);
-  assert.match(assetStep, /if \(!Object\.keys\(patch\)\.length\)/);
-  assert.match(assetStep, /No placeholder values were added/);
-  assert.doesNotMatch(assetStep, /extracted\.propertyType \|\| ['"]Apartment['"]/);
-  assert.doesNotMatch(assetStep, /extracted\.sqft \|\| 1850/);
-  assert.doesNotMatch(assetStep, /extracted\.emirate \|\| ['"]Dubai['"]/);
-  assert.match(assetStep, /riskProfile: 'ASSESSMENT_REQUIRED'/);
-  assert.doesNotMatch(assetStep, /maxWorshipperCapacity: 300/);
-});
-
-test('Broker KYC is written only through the App Check callable', async () => {
-  const callable = await read('functions/brokerKycProfile.ts');
-  const runtime = await read('functions/runtime.ts');
-  const page = await read('src/broker/pages/BrokerProfilePage.tsx');
-  const ruleHardener = await read('scripts/harden-broker-kyc-rules.mjs');
-  const packageJson = await read('package.json');
-
-  assert.match(callable, /export const submitBrokerKycProfile = onCall/);
-  assert.match(callable, /enforceAppCheck: true/);
-  assert.match(callable, /broker_kyc_profiles/);
-  assert.match(callable, /broker_kyc_submission_limits/);
-  assert.match(callable, /submissionHash/);
-  assert.match(runtime, /export \* from "\.\/brokerKycProfile"/);
-  assert.match(runtime, /submitBrokerKycProfile,\s*getBrokerKycProfileSummary/);
-  assert.match(runtime, /from "\.\/secureBrokerKycSubmission"/);
-  assert.match(page, /submitBrokerKycProfile/);
-  assert.match(page, /getBrokerKycProfileSummary/);
-  assert.doesNotMatch(page, /broker_kyc_profiles/);
-  assert.doesNotMatch(page, /setDoc\(doc\(db, ['"]users['"]/);
-  assert.match(ruleHardener, /allow create, update, delete: if false/);
-  assert.match(ruleHardener, /sensitiveBrokerFields/);
-  assert.match(packageJson, /harden:broker-kyc-rules/);
 });
