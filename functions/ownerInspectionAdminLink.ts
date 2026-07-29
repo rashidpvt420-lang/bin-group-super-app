@@ -23,29 +23,42 @@ async function requireAdmin(request: any) {
 export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const actor = await requireAdmin(request);
   const intakeId = text(request.data?.intakeId);
-  const inspectionId = text(request.data?.inspectionId);
-  if (!intakeId || !inspectionId) throw new HttpsError("invalid-argument", "intakeId and inspectionId are required.");
+  const suppliedIds = Array.isArray(request.data?.inspectionIds)
+    ? request.data.inspectionIds
+    : [request.data?.inspectionId];
+  const inspectionIds = Array.from(new Set(suppliedIds.map(text).filter(Boolean))).slice(0, 100);
+  if (!intakeId || !inspectionIds.length) throw new HttpsError("invalid-argument", "intakeId and at least one inspection ID are required.");
 
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
-  const inspectionRef = db.collection("property_inspections").doc(inspectionId);
-  const [intakeSnap, inspectionSnap] = await Promise.all([intakeRef.get(), inspectionRef.get()]);
+  const inspectionRefs = inspectionIds.map((inspectionId) => db.collection("property_inspections").doc(inspectionId));
+  const [intakeSnap, ...inspectionSnaps] = await Promise.all([intakeRef.get(), ...inspectionRefs.map((ref) => ref.get())]);
   if (!intakeSnap.exists) throw new HttpsError("not-found", "Owner application not found.");
-  if (!inspectionSnap.exists) throw new HttpsError("not-found", "Property inspection not found.");
-  const inspection = inspectionSnap.data() || {};
-  if (text(inspection.intakeId) !== intakeId) throw new HttpsError("failed-precondition", "Inspection does not belong to this Owner application.");
+  inspectionSnaps.forEach((inspectionSnap, index) => {
+    if (!inspectionSnap.exists) throw new HttpsError("not-found", `Property inspection ${inspectionIds[index]} was not found.`);
+    if (text(inspectionSnap.data()?.intakeId) !== intakeId) throw new HttpsError("failed-precondition", "An inspection does not belong to this Owner application.");
+  });
+
+  const propertyCount = Array.isArray(intakeSnap.data()?.properties) ? intakeSnap.data()?.properties.length : 0;
+  if (propertyCount > 0 && inspectionIds.length !== propertyCount) {
+    throw new HttpsError("failed-precondition", `Create one site inspection for every property. Expected ${propertyCount}, received ${inspectionIds.length}.`);
+  }
 
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
   batch.set(intakeRef, {
-    inspectionId,
-    inspectionStatus: "READY_FOR_SITE_VISIT",
-    adminReviewState: "SITE_VISIT_CREATED_PENDING_COMPLETION",
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionCount: inspectionIds.length,
+    inspectionStatus: "READY_FOR_SITE_VISITS",
+    adminReviewState: "SITE_VISITS_CREATED_PENDING_COMPLETION",
     activationState: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
     updatedAt: now,
   }, { merge: true });
   batch.set(db.collection("payment_transactions").doc(intakeId), {
-    inspectionId,
-    inspectionStatus: "READY_FOR_SITE_VISIT",
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionCount: inspectionIds.length,
+    inspectionStatus: "READY_FOR_SITE_VISITS",
     inspectionVerified: false,
     status: "AWAITING_SITE_INSPECTION",
     paymentStatus: "AWAITING_SITE_INSPECTION",
@@ -53,8 +66,10 @@ export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppC
     updatedAt: now,
   }, { merge: true });
   batch.set(db.collection("contracts").doc(intakeId), {
-    inspectionId,
-    inspectionStatus: "READY_FOR_SITE_VISIT",
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionCount: inspectionIds.length,
+    inspectionStatus: "READY_FOR_SITE_VISITS",
     activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
     updatedAt: now,
   }, { merge: true });
@@ -62,12 +77,12 @@ export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppC
     actorId: actor.uid,
     actorEmail: actor.email,
     actorRole: "admin",
-    action: "LINK_OWNER_PROPERTY_INSPECTION_TO_APPLICATION",
+    action: "LINK_OWNER_PROPERTY_INSPECTIONS_TO_APPLICATION",
     targetType: "intake_submissions",
     targetId: intakeId,
-    metadata: { inspectionId },
+    metadata: { inspectionIds, inspectionCount: inspectionIds.length },
     createdAt: now,
   });
   await batch.commit();
-  return { status: "LINKED", intakeId, inspectionId };
+  return { status: "LINKED", intakeId, inspectionId: inspectionIds[0], inspectionIds };
 });
