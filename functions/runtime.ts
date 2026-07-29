@@ -26,9 +26,11 @@ export {
 export * from "./ownerInspectionAdminLink";
 export {
   adminGetOwnerPortfolioInspectionReadiness,
-  adminRecordOwnerPortfolioVisitEvidence,
-  adminCompleteOwnerPortfolioInspectionsPhase1 as adminCompleteOwnerPortfolioInspections,
 } from "./ownerInspectionEvidence";
+export {
+  adminRecordOwnerPortfolioVisitEvidenceHardened as adminRecordOwnerPortfolioVisitEvidence,
+  adminCompleteOwnerPortfolioInspectionsPhase1Hardened as adminCompleteOwnerPortfolioInspections,
+} from "./phase1OwnerVisitEvidenceHardened";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
