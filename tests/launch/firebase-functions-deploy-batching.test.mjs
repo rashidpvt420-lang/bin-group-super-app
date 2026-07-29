@@ -154,11 +154,13 @@ test('compiled identity parser requires full codebase, region and function name 
   assert.deepEqual(
     parseCompiledFunctionIdentities(JSON.stringify([
       currentIdentity('betaFunction'),
+      currentIdentity('HTTPWebhook'),
       currentIdentity('alphaFunction'),
       currentIdentity('multiRegionFunction', 'us-central1'),
       currentIdentity('multiRegionFunction', 'europe-west3'),
     ])),
     [
+      currentIdentity('HTTPWebhook'),
       currentIdentity('alphaFunction'),
       currentIdentity('betaFunction'),
       currentIdentity('multiRegionFunction'),
@@ -216,18 +218,21 @@ test('region moves delete the stale regional copy and require the new regional i
 
 test('reconciliation no-op is deterministic when remote owned identities match source', () => {
   const plan = buildFunctionReconciliationPlan(
-    [currentIdentity('alphaFunction'), currentIdentity('betaFunction')],
+    [currentIdentity('alphaFunction'), currentIdentity('HTTPWebhook'), currentIdentity('betaFunction')],
     [
       { name: 'betaFunction', region: 'europe-west3', codebase: 'default' },
       { name: 'alphaFunction', region: 'europe-west3', codebase: 'default' },
+      { name: 'HTTPWebhook', region: 'europe-west3', codebase: 'default' },
     ],
   );
   assert.deepEqual(plan.obsoleteOwned, []);
   assert.deepEqual(plan.compiledEndpointIdentities, [
+    'default|europe-west3|HTTPWebhook',
     'default|europe-west3|alphaFunction',
     'default|europe-west3|betaFunction',
   ]);
   assert.deepEqual(plan.remoteBefore, [
+    'default|europe-west3|HTTPWebhook',
     'default|europe-west3|alphaFunction',
     'default|europe-west3|betaFunction',
   ]);
