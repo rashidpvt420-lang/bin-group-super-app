@@ -162,14 +162,16 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
 export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const actor = await requireAdmin(request);
   const intakeId = text(request.data?.intakeId);
-  const suppliedIds = Array.isArray(request.data?.inspectionIds)
+  const suppliedIds: unknown[] = Array.isArray(request.data?.inspectionIds)
     ? request.data.inspectionIds
     : [request.data?.inspectionId];
-  const inspectionIds = Array.from(new Set(suppliedIds.map(text).filter(Boolean))).slice(0, 100);
+  const inspectionIds: string[] = Array.from(
+    new Set(suppliedIds.map((value: unknown) => text(value)).filter(Boolean)),
+  ).slice(0, 100);
   if (!intakeId || !inspectionIds.length) throw new HttpsError("invalid-argument", "intakeId and at least one inspection ID are required.");
 
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
-  const inspectionRefs = inspectionIds.map((inspectionId) => db.collection("property_inspections").doc(inspectionId));
+  const inspectionRefs = inspectionIds.map((inspectionId: string) => db.collection("property_inspections").doc(inspectionId));
   const [intakeSnap, ...inspectionSnaps] = await Promise.all([intakeRef.get(), ...inspectionRefs.map((ref) => ref.get())]);
   if (!intakeSnap.exists) throw new HttpsError("not-found", "Owner application not found.");
   inspectionSnaps.forEach((inspectionSnap, index) => {
