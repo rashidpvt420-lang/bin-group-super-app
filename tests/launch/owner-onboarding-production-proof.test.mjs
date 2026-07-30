@@ -110,7 +110,7 @@ for (const token of [
 for (const token of [
   'adminCreateOwnerPortfolioPropertyInspection',
   'adminLinkOwnerPropertyInspection',
-  'inspectionIds.length !== properties.length',
+  'inspectionIds.length !== propertyCount',
 ]) {
   assert.ok(inspectionLink.includes(token), `Per-property Admin inspection linking is missing: ${token}`);
 }
