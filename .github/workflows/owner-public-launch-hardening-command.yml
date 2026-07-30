@@ -14,15 +14,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  repair-owner-public-launch:
+  apply-phase1-manual-public-policy:
     if: >-
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
-      github.event.comment.body == '/bin-launch repair-owner-public-launch'
+      github.event.comment.body == '/bin-launch apply-phase1-manual-public-policy'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
 
     steps:
       - name: Resolve stable current main
@@ -50,63 +50,31 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Sanitize temporary repair script
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const file = 'scripts/apply-owner-public-launch-hardening.mjs';
-          let source = fs.readFileSync(file, 'utf8');
-          const removeBetween = (startMarker, endMarker, replacement) => {
-            const start = source.indexOf(startMarker);
-            const end = source.indexOf(endMarker, start + startMarker.length);
-            if (start < 0 || end < 0 || end <= start) {
-              throw new Error(`Unable to sanitize repair script between ${startMarker} and ${endMarker}`);
-            }
-            source = `${source.slice(0, start)}${replacement}${source.slice(end)}`;
-          };
-          removeBetween(
-            '// 3) Replace notes-only completion',
-            '// 4) Capture Broker referral',
-            '// 3) Evidence-backed completion file was committed directly.\n\n',
-          );
-          removeBetween(
-            '// 5) Guided Admin inspection evidence UI.',
-            "{\n  const file = 'apps/admin-panel/src/pages/admin/IntakeVaultPage.tsx';",
-            '// 5) Guided Admin evidence component was committed directly.\n',
-          );
-          removeBetween(
-            '// 7) Launch regression',
-            "console.log('[owner-launch-hardening] all source repairs applied');",
-            '// 7) Launch regression file was committed directly.\n\n',
-          );
-          fs.writeFileSync(file, source);
-          NODE
+      - name: Apply Phase 1 source and workflow policy
+        run: node scripts/apply-phase1-manual-public-launch-policy.mjs
 
-      - name: Apply remaining source repairs
-        run: node scripts/apply-owner-public-launch-hardening.mjs
+      - name: Validate generated workflow YAML
+        run: ruby -e "require 'yaml'; YAML.load_file('.github/workflows/firebase-production-deploy.yml'); puts 'workflow yaml parsed'"
 
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Run focused hardening regression
-        run: node --test tests/launch/owner-public-launch-hardening.test.mjs
+      - name: Run focused Owner and payment-policy regressions
+        run: node --test tests/launch/owner-public-launch-hardening.test.mjs tests/launch/phase1-manual-public-launch-policy.test.mjs
+
+      - name: Run launch honesty and workflow security
+        run: npm run test:launch-honesty
 
       - name: Run production stability guard
         run: npm run test:stability
 
-      - name: TypeScript check
-        run: npx tsc -p tsconfig.app.json --noEmit
+      - name: Validate policy scripts
+        run: |
+          node --check scripts/verify-phase1-manual-payment-proof.mjs
+          node --check scripts/postdeploy-release-gate.mjs
+          node --check scripts/hard-launch-decision-gate.mjs
 
-      - name: Build Firebase Functions
-        run: npm run build:functions
-
-      - name: Build Admin panel
-        run: npm run build:admin
-        env:
-          CI: false
-          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'false'
-
-      - name: Commit verified source repairs
+      - name: Commit validated source and generated workflow candidate
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -115,16 +83,17 @@ jobs:
           set -euo pipefail
           current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
           [[ "$current_main" == "$START_SHA" ]] || {
-            echo '::error::Main changed during repair; refusing to overwrite concurrent work.'
+            echo '::error::Main changed during policy validation; refusing to overwrite concurrent work.'
             exit 1
           }
+          test -s launch_package/generated/firebase-production-deploy-phase1.yml
           git restore --source="$START_SHA" -- .github/workflows/firebase-production-deploy.yml
-          rm -f scripts/apply-owner-public-launch-hardening.mjs
+          rm -f scripts/apply-phase1-manual-public-launch-policy.mjs
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git diff --cached --check
-          git commit -m 'fix: complete Owner public launch activation hardening'
+          git commit -m 'fix: bind public launch to Phase 1 manual payment proof'
           git push origin HEAD:main
 
       - name: Publish success
@@ -133,9 +102,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           final_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Owner public-launch source hardening passed and was committed to main at \`$final_sha\`. Property IDs, payment evidence, verified Broker referral timing, evidence-backed property visits and the guided Admin workflow passed focused tests, stability, TypeScript, Functions and Admin builds. The validated Phase 1 deployment-policy workflow change will be committed separately through the authorised GitHub connector. Live deployment evidence is still required before a YES-GO claim." >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Phase 1 manual public-launch policy validation passed in run \`$RUN_ID\` and source proof logic was committed at \`$final_sha\`. The generated production workflow candidate is ready for the authorised Git tree promotion step. No deployment or YES-GO claim has been made." >/dev/null
 
       - name: Publish failure
         if: failure()
@@ -144,6 +114,5 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Owner public-launch source hardening failed in Actions run \`$RUN_ID\` attempt \`$RUN_ATTEMPT\`: https://github.com/$REPOSITORY/actions/runs/$RUN_ID . No YES-GO or deployment claim was made." >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Phase 1 manual public-launch policy validation failed in run \`$RUN_ID\`: https://github.com/$REPOSITORY/actions/runs/$RUN_ID . No workflow promotion, deployment or YES-GO claim was made." >/dev/null
