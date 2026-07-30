@@ -93,3 +93,10 @@ test('Tenant request page resolves the canonical dispatch-ready linked unit', ()
   assert.match(page, /setUnitData\(selectedUnit\)/);
   assert.match(page, /setPropertyData\(selectedProperty\)/);
 });
+
+test('Tenant unit rules allow every client lookup path used by the request page', () => {
+  const rules = read('firestore.rules');
+  assert.match(rules, /get\('currentTenantId', null\) == request\.auth\.uid/);
+  assert.match(rules, /data\.get\('currentTenantId', null\)/);
+  assert.match(rules, /resource\.data\.currentTenantId == request\.auth\.uid/);
+});

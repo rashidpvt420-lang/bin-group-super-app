@@ -144,6 +144,8 @@ test('Storage uploads retry transient failures and protected E2E covers field fa
     /dispatch assigns the job, push receipt succeeds/,
     /data-delivery-state/,
     /pushTokenCount/,
+    /CURRENT_PUSH_TOKEN_MAX_AGE_MS/,
+    /hasCurrentProductionPushToken/,
     /PROTECTED_E2E_DISPATCH/,
     /technician-before-work-file/,
     /network-recovery-after-work-proof\.png/,

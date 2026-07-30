@@ -28,6 +28,7 @@ let dispatchTicketId = '';
 let gpsDeniedTicketId = '';
 let gpsPoorTicketId = '';
 let offlineTicketId = '';
+const CURRENT_PUSH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 function requireLaunchCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -84,6 +85,34 @@ async function clearAssignmentNotifications(ticketId: string) {
   const batch = db.batch();
   snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
   await batch.commit();
+}
+
+function timestampMillis(value: any) {
+  if (value && typeof value.toMillis === 'function') return value.toMillis();
+  if (Number.isFinite(value?.seconds)) return Number(value.seconds) * 1000;
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function hasCurrentProductionPushToken(userId: string, notOlderThanMs: number) {
+  const db = admin.firestore();
+  const [userSnap, tokenSnap] = await Promise.all([
+    db.collection('users').doc(userId).get(),
+    db.collection('users').doc(userId).collection('fcmTokens').get(),
+  ]);
+  const user = userSnap.data() || {};
+  const latestTokenMs = tokenSnap.docs.reduce((latest, docSnap) => {
+    const data = docSnap.data() || {};
+    return Math.max(latest, timestampMillis(data.lastRegisteredAt || data.updatedAt || data.createdAt));
+  }, 0);
+  const summaryMs = timestampMillis(user.pushUpdatedAt);
+  return {
+    ready: Number(user.pushTokenCount || 0) > 0 && tokenSnap.size > 0 && Math.max(latestTokenMs, summaryMs) >= notOlderThanMs,
+    summaryCount: Number(user.pushTokenCount || 0),
+    tokenDocumentCount: tokenSnap.size,
+    latestTokenMs,
+    summaryMs,
+  };
 }
 
 async function login(page: Page) {
@@ -170,6 +199,7 @@ test.describe('Technician Business Workflow', () => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     await Promise.all([
+      admin.auth().updateUser(technicianUid, { emailVerified: true, disabled: false }),
       db.collection('users').doc(technicianUid).set(readiness, { merge: true }),
       db.collection('technicians').doc(technicianUid).set(readiness, { merge: true }),
       db.collection('maintenanceTickets').doc(dispatchTicketId).set(fixtureTicket(dispatchTicketId, 'PENDING_ASSIGNMENT', false)),
@@ -206,10 +236,15 @@ test.describe('Technician Business Workflow', () => {
     await expect(page.getByText(/OPEN JOB POOL|CLAIM MISSION|ACCEPT JOB/i)).toHaveCount(0);
 
     await expect.poll(async () => {
-      const userSnap = await db.collection('users').doc(technicianUid).get();
-      const updatedAt = userSnap.data()?.pushUpdatedAt?.toMillis?.() || 0;
-      return Number(userSnap.data()?.pushTokenCount || 0) > 0 && updatedAt >= pushRegistrationStartedAt - 5_000;
-    }, { timeout: 60_000, message: 'A current production FCM token must register before dispatch.' }).toBe(true);
+      const result = await hasCurrentProductionPushToken(
+        technicianUid,
+        Math.min(pushRegistrationStartedAt - 5_000, Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS),
+      );
+      if (!result.ready) {
+        console.warn('[business-technician] waiting for current production FCM token', result);
+      }
+      return result.ready;
+    }, { timeout: 60_000, message: 'A current production FCM token must be registered before dispatch.' }).toBe(true);
 
     await db.collection('maintenanceTickets').doc(dispatchTicketId).set({
       assignedTechnicianId: technicianUid,

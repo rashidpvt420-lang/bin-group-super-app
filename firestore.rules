@@ -247,6 +247,7 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/units/$(unitId)) && (
           get(/databases/$(database)/documents/units/$(unitId)).data.get('tenantId', null) == request.auth.uid ||
           get(/databases/$(database)/documents/units/$(unitId)).data.get('tenantUid', null) == request.auth.uid ||
+          get(/databases/$(database)/documents/units/$(unitId)).data.get('currentTenantId', null) == request.auth.uid ||
           get(/databases/$(database)/documents/units/$(unitId)).data.get('userId', null) == request.auth.uid ||
           get(/databases/$(database)/documents/units/$(unitId)).data.get('authUid', null) == request.auth.uid ||
           emailMatches(get(/databases/$(database)/documents/units/$(unitId)).data.get('tenantEmail', null))
@@ -265,7 +266,7 @@ service cloud.firestore {
     }
 
     function tenantOwns(data) {
-      return isTenantId(data.get('tenantId', null)) || isTenantId(data.get('tenantUid', null)) || isTenantId(data.get('authUid', null)) || isTenantId(data.get('userId', null)) || isTenantId(data.get('createdByUid', null));
+      return isTenantId(data.get('tenantId', null)) || isTenantId(data.get('tenantUid', null)) || isTenantId(data.get('currentTenantId', null)) || isTenantId(data.get('authUid', null)) || isTenantId(data.get('userId', null)) || isTenantId(data.get('createdByUid', null));
     }
 
     function techOwns(data) {
@@ -1126,9 +1127,10 @@ service cloud.firestore {
     }
 
     match /units/{unitId} {
-      allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
+      allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('currentTenantId', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
       allow list: if signedIn() && resource.data.tenantId == request.auth.uid;
       allow list: if signedIn() && resource.data.tenantUid == request.auth.uid;
+      allow list: if signedIn() && resource.data.currentTenantId == request.auth.uid;
       allow list: if emailMatches(resource.data.get('tenantEmail', null));
       allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
       allow create: if canManageProperties();
