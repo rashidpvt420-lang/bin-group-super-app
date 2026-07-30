@@ -1,0 +1,90 @@
+name: Apply Owner Public Launch Hardening
+
+on:
+  push:
+    branches:
+      - fix/public-launch-owner-activation-hardening
+    paths:
+      - scripts/apply-owner-public-launch-hardening.mjs
+      - .github/workflows/apply-owner-public-launch-hardening.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-owner-public-launch-hardening
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/public-launch-owner-activation-hardening
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Remove direct-file templates from repair script
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'scripts/apply-owner-public-launch-hardening.mjs';
+          let source = fs.readFileSync(file, 'utf8');
+          source = source.replace(
+            /\/\/ 3\) Replace notes-only completion[\s\S]*?(?=\/\/ 4\) Capture Broker referral)/,
+            '// 3) Evidence-backed completion file was committed directly.\n\n',
+          );
+          source = source.replace(
+            /\/\/ 5\) Guided Admin inspection evidence UI\.\nwrite\('apps\/admin-panel\/src\/components\/admin\/OwnerInspectionEvidenceDialog\.tsx',[\s\S]*?\n`\);\n\n(?=\{\n  const file = 'apps\/admin-panel\/src\/pages\/admin\/IntakeVaultPage\.tsx')/,
+            '// 5) Guided Admin evidence component was committed directly.\n',
+          );
+          source = source.replace(
+            /\/\/ 7\) Launch regression[\s\S]*?(?=console\.log\('\[owner-launch-hardening\])/,
+            '// 7) Launch regression file was committed directly.\n\n',
+          );
+          fs.writeFileSync(file, source);
+          NODE
+
+      - name: Apply source repairs
+        run: node scripts/apply-owner-public-launch-hardening.mjs
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Run focused launch hardening tests
+        run: node --test tests/launch/owner-public-launch-hardening.test.mjs
+
+      - name: Run production stability guard
+        run: npm run test:stability
+
+      - name: TypeScript check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Build Firebase Functions
+        run: npm run build:functions
+
+      - name: Build Admin panel
+        run: npm run build:admin
+        env:
+          CI: false
+          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'false'
+
+      - name: Commit verified repair and remove temporary runner
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply-owner-public-launch-hardening.mjs
+          rm -f .github/workflows/apply-owner-public-launch-hardening.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'fix: harden Owner activation for public launch'
+          git push origin HEAD:fix/public-launch-owner-activation-hardening
