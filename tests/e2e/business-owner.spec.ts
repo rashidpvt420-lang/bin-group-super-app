@@ -83,7 +83,6 @@ function requireLaunchCredentials() {
   const required = [
     ['E2E_OWNER_EMAIL', EMAIL],
     ['E2E_OWNER_PASSWORD', PASSWORD],
-    ['E2E_OWNER_MAILBOX_EMAIL', process.env.E2E_OWNER_MAILBOX_EMAIL ?? ''],
     ['E2E_FOUNDER_EMAIL', process.env.E2E_FOUNDER_EMAIL ?? ''],
     ['E2E_FOUNDER_PASSWORD', process.env.E2E_FOUNDER_PASSWORD ?? ''],
     ['E2E_FOUNDER_TOTP_SECRET', process.env.E2E_FOUNDER_TOTP_SECRET ?? ''],
