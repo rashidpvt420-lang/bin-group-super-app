@@ -56,27 +56,27 @@ jobs:
           const fs = require('fs');
           const file = 'scripts/apply-phase1-manual-public-launch-policy.mjs';
           let source = fs.readFileSync(file, 'utf8');
-          const oldValue = "    2,\n    'workflow job payment policy env',";
-          const newValue = "    6,\n    'workflow job payment policy env',";
-          if (!source.includes(oldValue)) throw new Error('workflow job payment policy count anchor missing');
-          source = source.replace(oldValue, newValue);
-          const removeReplaceBlock = (label) => {
+          const removeReplaceBlock = (label, functionName = 'replaceOnce') => {
             const endMarker = `    '${label}',\n  );`;
             const labelIndex = source.indexOf(endMarker);
             if (labelIndex < 0) throw new Error(`redundant transformation label missing: ${label}`);
-            const startIndex = source.lastIndexOf('  source = replaceOnce(', labelIndex);
-            if (startIndex < 0) throw new Error(`replaceOnce start missing for: ${label}`);
+            const startIndex = source.lastIndexOf(`  source = ${functionName}(`, labelIndex);
+            if (startIndex < 0) throw new Error(`${functionName} start missing for: ${label}`);
             source = `${source.slice(0, startIndex)}${source.slice(labelIndex + endMarker.length)}`;
           };
+          removeReplaceBlock('workflow job payment policy env', 'replaceCount');
           removeReplaceBlock('workflow postdeploy gate policy env');
           removeReplaceBlock('workflow final decision policy env');
+          const writeMarker = "  write(file, source);\n  write('launch_package/generated/firebase-production-deploy-phase1.yml', source);";
+          const insertion = `  {\n    const paymentExpression = "$" + "{{ inputs.payment_policy }}";\n    let launchModeBindingCount = 0;\n    source = source.split("\\n").map((line) => {\n      const match = line.match(/^(\\s*)LAUNCH_MODE:/);\n      if (!match || !line.includes("inputs.launch_mode")) return line;\n      launchModeBindingCount += 1;\n      return \`\${line}\\n\${match[1]}PAYMENT_POLICY: \${paymentExpression}\`;\n    }).join("\\n");\n    if (launchModeBindingCount !== 6) throw new Error(\`workflow job payment policy env: expected 6 bindings, found \${launchModeBindingCount}\`);\n  }\n`;
+          if (!source.includes(writeMarker)) throw new Error('workflow write marker missing');
+          source = source.replace(writeMarker, insertion + writeMarker);
           fs.writeFileSync(file, source);
           NODE
           node scripts/apply-phase1-manual-public-launch-policy.mjs
 
       - name: Validate generated workflow YAML
         run: |
-          nl -ba .github/workflows/firebase-production-deploy.yml | sed -n '235,285p'
           ruby -e "require 'yaml'; YAML.load_file('.github/workflows/firebase-production-deploy.yml'); puts 'workflow yaml parsed'"
 
       - name: Install dependencies
