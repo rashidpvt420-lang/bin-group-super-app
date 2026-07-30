@@ -1,0 +1,104 @@
+name: Owner Auth Recovery Command
+run-name: Owner Auth recovery · ${{ github.event.comment.body }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+concurrency:
+  group: owner-auth-recovery-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  repair-owner-auth:
+    name: Repair stale Identity Platform Auth hooks
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch repair-owner-auth'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+
+    steps:
+      - name: Resolve stable current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main changed while authorizing Owner Auth recovery.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Repair stale blocking triggers and prove public signup
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GITHUB_SHA: ${{ steps.release.outputs.sha }}
+        run: node scripts/repair-owner-auth-blocking-functions.mjs --repair --probe
+
+      - name: Upload sanitized recovery proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: owner-auth-recovery-${{ steps.release.outputs.sha }}
+          path: launch_package/artifacts/owner-auth-recovery.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish success to launch issue
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+            -f body="Owner Auth recovery passed for exact main SHA \`$RELEASE_SHA\`. Stale Identity Platform blocking triggers were removed if present, a real public email/password signup succeeded, and the probe account was deleted. Hard-launch claim remains false." >/dev/null
+
+      - name: Publish failure to launch issue
+        if: failure()
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+            -f body="Owner Auth recovery failed for exact main SHA \`${RELEASE_SHA:-unknown}\`. Review the protected workflow logs; no hard-launch claim was made." >/dev/null
