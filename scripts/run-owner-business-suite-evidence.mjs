@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 
 const run = (script) => execFileSync(process.execPath, [script], {
   cwd: process.cwd(),
-  env: process.env,
+  env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' },
   stdio: 'inherit',
   timeout: 12 * 60 * 1000,
 });
@@ -17,6 +17,7 @@ if (mode === 'lifecycle') {
   // removes its prior role fixtures. Restore tenant/technician fixtures only
   // after the Owner UI has inspected the acquisition-generated portfolio.
   run('scripts/seed-live-role-test-data.mjs');
+  run('scripts/prepare-protected-business-fixtures.mjs');
 } else {
   throw new Error(`Unsupported Owner business evidence mode: ${mode}`);
 }
