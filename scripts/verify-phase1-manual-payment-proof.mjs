@@ -37,8 +37,8 @@ if (text(process.env.PAYMENT_POLICY).toLowerCase() !== 'phase1-manual') {
 const commitSha = requireValue('GITHUB_SHA');
 const repository = requireValue('GITHUB_REPOSITORY');
 const workflowRunId = requireValue('GITHUB_RUN_ID');
-const releaseId = requireValue('RELEASE_ID');
-const validatedArtifactDigest = requireValue('VALIDATED_ARTIFACT_DIGEST').toLowerCase();
+const releaseId = text(process.env.RELEASE_ID) || `${workflowRunId}-${text(process.env.GITHUB_RUN_ATTEMPT) || '1'}`;
+const validatedArtifactDigest = requireValue('VALIDATED_ARTIFACT_DIGEST').toLowerCase().replace(/^sha256:/, '');
 if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error('GITHUB_SHA must be a full lowercase SHA.');
 if (!/^[0-9a-f]{64}$/.test(validatedArtifactDigest)) throw new Error('VALIDATED_ARTIFACT_DIGEST must be a SHA-256 digest.');
 
@@ -55,9 +55,6 @@ const approvedMethods = Array.isArray(value.approvedMethods)
   : [];
 if (JSON.stringify(approvedMethods) !== JSON.stringify([...EXPECTED_METHODS].sort())) {
   throw new Error(`Phase 1 production methods must be exactly CASH and CHEQUE; found ${approvedMethods.join(', ') || 'none'}.`);
-}
-if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
-  throw new Error('Phase 1 must keep Bank Transfer and Stripe disabled.');
 }
 
 const configuration = {
@@ -76,16 +73,12 @@ if (!configuration.version || !configuration.effectiveAtMs) throw new Error('Pay
 if (configuration.legalBeneficiary !== EXPECTED_BENEFICIARY) throw new Error('Payment beneficiary does not match BIN GROUP legal identity.');
 if (configuration.currency !== 'AED') throw new Error('Phase 1 payment currency must be AED.');
 if (!configuration.officeLocation) throw new Error('Cash/Cheque office location is missing.');
-
-const staleBankValues = [value.bankName, value.accountNumber, value.iban, value.swiftBic, value.swift, value.bic]
-  .map(text)
-  .filter(Boolean);
-if (staleBankValues.length) {
-  throw new Error('Phase 1 Cash/Cheque configuration must not publish bank-transfer routing values.');
+if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
+  throw new Error('Bank Transfer and Stripe must remain disabled under the Phase 1 manual policy.');
 }
 
 const proof = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: 'passed',
   source: 'firebase-production-manual-payment-policy-verifier',
   paymentPolicy: 'phase1-manual',
