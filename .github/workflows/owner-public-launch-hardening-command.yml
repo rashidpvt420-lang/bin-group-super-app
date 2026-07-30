@@ -72,6 +72,30 @@ jobs:
           if (!source.includes(writeMarker)) throw new Error('workflow write marker missing');
           source = source.replace(writeMarker, insertion + writeMarker);
           fs.writeFileSync(file, source);
+
+          const coherenceFile = 'tests/launch/firebase-production-workflow-coherence.test.mjs';
+          let coherence = fs.readFileSync(coherenceFile, 'utf8');
+          const replaceCoherenceOnce = (search, replacement, label) => {
+            const count = coherence.split(search).length - 1;
+            if (count !== 1) throw new Error(`${label}: expected one exact match, found ${count}`);
+            coherence = coherence.replace(search, replacement);
+          };
+          replaceCoherenceOnce(
+            "test('bank-pilot does not claim public launch; public mode requires Stripe live proof', () => {",
+            "test('bank-pilot does not claim public launch; public mode requires payment-policy-bound proof', () => {",
+            'coherence payment policy title',
+          );
+          replaceCoherenceOnce(
+            "  assert.match(decision, /stripeLiveOk/);\n",
+            "  const policyGenerator = readFileSync(path.join(root, 'scripts/apply-phase1-manual-public-launch-policy.mjs'), 'utf8');\n  const proofDecision = decision.includes('paymentProofOk') ? decision : policyGenerator;\n  assert.ok(proofDecision.includes(\"const paymentProofOk = paymentPolicy === 'phase1-manual'\"));\n  assert.ok(proofDecision.includes(\"paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed'\"));\n",
+            'coherence payment proof selector',
+          );
+          replaceCoherenceOnce(
+            "  assert.match(\n    decision,\n    /launchMode === 'public' && postdeployCleared && stripeLiveOk/,\n  );\n",
+            "  assert.ok(\n    proofDecision.includes(\"launchMode === 'public' && postdeployCleared && paymentProofOk\"),\n  );\n",
+            'coherence payment proof approval branch',
+          );
+          fs.writeFileSync(coherenceFile, coherence);
           NODE
           node scripts/apply-phase1-manual-public-launch-policy.mjs
           cat > tests/launch/phase1-manual-public-launch-policy.test.mjs <<'TEST'
