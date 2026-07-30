@@ -193,7 +193,31 @@ test('protected same-commit English and Arabic role evidence remains wired', asy
   }
 });
 
-test('remaining profile gaps stay explicit until implemented', async (t) => {
-  await t.test('Technician credential expiry, renewal evidence, and dispatch freeze on expired credentials', { todo: true });
-  await t.test('Admin recovery-factor lifecycle and controlled factor replacement after device loss', { todo: true });
+test('Technician credential expiry and Admin recovery-factor lifecycles remain implemented', async () => {
+  const [
+    technicianReadiness,
+    technicianAuthority,
+    adminRecovery,
+    adminRecoveryPage,
+    adminEnrollment,
+  ] = await Promise.all([
+    read('src/technician/utils/normalizeTechnicianProfile.ts'),
+    read('functions/secureTechnicianOperations.ts'),
+    read('functions/adminMfaRecovery.ts'),
+    read('apps/admin-panel/src/pages/settings/AdminMfaRecoveryPage.tsx'),
+    read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx'),
+  ]);
+
+  assert.match(technicianReadiness, /expiryMs !== null && expiryMs <= nowMs/);
+  assert.match(technicianReadiness, /complianceBlocked = medicalCardStatus !== 'valid'/);
+  assert.match(technicianAuthority, /Technician is not operationally ready/);
+  assert.match(technicianAuthority, /assertTechnicianReadiness\(request\.auth, action\)/);
+
+  assert.match(adminRecovery, /The first approver cannot provide the second approval/);
+  assert.match(adminRecovery, /multiFactor: \{ enrolledFactors: null \}/);
+  assert.match(adminRecovery, /adminMfaRecoveryState: "RESET_COMPLETED_REENROLL_REQUIRED"/);
+  assert.match(adminRecovery, /adminMfaRecoveryState: "REENROLLED"/);
+  assert.match(adminRecoveryPage, /createAdminMfaRecoveryRequest/);
+  assert.match(adminRecoveryPage, /approveAdminMfaRecoveryRequest/);
+  assert.match(adminEnrollment, /finalizeOwnAdminMfaRecovery/);
 });

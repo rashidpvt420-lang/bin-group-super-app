@@ -268,6 +268,29 @@ async function inspectOtpDelivery(challengeId) {
     return { providerMessageId, bindingHash, correlationId, otpHashVersion: text(value.otpHashVersion) };
 }
 
+async function waitForUiLead(brokerUid, expectedLeadName, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastSize = 0;
+
+  while (Date.now() < deadline) {
+    const snapshot = await db.collection('brokerLeads')
+      .where('brokerId', '==', brokerUid)
+      .where('leadName', '==', expectedLeadName)
+      .limit(2)
+      .get();
+    lastSize = snapshot.size;
+    if (snapshot.size === 1) return snapshot.docs[0];
+    if (snapshot.size > 1) {
+      throw new Error(`Expected exactly one UI-created Broker lead named ${expectedLeadName}; found ${snapshot.size}.`);
+    }
+    await sleep(1_000);
+  }
+
+  throw new Error(
+    `UI reported Broker lead ${expectedLeadName} as recorded, but it was not server-visible after ${timeoutMs}ms (found ${lastSize}).`,
+  );
+}
+
 async function main() {
   const startedAt = new Date().toISOString();
   const runId = safeId(process.env.GITHUB_RUN_ID || Date.now(), 'local');
@@ -288,13 +311,7 @@ async function main() {
   assert(privateKyc.commissionAgreementAccepted === true, 'Broker commission agreement is not accepted.');
   assert(text(privateKyc.submissionHash) && text(privateKyc.approvedSubmissionHash) === text(privateKyc.submissionHash), 'Broker private KYC approval hash is not current.');
 
-  const leadSnapshot = await db.collection('brokerLeads')
-    .where('brokerId', '==', brokerUid)
-    .where('leadName', '==', leadName)
-    .limit(2)
-    .get();
-  assert(leadSnapshot.size === 1, `Expected exactly one UI-created Broker lead named ${leadName}; found ${leadSnapshot.size}.`);
-  const leadDocument = leadSnapshot.docs[0];
+  const leadDocument = await waitForUiLead(brokerUid, leadName);
   const lead = leadDocument.data() || {};
   assert(text(lead.attributionId).startsWith(`broker_lead_${brokerUid}_`), 'UI-created lead attribution is missing or does not belong to the Broker.');
 

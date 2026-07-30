@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const fixture = readFileSync('scripts/prepare-broker-payout-otp-e2e.mjs', 'utf8');
 const runner = readFileSync('scripts/run-critical-evidence.mjs', 'utf8');
+const productionEvidence = readFileSync('scripts/run-broker-production-evidence.mjs', 'utf8');
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const page = readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8');
 
@@ -37,6 +38,20 @@ test('critical evidence prepares the Broker payout fixture before browser execut
   assert.ok(fixtureLookup > fixtureCommand, 'suite fixture lookup must use the central map');
   assert.ok(fixtureFailure > fixtureLookup, 'fixture failure must block evidence');
   assert.ok(playwrightExecution > fixtureFailure, 'fixture preparation must happen before browser execution');
+});
+
+test('Broker evidence remains deterministic across Playwright retries and Firestore visibility delay', () => {
+  const beforeEach = brokerSpec.indexOf('test.beforeEach');
+  const retryFixture = brokerSpec.indexOf("['scripts/prepare-broker-payout-otp-e2e.mjs']", beforeEach);
+  const login = brokerSpec.indexOf('await login(page)', beforeEach);
+
+  assert.ok(beforeEach >= 0);
+  assert.ok(retryFixture > beforeEach, 'each Broker test attempt must reset the single-use payout fixture');
+  assert.ok(login > retryFixture, 'the payout fixture must be reset before the Broker signs in');
+  assert.match(productionEvidence, /async function waitForUiLead/);
+  assert.match(productionEvidence, /while \(Date\.now\(\) < deadline\)/);
+  assert.match(productionEvidence, /not server-visible after/);
+  assert.match(productionEvidence, /const leadDocument = await waitForUiLead\(brokerUid, leadName\)/);
 });
 
 test('Broker live evidence fetches a real OTP from Gmail and submits it — cancel path is forbidden', () => {

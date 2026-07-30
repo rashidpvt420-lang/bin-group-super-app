@@ -79,6 +79,15 @@ test.describe('Broker Business Workflow', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    // Every retry must receive a fresh single-use commission and OTP state.
+    // Preparing only once in run-critical-evidence makes a serial-suite retry
+    // rerun this test against the commission consumed by the first attempt.
+    execFileSync(process.execPath, ['scripts/prepare-broker-payout-otp-e2e.mjs'], {
+      cwd: repositoryRoot,
+      env: process.env,
+      stdio: 'inherit',
+      timeout: 60_000,
+    });
     const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
     (page as any).__binAppCheckMonitor = appCheckMonitor;
     await appCheckMonitor.assertTokenFingerprint();

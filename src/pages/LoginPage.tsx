@@ -85,6 +85,11 @@ const LoginPage: React.FC = () => {
         window.location.assign(buildAdminPanelLoginUrl(candidateEmail));
     };
 
+    const toggleLoginLanguage = () => {
+        setNotice(null);
+        setLang(lang === 'en' ? 'ar' : 'en');
+    };
+
     useEffect(() => {
         if (ownerEmailParam && !email) setEmail(normalizeEmail(ownerEmailParam));
     }, [ownerEmailParam, email]);
@@ -162,6 +167,15 @@ const LoginPage: React.FC = () => {
         const code = err?.code || err?.name || '';
         const message = err?.message || '';
         const diagnostic = buildAuthDiagnostic(err);
+        const copy = (english: string, arabic: string) => isRTL ? arabic : english;
+        const notice = (
+            type: NoticeState['type'],
+            text: string,
+        ): NoticeState => ({
+            type,
+            text,
+            ...(import.meta.env.DEV ? { diagnostic } : {}),
+        });
         console.error('[AUTH_DIAGNOSTIC]', {
             code,
             message,
@@ -175,22 +189,64 @@ const LoginPage: React.FC = () => {
             emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
-        if (code === 'auth/invalid-email') return { type: 'error', text: tx('login.error.invalid_email', 'Please enter a valid email address.'), diagnostic };
-        if (code === 'auth/missing-password') return { type: 'error', text: 'Password is missing. Enter the account password and try again.', diagnostic };
-        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return { type: 'error', text: t('login.error.invalid'), diagnostic };
-        if (code === 'auth/user-disabled') return { type: 'error', text: 'This Firebase Auth user is disabled. Enable the user in Firebase Authentication → Users.', diagnostic };
-        if (code === 'auth/too-many-requests') return { type: 'error', text: t('login.error.too_many'), diagnostic };
-        if (code === 'auth/popup-closed-by-user') return { type: 'error', text: tx('login.error.popup_closed', 'Google sign-in was closed before completion. Try again or use email and password.'), diagnostic };
-        if (code === 'auth/popup-blocked') return { type: 'error', text: tx('login.error.popup_blocked', 'The browser blocked the Google sign-in popup. A redirect sign-in will be attempted.'), diagnostic };
-        if (code === 'auth/multi-factor-auth-required') return { type: 'warning', text: `Admin MFA is required. Open the secure Admin Panel to complete phone verification: ${buildAdminPanelLoginUrl(email)}`, diagnostic };
-        if (code === 'auth/unauthorized-domain') return { type: 'error', text: tx('login.error.unauthorized_domain', 'This domain is not authorized for Firebase sign-in. Add this app domain in Firebase Authentication → Settings → Authorized domains.'), diagnostic };
-        if (code === 'auth/operation-not-allowed') return { type: 'error', text: tx('login.error.provider_disabled', 'This sign-in method is not enabled in Firebase Authentication. Enable Email/Password or Google sign-in first.'), diagnostic };
-        if (code === 'auth/account-exists-with-different-credential') return { type: 'error', text: tx('login.error.account_exists', 'This email already exists with another sign-in method. Sign in using email/password first, then link Google later.'), diagnostic };
-        if (code === 'auth/network-request-failed') return { type: 'error', text: t('login.error.network'), diagnostic };
-        if (code === 'auth/api-key-not-valid' || code === 'auth/invalid-api-key') return { type: 'error', text: 'Firebase rejected the API key. Use the Web API key from project bin-group-57c60, or remove the wrong VITE_FIREBASE_API_KEY from .env.local so the app uses the built-in project fallback.', diagnostic };
-        if (code === 'auth/app-not-authorized') return { type: 'error', text: 'Firebase rejected this app/domain. Add the Codespaces preview domain and production domain in Firebase Authentication → Authorized domains, and check API key browser restrictions.', diagnostic };
-        if (code === 'permission-denied' || code === 'FirebaseError') return { type: 'error', text: 'Firebase signed in but role/profile sync was blocked. Check Firestore rules, App Check enforcement, or the users/{uid} role document.', diagnostic };
-        return { type: 'error', text: `Login blocked by Firebase: ${code || 'unknown error'}. The diagnostic details below show the exact blocker.`, diagnostic };
+        if (code === 'auth/invalid-email') {
+            return notice('error', copy('Please enter a valid email address.', 'يرجى إدخال عنوان بريد إلكتروني صالح.'));
+        }
+        if (code === 'auth/missing-password') {
+            return notice('error', copy('Enter your account password and try again.', 'أدخل كلمة مرور الحساب وحاول مرة أخرى.'));
+        }
+        if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+            return notice('error', copy(
+                'Email or password is incorrect. Try again or use Forgot Password.',
+                'البريد الإلكتروني أو كلمة المرور غير صحيحة. حاول مرة أخرى أو استخدم نسيت كلمة المرور.',
+            ));
+        }
+        if (code === 'auth/user-disabled') {
+            return notice('error', copy(
+                'This account is unavailable. Contact BIN GROUP support for help.',
+                'هذا الحساب غير متاح. تواصل مع دعم بن جروب للمساعدة.',
+            ));
+        }
+        if (code === 'auth/too-many-requests') {
+            return notice('error', copy(
+                'Too many sign-in attempts. Wait a few minutes, then try again or reset your password.',
+                'عدد محاولات تسجيل الدخول كبير. انتظر بضع دقائق ثم حاول مرة أخرى أو أعد تعيين كلمة المرور.',
+            ));
+        }
+        if (code === 'auth/popup-closed-by-user') {
+            return notice('error', copy(
+                'Google sign-in was closed before completion. Try again or use email and password.',
+                'تم إغلاق تسجيل الدخول عبر Google قبل الاكتمال. حاول مرة أخرى أو استخدم البريد الإلكتروني وكلمة المرور.',
+            ));
+        }
+        if (code === 'auth/popup-blocked') {
+            return notice('error', copy(
+                'The browser blocked Google sign-in. Allow pop-ups for this site and try again.',
+                'حظر المتصفح تسجيل الدخول عبر Google. اسمح بالنوافذ المنبثقة لهذا الموقع وحاول مرة أخرى.',
+            ));
+        }
+        if (code === 'auth/multi-factor-auth-required') {
+            return notice('warning', copy(
+                `Admin MFA is required. Open the secure Admin Panel to continue: ${buildAdminPanelLoginUrl(email)}`,
+                `المصادقة متعددة العوامل للمسؤول مطلوبة. افتح لوحة المسؤول الآمنة للمتابعة: ${buildAdminPanelLoginUrl(email)}`,
+            ));
+        }
+        if (code === 'auth/account-exists-with-different-credential') {
+            return notice('error', copy(
+                'This email uses a different sign-in method. Use the original method or reset the password.',
+                'يستخدم هذا البريد طريقة تسجيل دخول مختلفة. استخدم الطريقة الأصلية أو أعد تعيين كلمة المرور.',
+            ));
+        }
+        if (code === 'auth/network-request-failed') {
+            return notice('error', copy(
+                'We could not reach the sign-in service. Check your connection and try again.',
+                'تعذر الوصول إلى خدمة تسجيل الدخول. تحقق من الاتصال وحاول مرة أخرى.',
+            ));
+        }
+        return notice('error', copy(
+            'Sign-in is temporarily unavailable. Try again later or contact BIN GROUP support.',
+            'تسجيل الدخول غير متاح مؤقتاً. حاول لاحقاً أو تواصل مع دعم بن جروب.',
+        ));
     };
 
     useEffect(() => {
@@ -347,7 +403,7 @@ const LoginPage: React.FC = () => {
                     {t('login.change_role')}
                 </Button>
                 <Button
-                    onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+                    onClick={toggleLoginLanguage}
                     sx={{ color: palette.ink, fontWeight: 950, bgcolor: 'rgba(255,255,255,0.8)', px: 2, borderRadius: 2, border: `1px solid ${alpha(palette.gold, 0.36)}` }}
                 >
                     {isRTL ? 'EN' : 'AR'}
@@ -379,7 +435,7 @@ const LoginPage: React.FC = () => {
                         {notice && (
                             <Alert severity={notice.type} sx={{ mb: 3, '& .MuiAlert-message': { width: '100%' } }}>
                                 <Typography sx={{ fontWeight: 800 }}>{notice.text}</Typography>
-                                {notice.diagnostic && (
+                                {import.meta.env.DEV && notice.diagnostic && (
                                     <Typography component="pre" sx={{ mt: 1, mb: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, fontFamily: 'monospace', color: '#7f1d1d' }}>
                                         {notice.diagnostic}
                                     </Typography>
