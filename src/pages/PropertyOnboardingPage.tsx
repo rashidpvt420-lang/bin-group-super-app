@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useOnboardingStore } from '../store/onboardingStore';
-import { functions, httpsCallable } from '../lib/firebase';
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import AssetProfileStep from '../components/onboarding/AssetProfileStep';
@@ -20,20 +19,16 @@ const PAGE_COUNT = 5;
 const clampPage = (value: number) => Math.min(Math.max(Number(value) || 1, 1), PAGE_COUNT);
 const readable = (value: string | undefined, fallback: string) => (!value || value.includes('.') ? fallback : value);
 
-type ReferralState = 'not_required' | 'waiting_for_owner' | 'capturing' | 'captured' | 'error';
-
 export default function PropertyOnboardingPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { t, isRTL, lang } = useLanguage();
-    const { step, nextStep, prevStep, setStep, properties, intakeId, onboardingSessionId, ownerAccount } = useOnboardingStore();
+    const { step, nextStep, prevStep, setStep, properties, intakeId } = useOnboardingStore();
     const label = React.useCallback((en: string, ar: string) => lang === 'ar' ? ar : en, [lang]);
     const brokerUid = String(searchParams.get('broker') || '').trim();
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
-    const [referralState, setReferralState] = React.useState<ReferralState>(brokerUid ? 'waiting_for_owner' : 'not_required');
     const [section, setSection] = React.useState(0);
-    const capturedReferralKey = React.useRef('');
 
     const safePage = clampPage(step);
     const pageProgress = safePage * 20;
@@ -59,45 +54,6 @@ export default function PropertyOnboardingPage() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [safePage, setStep, step]);
 
-    React.useEffect(() => {
-        if (!brokerUid) {
-            setReferralState('not_required');
-            return;
-        }
-        if (!validBrokerUid) {
-            setReferralState('error');
-            setGuardError(label('The Broker referral link is invalid. Ask the Broker to share a new link.', 'رابط إحالة الوسيط غير صالح. اطلب من الوسيط إرسال رابط جديد.'));
-            return;
-        }
-        if (!ownerAccount?.uid) {
-            setReferralState('waiting_for_owner');
-            return;
-        }
-
-        const captureKey = `${brokerUid}:${ownerAccount.uid}`;
-        if (capturedReferralKey.current === captureKey || referralState === 'capturing' || referralState === 'captured') return;
-        capturedReferralKey.current = captureKey;
-        setReferralState('capturing');
-        setGuardError('');
-
-        const captureReferral = httpsCallable(functions, 'captureBrokerReferralAttribution');
-        captureReferral({
-            brokerUid,
-            intakeId: intakeId || onboardingSessionId,
-            onboardingSubmissionId: intakeId || onboardingSessionId,
-            ownerName: ownerAccount.fullName,
-        }).then(() => {
-            setReferralState('captured');
-        }).catch((error: any) => {
-            console.error('[OwnerOnboarding] Broker referral capture failed:', { code: error?.code, message: error?.message });
-            capturedReferralKey.current = '';
-            setReferralState('error');
-            setGuardError(label(
-                'Your Owner account was created, but the Broker referral could not be verified. Retry or request a new Broker link before continuing.',
-                'تم إنشاء حساب المالك، لكن تعذر التحقق من إحالة الوسيط. أعد المحاولة أو اطلب رابط وسيط جديد قبل المتابعة.',
-            ));
-        });
-    }, [brokerUid, intakeId, label, onboardingSessionId, ownerAccount, referralState, validBrokerUid]);
 
     const advancePage = () => {
         setGuardError('');
@@ -128,17 +84,6 @@ export default function PropertyOnboardingPage() {
         goBackPage();
     };
 
-    const guardedAccountNext = () => {
-        if (brokerUid && referralState !== 'captured') {
-            setGuardError(referralState === 'capturing'
-                ? label('Broker referral verification is still running. Please wait a moment.', 'لا يزال التحقق من إحالة الوسيط جارياً. انتظر لحظة.')
-                : label('Broker referral verification must complete before continuing.', 'يجب إكمال التحقق من إحالة الوسيط قبل المتابعة.'));
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            return;
-        }
-        advancePage();
-    };
-
     const guardedAssetNext = () => {
         const property = properties[0];
         const descriptor = `${property?.propertyType || ''} ${property?.subType || ''}`.toLowerCase();
@@ -164,7 +109,7 @@ export default function PropertyOnboardingPage() {
         if (safePage === 1) {
             return section === 0
                 ? <CompanyProfileStep onNext={advanceSection} />
-                : <AccountCreationStep onNext={guardedAccountNext} onBack={backSectionOrPage} />;
+                : <AccountCreationStep onNext={advancePage} onBack={backSectionOrPage} brokerUid={brokerUid} />;
         }
         if (safePage === 2) {
             if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} />;
@@ -192,7 +137,7 @@ export default function PropertyOnboardingPage() {
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                         <Chip icon={<ShieldCheck size={15} />} label={`${label('Page', 'الصفحة')} ${safePage} / ${PAGE_COUNT}`} sx={{ fontWeight: 900 }} />
                         <Chip icon={<Save size={15} />} label={intakeId ? label('Application reference saved', 'تم حفظ مرجع الطلب') : label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
-                        {brokerUid && <Chip label={referralState === 'captured' ? label('Broker referral locked', 'تم تثبيت إحالة الوسيط') : label('Broker referral pending', 'إحالة الوسيط قيد التحقق')} color={referralState === 'captured' ? 'success' : 'warning'} variant="outlined" />}
+                        {brokerUid && <Chip label={validBrokerUid ? label('Broker referral will lock after verified email', 'سيتم تثبيت إحالة الوسيط بعد التحقق من البريد') : label('Invalid Broker referral link', 'رابط إحالة وسيط غير صالح')} color={validBrokerUid ? 'info' : 'error'} variant="outlined" />}
                     </Stack>
                 </Stack>
                 <Box sx={{ mb: 2, textAlign: 'center' }}>

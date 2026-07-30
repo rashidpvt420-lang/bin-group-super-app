@@ -1,8 +1,7 @@
 import React from 'react';
 import {
-    Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
-    DialogTitle, Divider, Drawer, Grid, IconButton, Paper, Stack, Table, TableBody,
-    TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+    Alert, Box, Button, Chip, CircularProgress, Divider, Drawer, Grid, IconButton, Paper, Stack, Table, TableBody,
+    TableCell, TableContainer, TableHead, TableRow, Typography,
 } from '@mui/material';
 import {
     Building2, CalendarCheck, CheckCircle2, ClipboardCheck, Eye, FileText, Mail,
@@ -12,6 +11,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
+import OwnerInspectionEvidenceDialog from '../../components/admin/OwnerInspectionEvidenceDialog';
 
 type IntakeSubmission = {
     id: string;
@@ -74,8 +74,7 @@ export const IntakeVaultPage: React.FC = () => {
     const [notice, setNotice] = React.useState('');
     const [busyId, setBusyId] = React.useState('');
     const [selected, setSelected] = React.useState<IntakeSubmission | null>(null);
-    const [completionTarget, setCompletionTarget] = React.useState<IntakeSubmission | null>(null);
-    const [completionNotes, setCompletionNotes] = React.useState('');
+    const [evidenceTarget, setEvidenceTarget] = React.useState<IntakeSubmission | null>(null);
 
     React.useEffect(() => {
         const intakeQuery = query(collection(db, 'intake_submissions'), orderBy('createdAt', 'desc'));
@@ -128,16 +127,6 @@ export const IntakeVaultPage: React.FC = () => {
         if (firstDirections && window.confirm('Visits created. Open directions for the first property?')) window.open(firstDirections, '_blank', 'noopener,noreferrer');
     });
 
-    const completeVisits = async () => {
-        if (!completionTarget) return;
-        const target = completionTarget;
-        await runAction(target, async () => {
-            await httpsCallable(functions, 'adminCompleteOwnerPortfolioInspections')({ intakeId: target.id, notes: completionNotes.trim() });
-            setCompletionTarget(null);
-            setCompletionNotes('');
-            setNotice(`All property visits completed. AED ${money(mobilisation(target))} is now due as the exact 15% mobilisation payment.`);
-        });
-    };
 
     const messageOwner = (item: IntakeSubmission) => runAction(item, async () => {
         const message = window.prompt('Message to the Owner:', 'BIN GROUP is reviewing your five-page property application and will contact you to arrange the site visit.');
@@ -155,7 +144,7 @@ export const IntakeVaultPage: React.FC = () => {
         const busy = busyId === item.id;
         if (stage.key === 'ACTIVE') return <Chip label="APPROVED & ACTIVE" color="success" variant="outlined" />;
         if (stage.key === 'PAYMENT') return <Button size="small" variant="contained" startIcon={<WalletCards size={15} />} onClick={() => navigate(`/payments?paymentId=${encodeURIComponent(item.payment?.paymentId || item.id)}`)} sx={{ bgcolor: GOLD, color: '#000', fontWeight: 950 }}>RECORD 15% & APPROVE</Button>;
-        if (stage.key === 'VISITS') return <Button size="small" variant="contained" disabled={busy} startIcon={busy ? <CircularProgress size={14} /> : <CheckCircle2 size={15} />} onClick={() => { setCompletionNotes(''); setCompletionTarget(item); }} sx={{ bgcolor: '#2563EB', fontWeight: 950 }}>COMPLETE ALL VISITS</Button>;
+        if (stage.key === 'VISITS') return <Button size="small" variant="contained" disabled={busy} startIcon={busy ? <CircularProgress size={14} /> : <CheckCircle2 size={15} />} onClick={() => setEvidenceTarget(item)} sx={{ bgcolor: '#2563EB', fontWeight: 950 }}>COMPLETE ALL VISITS</Button>;
         return <Button size="small" variant="contained" disabled={busy} startIcon={busy ? <CircularProgress size={14} /> : <Route size={15} />} onClick={() => void createVisits(item)} sx={{ bgcolor: GOLD, color: '#000', fontWeight: 950 }}>CREATE PROPERTY VISITS</Button>;
     };
 
@@ -209,15 +198,12 @@ export const IntakeVaultPage: React.FC = () => {
                 </Stack>}
             </Drawer>
 
-            <Dialog open={Boolean(completionTarget)} onClose={() => !busyId && setCompletionTarget(null)} fullWidth maxWidth="sm">
-                <DialogTitle sx={{ fontWeight: 950 }}>Confirm every property visit is complete</DialogTitle>
-                <DialogContent>
-                    <Alert severity="warning" sx={{ mb: 2 }}>This action makes the exact 15% mobilisation payment due. Confirm physical visits, GPS, access, systems, condition and service scope for every property.</Alert>
-                    <Typography variant="body2" sx={{ mb: 1 }}>{completionTarget ? `${propertyCount(completionTarget)} properties · ${completionTarget.inspectionIds?.length || completionTarget.inspectionCount || 0} linked inspections` : ''}</Typography>
-                    <TextField autoFocus multiline minRows={4} fullWidth label="Portfolio site-visit findings and verification notes" value={completionNotes} onChange={(event) => setCompletionNotes(event.target.value)} />
-                </DialogContent>
-                <DialogActions><Button onClick={() => setCompletionTarget(null)} disabled={Boolean(busyId)}>Cancel</Button><Button variant="contained" disabled={completionNotes.trim().length < 8 || Boolean(busyId)} onClick={() => void completeVisits()} startIcon={busyId ? <CircularProgress size={16} /> : <CheckCircle2 size={16} />}>Complete all visits & request 15%</Button></DialogActions>
-            </Dialog>
+            <OwnerInspectionEvidenceDialog
+                open={Boolean(evidenceTarget)}
+                intake={evidenceTarget}
+                onClose={() => setEvidenceTarget(null)}
+                onCompleted={(message) => { setEvidenceTarget(null); setNotice(message); }}
+            />
         </Box>
     );
 };

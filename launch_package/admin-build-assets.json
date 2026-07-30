@@ -3,11 +3,15 @@
   "status": "pass",
   "buildDirectory": "apps/admin-panel/build",
   "indexPresent": true,
-  "indexScriptAssetCount": 1,
+  "indexScriptAssetCount": 2,
   "indexScriptAssets": [
     {
-      "path": "static/js/main.06ed0376.js",
+      "path": "static/js/main.cbe0eebd.js",
       "size": 148758
+    },
+    {
+      "path": "admin-init-recovery.js",
+      "size": 1046
     }
   ],
   "generatedScriptAssetCount": 9,
@@ -17,16 +21,16 @@
       "size": 202928
     },
     {
-      "path": "static/js/374.ddaaff8f.chunk.js",
-      "size": 720750
-    },
-    {
-      "path": "static/js/428.c54e7130.chunk.js",
-      "size": 660364
+      "path": "static/js/374.3a1007c6.chunk.js",
+      "size": 720793
     },
     {
       "path": "static/js/455.1103bc91.chunk.js",
       "size": 139972
+    },
+    {
+      "path": "static/js/582.34a3c78e.chunk.js",
+      "size": 1881031
     },
     {
       "path": "static/js/614.63ade29d.chunk.js",
@@ -37,15 +41,15 @@
       "size": 235623
     },
     {
-      "path": "static/js/800.f2938e8a.chunk.js",
-      "size": 1880858
+      "path": "static/js/964.ba8a9247.chunk.js",
+      "size": 669501
     },
     {
       "path": "static/js/977.e75088cf.chunk.js",
       "size": 27172
     },
     {
-      "path": "static/js/main.06ed0376.js",
+      "path": "static/js/main.cbe0eebd.js",
       "size": 148758
     }
   ],

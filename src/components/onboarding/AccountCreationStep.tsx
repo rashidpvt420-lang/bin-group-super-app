@@ -21,6 +21,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 interface AccountCreationStepProps {
     onNext: () => void;
     onBack: () => void;
+    brokerUid?: string;
 }
 
 const readable = (value: string | undefined, fallback: string) => {
@@ -36,8 +37,8 @@ const isBlockingFunctionFailure = (error: unknown) => (
     /BLOCKING_FUNCTION|HTTP Cloud Function|Page not found|requested URL was not found/i.test(authMessage(error))
 );
 
-export default function AccountCreationStep({ onBack, onNext }: AccountCreationStepProps) {
-    const { companyProfile, setOwnerAccount, intakeId, setIntakeId, onboardingSessionId } = useOnboardingStore();
+export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: AccountCreationStepProps) {
+    const { companyProfile, setOwnerAccount, setBrokerAttribution, intakeId, setIntakeId, onboardingSessionId } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
@@ -148,7 +149,26 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
                 mobile: normalizePhone(formData.mobile),
                 intakeId: intakeId || onboardingSessionId,
             });
-            await currentUser.getIdToken(true);
+            const tokenResult = await currentUser.getIdTokenResult(true);
+            const resolvedRole = String(tokenResult.claims.role || tokenResult.claims.userRole || tokenResult.claims.primaryRole || '').toLowerCase();
+            if (resolvedRole !== 'owner') throw new Error(copy('The verified Owner role is not ready yet. Retry in a moment.', 'دور المالك الموثق غير جاهز بعد. أعد المحاولة بعد لحظة.'));
+            if (brokerUid) {
+                if (!/^[A-Za-z0-9_-]{6,128}$/.test(brokerUid)) throw new Error(copy('The Broker referral link is invalid. Ask the Broker to share a new link.', 'رابط إحالة الوسيط غير صالح. اطلب من الوسيط إرسال رابط جديد.'));
+                const captureReferral = httpsCallable(functions, 'captureBrokerReferralAttribution');
+                const referralResponse = await captureReferral({
+                    brokerUid,
+                    intakeId: intakeId || onboardingSessionId,
+                    onboardingSubmissionId: intakeId || onboardingSessionId,
+                    ownerName: formData.fullName.trim(),
+                });
+                const referral = referralResponse.data as { referralCode?: string; attributionId?: string };
+                setBrokerAttribution({
+                    referralCode: referral.referralCode || referral.attributionId || brokerUid,
+                    source: 'verified-owner-onboarding',
+                    capturedAt: new Date().toISOString(),
+                    landingPath: window.location.pathname + window.location.search,
+                });
+            }
             onNext();
         } catch (err: unknown) {
             const code = authCode(err);

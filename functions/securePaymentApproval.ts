@@ -79,6 +79,41 @@ async function assertOwnerActivationGate(paymentId: string) {
     throw new HttpsError("failed-precondition", "Payment is not bound to an owner onboarding intake.");
   }
 
+  if (upper(payment.workflowVersion) === "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1") {
+    if (payment.inspectionVerified !== true) {
+      throw new HttpsError("failed-precondition", "Every property visit must be verified before final payment approval.");
+    }
+    const intakeSnap = await db.collection("intake_submissions").doc(intakeId).get();
+    if (!intakeSnap.exists) throw new HttpsError("failed-precondition", "The five-page Owner intake is missing.");
+    const intake = intakeSnap.data() || {};
+    const properties = Array.isArray(intake.properties) ? intake.properties : [];
+    const inspectionIds = Array.isArray(intake.inspectionIds)
+      ? Array.from(new Set(intake.inspectionIds.map((value: unknown) => text(value)).filter(Boolean)))
+      : [];
+    if (upper(intake.inspectionStatus) !== "COMPLETED" || !properties.length || inspectionIds.length !== properties.length) {
+      throw new HttpsError("failed-precondition", "All portfolio inspections must be completed and linked before final approval.");
+    }
+    const inspectionSnaps = await Promise.all(inspectionIds.map((inspectionId: string) => db.collection("property_inspections").doc(inspectionId).get()));
+    const invalidInspection = inspectionSnaps.find((snapshot) => {
+      const value = snapshot.data() || {};
+      return !snapshot.exists ||
+        text(value.intakeId) !== intakeId ||
+        upper(value.status) !== "COMPLETED" ||
+        upper(value.evidenceStatus) !== "VERIFIED" ||
+        !/^[a-f0-9]{64}$/i.test(text(value.evidenceHash)) ||
+        !text(value.evidenceGeneration) ||
+        value.arrivalLocation?.withinRadius !== true ||
+        value.checklistVerified !== true;
+    });
+    if (invalidInspection) {
+      throw new HttpsError("failed-precondition", "A property visit is missing verified GPS, checklist, photo evidence, or completion proof.");
+    }
+    if (!/^[a-f0-9]{64}$/i.test(text(payment.paymentProofHash || payment.receiptHash)) ||
+        !text(payment.paymentProofGeneration || payment.receiptGeneration)) {
+      throw new HttpsError("failed-precondition", "Immutable 15% receipt evidence is required before final approval.");
+    }
+  }
+
   const propertySnap = await db.collection("properties").where("intakeId", "==", intakeId).limit(100).get();
   if (propertySnap.empty) {
     throw new HttpsError("failed-precondition", "No property records are bound to this onboarding intake.");

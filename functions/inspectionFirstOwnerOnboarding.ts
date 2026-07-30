@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -412,9 +413,11 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     transaction.set(otpRef, { consumedFor: contractId, consumedAt: otpData.consumedAt || now, updatedAt: now }, { merge: true });
 
     const normalizedProperties: PlainRecord[] = properties.map((property: PlainRecord, index: number) => {
-      const propertyId = safeId(property.id || property.propertyId, `${intakeId}_property_${index + 1}`);
+      const clientDraftId = safeId(property.id || property.propertyId, `draft_property_${index + 1}`);
+      const propertyId = safeId(`${intakeId}_property_${index + 1}`, `owner_${owner.uid}_property_${index + 1}`);
       return {
         ...property,
+        clientDraftId,
         id: propertyId,
         propertyId,
         ownerUid: owner.uid,
@@ -775,7 +778,7 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   const contentType = text(request.data?.contentType || "application/pdf");
   const encoded = text(request.data?.encodedDocument);
   if (!paymentId || reference.length < 4) throw new HttpsError("invalid-argument", "Payment ID and a valid receipt reference are required.");
-  if (!["CASH", "CHEQUE", "BANK_TRANSFER"].includes(method)) throw new HttpsError("invalid-argument", "Payment method must be Cash, Cheque, or Bank Transfer.");
+  if (!["CASH", "CHEQUE"].includes(method)) throw new HttpsError("invalid-argument", "Phase 1 Owner activation accepts Cash or Cheque only.");
   if (!contentType.match(/^image\//) && contentType !== "application/pdf") throw new HttpsError("invalid-argument", "Payment evidence must be a PDF or image.");
   const buffer = Buffer.from(encoded.includes(",") ? encoded.split(",").pop() || "" : encoded, "base64");
   if (!buffer.length || buffer.length > 10 * 1024 * 1024) throw new HttpsError("invalid-argument", "Payment evidence is empty or exceeds 10 MB.");
@@ -784,6 +787,10 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
   const payment = paymentSnap.data() || {};
   if (text(payment.workflowVersion) !== OWNER_WORKFLOW_VERSION || payment.inspectionVerified !== true) throw new HttpsError("failed-precondition", "Complete every Admin property visit before recording the 15% payment.");
+  const activeConfiguration = await loadActivePaymentConfiguration();
+  if (!activeConfiguration.approvedMethods.includes(method)) {
+    throw new HttpsError("failed-precondition", `The active corporate payment configuration does not approve ${method}.`);
+  }
   const ownerUid = text(payment.ownerUid || payment.ownerId);
   const intakeId = text(payment.intakeId || paymentId);
   const expectedAmount = money(payment.activationDeposit || payment.amount);
@@ -823,6 +830,20 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
     paymentReferenceId: reference,
     paymentReference: reference,
     amountReceived,
+    paymentConfigVersion: activeConfiguration.version,
+    paymentConfigurationVersion: activeConfiguration.version,
+    paymentConfigHash: activeConfiguration.configHash,
+    paymentConfigurationHash: activeConfiguration.configHash,
+    paymentManifest: {
+      configVersion: activeConfiguration.version,
+      configHash: activeConfiguration.configHash,
+      legalBeneficiary: activeConfiguration.legalBeneficiary,
+      currency: activeConfiguration.currency,
+      officeLocation: activeConfiguration.officeLocation,
+      approvedMethods: activeConfiguration.approvedMethods,
+      selectedMethod: method,
+      capturedAt: new Date().toISOString(),
+    },
     paymentProofUrl: receiptUrl,
     paymentProofPath: storagePath,
     paymentProofHash: receiptHash,
@@ -846,7 +867,7 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
     action: "RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE",
     targetType: "payment_transactions",
     targetId: paymentId,
-    metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation },
+    metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation, paymentConfigVersion: activeConfiguration.version, paymentConfigHash: activeConfiguration.configHash },
     createdAt: ts(),
   });
   await batch.commit();
