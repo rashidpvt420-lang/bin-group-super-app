@@ -30,6 +30,43 @@ const getVapidKey = () =>
   readEnv('VITE_FIREBASE_VAPID_KEY') ||
   readEnv('REACT_APP_FIREBASE_VAPID_KEY');
 
+const PUSH_REGISTRATION_ATTEMPTS = 4;
+const PUSH_REGISTRATION_BASE_DELAY_MS = 1_000;
+const SERVICE_WORKER_ACTIVATION_TIMEOUT_MS = 20_000;
+
+const sleep = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error || 'unknown');
+
+const isRetryableRegistrationError = (error: unknown) => {
+  const value = `${(error as { code?: unknown })?.code || ''} ${errorMessage(error)}`.toLowerCase();
+  return value.includes('network')
+    || value.includes('fetch')
+    || value.includes('timeout')
+    || value.includes('service worker')
+    || value.includes('service-worker')
+    || value.includes('messaging/token')
+    || value.includes('push service')
+    || value.includes('registration');
+};
+
+async function activeMessagingServiceWorker(): Promise<ServiceWorkerRegistration> {
+  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+  await registration.update().catch(() => undefined);
+  if (registration.active) return registration;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < SERVICE_WORKER_ACTIVATION_TIMEOUT_MS) {
+    if (registration.active) return registration;
+    await sleep(250);
+  }
+
+  const ready = await navigator.serviceWorker.ready;
+  if (!ready.active || !ready.active.scriptURL.endsWith('/firebase-messaging-sw.js')) {
+    throw new Error('The BIN GROUP Firebase Messaging service worker did not become active.');
+  }
+  return ready;
+}
+
 type PushReadiness = {
   platform: 'web' | 'android-web' | 'ios-pwa' | 'ios-browser' | 'unknown';
   isIOS: boolean;
@@ -129,35 +166,46 @@ export async function registerPushNotifications(userId: string, role?: string | 
     };
   }
 
-  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-  const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
-  if (!token) {
-    return {
-      enabled: false,
-      reason: 'token_unavailable',
-      readiness: { ...permissionReadiness, supportsMessaging: true },
-    };
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= PUSH_REGISTRATION_ATTEMPTS; attempt += 1) {
+    try {
+      const registration = await activeMessagingServiceWorker();
+      const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+      if (!token) throw new Error('Firebase Messaging did not return a registration token.');
+
+      const registerToken = httpsCallable(functions, 'registerPushToken');
+      const response = await registerToken({
+        token,
+        platform: readiness.platform,
+        permission,
+        isStandalone: readiness.isStandalone,
+      });
+      const data = response.data as {
+        enabled?: boolean;
+        registrationId?: string;
+        registeredTokenCount?: number;
+        prunedTokenCount?: number;
+      };
+      if (data.enabled !== true) throw new Error('The server did not confirm push registration.');
+
+      return {
+        enabled: true,
+        registrationId: data.registrationId,
+        registeredTokenCount: data.registeredTokenCount,
+        prunedTokenCount: data.prunedTokenCount,
+        readiness: { ...permissionReadiness, supportsMessaging: true },
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt === PUSH_REGISTRATION_ATTEMPTS || !isRetryableRegistrationError(error)) break;
+      console.warn(`[Push] Registration attempt ${attempt}/${PUSH_REGISTRATION_ATTEMPTS} failed: ${errorMessage(error)}`);
+      await sleep(PUSH_REGISTRATION_BASE_DELAY_MS * attempt);
+    }
   }
 
-  const registerToken = httpsCallable(functions, 'registerPushToken');
-  const response = await registerToken({
-    token,
-    platform: readiness.platform,
-    permission,
-    isStandalone: readiness.isStandalone,
-  });
-  const data = response.data as {
-    enabled?: boolean;
-    registrationId?: string;
-    registeredTokenCount?: number;
-    prunedTokenCount?: number;
-  };
-
   return {
-    enabled: data.enabled === true,
-    registrationId: data.registrationId,
-    registeredTokenCount: data.registeredTokenCount,
-    prunedTokenCount: data.prunedTokenCount,
+    enabled: false,
+    reason: `registration_failed:${errorMessage(lastError)}`,
     readiness: { ...permissionReadiness, supportsMessaging: true },
   };
 }
