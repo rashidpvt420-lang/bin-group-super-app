@@ -14,13 +14,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  apply-phase1-manual-public-policy:
+  repair-promoted-phase1-coherence:
     if: >-
       github.event.issue.number == 434 &&
       !github.event.issue.pull_request &&
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
-      github.event.comment.body == '/bin-launch apply-phase1-manual-public-policy'
+      github.event.comment.body == '/bin-launch repair-promoted-phase1-coherence'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -50,110 +50,27 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Apply Phase 1 source and workflow policy
+      - name: Remove retired generator fallback
         run: |
           node <<'NODE'
           const fs = require('fs');
-          const file = 'scripts/apply-phase1-manual-public-launch-policy.mjs';
+          const file = 'tests/launch/firebase-production-workflow-coherence.test.mjs';
           let source = fs.readFileSync(file, 'utf8');
-          const removeReplaceBlock = (label, functionName = 'replaceOnce') => {
-            const endMarker = `    '${label}',\n  );`;
-            const labelIndex = source.indexOf(endMarker);
-            if (labelIndex < 0) throw new Error(`redundant transformation label missing: ${label}`);
-            const startIndex = source.lastIndexOf(`  source = ${functionName}(`, labelIndex);
-            if (startIndex < 0) throw new Error(`${functionName} start missing for: ${label}`);
-            source = `${source.slice(0, startIndex)}${source.slice(labelIndex + endMarker.length)}`;
-          };
-          removeReplaceBlock('workflow job payment policy env', 'replaceCount');
-          removeReplaceBlock('workflow postdeploy gate policy env');
-          removeReplaceBlock('workflow final decision policy env');
-          const writeMarker = "  write(file, source);\n  write('launch_package/generated/firebase-production-deploy-phase1.yml', source);";
-          const insertion = `  {\n    const paymentExpression = "$" + "{{ inputs.payment_policy }}";\n    let launchModeBindingCount = 0;\n    source = source.split("\\n").map((line) => {\n      const match = line.match(/^(\\s*)LAUNCH_MODE:/);\n      if (!match || !line.includes("inputs.launch_mode")) return line;\n      launchModeBindingCount += 1;\n      return \`\${line}\\n\${match[1]}PAYMENT_POLICY: \${paymentExpression}\`;\n    }).join("\\n");\n    if (launchModeBindingCount !== 6) throw new Error(\`workflow job payment policy env: expected 6 bindings, found \${launchModeBindingCount}\`);\n  }\n`;
-          if (!source.includes(writeMarker)) throw new Error('workflow write marker missing');
-          source = source.replace(writeMarker, insertion + writeMarker);
+          const stale = "  const policyGenerator = readFileSync(path.join(root, 'scripts/apply-phase1-manual-public-launch-policy.mjs'), 'utf8');\n  const proofDecision = decision.includes('paymentProofOk') ? decision : policyGenerator;\n";
+          const replacement = "  const proofDecision = decision;\n  assert.match(decision, /phase1-manual-payment-proof\\.json/);\n";
+          const count = source.split(stale).length - 1;
+          if (count !== 1) {
+            throw new Error(`retired policy-generator fallback: expected one exact match, found ${count}`);
+          }
+          source = source.replace(stale, replacement);
           fs.writeFileSync(file, source);
-
-          const coherenceFile = 'tests/launch/firebase-production-workflow-coherence.test.mjs';
-          let coherence = fs.readFileSync(coherenceFile, 'utf8');
-          const replaceCoherenceOnce = (search, replacement, label) => {
-            const count = coherence.split(search).length - 1;
-            if (count !== 1) throw new Error(`${label}: expected one exact match, found ${count}`);
-            coherence = coherence.replace(search, replacement);
-          };
-          replaceCoherenceOnce(
-            "test('bank-pilot does not claim public launch; public mode requires Stripe live proof', () => {",
-            "test('bank-pilot does not claim public launch; public mode requires payment-policy-bound proof', () => {",
-            'coherence payment policy title',
-          );
-          replaceCoherenceOnce(
-            "  assert.match(decision, /stripeLiveOk/);\n",
-            "  const policyGenerator = readFileSync(path.join(root, 'scripts/apply-phase1-manual-public-launch-policy.mjs'), 'utf8');\n  const proofDecision = decision.includes('paymentProofOk') ? decision : policyGenerator;\n  assert.ok(proofDecision.includes(\"const paymentProofOk = paymentPolicy === 'phase1-manual'\"));\n  assert.ok(proofDecision.includes(\"paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed'\"));\n",
-            'coherence payment proof selector',
-          );
-          replaceCoherenceOnce(
-            "  assert.match(\n    decision,\n    /launchMode === 'public' && postdeployCleared && stripeLiveOk/,\n  );\n",
-            "  assert.ok(\n    proofDecision.includes(\"launchMode === 'public' && postdeployCleared && paymentProofOk\"),\n  );\n",
-            'coherence payment proof approval branch',
-          );
-          fs.writeFileSync(coherenceFile, coherence);
           NODE
-          node scripts/apply-phase1-manual-public-launch-policy.mjs
-          cat > tests/launch/phase1-manual-public-launch-policy.test.mjs <<'TEST'
-          import test from 'node:test';
-          import assert from 'node:assert/strict';
-          import { readFileSync } from 'node:fs';
-
-          const read = (file) => readFileSync(file, 'utf8');
-
-          test('production workflow supports fail-closed Phase 1 manual or Phase 2 Stripe proof', () => {
-            const workflow = read('.github/workflows/firebase-production-deploy.yml');
-            assert.ok(workflow.includes('payment_policy:'));
-            assert.ok(workflow.includes('phase1-manual'));
-            assert.ok(workflow.includes('phase2-stripe'));
-            assert.ok(workflow.includes('Verify Phase 1 manual Cash/Cheque production policy'));
-            assert.ok(workflow.includes("inputs.payment_policy == 'phase1-manual'"));
-            assert.ok(workflow.includes("inputs.payment_policy == 'phase2-stripe'"));
-            assert.ok(workflow.includes('phase1-manual-payment-proof.json'));
-          });
-
-          test('Phase 1 verifier proves exact production Cash and Cheque policy without leaking banking data', () => {
-            const source = read('scripts/verify-phase1-manual-payment-proof.mjs');
-            assert.ok(source.includes("const EXPECTED_METHODS = ['CASH', 'CHEQUE'];"));
-            assert.ok(source.includes("source: 'firebase-production-manual-payment-policy-verifier'"));
-            assert.ok(source.includes('sensitiveValuesExcluded: true'));
-            assert.ok(source.includes('bankTransferEnabled: false'));
-            assert.ok(source.includes('stripeEnabled: false'));
-            const proofStart = source.indexOf('const proof = {');
-            const proofEnd = source.indexOf('\n};', proofStart);
-            assert.ok(proofStart >= 0 && proofEnd > proofStart, 'proof object must be present');
-            const proofBlock = source.slice(proofStart, proofEnd);
-            assert.ok(!proofBlock.includes('accountNumber'), 'proof must exclude account number');
-            assert.ok(!proofBlock.includes('iban'), 'proof must exclude IBAN');
-            assert.ok(!proofBlock.includes('swiftBic'), 'proof must exclude SWIFT/BIC');
-          });
-
-          test('postdeploy and signed final decision bind to the selected payment policy', () => {
-            const postdeploy = read('scripts/postdeploy-release-gate.mjs');
-            const decision = read('scripts/hard-launch-decision-gate.mjs');
-            assert.ok(postdeploy.includes('PAYMENT_POLICY'));
-            assert.ok(postdeploy.includes('phase1-manual-payment-proof.json'));
-            assert.ok(postdeploy.includes('stripe-live-proof.json'));
-            assert.ok(decision.includes('phase1ManualPaymentProof'));
-            assert.ok(decision.includes('paymentProofOk'));
-            assert.ok(decision.includes("paymentPolicy: launchMode === 'public'"));
-            assert.ok(!decision.includes('postdeployCleared && stripeLiveOk'));
-          });
-          TEST
-
-      - name: Validate generated workflow YAML
-        run: |
-          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/firebase-production-deploy.yml'); puts 'workflow yaml parsed'"
 
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
 
-      - name: Run focused Owner and payment-policy regressions
-        run: node --test tests/launch/owner-public-launch-hardening.test.mjs tests/launch/phase1-manual-public-launch-policy.test.mjs
+      - name: Run focused production workflow coherence regression
+        run: node --test tests/launch/firebase-production-workflow-coherence.test.mjs
 
       - name: Run launch honesty and workflow security
         run: npm run test:launch-honesty
@@ -161,13 +78,7 @@ jobs:
       - name: Run production stability guard
         run: npm run test:stability
 
-      - name: Validate policy scripts
-        run: |
-          node --check scripts/verify-phase1-manual-payment-proof.mjs
-          node --check scripts/postdeploy-release-gate.mjs
-          node --check scripts/hard-launch-decision-gate.mjs
-
-      - name: Commit validated source and generated workflow candidate
+      - name: Commit validated coherence repair
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -176,17 +87,18 @@ jobs:
           set -euo pipefail
           current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
           [[ "$current_main" == "$START_SHA" ]] || {
-            echo '::error::Main changed during policy validation; refusing to overwrite concurrent work.'
+            echo '::error::Main changed during validation; refusing to overwrite concurrent work.'
             exit 1
           }
-          test -s launch_package/generated/firebase-production-deploy-phase1.yml
-          git restore --source="$START_SHA" -- .github/workflows/firebase-production-deploy.yml
-          rm -f scripts/apply-phase1-manual-public-launch-policy.mjs
+          git diff --exit-code -- . ':(exclude)tests/launch/firebase-production-workflow-coherence.test.mjs' || {
+            echo '::error::Repair changed files outside the exact coherence regression.'
+            exit 1
+          }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add tests/launch/firebase-production-workflow-coherence.test.mjs
           git diff --cached --check
-          git commit -m 'fix: bind public launch to Phase 1 manual payment proof'
+          git commit -m 'fix: stop launch coherence from reading retired generator'
           git push origin HEAD:main
 
       - name: Publish success
@@ -198,7 +110,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           final_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Phase 1 manual public-launch policy validation passed in run \`$RUN_ID\` and source proof logic was committed at \`$final_sha\`. The generated production workflow candidate is ready for the authorised Git tree promotion step. No deployment or YES-GO claim has been made." >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Promoted Phase 1 coherence repair passed in run \`$RUN_ID\` and was committed at \`$final_sha\`. The retired generator fallback is removed; launch-honesty and stability passed. A fresh exact-SHA review and deployment are still required before any YES-GO claim." >/dev/null
 
       - name: Publish failure
         if: failure()
@@ -208,4 +120,4 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           RUN_ID: ${{ github.run_id }}
         run: |
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Phase 1 manual public-launch policy validation failed in run \`$RUN_ID\`: https://github.com/$REPOSITORY/actions/runs/$RUN_ID . No workflow promotion, deployment or YES-GO claim was made." >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Promoted Phase 1 coherence repair failed in run \`$RUN_ID\`: https://github.com/$REPOSITORY/actions/runs/$RUN_ID . No deployment or YES-GO claim was made." >/dev/null
