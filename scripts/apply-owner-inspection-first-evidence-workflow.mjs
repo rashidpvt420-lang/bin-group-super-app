@@ -16,7 +16,7 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
 
   let adminPasswordBindings = 0;
   const patched = source.replace(
-    /^(\s*)E2E_ADMIN_PASSWORD: \$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}$/gm,
+    /^(      )E2E_ADMIN_PASSWORD: \$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}$/gm,
     (line, indent) => {
       adminPasswordBindings += 1;
       return [
@@ -30,7 +30,7 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
   );
 
   if (adminPasswordBindings !== 2) {
-    throw new Error(`${label}: expected two deploy/public E2E_ADMIN_PASSWORD anchors, found ${adminPasswordBindings}.`);
+    throw new Error(`${label}: expected two job-level deploy/public E2E_ADMIN_PASSWORD anchors, found ${adminPasswordBindings}.`);
   }
   for (const required of [
     'Run current-commit five-role business evidence',
