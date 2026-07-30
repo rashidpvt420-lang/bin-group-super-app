@@ -68,3 +68,5 @@ jobs:
           git diff --cached --check
           git commit -m 'test: remove retired Phase 1 generator fallback'
           git push origin HEAD:fix/remove-retired-phase1-generator-fallback
+
+# second push intentionally triggers this branch-scoped one-shot
