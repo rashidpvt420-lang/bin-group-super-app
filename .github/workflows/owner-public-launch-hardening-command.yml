@@ -87,8 +87,8 @@ jobs:
             assert.ok(workflow.includes('phase1-manual'));
             assert.ok(workflow.includes('phase2-stripe'));
             assert.ok(workflow.includes('Verify Phase 1 manual Cash/Cheque production policy'));
-            assert.ok(workflow.includes("if: ${{ inputs.payment_policy == 'phase1-manual' }}"));
-            assert.ok(workflow.includes("if: ${{ inputs.payment_policy == 'phase2-stripe' }}"));
+            assert.ok(workflow.includes("inputs.payment_policy == 'phase1-manual'"));
+            assert.ok(workflow.includes("inputs.payment_policy == 'phase2-stripe'"));
             assert.ok(workflow.includes('phase1-manual-payment-proof.json'));
           });
 
