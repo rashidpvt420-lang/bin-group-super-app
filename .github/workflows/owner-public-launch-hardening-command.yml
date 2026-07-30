@@ -75,7 +75,9 @@ jobs:
           node scripts/apply-phase1-manual-public-launch-policy.mjs
 
       - name: Validate generated workflow YAML
-        run: ruby -e "require 'yaml'; YAML.load_file('.github/workflows/firebase-production-deploy.yml'); puts 'workflow yaml parsed'"
+        run: |
+          nl -ba .github/workflows/firebase-production-deploy.yml | sed -n '235,285p'
+          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/firebase-production-deploy.yml'); puts 'workflow yaml parsed'"
 
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
