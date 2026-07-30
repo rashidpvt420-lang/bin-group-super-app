@@ -137,9 +137,12 @@ for (const token of [
 assert.ok(financials.includes("collection(db, 'invoices')"), 'Owner financials must query invoices');
 assert.ok(financials.includes("where('ownerUid', '==', user.uid)"), 'Owner invoice visibility must be UID scoped');
 assert.ok(financials.includes('invoice.invoiceId || invoice.id'), 'Owner financials must render the canonical invoice ID');
-assert.ok(runtime.includes('export * from "./inspectionFirstOwnerOnboarding";'), 'Runtime must export inspection-first Owner callables');
+assert.ok(runtime.includes('previewOwnerInspectionQuote,'), 'Runtime must explicitly export the inspection-first quote callable');
+assert.ok(runtime.includes('submitOwnerInspectionFirstOnboarding,'), 'Runtime must explicitly export the inspection-first submission callable');
+assert.ok(runtime.includes('adminRecordOwnerMobilizationPaymentEvidence,'), 'Runtime must explicitly export the exact 15% evidence callable');
+assert.ok(!runtime.includes('export * from "./inspectionFirstOwnerOnboarding";'), 'Runtime must not wildcard-export the legacy single-inspection callable surface');
 assert.ok(runtime.includes('export * from "./ownerInspectionAdminLink";'), 'Runtime must export Admin inspection linking');
 assert.ok(runtime.includes('export * from "./ownerInspectionCompletion";'), 'Runtime must export evidence-backed inspection completion');
-assert.ok(runtime.includes('export { adminApprovePayment, adminRejectPayment } from "./securePaymentApproval";'), 'Runtime must export the secure payment approval gate');
+assert.ok(runtime.includes('export * from "./securePaymentApproval";'), 'Runtime must export the secure payment approval gate');
 
 console.log('inspection-first Owner production proof launch regression: PASS');
