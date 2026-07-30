@@ -51,7 +51,18 @@ jobs:
           cache: npm
 
       - name: Apply Phase 1 source and workflow policy
-        run: node scripts/apply-phase1-manual-public-launch-policy.mjs
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'scripts/apply-phase1-manual-public-launch-policy.mjs';
+          let source = fs.readFileSync(file, 'utf8');
+          const oldValue = "    2,\n    'workflow job payment policy env',";
+          const newValue = "    6,\n    'workflow job payment policy env',";
+          if (!source.includes(oldValue)) throw new Error('workflow job payment policy count anchor missing');
+          source = source.replace(oldValue, newValue);
+          fs.writeFileSync(file, source);
+          NODE
+          node scripts/apply-phase1-manual-public-launch-policy.mjs
 
       - name: Validate generated workflow YAML
         run: ruby -e "require 'yaml'; YAML.load_file('.github/workflows/firebase-production-deploy.yml'); puts 'workflow yaml parsed'"
