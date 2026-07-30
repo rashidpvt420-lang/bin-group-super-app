@@ -36,13 +36,21 @@ on:
           - bank-pilot
           - public
         default: bank-pilot
+      payment_policy:
+        description: 'Phase 1 Cash/Cheque or Phase 2 Stripe'
+        required: true
+        type: choice
+        options:
+          - phase1-manual
+          - phase2-stripe
+        default: phase1-manual
       run_public_release_gate:
         description: 'Required for public mode; runs the protected postdeploy public-release gate'
         required: true
         type: boolean
         default: false
       deployment_payload_json:
-        description: 'JSON containing incident, hard-clearance, and Stripe live-proof fields'
+        description: 'JSON containing incident, hard-clearance, and optional Phase 2 Stripe live-proof fields'
         required: false
         type: string
         default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
@@ -92,6 +100,7 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
+          PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
           HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
           STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
@@ -120,13 +129,22 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
-            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
-              || fail "Public mode requires a live Stripe checkout session ID."
-            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
-              || fail "Public mode requires a Stripe webhook event ID."
+            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
+              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
+              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
+            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
+              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
+            else
+              fail "Public payment_policy must be phase1-manual or phase2-stripe."
+            fi
           else
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
               || fail "Bank-pilot mode requires run_public_release_gate=false."
+            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
           fi
 
       - name: Checkout repository
@@ -231,6 +249,7 @@ jobs:
       E2E_STRICT_ROLES: 'true'
       E2E_STRICT_LIVE: 'true'
       LAUNCH_MODE: ${{ inputs.launch_mode }}
+      PAYMENT_POLICY: ${{ inputs.payment_policy }}
       RUN_PUBLIC_RELEASE_GATE: ${{ inputs.run_public_release_gate }}
     outputs:
       validated_artifact_digest: ${{ steps.artifact_digest.outputs.digest }}
@@ -246,6 +265,7 @@ jobs:
           CURRENT_REF: ${{ github.ref }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
+          PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
           HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
           STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
@@ -274,13 +294,22 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
-            [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
-              || fail "Public mode requires a live Stripe checkout session ID."
-            [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
-              || fail "Public mode requires a Stripe webhook event ID."
+            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
+              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
+              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
+            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
+              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
+            else
+              fail "Public payment_policy must be phase1-manual or phase2-stripe."
+            fi
           else
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
               || fail "Bank-pilot mode requires run_public_release_gate=false."
+            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
           fi
 
       - name: Checkout repository
@@ -487,6 +516,7 @@ jobs:
           APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
           RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
         run: |
           set -euo pipefail
           if [[ -z "${APPROVED_BY}" ]]; then
@@ -507,6 +537,7 @@ jobs:
             approvedVia: 'github-environment-protection',
             githubEnvironment: 'production',
             launchMode: process.env.LAUNCH_MODE_INPUT,
+            paymentPolicy: process.env.PAYMENT_POLICY_INPUT,
           };
           fs.writeFileSync('launch_package/predeploy-approval.json', `${JSON.stringify(doc, null, 2)}\n`);
           console.log('Wrote predeploy-approval.json for', doc.commitSha);
@@ -523,6 +554,7 @@ jobs:
           DEPLOYMENT_ENVIRONMENT: production
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
           LAUNCH_BANK_ONLY: ${{ inputs.launch_mode == 'bank-pilot' && '1' || '0' }}
           VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
           PREDEPLOY_BUILD_OK: ${{ steps.build_public.outputs.ok }}
@@ -634,6 +666,7 @@ jobs:
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
           AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
           POSTDEPLOY_RELEASE_CLEARED: 'false'
           VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
         run: npm run hard-launch:decision
@@ -687,6 +720,7 @@ jobs:
       E2E_STRICT_ROLES: 'true'
       E2E_STRICT_LIVE: 'true'
       LAUNCH_MODE: ${{ inputs.launch_mode }}
+      PAYMENT_POLICY: ${{ inputs.payment_policy }}
       RUN_PUBLIC_RELEASE_GATE: ${{ inputs.run_public_release_gate }}
 
     steps:
@@ -916,7 +950,17 @@ jobs:
           npm run test:e2e:launch-audit:live
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
+      - name: Verify Phase 1 manual Cash/Cheque production policy
+        if: ${{ inputs.payment_policy == 'phase1-manual' }}
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+        run: node scripts/verify-phase1-manual-payment-proof.mjs
+
       - name: Verify recent live Stripe payment and processed webhook
+        if: ${{ inputs.payment_policy == 'phase2-stripe' }}
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
@@ -930,6 +974,7 @@ jobs:
         env:
           DEPLOYMENT_ENVIRONMENT: production
           LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
           RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
           POSTDEPLOY_ROUTES_OK: ${{ steps.postdeploy_routes.outputs.ok }}
@@ -950,6 +995,7 @@ jobs:
           AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
           AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
           LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
           POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
         run: npm run hard-launch:decision
 
@@ -961,6 +1007,7 @@ jobs:
           path: |
             launch_package/public-release-status.json
             launch_package/stripe-live-proof.json
+            launch_package/phase1-manual-payment-proof.json
             launch_package/pilot-incident-report.json
             launch_package/launch-evidence-batch.json
             launch_package/hard-launch-decision.json
