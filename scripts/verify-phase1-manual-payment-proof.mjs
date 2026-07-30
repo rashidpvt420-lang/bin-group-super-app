@@ -54,17 +54,20 @@ const approvedMethods = Array.isArray(value.approvedMethods)
   ? [...new Set(value.approvedMethods.map(upper).filter(Boolean))].sort()
   : [];
 if (JSON.stringify(approvedMethods) !== JSON.stringify([...EXPECTED_METHODS].sort())) {
-  throw new Error(`Phase 1 production methods must be exactly CASH and CHEQUE; found ${approvedMethods.join(", ") || "none"}.`);
+  throw new Error(`Phase 1 production methods must be exactly CASH and CHEQUE; found ${approvedMethods.join(', ') || 'none'}.`);
+}
+if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
+  throw new Error('Phase 1 must keep Bank Transfer and Stripe disabled.');
 }
 
 const configuration = {
   version: text(value.version),
   effectiveAtMs: timestampMs(value.effectiveAt || value.updatedAt),
   legalBeneficiary: text(value.legalBeneficiary || value.beneficiaryName),
-  bankName: text(value.bankName),
-  accountNumber: text(value.accountNumber).replace(/\s+/g, ''),
-  iban: upper(value.iban).replace(/\s+/g, ''),
-  swiftBic: upper(value.swiftBic || value.swift || value.bic).replace(/\s+/g, ''),
+  bankName: '',
+  accountNumber: '',
+  iban: '',
+  swiftBic: '',
   currency: upper(value.currency),
   officeLocation: text(value.officeLocation || value.cashOfficeLocation),
   approvedMethods,
@@ -73,8 +76,12 @@ if (!configuration.version || !configuration.effectiveAtMs) throw new Error('Pay
 if (configuration.legalBeneficiary !== EXPECTED_BENEFICIARY) throw new Error('Payment beneficiary does not match BIN GROUP legal identity.');
 if (configuration.currency !== 'AED') throw new Error('Phase 1 payment currency must be AED.');
 if (!configuration.officeLocation) throw new Error('Cash/Cheque office location is missing.');
-if (!configuration.bankName || !configuration.accountNumber || !/^AE\d{21}$/.test(configuration.iban) || !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(configuration.swiftBic)) {
-  throw new Error('Corporate payment configuration is incomplete or invalid.');
+
+const staleBankValues = [value.bankName, value.accountNumber, value.iban, value.swiftBic, value.swift, value.bic]
+  .map(text)
+  .filter(Boolean);
+if (staleBankValues.length) {
+  throw new Error('Phase 1 Cash/Cheque configuration must not publish bank-transfer routing values.');
 }
 
 const proof = {

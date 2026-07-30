@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 
 const run = (script) => execFileSync(process.execPath, [script], {
   cwd: process.cwd(),
-  env: process.env,
+  env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' },
   stdio: 'inherit',
   timeout: 18 * 60 * 1000,
 });
@@ -17,6 +17,7 @@ if (mode === 'lifecycle') {
   // Restore the shared live-role fixtures only after the Owner UI has inspected
   // the activation-generated portfolio, contract and financial records.
   run('scripts/seed-live-role-test-data.mjs');
+  run('scripts/prepare-protected-business-fixtures.mjs');
 } else {
   throw new Error(`Unsupported Owner business evidence mode: ${mode}`);
 }

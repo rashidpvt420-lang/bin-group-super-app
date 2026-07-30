@@ -27,14 +27,74 @@ const writeEvidence = process.argv.includes('--write-evidence');
 const commitSha = gitSha();
 const failures = [];
 const MAX_BUNDLE_ASSETS = 250;
+const HOSTING_FETCH_ATTEMPTS = 6;
+const HOSTING_FETCH_BASE_DELAY_MS = 10_000;
+const FETCH_TIMEOUT_MS = 30_000;
 
 function fail(msg) {
   failures.push(msg);
 }
 
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function isRetryableStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 async function fetchText(url) {
   const response = await fetch(url, { redirect: 'follow' });
   return { ok: response.ok, status: response.status, text: await response.text() };
+}
+
+async function fetchProductionHostingText(site) {
+  const request = site === 'main'
+    ? () => fetch(PRODUCTION.mainUrl, {
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
+    : site === 'admin'
+      ? () => fetch(PRODUCTION.adminUrl, {
+        redirect: 'follow',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      })
+      : null;
+
+  if (!request) throw new Error(`Unsupported production hosting site: ${site}`);
+
+  let lastError;
+  let lastResult;
+
+  for (let attempt = 1; attempt <= HOSTING_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await request();
+      const result = { ok: response.ok, status: response.status, text: await response.text() };
+      lastResult = result;
+
+      if (result.ok || !isRetryableStatus(result.status) || attempt === HOSTING_FETCH_ATTEMPTS) {
+        return result;
+      }
+
+      console.warn(
+        `[deploy-verify] transient ${site} hosting HTTP ${result.status}; retrying ${attempt + 1}/${HOSTING_FETCH_ATTEMPTS}`,
+      );
+    } catch (error) {
+      lastError = error;
+      if (attempt === HOSTING_FETCH_ATTEMPTS) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[deploy-verify] transient ${site} hosting fetch failure (${message}); retrying ${attempt + 1}/${HOSTING_FETCH_ATTEMPTS}`,
+      );
+    }
+
+    await sleep(HOSTING_FETCH_BASE_DELAY_MS * attempt);
+  }
+
+  if (lastError) throw lastError;
+  return lastResult || { ok: false, status: 0, text: '' };
 }
 
 async function discoverManifestJavascriptUrls(siteUrl, origin) {
@@ -133,14 +193,15 @@ async function verifySite(label, url, site) {
   console.log(`[deploy-verify] checking ${label} ${url}`);
   let html;
   try {
-    const res = await fetchText(url);
+    const res = await fetchProductionHostingText(site);
     if (!res.ok) {
       fail(`${label}: HTTP ${res.status}`);
       return { httpOk: false, bundleVerified: false, runtimeSummary: { assetCount: 0 } };
     }
     html = res.text;
   } catch (err) {
-    fail(`${label}: fetch failed (${err.message})`);
+    const message = err instanceof Error ? err.message : String(err);
+    fail(`${label}: fetch failed (${message})`);
     return { httpOk: false, bundleVerified: false, runtimeSummary: { assetCount: 0 } };
   }
 

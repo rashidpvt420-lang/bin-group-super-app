@@ -87,10 +87,10 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
   }
 
   const legalBeneficiary = normalizeText(value.legalBeneficiary || value.beneficiaryName);
-  const bankName = normalizeText(value.bankName);
-  const accountNumber = normalizeText(value.accountNumber).replace(/\s+/g, "");
-  const iban = normalizeUpper(value.iban).replace(/\s+/g, "");
-  const swiftBic = normalizeUpper(value.swiftBic || value.swift || value.bic).replace(/\s+/g, "");
+  const rawBankName = normalizeText(value.bankName);
+  const rawAccountNumber = normalizeText(value.accountNumber).replace(/\s+/g, "");
+  const rawIban = normalizeUpper(value.iban).replace(/\s+/g, "");
+  const rawSwiftBic = normalizeUpper(value.swiftBic || value.swift || value.bic).replace(/\s+/g, "");
   const currency = normalizeUpper(value.currency);
   const version = normalizeText(value.version);
   const effectiveAtMs = timestampToMillis(value.effectiveAt || value.updatedAt);
@@ -98,18 +98,14 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
   const approvedMethods = Array.isArray(value.approvedMethods)
     ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter((method: string) => ALLOWED_METHODS.has(method))))
     : [];
+  const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER");
+  const cashOrChequeEnabled = approvedMethods.some((method) => method === "CASH" || method === "CHEQUE");
 
   if (legalBeneficiary !== EXPECTED_BENEFICIARY) {
     throw new HttpsError("failed-precondition", "The configured legal beneficiary does not match the approved corporate identity.");
   }
-  if (!version || !effectiveAtMs || !bankName || !accountNumber) {
+  if (!version || !effectiveAtMs) {
     throw new HttpsError("failed-precondition", "The corporate payment configuration is incomplete.");
-  }
-  if (!/^AE\d{21}$/.test(iban)) {
-    throw new HttpsError("failed-precondition", "The configured UAE IBAN is invalid.");
-  }
-  if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(swiftBic)) {
-    throw new HttpsError("failed-precondition", "The configured SWIFT/BIC is invalid.");
   }
   if (currency !== "AED") {
     throw new HttpsError("failed-precondition", "Owner onboarding payments must be configured in AED.");
@@ -117,15 +113,29 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
   if (approvedMethods.length === 0) {
     throw new HttpsError("failed-precondition", "No approved owner payment method is configured.");
   }
+  if (cashOrChequeEnabled && !officeLocation) {
+    throw new HttpsError("failed-precondition", "Cash and Cheque payments require an approved BIN GROUP office location.");
+  }
+  if (bankTransferEnabled) {
+    if (!rawBankName || !rawAccountNumber) {
+      throw new HttpsError("failed-precondition", "The corporate bank-transfer configuration is incomplete.");
+    }
+    if (!/^AE\d{21}$/.test(rawIban)) {
+      throw new HttpsError("failed-precondition", "The configured UAE IBAN is invalid.");
+    }
+    if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(rawSwiftBic)) {
+      throw new HttpsError("failed-precondition", "The configured SWIFT/BIC is invalid.");
+    }
+  }
 
   const configurationWithoutHash: Omit<ActivePaymentConfiguration, "configHash"> = {
     version,
     effectiveAtMs,
     legalBeneficiary,
-    bankName,
-    accountNumber,
-    iban,
-    swiftBic,
+    bankName: bankTransferEnabled ? rawBankName : "",
+    accountNumber: bankTransferEnabled ? rawAccountNumber : "",
+    iban: bankTransferEnabled ? rawIban : "",
+    swiftBic: bankTransferEnabled ? rawSwiftBic : "",
     currency: "AED",
     officeLocation,
     approvedMethods,
