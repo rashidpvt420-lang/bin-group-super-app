@@ -4,23 +4,26 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const read = (file) => readFileSync(file, 'utf8');
 
-test('protected business evidence prepares real Phase 1 payment and canonical geo fixtures', () => {
+test('protected business evidence separates exact Phase 1 payment policy from Founder geo authority', () => {
   const runner = read('scripts/run-protected-business-evidence.mjs');
   const ownerRunner = read('scripts/run-owner-business-suite-evidence.mjs');
+  const payment = read('scripts/ensure-phase1-manual-payment-config.mjs');
   const preparer = read('scripts/prepare-protected-business-fixtures.mjs');
-  assert.ok(runner.includes("prepare-protected-business-fixtures.mjs"));
+  assert.ok(runner.includes("run('scripts/ensure-phase1-manual-payment-config.mjs'"));
+  assert.ok(runner.includes("run('scripts/prepare-protected-business-fixtures.mjs'"));
+  assert.ok(ownerRunner.includes("run('scripts/ensure-phase1-manual-payment-config.mjs')"));
   assert.ok(ownerRunner.includes("run('scripts/prepare-protected-business-fixtures.mjs')"));
+  assert.ok(payment.includes("approvedMethods: EXPECTED_METHODS"));
+  assert.ok(payment.includes('bankTransferEnabled: false'));
+  assert.ok(payment.includes('stripeEnabled: false'));
   assert.ok(preparer.includes("process.env.GITHUB_WORKFLOW !== 'Firebase Production Deploy'"));
   assert.ok(preparer.includes("process.env.GITHUB_REF !== 'refs/heads/main'"));
-  assert.ok(preparer.includes("approvedMethods: ['CASH', 'CHEQUE']"));
-  assert.ok(preparer.includes('bankTransferEnabled: false'));
-  assert.ok(preparer.includes('stripeEnabled: false'));
   assert.ok(preparer.includes("E2E_PROPERTY_ID = 'e2e-live-role-property'"));
-  assert.ok(preparer.includes('emirate'));
-  assert.ok(preparer.includes('city'));
-  assert.ok(preparer.includes('area'));
+  assert.ok(preparer.includes('admin.auth().getUserByEmail(founderEmail)'));
+  assert.ok(preparer.includes('verifiedBy: founder.uid'));
   assert.ok(preparer.includes("source: 'FOUNDER_MFA_REVIEW'"));
   assert.ok(preparer.includes('hardLaunchClaim: false'));
+  assert.ok(!preparer.includes('property.ownerUid || property.ownerId'));
 });
 
 test('Phase 1 callable requires bank routing only when Bank Transfer is enabled', () => {

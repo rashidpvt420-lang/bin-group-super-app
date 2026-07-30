@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Idempotent Phase 1 policy validator.
+ * Idempotent Phase 1 policy validator and generated-workflow producer.
  *
- * The source transformation that introduced the Phase 1 Cash/Cheque policy was
- * intentionally removed after promotion. Production coherence tests and the
- * Owner hardening command still require a stable validator at this path.
- * This script therefore verifies the promoted policy and emits the generated
- * workflow copy without mutating production source.
+ * Production source remains unchanged in this step. The protected promotion
+ * workflow consumes the generated copy and promotes it byte-for-byte only after
+ * the source candidate passes its launch regressions.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { patchOwnerEvidenceWorkflow } from './apply-owner-inspection-first-evidence-workflow.mjs';
 
 const root = process.cwd();
 const workflowPath = path.join(root, '.github/workflows/firebase-production-deploy.yml');
@@ -22,6 +21,7 @@ const generatedPath = path.join(
 );
 
 const workflow = readFileSync(workflowPath, 'utf8');
+const generatedWorkflow = patchOwnerEvidenceWorkflow(workflow, workflowPath);
 const decision = readFileSync(decisionPath, 'utf8');
 
 const requiredWorkflowBindings = [
@@ -30,15 +30,28 @@ const requiredWorkflowBindings = [
   'phase2-stripe',
   'Verify Phase 1 manual Cash/Cheque production policy',
   'phase1-manual-payment-proof.json',
+  'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
+  'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
+  'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
+  "E2E_REQUIRE_FOUNDER_MFA: 'true'",
 ];
 
 for (const binding of requiredWorkflowBindings) {
-  if (!workflow.includes(binding)) {
+  if (!generatedWorkflow.includes(binding)) {
     throw new Error(`Phase 1 production workflow binding missing: ${binding}`);
   }
 }
 
-// These exact expressions are part of the launch-honesty contract.
+for (const binding of [
+  'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
+  'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
+  'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
+  "E2E_REQUIRE_FOUNDER_MFA: 'true'",
+]) {
+  const count = generatedWorkflow.split(binding).length - 1;
+  if (count !== 2) throw new Error(`Phase 1 production workflow must contain exactly two ${binding} bindings; found ${count}.`);
+}
+
 const requiredDecisionBindings = [
   "const paymentProofOk = paymentPolicy === 'phase1-manual'",
   "paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed'",
@@ -52,6 +65,6 @@ for (const binding of requiredDecisionBindings) {
 }
 
 mkdirSync(path.dirname(generatedPath), { recursive: true });
-writeFileSync(generatedPath, workflow.endsWith('\n') ? workflow : `${workflow}\n`, 'utf8');
+writeFileSync(generatedPath, generatedWorkflow.endsWith('\n') ? generatedWorkflow : `${generatedWorkflow}\n`, 'utf8');
 
-console.log('Phase 1 manual public-launch policy is already promoted and verified.');
+console.log('Phase 1 Cash/Cheque policy and inspection-first Founder MFA workflow are generated and verified.');
