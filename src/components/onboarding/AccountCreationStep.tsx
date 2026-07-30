@@ -29,6 +29,12 @@ const readable = (value: string | undefined, fallback: string) => {
 };
 
 const normalizePhone = (value: string) => value.replace(/[^0-9+]/g, '').trim();
+const authCode = (error: unknown) => String((error as { code?: unknown })?.code || 'auth/unknown');
+const authMessage = (error: unknown) => String((error as { message?: unknown })?.message || '');
+const isBlockingFunctionFailure = (error: unknown) => (
+    authCode(error) === 'auth/internal-error' &&
+    /BLOCKING_FUNCTION|HTTP Cloud Function|Page not found|requested URL was not found/i.test(authMessage(error))
+);
 
 export default function AccountCreationStep({ onBack, onNext }: AccountCreationStepProps) {
     const { companyProfile, setOwnerAccount, intakeId, setIntakeId, onboardingSessionId } = useOnboardingStore();
@@ -104,13 +110,20 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             if (!credential.user.emailVerified) await sendEmailVerification(credential.user);
             setAccountReady(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch (err: any) {
-            console.error('Owner account creation failed:', err);
-            const code = String(err?.code || '');
+        } catch (err: unknown) {
+            const code = authCode(err);
+            console.error('[OwnerOnboarding] Account creation failed', {
+                code,
+                blockingFunctionFailure: isBlockingFunctionFailure(err),
+                host: window.location.host,
+            });
             if (code === 'auth/invalid-email') setError({ message: errorText('onboarding.error.invalid_email', 'Enter a valid email address.'), type: 'error' });
             else if (code === 'auth/weak-password') setError({ message: errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.'), type: 'error' });
             else if (code === 'auth/network-request-failed') setError({ message: copy('Network connection failed. Check your connection and try again.', 'فشل الاتصال بالشبكة. تحقق من الاتصال وحاول مرة أخرى.'), type: 'error' });
-            else setError({ message: `${errorText('onboarding.error.generic', 'Account creation failed. Please try again.')} (${err?.message || code || 'unknown'})`, type: 'error' });
+            else if (code === 'auth/too-many-requests') setError({ message: copy('Too many attempts were made. Wait a few minutes, then try again.', 'تم إجراء محاولات كثيرة. انتظر بضع دقائق ثم حاول مرة أخرى.'), type: 'warning' });
+            else if (code === 'auth/operation-not-allowed') setError({ message: copy('Secure account registration is temporarily unavailable. Please contact BIN GROUP support.', 'إنشاء الحساب الآمن غير متاح مؤقتاً. يرجى التواصل مع دعم BIN GROUP.'), type: 'error' });
+            else if (isBlockingFunctionFailure(err)) setError({ message: copy('The secure account verification service is temporarily unavailable. BIN GROUP has been notified. Please retry shortly.', 'خدمة التحقق الآمن من الحساب غير متاحة مؤقتاً. تم إشعار BIN GROUP. يرجى المحاولة بعد قليل.'), type: 'error' });
+            else setError({ message: `${errorText('onboarding.error.generic', 'Account creation failed. Please try again.')} [${code}]`, type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -137,8 +150,10 @@ export default function AccountCreationStep({ onBack, onNext }: AccountCreationS
             });
             await currentUser.getIdToken(true);
             onNext();
-        } catch (err: any) {
-            setError({ message: err?.message || copy('Email verification could not be confirmed.', 'تعذر تأكيد البريد الإلكتروني.'), type: 'error' });
+        } catch (err: unknown) {
+            const code = authCode(err);
+            console.error('[OwnerOnboarding] Email verification confirmation failed', { code });
+            setError({ message: copy(`Email verification could not be confirmed. Please retry. [${code}]`, `تعذر تأكيد البريد الإلكتروني. يرجى المحاولة مرة أخرى. [${code}]`), type: 'error' });
         } finally {
             setCheckingVerification(false);
         }
