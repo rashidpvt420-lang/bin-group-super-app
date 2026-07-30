@@ -60,6 +60,16 @@ jobs:
           const newValue = "    6,\n    'workflow job payment policy env',";
           if (!source.includes(oldValue)) throw new Error('workflow job payment policy count anchor missing');
           source = source.replace(oldValue, newValue);
+          const removeReplaceBlock = (label) => {
+            const endMarker = `    '${label}',\n  );`;
+            const labelIndex = source.indexOf(endMarker);
+            if (labelIndex < 0) throw new Error(`redundant transformation label missing: ${label}`);
+            const startIndex = source.lastIndexOf('  source = replaceOnce(', labelIndex);
+            if (startIndex < 0) throw new Error(`replaceOnce start missing for: ${label}`);
+            source = `${source.slice(0, startIndex)}${source.slice(labelIndex + endMarker.length)}`;
+          };
+          removeReplaceBlock('workflow postdeploy gate policy env');
+          removeReplaceBlock('workflow final decision policy env');
           fs.writeFileSync(file, source);
           NODE
           node scripts/apply-phase1-manual-public-launch-policy.mjs
