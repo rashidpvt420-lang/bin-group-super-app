@@ -1,0 +1,217 @@
+name: Controlled Production Store Release
+run-name: Store release gate · ${{ inputs.expected_commit_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: Exact frozen main SHA deployed to Firebase production
+        required: true
+        type: string
+      production_deployment_run_id:
+        description: Successful Firebase Production Deploy workflow run ID for the exact SHA
+        required: true
+        type: string
+      build_android:
+        description: Dispatch the signed Android AAB workflow
+        required: true
+        type: boolean
+        default: true
+      build_ios:
+        description: Dispatch the signed iOS IPA workflow
+        required: true
+        type: boolean
+        default: true
+      ios_build_number:
+        description: Positive App Store Connect build number; required when build_ios is enabled
+        required: false
+        type: string
+        default: '1'
+      upload_ios_to_testflight:
+        description: Upload the signed iOS IPA to TestFlight after validation
+        required: true
+        type: boolean
+        default: false
+      confirmation:
+        description: Type RELEASE_CONTROLLED_PRODUCTION_TO_STORES
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: controlled-production-store-release
+  cancel-in-progress: false
+
+jobs:
+  production-distribution-ready:
+    name: Verify production distribution and dispatch store builds
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+      DEPLOYMENT_RUN_ID: ${{ inputs.production_deployment_run_id }}
+      IOS_BUILD_NUMBER: ${{ inputs.ios_build_number }}
+
+    steps:
+      - name: Enforce exact-main controlled production authorization
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          BUILD_ANDROID: ${{ inputs.build_android }}
+          BUILD_IOS: ${{ inputs.build_ios }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == 'RELEASE_CONTROLLED_PRODUCTION_TO_STORES' ]] || {
+            echo '::error::Store release confirmation phrase does not match.'
+            exit 1
+          }
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || {
+            echo '::error::Store release may run only from main.'
+            exit 1
+          }
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo '::error::expected_commit_sha must be a lowercase 40-character SHA.'
+            exit 1
+          }
+          [[ "$DEPLOYMENT_RUN_ID" =~ ^[1-9][0-9]*$ ]] || {
+            echo '::error::production_deployment_run_id must be numeric.'
+            exit 1
+          }
+          [[ "$BUILD_ANDROID" == 'true' || "$BUILD_IOS" == 'true' ]] || {
+            echo '::error::At least one store build must be selected.'
+            exit 1
+          }
+          if [[ "$BUILD_IOS" == 'true' ]]; then
+            [[ "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
+              echo '::error::ios_build_number must be a positive integer.'
+              exit 1
+            }
+          fi
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$EXPECTED_COMMIT_SHA" ]] || {
+            echo "::error::Current main $current_main does not match the authorized release SHA $EXPECTED_COMMIT_SHA."
+            exit 1
+          }
+
+      - name: Checkout exact frozen release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify launch honesty and mobile store source readiness
+        run: |
+          npm run test:launch-honesty
+          npm run test:mobile-store-readiness
+
+      - name: Download exact-SHA production deployment evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: production-deployment-${{ inputs.expected_commit_sha }}
+          path: downloaded-production-deployment
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.production_deployment_run_id }}
+
+      - name: Verify deployment evidence is passed and exact-SHA bound
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$(find downloaded-production-deployment -type f -name production-deployment.json -print -quit)"
+          [[ -n "$evidence" && -s "$evidence" ]] || {
+            echo '::error::The selected workflow run has no production-deployment.json artifact.'
+            exit 1
+          }
+          jq -e \
+            --arg sha "$EXPECTED_COMMIT_SHA" \
+            '(.status == "passed") and
+             ((.deployedCommitSha // .commitSha // "") == $sha) and
+             (.projectId == "bin-group-57c60") and
+             (.hardLaunchClaim != true)' \
+            "$evidence" >/dev/null || {
+              echo '::error::Production deployment evidence is not passed, exact-SHA bound, or correctly scoped.'
+              jq '{status, deployedCommitSha, commitSha, projectId, hardLaunchClaim}' "$evidence" || true
+              exit 1
+            }
+          mkdir -p launch_package
+          cp "$evidence" launch_package/production-deployment.json
+
+      - name: Verify source remains frozen before store dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$EXPECTED_COMMIT_SHA" ]] || {
+            echo "::error::Main advanced to $current_main before store dispatch."
+            exit 1
+          }
+
+      - name: Dispatch signed Android AAB workflow
+        if: ${{ inputs.build_android == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$EXPECTED_COMMIT_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
+            > android-dispatch.json
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
+            --input android-dispatch.json
+
+      - name: Dispatch signed iOS IPA workflow
+        if: ${{ inputs.build_ios == true }}
+        shell: bash
+        env:
+          UPLOAD_TO_TESTFLIGHT: ${{ inputs.upload_ios_to_testflight }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$EXPECTED_COMMIT_SHA" \
+            --arg build "$IOS_BUILD_NUMBER" \
+            --arg upload "$UPLOAD_TO_TESTFLIGHT" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,build_number:$build,upload_to_testflight:$upload,confirmation:"BUILD_SIGNED_IOS_IPA_BIN_GROUP"}}' \
+            > ios-dispatch.json
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/ios-app-store-release.yml/dispatches" \
+            --input ios-dispatch.json
+
+      - name: Record controlled-production release summary
+        shell: bash
+        env:
+          BUILD_ANDROID: ${{ inputs.build_android }}
+          BUILD_IOS: ${{ inputs.build_ios }}
+          UPLOAD_TO_TESTFLIGHT: ${{ inputs.upload_ios_to_testflight }}
+        run: |
+          {
+            echo '## Controlled production store release dispatched'
+            echo
+            echo "- Exact production SHA: \`$EXPECTED_COMMIT_SHA\`"
+            echo "- Firebase deployment run: \`$DEPLOYMENT_RUN_ID\`"
+            echo "- Android signed AAB requested: \`$BUILD_ANDROID\`"
+            echo "- iOS signed IPA requested: \`$BUILD_IOS\`"
+            echo "- TestFlight upload requested: \`$UPLOAD_TO_TESTFLIGHT\`"
+            echo '- Commercial public activation remains a separate later decision.'
+          } >> "$GITHUB_STEP_SUMMARY"
