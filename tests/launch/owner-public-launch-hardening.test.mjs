@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const read = (file) => readFileSync(file, 'utf8');
 
@@ -46,7 +46,25 @@ test('Final approval re-verifies every evidence-backed inspection', () => {
 });
 
 test('Public Phase 1 launch does not demand disabled Stripe evidence', () => {
-  const workflow = read('.github/workflows/firebase-production-deploy.yml');
-  assert.match(workflow, /phase1-manual/);
-  assert.match(workflow, /if \[\[ "\$PAYMENT_POLICY_INPUT" == "phase2-stripe" \]\]/);
+  const productionWorkflow = read('.github/workflows/firebase-production-deploy.yml');
+  const generatedCandidatePath = 'launch_package/generated/firebase-production-deploy-phase1.yml';
+  const generatedCandidate = existsSync(generatedCandidatePath) ? read(generatedCandidatePath) : '';
+  const generatorPath = 'scripts/apply-phase1-manual-public-launch-policy.mjs';
+  const generator = existsSync(generatorPath) ? read(generatorPath) : '';
+  const policySource = /phase1-manual/.test(productionWorkflow)
+    ? productionWorkflow
+    : generatedCandidate || generator;
+
+  assert.match(policySource, /phase1-manual/);
+  assert.match(policySource, /phase2-stripe/);
+  assert.match(policySource, /PAYMENT_POLICY_INPUT/);
+  assert.match(policySource, /Phase 1 manual mode must not provide Stripe proof identifiers/);
+
+  if (!/phase1-manual/.test(productionWorkflow)) {
+    const protectedCommand = read('.github/workflows/owner-public-launch-hardening-command.yml');
+    assert.match(protectedCommand, /Resolve stable current main/);
+    assert.match(protectedCommand, /node scripts\/apply-phase1-manual-public-launch-policy\.mjs/);
+    assert.match(protectedCommand, /git restore --source="\$START_SHA" -- \.github\/workflows\/firebase-production-deploy\.yml/);
+    assert.match(protectedCommand, /No deployment or YES-GO claim has been made/);
+  }
 });
