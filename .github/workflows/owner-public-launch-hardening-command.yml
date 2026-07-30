@@ -74,6 +74,16 @@ jobs:
           fs.writeFileSync(file, source);
           NODE
           node scripts/apply-phase1-manual-public-launch-policy.mjs
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'tests/launch/phase1-manual-public-launch-policy.test.mjs';
+          let source = fs.readFileSync(file, 'utf8');
+          const broken = "  assert.match(workflow, /Verify Phase 1 manual Cash/Cheque production policy/);";
+          const repaired = "  assert.ok(workflow.includes('Verify Phase 1 manual Cash/Cheque production policy'));";
+          if (!source.includes(broken)) throw new Error('Phase 1 Cash/Cheque regression syntax anchor missing');
+          source = source.replace(broken, repaired);
+          fs.writeFileSync(file, source);
+          NODE
 
       - name: Validate generated workflow YAML
         run: |
