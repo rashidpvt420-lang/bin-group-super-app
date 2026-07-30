@@ -8,7 +8,7 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
-// Security: do not use `export * from "./inspectionFirstOwnerOnboarding";` here.
+// Security: keep inspectionFirstOwnerOnboarding on an explicit named export list.
 // The legacy single-inspection completion export is intentionally excluded; only
 // portfolio-safe Owner acquisition callables are deployed.
 export {
