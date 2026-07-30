@@ -473,8 +473,8 @@ test('bank-pilot does not claim public launch; public mode requires payment-poli
   const decision = readFileSync(path.join(root, 'scripts/hard-launch-decision-gate.mjs'), 'utf8');
   assert.match(decision, /bank-pilot-no-public-claim/);
   assert.match(decision, /stripe-live-proof\.json/);
-  const policyGenerator = readFileSync(path.join(root, 'scripts/apply-phase1-manual-public-launch-policy.mjs'), 'utf8');
-  const proofDecision = decision.includes('paymentProofOk') ? decision : policyGenerator;
+  const proofDecision = decision;
+  assert.match(decision, /phase1-manual-payment-proof\.json/);
   assert.ok(proofDecision.includes("const paymentProofOk = paymentPolicy === 'phase1-manual'"));
   assert.ok(proofDecision.includes("paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed'"));
   assert.doesNotMatch(decision, /POSTDEPLOY_STRIPE_LIVE_OK/);
