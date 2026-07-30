@@ -64,6 +64,7 @@ test('Public Phase 1 launch does not demand disabled Stripe evidence', () => {
     const protectedCommand = read('.github/workflows/owner-public-launch-hardening-command.yml');
     assert.match(protectedCommand, /Resolve stable current main/);
     assert.match(protectedCommand, /node scripts\/apply-phase1-manual-public-launch-policy\.mjs/);
+    assert.match(protectedCommand, /git restore --source="\$START_SHA" -- \.github\/workflows\/firebase-production-deploy\.yml/);
     assert.match(protectedCommand, /No deployment or YES-GO claim has been made/);
   }
 });
