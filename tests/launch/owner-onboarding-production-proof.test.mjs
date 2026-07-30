@@ -97,7 +97,7 @@ assert.ok(ownerSpec.includes("testInfo.attach('owner-onboarding-production-evide
 
 for (const token of [
   'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1',
-  'const propertyId = `${intakeId}_property_${index + 1}`',
+  'const propertyId = safeId(`${intakeId}_property_${index + 1}`',
   'paymentDueAfterInspection: false',
   'approvedMethods.includes(method)',
   'paymentConfigVersion: activeConfiguration.version',
