@@ -116,7 +116,7 @@ for (const token of [
 }
 for (const token of [
   'adminRecordOwnerPropertyInspectionEvidence',
-  'distanceMetres > MAX_ARRIVAL_DISTANCE_METRES',
+  'distance > MAX_VISIT_RADIUS_METRES',
   'checklistVerified: true',
   'evidenceHash',
   'evidenceGeneration',
