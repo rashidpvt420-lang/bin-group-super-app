@@ -132,5 +132,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Owner public-launch source hardening failed. Review this protected workflow run; no YES-GO or deployment claim was made." >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Owner public-launch source hardening failed in Actions run \`$RUN_ID\` attempt \`$RUN_ATTEMPT\`: https://github.com/$REPOSITORY/actions/runs/$RUN_ID . No YES-GO or deployment claim was made." >/dev/null
