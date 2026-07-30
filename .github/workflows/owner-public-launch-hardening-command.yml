@@ -106,7 +106,7 @@ jobs:
           CI: false
           REACT_APP_ENABLE_FIREBASE_APPCHECK: 'false'
 
-      - name: Commit verified repairs and remove temporary command
+      - name: Commit verified source repairs
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -118,8 +118,8 @@ jobs:
             echo '::error::Main changed during repair; refusing to overwrite concurrent work.'
             exit 1
           }
+          git restore --source="$START_SHA" -- .github/workflows/firebase-production-deploy.yml
           rm -f scripts/apply-owner-public-launch-hardening.mjs
-          rm -f .github/workflows/owner-public-launch-hardening-command.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
@@ -135,7 +135,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           final_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
-          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Owner public-launch source hardening passed and was committed to main at \`$final_sha\`. Property IDs, payment evidence, verified Broker referral timing, evidence-backed property visits, Admin workflow and Phase 1 public payment policy were validated. Live deployment evidence is still required before a YES-GO claim." >/dev/null
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="Owner public-launch source hardening passed and was committed to main at \`$final_sha\`. Property IDs, payment evidence, verified Broker referral timing, evidence-backed property visits and the guided Admin workflow passed focused tests, stability, TypeScript, Functions and Admin builds. The validated Phase 1 deployment-policy workflow change will be committed separately through the authorised GitHub connector. Live deployment evidence is still required before a YES-GO claim." >/dev/null
 
       - name: Publish failure
         if: failure()
