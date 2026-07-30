@@ -1,6 +1,6 @@
-﻿/**
- * Authenticated production business proof for the Owner role.
- * No Firebase network mocking is allowed in this launch-critical suite.
+/**
+ * Authenticated production business proof for the five-page inspection-first
+ * Owner lifecycle. No Firebase network mocking is allowed.
  */
 import { config as loadDotenv } from 'dotenv';
 import { execFileSync } from 'node:child_process';
@@ -12,7 +12,7 @@ import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 test.use({ trace: 'off', video: 'off', screenshot: 'off' });
 
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(__dirname, '../..');
 const envPath = path.resolve(repositoryRoot, '.env.e2e');
 const evidencePath = path.resolve(repositoryRoot, 'launch_package/artifacts/owner-onboarding-production-evidence.json');
@@ -25,6 +25,7 @@ const ACQUIRED_PROPERTY = 'E2E Owner Acquisition Tower';
 type OwnerLifecycleEvidence = {
   status?: string;
   projectId?: string;
+  workflowVersion?: string;
   owner?: {
     acquiredThroughCallable?: boolean;
     authenticated?: boolean;
@@ -34,21 +35,44 @@ type OwnerLifecycleEvidence = {
   onboarding?: {
     intakeId?: string;
     propertyCount?: number;
+    clientDraftId?: string;
+    serverGeneratedPropertyIds?: string[];
     mobilizationPercent?: number;
-    contractUrlPresent?: boolean;
-    initialSubmissionIdempotentReplay?: boolean;
-    adminRejectionProven?: boolean;
-    resubmissionProven?: boolean;
-    approvalIdempotentReplay?: boolean;
+    submissionIdempotentReplay?: boolean;
+    paymentNotDueBeforeInspections?: boolean;
+    finalApprovalIdempotentReplay?: boolean;
     invoiceId?: string;
     invoiceProofHash?: string;
   };
-  receiptEvidence?: {
-    initialHash?: string;
-    initialGeneration?: string;
-    resubmissionHash?: string;
-    resubmissionGeneration?: string;
-    rotated?: boolean;
+  inspectionEvidence?: {
+    inspectionIds?: string[];
+    inspectionCount?: number;
+    evidenceHash?: string;
+    evidenceGeneration?: string;
+    checklistVerified?: boolean;
+    arrivalWithinRadius?: boolean;
+    distanceMetres?: number;
+    visitStartedAtPresent?: boolean;
+    visitCompletedAtPresent?: boolean;
+  };
+  paymentEvidence?: {
+    policy?: string;
+    method?: string;
+    paymentConfigVersion?: string;
+    paymentConfigHash?: string;
+    approvedMethods?: string[];
+    amountReceived?: number;
+    receiptHash?: string;
+    receiptGeneration?: string;
+    sensitiveValuesExcluded?: boolean;
+  };
+  adminApproval?: {
+    canonicalFounderEmail?: string;
+    mfaSecondFactorType?: string;
+    mfaSecondFactorIdentifierPresent?: boolean;
+    contractActivated?: boolean;
+    propertyActivated?: boolean;
+    dashboardUnlocked?: boolean;
   };
   emailDelivery?: Record<string, unknown>;
 };
@@ -59,13 +83,15 @@ function requireLaunchCredentials() {
   const required = [
     ['E2E_OWNER_EMAIL', EMAIL],
     ['E2E_OWNER_PASSWORD', PASSWORD],
-    ['E2E_ADMIN_EMAIL', process.env.E2E_ADMIN_EMAIL ?? ''],
-    ['E2E_ADMIN_PASSWORD', process.env.E2E_ADMIN_PASSWORD ?? ''],
+    ['E2E_OWNER_MAILBOX_EMAIL', process.env.E2E_OWNER_MAILBOX_EMAIL ?? ''],
+    ['E2E_FOUNDER_EMAIL', process.env.E2E_FOUNDER_EMAIL ?? ''],
+    ['E2E_FOUNDER_PASSWORD', process.env.E2E_FOUNDER_PASSWORD ?? ''],
+    ['E2E_FOUNDER_TOTP_SECRET', process.env.E2E_FOUNDER_TOTP_SECRET ?? ''],
     ['VITE_FIREBASE_APPCHECK_DEBUG_TOKEN', process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN ?? ''],
   ];
   const missing = required.filter(([, value]) => !value).map(([name]) => name);
   if (missing.length) {
-    throw new Error(`Missing ${missing.join(', ')}. Owner acquisition and activation proof cannot be skipped for public release.`);
+    throw new Error(`Missing ${missing.join(', ')}. Inspection-first Owner activation proof cannot be skipped.`);
   }
 }
 
@@ -74,7 +100,7 @@ function runOwnerSuiteCommand(mode: 'lifecycle' | 'restore-shared-fixtures') {
     cwd: repositoryRoot,
     env: process.env,
     stdio: 'inherit',
-    timeout: 12 * 60 * 1000,
+    timeout: 18 * 60 * 1000,
   });
 }
 
@@ -82,7 +108,7 @@ function runOwnerLifecycleProof() {
   requireLaunchCredentials();
   runOwnerSuiteCommand('lifecycle');
   if (!existsSync(evidencePath)) {
-    throw new Error('Owner production lifecycle runner did not create its evidence artifact.');
+    throw new Error('Inspection-first Owner production runner did not create its evidence artifact.');
   }
   lifecycleEvidence = JSON.parse(readFileSync(evidencePath, 'utf8')) as OwnerLifecycleEvidence;
 }
@@ -107,7 +133,7 @@ async function login(page: Page) {
 }
 
 async function expectAcquiredOwnerDashboard(page: Page) {
-  await expect(page.locator('body'), 'owner dashboard must render the property created by the production acquisition workflow').toContainText(
+  await expect(page.locator('body'), 'Owner dashboard must render the server-generated activation property').toContainText(
     new RegExp(ACQUIRED_PROPERTY, 'i'),
     { timeout: 30_000 },
   );
@@ -119,7 +145,7 @@ async function expectAcquiredOwnerDashboard(page: Page) {
 
 test.describe('Owner Business Workflow', () => {
   test.describe.configure({ mode: 'serial' });
-  test.setTimeout(15 * 60 * 1000);
+  test.setTimeout(20 * 60 * 1000);
 
   test.beforeAll(() => {
     runOwnerLifecycleProof();
@@ -143,9 +169,10 @@ test.describe('Owner Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-  test('New Owner acquisition, rejection, resubmission and one-time activation are production-proven', async ({ page }, testInfo) => {
+  test('Five-page Owner submission, evidence-backed visits, exact 15% and Founder MFA activation are production-proven', async ({ page }, testInfo) => {
     expect(lifecycleEvidence.status).toBe('passed');
     expect(lifecycleEvidence.projectId).toBe('bin-group-57c60');
+    expect(lifecycleEvidence.workflowVersion).toBe('OWNER_FIVE_PAGE_INSPECTION_FIRST_V1');
     expect(lifecycleEvidence.owner).toMatchObject({
       acquiredThroughCallable: true,
       authenticated: true,
@@ -155,28 +182,54 @@ test.describe('Owner Business Workflow', () => {
     expect(lifecycleEvidence.onboarding).toMatchObject({
       propertyCount: 1,
       mobilizationPercent: 15,
-      contractUrlPresent: true,
-      initialSubmissionIdempotentReplay: true,
-      adminRejectionProven: true,
-      resubmissionProven: true,
-      approvalIdempotentReplay: true,
+      submissionIdempotentReplay: true,
+      paymentNotDueBeforeInspections: true,
+      finalApprovalIdempotentReplay: true,
     });
-    expect(lifecycleEvidence.onboarding?.intakeId).toMatch(/^e2e_owner_onboarding_/);
+    expect(lifecycleEvidence.onboarding?.intakeId).toMatch(/^e2e_owner_inspection_first_/);
+    expect(lifecycleEvidence.onboarding?.clientDraftId).toBe('draft-owner-property-1');
+    expect(lifecycleEvidence.onboarding?.serverGeneratedPropertyIds).toEqual([
+      `${lifecycleEvidence.onboarding?.intakeId}_property_1`,
+    ]);
     expect(lifecycleEvidence.onboarding?.invoiceId).toMatch(/^MOB-/);
     expect(lifecycleEvidence.onboarding?.invoiceProofHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(lifecycleEvidence.receiptEvidence).toMatchObject({ rotated: true });
-    expect(lifecycleEvidence.receiptEvidence?.initialHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(lifecycleEvidence.receiptEvidence?.resubmissionHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(lifecycleEvidence.receiptEvidence?.initialGeneration).toBeTruthy();
-    expect(lifecycleEvidence.receiptEvidence?.resubmissionGeneration).toBeTruthy();
+
+    expect(lifecycleEvidence.inspectionEvidence).toMatchObject({
+      inspectionCount: 1,
+      checklistVerified: true,
+      arrivalWithinRadius: true,
+      visitStartedAtPresent: true,
+      visitCompletedAtPresent: true,
+    });
+    expect(lifecycleEvidence.inspectionEvidence?.inspectionIds?.[0]).toMatch(/^owner_inspection_/);
+    expect(lifecycleEvidence.inspectionEvidence?.evidenceHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(lifecycleEvidence.inspectionEvidence?.evidenceGeneration).toBeTruthy();
+    expect(lifecycleEvidence.inspectionEvidence?.distanceMetres).toBeLessThanOrEqual(750);
+
+    expect(lifecycleEvidence.paymentEvidence).toMatchObject({
+      policy: 'phase1-manual',
+      method: 'CASH',
+      approvedMethods: ['CASH', 'CHEQUE'],
+      sensitiveValuesExcluded: true,
+    });
+    expect(lifecycleEvidence.paymentEvidence?.paymentConfigVersion).toBeTruthy();
+    expect(lifecycleEvidence.paymentEvidence?.paymentConfigHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(lifecycleEvidence.paymentEvidence?.receiptHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(lifecycleEvidence.paymentEvidence?.receiptGeneration).toBeTruthy();
+
+    expect(lifecycleEvidence.adminApproval).toMatchObject({
+      canonicalFounderEmail: 'ceo@bin-groups.com',
+      mfaSecondFactorType: 'totp',
+      mfaSecondFactorIdentifierPresent: true,
+      contractActivated: true,
+      propertyActivated: true,
+      dashboardUnlocked: true,
+    });
     expect(Object.keys(lifecycleEvidence.emailDelivery ?? {})).toEqual(expect.arrayContaining([
-      'contractOtpInitialProviderMessageId',
-      'contractOtpResubmissionProviderMessageId',
-      'initialOnboardingMail',
-      'initialContractMail',
-      'rejectionMail',
-      'resubmissionOnboardingMail',
-      'resubmissionContractMail',
+      'contractOtpProviderMessageId',
+      'contractOtpMailboxReceiptVerified',
+      'contractOtpMailboxReceivedAt',
+      'contractOtpMailboxMessageIdHash',
       'invoiceMail',
     ]));
 
@@ -191,7 +244,7 @@ test.describe('Owner Business Workflow', () => {
     await expect(page.locator('body')).toContainText(/property|portfolio|asset|unit/i, { timeout: 20_000 });
   });
 
-  test('Owner sees the activated contract generated by the acquisition workflow', async ({ page }) => {
+  test('Owner sees the active contract created only after visits and payment approval', async ({ page }) => {
     const intakeId = lifecycleEvidence.onboarding?.intakeId;
     expect(intakeId).toBeTruthy();
     await page.goto(`/owner/contracts?contractId=${encodeURIComponent(String(intakeId))}`, { waitUntil: 'domcontentloaded' });
@@ -201,7 +254,7 @@ test.describe('Owner Business Workflow', () => {
     await expect(page.locator('body')).toContainText(/LOCKED CONTRACT SCOPE|ACTIVE AGREEMENTS|admin approved/i, { timeout: 20_000 });
   });
 
-  test('Owner sees the generated mobilization invoice and financial controls', async ({ page }) => {
+  test('Owner sees the exact 15% mobilisation invoice and Phase 1 controls', async ({ page }) => {
     const invoiceId = lifecycleEvidence.onboarding?.invoiceId;
     expect(invoiceId).toBeTruthy();
     await page.goto('/owner/financials', { waitUntil: 'domcontentloaded' });
