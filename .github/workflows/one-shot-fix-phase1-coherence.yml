@@ -1,0 +1,70 @@
+name: One-shot fix promoted Phase 1 coherence
+
+on:
+  push:
+    branches:
+      - fix/remove-retired-phase1-generator-fallback
+    paths:
+      - .github/workflows/one-shot-fix-phase1-coherence.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-fix-promoted-phase1-coherence
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/remove-retired-phase1-generator-fallback
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Remove retired generator fallback and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/launch/firebase-production-workflow-coherence.test.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = """  const policyGenerator = readFileSync(path.join(root, 'scripts/apply-phase1-manual-public-launch-policy.mjs'), 'utf8');
+          const proofDecision = decision.includes('paymentProofOk') ? decision : policyGenerator;
+          """
+          new = """  const proofDecision = decision;
+          assert.ok(
+            decision.includes('paymentProofOk'),
+            'promoted hard-launch decision must bind payment proof directly',
+          );
+          """
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one retired generator fallback, found {count}')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+
+          node --test tests/launch/firebase-production-workflow-coherence.test.mjs
+          git diff --check
+
+      - name: Commit only the validated coherence repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/one-shot-fix-phase1-coherence.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/launch/firebase-production-workflow-coherence.test.mjs .github/workflows/one-shot-fix-phase1-coherence.yml
+          git diff --cached --check
+          git commit -m 'test: remove retired Phase 1 generator fallback'
+          git push origin HEAD:fix/remove-retired-phase1-generator-fallback
