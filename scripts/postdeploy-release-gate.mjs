@@ -60,13 +60,15 @@ export function runPostdeployReleaseGate({
 
   const approvalPath = path.join(root, PREDEPLOY_APPROVAL_PATH);
   let releaseId = String(env.RELEASE_ID || '').trim();
+  let approvalDoc = null;
   if (!existsSync(approvalPath)) {
     failures.push(
       `${PREDEPLOY_APPROVAL_PATH} missing. Postdeploy release clearance must bind to the predeploy releaseId.`,
     );
   } else {
     try {
-      const approval = JSON.parse(readFileSync(approvalPath, 'utf8'));
+      approvalDoc = JSON.parse(readFileSync(approvalPath, 'utf8'));
+      const approval = approvalDoc;
       const boundReleaseId = String(approval.releaseId || '').trim();
       if (!boundReleaseId) {
         failures.push('predeploy-approval.json missing releaseId binding.');
@@ -235,34 +237,73 @@ export function runPostdeployReleaseGate({
   }
 
   const launchMode = String(env.LAUNCH_MODE || '').trim();
+  const paymentPolicy = String(env.PAYMENT_POLICY || approvalDoc?.paymentPolicy || '').trim().toLowerCase();
   if (launchMode === 'public') {
-    const stripeProofPath = path.join(root, 'launch_package', 'stripe-live-proof.json');
-    if (!existsSync(stripeProofPath)) {
-      failures.push('Public launch requires execution-generated stripe-live-proof.json.');
-    } else {
-      try {
-        const proof = JSON.parse(readFileSync(stripeProofPath, 'utf8'));
-        const proofAgeMs = now - Date.parse(proof.observedAt || '');
-        if (
-          proof.status !== 'passed' ||
-          proof.source !== 'stripe-api-live-verifier' ||
-          proof.liveMode !== true ||
-          proof.webhookProcessed !== true ||
-          proof.currency !== 'AED' ||
-          Number(proof.amountMinor || 0) <= 0 ||
-          proof.commitSha !== githubSha ||
-          String(proof.workflowRunId || '') !== String(env.GITHUB_RUN_ID || '') ||
-          proof.releaseId !== releaseId ||
-          proof.validatedArtifactDigest !== validatedDigest ||
-          !Number.isFinite(proofAgeMs) ||
-          proofAgeMs < 0 ||
-          proofAgeMs > 72 * 60 * 60 * 1000 ||
-          proof.hardLaunchClaim === true
-        ) {
-          failures.push('stripe-live-proof.json is stale, non-live, unprocessed, or not bound to this release.');
+    if (!['phase1-manual', 'phase2-stripe'].includes(paymentPolicy)) {
+      failures.push('Public launch requires PAYMENT_POLICY=phase1-manual or phase2-stripe.');
+    }
+    if (approvalDoc?.paymentPolicy && String(approvalDoc.paymentPolicy).trim().toLowerCase() !== paymentPolicy) {
+      failures.push('Predeploy approval paymentPolicy does not match PAYMENT_POLICY.');
+    }
+
+    if (paymentPolicy === 'phase2-stripe') {
+      const stripeProofPath = path.join(root, 'launch_package', 'stripe-live-proof.json');
+      if (!existsSync(stripeProofPath)) {
+        failures.push('Phase 2 Stripe launch requires execution-generated stripe-live-proof.json.');
+      } else {
+        try {
+          const proof = JSON.parse(readFileSync(stripeProofPath, 'utf8'));
+          const proofAgeMs = now - Date.parse(proof.observedAt || '');
+          if (
+            proof.status !== 'passed' ||
+            proof.source !== 'stripe-api-live-verifier' ||
+            proof.liveMode !== true ||
+            proof.webhookProcessed !== true ||
+            proof.currency !== 'AED' ||
+            Number(proof.amountMinor || 0) <= 0 ||
+            proof.commitSha !== githubSha ||
+            String(proof.workflowRunId || '') !== String(env.GITHUB_RUN_ID || '') ||
+            proof.releaseId !== releaseId ||
+            proof.validatedArtifactDigest !== validatedDigest ||
+            !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
+            proof.hardLaunchClaim === true
+          ) failures.push('stripe-live-proof.json is stale, non-live, unprocessed, or not bound to this release.');
+        } catch (error) {
+          failures.push(`stripe-live-proof.json is malformed: ${error.message}`);
         }
-      } catch (error) {
-        failures.push(`stripe-live-proof.json is malformed: ${error.message}`);
+      }
+    }
+
+    if (paymentPolicy === 'phase1-manual') {
+      const manualProofPath = path.join(root, 'launch_package', 'phase1-manual-payment-proof.json');
+      if (!existsSync(manualProofPath)) {
+        failures.push('Phase 1 manual launch requires execution-generated phase1-manual-payment-proof.json.');
+      } else {
+        try {
+          const proof = JSON.parse(readFileSync(manualProofPath, 'utf8'));
+          const proofAgeMs = now - Date.parse(proof.observedAt || '');
+          if (
+            proof.status !== 'passed' ||
+            proof.source !== 'firebase-production-manual-payment-policy-verifier' ||
+            proof.paymentPolicy !== 'phase1-manual' ||
+            proof.projectId !== PRODUCTION.projectId ||
+            proof.currency !== 'AED' ||
+            JSON.stringify(proof.approvedMethods) !== JSON.stringify(['CASH', 'CHEQUE']) ||
+            proof.bankTransferEnabled !== false || proof.stripeEnabled !== false ||
+            proof.sensitiveValuesExcluded !== true ||
+            !/^[0-9a-f]{64}$/.test(String(proof.configHash || '')) ||
+            !String(proof.configVersion || '').trim() ||
+            proof.commitSha !== githubSha ||
+            proof.repository !== String(env.GITHUB_REPOSITORY || '') ||
+            String(proof.workflowRunId || '') !== String(env.GITHUB_RUN_ID || '') ||
+            proof.releaseId !== releaseId ||
+            proof.validatedArtifactDigest !== validatedDigest ||
+            !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
+            proof.hardLaunchClaim === true
+          ) failures.push('phase1-manual-payment-proof.json is invalid, stale, or not bound to this release.');
+        } catch (error) {
+          failures.push(`phase1-manual-payment-proof.json is malformed: ${error.message}`);
+        }
       }
     }
   }
@@ -287,6 +328,7 @@ export function runPostdeployReleaseGate({
     commitSha: githubSha || null,
     releaseId: releaseId || null,
     validatedArtifactDigest: validatedDigest || null,
+    paymentPolicy: paymentPolicy || null,
     publicReleaseCleared: ok,
     hardLaunchClaim: HARD_LAUNCH_CLAIM,
     pilotEligible: eligibility.pilotEligible === true,

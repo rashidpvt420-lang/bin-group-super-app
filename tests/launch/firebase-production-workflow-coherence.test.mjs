@@ -469,17 +469,19 @@ test('deployment failure prevents evidence and release jobs by job dependency an
   assert.ok(liveEvidence > deploy);
 });
 
-test('bank-pilot does not claim public launch; public mode requires Stripe live proof', () => {
+test('bank-pilot does not claim public launch; public mode requires payment-policy-bound proof', () => {
   const decision = readFileSync(path.join(root, 'scripts/hard-launch-decision-gate.mjs'), 'utf8');
   assert.match(decision, /bank-pilot-no-public-claim/);
   assert.match(decision, /stripe-live-proof\.json/);
-  assert.match(decision, /stripeLiveOk/);
+  const policyGenerator = readFileSync(path.join(root, 'scripts/apply-phase1-manual-public-launch-policy.mjs'), 'utf8');
+  const proofDecision = decision.includes('paymentProofOk') ? decision : policyGenerator;
+  assert.ok(proofDecision.includes("const paymentProofOk = paymentPolicy === 'phase1-manual'"));
+  assert.ok(proofDecision.includes("paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed'"));
   assert.doesNotMatch(decision, /POSTDEPLOY_STRIPE_LIVE_OK/);
   assert.match(decision, /public-awaiting-postdeploy-clearance|postdeploy release clearance/);
   assert.match(workflow, /LAUNCH_MODE:\s*\$\{\{\s*inputs\.launch_mode\s*\}\}/);
-  assert.match(
-    decision,
-    /launchMode === 'public' && postdeployCleared && stripeLiveOk/,
+  assert.ok(
+    proofDecision.includes("launchMode === 'public' && postdeployCleared && paymentProofOk"),
   );
 });
 

@@ -1,0 +1,1016 @@
+name: Firebase Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type exactly DEPLOY_PRODUCTION_BIN_GROUP_57C60'
+        required: true
+        type: string
+      hard_launch_confirmation:
+        description: 'Type exactly AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP'
+        required: true
+        type: string
+      expected_commit_sha:
+        description: 'Full lowercase 40-character main commit SHA'
+        required: true
+        type: string
+      authorization_actor:
+        description: 'Automation-only GitHub actor delegated by the exact-main wrapper'
+        required: false
+        type: string
+        default: ''
+      founder_name:
+        description: 'Founder/CEO legal name'
+        required: true
+        type: string
+      founder_email:
+        description: 'Founder/CEO email listed in AUTHORIZED_FOUNDER_EMAILS'
+        required: true
+        type: string
+      launch_mode:
+        description: 'bank-pilot or public'
+        required: true
+        type: choice
+        options:
+          - bank-pilot
+          - public
+        default: bank-pilot
+      payment_policy:
+        description: 'Phase 1 Cash/Cheque or Phase 2 Stripe'
+        required: true
+        type: choice
+        options:
+          - phase1-manual
+          - phase2-stripe
+        default: phase1-manual
+      run_public_release_gate:
+        description: 'Required for public mode; runs the protected postdeploy public-release gate'
+        required: true
+        type: boolean
+        default: false
+      deployment_payload_json:
+        description: 'JSON containing incident, hard-clearance, and optional Phase 2 Stripe live-proof fields'
+        required: false
+        type: string
+        default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: firebase-production-deploy
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+  VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+  VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  VITE_ENABLE_FIREBASE_APPCHECK: 'true'
+  VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+  REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+  REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+  REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+  REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+  REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+  CI: true
+  PRODUCTION_CONFIRMATION_PHRASE: DEPLOY_PRODUCTION_BIN_GROUP_57C60
+  HARD_LAUNCH_CONFIRMATION_PHRASE: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP
+
+jobs:
+  validate-production-build:
+    name: Validate production build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce production dispatch gates
+        env:
+          DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION_INPUT: ${{ inputs.hard_launch_confirmation }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}
+          CURRENT_COMMIT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+          RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
+          PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
+          HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
+          STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]] \
+            || fail "Production confirmation phrase does not match."
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]] \
+            || fail "Hard-launch confirmation phrase does not match."
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] \
+            || fail "Production deploy may only run on refs/heads/main."
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail "expected_commit_sha must be a full lowercase 40-character SHA."
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
+            || fail "expected_commit_sha must equal the workflow commit SHA."
+          if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
+            [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
+              || fail "authorization_actor may only be supplied by github-actions[bot]."
+            # Keep in sync with scripts/create-hard-launch-authorization.mjs actor validation.
+            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+(\[[a-z]+\])?$ ]] \
+              || fail "authorization_actor must be a GitHub login or github-actions[bot]."
+          fi
+          if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]] \
+              || fail "Public mode requires run_public_release_gate=true."
+            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
+              || fail "Public mode requires a numeric hard-clearance run ID."
+            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
+              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
+              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
+            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
+              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
+            else
+              fail "Public payment_policy must be phase1-manual or phase2-stripe."
+            fi
+          else
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
+              || fail "Bank-pilot mode requires run_public_release_gate=false."
+            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Use Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify Java runtime
+        run: java -version
+
+      - name: Repository hygiene guard
+        run: node scripts/repo-hygiene-guard.mjs
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Create strict production environment files
+        run: node scripts/write-production-env.mjs
+
+      - name: Production stability guard
+        run: npm run test:stability
+
+      - name: Launch honesty and hard-launch control regressions
+        run: npm run test:launch-honesty
+
+      - name: TypeScript check
+        run: npx tsc -p tsconfig.app.json --noEmit
+
+      - name: Lint root app
+        run: npm run lint
+
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
+      - name: Build unified public app
+        run: npm run build
+
+      - name: Build dedicated admin panel
+        run: npm run build:admin
+        env:
+          CI: false
+
+      - name: Verify admin Firebase project embedding
+        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
+
+      - name: Build Firebase Functions
+        run: npm run build:functions
+
+      - name: Measure Functions discovery load
+        run: npm run measure:functions-load
+
+      - name: Run Firestore rules tests
+        run: npm run test:rules
+
+      - name: Verify mobile store source readiness
+        run: npm run test:mobile-store-readiness
+
+      - name: Verify Firebase hosting entrypoints
+        run: |
+          test -f dist/index.html
+          test -f apps/admin-panel/build/index.html
+
+  deploy-firebase-production-stack:
+    name: Deploy Firebase production stack
+    runs-on: ubuntu-latest
+    needs: validate-production-build
+    environment: production
+    env:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+      PRODUCTION_APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      E2E_BASE_URL: https://bin-group-57c60.web.app
+      E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+      E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+      E2E_TECHNICIAN_B_EMAIL: ${{ secrets.E2E_TECHNICIAN_B_EMAIL }}
+      E2E_TECHNICIAN_B_PASSWORD: ${{ secrets.E2E_TECHNICIAN_B_PASSWORD }}
+      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+      E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+      E2E_STRICT_ROLES: 'true'
+      E2E_STRICT_LIVE: 'true'
+      LAUNCH_MODE: ${{ inputs.launch_mode }}
+      PAYMENT_POLICY: ${{ inputs.payment_policy }}
+      RUN_PUBLIC_RELEASE_GATE: ${{ inputs.run_public_release_gate }}
+    outputs:
+      validated_artifact_digest: ${{ steps.artifact_digest.outputs.digest }}
+
+    steps:
+      - name: Enforce production dispatch gates
+        env:
+          DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION_INPUT: ${{ inputs.hard_launch_confirmation }}
+          EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          AUTHORIZATION_ACTOR_INPUT: ${{ inputs.authorization_actor }}
+          CURRENT_COMMIT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+          LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+          RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
+          PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
+          HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
+          STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$DISPATCH_CONFIRMATION" == "$PRODUCTION_CONFIRMATION_PHRASE" ]] \
+            || fail "Production confirmation phrase does not match."
+          [[ "$HARD_LAUNCH_CONFIRMATION_INPUT" == "$HARD_LAUNCH_CONFIRMATION_PHRASE" ]] \
+            || fail "Hard-launch confirmation phrase does not match."
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] \
+            || fail "Production deploy may only run on refs/heads/main."
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail "expected_commit_sha must be a full lowercase 40-character SHA."
+          [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
+            || fail "expected_commit_sha must equal the workflow commit SHA."
+          if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
+            [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
+              || fail "authorization_actor may only be supplied by github-actions[bot]."
+            # Keep in sync with scripts/create-hard-launch-authorization.mjs actor validation.
+            [[ "$AUTHORIZATION_ACTOR_INPUT" =~ ^[a-z0-9-]+(\[[a-z]+\])?$ ]] \
+              || fail "authorization_actor must be a GitHub login or github-actions[bot]."
+          fi
+          if [[ "$LAUNCH_MODE_INPUT" == "public" ]]; then
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "true" ]] \
+              || fail "Public mode requires run_public_release_gate=true."
+            [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
+              || fail "Public mode requires a numeric hard-clearance run ID."
+            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
+              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
+              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
+                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
+            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
+              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
+            else
+              fail "Public payment_policy must be phase1-manual or phase2-stripe."
+            fi
+          else
+            [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
+              || fail "Bank-pilot mode requires run_public_release_gate=false."
+            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Resolve protected Gmail mailbox identities
+        env:
+          E2E_OWNER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/resolve-production-mailbox-identities.mjs
+
+      - name: Verify named production values
+        run: node scripts/verify-production-workflow-env.mjs
+
+      - name: Deployment and authorization secrets preflight
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIF_PROVIDER" ]]
+          [[ -n "$GCP_SERVICE_ACCOUNT" ]]
+          [[ -n "$FOUNDER_ACTORS" ]]
+          [[ -n "$FOUNDER_EMAILS" ]]
+          [[ ${#APPROVAL_HMAC_KEY} -ge 32 ]]
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify predeploy hard-clearance run provenance
+        if: ${{ inputs.launch_mode == 'public' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$EXPECTED_REPOSITORY/actions/runs/$HARD_CLEARANCE_RUN_ID")"
+          jq -e --arg sha "$EXPECTED_SHA" '
+            .name == "Live Role Smoke Tests" and
+            .event == "workflow_dispatch" and
+            .head_branch == "main" and
+            .head_sha == $sha and
+            .status == "completed" and
+            .conclusion == "success"' \
+            <<<"$run_json" >/dev/null
+
+      - name: Download predeploy exact-SHA hard-clearance evidence
+        if: ${{ inputs.launch_mode == 'public' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hard-public-launch-clearance-${{ github.sha }}
+          path: predeploy_hard_clearance
+          github-token: ${{ github.token }}
+          run-id: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+
+      - name: Verify predeploy hard-clearance artifact
+        if: ${{ inputs.launch_mode == 'public' }}
+        env:
+          HARD_CLEARANCE_DIRECTORY: predeploy_hard_clearance
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+        run: node scripts/verify-hard-clearance-artifact.mjs
+
+      - name: Create production incidents artifact from protected workflow attestation
+        env:
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          INCIDENT_ATTESTATION: ${{ fromJSON(inputs.deployment_payload_json).incident_attestation }}
+          INCIDENT_ACTIVE_JSON: ${{ fromJSON(inputs.deployment_payload_json).incident_active_json }}
+          INCIDENT_REQUIRES_ROLLBACK: ${{ fromJSON(inputs.deployment_payload_json).incident_requires_rollback }}
+          INCIDENT_ROLLBACK_REASON: ${{ fromJSON(inputs.deployment_payload_json).incident_rollback_reason }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed }}
+          INCIDENT_LAST_DEPLOYMENT_FAILED_AT: ${{ fromJSON(inputs.deployment_payload_json).incident_last_deployment_failed_at }}
+          INCIDENT_EVIDENCE_REFS: ${{ fromJSON(inputs.deployment_payload_json).incident_evidence_refs }}
+        run: node scripts/create-production-incidents-attestation.mjs
+
+      - name: Create signed founder authorization
+        env:
+          FOUNDER_NAME: ${{ inputs.founder_name }}
+          FOUNDER_EMAIL: ${{ inputs.founder_email }}
+          AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
+          DEPLOYMENT_CONFIRMATION: ${{ inputs.confirmation }}
+          HARD_LAUNCH_CONFIRMATION: ${{ inputs.hard_launch_confirmation }}
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: npm run hard-launch:authorize
+
+      - name: Enforce signed predeploy authorization
+        env:
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
+        run: npm run hard-launch:predeploy
+
+      - name: Create strict production environment files
+        run: node scripts/write-production-env.mjs
+
+      - name: Validate resolved E2E role identity isolation before deploy
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: npm run test:e2e:env
+
+      - name: Use Java 21 for Firestore rules emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
+      - name: Build unified public app
+        id: build_public
+        run: |
+          set -euo pipefail
+          npm run build
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build dedicated admin panel
+        id: build_admin
+        run: |
+          set -euo pipefail
+          npm run build:admin
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        env:
+          CI: false
+          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+
+      - name: Verify admin Firebase project embedding before deploy
+        run: npm run verify:admin-firebase -- --build apps/admin-panel/build
+
+      - name: Build Firebase Functions
+        id: build_functions
+        run: |
+          set -euo pipefail
+          npm run build:functions
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Measure Functions discovery load
+        id: functions_load
+        run: |
+          set -euo pipefail
+          npm run measure:functions-load
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Firestore rules tests
+        id: rules_test
+        run: |
+          set -euo pipefail
+          npm run test:rules
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compute validated artifact digest
+        id: artifact_digest
+        run: |
+          set -euo pipefail
+          DIGEST="$(node scripts/compute-artifact-digest.mjs)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "VALIDATED_ARTIFACT_DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          echo "Computed VALIDATED_ARTIFACT_DIGEST=$DIGEST"
+
+      - name: Write predeploy approval binding (SHA + digest)
+        env:
+          APPROVED_BY: ${{ secrets.PRODUCTION_APPROVED_BY }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          LAUNCH_MODE_INPUT: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPROVED_BY}" ]]; then
+            echo "::error::Missing GitHub secret PRODUCTION_APPROVED_BY (audit trail email; authorization is the protected environment)."
+            exit 1
+          fi
+          mkdir -p launch_package
+          node <<'NODE'
+          const fs = require('fs');
+          const approvedBy = process.env.APPROVED_BY;
+          const doc = {
+            schemaVersion: 1,
+            commitSha: process.env.GITHUB_SHA,
+            artifactDigest: process.env.VALIDATED_ARTIFACT_DIGEST,
+            releaseId: process.env.RELEASE_ID,
+            approvedAt: new Date().toISOString(),
+            approvedBy,
+            approvedVia: 'github-environment-protection',
+            githubEnvironment: 'production',
+            launchMode: process.env.LAUNCH_MODE_INPUT,
+            paymentPolicy: process.env.PAYMENT_POLICY_INPUT,
+          };
+          fs.writeFileSync('launch_package/predeploy-approval.json', `${JSON.stringify(doc, null, 2)}\n`);
+          console.log('Wrote predeploy-approval.json for', doc.commitSha);
+          NODE
+
+      - name: Predeploy approval gate
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+          DEPLOYMENT_ENVIRONMENT: production
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
+          LAUNCH_BANK_ONLY: ${{ inputs.launch_mode == 'bank-pilot' && '1' || '0' }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+          PREDEPLOY_BUILD_OK: ${{ steps.build_public.outputs.ok }}
+          PREDEPLOY_ADMIN_BUILD_OK: ${{ steps.build_admin.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_BUILD_OK: ${{ steps.build_functions.outputs.ok }}
+          PREDEPLOY_RULES_OK: ${{ steps.rules_test.outputs.ok }}
+          PREDEPLOY_FUNCTIONS_LOAD_OK: ${{ steps.functions_load.outputs.ok }}
+        run: node scripts/predeploy-approval-gate.mjs
+
+      - name: Remove unexpected privileged Firebase accounts
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          PRIVILEGED_ACCOUNT_CLEANUP_CONFIRMATION: DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP
+          CANONICAL_FOUNDER_EMAIL_CONFIRMATION: ceo@bin-groups.com
+        run: node scripts/delete-obsolete-privileged-accounts-production.mjs --execute
+
+      - name: Deploy and verify Firebase production stack
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+        run: node scripts/deploy-firebase-production.mjs
+
+      - name: Verify production deployment metadata and same-run bindings after deploy
+        env:
+          VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
+        run: node scripts/verify-same-run-deployment-artifact.mjs
+
+      - name: Authenticate Google Cloud for E2E fixtures
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Validate full live E2E secrets and App Check UUID
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: npm run test:e2e:env
+
+      - name: Seed or repair E2E role accounts
+        run: npm run seed:e2e:auth
+
+      - name: Seed current-commit five-role fixtures
+        run: npm run seed:e2e:live-data
+
+      - name: Run current-commit production deployment evidence
+        run: node scripts/run-critical-evidence.mjs --suite productionDeployment
+
+      - name: Run current-commit five-role business evidence
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: npm run test:e2e:business
+
+      - name: Upload failed business evidence diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: business-evidence-diagnostics-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            launch_package/artifacts/*.json
+            launch_package/artifacts/*.stdio.log
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Run current-commit live launch audit
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: npm run test:e2e:launch-audit:live
+
+      - name: Evaluate controlled-pilot eligibility
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: npm run launch:status
+
+      - name: Create signed hard-launch decision
+        if: ${{ inputs.launch_mode == 'bank-pilot' }}
+        env:
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
+          POSTDEPLOY_RELEASE_CLEARED: 'false'
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+        run: npm run hard-launch:decision
+
+      - name: Upload production deployment metadata after verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          path: |
+            launch_package/production-deployment.json
+            launch_package/production-deployment-verify.log
+            launch_package/predeploy-approval.json
+            launch_package/production-incidents.json
+            launch_package/hard-launch-authorization.json
+            launch_package/hard-launch-decision.json
+            launch_package/launch-evidence-batch.json
+            launch_package/launch-status.json
+          if-no-files-found: error
+          retention-days: 90
+
+  public-release-clearance:
+    name: Postdeploy public release gate
+    runs-on: ubuntu-latest
+    needs: deploy-firebase-production-stack
+    if: ${{ inputs.run_public_release_gate == true }}
+    environment: production
+    env:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      E2E_BASE_URL: https://bin-group-57c60.web.app
+      E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+      E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+      E2E_TECHNICIAN_B_EMAIL: ${{ secrets.E2E_TECHNICIAN_B_EMAIL }}
+      E2E_TECHNICIAN_B_PASSWORD: ${{ secrets.E2E_TECHNICIAN_B_PASSWORD }}
+      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+      E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+      E2E_STRICT_ROLES: 'true'
+      E2E_STRICT_LIVE: 'true'
+      LAUNCH_MODE: ${{ inputs.launch_mode }}
+      PAYMENT_POLICY: ${{ inputs.payment_policy }}
+      RUN_PUBLIC_RELEASE_GATE: ${{ inputs.run_public_release_gate }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Resolve protected Gmail mailbox identities
+        env:
+          E2E_OWNER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/resolve-production-mailbox-identities.mjs
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Authenticate to Google Cloud for live postdeploy proofs
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Create E2E environment for live proofs
+        env:
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+          E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+          E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+          E2E_TECHNICIAN_B_EMAIL: ${{ secrets.E2E_TECHNICIAN_B_EMAIL }}
+          E2E_TECHNICIAN_B_PASSWORD: ${{ secrets.E2E_TECHNICIAN_B_PASSWORD }}
+          E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+          E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+          E2E_STRICT_ROLES: 'true'
+          E2E_STRICT_LIVE: 'true'
+        run: |
+          set -euo pipefail
+          {
+            printf 'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=%s\n' "$VITE_FIREBASE_APPCHECK_DEBUG_TOKEN"
+            printf 'FIREBASE_APPCHECK_DEBUG_TOKEN=%s\n' "$FIREBASE_APPCHECK_DEBUG_TOKEN"
+            printf 'VITE_FIREBASE_API_KEY=%s\n' "$VITE_FIREBASE_API_KEY"
+            printf 'VITE_FIREBASE_APP_ID=%s\n' "$VITE_FIREBASE_APP_ID"
+            printf 'VITE_FIREBASE_MESSAGING_SENDER_ID=%s\n' "$VITE_FIREBASE_MESSAGING_SENDER_ID"
+            printf 'VITE_APP_CHECK_SITE_KEY=%s\n' "$VITE_APP_CHECK_SITE_KEY"
+            printf 'E2E_BASE_URL=%s\n' "$E2E_BASE_URL"
+            printf 'E2E_ADMIN_BASE_URL=%s\n' "$E2E_ADMIN_BASE_URL"
+            printf 'E2E_ADMIN_EMAIL=%s\n' "$E2E_ADMIN_EMAIL"
+            printf 'E2E_ADMIN_PASSWORD=%s\n' "$E2E_ADMIN_PASSWORD"
+            printf 'E2E_OWNER_EMAIL=%s\n' "$E2E_OWNER_EMAIL"
+            printf 'E2E_OWNER_MAILBOX_EMAIL=%s\n' "$E2E_OWNER_MAILBOX_EMAIL"
+            printf 'E2E_OWNER_PASSWORD=%s\n' "$E2E_OWNER_PASSWORD"
+            printf 'E2E_TENANT_EMAIL=%s\n' "$E2E_TENANT_EMAIL"
+            printf 'E2E_TENANT_PASSWORD=%s\n' "$E2E_TENANT_PASSWORD"
+            printf 'E2E_TECHNICIAN_EMAIL=%s\n' "$E2E_TECHNICIAN_EMAIL"
+            printf 'E2E_TECHNICIAN_PASSWORD=%s\n' "$E2E_TECHNICIAN_PASSWORD"
+            printf 'E2E_TECHNICIAN_B_EMAIL=%s\n' "$E2E_TECHNICIAN_B_EMAIL"
+            printf 'E2E_TECHNICIAN_B_PASSWORD=%s\n' "$E2E_TECHNICIAN_B_PASSWORD"
+            printf 'E2E_BROKER_EMAIL=%s\n' "$E2E_BROKER_EMAIL"
+            printf 'E2E_BROKER_MAILBOX_EMAIL=%s\n' "$E2E_BROKER_MAILBOX_EMAIL"
+            printf 'E2E_BROKER_PASSWORD=%s\n' "$E2E_BROKER_PASSWORD"
+            printf 'E2E_STRICT_ROLES=%s\n' "$E2E_STRICT_ROLES"
+            printf 'E2E_STRICT_LIVE=%s\n' "$E2E_STRICT_LIVE"
+          } > .env.e2e
+          node scripts/verify-e2e-env.mjs
+
+      - name: Download production deployment metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          # Upload paths already include launch_package/. Downloading into that
+          # directory would nest launch_package/launch_package and make the
+          # same-run verifier read missing files.
+          path: .
+          # Same-workflow-run only: never accept a cross-run orphan artifact.
+
+      - name: Verify downloaded deployment artifact is bound to this run and SHA
+        env:
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+        run: node scripts/verify-same-run-deployment-artifact.mjs
+
+      - name: Verify hard-clearance run provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$EXPECTED_REPOSITORY/actions/runs/$HARD_CLEARANCE_RUN_ID")"
+          jq -e \
+            --arg sha "$EXPECTED_SHA" \
+            '.path == ".github/workflows/live-role-smoke.yml" and
+             .event == "workflow_dispatch" and
+             .head_branch == "main" and
+             .head_sha == $sha and
+             .status == "completed" and
+             .conclusion == "success"' \
+            <<<"$run_json" >/dev/null
+
+      - name: Download exact-SHA hard-clearance evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hard-public-launch-clearance-${{ github.sha }}
+          path: hard_clearance
+          github-token: ${{ github.token }}
+          run-id: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+
+      - name: Restore pilot incident evidence
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package
+          if [[ -f hard_clearance/pilot-incident-report.json ]]; then
+            cp hard_clearance/pilot-incident-report.json launch_package/pilot-incident-report.json
+          elif [[ -f hard_clearance/launch_package/pilot-incident-report.json ]]; then
+            cp hard_clearance/launch_package/pilot-incident-report.json launch_package/pilot-incident-report.json
+          else
+            echo "::error::Downloaded hard-clearance artifact has no pilot-incident-report.json"
+            exit 1
+          fi
+      - name: Seed E2E auth and gate fixtures
+        run: |
+          set -euo pipefail
+          node scripts/seed-e2e-auth.mjs
+          node scripts/seed-live-role-test-data.mjs
+          node scripts/seed-gate11-fixtures.mjs
+
+      - name: Verify production routes
+        id: postdeploy_routes
+        run: |
+          set -euo pipefail
+          npm run test:e2e:gate11:routes
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify SMTP live delivery
+        id: postdeploy_smtp
+        run: |
+          set -euo pipefail
+          npm run test:gate12:smtp
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify App Check debug token registration
+        id: postdeploy_appcheck
+        run: |
+          set -euo pipefail
+          npm run test:gate12:appcheck
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run Gate 11 authenticated production smoke
+        # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
+        # plain `npm run test:e2e:gate11:staging` — postdeploy-release-gate.mjs
+        # requires that exact evidence key and nothing else was writing it, so the
+        # gate could never pass regardless of this step's own ok=true marker.
+        id: postdeploy_smoke
+        run: |
+          set -euo pipefail
+          node scripts/record-postdeploy-aggregate-evidence.mjs --only gate11
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run business workflow evidence
+        id: postdeploy_business
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm run test:e2e:business
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Aggregate business workflow evidence
+        # postdeploy-release-gate.mjs requires a single businessWorkflows record
+        # (passed=9/failed=0), not the six per-role records test:e2e:business
+        # writes individually. Sums the six already-written records for this
+        # commit — does not re-run anything.
+        run: node scripts/record-postdeploy-aggregate-evidence.mjs --only business
+
+      - name: Run launch audit live evidence
+        id: postdeploy_audit
+        env:
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm run test:e2e:launch-audit:live
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Phase 1 manual Cash/Cheque production policy
+        if: ${{ inputs.payment_policy == 'phase1-manual' }}
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+        run: node scripts/verify-phase1-manual-payment-proof.mjs
+
+      - name: Verify recent live Stripe payment and processed webhook
+        if: ${{ inputs.payment_policy == 'phase2-stripe' }}
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
+          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+        run: node scripts/verify-stripe-live-proof.mjs
+
+      - name: Postdeploy release gate
+        id: postdeploy_gate
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
+          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
+          POSTDEPLOY_ROUTES_OK: ${{ steps.postdeploy_routes.outputs.ok }}
+          POSTDEPLOY_SMTP_OK: ${{ steps.postdeploy_smtp.outputs.ok }}
+          POSTDEPLOY_APPCHECK_OK: ${{ steps.postdeploy_appcheck.outputs.ok }}
+          POSTDEPLOY_SMOKE_OK: ${{ steps.postdeploy_smoke.outputs.ok }}
+          POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
+          POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
+        run: |
+          set -euo pipefail
+          node scripts/postdeploy-release-gate.mjs
+          echo "cleared=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create signed hard-launch decision after postdeploy clearance
+        env:
+          HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
+          AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+          AUTHORIZED_FOUNDER_EMAILS: ${{ secrets.AUTHORIZED_FOUNDER_EMAILS }}
+          AUTHORIZATION_ACTOR: ${{ inputs.authorization_actor }}
+          LAUNCH_MODE: ${{ inputs.launch_mode }}
+          PAYMENT_POLICY: ${{ inputs.payment_policy }}
+          POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
+        run: npm run hard-launch:decision
+
+      - name: Upload public release clearance artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: public-release-clearance-${{ github.sha }}
+          path: |
+            launch_package/public-release-status.json
+            launch_package/stripe-live-proof.json
+            launch_package/phase1-manual-payment-proof.json
+            launch_package/pilot-incident-report.json
+            launch_package/launch-evidence-batch.json
+            launch_package/hard-launch-decision.json
+            launch_package/production-incidents.json
+          if-no-files-found: warn
+          retention-days: 90
