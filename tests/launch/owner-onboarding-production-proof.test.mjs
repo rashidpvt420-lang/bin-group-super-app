@@ -140,7 +140,7 @@ assert.ok(financials.includes('invoice.invoiceId || invoice.id'), 'Owner financi
 assert.ok(runtime.includes('previewOwnerInspectionQuote,'), 'Runtime must explicitly export the inspection-first quote callable');
 assert.ok(runtime.includes('submitOwnerInspectionFirstOnboarding,'), 'Runtime must explicitly export the inspection-first submission callable');
 assert.ok(runtime.includes('adminRecordOwnerMobilizationPaymentEvidence,'), 'Runtime must explicitly export the exact 15% evidence callable');
-assert.ok(!runtime.includes('export * from "./inspectionFirstOwnerOnboarding";'), 'Runtime must not wildcard-export the legacy single-inspection callable surface');
+assert.doesNotMatch(runtime, /^\s*export\s+\*\s+from\s+["']\.\/inspectionFirstOwnerOnboarding["'];\s*$/m, 'Runtime must not wildcard-export the legacy single-inspection callable surface');
 assert.ok(runtime.includes('export * from "./ownerInspectionAdminLink";'), 'Runtime must export Admin inspection linking');
 assert.ok(runtime.includes('export * from "./ownerInspectionCompletion";'), 'Runtime must export evidence-backed inspection completion');
 assert.ok(runtime.includes('export * from "./securePaymentApproval";'), 'Runtime must export the secure payment approval gate');
