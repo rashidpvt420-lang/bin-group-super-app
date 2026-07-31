@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - fix/founder-predeploy-env-guard-30637308881
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -15,12 +19,14 @@ concurrency:
 
 jobs:
   repair:
+    if: github.event_name == 'push' || github.head_ref == 'fix/founder-predeploy-env-guard-30637308881'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout repair branch
+      - name: Checkout exact repair head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Publish temporary repair run locator
@@ -31,7 +37,7 @@ jobs:
         run: |
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -f body="Founder predeploy repair bootstrap run \`${GITHUB_RUN_ID}\` started for head \`${GITHUB_SHA}\`. No Firebase workflow was dispatched."
+            -f body="Founder predeploy repair bootstrap run \`${GITHUB_RUN_ID}\` started for head \`$(git rev-parse HEAD)\`. No Firebase workflow was dispatched."
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
