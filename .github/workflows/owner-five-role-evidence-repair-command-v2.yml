@@ -1,0 +1,155 @@
+name: Owner Five-Role Evidence Repair Command V2
+run-name: Owner five-role evidence repair v2
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: owner-five-role-evidence-repair-v2
+  cancel-in-progress: false
+
+jobs:
+  generate-repair:
+    name: Generate deterministic five-role evidence repair PR v2
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-repair five-role-production-evidence-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+
+    steps:
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while authorizing the repair.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+          echo "short=${second_sha:0:8}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Syntax-check and apply exact fail-closed repair
+        run: |
+          node --check scripts/apply-five-role-production-evidence-repair-v2.mjs
+          node scripts/apply-five-role-production-evidence-repair-v2.mjs
+
+      - name: Verify generated repair scope and regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          node --test tests/launch/five-role-production-evidence-repair.test.mjs
+          test ! -e .github/workflows/owner-five-role-evidence-repair-command.yml
+          test ! -e scripts/apply-five-role-production-evidence-repair.mjs
+          test ! -e .github/workflows/owner-five-role-evidence-repair-command-v2.yml
+          test ! -e scripts/apply-five-role-production-evidence-repair-v2.mjs
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            .github/workflows/owner-five-role-evidence-repair-command-v2.yml
+            .github/workflows/owner-five-role-evidence-repair-command.yml
+            scripts/apply-five-role-production-evidence-repair-v2.mjs
+            scripts/apply-five-role-production-evidence-repair.mjs
+            scripts/prepare-protected-business-fixtures.mjs
+            src/technician/pages/TechnicianJobDetailPage.tsx
+            tests/e2e/business-technician.spec.ts
+            tests/e2e/business-tenant.spec.ts
+            tests/launch/five-role-production-evidence-repair.test.mjs
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          diff -u <(printf '%s\n' "${expected_sorted[@]}") <(printf '%s\n' "${changed[@]}")
+
+      - name: Commit repair to isolated branch
+        id: commit
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RELEASE_SHORT: ${{ steps.release.outputs.short }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]] || {
+            echo '::error::Main moved before repair branch creation.'
+            exit 1
+          }
+          branch="fix/five-role-production-evidence-${RELEASE_SHORT}-generated-v2"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$branch"
+          git add -A
+          git commit -m 'fix: make five-role production evidence deterministic'
+          git push --force-with-lease origin "HEAD:refs/heads/$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Open protected repair PR
+        id: pr
+        env:
+          BRANCH: ${{ steps.commit.outputs.branch }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(cat <<BODY
+          ## Verified failure
+          Firebase Production Deploy run 30615219518 deployed the stack, then failed at current-commit five-role business evidence.
+
+          ## Already fixed on main
+          PR #831 added the protected Founder email/password/TOTP wiring and line-ending-safe evidence patching.
+
+          ## Remaining root causes fixed here
+          - Protected shared fixtures now make the Technician operationally callable-ready before Tenant lifecycle evidence.
+          - Technician ticket IDs are run-specific and acceptance proof is status-aware.
+          - Tenant Start Trip proof verifies exact Firestore EN_ROUTE state plus visible UI confirmation.
+          - Online callable rejections are visible and are no longer mislabeled as offline queued success.
+
+          ## Safety
+          - Base exact main: \`$RELEASE_SHA\`
+          - Both temporary bootstrap versions remove themselves in this PR.
+          - Public release gate and hard-launch claim remain disabled.
+          - Stripe and Bank Transfer remain disabled.
+          - A fresh exact-SHA deployment/evidence chain is required after merge.
+          BODY
+          )"
+          pr_url="$(gh pr create --repo "$REPOSITORY" --base main --head "$BRANCH" --draft --title 'Fix remaining five-role production evidence failures' --body "$body")"
+          echo "url=$pr_url" >> "$GITHUB_OUTPUT"
+
+      - name: Post repair handoff
+        env:
+          PR_URL: ${{ steps.pr.outputs.url }}
+          HEAD_SHA: ${{ steps.commit.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+            -f body="Remaining five-role production evidence repair PR created: $PR_URL (head \`$HEAD_SHA\`). No deployment was retriggered."
