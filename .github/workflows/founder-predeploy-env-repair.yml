@@ -1,0 +1,87 @@
+name: Founder Predeploy Environment Repair
+
+on:
+  push:
+    branches:
+      - fix/founder-predeploy-env-guard-30637308881
+
+permissions:
+  contents: write
+
+concurrency:
+  group: founder-predeploy-env-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enforce unchanged exact main
+        env:
+          EXPECTED_MAIN_SHA: 91e8ebe62fce90da65400253b2476efdcba7b3d0
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          actual_main_sha="$(git rev-parse origin/main)"
+          merge_base_sha="$(git merge-base HEAD origin/main)"
+          test "$actual_main_sha" = "$EXPECTED_MAIN_SHA"
+          test "$merge_base_sha" = "$EXPECTED_MAIN_SHA"
+
+      - name: Apply Founder predeploy environment repair
+        run: node scripts/apply-founder-predeploy-env-guard.mjs
+
+      - name: Run focused regressions
+        run: |
+          node --test \
+            tests/launch/production-client-value-preflight.test.mjs \
+            tests/launch/owner-inspection-first-live-evidence.test.mjs
+
+      - name: Verify exact persistent repair scope
+        run: |
+          set -euo pipefail
+          mapfile -t actual < <(git diff --name-only | sort)
+          mapfile -t expected < <(printf '%s\n' \
+            '.github/workflows/firebase-production-deploy.yml' \
+            'launch_package/generated/firebase-production-deploy-phase1.yml' \
+            'scripts/apply-owner-inspection-first-evidence-workflow.mjs' \
+            'scripts/verify-production-workflow-env.mjs' \
+            'tests/launch/owner-inspection-first-live-evidence.test.mjs' \
+            'tests/launch/production-client-value-preflight.test.mjs' | sort)
+          diff -u <(printf '%s\n' "${expected[@]}") <(printf '%s\n' "${actual[@]}")
+          grep -q "E2E_FOUNDER_EMAIL: \${{ inputs.founder_email }}" .github/workflows/firebase-production-deploy.yml
+          test "$(grep -c 'E2E_FOUNDER_REAL_MFA_CODE: \${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}' .github/workflows/firebase-production-deploy.yml)" -eq 2
+          grep -q "E2E_FOUNDER_EMAIL'" scripts/verify-production-workflow-env.mjs
+          grep -q 'Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE' scripts/verify-production-workflow-env.mjs
+
+      - name: Commit repair and remove bootstrap
+        env:
+          BRANCH_NAME: fix/founder-predeploy-env-guard-30637308881
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/firebase-production-deploy.yml \
+            launch_package/generated/firebase-production-deploy-phase1.yml \
+            scripts/apply-owner-inspection-first-evidence-workflow.mjs \
+            scripts/verify-production-workflow-env.mjs \
+            tests/launch/owner-inspection-first-live-evidence.test.mjs \
+            tests/launch/production-client-value-preflight.test.mjs
+          git commit -m 'fix: fail closed on missing Founder production evidence'
+          git rm \
+            .github/workflows/founder-predeploy-env-repair.yml \
+            scripts/apply-founder-predeploy-env-guard.mjs
+          git commit -m 'chore: remove temporary Founder repair bootstrap'
+          git push origin "HEAD:${BRANCH_NAME}"
