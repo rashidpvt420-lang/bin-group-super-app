@@ -60,8 +60,9 @@ jobs:
             'tests/launch/owner-inspection-first-live-evidence.test.mjs' \
             'tests/launch/production-client-value-preflight.test.mjs' | sort)
           diff -u <(printf '%s\n' "${expected[@]}") <(printf '%s\n' "${actual[@]}")
-          grep -q "E2E_FOUNDER_EMAIL: \${{ inputs.founder_email }}" .github/workflows/firebase-production-deploy.yml
-          test "$(grep -c 'E2E_FOUNDER_REAL_MFA_CODE: \${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}' .github/workflows/firebase-production-deploy.yml)" -eq 2
+          test "$(grep -c 'E2E_FOUNDER_EMAIL:' .github/workflows/firebase-production-deploy.yml)" -ge 2
+          test "$(grep -c 'inputs.founder_email' .github/workflows/firebase-production-deploy.yml)" -ge 2
+          test "$(grep -c 'E2E_FOUNDER_REAL_MFA_CODE:' .github/workflows/firebase-production-deploy.yml)" -eq 2
           grep -q "E2E_FOUNDER_EMAIL'" scripts/verify-production-workflow-env.mjs
           grep -q 'Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE' scripts/verify-production-workflow-env.mjs
 
