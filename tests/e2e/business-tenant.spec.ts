@@ -225,7 +225,11 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
       'button:has-text("Start Trip")',
       'button:has-text("En Route")',
     ], 'Start trip action');
-    await expect(page.locator('.MuiChip-label').filter({ hasText: /^EN ROUTE$/i }).first()).toBeVisible({ timeout: 40_000 });
+    await expect.poll(async () => {
+      const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      return String(lifecycleSnap.data()?.status || '').toUpperCase();
+    }, { timeout: 40_000, message: 'Technician Start Trip must persist EN_ROUTE in production Firestore.' }).toBe('EN_ROUTE');
+    await expect(page.locator('body')).toContainText(/EN ROUTE|Status updated/i, { timeout: 20_000 });
 
     await clickRequired(page, [
       'button:has-text("Arrived")',
