@@ -222,6 +222,7 @@ jobs:
     needs: validate-production-build
     environment: production
     env:
+      DEPLOYMENT_ENVIRONMENT: production
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
@@ -694,6 +695,7 @@ jobs:
     if: ${{ inputs.run_public_release_gate == true }}
     environment: production
     env:
+      DEPLOYMENT_ENVIRONMENT: production
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       HARD_LAUNCH_APPROVAL_HMAC_KEY: ${{ secrets.HARD_LAUNCH_APPROVAL_HMAC_KEY }}
