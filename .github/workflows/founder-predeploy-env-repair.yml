@@ -10,8 +10,7 @@ on:
       - main
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
 
 concurrency:
   group: founder-predeploy-env-repair
@@ -28,16 +27,6 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-
-      - name: Publish temporary repair run locator
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: '837'
-        run: |
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -f body="Founder predeploy repair bootstrap run \`${GITHUB_RUN_ID}\` started for head \`$(git rev-parse HEAD)\`. No Firebase workflow was dispatched."
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -81,35 +70,30 @@ jobs:
           test "$(grep -c 'E2E_FOUNDER_REAL_MFA_CODE:' .github/workflows/firebase-production-deploy.yml)" -eq 2
           grep -q "E2E_FOUNDER_EMAIL'" scripts/verify-production-workflow-env.mjs
           grep -q 'Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE' scripts/verify-production-workflow-env.mjs
-
-      - name: Commit repair and remove bootstrap
-        env:
-          BRANCH_NAME: fix/founder-predeploy-env-guard-30637308881
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
+          mkdir -p founder-predeploy-repair
+          cp --parents \
             .github/workflows/firebase-production-deploy.yml \
             launch_package/generated/firebase-production-deploy-phase1.yml \
             scripts/apply-owner-inspection-first-evidence-workflow.mjs \
             scripts/verify-production-workflow-env.mjs \
             tests/launch/owner-inspection-first-live-evidence.test.mjs \
-            tests/launch/production-client-value-preflight.test.mjs
-          git commit -m 'fix: fail closed on missing Founder production evidence'
-          git rm \
-            .github/workflows/founder-predeploy-env-repair.yml \
-            scripts/apply-founder-predeploy-env-guard.mjs
-          git commit -m 'chore: remove temporary Founder repair bootstrap'
-          git push origin "HEAD:${BRANCH_NAME}"
+            tests/launch/production-client-value-preflight.test.mjs \
+            founder-predeploy-repair/
+          git diff --check
+          git diff --stat > founder-predeploy-repair/validated-diff-stat.txt
+          printf '%s\n' \
+            "base_main_sha=91e8ebe62fce90da65400253b2476efdcba7b3d0" \
+            "repair_source_sha=$(git rev-parse HEAD)" \
+            "public_release_gate=false" \
+            "hard_launch_claim=false" \
+            "payment_policy=phase1-manual" \
+            "firebase_dispatched=false" \
+            > founder-predeploy-repair/repair-manifest.txt
 
-      - name: Publish repair completion locator
-        if: success()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: '837'
-        run: |
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-            -f body="Founder predeploy repair bootstrap run \`${GITHUB_RUN_ID}\` completed successfully and removed its temporary files. No Firebase workflow was dispatched."
+      - name: Upload validated Founder predeploy repair
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: founder-predeploy-repair-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: founder-predeploy-repair
+          if-no-files-found: error
+          retention-days: 1
