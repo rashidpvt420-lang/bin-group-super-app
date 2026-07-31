@@ -71,6 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git add -N tests/launch/five-role-production-evidence-repair.test.mjs
           git diff --check
           node --test tests/launch/five-role-production-evidence-repair.test.mjs
           test ! -e .github/workflows/owner-five-role-evidence-repair-command.yml
