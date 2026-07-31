@@ -6,10 +6,16 @@ const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
 const TECHNICIAN_FILE = 'tests/e2e/business-technician.spec.ts';
 
 function replaceExactlyOnce(source, before, after, label) {
-  const first = source.indexOf(before);
+  const isCrlf = source.includes('\r\n');
+  const normSource = source.replace(/\r\n/g, '\n');
+  const normBefore = before.replace(/\r\n/g, '\n');
+  const normAfter = after.replace(/\r\n/g, '\n');
+
+  const first = normSource.indexOf(normBefore);
   if (first < 0) throw new Error(`${label}: expected source anchor was not found.`);
-  if (source.indexOf(before, first + before.length) >= 0) throw new Error(`${label}: source anchor was not unique.`);
-  return `${source.slice(0, first)}${after}${source.slice(first + before.length)}`;
+  if (normSource.indexOf(normBefore, first + normBefore.length) >= 0) throw new Error(`${label}: source anchor was not unique.`);
+  const patched = `${normSource.slice(0, first)}${normAfter}${normSource.slice(first + normBefore.length)}`;
+  return isCrlf ? patched.replace(/\n/g, '\r\n') : patched;
 }
 
 export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {

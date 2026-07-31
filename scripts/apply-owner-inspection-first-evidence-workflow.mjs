@@ -8,14 +8,17 @@ const WORKFLOW_FILES = [
 ];
 
 export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
-  if (source.includes('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}')) {
-    const count = source.split('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}').length - 1;
+  const isCrlf = source.includes('\r\n');
+  const normalized = source.replace(/\r\n/g, '\n');
+
+  if (normalized.includes('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}')) {
+    const count = normalized.split('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}').length - 1;
     if (count !== 2) throw new Error(`${label}: expected exactly two Founder MFA bindings, found ${count}.`);
     return source;
   }
 
   let adminPasswordBindings = 0;
-  const patched = source.replace(
+  const patched = normalized.replace(
     /^(      )E2E_ADMIN_PASSWORD: \$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}$/gm,
     (line, indent) => {
       adminPasswordBindings += 1;
@@ -41,10 +44,13 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
   ]) {
     if (!patched.includes(required)) throw new Error(`${label}: missing required Owner evidence control: ${required}`);
   }
-  return patched;
+  return isCrlf ? patched.replace(/\n/g, '\r\n') : patched;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   for (const file of WORKFLOW_FILES) {
     const source = readFileSync(file, 'utf8');
     const patched = patchOwnerEvidenceWorkflow(source, file);
