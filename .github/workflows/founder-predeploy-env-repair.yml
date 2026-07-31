@@ -1,16 +1,13 @@
 name: Founder Predeploy Environment Repair
 
 on:
-  push:
-    branches:
-      - fix/founder-predeploy-env-guard-30637308881
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: founder-predeploy-env-repair
@@ -18,14 +15,14 @@ concurrency:
 
 jobs:
   repair:
-    if: github.event_name == 'push' || github.head_ref == 'fix/founder-predeploy-env-guard-30637308881'
+    if: github.head_ref == 'fix/founder-predeploy-env-guard-30637308881'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout exact repair head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Use Node.js 22
@@ -93,8 +90,35 @@ jobs:
       - name: Upload validated Founder predeploy repair
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: founder-predeploy-repair-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          name: founder-predeploy-repair-${{ github.event.pull_request.head.sha }}
           path: founder-predeploy-repair
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
+
+      - name: Commit validated non-workflow repair files
+        env:
+          BRANCH_NAME: fix/founder-predeploy-env-guard-30637308881
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          git fetch origin "$BRANCH_NAME"
+          test "$(git rev-parse "origin/$BRANCH_NAME")" = "$source_sha"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            launch_package/generated/firebase-production-deploy-phase1.yml \
+            scripts/apply-owner-inspection-first-evidence-workflow.mjs \
+            scripts/verify-production-workflow-env.mjs \
+            tests/launch/owner-inspection-first-live-evidence.test.mjs \
+            tests/launch/production-client-value-preflight.test.mjs
+          mapfile -t staged < <(git diff --cached --name-only | sort)
+          mapfile -t expected < <(printf '%s\n' \
+            'launch_package/generated/firebase-production-deploy-phase1.yml' \
+            'scripts/apply-owner-inspection-first-evidence-workflow.mjs' \
+            'scripts/verify-production-workflow-env.mjs' \
+            'tests/launch/owner-inspection-first-live-evidence.test.mjs' \
+            'tests/launch/production-client-value-preflight.test.mjs' | sort)
+          diff -u <(printf '%s\n' "${expected[@]}") <(printf '%s\n' "${staged[@]}")
+          git commit -m 'fix: fail closed on missing Founder production evidence'
+          git push origin "HEAD:$BRANCH_NAME"
