@@ -2,6 +2,7 @@
 
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { parseCsvRequired } from './lib/hard-launch-control.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const PRODUCTION_URL = 'https://bin-group-57c60.web.app';
@@ -24,8 +25,20 @@ if (text(process.env.PAYMENT_POLICY).toLowerCase() !== 'phase1-manual') fail('PA
 if (text(process.env.E2E_STRICT_LIVE).toLowerCase() !== 'true') fail('E2E_STRICT_LIVE=true is required.');
 if (text(process.env.E2E_BASE_URL).replace(/\/+$/, '') !== PRODUCTION_URL) fail(`E2E_BASE_URL must equal ${PRODUCTION_URL}.`);
 
-const founderEmail = text(process.env.E2E_FOUNDER_EMAIL).toLowerCase();
-if (!founderEmail) fail('E2E_FOUNDER_EMAIL is required for Founder-MFA geography authority.');
+const authorizedFounderEmails = parseCsvRequired(
+  process.env.AUTHORIZED_FOUNDER_EMAILS,
+  'AUTHORIZED_FOUNDER_EMAILS',
+);
+const configuredFounderEmail = text(process.env.E2E_FOUNDER_EMAIL).toLowerCase();
+const founderEmail = configuredFounderEmail || (
+  authorizedFounderEmails.length === 1 ? authorizedFounderEmails[0] : ''
+);
+if (!founderEmail) {
+  fail('E2E_FOUNDER_EMAIL is required when AUTHORIZED_FOUNDER_EMAILS does not resolve to exactly one address.');
+}
+if (!authorizedFounderEmails.includes(founderEmail)) {
+  fail('Founder evidence email is not listed in AUTHORIZED_FOUNDER_EMAILS.');
+}
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PROJECT_ID) fail(`Expected Firebase project ${PROJECT_ID}; got ${projectId}.`);
