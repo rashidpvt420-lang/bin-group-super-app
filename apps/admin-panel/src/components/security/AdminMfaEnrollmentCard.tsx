@@ -94,8 +94,8 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
   // Founder and Multi-Factor status checks
   const isFounder = auth.currentUser?.email?.toLowerCase() === 'ceo@bin-groups.com';
   const enrolledFactors = auth.currentUser ? multiFactor(auth.currentUser).enrolledFactors : [];
-  const hasPhone = enrolledFactors.some((f) => f.factorId === 'phone');
-  const hasTotp = enrolledFactors.some((f) => f.factorId === 'totp');
+  const hasPhone = enrolledFactors.some((f) => f.factorId === PhoneMultiFactorGenerator.FACTOR_ID);
+  const hasTotp = enrolledFactors.some((f) => f.factorId === TotpMultiFactorGenerator.FACTOR_ID);
 
   // TOTP Authenticator States
   const [totpStep, setTotpStep] = React.useState<'idle' | 'verifying'>('idle');
@@ -105,6 +105,37 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
   const [totpCode, setTotpCode] = React.useState('');
   const [totpBusy, setTotpBusy] = React.useState(false);
   const [totpNotice, setTotpNotice] = React.useState<Notice | null>(null);
+  const [totpChallengeUid, setTotpChallengeUid] = React.useState('');
+
+  const clearTotpSecretState = React.useCallback((keepNotice = false) => {
+    setTotpSecret(null);
+    setTotpSetupKey('');
+    setTotpQrUrl('');
+    setTotpCode('');
+    setTotpStep('idle');
+    setTotpChallengeUid('');
+    if (!keepNotice) {
+      setTotpNotice(null);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    clearTotpSecretState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.currentUser?.uid, auth.currentUser?.email, clearTotpSecretState]);
+
+  React.useEffect(() => {
+    const handleVisibilityClear = () => {
+      clearTotpSecretState();
+    };
+    window.addEventListener('pagehide', handleVisibilityClear);
+    window.addEventListener('beforeunload', handleVisibilityClear);
+    return () => {
+      window.removeEventListener('pagehide', handleVisibilityClear);
+      window.removeEventListener('beforeunload', handleVisibilityClear);
+      clearTotpSecretState();
+    };
+  }, [clearTotpSecretState]);
 
   React.useEffect(() => {
     if (!verificationId) setPhone(currentPhone || '');
@@ -380,12 +411,28 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
     setTotpBusy(true);
     setTotpNotice(null);
     try {
+      try {
+        await user.reload();
+      } catch (e) {
+        // ignore
+      }
+      const freshFactors = multiFactor(user).enrolledFactors;
+      const alreadyHasTotp = freshFactors.some((f) => f.factorId === TotpMultiFactorGenerator.FACTOR_ID);
+      if (alreadyHasTotp) {
+        setTotpNotice({
+          type: 'error',
+          text: copy('A TOTP factor is already enrolled.', 'عامل TOTP مسجّل بالفعل.'),
+        });
+        return;
+      }
+
       const session = await multiFactor(user).getSession();
       const secret = await TotpMultiFactorGenerator.generateSecret(session);
       setTotpSecret(secret);
       setTotpSetupKey(secret.secretKey);
       const qrUrl = secret.generateQrCodeUrl(user.email || 'ceo@bin-groups.com', 'BIN GROUP');
       setTotpQrUrl(qrUrl);
+      setTotpChallengeUid(user.uid);
       setTotpStep('verifying');
       setTotpCode('');
     } catch (error) {
@@ -406,10 +453,34 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder.', 'يقتصر تسجيل TOTP على المؤسس المعتمد.') });
       return;
     }
+    if (!totpChallengeUid || totpChallengeUid !== user.uid) {
+      clearTotpSecretState();
+      setTotpNotice({
+        type: 'error',
+        text: copy('The authenticated Admin changed. Request a new MFA challenge.', 'تغيّر حساب المسؤول المصادق عليه. اطلب تحدي مصادقة جديداً.'),
+      });
+      return;
+    }
 
     setTotpBusy(true);
     setTotpNotice(null);
     try {
+      try {
+        await user.reload();
+      } catch (e) {
+        // ignore
+      }
+
+      const freshFactors = multiFactor(user).enrolledFactors;
+      if (freshFactors.some((f) => f.factorId === TotpMultiFactorGenerator.FACTOR_ID)) {
+        clearTotpSecretState();
+        setTotpNotice({
+          type: 'error',
+          text: copy('A TOTP factor is already enrolled.', 'عامل TOTP مسجّل بالفعل.'),
+        });
+        return;
+      }
+
       const assertion = TotpMultiFactorGenerator.assertionForEnrollment(totpSecret, totpCode);
       await multiFactor(user).enroll(assertion, 'Founder TOTP Authenticator');
       await user.reload();
@@ -426,11 +497,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
         ),
       });
       
-      setTotpSecret(null);
-      setTotpSetupKey('');
-      setTotpQrUrl('');
-      setTotpCode('');
-      setTotpStep('idle');
+      clearTotpSecretState(true);
       
       await onEnrolled?.();
       await loadReadiness();
@@ -449,12 +516,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
   };
 
   const clearTotpChallenge = () => {
-    setTotpSecret(null);
-    setTotpSetupKey('');
-    setTotpQrUrl('');
-    setTotpCode('');
-    setTotpStep('idle');
-    totpNotice && setTotpNotice(null);
+    clearTotpSecretState();
   };
 
   const phoneMfaCard = hasPhone ? (
@@ -551,115 +613,118 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
     </Paper>
   );
 
-  const totpMfaCard = isFounder && (hasTotp ? (
-    <Paper data-testid="admin-totp-enrollment-complete" sx={{ p: 3, borderRadius: 4, border: '1px solid rgba(16,185,129,0.35)' }}>
-      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
-        <BadgeCheck color="#10b981" />
-        <Box>
-          <Typography fontWeight={950}>{copy('Founder TOTP Authenticator enrolled', 'تم تسجيل مصادقة TOTP للمؤسس')}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {copy('Firebase requires your Authenticator App code during Admin sign-in.', 'تتطلب Firebase رمز تطبيق المصادقة الخاص بك أثناء تسجيل دخول المسؤول.')}
-          </Typography>
-        </Box>
-      </Stack>
-    </Paper>
-  ) : (
-    <Paper data-testid="admin-totp-enrollment-card" sx={{ p: 3, borderRadius: 4, border: `1px solid ${binThemeTokens.gold}66` }}>
-      <Stack spacing={2}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
-          <KeyRound color={binThemeTokens.gold} />
-          <Box>
-            <Typography fontWeight={950}>{copy('Enroll Founder TOTP Authenticator', 'تسجيل مصادقة TOTP للمؤسس')}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {copy('Link your account to an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, etc.) as an additional second factor.', 'اربط حسابك بتطبيق مصادقة (Google Authenticator، Microsoft Authenticator، 1Password، إلخ) كعامل أمان ثانٍ إضافي.')}
-            </Typography>
-          </Box>
-        </Stack>
-
-        {totpNotice && <Alert severity={totpNotice.type} onClose={() => setTotpNotice(null)}>{totpNotice.text}</Alert>}
-
-        {totpStep === 'idle' ? (
-          <Button
-            data-testid="admin-totp-generate"
-            variant="contained"
-            startIcon={totpBusy ? <CircularProgress size={18} /> : <KeyRound size={18} />}
-            disabled={totpBusy || !emailVerified}
-            onClick={generateTotpSecret}
-            sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}
-          >
-            {copy('Generate TOTP Secret', 'توليد سر TOTP')}
-          </Button>
-        ) : (
-          <Stack spacing={2}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 3, display: 'inline-block' }}>
-                <QRCode value={totpQrUrl} size={150} />
-              </Box>
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="caption" color="text.secondary" display="block" align="center" gutterBottom>
-                  {copy('Manual Setup Key (Base32)', 'مفتاح الإعداد اليدوي (Base32)')}
-                </Typography>
-                <Typography
-                  data-testid="totp-setup-key"
-                  variant="body2"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontWeight: 'bold',
-                    wordBreak: 'break-all',
-                    textAlign: 'center',
-                    p: 1.5,
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                    borderRadius: 2,
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: binThemeTokens.gold
-                  }}
-                >
-                  {totpSetupKey}
-                </Typography>
-              </Box>
+  const totpMfaCard = isFounder && (
+    <Stack spacing={2}>
+      {totpNotice && <Alert severity={totpNotice.type} onClose={() => setTotpNotice(null)}>{totpNotice.text}</Alert>}
+      {hasTotp ? (
+        <Paper data-testid="admin-totp-enrollment-complete" sx={{ p: 3, borderRadius: 4, border: '1px solid rgba(16,185,129,0.35)' }}>
+          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+            <BadgeCheck color="#10b981" />
+            <Box>
+              <Typography fontWeight={950}>{copy('Founder TOTP Authenticator enrolled', 'تم تسجيل مصادقة TOTP للمؤسس')}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {copy('Firebase requires your Authenticator App code during Admin sign-in.', 'تتطلب Firebase رمز تطبيق المصادقة الخاص بك أثناء تسجيل دخول المسؤول.')}
+              </Typography>
             </Box>
+          </Stack>
+        </Paper>
+      ) : (
+        <Paper data-testid="admin-totp-enrollment-card" sx={{ p: 3, borderRadius: 4, border: `1px solid ${binThemeTokens.gold}66` }}>
+          <Stack spacing={2}>
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
+              <KeyRound color={binThemeTokens.gold} />
+              <Box>
+                <Typography fontWeight={950}>{copy('Enroll Founder TOTP Authenticator', 'تسجيل مصادقة TOTP للمؤسس')}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {copy('Link your account to an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, etc.) as an additional second factor.', 'اربط حسابك بتطبيق مصادقة (Google Authenticator، Microsoft Authenticator، 1Password، إلخ) كعامل أمان ثانٍ إضافي.')}
+                </Typography>
+              </Box>
+            </Stack>
 
-            <Alert severity="warning" sx={{ bgcolor: 'rgba(245,158,11,0.1)', color: '#FDE68A', border: '1px solid rgba(245,158,11,0.3)' }}>
-              {copy(
-                'Warning: The setup key is visible only during enrollment and must be saved in an approved password manager.',
-                'تحذير: مفتاح الإعداد مرئي فقط أثناء التسجيل ويجب حفظه في مدير كلمات مرور معتمد.',
-              )}
-            </Alert>
-
-            <TextField
-              data-testid="admin-totp-code-input"
-              fullWidth
-              label={copy('6-digit Authenticator code', 'رمز المصادقة من 6 أرقام')}
-              value={totpCode}
-              onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputProps={{ inputMode: 'numeric', maxLength: 6, autoComplete: 'one-time-code' }}
-              disabled={totpBusy}
-            />
-
-            <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+            {totpStep === 'idle' ? (
               <Button
-                data-testid="admin-totp-verify-enroll"
+                data-testid="admin-totp-generate"
                 variant="contained"
-                disabled={totpBusy || totpCode.length !== 6}
-                onClick={verifyAndEnrollTotp}
+                startIcon={totpBusy ? <CircularProgress size={18} /> : <KeyRound size={18} />}
+                disabled={totpBusy || !emailVerified}
+                onClick={generateTotpSecret}
                 sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}
               >
-                {totpBusy ? <CircularProgress size={18} /> : copy('Verify and enroll TOTP', 'التحقق وتسجيل TOTP')}
+                {copy('Generate TOTP Secret', 'توليد سر TOTP')}
               </Button>
-              <Button
-                data-testid="admin-totp-cancel"
-                variant="text"
-                disabled={totpBusy}
-                onClick={clearTotpChallenge}
-              >
-                {copy('Cancel', 'إلغاء')}
-              </Button>
-            </Stack>
+            ) : (
+              <Stack spacing={2}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 3, display: 'inline-block' }}>
+                    <QRCode value={totpQrUrl} size={150} />
+                  </Box>
+                  <Box sx={{ width: '100%' }}>
+                    <Typography variant="caption" color="text.secondary" display="block" align="center" gutterBottom>
+                      {copy('Manual Setup Key (Base32)', 'مفتاح الإعداد اليدوي (Base32)')}
+                    </Typography>
+                    <Typography
+                      data-testid="totp-setup-key"
+                      variant="body2"
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontWeight: 'bold',
+                        wordBreak: 'break-all',
+                        textAlign: 'center',
+                        p: 1.5,
+                        bgcolor: 'rgba(255,255,255,0.05)',
+                        borderRadius: 2,
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: binThemeTokens.gold
+                      }}
+                    >
+                      {totpSetupKey}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Alert severity="warning" sx={{ bgcolor: 'rgba(245,158,11,0.1)', color: '#FDE68A', border: '1px solid rgba(245,158,11,0.3)' }}>
+                  {copy(
+                    'Warning: The setup key is visible only during enrollment and must be saved in an approved password manager.',
+                    'تحذير: مفتاح الإعداد مرئي فقط أثناء التسجيل ويجب حفظه في مدير كلمات مرور معتمد.',
+                  )}
+                </Alert>
+
+                <TextField
+                  data-testid="admin-totp-code-input"
+                  fullWidth
+                  label={copy('6-digit Authenticator code', 'رمز المصادقة من 6 أرقام')}
+                  value={totpCode}
+                  onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputProps={{ inputMode: 'numeric', maxLength: 6, autoComplete: 'one-time-code' }}
+                  disabled={totpBusy}
+                />
+
+                <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
+                  <Button
+                    data-testid="admin-totp-verify-enroll"
+                    variant="contained"
+                    disabled={totpBusy || totpCode.length !== 6}
+                    onClick={verifyAndEnrollTotp}
+                    sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}
+                  >
+                    {totpBusy ? <CircularProgress size={18} /> : copy('Verify and enroll TOTP', 'التحقق وتسجيل TOTP')}
+                  </Button>
+                  <Button
+                    data-testid="admin-totp-cancel"
+                    variant="text"
+                    disabled={totpBusy}
+                    onClick={clearTotpChallenge}
+                  >
+                    {copy('Cancel', 'إلغاء')}
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
           </Stack>
-        )}
-      </Stack>
-    </Paper>
-  ));
+        </Paper>
+      )}
+    </Stack>
+  );
 
   return (
     <Stack spacing={2.5}>
