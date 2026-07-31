@@ -29,6 +29,8 @@ let gpsDeniedTicketId = '';
 let gpsPoorTicketId = '';
 let offlineTicketId = '';
 const CURRENT_PUSH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const EVIDENCE_RUN_KEY = `${process.env.GITHUB_RUN_ID || Date.now()}-${process.env.GITHUB_RUN_ATTEMPT || '1'}`
+  .toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 40);
 
 function requireLaunchCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -169,10 +171,10 @@ test.describe('Technician Business Workflow', () => {
     const technician = await admin.auth().getUserByEmail(EMAIL);
     technicianUid = technician.uid;
     const suffix = technicianUid.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 48);
-    dispatchTicketId = `e2e-tech-dispatch-${suffix}`;
-    gpsDeniedTicketId = `e2e-tech-gps-denied-${suffix}`;
-    gpsPoorTicketId = `e2e-tech-gps-poor-${suffix}`;
-    offlineTicketId = `e2e-tech-offline-${suffix}`;
+    dispatchTicketId = `e2e-tech-dispatch-${EVIDENCE_RUN_KEY}-${suffix}`;
+    gpsDeniedTicketId = `e2e-tech-gps-denied-${EVIDENCE_RUN_KEY}-${suffix}`;
+    gpsPoorTicketId = `e2e-tech-gps-poor-${EVIDENCE_RUN_KEY}-${suffix}`;
+    offlineTicketId = `e2e-tech-offline-${EVIDENCE_RUN_KEY}-${suffix}`;
 
     const db = admin.firestore();
     const readiness = {
@@ -263,10 +265,20 @@ test.describe('Technician Business Workflow', () => {
     await openCard.click();
     await page.waitForURL(`**/technician/job/${dispatchTicketId}`, { timeout: 20_000 });
 
-    const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
-    await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
-    await acceptMission.click();
-    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 30_000 }).toBe('ACCEPTED');
+    const statusBeforeAccept = await firestoreStatus(dispatchTicketId);
+    if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(statusBeforeAccept)) {
+      const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
+      await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
+      await acceptMission.click();
+      await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 30_000 }).toBe('ACCEPTED');
+    } else if (statusBeforeAccept === 'ACCEPTED') {
+      const acceptedSnap = await db.collection('maintenanceTickets').doc(dispatchTicketId).get();
+      const accepted = acceptedSnap.data() || {};
+      expect(String(accepted.assignedTechnicianId || accepted.technicianId || '')).toBe(technicianUid);
+      expect(accepted.acceptedAt, 'An already-accepted mission must retain server acceptance evidence.').toBeTruthy();
+    } else {
+      throw new Error(`Protected dispatch ticket entered unexpected status before acceptance: ${statusBeforeAccept || 'missing'}.`);
+    }
 
     await clickRequired(page, ['button:has-text("On The Way")'], 'Start trip action');
     await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('EN_ROUTE');

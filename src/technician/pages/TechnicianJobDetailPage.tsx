@@ -195,6 +195,12 @@ export default function TechnicianJobDetailPage() {
     const proofReadyCount = proofChecks.length - closeBlockers.length;
     const canComplete = closeBlockers.length === 0;
 
+    const isRetryableNetworkError = (error: any) => {
+        const code = String(error?.code || '').toLowerCase();
+        const detail = `${code} ${String(error?.message || '')}`;
+        return !navigator.onLine || /network-request-failed|unavailable|deadline-exceeded|timeout|failed to fetch|network error/i.test(detail);
+    };
+
     const queueAction = (nextStatus: Step | 'ACCEPTED', reason: string) => {
         if (!id || !user?.uid) return;
         const queued = queueOfflineJobAction({
@@ -249,7 +255,12 @@ export default function TechnicianJobDetailPage() {
             await acceptTechnicianTicket({ ticketId: id });
             setMessage('Mission accepted.');
         } catch (err: any) {
-            queueAction('ACCEPTED', err?.message || 'Accept mission failed before confirmation.');
+            if (isRetryableNetworkError(err)) {
+                queueAction('ACCEPTED', err?.message || 'Accept mission failed because the network was unavailable.');
+            } else {
+                setGpsError(err?.message || 'Mission acceptance was rejected by production controls.');
+                setMessage(null);
+            }
         } finally {
             setActionLoading(false);
         }
@@ -348,8 +359,11 @@ export default function TechnicianJobDetailPage() {
             if (nextStatus === 'ARRIVED') {
                 setGpsError(err?.message || 'GPS arrival verification failed. Arrival was not recorded.');
                 setMessage(null);
+            } else if (isRetryableNetworkError(err)) {
+                queueAction(nextStatus, err?.message || 'Mission lifecycle update failed because the network was unavailable.');
             } else {
-                queueAction(nextStatus, err?.message || 'Mission lifecycle update failed before confirmation.');
+                setGpsError(err?.message || `Production rejected the ${nextStatus.replace(/_/g, ' ')} transition.`);
+                setMessage(null);
             }
         } finally {
             setActionLoading(false);

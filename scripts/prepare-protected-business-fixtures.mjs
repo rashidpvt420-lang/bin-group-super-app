@@ -49,6 +49,13 @@ if (founder.disabled || founder.emailVerified !== true) fail('The Founder eviden
 const founderRole = text(founder.customClaims?.role || founder.customClaims?.primaryRole).toLowerCase();
 if (!['ceo', 'super_admin', 'admin'].includes(founderRole)) fail(`Founder account role is not privileged: ${founderRole || 'missing'}.`);
 
+const technicianEmail = text(process.env.E2E_TECHNICIAN_EMAIL).toLowerCase();
+if (!technicianEmail) fail('E2E_TECHNICIAN_EMAIL is required for protected Tenant and Technician lifecycle evidence.');
+const technician = await admin.auth().getUserByEmail(technicianEmail);
+if (technician.disabled || technician.emailVerified !== true) fail('The Technician evidence account must be enabled and email verified.');
+const technicianRole = text(technician.customClaims?.role || technician.customClaims?.primaryRole).toLowerCase();
+if (technicianRole !== 'technician') fail(`Technician account role is invalid: ${technicianRole || 'missing'}.`);
+
 const db = admin.firestore();
 const propertyRef = db.collection('properties').doc(E2E_PROPERTY_ID);
 const propertySnap = await propertyRef.get();
@@ -76,6 +83,70 @@ const submittedSource = text(candidate.submittedSource || candidate.source) || '
 const accuracy = finite(candidate.accuracyMeters ?? candidate.accuracy);
 const verifiedAt = admin.firestore.Timestamp.now();
 const serverNow = admin.firestore.FieldValue.serverTimestamp();
+
+const technicianShiftId = `protected-five-role-${text(process.env.GITHUB_RUN_ID) || 'unknown'}-${technician.uid.slice(0, 20)}`;
+const credentialExpiry = admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000));
+const technicianReadiness = {
+  role: 'technician',
+  userRole: 'technician',
+  primaryRole: 'technician',
+  status: 'active',
+  approvalStatus: 'approved',
+  suspended: false,
+  onDuty: true,
+  dutyStatus: 'on_duty',
+  isAvailable: true,
+  available: true,
+  currentShiftId: technicianShiftId,
+  shiftStatus: 'active',
+  deviceRegistered: true,
+  deviceVerified: true,
+  registeredDeviceId: 'protected-five-role-browser',
+  medicalCardStatus: 'valid',
+  medicalCardExpiry: credentialExpiry,
+  drivingLicenseStatus: 'valid',
+  drivingLicenseExpiry: credentialExpiry,
+  certificationsStatus: 'valid',
+  certifications: [{ name: 'Protected E2E Trade', status: 'valid', expiryAt: credentialExpiry }],
+  lastGpsAt: verifiedAt,
+  gpsMaxAgeMs: 60 * 60 * 1000,
+  activeJobCount: 0,
+  maxConcurrentJobs: 10,
+  protectedFiveRoleEvidenceReady: true,
+  protectedFiveRoleEvidenceRunId: text(process.env.GITHUB_RUN_ID),
+  updatedAt: serverNow,
+};
+await Promise.all([
+  db.collection('users').doc(technician.uid).set(technicianReadiness, { merge: true }),
+  db.collection('technicians').doc(technician.uid).set(technicianReadiness, { merge: true }),
+]);
+const [technicianUserSnap, technicianProfileSnap] = await Promise.all([
+  db.collection('users').doc(technician.uid).get(),
+  db.collection('technicians').doc(technician.uid).get(),
+]);
+for (const [label, record] of [
+  ['users', technicianUserSnap.data() || {}],
+  ['technicians', technicianProfileSnap.data() || {}],
+]) {
+  if (
+    text(record.status).toLowerCase() !== 'active' ||
+    text(record.approvalStatus).toLowerCase() !== 'approved' ||
+    record.suspended === true ||
+    record.onDuty !== true ||
+    record.isAvailable !== true ||
+    record.deviceRegistered !== true ||
+    record.deviceVerified !== true ||
+    text(record.medicalCardStatus).toLowerCase() !== 'valid' ||
+    text(record.drivingLicenseStatus).toLowerCase() !== 'valid' ||
+    text(record.certificationsStatus).toLowerCase() !== 'valid' ||
+    !Array.isArray(record.certifications) || record.certifications.length !== 1 ||
+    !text(record.currentShiftId) ||
+    !record.lastGpsAt ||
+    Number(record.activeJobCount) >= Number(record.maxConcurrentJobs)
+  ) {
+    fail(`Protected Technician readiness did not persist in ${label}/${technician.uid}.`);
+  }
+}
 
 const geo = {
   lat,
