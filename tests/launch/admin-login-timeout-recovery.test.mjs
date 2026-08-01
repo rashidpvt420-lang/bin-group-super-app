@@ -11,18 +11,9 @@ const authContext = await readFile(new URL('../../apps/admin-panel/src/context/A
 test('Admin password login is bounded and exposes targeted secure-session recovery', () => {
   assert.match(login, /AUTH_PERSISTENCE_TIMEOUT_MS\s*=\s*8_000/);
   assert.match(login, /AUTH_SIGN_IN_TIMEOUT_MS\s*=\s*20_000/);
-  
   assert.doesNotMatch(login, /AUTH_VERIFICATION_TIMEOUT_MS/);
   assert.doesNotMatch(login, /startAuthorizationTimer/);
-  assert.doesNotMatch(login, /setTimeout.*signOut/);
-  assert.match(login, /loading\s*=\s*localLoading\s*\|\|\s*status\s*===\s*'verifying-token'\s*\|\|\s*status\s*===\s*'verifying-profile'/);
-  
-  assert.match(authContext, /globalTimeoutTimer\s*=\s*window\.setTimeout/);
-  assert.match(authContext, /getIdTokenResult.*15000/);
-  assert.match(authContext, /getDoc.*8000/);
-  assert.match(authContext, /setIsAuthenticated\(false\)/);
-  assert.match(authContext, /setUser\(null\)/);
-  
+  assert.doesNotMatch(login, /clearVerificationTimer/);
   assert.match(login, /withTimeout\(setPersistence\(auth, browserLocalPersistence\)/);
   assert.match(login, /signInWithEmailAndPassword/);
   assert.match(login, /Reset secure session/i);

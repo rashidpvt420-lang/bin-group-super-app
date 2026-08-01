@@ -80,6 +80,13 @@ test('every Firebase production strict-live consumer receives protected Gmail OA
   }
 });
 
+test('predeploy identity isolation does not require founder MFA secrets', () => {
+  const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
+  const step = workflowStep(source, 'Validate resolved E2E role identity isolation before deploy');
+  assert.match(step, /E2E_REQUIRE_FOUNDER_MFA:\s*'false'/);
+  assert.match(step, /run: npm run test:e2e:env/);
+});
+
 test('every Admin production strict-live consumer receives protected Gmail OAuth secrets', () => {
   const source = readFileSync('.github/workflows/admin-production-evidence.yml', 'utf8');
   const consumers = [

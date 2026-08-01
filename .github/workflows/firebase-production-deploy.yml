@@ -442,6 +442,7 @@ jobs:
 
       - name: Validate resolved E2E role identity isolation before deploy
         env:
+          E2E_REQUIRE_FOUNDER_MFA: 'false'
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
           E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
           E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}

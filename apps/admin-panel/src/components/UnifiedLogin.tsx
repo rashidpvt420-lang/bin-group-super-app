@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
 import { getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
@@ -35,9 +35,8 @@ export default function UnifiedLogin() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
-
     const error = authError || localError;
-    const loading = localLoading || status === 'verifying-token' || status === 'verifying-profile';
+    const loading = localLoading;
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
