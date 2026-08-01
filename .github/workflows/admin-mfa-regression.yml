@@ -75,6 +75,7 @@ jobs:
     env:
       GCP_PROJECT_ID: bin-group-57c60
       FOUNDER_PREVIEW_SITE: bin-founder-totp-260801174030
+      EXACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
@@ -88,6 +89,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "$EXACT_HEAD_SHA" = "${{ github.event.pull_request.head.sha }}"
+          test "$EXACT_HEAD_SHA" = "$(git rev-parse HEAD)"
           test "${{ github.event.pull_request.base.sha }}" = "ccf622fdac1ba9cfd4322d040533d9488612fa99"
           test "$GCP_PROJECT_ID" = "bin-group-57c60"
           test "$FOUNDER_PREVIEW_SITE" = "bin-founder-totp-260801174030"
@@ -155,13 +158,13 @@ jobs:
         run: |
           set -euo pipefail
           npm run verify:admin-firebase -- --build apps/admin-panel/build
-          MANIFEST="apps/admin-panel/build/founder-preview-${GITHUB_SHA}.json"
+          MANIFEST="apps/admin-panel/build/founder-preview-${EXACT_HEAD_SHA}.json"
           node <<'NODE'
           const fs = require('fs');
-          const path = `apps/admin-panel/build/founder-preview-${process.env.GITHUB_SHA}.json`;
+          const path = `apps/admin-panel/build/founder-preview-${process.env.EXACT_HEAD_SHA}.json`;
           const evidence = {
             schemaVersion: 1,
-            commitSha: process.env.GITHUB_SHA,
+            commitSha: process.env.EXACT_HEAD_SHA,
             firebaseProjectId: process.env.GCP_PROJECT_ID,
             hostingSite: process.env.FOUNDER_PREVIEW_SITE,
             deploymentScope: 'temporary-founder-mfa-preview',
@@ -199,7 +202,7 @@ jobs:
         id: preview_channel
         run: |
           set -euo pipefail
-          CHANNEL_ID="mfa-${GITHUB_SHA:0:12}"
+          CHANNEL_ID="mfa-${EXACT_HEAD_SHA:0:12}"
           npx firebase-tools hosting:channel:deploy "$CHANNEL_ID" \
             --only founder-preview \
             --config firebase.founder-preview.json \
@@ -221,19 +224,37 @@ jobs:
       - name: Verify the temporary site serves the exact head
         run: |
           set -euo pipefail
-          LIVE_MANIFEST="https://${FOUNDER_PREVIEW_SITE}.web.app/founder-preview-${GITHUB_SHA}.json"
-          curl --fail --silent --show-error --retry 8 --retry-delay 3 "$LIVE_MANIFEST" > "$RUNNER_TEMP/founder-preview-live.json"
-          node <<'NODE'
+          LIVE_MANIFEST="https://${FOUNDER_PREVIEW_SITE}.web.app/founder-preview-${EXACT_HEAD_SHA}.json"
+          VERIFIED=false
+          for attempt in $(seq 1 20); do
+            curl --fail --silent --show-error \
+              -H 'Cache-Control: no-cache' \
+              -H 'Pragma: no-cache' \
+              "${LIVE_MANIFEST}?attempt=${attempt}" \
+              > "$RUNNER_TEMP/founder-preview-live.json" || true
+            if node <<'NODE'
           const fs = require('fs');
-          const evidence = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/founder-preview-live.json', 'utf8'));
-          if (evidence.commitSha !== process.env.GITHUB_SHA) throw new Error('Temporary site commit SHA mismatch.');
-          if (evidence.hostingSite !== process.env.FOUNDER_PREVIEW_SITE) throw new Error('Temporary site identity mismatch.');
-          if (evidence.firebaseProjectId !== process.env.GCP_PROJECT_ID) throw new Error('Firebase project mismatch.');
-          if (evidence.appCheckEnabled !== true) throw new Error('App Check build marker is not enabled.');
-          if (evidence.publicReleaseGate !== false || evidence.hardLaunchClaim !== false) {
-            throw new Error('Preview evidence attempted to claim public release or hard launch.');
+          try {
+            const evidence = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/founder-preview-live.json', 'utf8'));
+            const valid =
+              evidence.commitSha === process.env.EXACT_HEAD_SHA &&
+              evidence.hostingSite === process.env.FOUNDER_PREVIEW_SITE &&
+              evidence.firebaseProjectId === process.env.GCP_PROJECT_ID &&
+              evidence.appCheckEnabled === true &&
+              evidence.publicReleaseGate === false &&
+              evidence.hardLaunchClaim === false;
+            process.exit(valid ? 0 : 1);
+          } catch {
+            process.exit(1);
           }
           NODE
+            then
+              VERIFIED=true
+              break
+            fi
+            sleep 3
+          done
+          test "$VERIFIED" = true
 
       - name: Write controlled-preview evidence
         run: |
@@ -243,7 +264,7 @@ jobs:
           const fs = require('fs');
           const evidence = {
             schemaVersion: 1,
-            commitSha: process.env.GITHUB_SHA,
+            commitSha: process.env.EXACT_HEAD_SHA,
             pullRequest: 844,
             baseSha: 'ccf622fdac1ba9cfd4322d040533d9488612fa99',
             firebaseProjectId: process.env.GCP_PROJECT_ID,
