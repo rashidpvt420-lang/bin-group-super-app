@@ -19,10 +19,7 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: admin-mfa-regression-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  id-token: write
 
 env:
   CI: true
@@ -62,3 +59,216 @@ jobs:
             src/__tests__/components/AdminMfaSignInChallenge.test.tsx \
             src/__tests__/components/UnifiedLoginMfaResolution.test.tsx \
             src/__tests__/lib/adminAuthRedirect.test.ts
+
+  deploy-founder-preview:
+    name: Clone exact head to temporary Founder site
+    needs: focused-admin-mfa-tests
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 844 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/admin-mfa-post-resolution-loop' &&
+      github.event.pull_request.base.sha == 'ccf622fdac1ba9cfd4322d040533d9488612fa99'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      FOUNDER_PREVIEW_SITE: bin-founder-totp-260801174030
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Enforce exact-head and temporary-site boundaries
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "ccf622fdac1ba9cfd4322d040533d9488612fa99"
+          test "$GCP_PROJECT_ID" = "bin-group-57c60"
+          test "$FOUNDER_PREVIEW_SITE" = "bin-founder-totp-260801174030"
+          test "$FOUNDER_PREVIEW_SITE" != "bin-group-57c60"
+          test "$FOUNDER_PREVIEW_SITE" != "bin-group-admin-panel"
+          test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
+          test -n "$GCP_SERVICE_ACCOUNT"
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify the hardcoded Founder site exists in the expected project
+        run: |
+          set -euo pipefail
+          npx firebase-tools hosting:sites:list --project "$GCP_PROJECT_ID" --json > "$RUNNER_TEMP/firebase-sites.json"
+          node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/firebase-sites.json', 'utf8'));
+          const sites = payload?.result?.sites || payload?.sites || [];
+          const ids = sites.map((site) => site.site || String(site.name || '').split('/').pop()).filter(Boolean);
+          const expected = process.env.FOUNDER_PREVIEW_SITE;
+          if (!ids.includes(expected)) {
+            console.error(`Expected temporary Founder site ${expected} was not found in the configured project.`);
+            process.exit(1);
+          }
+          if (expected === 'bin-group-57c60' || expected === 'bin-group-admin-panel') {
+            console.error('Refusing to use a production Hosting site as the Founder preview destination.');
+            process.exit(1);
+          }
+          console.log('Verified the dedicated temporary Founder Hosting site.');
+          NODE
+
+      - name: Build shared package
+        run: npm run build --workspace=@bin/shared
+
+      - name: Build App Check-enforced Admin panel
+        run: npm run build:admin
+        env:
+          CI: false
+          REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
+          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
+          REACT_APP_FIREBASE_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+
+      - name: Verify embedded Firebase project and write exact-SHA manifest
+        run: |
+          set -euo pipefail
+          npm run verify:admin-firebase -- --build apps/admin-panel/build
+          MANIFEST="apps/admin-panel/build/founder-preview-${GITHUB_SHA}.json"
+          node <<'NODE'
+          const fs = require('fs');
+          const path = `apps/admin-panel/build/founder-preview-${process.env.GITHUB_SHA}.json`;
+          const evidence = {
+            schemaVersion: 1,
+            commitSha: process.env.GITHUB_SHA,
+            firebaseProjectId: process.env.GCP_PROJECT_ID,
+            hostingSite: process.env.FOUNDER_PREVIEW_SITE,
+            deploymentScope: 'temporary-founder-mfa-preview',
+            appCheckEnabled: true,
+            publicReleaseGate: false,
+            hardLaunchClaim: false,
+          };
+          fs.writeFileSync(path, `${JSON.stringify(evidence, null, 2)}\n`);
+          NODE
+          test -f "$MANIFEST"
+
+      - name: Generate an isolated Hosting-only configuration
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const source = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+          const entries = Array.isArray(source.hosting) ? source.hosting : [source.hosting];
+          const admin = entries.find((entry) => entry && entry.target === 'admin');
+          if (!admin || admin.public !== 'apps/admin-panel/build') {
+            console.error('The canonical Admin Hosting configuration could not be resolved.');
+            process.exit(1);
+          }
+          const isolated = JSON.parse(JSON.stringify(admin));
+          isolated.target = 'founder-preview';
+          fs.writeFileSync(
+            process.env.RUNNER_TEMP + '/firebase-founder-preview.json',
+            `${JSON.stringify({ hosting: [isolated] }, null, 2)}\n`,
+          );
+          NODE
+          node -e "const c=require(process.env.RUNNER_TEMP + '/firebase-founder-preview.json'); if(c.hosting.length!==1||c.hosting[0].target!=='founder-preview'||c.hosting[0].public!=='apps/admin-panel/build') process.exit(1)"
+          npx firebase-tools target:apply hosting founder-preview "$FOUNDER_PREVIEW_SITE" --project "$GCP_PROJECT_ID" --non-interactive
+
+      - name: Deploy exact head to a temporary preview channel
+        id: preview_channel
+        run: |
+          set -euo pipefail
+          CHANNEL_ID="mfa-${GITHUB_SHA:0:12}"
+          npx firebase-tools hosting:channel:deploy "$CHANNEL_ID" \
+            --only founder-preview \
+            --config "$RUNNER_TEMP/firebase-founder-preview.json" \
+            --project "$GCP_PROJECT_ID" \
+            --expires 1d \
+            --non-interactive
+          echo "channel_id=$CHANNEL_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Clone the verified preview version to the temporary Founder site's live channel
+        run: |
+          set -euo pipefail
+          CHANNEL_ID="${{ steps.preview_channel.outputs.channel_id }}"
+          npx firebase-tools hosting:clone \
+            "$FOUNDER_PREVIEW_SITE:$CHANNEL_ID" \
+            "$FOUNDER_PREVIEW_SITE:live" \
+            --project "$GCP_PROJECT_ID" \
+            --non-interactive
+
+      - name: Verify the temporary site serves the exact head
+        run: |
+          set -euo pipefail
+          LIVE_MANIFEST="https://${FOUNDER_PREVIEW_SITE}.web.app/founder-preview-${GITHUB_SHA}.json"
+          curl --fail --silent --show-error --retry 8 --retry-delay 3 "$LIVE_MANIFEST" > "$RUNNER_TEMP/founder-preview-live.json"
+          node <<'NODE'
+          const fs = require('fs');
+          const evidence = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/founder-preview-live.json', 'utf8'));
+          if (evidence.commitSha !== process.env.GITHUB_SHA) throw new Error('Temporary site commit SHA mismatch.');
+          if (evidence.hostingSite !== process.env.FOUNDER_PREVIEW_SITE) throw new Error('Temporary site identity mismatch.');
+          if (evidence.firebaseProjectId !== process.env.GCP_PROJECT_ID) throw new Error('Firebase project mismatch.');
+          if (evidence.appCheckEnabled !== true) throw new Error('App Check build marker is not enabled.');
+          if (evidence.publicReleaseGate !== false || evidence.hardLaunchClaim !== false) {
+            throw new Error('Preview evidence attempted to claim public release or hard launch.');
+          }
+          NODE
+
+      - name: Write controlled-preview evidence
+        run: |
+          set -euo pipefail
+          mkdir -p founder_preview_evidence
+          node <<'NODE'
+          const fs = require('fs');
+          const evidence = {
+            schemaVersion: 1,
+            commitSha: process.env.GITHUB_SHA,
+            pullRequest: 844,
+            baseSha: 'ccf622fdac1ba9cfd4322d040533d9488612fa99',
+            firebaseProjectId: process.env.GCP_PROJECT_ID,
+            hostingSite: process.env.FOUNDER_PREVIEW_SITE,
+            previewChannel: process.env.PREVIEW_CHANNEL,
+            clonedToTemporaryLive: true,
+            liveManifestVerified: true,
+            phoneMfaAuthorization: 'pending-human',
+            profileAccess: 'pending-human',
+            founderTotpEnrollment: 'pending-human',
+            freshTotpLogin: 'pending-human',
+            protectedFounderE2eSecrets: 'not-configured',
+            publicReleaseGate: false,
+            hardLaunchClaim: false,
+            verifiedAt: new Date().toISOString(),
+          };
+          fs.writeFileSync('founder_preview_evidence/founder-preview-deployment.json', `${JSON.stringify(evidence, null, 2)}\n`);
+          NODE
+        env:
+          PREVIEW_CHANNEL: ${{ steps.preview_channel.outputs.channel_id }}
+
+      - name: Upload exact-SHA controlled-preview evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: founder-preview-${{ github.event.pull_request.head.sha }}
+          path: founder_preview_evidence/founder-preview-deployment.json
+          if-no-files-found: error
+          retention-days: 30
