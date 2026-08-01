@@ -105,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let authHandshakeResolved = false;
         let globalTimeoutTimer: any = null;
         let currentVerificationUid = '';
+        let verificationGeneration = 0;
 
         const markAuthReady = () => {
             if (!mounted || authHandshakeResolved) return;
@@ -249,6 +250,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             currentVerificationUid = firebaseUser.uid;
+            verificationGeneration++;
+            const myGeneration = verificationGeneration;
 
             // Start global timeout of 30 seconds
             globalTimeoutTimer = window.setTimeout(async () => {
@@ -276,6 +279,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             try {
                 const verifiedUser = await verifyAdminUser(firebaseUser);
+                if (verificationGeneration !== myGeneration) return;
+                
                 if (globalTimeoutTimer) {
                     window.clearTimeout(globalTimeoutTimer);
                     globalTimeoutTimer = null;
@@ -290,6 +295,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setStatus('authorized');
                 console.log('[ADMIN-AUTH] final authorization status: authorized');
             } catch (authError: any) {
+                if (verificationGeneration !== myGeneration) return;
+                
                 if (globalTimeoutTimer) {
                     window.clearTimeout(globalTimeoutTimer);
                     globalTimeoutTimer = null;
