@@ -36,6 +36,13 @@ jobs:
     steps:
       - name: Checkout exact pull request head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Record tested commit
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          git rev-parse HEAD
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
