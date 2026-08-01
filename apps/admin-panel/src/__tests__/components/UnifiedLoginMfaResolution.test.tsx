@@ -19,7 +19,7 @@ jest.mock('../../context/AuthContext', () => ({
 jest.mock('@bin/shared', () => ({
   __esModule: true,
   useLanguage: () => ({ t: (key: string) => key, isRTL: false }),
-}));
+}), { virtual: true });
 
 jest.mock('../../components/security/AdminMfaSignInChallenge', () => {
   return function MockAdminMfaSignInChallenge(props: { onResolved: () => void; onCancel: () => void }) {
