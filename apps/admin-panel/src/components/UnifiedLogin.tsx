@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
 import { getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
@@ -6,6 +7,7 @@ import { Shield, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '@bin/shared';
 import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
+import { adminReturnToFromSearch } from '../lib/adminAuthRedirect';
 
 const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
 const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
@@ -30,13 +32,18 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
 export default function UnifiedLogin() {
     const { error: authError, isAuthenticated, status } = useAuth();
     const { t, isRTL } = useLanguage();
+    const navigate = useNavigate();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
+    const [mfaResolutionPending, setMfaResolutionPending] = useState(false);
     const error = authError || localError;
-    const loading = localLoading;
+    const loading = localLoading ||
+        status === 'verifying-token' ||
+        status === 'verifying-profile' ||
+        mfaResolutionPending;
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
@@ -44,10 +51,23 @@ export default function UnifiedLogin() {
     }, [email]);
 
     useEffect(() => {
-        if (isAuthenticated || authError || mfaResolver) {
+        if (isAuthenticated && status === 'authorized') {
+            setLocalLoading(false);
+            setMfaResolutionPending(false);
+            navigate(adminReturnToFromSearch(window.location.search), { replace: true });
+            return;
+        }
+
+        if (authError || status === 'failed') {
+            setLocalLoading(false);
+            setMfaResolutionPending(false);
+            return;
+        }
+
+        if (mfaResolver) {
             setLocalLoading(false);
         }
-    }, [authError, isAuthenticated, mfaResolver]);
+    }, [authError, isAuthenticated, mfaResolver, navigate, status]);
 
     const friendlyAuthError = (err: any) => {
         const code = String(err?.code || '');
@@ -77,6 +97,7 @@ export default function UnifiedLogin() {
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
+        setMfaResolutionPending(false);
         try {
             await withTimeout(signOut(auth), AUTH_RESET_TIMEOUT_MS, 'ADMIN_SIGN_OUT_TIMEOUT').catch(() => undefined);
         } finally {
@@ -94,9 +115,12 @@ export default function UnifiedLogin() {
 
     const handleEmailLogin = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (loading || mfaResolver || isAuthenticated) return;
+
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
+        setMfaResolutionPending(false);
         try {
             await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
             const promise = signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
@@ -178,6 +202,7 @@ export default function UnifiedLogin() {
                             resolver={mfaResolver}
                             onResolved={() => {
                                 setLocalLoading(true);
+                                setMfaResolutionPending(true);
                                 setMfaResolver(null);
                                 setPassword('');
                             }}
@@ -186,6 +211,7 @@ export default function UnifiedLogin() {
                                 setMfaResolver(null);
                                 setPassword('');
                                 setLocalError(null);
+                                setMfaResolutionPending(false);
                             }}
                         />
                     ) : (
@@ -193,7 +219,7 @@ export default function UnifiedLogin() {
                             <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
                                 <input data-testid="admin-login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('login.email')} autoComplete="username" className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E]" required />
                                 <input data-testid="admin-login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('login.password')} autoComplete="current-password" className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E]" required />
-                                <button data-testid="admin-login-submit" type="submit" disabled={loading || !email || !password} className="w-full flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl disabled:opacity-50 uppercase tracking-widest text-sm">{loading ? '...' : t('login.signin')}</button>
+                                <button data-testid="admin-login-submit" type="submit" disabled={loading || !email || !password || isAuthenticated} className="w-full flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl disabled:opacity-50 uppercase tracking-widest text-sm">{loading ? '...' : t('login.signin')}</button>
                                 <button type="button" onClick={handlePasswordReset} disabled={loading} className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest disabled:opacity-50">{t('login.forgot_password')}</button>
                                 <button type="button" onClick={() => void resetSecureSession()} disabled={loading} className="w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest disabled:opacity-50">Reset secure session</button>
                             </form>
