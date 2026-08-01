@@ -51,9 +51,6 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
   'E2E_TECHNICIAN_PASSWORD',
   'E2E_BROKER_MAILBOX_EMAIL',
   'E2E_BROKER_PASSWORD',
-  'E2E_FOUNDER_EMAIL',
-  'E2E_FOUNDER_PASSWORD',
-  'E2E_FOUNDER_TOTP_SECRET',
 ]);
 
 const value = (env, key) => String(env?.[key] || '').trim();
@@ -158,8 +155,8 @@ export function validateProductionWorkflowEnv(env = process.env) {
   if (value(env, 'E2E_FOUNDER_EMAIL') && value(env, 'E2E_FOUNDER_EMAIL').toLowerCase() !== 'ceo@bin-groups.com') {
     failures.push('E2E_FOUNDER_EMAIL must equal ceo@bin-groups.com');
   }
-  const founderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET');
-  if (founderTotp && founderTotp.length < 16) {
+  const rawFounderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET');
+  if (rawFounderTotp && rawFounderTotp.length < 16) {
     failures.push('E2E_FOUNDER_TOTP_SECRET must contain at least 16 characters');
   }
 
