@@ -9,7 +9,6 @@ import AdminMfaSignInChallenge from './security/AdminMfaSignInChallenge';
 
 const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
 const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
-const AUTH_VERIFICATION_TIMEOUT_MS = 15_000;
 const AUTH_RESET_TIMEOUT_MS = 5_000;
 
 const timeoutError = (code: string) => Object.assign(new Error(code), { code });
@@ -29,49 +28,24 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
 });
 
 export default function UnifiedLogin() {
-    const { error: authError, isAuthenticated } = useAuth();
+    const { error: authError, isAuthenticated, status } = useAuth();
     const { t, isRTL } = useLanguage();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
-    const verificationTimerRef = useRef<number | null>(null);
 
     const error = authError || localError;
-    const loading = localLoading;
-
-    const clearVerificationTimer = () => {
-        if (verificationTimerRef.current !== null) {
-            window.clearTimeout(verificationTimerRef.current);
-            verificationTimerRef.current = null;
-        }
-    };
-
-    const startAuthorizationTimer = () => {
-        clearVerificationTimer();
-        verificationTimerRef.current = window.setTimeout(() => {
-            verificationTimerRef.current = null;
-            setLocalLoading(false);
-            setLocalError('The primary credential was accepted, but Admin authorization did not finish. Reset the secure session and sign in again.');
-            void signOut(auth).catch(() => undefined);
-        }, AUTH_VERIFICATION_TIMEOUT_MS);
-    };
+    const loading = localLoading || status === 'verifying-token' || status === 'verifying-profile';
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
         if (redirectedEmail && !email) setEmail(redirectedEmail);
     }, [email]);
 
-    useEffect(() => () => clearVerificationTimer(), []);
-
     useEffect(() => {
-        if (isAuthenticated) {
-            clearVerificationTimer();
-            return;
-        }
-        if (authError || mfaResolver) {
-            clearVerificationTimer();
+        if (isAuthenticated || authError || mfaResolver) {
             setLocalLoading(false);
         }
     }, [authError, isAuthenticated, mfaResolver]);
@@ -101,7 +75,6 @@ export default function UnifiedLogin() {
     };
 
     const resetSecureSession = async () => {
-        clearVerificationTimer();
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
@@ -122,23 +95,21 @@ export default function UnifiedLogin() {
 
     const handleEmailLogin = async (event: React.FormEvent) => {
         event.preventDefault();
-        clearVerificationTimer();
         setLocalLoading(true);
         setLocalError(null);
         setMfaResolver(null);
         try {
             await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
+            const promise = signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
             const result = await withTimeout(
-                signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
+                promise,
                 AUTH_SIGN_IN_TIMEOUT_MS,
                 'ADMIN_SIGN_IN_TIMEOUT',
             );
             if (result.user) {
                 console.info('[ADMIN-AUTH] Primary credential accepted.');
-                startAuthorizationTimer();
             }
         } catch (err: any) {
-            clearVerificationTimer();
             if (err?.code === 'auth/multi-factor-auth-required') {
                 try {
                     setMfaResolver(getMultiFactorResolver(auth, err));
@@ -207,14 +178,11 @@ export default function UnifiedLogin() {
                         <AdminMfaSignInChallenge
                             resolver={mfaResolver}
                             onResolved={() => {
-                                clearVerificationTimer();
                                 setLocalLoading(true);
                                 setMfaResolver(null);
                                 setPassword('');
-                                startAuthorizationTimer();
                             }}
                             onCancel={() => {
-                                clearVerificationTimer();
                                 setLocalLoading(false);
                                 setMfaResolver(null);
                                 setPassword('');
