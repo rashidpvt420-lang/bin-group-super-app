@@ -25,22 +25,29 @@ jobs:
           node-version: '22'
 
       - name: Print set/missing/redacted status
+        env:
+          E2E_FOUNDER_EMAIL: ${{ vars.E2E_FOUNDER_EMAIL || secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
         run: |
-          echo "Checking presence of critical Founder secrets:"
-          if [ -z "${{ secrets.E2E_FOUNDER_EMAIL }}" ]; then
+          echo "Checking presence of critical Founder values:"
+          if [ -z "$E2E_FOUNDER_EMAIL" ]; then
             echo "  E2E_FOUNDER_EMAIL: MISSING"
           else
             echo "  E2E_FOUNDER_EMAIL: SET (redacted)"
           fi
-          if [ -z "${{ secrets.E2E_FOUNDER_PASSWORD }}" ]; then
+          if [ -z "$E2E_FOUNDER_PASSWORD" ]; then
             echo "  E2E_FOUNDER_PASSWORD: MISSING"
           else
             echo "  E2E_FOUNDER_PASSWORD: SET (redacted)"
           fi
-          if [ -z "${{ secrets.E2E_FOUNDER_TOTP_SECRET }}" ]; then
-            echo "  E2E_FOUNDER_TOTP_SECRET: MISSING"
+          if [ -n "$E2E_FOUNDER_TOTP_SECRET" ]; then
+            echo "  Founder MFA evidence: SET (TOTP secret, redacted)"
+          elif [ -n "$E2E_FOUNDER_REAL_MFA_CODE" ]; then
+            echo "  Founder MFA evidence: SET (real MFA code, redacted)"
           else
-            echo "  E2E_FOUNDER_TOTP_SECRET: SET (redacted)"
+            echo "  Founder MFA evidence: MISSING"
           fi
 
       - name: Run verification script
@@ -75,6 +82,7 @@ jobs:
           E2E_FOUNDER_EMAIL: ${{ vars.E2E_FOUNDER_EMAIL || secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
           LAUNCH_MODE: 'public'
           RUN_PUBLIC_RELEASE_GATE: 'true'
         run: |
