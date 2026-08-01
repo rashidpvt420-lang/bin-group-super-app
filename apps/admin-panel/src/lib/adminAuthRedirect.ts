@@ -1,7 +1,11 @@
 const DEFAULT_ADMIN_DESTINATION = '/dashboard';
 const ADMIN_LOGIN_PATH = '/login';
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 const SAFE_ORIGIN = 'https://bin-admin.invalid';
+
+const hasControlCharacters = (value: string): boolean => Array.from(value).some((character) => {
+  const codePoint = character.codePointAt(0);
+  return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+});
 
 export const sanitizeAdminReturnTo = (
   rawReturnTo: string | null | undefined,
@@ -14,7 +18,7 @@ export const sanitizeAdminReturnTo = (
     !candidate.startsWith('/') ||
     candidate.startsWith('//') ||
     candidate.includes('\\') ||
-    CONTROL_CHARACTERS.test(candidate)
+    hasControlCharacters(candidate)
   ) {
     return fallback;
   }
