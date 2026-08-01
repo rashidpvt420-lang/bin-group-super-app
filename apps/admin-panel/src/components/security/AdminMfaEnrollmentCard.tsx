@@ -436,6 +436,17 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       setTotpStep('verifying');
       setTotpCode('');
     } catch (error) {
+      const codeValue = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : '';
+      if (codeValue === 'auth/requires-recent-login') {
+        clearTotpSecretState();
+        sessionStorage.removeItem('bin-admin-security-session');
+        void signOut(auth).finally(() => {
+          window.location.href = '/login?reason=recent-auth-required';
+        });
+        return;
+      }
       setTotpNotice({ type: 'error', text: friendlyError(error) });
     } finally {
       setTotpBusy(false);
@@ -509,6 +520,17 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
         });
       }, 900);
     } catch (error) {
+      const codeValue = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : '';
+      if (codeValue === 'auth/requires-recent-login') {
+        clearTotpSecretState();
+        sessionStorage.removeItem('bin-admin-security-session');
+        void signOut(auth).finally(() => {
+          window.location.href = '/login?reason=recent-auth-required';
+        });
+        return;
+      }
       setTotpNotice({ type: 'error', text: friendlyError(error) });
     } finally {
       setTotpBusy(false);
