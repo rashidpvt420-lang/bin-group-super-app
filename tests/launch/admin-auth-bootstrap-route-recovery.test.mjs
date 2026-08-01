@@ -14,7 +14,7 @@ const app = await readFile(
 test('Admin login route is never hidden behind initial Firebase session restoration', () => {
   assert.match(authContext, /const shouldBlockForInitialAuth = \(\) =>/);
   assert.match(authContext, /window\.location\.pathname !== '\/login'/);
-  assert.match(authContext, /useState\(shouldBlockForInitialAuth\)/);
+  assert.match(authContext, /shouldBlockForInitialAuth\(\) \? 'restoring-session' : 'idle'/);
   assert.match(app, /if \(loading\)/);
   assert.match(app, /<Route path="\/login" element=\{<LoginPage \/>\} \/>/);
 });
