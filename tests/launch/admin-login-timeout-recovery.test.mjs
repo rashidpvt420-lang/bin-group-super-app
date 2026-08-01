@@ -6,6 +6,8 @@ const login = await readFile(new URL('../../apps/admin-panel/src/components/Unif
 const challenge = await readFile(new URL('../../apps/admin-panel/src/components/security/AdminMfaSignInChallenge.tsx', import.meta.url), 'utf8');
 const adminSpec = await readFile(new URL('../e2e/business-admin.spec.ts', import.meta.url), 'utf8');
 
+const authContext = await readFile(new URL('../../apps/admin-panel/src/context/AuthContext.tsx', import.meta.url), 'utf8');
+
 test('Admin password login is bounded and exposes targeted secure-session recovery', () => {
   assert.match(login, /AUTH_PERSISTENCE_TIMEOUT_MS\s*=\s*8_000/);
   assert.match(login, /AUTH_SIGN_IN_TIMEOUT_MS\s*=\s*20_000/);

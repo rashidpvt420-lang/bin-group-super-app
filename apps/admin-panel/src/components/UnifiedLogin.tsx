@@ -28,7 +28,7 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
 });
 
 export default function UnifiedLogin() {
-    const { error: authError, isAuthenticated } = useAuth();
+    const { error: authError, isAuthenticated, status } = useAuth();
     const { t, isRTL } = useLanguage();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
@@ -99,8 +99,9 @@ export default function UnifiedLogin() {
         setMfaResolver(null);
         try {
             await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
+            const promise = signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
             const result = await withTimeout(
-                signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
+                promise,
                 AUTH_SIGN_IN_TIMEOUT_MS,
                 'ADMIN_SIGN_IN_TIMEOUT',
             );
