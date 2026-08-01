@@ -1,0 +1,57 @@
+name: Admin MFA Regression
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - apps/admin-panel/src/components/UnifiedLogin.tsx
+      - apps/admin-panel/src/components/security/AdminMfaSignInChallenge.tsx
+      - apps/admin-panel/src/pages/auth/LoginPage.tsx
+      - apps/admin-panel/src/lib/adminAuthRedirect.ts
+      - apps/admin-panel/src/__tests__/components/AdminMfaSignInChallenge.test.tsx
+      - apps/admin-panel/src/__tests__/components/UnifiedLoginMfaResolution.test.tsx
+      - apps/admin-panel/src/__tests__/lib/adminAuthRedirect.test.ts
+      - apps/admin-panel/package.json
+      - apps/admin-panel/package-lock.json
+      - .github/workflows/admin-mfa-regression.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-mfa-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+
+jobs:
+  focused-admin-mfa-tests:
+    name: Phone, TOTP, routing, and fail-closed regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/admin-panel/package-lock.json
+
+      - name: Install Admin panel dependencies
+        run: npm --prefix apps/admin-panel ci --legacy-peer-deps
+
+      - name: Run focused Admin MFA regressions
+        run: |
+          npm --prefix apps/admin-panel test -- \
+            --watchAll=false \
+            --runInBand \
+            src/__tests__/components/AdminMfaSignInChallenge.test.tsx \
+            src/__tests__/components/UnifiedLoginMfaResolution.test.tsx \
+            src/__tests__/lib/adminAuthRedirect.test.ts
