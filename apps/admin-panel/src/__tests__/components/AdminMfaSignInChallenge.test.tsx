@@ -111,9 +111,10 @@ describe('AdminMfaSignInChallenge', () => {
 
     fireEvent.click(screen.getByTestId('admin-mfa-send-signin-code'));
     await waitFor(() => expect(g.__mockVerifyPhoneNumber).toHaveBeenCalledTimes(1));
+    const phoneCodeInput = await screen.findByTestId('admin-mfa-signin-code');
     expect(g.__mockClearRecaptcha).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByTestId('admin-mfa-signin-code'), { target: { value: '654321' } });
+    fireEvent.change(phoneCodeInput, { target: { value: '654321' } });
     fireEvent.click(screen.getByTestId('admin-mfa-resolve-signin'));
 
     await waitFor(() => {
