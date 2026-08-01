@@ -188,11 +188,11 @@ jobs:
           const isolated = JSON.parse(JSON.stringify(admin));
           isolated.target = 'founder-preview';
           fs.writeFileSync(
-            process.env.RUNNER_TEMP + '/firebase-founder-preview.json',
+            'firebase.founder-preview.json',
             `${JSON.stringify({ hosting: [isolated] }, null, 2)}\n`,
           );
           NODE
-          node -e "const c=require(process.env.RUNNER_TEMP + '/firebase-founder-preview.json'); if(c.hosting.length!==1||c.hosting[0].target!=='founder-preview'||c.hosting[0].public!=='apps/admin-panel/build') process.exit(1)"
+          node -e "const c=require('./firebase.founder-preview.json'); if(c.hosting.length!==1||c.hosting[0].target!=='founder-preview'||c.hosting[0].public!=='apps/admin-panel/build') process.exit(1)"
           npx firebase-tools target:apply hosting founder-preview "$FOUNDER_PREVIEW_SITE" --project "$GCP_PROJECT_ID" --non-interactive
 
       - name: Deploy exact head to a temporary preview channel
@@ -202,7 +202,7 @@ jobs:
           CHANNEL_ID="mfa-${GITHUB_SHA:0:12}"
           npx firebase-tools hosting:channel:deploy "$CHANNEL_ID" \
             --only founder-preview \
-            --config "$RUNNER_TEMP/firebase-founder-preview.json" \
+            --config firebase.founder-preview.json \
             --project "$GCP_PROJECT_ID" \
             --expires 1d \
             --non-interactive
