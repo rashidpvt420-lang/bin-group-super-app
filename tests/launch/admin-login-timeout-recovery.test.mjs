@@ -9,7 +9,9 @@ const adminSpec = await readFile(new URL('../e2e/business-admin.spec.ts', import
 test('Admin password login is bounded and exposes targeted secure-session recovery', () => {
   assert.match(login, /AUTH_PERSISTENCE_TIMEOUT_MS\s*=\s*8_000/);
   assert.match(login, /AUTH_SIGN_IN_TIMEOUT_MS\s*=\s*20_000/);
-  assert.match(login, /AUTH_VERIFICATION_TIMEOUT_MS\s*=\s*15_000/);
+  assert.doesNotMatch(login, /AUTH_VERIFICATION_TIMEOUT_MS/);
+  assert.doesNotMatch(login, /startAuthorizationTimer/);
+  assert.doesNotMatch(login, /clearVerificationTimer/);
   assert.match(login, /withTimeout\(setPersistence\(auth, browserLocalPersistence\)/);
   assert.match(login, /signInWithEmailAndPassword/);
   assert.match(login, /Reset secure session/i);
