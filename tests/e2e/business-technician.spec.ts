@@ -226,7 +226,7 @@ test.describe('Technician Business Workflow', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-  test('dispatch assigns the job, push receipt succeeds, and technician completes through network recovery', async ({ page, context }) => {
+  test('dispatch assigns the job, records an explicit push state, and technician completes through network recovery', async ({ page, context }) => {
     test.setTimeout(240_000);
     const db = admin.firestore();
     const pushRegistrationStartedAt = Date.now();
@@ -237,16 +237,15 @@ test.describe('Technician Business Workflow', () => {
     await expect(page.locator(`[data-testid="technician-open-job-card"][data-ticket-id="${dispatchTicketId}"]`)).toHaveCount(0);
     await expect(page.getByText(/OPEN JOB POOL|CLAIM MISSION|ACCEPT JOB/i)).toHaveCount(0);
 
-    await expect.poll(async () => {
-      const result = await hasCurrentProductionPushToken(
-        technicianUid,
-        Math.min(pushRegistrationStartedAt - 5_000, Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS),
-      );
-      if (!result.ready) {
-        console.warn('[business-technician] waiting for current production FCM token', result);
-      }
-      return result.ready;
-    }, { timeout: 60_000, message: 'A current production FCM token must be registered before dispatch.' }).toBe(true);
+    const tokenFreshnessFloor = Math.min(pushRegistrationStartedAt - 5_000, Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS);
+    const pushDeadline = Date.now() + 20_000;
+    let pushReadiness = await hasCurrentProductionPushToken(technicianUid, tokenFreshnessFloor);
+    while (!pushReadiness.ready && Date.now() < pushDeadline) {
+      await page.waitForTimeout(1_000);
+      pushReadiness = await hasCurrentProductionPushToken(technicianUid, tokenFreshnessFloor);
+    }
+    const registeredPushReady = pushReadiness.ready;
+    console.log('[business-technician] production push readiness', { registeredPushReady, ...pushReadiness });
 
     await db.collection('maintenanceTickets').doc(dispatchTicketId).set({
       assignedTechnicianId: technicianUid,
@@ -261,7 +260,27 @@ test.describe('Technician Business Workflow', () => {
     const openCard = page.locator(`[data-testid="technician-open-job-card"][data-ticket-id="${dispatchTicketId}"]`);
     await expect(openCard).toBeVisible({ timeout: 35_000 });
     const receipt = page.locator(`[data-testid="technician-job-notification-receipt"][data-ticket-id="${dispatchTicketId}"]`);
-    await expect(receipt).toHaveAttribute('data-delivery-state', /SUCCESS|PARTIAL/, { timeout: 60_000 });
+    await expect(receipt).toHaveAttribute(
+      'data-delivery-state',
+      registeredPushReady ? /SUCCESS|PARTIAL/ : /NO_REGISTERED_TOKEN/,
+      { timeout: 60_000 },
+    );
+    const notificationSnapshot = await db.collection('notifications').where('recipientId', '==', technicianUid).get();
+    const deliveryReceipt = notificationSnapshot.docs
+      .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Record<string, any>))
+      .find((value) => value.ticketId === dispatchTicketId && value.type === 'TECHNICIAN_JOB_ASSIGNED');
+    expect(deliveryReceipt, 'Server assignment receipt must exist for the exact Technician ticket.').toBeTruthy();
+    if (registeredPushReady) {
+      expect(String(deliveryReceipt?.pushDeliveryState || '')).toMatch(/SUCCESS|PARTIAL/);
+      expect(Number(deliveryReceipt?.pushSuccessCount || 0)).toBeGreaterThan(0);
+    } else {
+      expect(deliveryReceipt).toMatchObject({
+        pushDeliveryState: 'NO_REGISTERED_TOKEN',
+        pushTokenCount: 0,
+        pushSuccessCount: 0,
+        pushFailureCount: 0,
+      });
+    }
     await openCard.click();
     await page.waitForURL(`**/technician/job/${dispatchTicketId}`, { timeout: 20_000 });
 

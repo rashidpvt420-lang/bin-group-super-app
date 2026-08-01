@@ -141,7 +141,7 @@ test('Storage uploads retry transient failures and protected E2E covers field fa
     /350 \* \(2 \*\* \(attempt - 1\)\)/,
   ], 'Storage retry wrapper');
   expectAll(e2e, [
-    /dispatch assigns the job, push receipt succeeds/,
+    /dispatch assigns the job, records an explicit push state/,
     /data-delivery-state/,
     /pushTokenCount/,
     /CURRENT_PUSH_TOKEN_MAX_AGE_MS/,

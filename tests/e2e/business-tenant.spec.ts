@@ -141,24 +141,38 @@ async function submitRealTenantRequest(page: Page, suffix: string) {
     buffer: IMAGE_BUFFER,
   });
 
-  await page.getByTestId('tenant-request-submit').click();
-  await Promise.race([
-    page.waitForURL('**/tenant/tickets', { timeout: 35_000 }),
-    expect(page.locator('body')).toContainText(/success|created|submitted|ticket|request/i, { timeout: 35_000 }),
-  ]);
+  const submitButton = page.getByTestId('tenant-request-submit');
+  await expect(submitButton, 'Tenant request submission must be fully ready before evidence capture.').toBeEnabled({ timeout: 30_000 });
+  let dialogMessage = '';
+  page.once('dialog', async (dialog) => {
+    dialogMessage = dialog.message();
+    await dialog.dismiss();
+  });
+  const callableResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().includes('createTenantServiceTicket'),
+    { timeout: 60_000 },
+  );
+  await submitButton.click();
+  const callableResponse = await callableResponsePromise;
+  const callablePayload = await callableResponse.json().catch(() => ({})) as any;
+  if (!callableResponse.ok() || callablePayload?.error) {
+    throw new Error(`createTenantServiceTicket failed HTTP ${callableResponse.status()}: ${JSON.stringify(callablePayload)}`);
+  }
+  const ticketId = String(callablePayload?.result?.ticketId || callablePayload?.data?.ticketId || '').trim();
+  expect(ticketId, 'createTenantServiceTicket must return the exact production ticket ID.').toMatch(/^tenant_/);
+  await page.waitForURL('**/tenant/tickets', { timeout: 60_000 });
+  await page.waitForTimeout(250);
+  if (dialogMessage) throw new Error(`Tenant request UI reported an error: ${dialogMessage}`);
   await expect(page.locator('body')).not.toContainText(
     /Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i,
     { timeout: 5_000 },
   );
 
   const db = admin.firestore();
-  let ticketId = '';
-  await expect.poll(async () => {
-    const result = await db.collection('maintenanceTickets').where('description', '==', description).get();
-    const exact = result.docs.find((docSnap) => docSnap.data()?.tenantId === tenantUid || docSnap.data()?.tenantUid === tenantUid);
-    ticketId = exact?.id || '';
-    return ticketId;
-  }, { timeout: 40_000 }).not.toBe('');
+  await expect.poll(async () => (await db.collection('maintenanceTickets').doc(ticketId).get()).exists, {
+    timeout: 40_000,
+    message: `Exact callable-created ticket ${ticketId} must exist in production Firestore.`,
+  }).toBe(true);
 
   createdTicketIds.add(ticketId);
   const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
