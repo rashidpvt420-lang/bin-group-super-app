@@ -201,7 +201,10 @@ export default function UnifiedLogin() {
                                 setMfaResolutionPending(true);
                                 setMfaResolver(null);
                                 setPassword('');
-                                void retryAuthorization();
+                                // Firebase's auth-state listener is the canonical owner of
+                                // post-MFA authorization. Calling retryAuthorization here
+                                // creates a second competing attempt before mobile browser
+                                // persistence has finished publishing auth.currentUser.
                             }}
                             onCancel={() => {
                                 setLocalLoading(false);
