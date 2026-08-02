@@ -14,6 +14,7 @@ import {
     onAuthStateChanged,
     setPersistence,
     browserLocalPersistence,
+    browserSessionPersistence,
     signOut,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
@@ -271,7 +272,7 @@ export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
     onAuthStateChanged,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
-    ref, uploadBytes, getDownloadURL, signInWithRedirect, signInWithEmailAndPassword, setPersistence, browserLocalPersistence
+    ref, uploadBytes, getDownloadURL, signInWithRedirect, signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence
 };
 export type { User };
 export default app;

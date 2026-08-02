@@ -96,30 +96,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const globalTimeoutRef = useRef<number | null>(null);
     const manualRetryTriggerRef = useRef<((firebaseUser: any) => Promise<void>) | null>(null);
 
-    useEffect(() => {
-        mountedRef.current = true;
-        let authHandshakeResolved = false;
-
-        const markAuthReady = () => {
-            if (!mountedRef.current || authHandshakeResolved) return;
-            authHandshakeResolved = true;
-            const bootWindow = window as typeof window & { __BIN_GROUPS_BOOT__?: Record<string, unknown> };
-            bootWindow.__BIN_GROUPS_BOOT__ = {
-                ...(bootWindow.__BIN_GROUPS_BOOT__ || {}),
-                authReady: true,
-            };
+    const authReadyRef = useRef(false);
+    const markAuthReady = useCallback(() => {
+        if (!mountedRef.current || authReadyRef.current) return;
+        authReadyRef.current = true;
+        const bootWindow = window as typeof window & { __BIN_GROUPS_BOOT__?: Record<string, unknown> };
+        bootWindow.__BIN_GROUPS_BOOT__ = {
+            ...(bootWindow.__BIN_GROUPS_BOOT__ || {}),
+            authReady: true,
         };
+    }, []);
 
-        const resetMfaState = () => {
-            setMfaEnrollmentRequired(false);
-            setMfaVerified(false);
-            setMfaFactorCount(0);
-        };
+    const resetMfaState = useCallback(() => {
+        setMfaEnrollmentRequired(false);
+        setMfaVerified(false);
+        setMfaFactorCount(0);
+    }, []);
 
-        const verifyAdminUser = async (firebaseUser: any, attemptId: number, expectedUid: string) => {
-            console.log('[ADMIN-AUTH] token verification started for generation', attemptId);
-            setStatus('verifying-token');
+    const authorizeFirebaseUser = useCallback(async (firebaseUser: any) => {
+        currentUidRef.current = firebaseUser.uid;
+        generationRef.current++;
+        const attemptId = generationRef.current;
+        const expectedUid = firebaseUser.uid;
+
+        console.log('[ADMIN-AUTH] token verification started for generation', attemptId);
+        setStatus('verifying-token');
+
+        if (globalTimeoutRef.current) {
+            window.clearTimeout(globalTimeoutRef.current);
+            globalTimeoutRef.current = null;
+        }
+
+        const myTimeoutId = window.setTimeout(async () => {
+            if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
+            console.error('[ADMIN-AUTH] Global verification timeout exceeded.');
+            setIsAuthenticated(false);
+            setUser(null);
+            resetMfaState();
             
+            let timeoutMessage = 'Admin verification timed out. Please try again.';
+            if (statusRef.current === 'verifying-token') {
+                timeoutMessage = 'Token verification timed out. Please check your network connection and try again.';
+            } else if (statusRef.current === 'verifying-profile') {
+                timeoutMessage = 'Admin profile lookup timed out. Please check your network connection and try again.';
+            }
+            setError(timeoutMessage);
+            setStatus('failed');
+            console.log('[ADMIN-AUTH] final authorization status: failed (GLOBAL_TIMEOUT)');
+        }, 30000);
+        globalTimeoutRef.current = myTimeoutId;
+
+        try {
             let idTokenResult = await timeout(getIdTokenResult(firebaseUser, true), 15000, 'AUTH_TOKEN_TIMEOUT');
             if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
 
@@ -207,7 +234,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
 
-            return {
+            if (globalTimeoutRef.current === myTimeoutId) {
+                window.clearTimeout(myTimeoutId);
+                globalTimeoutRef.current = null;
+            }
+
+            setUser({
                 ...firebaseUser,
                 ...profile,
                 role,
@@ -216,8 +248,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 mfaEnrollmentRequired: enrollmentRequired,
                 mfaVerified: verifiedSecondFactor,
                 mfaFactorCount: factorCount,
-            };
-        };
+            });
+            setIsAuthenticated(true);
+            setMfaEnrollmentRequired(enrollmentRequired);
+            setMfaVerified(verifiedSecondFactor);
+            setMfaFactorCount(factorCount);
+            setError(null);
+            setStatus('authorized');
+            console.log('[ADMIN-AUTH] final authorization status: authorized');
+        } catch (authError: any) {
+            if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
+            
+            if (globalTimeoutRef.current === myTimeoutId) {
+                window.clearTimeout(myTimeoutId);
+                globalTimeoutRef.current = null;
+            }
+            console.error('[ADMIN-AUTH] Verification failed:', authError);
+            
+            setIsAuthenticated(false);
+            setUser(null);
+            resetMfaState();
+
+            let authMessage = '';
+            const errMessage = authError?.message || '';
+            const errCode = authError?.code || '';
+            
+            let isTransient = false;
+
+            if (errMessage === 'AUTH_TOKEN_TIMEOUT') {
+                authMessage = 'Token verification timed out. Please check your network connection and try again.';
+                isTransient = true;
+            } else if (errMessage === 'ADMIN_PROFILE_TIMEOUT') {
+                authMessage = 'Admin profile lookup timed out. Please check your network connection and try again.';
+                isTransient = true;
+            } else if (errMessage === 'ADMIN_PROFILE_LOOKUP_FAILED') {
+                authMessage = 'Admin profile lookup failed. Verify your user profile in the database.';
+                isTransient = true;
+            } else if (errMessage === 'ADMIN_ACCESS_DENIED') {
+                authMessage = 'This account does not have an approved admin or staff role.';
+            } else if (errMessage === 'ADMIN_MFA_REQUIRED') {
+                authMessage = 'Admin MFA verification is required. Sign in again and complete the second-factor challenge.';
+            } else if (errCode === 'auth/network-request-failed' || errMessage.toLowerCase().includes('network')) {
+                authMessage = 'Network connection failed. Please try again.';
+                isTransient = true;
+            } else if (errMessage === 'INVALID_ADMIN_CLAIMS') {
+                authMessage = 'Access denied: missing or invalid Admin claims.';
+            } else if (errMessage === 'ADMIN_APPCHECK_RECAPTCHA_FAILED' || errMessage === 'ADMIN_APPCHECK_TOKEN_FAILED' || errMessage === 'ADMIN_APPCHECK_NOT_INITIALIZED') {
+                authMessage = 'Admin security verification could not obtain an App Check token for this domain. Access remains locked. Retry after confirming the App Check domain registration.';
+                isTransient = true;
+            } else {
+                authMessage = `Admin verification failed: ${errMessage || errCode || 'unknown error'}`;
+                if (authMessage.includes('timeout') || authMessage.includes('unavailable') || authMessage.includes('deadline')) {
+                    isTransient = true;
+                }
+            }
+
+            setError(authMessage);
+            setStatus('failed');
+            console.log('[ADMIN-AUTH] final authorization status: failed (' + (errMessage || errCode) + ')');
+            
+            if (isTransient) {
+                console.log('[ADMIN-AUTH] Transient error captured. Firebase authenticated session retained for bounded retry.');
+            }
+        } finally {
+            if (mountedRef.current && generationRef.current === attemptId && currentUidRef.current === expectedUid) {
+                markAuthReady();
+            }
+        }
+    }, [resetMfaState, setStatus, markAuthReady]);
+
+    const retryAuthorization = useCallback(async () => {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+            setError(null);
+            await authorizeFirebaseUser(currentUser);
+        }
+    }, [authorizeFirebaseUser]);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        let authHandshakeResolved = false;
 
         if (typeof window !== 'undefined') {
             const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -238,7 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const authStateWatchdog = window.setTimeout(() => {
-            if (authHandshakeResolved) return;
+            if (authReadyRef.current || !mountedRef.current) return;
             setIsAuthenticated(false);
             setUser(null);
             resetMfaState();
@@ -246,122 +356,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setStatus('failed');
             markAuthReady();
         }, 12000);
-        
-        const triggerVerification = async (firebaseUser: any) => {
-            currentUidRef.current = firebaseUser.uid;
-            generationRef.current++;
-            const attemptId = generationRef.current;
-            const expectedUid = firebaseUser.uid;
-
-            if (globalTimeoutRef.current) {
-                window.clearTimeout(globalTimeoutRef.current);
-                globalTimeoutRef.current = null;
-            }
-
-            globalTimeoutRef.current = window.setTimeout(async () => {
-                if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
-                console.error('[ADMIN-AUTH] Global verification timeout exceeded.');
-                setIsAuthenticated(false);
-                setUser(null);
-                resetMfaState();
-                
-                let timeoutMessage = 'Admin verification timed out. Please try again.';
-                if (statusRef.current === 'verifying-token') {
-                    timeoutMessage = 'Token verification timed out. Please check your network connection and try again.';
-                } else if (statusRef.current === 'verifying-profile') {
-                    timeoutMessage = 'Admin profile lookup timed out. Please check your network connection and try again.';
-                }
-                setError(timeoutMessage);
-                setStatus('failed');
-                console.log('[ADMIN-AUTH] final authorization status: failed (GLOBAL_TIMEOUT)');
-                // Transient error: do not sign out.
-            }, 30000);
-
-            try {
-                const verifiedUser = await verifyAdminUser(firebaseUser, attemptId, expectedUid);
-                if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
-                
-                if (globalTimeoutRef.current) {
-                    window.clearTimeout(globalTimeoutRef.current);
-                    globalTimeoutRef.current = null;
-                }
-                
-                setUser(verifiedUser);
-                setIsAuthenticated(true);
-                setMfaEnrollmentRequired(verifiedUser.mfaEnrollmentRequired === true);
-                setMfaVerified(verifiedUser.mfaVerified === true);
-                setMfaFactorCount(Number(verifiedUser.mfaFactorCount || 0));
-                setError(null);
-                setStatus('authorized');
-                console.log('[ADMIN-AUTH] final authorization status: authorized');
-            } catch (authError: any) {
-                if (!mountedRef.current || generationRef.current !== attemptId || currentUidRef.current !== expectedUid) return;
-                
-                if (globalTimeoutRef.current) {
-                    window.clearTimeout(globalTimeoutRef.current);
-                    globalTimeoutRef.current = null;
-                }
-                console.error('[ADMIN-AUTH] Verification failed:', authError);
-                
-                setIsAuthenticated(false);
-                setUser(null);
-                resetMfaState();
-
-                let authMessage = '';
-                const errMessage = authError?.message || '';
-                const errCode = authError?.code || '';
-                
-                let isTransient = false;
-
-                if (errMessage === 'AUTH_TOKEN_TIMEOUT') {
-                    authMessage = 'Token verification timed out. Please check your network connection and try again.';
-                    isTransient = true;
-                } else if (errMessage === 'ADMIN_PROFILE_TIMEOUT') {
-                    authMessage = 'Admin profile lookup timed out. Please check your network connection and try again.';
-                    isTransient = true;
-                } else if (errMessage === 'ADMIN_PROFILE_LOOKUP_FAILED') {
-                    authMessage = 'Admin profile lookup failed. Verify your user profile in the database.';
-                    isTransient = true;
-                } else if (errMessage === 'ADMIN_ACCESS_DENIED') {
-                    authMessage = 'This account does not have an approved admin or staff role.';
-                } else if (errMessage === 'ADMIN_MFA_REQUIRED') {
-                    authMessage = 'Admin MFA verification is required. Sign in again and complete the second-factor challenge.';
-                } else if (errCode === 'auth/network-request-failed' || errMessage.toLowerCase().includes('network')) {
-                    authMessage = 'Network connection failed. Please try again.';
-                    isTransient = true;
-                } else if (errMessage === 'INVALID_ADMIN_CLAIMS') {
-                    authMessage = 'Access denied: missing or invalid Admin claims.';
-                } else if (errMessage === 'ADMIN_APPCHECK_RECAPTCHA_FAILED' || errMessage === 'ADMIN_APPCHECK_TOKEN_FAILED' || errMessage === 'ADMIN_APPCHECK_NOT_INITIALIZED') {
-                    authMessage = 'Admin security verification could not obtain an App Check token for this domain. Access remains locked. Retry after confirming the App Check domain registration.';
-                    isTransient = true;
-                } else {
-                    authMessage = `Admin verification failed: ${errMessage || errCode || 'unknown error'}`;
-                    if (authMessage.includes('timeout') || authMessage.includes('unavailable') || authMessage.includes('deadline')) {
-                        isTransient = true;
-                    }
-                }
-
-                setError(authMessage);
-                setStatus('failed');
-                console.log('[ADMIN-AUTH] final authorization status: failed (' + (errMessage || errCode) + ')');
-                
-                if (!isTransient) {
-                    try {
-                        await signOut(auth);
-                    } catch {
-                        // Sign-out cleanup is best effort.
-                    }
-                } else {
-                    console.log('[ADMIN-AUTH] Transient error captured. Firebase authenticated session retained for bounded retry.');
-                }
-            } finally {
-                if (mountedRef.current && generationRef.current === attemptId && currentUidRef.current === expectedUid) {
-                    markAuthReady();
-                }
-            }
-        };
-
-        manualRetryTriggerRef.current = triggerVerification;
 
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             window.clearTimeout(authStateWatchdog);
@@ -379,8 +373,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setIsAuthenticated(false);
                 setUser(null);
                 resetMfaState();
-                setError(null);
-                setStatus('idle');
+                if (statusRef.current !== 'failed') {
+                    setError(null);
+                    setStatus('idle');
+                }
                 markAuthReady();
                 return;
             }
@@ -390,7 +386,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 return;
             }
 
-            await triggerVerification(firebaseUser);
+            await authorizeFirebaseUser(firebaseUser);
         });
 
         return () => {
@@ -402,7 +398,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             unsubscribe();
         };
-    }, [setStatus]);
+    }, [authorizeFirebaseUser, resetMfaState, setStatus, markAuthReady]);
 
     const login = async ({ email, password }: { email: string; password: string }) => {
         setError(null);
@@ -431,12 +427,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setStatus('idle');
     };
     
-    const retryAuthorization = useCallback(async () => {
-        if (auth.currentUser && manualRetryTriggerRef.current) {
-            setError(null);
-            await manualRetryTriggerRef.current(auth.currentUser);
-        }
-    }, []);
 
     const contextValue = useMemo(
         () => ({
