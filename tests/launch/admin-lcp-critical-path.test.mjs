@@ -38,14 +38,29 @@ test('Admin authenticated pages and expensive PDF routes are lazy-loaded', async
   assert.doesNotMatch(source, /from\s+['"]@bin\/shared['"]/);
 });
 
-test('Admin webpack keeps PDF and chart vendors async-only', async () => {
-  const source = await read('apps/admin-panel/craco.config.js');
+test('Admin webpack keeps PDF, canvas, chart and report modules async-only', async () => {
+  const [webpackConfig, buildVerifier] = await Promise.all([
+    read('apps/admin-panel/craco.config.js'),
+    read('scripts/verify-admin-build-assets.mjs'),
+  ]);
 
-  assert.match(source, /pdfVendor/);
-  assert.match(source, /jspdf\|jspdf-autotable/);
-  assert.match(source, /name:\s*["']pdf-vendor["']/);
-  assert.match(source, /chartsVendor/);
-  assert.match(source, /chunks:\s*["']async["']/);
+  assert.match(webpackConfig, /pdfVendor/);
+  assert.match(webpackConfig, /jspdf\|jspdf-autotable\|html2canvas/);
+  assert.match(webpackConfig, /name:\s*["']pdf-vendor["']/);
+  assert.match(webpackConfig, /chartsVendor/);
+  assert.match(webpackConfig, /recharts\|d3-/);
+  assert.match(webpackConfig, /name:\s*["']charts-vendor["']/);
+  assert.match(webpackConfig, /reportRoutes/);
+  assert.match(webpackConfig, /name:\s*["']report-routes["']/);
+  assert.equal((webpackConfig.match(/chunks:\s*["']async["']/g) || []).length >= 3, true);
+
+  assert.match(buildVerifier, /asset-manifest\.json/);
+  assert.match(buildVerifier, /manifestJavaScriptEntrypoints/);
+  assert.match(buildVerifier, /pdfVendor:\s*'pdf-vendor'/);
+  assert.match(buildVerifier, /chartsVendor:\s*'charts-vendor'/);
+  assert.match(buildVerifier, /reportRoutes:\s*'report-routes'/);
+  assert.match(buildVerifier, /leaked into initial Admin entrypoints/);
+  assert.match(buildVerifier, /heavyChunksExcludedFromInitialEntrypoints:\s*true/);
 });
 
 test('Admin static shell paints branded LCP content and defers recovery maintenance', async () => {
