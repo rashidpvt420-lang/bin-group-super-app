@@ -26,7 +26,7 @@ jobs:
 
       - name: Print set/missing/redacted status
         env:
-          E2E_FOUNDER_EMAIL: ${{ vars.E2E_FOUNDER_EMAIL || secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_EMAIL: 'ceo@bin-groups.com'
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
           E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
