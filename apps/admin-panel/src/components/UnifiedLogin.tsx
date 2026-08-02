@@ -30,7 +30,7 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
 });
 
 export default function UnifiedLogin() {
-    const { error: authError, isAuthenticated, status } = useAuth();
+    const { error: authError, isAuthenticated, retryAuthorization, status } = useAuth();
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
     const [localLoading, setLocalLoading] = useState(false);
@@ -44,6 +44,7 @@ export default function UnifiedLogin() {
         status === 'verifying-token' ||
         status === 'verifying-profile' ||
         mfaResolutionPending;
+    const retainedFailedSession = status === 'failed' && Boolean(auth.currentUser) && !mfaResolver;
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
@@ -64,9 +65,7 @@ export default function UnifiedLogin() {
             return;
         }
 
-        if (mfaResolver) {
-            setLocalLoading(false);
-        }
+        if (mfaResolver) setLocalLoading(false);
     }, [authError, isAuthenticated, mfaResolver, navigate, status]);
 
     const friendlyAuthError = (err: any) => {
@@ -115,7 +114,7 @@ export default function UnifiedLogin() {
 
     const handleEmailLogin = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (loading || mfaResolver || isAuthenticated) return;
+        if (loading || mfaResolver || isAuthenticated || auth.currentUser) return;
 
         setLocalLoading(true);
         setLocalError(null);
@@ -123,15 +122,12 @@ export default function UnifiedLogin() {
         setMfaResolutionPending(false);
         try {
             await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
-            const promise = signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
             const result = await withTimeout(
-                promise,
+                signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
                 AUTH_SIGN_IN_TIMEOUT_MS,
                 'ADMIN_SIGN_IN_TIMEOUT',
             );
-            if (result.user) {
-                console.info('[ADMIN-AUTH] Primary credential accepted.');
-            }
+            if (result.user) console.info('[ADMIN-AUTH] Primary credential accepted.');
         } catch (err: any) {
             if (err?.code === 'auth/multi-factor-auth-required') {
                 try {
@@ -193,10 +189,10 @@ export default function UnifiedLogin() {
                 <div className="bg-[#0f172a]/80 backdrop-blur-xl border border-white/5 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C6A75E] to-transparent opacity-50" />
                     <div className="mb-8">
-                        <h2 className="text-xl font-black text-white mb-2">{mfaResolver ? 'Admin MFA Verification' : 'Admin Login'}</h2>
-                        <p className="text-sm text-[#64748b] leading-relaxed">{mfaResolver ? 'The primary credential was accepted. Complete the enrolled Firebase second factor.' : 'Authorized BIN GROUP administrators only.'}</p>
+                        <h2 className="text-xl font-black text-white mb-2">{mfaResolver ? 'Admin MFA Verification' : retainedFailedSession ? 'Admin Authorization Blocked' : 'Admin Login'}</h2>
+                        <p className="text-sm text-[#64748b] leading-relaxed">{mfaResolver ? 'The primary credential was accepted. Complete the enrolled Firebase second factor.' : retainedFailedSession ? 'Your Firebase session is retained so the exact protected authorization failure can be retried or reset safely.' : 'Authorized BIN GROUP administrators only.'}</p>
                     </div>
-                    {error && !mfaResolver && <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{error}</div>}
+                    {error && !mfaResolver && <div data-testid="admin-auth-error" className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{error}</div>}
                     {mfaResolver ? (
                         <AdminMfaSignInChallenge
                             resolver={mfaResolver}
@@ -205,6 +201,7 @@ export default function UnifiedLogin() {
                                 setMfaResolutionPending(true);
                                 setMfaResolver(null);
                                 setPassword('');
+                                void retryAuthorization();
                             }}
                             onCancel={() => {
                                 setLocalLoading(false);
@@ -214,12 +211,17 @@ export default function UnifiedLogin() {
                                 setMfaResolutionPending(false);
                             }}
                         />
+                    ) : retainedFailedSession ? (
+                        <div className="space-y-3">
+                            <button data-testid="admin-retry-authorization" type="button" onClick={() => void retryAuthorization()} className="w-full flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl uppercase tracking-widest text-sm">Retry secure authorization</button>
+                            <button data-testid="admin-reset-failed-session" type="button" onClick={() => void resetSecureSession()} className="w-full rounded-xl border border-[#C6A75E]/40 px-5 py-3 text-[10px] font-black uppercase tracking-widest text-[#C6A75E] hover:bg-[#C6A75E]/10">Reset secure session</button>
+                        </div>
                     ) : (
                         <>
                             <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
                                 <input data-testid="admin-login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('login.email')} autoComplete="username" className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E]" required />
                                 <input data-testid="admin-login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('login.password')} autoComplete="current-password" className="w-full bg-[#1e293b] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-[#64748b] focus:outline-none focus:border-[#C6A75E]" required />
-                                <button data-testid="admin-login-submit" type="submit" disabled={loading || !email || !password || isAuthenticated} className="w-full flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl disabled:opacity-50 uppercase tracking-widest text-sm">{loading ? '...' : t('login.signin')}</button>
+                                <button data-testid="admin-login-submit" type="submit" disabled={loading || !email || !password || isAuthenticated || Boolean(auth.currentUser)} className="w-full flex items-center justify-center bg-[#C6A75E] text-black font-black py-4 rounded-xl disabled:opacity-50 uppercase tracking-widest text-sm">{loading ? '...' : t('login.signin')}</button>
                                 <button type="button" onClick={handlePasswordReset} disabled={loading} className="w-full text-[#C6A75E] text-xs font-black uppercase tracking-widest disabled:opacity-50">{t('login.forgot_password')}</button>
                                 <button type="button" onClick={() => void resetSecureSession()} disabled={loading} className="w-full text-[#94a3b8] text-[10px] font-black uppercase tracking-widest disabled:opacity-50">Reset secure session</button>
                             </form>
