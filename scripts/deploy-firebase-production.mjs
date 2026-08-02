@@ -25,9 +25,14 @@ const adminBootstrapFunctions = Object.freeze([
   'lockOwnAdminAccount',
   'finalizeOwnAdminMfaRecovery',
 ]);
+const adminBootstrapHostingTarget = 'hosting:admin';
+const adminBootstrapFunctionComponents = Object.freeze(
+  adminBootstrapFunctions.map((functionName) => `functions:${functionName}`),
+);
+const adminBootstrapFunctionTarget = adminBootstrapFunctionComponents.join(',');
 const adminBootstrapDeployComponents = Object.freeze([
-  'hosting:admin',
-  ...adminBootstrapFunctions.map((functionName) => `functions:${functionName}`),
+  adminBootstrapHostingTarget,
+  ...adminBootstrapFunctionComponents,
 ]);
 const adminBootstrapDeployTarget = adminBootstrapDeployComponents.join(',');
 const digestFailures = [];
@@ -125,6 +130,13 @@ function run(command, args, options = {}) {
     shell: false,
     ...options,
   });
+  if (result.error) {
+    const code = String(result.error.code || 'unknown');
+    console.error(`[production-deploy] ${command} failed to complete (${code})`);
+  }
+  if (result.signal) {
+    console.error(`[production-deploy] ${command} terminated by ${result.signal}`);
+  }
   return result.status ?? 1;
 }
 
@@ -149,8 +161,16 @@ function retryFirebase(target, label, options = {}) {
     60,
     300,
   );
+  const commandTimeoutSeconds = boundedInteger(
+    'FIREBASE_DEPLOY_COMMAND_TIMEOUT_SECONDS',
+    options.commandTimeoutSeconds || 900,
+    300,
+    1800,
+  );
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    console.log(`[production-deploy] ${label} attempt ${attempt}/${attempts}`);
+    console.log(
+      `[production-deploy] ${label} attempt ${attempt}/${attempts} (timeout=${commandTimeoutSeconds}s)`,
+    );
     const status = run('npx', [
       'firebase',
       'deploy',
@@ -160,7 +180,10 @@ function retryFirebase(target, label, options = {}) {
       projectId,
       '--non-interactive',
       '--force',
-    ]);
+    ], {
+      timeout: commandTimeoutSeconds * 1000,
+      killSignal: 'SIGTERM',
+    });
     if (status === 0) return;
     if (attempt < attempts) {
       sleepSeconds(retryDelaySeconds * attempt, `before retrying ${label}`);
@@ -337,8 +360,18 @@ if (adminBootstrapRequested) {
     process.exit(1);
   }
 
-  console.log(`[production-deploy] Protected Admin MFA bootstrap requested; deploying ${adminBootstrapDeployTarget} before account-coverage enforcement`);
-  retryFirebase(adminBootstrapDeployTarget, 'Admin MFA bootstrap hosting and remediation callables');
+  console.log('[production-deploy] Protected Admin MFA bootstrap requested; deploying Admin Hosting before remediation callables');
+  retryFirebase(
+    adminBootstrapHostingTarget,
+    'Admin MFA bootstrap hosting',
+    { attempts: 2, retryDelaySeconds: 60, commandTimeoutSeconds: 600 },
+  );
+  console.log('[production-deploy] Admin Hosting release completed; deploying only the allowlisted remediation callables');
+  retryFirebase(
+    adminBootstrapFunctionTarget,
+    'Admin MFA bootstrap remediation callables',
+    { attempts: 2, retryDelaySeconds: 90, commandTimeoutSeconds: 900 },
+  );
   writeFileSync(adminBootstrapMetadataPath, `${JSON.stringify({
     schemaVersion: 2,
     status: 'deployed',
@@ -349,6 +382,8 @@ if (adminBootstrapRequested) {
     deploymentScope: adminBootstrapDeployTarget,
     deploymentComponents: adminBootstrapDeployComponents,
     bootstrapFunctions: adminBootstrapFunctions,
+    hostingDeployedFirst: true,
+    firebaseCommandTimeoutEnforced: true,
     requestedBy: process.env.GITHUB_ACTOR || '',
     deployedAt: new Date().toISOString(),
     mfaGateBypassed: false,
