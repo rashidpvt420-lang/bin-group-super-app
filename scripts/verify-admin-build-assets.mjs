@@ -9,12 +9,19 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '..');
 const buildDirectory = path.join(repositoryRoot, 'apps', 'admin-panel', 'build');
 const indexPath = path.join(buildDirectory, 'index.html');
+const manifestPath = path.join(buildDirectory, 'asset-manifest.json');
 const evidencePath = path.join(repositoryRoot, 'launch_package', 'admin-build-assets.json');
 
 const fail = (message) => {
   console.error(`[admin-build-assets] FAIL: ${message}`);
   process.exit(1);
 };
+
+const normalizeAssetPath = (value) => String(value || '')
+  .trim()
+  .replace(/^\/+/, '')
+  .split(/[?#]/, 1)[0]
+  .replaceAll('\\', '/');
 
 function collectJavaScript(directory, output = []) {
   if (!existsSync(directory)) return output;
@@ -36,8 +43,24 @@ function verifyJavaScriptAsset(assetPath) {
 }
 
 if (!existsSync(indexPath)) fail(`missing ${indexPath}`);
+if (!existsSync(manifestPath)) fail(`missing ${manifestPath}`);
+
 const indexHtml = readFileSync(indexPath, 'utf8');
 if (!/<div\s+id=["']root["']/.test(indexHtml)) fail('index.html does not contain the React root element');
+
+let manifest;
+try {
+  manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+} catch (error) {
+  fail(`asset-manifest.json is invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+const manifestEntrypoints = Array.isArray(manifest?.entrypoints)
+  ? manifest.entrypoints.map(normalizeAssetPath).filter(Boolean)
+  : [];
+if (manifestEntrypoints.length === 0) fail('asset-manifest.json contains no entrypoints');
+const manifestJavaScriptEntrypoints = manifestEntrypoints.filter((asset) => asset.endsWith('.js'));
+if (manifestJavaScriptEntrypoints.length === 0) fail('asset-manifest.json contains no JavaScript entrypoints');
 
 const scriptSources = [...indexHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)]
   .map((match) => String(match[1] || '').trim())
@@ -45,14 +68,17 @@ const scriptSources = [...indexHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/g
 if (scriptSources.length === 0) fail('index.html contains no JavaScript bundle reference');
 
 const entryAssets = [];
+let mergedEntryJavaScript = '';
 for (const source of scriptSources) {
   if (/^(?:https?:)?\/\//i.test(source)) fail(`external JavaScript bundle is not allowed: ${source}`);
-  const relativeAsset = source.replace(/^\/+/, '').split(/[?#]/, 1)[0];
+  const relativeAsset = normalizeAssetPath(source);
   if (!relativeAsset.endsWith('.js')) fail(`non-JavaScript script source found: ${source}`);
+  if (!manifestJavaScriptEntrypoints.includes(relativeAsset)) fail(`index.html script is not declared as a manifest entrypoint: ${relativeAsset}`);
   const assetPath = path.resolve(buildDirectory, relativeAsset);
   const relativeCheck = path.relative(buildDirectory, assetPath);
   if (relativeCheck.startsWith('..') || path.isAbsolute(relativeCheck)) fail(`script source escapes the Admin build directory: ${source}`);
   const verified = verifyJavaScriptAsset(assetPath);
+  mergedEntryJavaScript += `\n${verified.content}`;
   entryAssets.push({ path: relativeAsset, size: verified.size });
   console.log(`[admin-build-assets] PASS entry=${relativeAsset} bytes=${verified.size}`);
 }
@@ -68,6 +94,24 @@ for (const assetPath of generatedPaths) {
   mergedJavaScript += `\n${verified.content}`;
   generatedAssets.push({ path: relativeAsset, size: verified.size });
   console.log(`[admin-build-assets] PASS generated=${relativeAsset} bytes=${verified.size}`);
+}
+
+const manifestAssets = [...new Set([
+  ...Object.values(manifest?.files || {}).map(normalizeAssetPath),
+  ...manifestEntrypoints,
+].filter(Boolean))];
+const asyncHeavyChunks = {};
+for (const [label, marker] of Object.entries({
+  pdfVendor: 'pdf-vendor',
+  chartsVendor: 'charts-vendor',
+  reportRoutes: 'report-routes',
+})) {
+  const matchingAssets = manifestAssets.filter((asset) => asset.endsWith('.js') && asset.includes(marker));
+  if (matchingAssets.length === 0) fail(`generated Admin manifest is missing the required ${label} async chunk (${marker})`);
+  const leakedEntrypoints = matchingAssets.filter((asset) => manifestJavaScriptEntrypoints.includes(asset));
+  if (leakedEntrypoints.length > 0) fail(`${label} leaked into initial Admin entrypoints: ${leakedEntrypoints.join(', ')}`);
+  asyncHeavyChunks[label] = matchingAssets;
+  console.log(`[admin-build-assets] PASS async-only ${label}=${matchingAssets.join(',')}`);
 }
 
 for (const marker of [
@@ -103,14 +147,20 @@ for (const marker of [
 
 mkdirSync(path.dirname(evidencePath), { recursive: true });
 writeFileSync(evidencePath, `${JSON.stringify({
-  schemaVersion: 2,
+  schemaVersion: 3,
   status: 'pass',
   buildDirectory: 'apps/admin-panel/build',
   indexPresent: true,
+  manifestPresent: true,
   indexScriptAssetCount: entryAssets.length,
   indexScriptAssets: entryAssets,
+  manifestEntrypointCount: manifestEntrypoints.length,
+  manifestJavaScriptEntrypoints,
   generatedScriptAssetCount: generatedAssets.length,
   generatedScriptAssets: generatedAssets,
+  asyncHeavyChunks,
+  heavyChunksExcludedFromInitialEntrypoints: true,
+  entryJavaScriptBytes: Buffer.byteLength(mergedEntryJavaScript),
   firebaseProjectId: 'bin-group-57c60',
   firebaseAdminAppIdSuffix: '285cb53bc26626d699f3b6',
   productionAppCheckRequired,
@@ -119,4 +169,4 @@ writeFileSync(evidencePath, `${JSON.stringify({
   sensitiveValuesExcluded: true,
   hardLaunchClaim: false,
 }, null, 2)}\n`);
-console.log(`[admin-build-assets] PASS entries=${entryAssets.length} generated=${generatedAssets.length} evidence=${path.relative(repositoryRoot, evidencePath)}`);
+console.log(`[admin-build-assets] PASS entries=${entryAssets.length} generated=${generatedAssets.length} heavy-chunks=async-only evidence=${path.relative(repositoryRoot, evidencePath)}`);
