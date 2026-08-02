@@ -19,6 +19,13 @@ export function redactUrl(rawUrl) {
   }
 }
 
+export function canonicalHostingSiteId(rawBaseUrl) {
+  const hostname = new URL(String(rawBaseUrl)).hostname.toLowerCase();
+  if (hostname.endsWith('.web.app')) return hostname.slice(0, -'.web.app'.length);
+  if (hostname.endsWith('.firebaseapp.com')) return hostname.slice(0, -'.firebaseapp.com'.length);
+  return hostname;
+}
+
 export function classifyConsoleSignal(text) {
   const normalized = String(text || '');
   if (/App Check active\./i.test(normalized)) return 'appcheck-active';
@@ -73,6 +80,7 @@ async function waitForExactManifest(baseUrl, exactHeadSha, timeoutMs) {
   }
 
   const manifestUrl = `${baseUrl}/founder-preview-${exactHeadSha}.json`;
+  const expectedHostingSite = canonicalHostingSiteId(baseUrl);
   const deadline = Date.now() + timeoutMs;
   let attempt = 0;
 
@@ -90,7 +98,7 @@ async function waitForExactManifest(baseUrl, exactHeadSha, timeoutMs) {
         const evidence = await response.json();
         const valid =
           evidence?.commitSha === exactHeadSha &&
-          evidence?.hostingSite === new URL(baseUrl).hostname &&
+          evidence?.hostingSite === expectedHostingSite &&
           evidence?.deploymentScope === 'temporary-founder-mfa-preview' &&
           evidence?.publicReleaseGate === false &&
           evidence?.hardLaunchClaim === false;
@@ -199,6 +207,7 @@ export async function runFounderPreviewAppCheckRuntimeVerification({
     schemaVersion: 1,
     commitSha: exactHeadSha,
     hostingSite: new URL(normalizedBaseUrl).hostname,
+    hostingSiteId: canonicalHostingSiteId(normalizedBaseUrl),
     deploymentScope: 'temporary-founder-mfa-preview',
     manifestVerified: true,
     appCheckRuntimeOperational: classification.passed,
@@ -239,6 +248,13 @@ if (invokedDirectly) {
       hostingSite: (() => {
         try {
           return new URL(process.env.FOUNDER_PREVIEW_URL || DEFAULT_PREVIEW_URL).hostname;
+        } catch {
+          return null;
+        }
+      })(),
+      hostingSiteId: (() => {
+        try {
+          return canonicalHostingSiteId(process.env.FOUNDER_PREVIEW_URL || DEFAULT_PREVIEW_URL);
         } catch {
           return null;
         }
