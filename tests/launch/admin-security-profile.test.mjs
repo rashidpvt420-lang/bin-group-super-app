@@ -6,13 +6,18 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('Admin security profile is a dedicated protected bilingual route', async () => {
-  const [app, page] = await Promise.all([
+  const [app, layout, page] = await Promise.all([
     read('apps/admin-panel/src/App.tsx'),
+    read('apps/admin-panel/src/components/AdminLayout.tsx'),
     read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'),
   ]);
-  assert.match(app, /import AdminSecurityProfilePage/);
+  assert.match(
+    app,
+    /const\s+AdminSecurityProfilePage\s*=\s*lazy\(\(\)\s*=>\s*import\(['"]\.\/pages\/settings\/AdminSecurityProfilePage['"]\)\)/,
+  );
   assert.match(app, /Route path="\/profile" element=\{<ProtectedRoute adminOnly><AdminSecurityProfilePage/);
-  assert.match(app, /navigate\('\/profile'\)/);
+  assert.doesNotMatch(app, /import\s+AdminSecurityProfilePage\s+from/);
+  assert.match(layout, /navigate\('\/profile'\)/);
   assert.match(page, /dir=\{isRTL \? 'rtl' : 'ltr'\}/);
   assert.match(page, /Personal Security Profile/);
   assert.match(page, /ملف الأمان الشخصي/);
@@ -38,14 +43,15 @@ test('Admin security authority is App Check protected and Firebase Auth derived'
 });
 
 test('Admin security sessions are ephemeral and never stored in localStorage', async () => {
-  const [app, page] = await Promise.all([
-    read('apps/admin-panel/src/App.tsx'),
+  const [layout, page] = await Promise.all([
+    read('apps/admin-panel/src/components/AdminLayout.tsx'),
     read('apps/admin-panel/src/pages/settings/AdminSecurityProfilePage.tsx'),
   ]);
   assert.match(page, /sessionStorage\.getItem\('bin-admin-security-session'\)/);
   assert.match(page, /sessionStorage\.setItem\('bin-admin-security-session'/);
   assert.doesNotMatch(page, /localStorage/);
-  assert.match(app, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
+  assert.match(layout, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
+  assert.doesNotMatch(layout, /localStorage/);
 });
 
 test('unauthenticated Admin callables expire the stale browser session', async () => {
