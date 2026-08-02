@@ -38,9 +38,9 @@ module.exports = {
         }
       }
 
-      // Keep document-generation and charting libraries out of the login and
-      // authentication boot path. These groups are async-only and are fetched
-      // when their lazy route is actually opened.
+      // Keep document-generation, charting, and report-route code out of the
+      // login/authentication boot path. These groups are async-only and are
+      // fetched only when their lazy route is opened.
       const splitChunks = webpackConfig.optimization?.splitChunks;
       if (splitChunks && typeof splitChunks === "object") {
         splitChunks.cacheGroups = {
@@ -57,6 +57,13 @@ module.exports = {
             name: "charts-vendor",
             chunks: "async",
             priority: 35,
+            enforce: true,
+          },
+          reportRoutes: {
+            test: /[\\/]apps[\\/]admin-panel[\\/]src[\\/](?:pages[\\/]reports|components[\\/]reports)[\\/]/,
+            name: "report-routes",
+            chunks: "async",
+            priority: 30,
             enforce: true,
           },
         };
