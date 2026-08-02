@@ -157,6 +157,29 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  test('post-MFA handoff failure supersedes a stale pre-MFA context error', async () => {
+    const staleError = 'Firebase Auth did not respond before primary sign-in started.';
+    const { rerender } = render(<UnifiedLogin />);
+
+    await enterPrimaryCredential();
+    (useAuth as jest.Mock).mockReturnValue({
+      error: staleError,
+      isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
+      status: 'failed',
+    });
+    rerender(<UnifiedLogin />);
+
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
+    mockRetryAuthorization.mockRejectedValueOnce(new Error('authorization could not start'));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
+
+    expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
+    expect(screen.queryByText(staleError)).not.toBeInTheDocument();
+    expect(await screen.findByText('MFA was accepted, but secure Admin authorization could not start. Retry or reset the secure session.')).toBeInTheDocument();
+    expect(screen.queryByText(staleError)).not.toBeInTheDocument();
+  });
+
   test('does not create a competing retry after the auth-state listener has started verification', async () => {
     const { rerender } = render(<UnifiedLogin />);
 
