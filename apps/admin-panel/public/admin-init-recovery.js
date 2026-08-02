@@ -1,7 +1,7 @@
-setTimeout(() => {
+window.setTimeout(() => {
     const root = document.getElementById('root');
-    if (root && root.innerText.includes('AUTHENTICATING SOVEREIGN IDENTITY')) {
-        console.error("FATAL: Admin Terminal Initialization timed out at the HTML layer.");
+    if (root && root.textContent?.includes('AUTHENTICATING SOVEREIGN IDENTITY')) {
+        console.error('FATAL: Admin Terminal Initialization timed out at the HTML layer.');
         root.innerHTML = `
             <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #020617; color: #ff4444; padding: 20px; text-align: center; font-family: sans-serif;">
                 <h1 style="font-weight: 900; letter-spacing: 4px;">ADMIN_INITIALIZATION_ERROR</h1>
