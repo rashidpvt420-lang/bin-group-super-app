@@ -10,7 +10,8 @@ test('Admin installs bootstrap failure handling before loading the application g
   assert.doesNotMatch(indexSource, /import\s+App\s+from\s+['"]\.\/App['"]/);
   assert.doesNotMatch(indexSource, /import\s+ErrorBoundary\s+from/);
   const errorHandlerIndex = indexSource.indexOf('window.onerror =');
-  const dynamicAppImportIndex = indexSource.indexOf("import('./App')");
+  const dynamicAppImport = /import\(\s*\/\*\s*webpackChunkName:\s*["']admin-app-shell["']\s*\*\/\s*['"]\.\/App['"]\s*\)/.exec(indexSource);
+  const dynamicAppImportIndex = dynamicAppImport?.index ?? -1;
   assert.ok(errorHandlerIndex >= 0, 'Admin must install window.onerror');
   assert.ok(dynamicAppImportIndex > errorHandlerIndex, 'Admin application graph must load after bootstrap error handling');
   assert.match(indexSource, /data-testid=\"admin-bootstrap-error\"/);
@@ -28,6 +29,8 @@ test('every Admin build verifies index entries and all generated JavaScript chun
   assert.match(verifierSource, /built Admin chunks are missing Firebase marker/);
   assert.match(verifierSource, /protected production build requested App Check/);
   assert.match(verifierSource, /protected production App Check site key was not embedded in the Admin chunks/);
+  assert.match(verifierSource, /admin-async-boundaries\.json/);
+  assert.match(verifierSource, /heavyModulesExcludedFromLoginCriticalChunks: true/);
   assert.match(verifierSource, /sourceLevelUnsafeMfaChecksRequired: true/);
   assert.match(verifierSource, /sensitiveValuesExcluded: true/);
   assert.match(verifierSource, /hardLaunchClaim: false/);
