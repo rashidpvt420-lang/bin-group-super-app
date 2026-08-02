@@ -20,8 +20,16 @@ describe('adminAuthRedirect', () => {
     '/login',
     '/login?returnTo=/profile',
     '/login/retry',
+    '/LOGIN',
+    '/LoGiN/retry',
+    '/lo%67in',
+    '/%6Cogin/retry',
   ])('rejects a login-loop destination: %s', (candidate) => {
     expect(sanitizeAdminReturnTo(candidate)).toBe('/dashboard');
+  });
+
+  test('rejects malformed encoded paths instead of navigating ambiguously', () => {
+    expect(sanitizeAdminReturnTo('/%E0%A4%A')).toBe('/dashboard');
   });
 
   test('uses the supplied fallback when returnTo is missing or invalid', () => {
