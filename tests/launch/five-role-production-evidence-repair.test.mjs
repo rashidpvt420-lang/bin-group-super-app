@@ -10,7 +10,7 @@ const jobDetail = readFileSync('src/technician/pages/TechnicianJobDetailPage.tsx
 
 test('merged Founder MFA workflow wiring remains present in both production jobs', () => {
   const expected = [
-    'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
+    'E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}',
     'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
     'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
   ];

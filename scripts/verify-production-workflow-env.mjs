@@ -8,6 +8,7 @@ const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const EXPECTED_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const EXPECTED_MAIN_URL = 'https://bin-group-57c60.web.app';
 const EXPECTED_ADMIN_URL = 'https://bin-group-admin-panel.web.app';
+const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const GOOGLE_API_KEY_RE = /^AIza[0-9A-Za-z_-]{30,}$/;
 const FIREBASE_APP_ID_RE = /^1:\d{6,20}:web:[0-9A-Za-z]+$/;
@@ -40,6 +41,8 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
   'E2E_ADMIN_BASE_URL',
   'E2E_ADMIN_EMAIL',
   'E2E_ADMIN_PASSWORD',
+  'E2E_FOUNDER_EMAIL',
+  'E2E_FOUNDER_PASSWORD',
   'E2E_OWNER_MAILBOX_EMAIL',
   'E2E_OWNER_PASSWORD',
   'E2E_TENANT_EMAIL',
@@ -87,6 +90,24 @@ export function validateProductionWorkflowEnv(env = process.env) {
     failures.push('AUTHORIZED_FOUNDER_EMAILS must contain valid comma-separated email addresses');
   }
 
+  const founderEmail = value(env, 'E2E_FOUNDER_EMAIL').toLowerCase();
+  const adminEmail = value(env, 'E2E_ADMIN_EMAIL').toLowerCase();
+  if (founderEmail && founderEmail !== CANONICAL_FOUNDER_EMAIL) {
+    failures.push(`E2E_FOUNDER_EMAIL must equal ${CANONICAL_FOUNDER_EMAIL}`);
+  }
+  if (founderEmail && adminEmail && founderEmail === adminEmail) {
+    failures.push('E2E_FOUNDER_EMAIL must differ from the ephemeral E2E_ADMIN_EMAIL');
+  }
+  const founderPassword = value(env, 'E2E_FOUNDER_PASSWORD');
+  if (founderPassword && founderPassword.length < 8) failures.push('E2E_FOUNDER_PASSWORD must contain at least 8 characters');
+  const founderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '');
+  const founderRealMfaCode = value(env, 'E2E_FOUNDER_REAL_MFA_CODE');
+  const validFounderTotp = founderTotp.length >= 16 && /^[A-Z2-7]+$/.test(founderTotp);
+  const validFounderRealMfaCode = /^\d{6}$/.test(founderRealMfaCode);
+  if (!validFounderTotp && !validFounderRealMfaCode) {
+    failures.push('Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE');
+  }
+
   const namedClientValues = [
     'VITE_FIREBASE_API_KEY',
     'VITE_FIREBASE_APP_ID',
@@ -130,6 +151,12 @@ export function validateProductionWorkflowEnv(env = process.env) {
     if (current && current !== expected) failures.push(`${key} must equal ${expected}`);
   }
 
+  requirePattern(failures, env, 'E2E_FOUNDER_EMAIL', EMAIL_RE, 'must be a valid email address');
+  const rawFounderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET');
+  if (rawFounderTotp && rawFounderTotp.length < 16) {
+    failures.push('E2E_FOUNDER_TOTP_SECRET must contain at least 16 characters');
+  }
+
   const techBEmail = value(env, 'E2E_TECHNICIAN_B_EMAIL');
   const techBPassword = value(env, 'E2E_TECHNICIAN_B_PASSWORD');
   if (Boolean(techBEmail) !== Boolean(techBPassword)) {
@@ -155,6 +182,10 @@ export function productionWorkflowEnvSummary(env = process.env) {
     mainUrlMatched: value(env, 'E2E_BASE_URL').replace(/\/+$/, '') === EXPECTED_MAIN_URL,
     adminUrlMatched: value(env, 'E2E_ADMIN_BASE_URL').replace(/\/+$/, '') === EXPECTED_ADMIN_URL,
     appCheckEnabled: value(env, 'VITE_ENABLE_FIREBASE_APPCHECK') === 'true',
+    founderMfaConfigured:
+      (value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '').length >= 16 &&
+        /^[A-Z2-7]+$/.test(value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, ''))) ||
+      /^\d{6}$/.test(value(env, 'E2E_FOUNDER_REAL_MFA_CODE')),
     hrModuleEnabledByProductionWriter: hrEnabledByProductionWriter(),
     firebaseAndMapsKeysSeparated:
       Boolean(value(env, 'VITE_FIREBASE_API_KEY')) &&

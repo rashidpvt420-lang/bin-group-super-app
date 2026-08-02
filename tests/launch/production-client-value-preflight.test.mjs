@@ -30,6 +30,10 @@ function validEnv() {
     E2E_ADMIN_BASE_URL: 'https://bin-group-admin-panel.web.app',
     E2E_ADMIN_EMAIL: 'admin-e2e@bin-groups.com',
     E2E_ADMIN_PASSWORD: 'admin-password',
+    E2E_FOUNDER_EMAIL: 'ceo@bin-groups.com',
+    E2E_FOUNDER_PASSWORD: 'founder-password',
+    E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP',
+    E2E_FOUNDER_REAL_MFA_CODE: '',
     E2E_OWNER_MAILBOX_EMAIL: 'owner-e2e@bin-groups.com',
     E2E_OWNER_PASSWORD: 'owner-password',
     E2E_TENANT_EMAIL: 'tenant-e2e@bin-groups.com',
@@ -51,12 +55,15 @@ test('production client value preflight accepts exact, separated and well-formed
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_GOOGLE_MAPS_API_KEY'));
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_FIREBASE_VAPID_KEY'));
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_ENABLE_FIREBASE_APPCHECK'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FOUNDER_EMAIL'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FOUNDER_PASSWORD'));
   const summary = productionWorkflowEnvSummary(env);
   assert.equal(summary.projectIdMatched, true);
   assert.equal(summary.firebaseAppIdMatched, true);
   assert.equal(summary.mainUrlMatched, true);
   assert.equal(summary.adminUrlMatched, true);
   assert.equal(summary.appCheckEnabled, true);
+  assert.equal(summary.founderMfaConfigured, true);
   assert.equal(summary.firebaseAndMapsKeysSeparated, true);
   assert.equal(summary.sensitiveValuesExcluded, true);
 });
@@ -103,6 +110,27 @@ test('production client value preflight binds exact project, app id, identities,
   assert.match(failures, /E2E_BASE_URL must equal https:\/\/bin-group-57c60\.web\.app/);
   assert.match(failures, /E2E_ADMIN_BASE_URL must equal https:\/\/bin-group-admin-panel\.web\.app/);
   assert.match(failures, /bank-pilot launch mode requires RUN_PUBLIC_RELEASE_GATE=false/);
+});
+
+test('production client value preflight fails closed for missing or invalid Founder MFA values', () => {
+  const missing = validEnv();
+  missing.E2E_FOUNDER_EMAIL = '';
+  missing.E2E_FOUNDER_PASSWORD = '';
+  missing.E2E_FOUNDER_TOTP_SECRET = '';
+  missing.E2E_FOUNDER_REAL_MFA_CODE = '';
+  const missingFailures = validateProductionWorkflowEnv(missing).join('\n');
+  assert.match(missingFailures, /Missing required production value: E2E_FOUNDER_EMAIL/);
+  assert.match(missingFailures, /Missing required production value: E2E_FOUNDER_PASSWORD/);
+  assert.match(missingFailures, /valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE/);
+
+  const realCode = validEnv();
+  realCode.E2E_FOUNDER_TOTP_SECRET = '';
+  realCode.E2E_FOUNDER_REAL_MFA_CODE = '123456';
+  assert.deepEqual(validateProductionWorkflowEnv(realCode), []);
+
+  const wrongIdentity = validEnv();
+  wrongIdentity.E2E_FOUNDER_EMAIL = 'other@bin-groups.com';
+  assert.match(validateProductionWorkflowEnv(wrongIdentity).join('\n'), /must equal ceo@bin-groups.com/);
 });
 
 test('production client value failures never disclose supplied credentials', () => {

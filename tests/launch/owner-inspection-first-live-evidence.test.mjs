@@ -70,16 +70,18 @@ test('Owner Playwright business proof requires server IDs, genuine visits, Phase
   }
 });
 
-test('production workflow patch binds Founder TOTP evidence to bank-pilot and public evidence jobs', () => {
+test('production workflow patch binds canonical Founder credentials and MFA alternatives to both evidence jobs', () => {
   for (const file of [
     '.github/workflows/firebase-production-deploy.yml',
     'launch_package/generated/firebase-production-deploy-phase1.yml',
   ]) {
     const source = read(file);
     const patched = patchOwnerEvidenceWorkflow(source, file);
-    assert.equal(patched.split('E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}').length - 1, 2);
+    assert.equal(patched.split('E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}').length - 1, 2);
+    assert.equal(patched.split('E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}').length - 1, 0);
     assert.equal(patched.split('E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}').length - 1, 2);
     assert.equal(patched.split('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}').length - 1, 2);
+    assert.equal(patched.split('E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}').length - 1, 2);
     assert.equal(patched.split("E2E_REQUIRE_FOUNDER_MFA: 'true'").length - 1, 2);
     assert.equal(patchOwnerEvidenceWorkflow(patched, file), patched, 'workflow patch must be idempotent');
   }

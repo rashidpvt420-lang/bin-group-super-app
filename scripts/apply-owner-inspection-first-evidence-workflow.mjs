@@ -11,9 +11,20 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
   const isCrlf = source.includes('\r\n');
   const normalized = source.replace(/\r\n/g, '\n');
 
-  if (normalized.includes('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}')) {
-    const count = normalized.split('E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}').length - 1;
-    if (count !== 2) throw new Error(`${label}: expected exactly two Founder MFA bindings, found ${count}.`);
+  const completeBinding = 'E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}';
+  if (normalized.includes(completeBinding)) {
+    const count = normalized.split(completeBinding).length - 1;
+    if (count !== 2) throw new Error(`${label}: expected exactly two complete Founder MFA bindings, found ${count}.`);
+    for (const required of [
+      'Run current-commit five-role business evidence',
+      'E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}',
+      'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
+      'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
+      completeBinding,
+      "E2E_REQUIRE_FOUNDER_MFA: 'true'",
+    ]) {
+      if (!normalized.includes(required)) throw new Error(`${label}: missing required Owner evidence control: ${required}`);
+    }
     return source;
   }
 
@@ -24,9 +35,10 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
       adminPasswordBindings += 1;
       return [
         line,
-        `${indent}E2E_FOUNDER_EMAIL: \${{ secrets.E2E_FOUNDER_EMAIL }}`,
+        `${indent}E2E_FOUNDER_EMAIL: \${{ inputs.founder_email }}`,
         `${indent}E2E_FOUNDER_PASSWORD: \${{ secrets.E2E_FOUNDER_PASSWORD }}`,
         `${indent}E2E_FOUNDER_TOTP_SECRET: \${{ secrets.E2E_FOUNDER_TOTP_SECRET }}`,
+        `${indent}E2E_FOUNDER_REAL_MFA_CODE: \${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}`,
         `${indent}E2E_REQUIRE_FOUNDER_MFA: 'true'`,
       ].join('\n');
     },
@@ -37,9 +49,10 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
   }
   for (const required of [
     'Run current-commit five-role business evidence',
-    'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
+    'E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}',
     'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
     'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
+    'E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}',
     "E2E_REQUIRE_FOUNDER_MFA: 'true'",
   ]) {
     if (!patched.includes(required)) throw new Error(`${label}: missing required Owner evidence control: ${required}`);
