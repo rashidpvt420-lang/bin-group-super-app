@@ -1,5 +1,4 @@
 const path = require("path");
-const webpack = require("webpack");
 
 module.exports = {
   webpack: {
@@ -13,7 +12,7 @@ module.exports = {
       "react/jsx-dev-runtime": path.resolve(__dirname, "node_modules/react/jsx-dev-runtime"),
     },
     configure: (webpackConfig) => {
-      // 1. Remove ModuleScopePlugin to allow imports from outside src/
+      // Remove ModuleScopePlugin to allow imports from the shared workspace.
       const scopePluginIndex = webpackConfig.resolve.plugins.findIndex(
         ({ constructor }) => constructor && constructor.name === "ModuleScopePlugin"
       );
@@ -21,8 +20,8 @@ module.exports = {
         webpackConfig.resolve.plugins.splice(scopePluginIndex, 1);
       }
 
-
-      // 3. Add shared package to babel-loader include to ensure it's transpiled
+      // Add the shared package to babel-loader so direct subpath imports remain
+      // fully transpiled without routing through the side-effectful barrel file.
       const sharedPath = path.resolve(__dirname, "../../packages/shared");
       const oneOfRule = webpackConfig.module.rules.find((rule) => rule.oneOf);
       if (oneOfRule) {
@@ -37,6 +36,30 @@ module.exports = {
             babelLoaderRule.include = [babelLoaderRule.include, sharedPath];
           }
         }
+      }
+
+      // Keep document-generation and charting libraries out of the login and
+      // authentication boot path. These groups are async-only and are fetched
+      // when their lazy route is actually opened.
+      const splitChunks = webpackConfig.optimization?.splitChunks;
+      if (splitChunks && typeof splitChunks === "object") {
+        splitChunks.cacheGroups = {
+          ...(splitChunks.cacheGroups || {}),
+          pdfVendor: {
+            test: /[\\/]node_modules[\\/](jspdf|jspdf-autotable|html2canvas|canvg|dompurify|fflate)[\\/]/,
+            name: "pdf-vendor",
+            chunks: "async",
+            priority: 45,
+            enforce: true,
+          },
+          chartsVendor: {
+            test: /[\\/]node_modules[\\/](recharts|d3-[^\\/]+)[\\/]/,
+            name: "charts-vendor",
+            chunks: "async",
+            priority: 35,
+            enforce: true,
+          },
+        };
       }
 
       return webpackConfig;
