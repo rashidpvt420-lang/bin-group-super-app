@@ -30,7 +30,6 @@ import SettingsPage from './pages/settings/SettingsPage';
 import AdminSecurityProfilePage from './pages/settings/AdminSecurityProfilePage';
 import AdminMfaRecoveryPage from './pages/settings/AdminMfaRecoveryPage';
 import AdminContractControlPage from './pages/admin/AdminContractControlPage';
-import ReportsPage from './pages/reports/ReportsPage';
 import SOSFeedPage from './pages/sos/SOSFeedPage';
 import InstitutionalDocumentVaultPage from './pages/documents/InstitutionalDocumentVaultPage';
 import AuditShieldPage from './pages/admin/AuditShieldPage';
@@ -77,8 +76,20 @@ import TenantUnitLinkQueuePage from './pages/ops/TenantUnitLinkQueuePage';
 import { adminTheme } from './theme/adminTheme';
 import { functions as adminFunctions } from './lib/firebase';
 
+// Reports pull in charting and PDF-generation libraries. Keep that graph out of
+// the login bundle and load it only after an authorized Admin opens /reports.
+const ReportsPage = React.lazy(() => import('./pages/reports/ReportsPage'));
+
 const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr-admin' });
+
+function ReportsRouteFallback() {
+    return (
+        <Box sx={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617' }}>
+            <CircularProgress size={32} sx={{ color: '#DAA520' }} />
+        </Box>
+    );
+}
 
 function AppContent() {
     const { isAuthenticated, loading, error } = useAuth();
@@ -126,7 +137,7 @@ function AppContent() {
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
                     <Route path="/document-vault" element={<ProtectedRoute adminOnly><InstitutionalDocumentVaultPage /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
-                    <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
+                    <Route path="/reports" element={<ProtectedRoute adminOnly><React.Suspense fallback={<ReportsRouteFallback />}><ReportsPage /></React.Suspense></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
                     <Route path="/manual-approvals" element={<Navigate to="/payments" replace />} />
                     <Route path="/admin/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
