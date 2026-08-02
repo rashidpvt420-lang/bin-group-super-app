@@ -152,9 +152,6 @@ export function validateProductionWorkflowEnv(env = process.env) {
   }
 
   requirePattern(failures, env, 'E2E_FOUNDER_EMAIL', EMAIL_RE, 'must be a valid email address');
-  if (value(env, 'E2E_FOUNDER_EMAIL') && value(env, 'E2E_FOUNDER_EMAIL').toLowerCase() !== 'ceo@bin-groups.com') {
-    failures.push('E2E_FOUNDER_EMAIL must equal ceo@bin-groups.com');
-  }
   const rawFounderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET');
   if (rawFounderTotp && rawFounderTotp.length < 16) {
     failures.push('E2E_FOUNDER_TOTP_SECRET must contain at least 16 characters');
