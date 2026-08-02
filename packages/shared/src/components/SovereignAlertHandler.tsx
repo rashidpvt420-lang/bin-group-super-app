@@ -1,22 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Snackbar, Alert, Typography } from '@mui/material';
 import { ShieldAlert } from 'lucide-react';
+import {
+    showSovereignToast,
+    setupSovereignAlertInterceptor,
+    type SovereignSeverity,
+} from '../lib/sovereignAlerts';
 
-export type SovereignSeverity = 'success' | 'error' | 'warning' | 'info';
-
-export const showSovereignToast = (message: string, severity: SovereignSeverity = 'error') => {
-    if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('sovereign_alert', { detail: { message, severity } }));
-    }
-};
-
-export const setupSovereignAlertInterceptor = () => {
-    if (typeof window !== 'undefined') {
-        window.alert = (message?: any) => {
-            showSovereignToast(String(message), 'info');
-        };
-    }
-};
+export { showSovereignToast, setupSovereignAlertInterceptor };
+export type { SovereignSeverity };
 
 export const SovereignAlertHandler: React.FC = () => {
     const [open, setOpen] = useState(false);
@@ -44,21 +36,21 @@ export const SovereignAlertHandler: React.FC = () => {
     const handleClose = () => setOpen(false);
 
     return (
-        <Snackbar 
-            open={open} 
-            autoHideDuration={6000} 
+        <Snackbar
+            open={open}
+            autoHideDuration={6000}
             onClose={handleClose}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             sx={{ zIndex: 9999 }}
         >
-            <Alert 
+            <Alert
                 icon={<ShieldAlert size={20} />}
-                onClose={handleClose} 
-                severity={severity} 
+                onClose={handleClose}
+                severity={severity}
                 variant="filled"
-                sx={{ 
+                sx={{
                     bgcolor: '#0B0B0C',
-                    color: '#FFF', 
+                    color: '#FFF',
                     borderRadius: 3,
                     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
                 }}
