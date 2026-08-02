@@ -3,15 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --bin-bg-primary: #FFFFFF;
-  --bin-bg-soft: #F8F9FB;
-  --bin-card-bg: #FFFFFF;
+  --bin-bg-primary: #020617;
+  --bin-bg-soft: #0f172a;
+  --bin-card-bg: #0f172a;
   --bin-gold: #C9A646;
   --bin-gold-hover: #B8932F;
   --bin-platinum: #E5E4E2;
-  --bin-text-main: #111827;
-  --bin-text-muted: #6B7280;
-  --bin-border-soft: #E5E7EB;
+  --bin-text-main: #FFFFFF;
+  --bin-text-muted: #94A3B8;
+  --bin-border-soft: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
 }
 
 html,
@@ -22,13 +23,25 @@ body,
   color: var(--bin-text-main);
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  overflow: hidden;
   font-family: 'Inter', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  isolation: isolate;
 }
 
 code {
