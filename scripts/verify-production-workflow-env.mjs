@@ -12,6 +12,7 @@ const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const ADMIN_MFA_BOOTSTRAP_MARKER = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
 const CANONICAL_INCIDENT_REFERENCE = 'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434';
 const OWNER_REQUEST_REFERENCE_RE = /^https:\/\/github\.com\/rashidpvt420-lang\/bin-group-super-app\/pull\/\d+$/;
+const FAILED_PRODUCTION_RUN_REFERENCE_RE = /^GITHUB_PRODUCTION_RUN_[1-9]\d*$/;
 const AUTHORIZED_OWNER_ACTOR = 'rashidpvt420-lang';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const GOOGLE_API_KEY_RE = /^AIza[0-9A-Za-z_-]{30,}$/;
@@ -123,11 +124,29 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
     (founderTotp.length >= 16 && /^[A-Z2-7]+$/.test(founderTotp)) ||
     /^\d{6}$/.test(value(env, 'E2E_FOUNDER_REAL_MFA_CODE'));
   const incidentReferences = incidentEvidenceRefs.split(',').map((entry) => entry.trim()).filter(Boolean);
+  const hasFailedProductionReference =
+    incidentReferences.length === 3 && FAILED_PRODUCTION_RUN_REFERENCE_RE.test(incidentReferences[2]);
+  const failedDeploymentTimestamp = String(dispatch.deploymentPayload?.incident_last_deployment_failed_at || '').trim();
+  const failedDeploymentStateMatched = hasFailedProductionReference
+    ? String(dispatch.deploymentPayload?.incident_last_deployment_failed || '').trim() === 'true' &&
+      !Number.isNaN(Date.parse(failedDeploymentTimestamp)) &&
+      String(dispatch.deploymentPayload?.incident_attestation || '').trim() === 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS'
+    : incidentReferences.length === 2 &&
+      String(dispatch.deploymentPayload?.incident_last_deployment_failed || '').trim() === 'false' &&
+      failedDeploymentTimestamp === '' &&
+      String(dispatch.deploymentPayload?.incident_attestation || '').trim() === 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR';
   const canonicalOwnerRecoveryRequested =
     !founderMfaConfigured &&
-    incidentReferences.length === 2 &&
+    (incidentReferences.length === 2 || hasFailedProductionReference) &&
     incidentReferences[0] === CANONICAL_INCIDENT_REFERENCE &&
     OWNER_REQUEST_REFERENCE_RE.test(incidentReferences[1]) &&
+    failedDeploymentStateMatched &&
+    String(dispatch.deploymentPayload?.incident_active_json || '').trim() === '[]' &&
+    String(dispatch.deploymentPayload?.incident_requires_rollback || '').trim() === 'false' &&
+    String(dispatch.deploymentPayload?.incident_rollback_reason || '').trim() === '' &&
+    String(dispatch.deploymentPayload?.hard_clearance_run_id || '').trim() === '' &&
+    String(dispatch.deploymentPayload?.stripe_live_checkout_session_id || '').trim() === '' &&
+    String(dispatch.deploymentPayload?.stripe_live_webhook_event_id || '').trim() === '' &&
     String(dispatch.inputs?.authorization_actor || '').trim() === AUTHORIZED_OWNER_ACTOR &&
     String(dispatch.inputs?.founder_email || '').trim().toLowerCase() === CANONICAL_FOUNDER_EMAIL &&
     String(dispatch.inputs?.confirmation || '').trim() === 'DEPLOY_PRODUCTION_BIN_GROUP_57C60' &&

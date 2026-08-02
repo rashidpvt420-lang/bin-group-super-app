@@ -56,7 +56,7 @@ function validEnv() {
   };
 }
 
-function withDispatchEvent(t, env, incidentEvidenceRefs = marker, extraInputs = {}) {
+function withDispatchEvent(t, env, incidentEvidenceRefs = marker, extraInputs = {}, extraPayload = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), 'admin-mfa-bootstrap-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const eventPath = path.join(directory, 'event.json');
@@ -70,7 +70,17 @@ function withDispatchEvent(t, env, incidentEvidenceRefs = marker, extraInputs = 
       authorization_actor: 'rashidpvt420-lang',
       founder_email: 'ceo@bin-groups.com',
       deployment_payload_json: JSON.stringify({
+        incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR',
+        incident_active_json: '[]',
+        incident_requires_rollback: 'false',
+        incident_rollback_reason: '',
+        incident_last_deployment_failed: 'false',
+        incident_last_deployment_failed_at: '',
         incident_evidence_refs: incidentEvidenceRefs,
+        hard_clearance_run_id: '',
+        stripe_live_checkout_session_id: '',
+        stripe_live_webhook_event_id: '',
+        ...extraPayload,
       }),
       ...extraInputs,
     },
@@ -160,6 +170,51 @@ test('canonical protected owner request becomes bootstrap only while Founder MFA
   assert.equal(configuredState.requestSource, null);
   assert.deepEqual(validateProductionWorkflowEnv(configured), []);
   assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(configured), false);
+});
+
+test('canonical recovery accepts one attested prior failed production run reference after cooling', (t) => {
+  const env = validEnv();
+  const incidentRefs = [
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/pull/856',
+    'GITHUB_PRODUCTION_RUN_30750702544',
+  ].join(',');
+  const eventPath = withDispatchEvent(t, env, incidentRefs, {}, {
+    incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
+    incident_last_deployment_failed: 'true',
+    incident_last_deployment_failed_at: '2026-08-02T10:00:00Z',
+  });
+
+  const state = adminMfaBootstrapWorkflowState(env);
+  assert.equal(state.requested, true);
+  assert.equal(state.authorized, true);
+  assert.equal(state.requestSource, 'protected-owner-recovery');
+  assert.deepEqual(validateProductionWorkflowEnv(env), []);
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), true);
+  assert.equal(JSON.parse(readFileSync(eventPath, 'utf8')).inputs.incident_evidence_refs, marker);
+});
+
+test('prior failed-run reference requires exact matching failure attestation and safe payload', (t) => {
+  const refs = [
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/pull/856',
+    'GITHUB_PRODUCTION_RUN_30750702544',
+  ].join(',');
+  const cases = [
+    ['missing failed state', {}],
+    ['bad timestamp', { incident_last_deployment_failed: 'true', incident_last_deployment_failed_at: 'not-a-date', incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS' }],
+    ['wrong attestation', { incident_last_deployment_failed: 'true', incident_last_deployment_failed_at: '2026-08-02T10:00:00Z', incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR' }],
+    ['active incident', { incident_last_deployment_failed: 'true', incident_last_deployment_failed_at: '2026-08-02T10:00:00Z', incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS', incident_active_json: '[{"id":"x"}]' }],
+    ['rollback hold', { incident_last_deployment_failed: 'true', incident_last_deployment_failed_at: '2026-08-02T10:00:00Z', incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS', incident_requires_rollback: 'true' }],
+    ['Stripe evidence', { incident_last_deployment_failed: 'true', incident_last_deployment_failed_at: '2026-08-02T10:00:00Z', incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS', stripe_live_checkout_session_id: 'cs_live_forbidden' }],
+  ];
+
+  for (const [name, payload] of cases) {
+    const env = validEnv();
+    withDispatchEvent(t, env, refs, {}, payload);
+    assert.equal(adminMfaBootstrapWorkflowState(env).requested, false, name);
+    assert.match(validateProductionWorkflowEnv(env).join('\n'), /valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE/, name);
+  }
 });
 
 test('lookalike owner recovery references or identities do not authorize bootstrap', (t) => {
