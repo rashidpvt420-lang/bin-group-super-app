@@ -65,7 +65,9 @@ if (typeof window !== 'undefined') {
     }
 
     if (enableAppCheck) {
-        const existingDebug = (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN;
+        const existingDebug = 
+            (typeof window !== 'undefined' && window.localStorage.getItem('FIREBASE_APPCHECK_DEBUG_TOKEN')) ||
+            (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN;
         const hasRegisteredDebug =
             typeof existingDebug === 'string' &&
             existingDebug.length > 8 &&
@@ -79,6 +81,7 @@ if (typeof window !== 'undefined') {
             console.log('App Check boolean debug token set for local testing.');
         }
         if (hasRegisteredDebug) {
+            (window as any).FIREBASE_APPCHECK_DEBUG_TOKEN = existingDebug;
             const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
             console.info(`[Firebase] Admin App Check debug token fingerprint=${fingerprint}`);
         }
