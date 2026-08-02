@@ -1,6 +1,6 @@
 // admin-panel/src/__tests__/pages/LiveMapPage.test.tsx
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import LiveMapPage from '../../pages/map/LiveMapPage';
 import { apiClient } from '../../services/api';
