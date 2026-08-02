@@ -65,8 +65,12 @@ test('Admin contract UI is callable-only, bilingual and route-specific', async (
   assert.doesNotMatch(page, /\baddDoc\s*\(/);
   assert.doesNotMatch(page, /\bsetDoc\s*\(/);
 
-  assert.match(app, /import AdminContractControlPage/);
+  assert.match(
+    app,
+    /const\s+AdminContractControlPage\s*=\s*lazy\(\(\)\s*=>\s*import\(['"]\.\/pages\/admin\/AdminContractControlPage['"]\)\)/,
+  );
   assert.match(app, /path="\/contracts" element=\{<ProtectedRoute adminOnly><AdminContractControlPage \/><\/ProtectedRoute>\}/);
+  assert.doesNotMatch(app, /import\s+AdminContractControlPage\s+from/);
   assert.doesNotMatch(app, /ContractTerminationPage/);
   assert.match(navigation, /path: '\/contracts'/);
   assert.match(audit, /toHaveURL\(adminUrl\('\/contracts'\)\)/);
