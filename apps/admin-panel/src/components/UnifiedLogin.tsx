@@ -38,6 +38,7 @@ export default function UnifiedLogin() {
     const navigate = useNavigate();
     const [localLoading, setLocalLoading] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+    const [mfaHandoffError, setMfaHandoffError] = useState<string | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
@@ -45,19 +46,30 @@ export default function UnifiedLogin() {
     const authorizationStatusRef = useRef(status);
     const authorizationStatusVersionRef = useRef(0);
     const mfaHandoffStartVersionRef = useRef<number | null>(null);
-    const error = authError || localError;
+
+    // Event handlers must observe the latest committed render status. Keeping
+    // this ref synchronized during render avoids the post-paint gap created by
+    // a useEffect-based mirror.
+    if (authorizationStatusRef.current !== status) {
+        authorizationStatusVersionRef.current += 1;
+        authorizationStatusRef.current = status;
+    }
+
+    const activeHandoffStartVersion = mfaHandoffStartVersionRef.current;
+    const hasPostHandoffFailure =
+        status === 'failed' &&
+        activeHandoffStartVersion !== null &&
+        authorizationStatusVersionRef.current > activeHandoffStartVersion;
+    const suppressStaleAuthErrorDuringHandoff =
+        mfaResolutionPending &&
+        activeHandoffStartVersion !== null &&
+        !hasPostHandoffFailure;
+    const error = mfaHandoffError || (suppressStaleAuthErrorDuringHandoff ? localError : authError || localError);
     const loading = localLoading ||
         status === 'verifying-token' ||
         status === 'verifying-profile' ||
         mfaResolutionPending;
     const retainedFailedSession = status === 'failed' && Boolean(auth.currentUser) && !mfaResolver;
-
-    useEffect(() => {
-        if (authorizationStatusRef.current !== status) {
-            authorizationStatusVersionRef.current += 1;
-            authorizationStatusRef.current = status;
-        }
-    }, [status]);
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
@@ -67,6 +79,7 @@ export default function UnifiedLogin() {
     useEffect(() => {
         if (isAuthenticated && status === 'authorized') {
             mfaHandoffStartVersionRef.current = null;
+            setMfaHandoffError(null);
             setLocalLoading(false);
             setMfaResolutionPending(false);
             navigate(adminReturnToFromSearch(window.location.search), { replace: true });
@@ -74,12 +87,7 @@ export default function UnifiedLogin() {
         }
 
         if (authError || status === 'failed') {
-            const failurePredatesCurrentHandoff =
-                mfaResolutionPending &&
-                mfaHandoffStartVersionRef.current !== null &&
-                authorizationStatusVersionRef.current === mfaHandoffStartVersionRef.current;
-
-            if (failurePredatesCurrentHandoff) return;
+            if (suppressStaleAuthErrorDuringHandoff) return;
 
             mfaHandoffStartVersionRef.current = null;
             setLocalLoading(false);
@@ -88,7 +96,7 @@ export default function UnifiedLogin() {
         }
 
         if (mfaResolver) setLocalLoading(false);
-    }, [authError, isAuthenticated, mfaResolutionPending, mfaResolver, navigate, status]);
+    }, [authError, isAuthenticated, mfaResolver, navigate, status, suppressStaleAuthErrorDuringHandoff]);
 
     const friendlyAuthError = (err: any) => {
         const code = String(err?.code || '');
@@ -117,6 +125,7 @@ export default function UnifiedLogin() {
     const resetSecureSession = async () => {
         setLocalLoading(true);
         setLocalError(null);
+        setMfaHandoffError(null);
         setMfaResolver(null);
         setMfaResolutionPending(false);
         mfaHandoffStartVersionRef.current = null;
@@ -141,6 +150,7 @@ export default function UnifiedLogin() {
 
         setLocalLoading(true);
         setLocalError(null);
+        setMfaHandoffError(null);
         setMfaResolver(null);
         setMfaResolutionPending(false);
         mfaHandoffStartVersionRef.current = null;
@@ -183,13 +193,13 @@ export default function UnifiedLogin() {
             // handoff is stale and must not suppress the recovery attempt.
             while (Date.now() - startedAt < MFA_SESSION_PUBLISH_TIMEOUT_MS) {
                 const currentStatus = authorizationStatusRef.current;
-                const hasPostHandoffFailure =
+                const currentFailureIsPostHandoff =
                     currentStatus === 'failed' &&
                     authorizationStatusVersionRef.current > statusVersionAtStart;
 
                 if (
                     currentStatus === 'authorized' ||
-                    hasPostHandoffFailure ||
+                    currentFailureIsPostHandoff ||
                     currentStatus === 'verifying-token' ||
                     currentStatus === 'verifying-profile'
                 ) {
@@ -219,14 +229,15 @@ export default function UnifiedLogin() {
 
             throw timeoutError('ADMIN_MFA_SESSION_PUBLISH_TIMEOUT');
         } catch (handoffError: any) {
+            const handoffMessage = handoffError?.code === 'ADMIN_MFA_SESSION_PUBLISH_TIMEOUT'
+                ? 'MFA was accepted, but Firebase did not publish the resolved Admin session. Reset the secure session and try again.'
+                : 'MFA was accepted, but secure Admin authorization could not start. Retry or reset the secure session.';
+
             mfaHandoffStartVersionRef.current = null;
             setLocalLoading(false);
             setMfaResolutionPending(false);
-            setLocalError(
-                handoffError?.code === 'ADMIN_MFA_SESSION_PUBLISH_TIMEOUT'
-                    ? 'MFA was accepted, but Firebase did not publish the resolved Admin session. Reset the secure session and try again.'
-                    : 'MFA was accepted, but secure Admin authorization could not start. Retry or reset the secure session.'
-            );
+            setLocalError(null);
+            setMfaHandoffError(handoffMessage);
         }
     };
 
@@ -237,6 +248,7 @@ export default function UnifiedLogin() {
         }
         setLocalLoading(true);
         setLocalError(null);
+        setMfaHandoffError(null);
         try {
             await withTimeout(sendPasswordResetEmail(auth, email.trim().toLowerCase()), AUTH_SIGN_IN_TIMEOUT_MS, 'ADMIN_PASSWORD_RESET_TIMEOUT');
             setLocalError('Password reset email sent. Check your inbox.');
@@ -284,6 +296,7 @@ export default function UnifiedLogin() {
                                 mfaHandoffStartVersionRef.current = authorizationStatusVersionRef.current;
                                 setLocalLoading(true);
                                 setMfaResolutionPending(true);
+                                setMfaHandoffError(null);
                                 setMfaResolver(null);
                                 setPassword('');
                                 void completeResolvedMfaHandoff();
@@ -294,6 +307,7 @@ export default function UnifiedLogin() {
                                 setMfaResolver(null);
                                 setPassword('');
                                 setLocalError(null);
+                                setMfaHandoffError(null);
                                 setMfaResolutionPending(false);
                             }}
                         />
