@@ -15,6 +15,16 @@ export function patchOwnerEvidenceWorkflow(source, label = 'workflow') {
   if (normalized.includes(completeBinding)) {
     const count = normalized.split(completeBinding).length - 1;
     if (count !== 2) throw new Error(`${label}: expected exactly two complete Founder MFA bindings, found ${count}.`);
+    for (const required of [
+      'Run current-commit five-role business evidence',
+      'E2E_FOUNDER_EMAIL: ${{ inputs.founder_email }}',
+      'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
+      'E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}',
+      completeBinding,
+      "E2E_REQUIRE_FOUNDER_MFA: 'true'",
+    ]) {
+      if (!normalized.includes(required)) throw new Error(`${label}: missing required Owner evidence control: ${required}`);
+    }
     return source;
   }
 
