@@ -3,11 +3,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const adminApp = await readFile('apps/admin-panel/src/App.tsx', 'utf8');
+const adminLayout = await readFile('apps/admin-panel/src/components/AdminLayout.tsx', 'utf8');
 const chat = await readFile('packages/shared/src/components/SovereignAIChat.tsx', 'utf8');
 
 test('admin AI launcher uses the Admin Firebase Functions instance', () => {
-  assert.match(adminApp, /import \{ functions as adminFunctions \} from ['"]\.\/lib\/firebase['"]/);
-  assert.match(adminApp, /<SovereignAIChat[\s\S]*functionsOverride=\{adminFunctions\}[\s\S]*authUserId=\{user\?\.uid \|\| null\}/);
+  assert.match(
+    adminApp,
+    /const\s+AdminLayout\s*=\s*lazy\(\(\)\s*=>\s*import\(['"]\.\/components\/AdminLayout['"]\)\)/,
+  );
+  assert.match(adminApp, /<Route element=\{<AdminLayout \/>\}>/);
+  assert.match(adminLayout, /import \{ functions as adminFunctions \} from ['"]\.\.\/lib\/firebase['"]/);
+  assert.match(adminLayout, /const\s+SovereignAIChat\s*=\s*lazy\(/);
+  assert.match(adminLayout, /<SovereignAIChat[\s\S]*functionsOverride=\{adminFunctions\}[\s\S]*authUserId=\{user\?\.uid \|\| null\}/);
 });
 
 test('shared SovereignAIChat supports host auth-bound Functions override', () => {
