@@ -12,10 +12,16 @@ test('Admin login boot avoids the shared barrel and renders before service-worke
   assert.match(source, /root\.render\(/);
   assert.match(source, /scheduleServiceWorkerCleanup\(\);/);
 
-  const renderIndex = source.indexOf('root.render(');
-  const cleanupIndex = source.lastIndexOf('scheduleServiceWorkerCleanup();');
+  const bootstrapIndex = source.indexOf('async function bootstrapAdmin()');
+  assert.ok(bootstrapIndex >= 0, 'Admin bootstrap function must exist');
+  const bootstrapSource = source.slice(bootstrapIndex);
+  const renderIndex = bootstrapSource.indexOf('root.render(');
+  const cleanupIndex = bootstrapSource.indexOf('scheduleServiceWorkerCleanup();');
   assert.ok(renderIndex >= 0 && cleanupIndex > renderIndex, 'service-worker maintenance must run after the React mount starts');
-  assert.doesNotMatch(source, /await\s+navigator\.serviceWorker\.getRegistrations\(\)[\s\S]*root\.render\(/);
+  assert.doesNotMatch(
+    bootstrapSource.slice(0, renderIndex),
+    /await\s+(?:scheduleServiceWorkerCleanup|navigator\.serviceWorker\.getRegistrations)\s*\(/,
+  );
 });
 
 test('Admin authenticated pages and expensive PDF routes are lazy-loaded', async () => {
