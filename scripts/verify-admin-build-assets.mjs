@@ -10,6 +10,7 @@ const repositoryRoot = path.resolve(scriptDirectory, '..');
 const buildDirectory = path.join(repositoryRoot, 'apps', 'admin-panel', 'build');
 const indexPath = path.join(buildDirectory, 'index.html');
 const manifestPath = path.join(buildDirectory, 'asset-manifest.json');
+const boundaryEvidencePath = path.join(buildDirectory, 'admin-async-boundaries.json');
 const evidencePath = path.join(repositoryRoot, 'launch_package', 'admin-build-assets.json');
 
 const fail = (message) => {
@@ -22,6 +23,14 @@ const normalizeAssetPath = (value) => String(value || '')
   .replace(/^\/+/, '')
   .split(/[?#]/, 1)[0]
   .replaceAll('\\', '/');
+
+function readJson(filePath, label) {
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    fail(`${label} is invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 function collectJavaScript(directory, output = []) {
   if (!existsSync(directory)) return output;
@@ -42,21 +51,21 @@ function verifyJavaScriptAsset(assetPath) {
   return { size, content };
 }
 
-if (!existsSync(indexPath)) fail(`missing ${indexPath}`);
-if (!existsSync(manifestPath)) fail(`missing ${manifestPath}`);
+for (const requiredPath of [indexPath, manifestPath, boundaryEvidencePath]) {
+  if (!existsSync(requiredPath)) fail(`missing ${requiredPath}`);
+}
 
 const indexHtml = readFileSync(indexPath, 'utf8');
 if (!/<div\s+id=["']root["']/.test(indexHtml)) fail('index.html does not contain the React root element');
-if (!/<script\s+defer\s+src=["'][^"']*admin-init-recovery\.js["']/i.test(indexHtml)) {
+
+const scriptTags = [...indexHtml.matchAll(/<script\b[^>]*>/gi)].map((match) => match[0]);
+const recoveryTag = scriptTags.find((tag) => /\bsrc\s*=\s*["'][^"']*admin-init-recovery\.js["']/i.test(tag));
+if (!recoveryTag || !/\bdefer(?:\s*=\s*(?:["'][^"']*["']|[^\s>]+))?(?=\s|>)/i.test(recoveryTag)) {
   fail('admin-init-recovery.js must remain a deferred same-origin bootstrap helper');
 }
 
-let manifest;
-try {
-  manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-} catch (error) {
-  fail(`asset-manifest.json is invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
-}
+const manifest = readJson(manifestPath, 'asset-manifest.json');
+const boundaryEvidence = readJson(boundaryEvidencePath, 'admin-async-boundaries.json');
 
 const manifestEntrypoints = Array.isArray(manifest?.entrypoints)
   ? manifest.entrypoints.map(normalizeAssetPath).filter(Boolean)
@@ -65,8 +74,9 @@ if (manifestEntrypoints.length === 0) fail('asset-manifest.json contains no entr
 const manifestJavaScriptEntrypoints = manifestEntrypoints.filter((asset) => asset.endsWith('.js'));
 if (manifestJavaScriptEntrypoints.length === 0) fail('asset-manifest.json contains no JavaScript entrypoints');
 
-const scriptSources = [...indexHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)]
-  .map((match) => String(match[1] || '').trim())
+const scriptSources = scriptTags
+  .map((tag) => tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1] || '')
+  .map((source) => source.trim())
   .filter(Boolean);
 if (scriptSources.length === 0) fail('index.html contains no JavaScript bundle reference');
 const normalizedScriptSources = scriptSources.map(normalizeAssetPath);
@@ -95,12 +105,40 @@ for (const source of scriptSources) {
   const verified = verifyJavaScriptAsset(assetPath);
   mergedEntryJavaScript += `\n${verified.content}`;
 
-  const evidence = { path: relativeAsset, size: verified.size };
-  entryAssets.push(evidence);
-  if (isManifestEntrypoint) manifestEntryAssets.push(evidence);
-  else staticBootstrapAssets.push(evidence);
+  const assetEvidence = { path: relativeAsset, size: verified.size };
+  entryAssets.push(assetEvidence);
+  if (isManifestEntrypoint) manifestEntryAssets.push(assetEvidence);
+  else staticBootstrapAssets.push(assetEvidence);
   console.log(`[admin-build-assets] PASS ${isManifestEntrypoint ? 'entry' : 'deferred-bootstrap'}=${relativeAsset} bytes=${verified.size}`);
 }
+
+if (boundaryEvidence?.schemaVersion !== 1 || boundaryEvidence?.status !== 'pass') {
+  fail(`webpack async-boundary evidence did not pass: ${JSON.stringify(boundaryEvidence?.failures || [])}`);
+}
+if (boundaryEvidence?.appShellModuleFound !== true) fail('webpack evidence did not identify the Admin App shell chunk');
+
+const requiredBoundaryGroups = ['jspdfVendor', 'htmlCanvasVendor', 'chartsVendor', 'reportRoutes'];
+const asyncBoundaryGroups = {};
+for (const groupName of requiredBoundaryGroups) {
+  const group = boundaryEvidence?.groups?.[groupName];
+  if (!group || !Array.isArray(group.chunks) || !Array.isArray(group.bootCriticalChunks)) {
+    fail(`webpack evidence is missing boundary group: ${groupName}`);
+  }
+  if (group.bootCriticalChunks.length > 0) {
+    fail(`${groupName} is present in login-critical chunks`);
+  }
+  asyncBoundaryGroups[groupName] = {
+    present: group.present === true,
+    moduleCount: Number(group.moduleCount || 0),
+    chunkCount: group.chunks.length,
+    chunkFiles: [...new Set(group.chunks.flatMap((chunk) => chunk.files || []))].sort(),
+    excludedFromLoginCriticalChunks: true,
+  };
+  console.log(
+    `[admin-build-assets] PASS async-boundary ${groupName} present=${group.present === true} modules=${Number(group.moduleCount || 0)} chunks=${group.chunks.length}`,
+  );
+}
+if (asyncBoundaryGroups.reportRoutes.present !== true) fail('Admin report-route modules were not found in the emitted async chunk graph');
 
 const generatedPaths = collectJavaScript(path.join(buildDirectory, 'static', 'js')).sort();
 if (generatedPaths.length === 0) fail('Admin build contains no generated JavaScript files under static/js');
@@ -113,24 +151,6 @@ for (const assetPath of generatedPaths) {
   mergedJavaScript += `\n${verified.content}`;
   generatedAssets.push({ path: relativeAsset, size: verified.size });
   console.log(`[admin-build-assets] PASS generated=${relativeAsset} bytes=${verified.size}`);
-}
-
-const manifestAssets = [...new Set([
-  ...Object.values(manifest?.files || {}).map(normalizeAssetPath),
-  ...manifestEntrypoints,
-].filter(Boolean))];
-const asyncHeavyChunks = {};
-for (const [label, marker] of Object.entries({
-  pdfVendor: 'pdf-vendor',
-  chartsVendor: 'charts-vendor',
-  reportRoutes: 'report-routes',
-})) {
-  const matchingAssets = manifestAssets.filter((asset) => asset.endsWith('.js') && asset.includes(marker));
-  if (matchingAssets.length === 0) fail(`generated Admin manifest is missing the required ${label} async chunk (${marker})`);
-  const leakedEntrypoints = matchingAssets.filter((asset) => manifestJavaScriptEntrypoints.includes(asset));
-  if (leakedEntrypoints.length > 0) fail(`${label} leaked into initial Admin entrypoints: ${leakedEntrypoints.join(', ')}`);
-  asyncHeavyChunks[label] = matchingAssets;
-  console.log(`[admin-build-assets] PASS async-only ${label}=${matchingAssets.join(',')}`);
 }
 
 for (const marker of [
@@ -166,11 +186,12 @@ for (const marker of [
 
 mkdirSync(path.dirname(evidencePath), { recursive: true });
 writeFileSync(evidencePath, `${JSON.stringify({
-  schemaVersion: 3,
+  schemaVersion: 4,
   status: 'pass',
   buildDirectory: 'apps/admin-panel/build',
   indexPresent: true,
   manifestPresent: true,
+  asyncBoundaryEvidencePresent: true,
   indexScriptAssetCount: entryAssets.length,
   indexScriptAssets: entryAssets,
   manifestEntryAssetCount: manifestEntryAssets.length,
@@ -182,8 +203,8 @@ writeFileSync(evidencePath, `${JSON.stringify({
   manifestJavaScriptEntrypoints,
   generatedScriptAssetCount: generatedAssets.length,
   generatedScriptAssets: generatedAssets,
-  asyncHeavyChunks,
-  heavyChunksExcludedFromInitialEntrypoints: true,
+  asyncBoundaryGroups,
+  heavyModulesExcludedFromLoginCriticalChunks: true,
   entryJavaScriptBytes: Buffer.byteLength(mergedEntryJavaScript),
   firebaseProjectId: 'bin-group-57c60',
   firebaseAdminAppIdSuffix: '285cb53bc26626d699f3b6',
@@ -193,4 +214,4 @@ writeFileSync(evidencePath, `${JSON.stringify({
   sensitiveValuesExcluded: true,
   hardLaunchClaim: false,
 }, null, 2)}\n`);
-console.log(`[admin-build-assets] PASS entries=${entryAssets.length} generated=${generatedAssets.length} heavy-chunks=async-only evidence=${path.relative(repositoryRoot, evidencePath)}`);
+console.log(`[admin-build-assets] PASS entries=${entryAssets.length} generated=${generatedAssets.length} webpack-boundaries=pass evidence=${path.relative(repositoryRoot, evidencePath)}`);
