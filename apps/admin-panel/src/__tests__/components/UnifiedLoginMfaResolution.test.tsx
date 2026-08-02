@@ -137,6 +137,26 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
   });
 
+  test('ignores a failed status that predates the MFA handoff and retries the published session', async () => {
+    const { rerender } = render(<UnifiedLogin />);
+
+    await enterPrimaryCredential();
+    (useAuth as jest.Mock).mockReturnValue({
+      error: 'Firebase Auth did not respond before primary sign-in started.',
+      isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
+      status: 'failed',
+    });
+    rerender(<UnifiedLogin />);
+
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
+
+    await waitFor(() => expect(mockRetryAuthorization).toHaveBeenCalledTimes(1));
+    expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   test('does not create a competing retry after the auth-state listener has started verification', async () => {
     const { rerender } = render(<UnifiedLogin />);
 
