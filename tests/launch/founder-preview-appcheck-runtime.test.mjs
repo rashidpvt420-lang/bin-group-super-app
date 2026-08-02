@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  canonicalHostingSiteId,
   classifyConsoleSignal,
   classifyRuntimeSignals,
   redactUrl,
@@ -64,6 +65,17 @@ test('console classification records only sanitized signal names', () => {
     'appcheck-token-retrieval-error',
   );
   assert.equal(classifyConsoleSignal('unrelated browser message'), null);
+});
+
+test('Hosting manifest comparison uses the Firebase site ID, not the public hostname', () => {
+  assert.equal(
+    canonicalHostingSiteId('https://bin-founder-totp-260801174030.web.app'),
+    'bin-founder-totp-260801174030',
+  );
+  assert.equal(
+    canonicalHostingSiteId('https://bin-founder-totp-260801174030.firebaseapp.com'),
+    'bin-founder-totp-260801174030',
+  );
 });
 
 test('URL redaction strips query strings, fragments, and embedded key material', () => {
