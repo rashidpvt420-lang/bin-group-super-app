@@ -5,10 +5,12 @@ on:
     branches:
       - main
     paths:
+      - apps/admin-panel/src/context/AuthContext.tsx
       - apps/admin-panel/src/components/UnifiedLogin.tsx
       - apps/admin-panel/src/components/security/AdminMfaSignInChallenge.tsx
       - apps/admin-panel/src/pages/auth/LoginPage.tsx
       - apps/admin-panel/src/lib/adminAuthRedirect.ts
+      - apps/admin-panel/src/__tests__/context/AuthContextPostMfa.test.ts
       - apps/admin-panel/src/__tests__/components/AdminMfaSignInChallenge.test.tsx
       - apps/admin-panel/src/__tests__/components/UnifiedLoginMfaResolution.test.tsx
       - apps/admin-panel/src/__tests__/lib/adminAuthRedirect.test.ts
@@ -56,6 +58,7 @@ jobs:
           npm --prefix apps/admin-panel test -- \
             --watchAll=false \
             --runInBand \
+            src/__tests__/context/AuthContextPostMfa.test.ts \
             src/__tests__/components/AdminMfaSignInChallenge.test.tsx \
             src/__tests__/components/UnifiedLoginMfaResolution.test.tsx \
             src/__tests__/lib/adminAuthRedirect.test.ts
