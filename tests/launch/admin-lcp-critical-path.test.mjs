@@ -9,6 +9,8 @@ test('Admin login boot avoids the shared barrel and renders before service-worke
 
   assert.doesNotMatch(source, /import\(['"]@bin\/shared['"]\)/);
   assert.match(source, /@bin\/shared\/lib\/sovereignAlerts/);
+  assert.match(source, /webpackChunkName:\s*["']admin-app-shell["']/);
+  assert.match(source, /webpackChunkName:\s*["']admin-error-boundary["']/);
   assert.match(source, /root\.render\(/);
   assert.match(source, /scheduleServiceWorkerCleanup\(\);/);
 
@@ -38,7 +40,7 @@ test('Admin authenticated pages and expensive PDF routes are lazy-loaded', async
   assert.doesNotMatch(source, /from\s+['"]@bin\/shared['"]/);
 });
 
-test('Admin webpack keeps PDF, canvas, chart and report modules async-only', async () => {
+test('Admin webpack proves PDF, canvas, chart and report modules are outside login-critical chunks', async () => {
   const [webpackConfig, buildVerifier] = await Promise.all([
     read('apps/admin-panel/craco.config.js'),
     read('scripts/verify-admin-build-assets.mjs'),
@@ -54,13 +56,19 @@ test('Admin webpack keeps PDF, canvas, chart and report modules async-only', asy
   assert.match(webpackConfig, /name:\s*["']report-routes["']/);
   assert.equal((webpackConfig.match(/chunks:\s*["']async["']/g) || []).length >= 3, true);
 
-  assert.match(buildVerifier, /asset-manifest\.json/);
+  assert.match(webpackConfig, /class AdminAsyncBoundaryEvidencePlugin/);
+  assert.match(webpackConfig, /Admin App module was not found in the emitted webpack chunk graph/);
+  assert.match(webpackConfig, /leaked into login-critical chunk/);
+  assert.match(webpackConfig, /admin-async-boundaries\.json/);
+  for (const group of ['jspdfVendor', 'htmlCanvasVendor', 'chartsVendor', 'reportRoutes']) {
+    assert.match(webpackConfig, new RegExp(`${group}:`));
+  }
+
+  assert.match(buildVerifier, /admin-async-boundaries\.json/);
   assert.match(buildVerifier, /manifestJavaScriptEntrypoints/);
-  assert.match(buildVerifier, /pdfVendor:\s*'pdf-vendor'/);
-  assert.match(buildVerifier, /chartsVendor:\s*'charts-vendor'/);
-  assert.match(buildVerifier, /reportRoutes:\s*'report-routes'/);
-  assert.match(buildVerifier, /leaked into initial Admin entrypoints/);
-  assert.match(buildVerifier, /heavyChunksExcludedFromInitialEntrypoints:\s*true/);
+  assert.match(buildVerifier, /requiredBoundaryGroups/);
+  assert.match(buildVerifier, /group\.bootCriticalChunks\.length > 0/);
+  assert.match(buildVerifier, /heavyModulesExcludedFromLoginCriticalChunks:\s*true/);
 });
 
 test('Admin static shell paints branded LCP content and defers recovery maintenance', async () => {
