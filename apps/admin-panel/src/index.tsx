@@ -70,8 +70,8 @@ function scheduleServiceWorkerCleanup() {
 async function bootstrapAdmin() {
   try {
     const [appModule, boundaryModule] = await Promise.all([
-      import('./App'),
-      import('./components/ErrorBoundary'),
+      import(/* webpackChunkName: "admin-app-shell" */ './App'),
+      import(/* webpackChunkName: "admin-error-boundary" */ './components/ErrorBoundary'),
     ]);
 
     const rootElement = document.getElementById('root');
