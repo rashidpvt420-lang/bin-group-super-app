@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
-import { browserSessionPersistence, getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { browserSessionPersistence, inMemoryPersistence, getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
 import { Shield, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,7 @@ import { adminReturnToFromSearch } from '../lib/adminAuthRedirect';
 const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
 const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
 const AUTH_RESET_TIMEOUT_MS = 5_000;
-const MFA_SESSION_PUBLISH_TIMEOUT_MS = 5_000;
+const MFA_SESSION_PUBLISH_TIMEOUT_MS = 12_000;
 
 const timeoutError = (code: string) => Object.assign(new Error(code), { code });
 
@@ -43,6 +43,7 @@ export default function UnifiedLogin() {
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
     const [mfaResolutionPending, setMfaResolutionPending] = useState(false);
+    const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
     const authorizationStatusRef = useRef(status);
     const authorizationStatusVersionRef = useRef(0);
     const mfaHandoffStartVersionRef = useRef<number | null>(null);
@@ -128,6 +129,7 @@ export default function UnifiedLogin() {
         setMfaHandoffError(null);
         setMfaResolver(null);
         setMfaResolutionPending(false);
+        setPersistenceWarning(null);
         mfaHandoffStartVersionRef.current = null;
         try {
             await withTimeout(signOut(auth), AUTH_RESET_TIMEOUT_MS, 'ADMIN_SIGN_OUT_TIMEOUT').catch(() => undefined);
@@ -156,9 +158,23 @@ export default function UnifiedLogin() {
         mfaHandoffStartVersionRef.current = null;
         try {
             // The Admin portal deliberately uses session-scoped persistence.
-            // Android Chrome can leave IndexedDB-backed local persistence blocked,
-            // which previously prevented MFA sign-in from starting at all.
-            await withTimeout(setPersistence(auth, browserSessionPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
+            // Android Chrome can leave IndexedDB-backed local persistence blocked.
+            // If browserSessionPersistence times out, fall back to inMemoryPersistence
+            // so the full MFA flow can complete without any storage dependency.
+            // The session will not survive a page reload, which is acceptable for
+            // the Admin portal given the MFA requirement on every sign-in.
+            try {
+                await withTimeout(setPersistence(auth, browserSessionPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
+            } catch (persistenceErr: any) {
+                if (persistenceErr?.code !== 'ADMIN_PERSISTENCE_TIMEOUT') throw persistenceErr;
+                console.warn('[ADMIN-AUTH] browserSessionPersistence timed out; falling back to inMemoryPersistence.');
+                setPersistenceWarning('Session storage did not respond. Sign-in will continue, but this session will end if the page is reloaded.');
+                try {
+                    await setPersistence(auth, inMemoryPersistence);
+                } catch {
+                    // inMemoryPersistence failed; proceed anyway and let sign-in surface any real error.
+                }
+            }
             const result = await withTimeout(
                 signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
                 AUTH_SIGN_IN_TIMEOUT_MS,
@@ -174,7 +190,7 @@ export default function UnifiedLogin() {
                     setLocalError(friendlyAuthError(resolverError));
                 }
             } else {
-                if (err?.code === 'ADMIN_PERSISTENCE_TIMEOUT' || err?.code === 'ADMIN_SIGN_IN_TIMEOUT') {
+                if (err?.code === 'ADMIN_SIGN_IN_TIMEOUT') {
                     void signOut(auth).catch(() => undefined);
                 }
                 setLocalError(friendlyAuthError(err));
@@ -289,6 +305,7 @@ export default function UnifiedLogin() {
                         <p className="text-sm text-[#64748b] leading-relaxed">{mfaResolver ? 'The primary credential was accepted. Complete the enrolled Firebase second factor.' : retainedFailedSession ? 'Your Firebase session is retained so the exact protected authorization failure can be retried or reset safely.' : 'Authorized BIN GROUP administrators only.'}</p>
                     </div>
                     {error && !mfaResolver && <div data-testid="admin-auth-error" className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">{error}</div>}
+                    {persistenceWarning && <div data-testid="admin-persistence-warning" className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold">{persistenceWarning}</div>}
                     {mfaResolver ? (
                         <AdminMfaSignInChallenge
                             resolver={mfaResolver}
