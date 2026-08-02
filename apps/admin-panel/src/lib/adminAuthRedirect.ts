@@ -7,6 +7,14 @@ const hasControlCharacters = (value: string): boolean => Array.from(value).some(
   return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
 });
 
+const normalizedPathnameForComparison = (pathname: string): string => {
+  try {
+    return decodeURIComponent(pathname).toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
 export const sanitizeAdminReturnTo = (
   rawReturnTo: string | null | undefined,
   fallback = DEFAULT_ADMIN_DESTINATION,
@@ -28,7 +36,12 @@ export const sanitizeAdminReturnTo = (
     if (parsed.origin !== SAFE_ORIGIN) return fallback;
 
     const pathname = parsed.pathname || '/';
-    if (pathname === ADMIN_LOGIN_PATH || pathname.startsWith(`${ADMIN_LOGIN_PATH}/`)) {
+    const normalizedPathname = normalizedPathnameForComparison(pathname);
+    if (
+      !normalizedPathname ||
+      normalizedPathname === ADMIN_LOGIN_PATH ||
+      normalizedPathname.startsWith(`${ADMIN_LOGIN_PATH}/`)
+    ) {
       return fallback;
     }
 
