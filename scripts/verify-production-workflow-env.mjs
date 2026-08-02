@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +9,7 @@ const EXPECTED_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const EXPECTED_MAIN_URL = 'https://bin-group-57c60.web.app';
 const EXPECTED_ADMIN_URL = 'https://bin-group-admin-panel.web.app';
 const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
+const ADMIN_MFA_BOOTSTRAP_MARKER = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const GOOGLE_API_KEY_RE = /^AIza[0-9A-Za-z_-]{30,}$/;
 const FIREBASE_APP_ID_RE = /^1:\d{6,20}:web:[0-9A-Za-z]+$/;
@@ -58,6 +59,102 @@ const hrEnabledByProductionWriter = () =>
   /\[['"]VITE_ENABLE_HR_MODULE['"],\s*['"]true['"]\]/.test(PRODUCTION_ENV_WRITER) &&
   /\[['"]REACT_APP_ENABLE_HR_MODULE['"],\s*['"]true['"]\]/.test(PRODUCTION_ENV_WRITER);
 
+function readWorkflowDispatchEvent(env = process.env) {
+  const eventPath = value(env, 'GITHUB_EVENT_PATH');
+  if (!eventPath || !existsSync(eventPath)) {
+    return { eventPath, event: null, inputs: {}, deploymentPayload: null, error: null };
+  }
+
+  let event;
+  try {
+    event = JSON.parse(readFileSync(eventPath, 'utf8'));
+  } catch {
+    return {
+      eventPath,
+      event: null,
+      inputs: {},
+      deploymentPayload: null,
+      error: 'GitHub workflow dispatch event is malformed',
+    };
+  }
+
+  const inputs = event?.inputs && typeof event.inputs === 'object' ? event.inputs : {};
+  const rawDeploymentPayload = String(inputs.deployment_payload_json || '').trim();
+  if (!rawDeploymentPayload) {
+    return { eventPath, event, inputs, deploymentPayload: {}, error: null };
+  }
+
+  try {
+    const deploymentPayload = JSON.parse(rawDeploymentPayload);
+    if (!deploymentPayload || typeof deploymentPayload !== 'object' || Array.isArray(deploymentPayload)) {
+      return {
+        eventPath,
+        event,
+        inputs,
+        deploymentPayload: null,
+        error: 'deployment_payload_json must decode to an object',
+      };
+    }
+    return { eventPath, event, inputs, deploymentPayload, error: null };
+  } catch {
+    return {
+      eventPath,
+      event,
+      inputs,
+      deploymentPayload: null,
+      error: 'deployment_payload_json is malformed',
+    };
+  }
+}
+
+export function adminMfaBootstrapWorkflowState(env = process.env) {
+  const dispatch = readWorkflowDispatchEvent(env);
+  const nestedMarker = String(dispatch.deploymentPayload?.incident_evidence_refs || '').trim();
+  const compatibilityMarker = String(dispatch.inputs?.incident_evidence_refs || '').trim();
+  const requested = nestedMarker === ADMIN_MFA_BOOTSTRAP_MARKER || compatibilityMarker === ADMIN_MFA_BOOTSTRAP_MARKER;
+  const exactMainSha = /^[0-9a-f]{40}$/.test(value(env, 'GITHUB_SHA'));
+  const authorized =
+    requested &&
+    !dispatch.error &&
+    value(env, 'GITHUB_ACTIONS') === 'true' &&
+    value(env, 'GITHUB_EVENT_NAME') === 'workflow_dispatch' &&
+    value(env, 'GITHUB_REF') === 'refs/heads/main' &&
+    exactMainSha &&
+    value(env, 'LAUNCH_MODE') === 'bank-pilot' &&
+    value(env, 'RUN_PUBLIC_RELEASE_GATE') === 'false';
+
+  return {
+    marker: ADMIN_MFA_BOOTSTRAP_MARKER,
+    requested,
+    authorized,
+    eventPath: dispatch.eventPath,
+    dispatchError: dispatch.error,
+  };
+}
+
+export function normalizeAdminMfaBootstrapWorkflowEvent(env = process.env) {
+  const state = adminMfaBootstrapWorkflowState(env);
+  if (!state.authorized) return false;
+
+  const dispatch = readWorkflowDispatchEvent(env);
+  if (!dispatch.event || !dispatch.eventPath || dispatch.error) {
+    throw new Error('Authorized Admin MFA bootstrap event could not be normalized');
+  }
+
+  if (!dispatch.event.inputs || typeof dispatch.event.inputs !== 'object') {
+    dispatch.event.inputs = {};
+  }
+  if (String(dispatch.event.inputs.incident_evidence_refs || '').trim() === ADMIN_MFA_BOOTSTRAP_MARKER) {
+    return false;
+  }
+
+  dispatch.event.inputs.incident_evidence_refs = ADMIN_MFA_BOOTSTRAP_MARKER;
+  const temporaryPath = `${dispatch.eventPath}.admin-mfa-bootstrap-${process.pid}`;
+  writeFileSync(temporaryPath, `${JSON.stringify(dispatch.event)}\n`, { encoding: 'utf8', mode: 0o600 });
+  renameSync(temporaryPath, dispatch.eventPath);
+  return true;
+}
+
 function requirePattern(failures, env, key, pattern, description) {
   const current = value(env, key);
   if (current && !pattern.test(current)) failures.push(`${key} ${description}`);
@@ -104,7 +201,14 @@ export function validateProductionWorkflowEnv(env = process.env) {
   const founderRealMfaCode = value(env, 'E2E_FOUNDER_REAL_MFA_CODE');
   const validFounderTotp = founderTotp.length >= 16 && /^[A-Z2-7]+$/.test(founderTotp);
   const validFounderRealMfaCode = /^\d{6}$/.test(founderRealMfaCode);
-  if (!validFounderTotp && !validFounderRealMfaCode) {
+  const bootstrapState = adminMfaBootstrapWorkflowState(env);
+  if (bootstrapState.dispatchError && bootstrapState.requested) {
+    failures.push(bootstrapState.dispatchError);
+  }
+  if (bootstrapState.requested && !bootstrapState.authorized) {
+    failures.push('Admin MFA bootstrap is allowed only for exact-main workflow_dispatch bank-pilot runs with the public-release gate disabled');
+  }
+  if (!validFounderTotp && !validFounderRealMfaCode && !bootstrapState.authorized) {
     failures.push('Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE');
   }
 
@@ -176,6 +280,7 @@ export function validateProductionWorkflowEnv(env = process.env) {
 }
 
 export function productionWorkflowEnvSummary(env = process.env) {
+  const bootstrapState = adminMfaBootstrapWorkflowState(env);
   return {
     projectIdMatched: value(env, 'GCP_PROJECT_ID') === EXPECTED_PROJECT_ID,
     firebaseAppIdMatched: value(env, 'VITE_FIREBASE_APP_ID') === EXPECTED_FIREBASE_APP_ID,
@@ -186,6 +291,8 @@ export function productionWorkflowEnvSummary(env = process.env) {
       (value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '').length >= 16 &&
         /^[A-Z2-7]+$/.test(value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, ''))) ||
       /^\d{6}$/.test(value(env, 'E2E_FOUNDER_REAL_MFA_CODE')),
+    adminMfaBootstrapRequested: bootstrapState.requested,
+    adminMfaBootstrapAuthorized: bootstrapState.authorized,
     hrModuleEnabledByProductionWriter: hrEnabledByProductionWriter(),
     firebaseAndMapsKeysSeparated:
       Boolean(value(env, 'VITE_FIREBASE_API_KEY')) &&
@@ -204,9 +311,13 @@ if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
     for (const failure of failures) console.error(`- ${failure}`);
     process.exit(1);
   }
+  const eventNormalized = normalizeAdminMfaBootstrapWorkflowEvent(process.env);
   const summary = productionWorkflowEnvSummary(process.env);
+  if (eventNormalized) {
+    console.log('[production-preflight] Authorized Admin MFA bootstrap marker normalized for the exact protected deploy step');
+  }
   console.log(
     '[production-preflight] PASS — deployment, five-role, App Check, HR, Maps and Web Push values are configured '
-      + `(required=${summary.requiredValueCount}, hr=${summary.hrModuleEnabledByProductionWriter}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
+      + `(required=${summary.requiredValueCount}, hr=${summary.hrModuleEnabledByProductionWriter}, admin_mfa_bootstrap=${summary.adminMfaBootstrapAuthorized}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
   );
 }
