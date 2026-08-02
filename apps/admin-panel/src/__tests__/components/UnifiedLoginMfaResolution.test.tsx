@@ -109,7 +109,7 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     await waitFor(() => expect(screen.getByTestId('mfa-challenge')).toBeInTheDocument());
   };
 
-  test('resolved MFA explicitly retries authorization, then navigates once without another primary sign-in', async () => {
+  test('resolved MFA lets the auth-state listener authorize once, then navigates without another primary sign-in', async () => {
     window.location.search = '?returnTo=%2Fprofile%3Ftab%3Dmfa';
     const { rerender } = render(<UnifiedLogin />);
 
@@ -117,8 +117,8 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     g.__mockFocusedAuth.currentUser = { uid: 'founder' };
     fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
 
-    await waitFor(() => expect(mockRetryAuthorization).toHaveBeenCalledTimes(1));
     expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
+    expect(mockRetryAuthorization).not.toHaveBeenCalled();
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
 

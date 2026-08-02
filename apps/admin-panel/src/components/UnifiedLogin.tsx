@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
-import { getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { auth, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
+import { browserSessionPersistence, getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import type { MultiFactorResolver } from 'firebase/auth';
 import { Shield, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -80,7 +80,7 @@ export default function UnifiedLogin() {
             emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
-        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') return 'Secure browser storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
+        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') return 'Secure browser session storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
         if (code === 'ADMIN_SIGN_IN_TIMEOUT') return 'Firebase sign-in did not respond within 20 seconds. Check the connection, reset the secure session, and try again.';
         if (code === 'ADMIN_PASSWORD_RESET_TIMEOUT') return 'The password-reset request timed out. Check the connection and try again.';
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return 'The admin email or password is incorrect.';
@@ -121,7 +121,10 @@ export default function UnifiedLogin() {
         setMfaResolver(null);
         setMfaResolutionPending(false);
         try {
-            await withTimeout(setPersistence(auth, browserLocalPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
+            // The Admin portal deliberately uses session-scoped persistence.
+            // Android Chrome can leave IndexedDB-backed local persistence blocked,
+            // which previously prevented MFA sign-in from starting at all.
+            await withTimeout(setPersistence(auth, browserSessionPersistence), AUTH_PERSISTENCE_TIMEOUT_MS, 'ADMIN_PERSISTENCE_TIMEOUT');
             const result = await withTimeout(
                 signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password),
                 AUTH_SIGN_IN_TIMEOUT_MS,
@@ -201,7 +204,10 @@ export default function UnifiedLogin() {
                                 setMfaResolutionPending(true);
                                 setMfaResolver(null);
                                 setPassword('');
-                                void retryAuthorization();
+                                // Firebase's auth-state listener is the canonical owner of
+                                // post-MFA authorization. Calling retryAuthorization here
+                                // creates a second competing attempt before mobile browser
+                                // persistence has finished publishing auth.currentUser.
                             }}
                             onCancel={() => {
                                 setLocalLoading(false);

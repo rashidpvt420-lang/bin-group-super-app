@@ -14,7 +14,9 @@ test('Admin password login is bounded and exposes targeted secure-session recove
   assert.doesNotMatch(login, /AUTH_VERIFICATION_TIMEOUT_MS/);
   assert.doesNotMatch(login, /startAuthorizationTimer/);
   assert.doesNotMatch(login, /clearVerificationTimer/);
-  assert.match(login, /withTimeout\(setPersistence\(auth, browserLocalPersistence\)/);
+  assert.match(login, /browserSessionPersistence/);
+  assert.match(login, /withTimeout\(setPersistence\(auth, browserSessionPersistence\)/);
+  assert.doesNotMatch(login, /setPersistence\(auth, browserLocalPersistence\)/);
   assert.match(login, /signInWithEmailAndPassword/);
   assert.match(login, /Reset secure session/i);
   assert.match(login, /deleteDatabase\('firebaseLocalStorageDb'\)/);
