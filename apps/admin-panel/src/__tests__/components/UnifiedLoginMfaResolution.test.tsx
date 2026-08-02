@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getMultiFactorResolver, signOut } from 'firebase/auth';
 
 const mockNavigate = jest.fn();
+const mockRetryAuthorization = jest.fn(() => Promise.resolve());
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -43,10 +44,11 @@ jest.mock('firebase/auth', () => {
   const g = global as any;
   if (!g.__mockFocusedSignIn) g.__mockFocusedSignIn = jest.fn();
   if (!g.__mockFocusedPersistence) g.__mockFocusedPersistence = jest.fn(() => Promise.resolve());
+  if (!g.__mockFocusedAuth) g.__mockFocusedAuth = { currentUser: null, config: { authDomain: 'test-domain.firebaseapp.com' } };
 
   return {
     __esModule: true,
-    getAuth: jest.fn(() => ({ config: { authDomain: 'test-domain.firebaseapp.com' } })),
+    getAuth: jest.fn(() => g.__mockFocusedAuth),
     browserLocalPersistence: 'browserLocalPersistence',
     setPersistence: (...args: any[]) => g.__mockFocusedPersistence(...args),
     signInWithEmailAndPassword: (...args: any[]) => g.__mockFocusedSignIn(...args),
@@ -82,10 +84,13 @@ describe('UnifiedLogin MFA authorization handoff', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRetryAuthorization.mockResolvedValue(undefined);
     window.location.search = '';
+    g.__mockFocusedAuth.currentUser = null;
     (useAuth as jest.Mock).mockReturnValue({
       error: null,
       isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
       status: 'idle',
     });
     g.__mockFocusedPersistence.mockResolvedValue(undefined);
@@ -104,13 +109,15 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     await waitFor(() => expect(screen.getByTestId('mfa-challenge')).toBeInTheDocument());
   };
 
-  test('resolved MFA waits for authorized claims/profile checks, then navigates once without another primary sign-in', async () => {
+  test('resolved MFA explicitly retries authorization, then navigates once without another primary sign-in', async () => {
     window.location.search = '?returnTo=%2Fprofile%3Ftab%3Dmfa';
     const { rerender } = render(<UnifiedLogin />);
 
     await enterPrimaryCredential();
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
     fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
 
+    await waitFor(() => expect(mockRetryAuthorization).toHaveBeenCalledTimes(1));
     expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
@@ -118,6 +125,7 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     (useAuth as jest.Mock).mockReturnValue({
       error: null,
       isAuthenticated: true,
+      retryAuthorization: mockRetryAuthorization,
       status: 'authorized',
     });
     rerender(<UnifiedLogin />);
@@ -128,23 +136,43 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
   });
 
-  test('authorization failure after MFA remains fail-closed and does not navigate', async () => {
+  test('authorization failure retains the Firebase session and exposes retry and reset actions', async () => {
     const { rerender } = render(<UnifiedLogin />);
 
     await enterPrimaryCredential();
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
     fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
 
     (useAuth as jest.Mock).mockReturnValue({
       error: 'Access denied: missing or invalid Admin claims.',
       isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
       status: 'failed',
     });
     rerender(<UnifiedLogin />);
 
     expect(await screen.findByText('Access denied: missing or invalid Admin claims.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'login.signin' })).toBeInTheDocument();
+    expect(screen.getByTestId('admin-retry-authorization')).toBeInTheDocument();
+    expect(screen.getByTestId('admin-reset-failed-session')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'login.signin' })).not.toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  test('retry action reuses the retained session instead of starting primary sign-in again', async () => {
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
+    (useAuth as jest.Mock).mockReturnValue({
+      error: 'Admin profile lookup timed out. Please check your network connection and try again.',
+      isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
+      status: 'failed',
+    });
+
+    render(<UnifiedLogin />);
+    fireEvent.click(screen.getByTestId('admin-retry-authorization'));
+
+    await waitFor(() => expect(mockRetryAuthorization).toHaveBeenCalledTimes(1));
+    expect(g.__mockFocusedSignIn).not.toHaveBeenCalled();
   });
 
   test('an already authorized session leaves login and rejects an external returnTo', async () => {
@@ -152,6 +180,7 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     (useAuth as jest.Mock).mockReturnValue({
       error: null,
       isAuthenticated: true,
+      retryAuthorization: mockRetryAuthorization,
       status: 'authorized',
     });
 
@@ -166,6 +195,7 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     (useAuth as jest.Mock).mockReturnValue({
       error: null,
       isAuthenticated: true,
+      retryAuthorization: mockRetryAuthorization,
       status: 'verifying-profile',
     });
 
