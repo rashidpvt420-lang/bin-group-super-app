@@ -67,10 +67,10 @@ jobs:
     needs: focused-admin-mfa-tests
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.pull_request.number == 846 &&
+      github.event.pull_request.number == 847 &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'fix/founder-mfa-resolved-user-handoff' &&
-      github.event.pull_request.base.sha == '3af21aa0166a328a7601c29d190c6bf29642b40c'
+      github.event.pull_request.head.ref == 'fix/founder-mfa-credential-handoff' &&
+      github.event.pull_request.base.sha == 'be3dd81c1c5d79eeb66f0af8b00ccafe3170f1bf'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: founder-enrollment-preview
@@ -96,7 +96,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           test "$EXACT_HEAD_SHA" = "${{ github.event.pull_request.head.sha }}"
           test "$EXACT_HEAD_SHA" = "$(git rev-parse HEAD)"
-          test "${{ github.event.pull_request.base.sha }}" = "3af21aa0166a328a7601c29d190c6bf29642b40c"
+          test "${{ github.event.pull_request.base.sha }}" = "be3dd81c1c5d79eeb66f0af8b00ccafe3170f1bf"
           test "$GCP_PROJECT_ID" = "bin-group-57c60"
           test "$FOUNDER_PREVIEW_SITE" = "bin-founder-totp-260801174030"
           test "$FOUNDER_PREVIEW_SITE" != "bin-group-57c60"
@@ -270,8 +270,8 @@ jobs:
           const evidence = {
             schemaVersion: 1,
             commitSha: process.env.EXACT_HEAD_SHA,
-            pullRequest: 846,
-            baseSha: '3af21aa0166a328a7601c29d190c6bf29642b40c',
+            pullRequest: 847,
+            baseSha: 'be3dd81c1c5d79eeb66f0af8b00ccafe3170f1bf',
             firebaseProjectId: process.env.GCP_PROJECT_ID,
             hostingSite: process.env.FOUNDER_PREVIEW_SITE,
             previewChannel: process.env.PREVIEW_CHANNEL,
