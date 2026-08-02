@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { setupSovereignAlertInterceptor } from '@bin/shared/lib/sovereignAlerts';
 import './index.css';
 
 let reactMounted = false;
@@ -42,28 +43,41 @@ window.onunhandledrejection = (event) => {
   else console.warn('[ADMIN-RUNTIME] Recoverable promise rejection after mount:', reason);
 };
 
+function scheduleServiceWorkerCleanup() {
+  if (!('serviceWorker' in navigator)) return;
+
+  const cleanup = async () => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+      if (registrations.length > 0) console.info('[ADMIN-INIT] Removed stale Admin service workers.');
+    } catch (error) {
+      console.warn('[ADMIN-INIT] Service worker cleanup skipped:', error);
+    }
+  };
+
+  const browserWindow = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+  };
+
+  if (browserWindow.requestIdleCallback) {
+    browserWindow.requestIdleCallback(() => void cleanup(), { timeout: 4000 });
+  } else {
+    window.setTimeout(() => void cleanup(), 1500);
+  }
+}
+
 async function bootstrapAdmin() {
   try {
-    const [appModule, boundaryModule, sharedModule] = await Promise.all([
+    const [appModule, boundaryModule] = await Promise.all([
       import('./App'),
       import('./components/ErrorBoundary'),
-      import('@bin/shared'),
     ]);
-
-    sharedModule.setupSovereignAlertInterceptor();
 
     const rootElement = document.getElementById('root');
     if (!rootElement) throw new Error('Admin root element is missing.');
 
-    if ('serviceWorker' in navigator) {
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.allSettled(registrations.map((registration) => registration.unregister()));
-        if (registrations.length > 0) console.info('[ADMIN-INIT] Removed stale Admin service workers.');
-      } catch (error) {
-        console.warn('[ADMIN-INIT] Service worker cleanup skipped:', error);
-      }
-    }
+    setupSovereignAlertInterceptor();
 
     const App = appModule.default;
     const ErrorBoundary = boundaryModule.default;
@@ -76,6 +90,11 @@ async function bootstrapAdmin() {
       </React.StrictMode>,
     );
     reactMounted = true;
+
+    // Service-worker cleanup is maintenance, not a prerequisite for the first
+    // meaningful paint. Running it after mount removes a network/main-thread
+    // waterfall from the LCP path.
+    scheduleServiceWorkerCleanup();
   } catch (error) {
     renderBootError('Bootstrap Execution Fault', error);
   }
