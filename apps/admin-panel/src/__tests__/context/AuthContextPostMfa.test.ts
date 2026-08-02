@@ -18,9 +18,19 @@ describe('AuthContext post-MFA authorization contract', () => {
     expect(unifiedLoginSource).toMatch(/onResolved=\{\(\) => \{[\s\S]*void retryAuthorization\(\);/);
   });
 
-  test('forces a fresh token before re-running fail-closed claim, profile and MFA checks', () => {
-    expect(authContextSource).toMatch(/await timeout\(getIdTokenResult\(currentUser, true\)/);
-    expect(authContextSource).toContain('await authorizeFirebaseUser(currentUser);');
+  test('forces one fresh token refresh inside the serialized fail-closed authorization path', () => {
+    const authorizationFunction = authContextSource.slice(
+      authContextSource.indexOf('const authorizeFirebaseUser'),
+      authContextSource.indexOf('const retryAuthorization'),
+    );
+    const retryFunction = authContextSource.slice(
+      authContextSource.indexOf('const retryAuthorization'),
+      authContextSource.indexOf('useEffect(() =>', authContextSource.indexOf('const retryAuthorization')),
+    );
+
+    expect(authorizationFunction).toMatch(/await timeout\(getIdTokenResult\(firebaseUser, true\)/);
+    expect(retryFunction).toContain('await authorizeFirebaseUser(currentUser);');
+    expect(retryFunction).not.toContain('getIdTokenResult(currentUser, true)');
     expect(authContextSource).toContain("throw new Error('INVALID_ADMIN_CLAIMS')");
     expect(authContextSource).toContain("throw new Error('ADMIN_MFA_REQUIRED')");
   });
