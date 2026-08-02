@@ -1,0 +1,131 @@
+name: Founder Preview App Check Runtime
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+    paths:
+      - apps/admin-panel/src/lib/firebase.ts
+      - apps/admin-panel/src/components/UnifiedLogin.tsx
+      - apps/admin-panel/src/components/security/AdminMfaSignInChallenge.tsx
+      - .github/workflows/admin-mfa-regression.yml
+      - .github/workflows/founder-preview-appcheck-runtime.yml
+      - scripts/verify-founder-preview-appcheck-runtime.mjs
+      - tests/launch/founder-preview-appcheck-runtime.test.mjs
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+
+jobs:
+  runtime-verifier-contract:
+    name: Runtime verifier fail-closed contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Enforce exact tested head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run Founder preview App Check runtime regressions
+        run: node --test tests/launch/founder-preview-appcheck-runtime.test.mjs
+
+  verify-founder-preview-runtime:
+    name: Verify exact-head App Check token exchange
+    needs: runtime-verifier-contract
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'deploy-founder-preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      FOUNDER_PREVIEW_URL: https://bin-founder-totp-260801174030.web.app
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      FOUNDER_PREVIEW_MANIFEST_TIMEOUT_MS: '1200000'
+      FOUNDER_APPCHECK_OBSERVATION_MS: '15000'
+      FOUNDER_APPCHECK_EVIDENCE_PATH: founder_appcheck_evidence/founder-preview-appcheck-runtime.json
+
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Enforce exact-head and read-only boundaries
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$FOUNDER_PREVIEW_URL" = "https://bin-founder-totp-260801174030.web.app"
+          test "$FOUNDER_PREVIEW_URL" != "https://bin-group-57c60.web.app"
+          test "$FOUNDER_PREVIEW_URL" != "https://bin-group-admin-panel.web.app"
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install repository dependencies
+        run: npm ci --include=optional --legacy-peer-deps
+
+      - name: Install Chromium for the read-only runtime verifier
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify live App Check runtime token exchange
+        run: node scripts/verify-founder-preview-appcheck-runtime.mjs
+
+      - name: Validate sanitized exact-head runtime evidence
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = process.env.FOUNDER_APPCHECK_EVIDENCE_PATH;
+          const evidence = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const valid =
+            evidence.commitSha === process.env.EXPECTED_HEAD_SHA &&
+            evidence.hostingSite === 'bin-founder-totp-260801174030.web.app' &&
+            evidence.deploymentScope === 'temporary-founder-mfa-preview' &&
+            evidence.manifestVerified === true &&
+            evidence.appCheckRuntimeOperational === true &&
+            evidence.successfulAppCheckExchangeCount >= 1 &&
+            Array.isArray(evidence.fatalSignals) &&
+            evidence.fatalSignals.length === 0 &&
+            evidence.publicReleaseGate === false &&
+            evidence.hardLaunchClaim === false;
+          if (!valid) {
+            console.error('Founder preview App Check runtime evidence is not launch-safe.');
+            process.exit(1);
+          }
+          console.log('Verified sanitized exact-head App Check runtime evidence.');
+          NODE
+
+      - name: Upload sanitized App Check runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: founder-preview-${{ github.event.pull_request.head.sha }}-appcheck-runtime
+          path: founder_appcheck_evidence/founder-preview-appcheck-runtime.json
+          if-no-files-found: error
+          retention-days: 30
