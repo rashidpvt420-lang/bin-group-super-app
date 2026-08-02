@@ -12,10 +12,12 @@ const unifiedLoginSource = readFileSync(
 );
 
 describe('AuthContext post-MFA authorization contract', () => {
-  test('exposes an explicit retryAuthorization operation and calls it after MFA resolution', () => {
+  test('exposes explicit manual retry while initial post-MFA authorization remains listener-owned', () => {
     expect(authContextSource).toContain('retryAuthorization: () => Promise<void>');
     expect(authContextSource).toContain('const retryAuthorization = useCallback(async () =>');
-    expect(unifiedLoginSource).toMatch(/onResolved=\{\(\) => \{[\s\S]*void retryAuthorization\(\);/);
+    expect(unifiedLoginSource).toMatch(/onResolved=\{\(\) => \{[\s\S]*setMfaResolutionPending\(true\);/);
+    expect(unifiedLoginSource).not.toMatch(/onResolved=\{\(\) => \{[\s\S]*void retryAuthorization\(\);/);
+    expect(authContextSource).toContain('void authorizeFirebaseUser(firebaseUser);');
   });
 
   test('forces one fresh token refresh inside the serialized fail-closed authorization path', () => {
@@ -54,5 +56,11 @@ describe('AuthContext post-MFA authorization contract', () => {
     expect(unifiedLoginSource).toContain('data-testid="admin-retry-authorization"');
     expect(unifiedLoginSource).toContain('data-testid="admin-reset-failed-session"');
     expect(unifiedLoginSource).toContain('isAuthenticated || auth.currentUser');
+  });
+
+  test('uses session-scoped Firebase persistence so Admin login does not depend on IndexedDB local persistence', () => {
+    expect(unifiedLoginSource).toContain('browserSessionPersistence');
+    expect(unifiedLoginSource).toContain('setPersistence(auth, browserSessionPersistence)');
+    expect(unifiedLoginSource).not.toContain('setPersistence(auth, browserLocalPersistence)');
   });
 });
