@@ -84,7 +84,7 @@ export default function UnifiedLogin() {
             emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
-        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') return 'Secure browser storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
+        if (code === 'ADMIN_PERSISTENCE_TIMEOUT') return 'Secure browser session storage did not respond. Reset this site session or open the Admin portal in a private window, then try again.';
         if (code === 'ADMIN_SIGN_IN_TIMEOUT') return 'Firebase sign-in did not respond within 20 seconds. Check the connection, reset the secure session, and try again.';
         if (code === 'ADMIN_PASSWORD_RESET_TIMEOUT') return 'The password-reset request timed out. Check the connection and try again.';
         if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return 'The admin email or password is incorrect.';
