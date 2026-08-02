@@ -12,11 +12,15 @@ const unifiedLoginSource = readFileSync(
 );
 
 describe('AuthContext post-MFA authorization contract', () => {
-  test('exposes explicit manual retry while initial post-MFA authorization remains listener-owned', () => {
+  test('keeps listener ownership but recovers a published MFA session when the listener does not start', () => {
     expect(authContextSource).toContain('retryAuthorization: () => Promise<void>');
     expect(authContextSource).toContain('const retryAuthorization = useCallback(async () =>');
-    expect(unifiedLoginSource).toMatch(/onResolved=\{\(\) => \{[\s\S]*setMfaResolutionPending\(true\);/);
-    expect(unifiedLoginSource).not.toMatch(/onResolved=\{\(\) => \{[\s\S]*void retryAuthorization\(\);/);
+    expect(unifiedLoginSource).toContain('const completeResolvedMfaHandoff = async () =>');
+    expect(unifiedLoginSource).toContain('MFA_SESSION_PUBLISH_TIMEOUT_MS');
+    expect(unifiedLoginSource).toMatch(/onResolved=\{\(\) => \{[\s\S]*setMfaResolutionPending\(true\);[\s\S]*void completeResolvedMfaHandoff\(\);/);
+    expect(unifiedLoginSource).toContain('await retryAuthorization();');
+    expect(unifiedLoginSource).toContain("statusAfterPublish !== 'verifying-token'");
+    expect(unifiedLoginSource).toContain("statusAfterPublish !== 'verifying-profile'");
     expect(authContextSource).toContain('void authorizeFirebaseUser(firebaseUser);');
   });
 

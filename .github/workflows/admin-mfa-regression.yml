@@ -2,6 +2,11 @@ name: Admin MFA Regression
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
     paths:
@@ -67,10 +72,8 @@ jobs:
     needs: focused-admin-mfa-tests
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.pull_request.number == 846 &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'fix/founder-mfa-resolved-user-handoff' &&
-      github.event.pull_request.base.sha == '3af21aa0166a328a7601c29d190c6bf29642b40c'
+      contains(github.event.pull_request.labels.*.name, 'deploy-founder-preview')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: founder-enrollment-preview
@@ -96,7 +99,6 @@ jobs:
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           test "$EXACT_HEAD_SHA" = "${{ github.event.pull_request.head.sha }}"
           test "$EXACT_HEAD_SHA" = "$(git rev-parse HEAD)"
-          test "${{ github.event.pull_request.base.sha }}" = "3af21aa0166a328a7601c29d190c6bf29642b40c"
           test "$GCP_PROJECT_ID" = "bin-group-57c60"
           test "$FOUNDER_PREVIEW_SITE" = "bin-founder-totp-260801174030"
           test "$FOUNDER_PREVIEW_SITE" != "bin-group-57c60"
@@ -270,8 +272,8 @@ jobs:
           const evidence = {
             schemaVersion: 1,
             commitSha: process.env.EXACT_HEAD_SHA,
-            pullRequest: 846,
-            baseSha: '3af21aa0166a328a7601c29d190c6bf29642b40c',
+            pullRequest: Number(process.env.PR_NUMBER),
+            baseSha: process.env.PR_BASE_SHA,
             firebaseProjectId: process.env.GCP_PROJECT_ID,
             hostingSite: process.env.FOUNDER_PREVIEW_SITE,
             previewChannel: process.env.PREVIEW_CHANNEL,
@@ -290,6 +292,8 @@ jobs:
           NODE
         env:
           PREVIEW_CHANNEL: ${{ steps.preview_channel.outputs.channel_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
       - name: Upload exact-SHA controlled-preview evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

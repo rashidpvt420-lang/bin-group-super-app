@@ -50,6 +50,7 @@ jest.mock('firebase/auth', () => {
     __esModule: true,
     getAuth: jest.fn(() => g.__mockFocusedAuth),
     browserLocalPersistence: 'browserLocalPersistence',
+    browserSessionPersistence: 'browserSessionPersistence',
     setPersistence: (...args: any[]) => g.__mockFocusedPersistence(...args),
     signInWithEmailAndPassword: (...args: any[]) => g.__mockFocusedSignIn(...args),
     getMultiFactorResolver: jest.fn(),
@@ -109,7 +110,7 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     await waitFor(() => expect(screen.getByTestId('mfa-challenge')).toBeInTheDocument());
   };
 
-  test('resolved MFA lets the auth-state listener authorize once, then navigates without another primary sign-in', async () => {
+  test('resolved MFA recovers a published session when the auth-state listener does not start authorization', async () => {
     window.location.search = '?returnTo=%2Fprofile%3Ftab%3Dmfa';
     const { rerender } = render(<UnifiedLogin />);
 
@@ -118,7 +119,7 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
 
     expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
-    expect(mockRetryAuthorization).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockRetryAuthorization).toHaveBeenCalledTimes(1));
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
     expect(mockNavigate).not.toHaveBeenCalled();
 
@@ -133,6 +134,69 @@ describe('UnifiedLogin MFA authorization handoff', () => {
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/profile?tab=mfa', { replace: true });
     });
+    expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  test('ignores a failed status that predates the MFA handoff and retries the published session', async () => {
+    const { rerender } = render(<UnifiedLogin />);
+
+    await enterPrimaryCredential();
+    (useAuth as jest.Mock).mockReturnValue({
+      error: 'Firebase Auth did not respond before primary sign-in started.',
+      isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
+      status: 'failed',
+    });
+    rerender(<UnifiedLogin />);
+
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
+
+    await waitFor(() => expect(mockRetryAuthorization).toHaveBeenCalledTimes(1));
+    expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test('post-MFA handoff failure supersedes a stale pre-MFA context error', async () => {
+    const staleError = 'Firebase Auth did not respond before primary sign-in started.';
+    const { rerender } = render(<UnifiedLogin />);
+
+    await enterPrimaryCredential();
+    (useAuth as jest.Mock).mockReturnValue({
+      error: staleError,
+      isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
+      status: 'failed',
+    });
+    rerender(<UnifiedLogin />);
+
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
+    mockRetryAuthorization.mockRejectedValueOnce(new Error('authorization could not start'));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
+
+    expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
+    expect(screen.queryByText(staleError)).not.toBeInTheDocument();
+    expect(await screen.findByText('MFA was accepted, but secure Admin authorization could not start. Retry or reset the secure session.')).toBeInTheDocument();
+    expect(screen.queryByText(staleError)).not.toBeInTheDocument();
+  });
+
+  test('does not create a competing retry after the auth-state listener has started verification', async () => {
+    const { rerender } = render(<UnifiedLogin />);
+
+    await enterPrimaryCredential();
+    g.__mockFocusedAuth.currentUser = { uid: 'founder' };
+    (useAuth as jest.Mock).mockReturnValue({
+      error: null,
+      isAuthenticated: false,
+      retryAuthorization: mockRetryAuthorization,
+      status: 'verifying-token',
+    });
+    rerender(<UnifiedLogin />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve MFA' }));
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(mockRetryAuthorization).not.toHaveBeenCalled();
     expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
   });
 
