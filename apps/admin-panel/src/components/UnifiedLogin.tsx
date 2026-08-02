@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, setPersistence, signInWithEmailAndPassword } from '../lib/firebase';
 import { browserSessionPersistence, getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebase/auth';
@@ -12,6 +12,7 @@ import { adminReturnToFromSearch } from '../lib/adminAuthRedirect';
 const AUTH_PERSISTENCE_TIMEOUT_MS = 8_000;
 const AUTH_SIGN_IN_TIMEOUT_MS = 20_000;
 const AUTH_RESET_TIMEOUT_MS = 5_000;
+const MFA_SESSION_PUBLISH_TIMEOUT_MS = 5_000;
 
 const timeoutError = (code: string) => Object.assign(new Error(code), { code });
 
@@ -29,6 +30,8 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
     );
 });
 
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
 export default function UnifiedLogin() {
     const { error: authError, isAuthenticated, retryAuthorization, status } = useAuth();
     const { t, isRTL } = useLanguage();
@@ -39,12 +42,17 @@ export default function UnifiedLogin() {
     const [password, setPassword] = useState('');
     const [mfaResolver, setMfaResolver] = useState<MultiFactorResolver | null>(null);
     const [mfaResolutionPending, setMfaResolutionPending] = useState(false);
+    const authorizationStatusRef = useRef(status);
     const error = authError || localError;
     const loading = localLoading ||
         status === 'verifying-token' ||
         status === 'verifying-profile' ||
         mfaResolutionPending;
     const retainedFailedSession = status === 'failed' && Boolean(auth.currentUser) && !mfaResolver;
+
+    useEffect(() => {
+        authorizationStatusRef.current = status;
+    }, [status]);
 
     useEffect(() => {
         const redirectedEmail = new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
@@ -149,6 +157,54 @@ export default function UnifiedLogin() {
         }
     };
 
+    const completeResolvedMfaHandoff = async () => {
+        const startedAt = Date.now();
+
+        try {
+            // Give the canonical auth-state listener the first opportunity to
+            // claim the resolved session. If it does not start, recover using
+            // the now-published Firebase currentUser instead of dropping back
+            // to the credential form.
+            while (Date.now() - startedAt < MFA_SESSION_PUBLISH_TIMEOUT_MS) {
+                const currentStatus = authorizationStatusRef.current;
+                if (
+                    currentStatus === 'authorized' ||
+                    currentStatus === 'failed' ||
+                    currentStatus === 'verifying-token' ||
+                    currentStatus === 'verifying-profile'
+                ) {
+                    return;
+                }
+
+                if (auth.currentUser) {
+                    await wait(150);
+                    const statusAfterPublish = authorizationStatusRef.current;
+                    if (
+                        statusAfterPublish !== 'authorized' &&
+                        statusAfterPublish !== 'failed' &&
+                        statusAfterPublish !== 'verifying-token' &&
+                        statusAfterPublish !== 'verifying-profile'
+                    ) {
+                        await retryAuthorization();
+                    }
+                    return;
+                }
+
+                await wait(100);
+            }
+
+            throw timeoutError('ADMIN_MFA_SESSION_PUBLISH_TIMEOUT');
+        } catch (handoffError: any) {
+            setLocalLoading(false);
+            setMfaResolutionPending(false);
+            setLocalError(
+                handoffError?.code === 'ADMIN_MFA_SESSION_PUBLISH_TIMEOUT'
+                    ? 'MFA was accepted, but Firebase did not publish the resolved Admin session. Reset the secure session and try again.'
+                    : 'MFA was accepted, but secure Admin authorization could not start. Retry or reset the secure session.'
+            );
+        }
+    };
+
     const handlePasswordReset = async () => {
         if (!email.trim()) {
             setLocalError('Enter your admin email first.');
@@ -204,10 +260,7 @@ export default function UnifiedLogin() {
                                 setMfaResolutionPending(true);
                                 setMfaResolver(null);
                                 setPassword('');
-                                // Firebase's auth-state listener is the canonical owner of
-                                // post-MFA authorization. Calling retryAuthorization here
-                                // creates a second competing attempt before mobile browser
-                                // persistence has finished publishing auth.currentUser.
+                                void completeResolvedMfaHandoff();
                             }}
                             onCancel={() => {
                                 setLocalLoading(false);
