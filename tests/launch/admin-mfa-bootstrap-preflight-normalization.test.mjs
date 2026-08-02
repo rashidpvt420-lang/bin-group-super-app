@@ -56,7 +56,7 @@ function validEnv() {
   };
 }
 
-function withDispatchEvent(t, env, incidentEvidenceRefs = marker) {
+function withDispatchEvent(t, env, incidentEvidenceRefs = marker, extraInputs = {}) {
   const directory = mkdtempSync(path.join(tmpdir(), 'admin-mfa-bootstrap-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const eventPath = path.join(directory, 'event.json');
@@ -64,9 +64,15 @@ function withDispatchEvent(t, env, incidentEvidenceRefs = marker) {
     inputs: {
       launch_mode: env.LAUNCH_MODE,
       run_public_release_gate: env.RUN_PUBLIC_RELEASE_GATE,
+      confirmation: 'DEPLOY_PRODUCTION_BIN_GROUP_57C60',
+      hard_launch_confirmation: 'AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP',
+      expected_commit_sha: env.GITHUB_SHA,
+      authorization_actor: 'rashidpvt420-lang',
+      founder_email: 'ceo@bin-groups.com',
       deployment_payload_json: JSON.stringify({
         incident_evidence_refs: incidentEvidenceRefs,
       }),
+      ...extraInputs,
     },
   }));
   env.GITHUB_EVENT_PATH = eventPath;
@@ -82,6 +88,7 @@ test('exact protected bank-pilot bootstrap authorizes missing Founder automation
     marker,
     requested: true,
     authorized: true,
+    requestSource: 'explicit-marker',
     eventPath,
     dispatchError: null,
   });
@@ -126,4 +133,59 @@ test('normal bank-pilot deployment without the exact marker still requires real 
   assert.doesNotMatch(failures, /Admin MFA bootstrap is allowed only/);
   assert.match(failures, /valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE/);
   assert.equal(adminMfaBootstrapWorkflowState(env).requested, false);
+});
+
+test('canonical protected owner request becomes bootstrap only while Founder MFA proof is absent', (t) => {
+  const env = validEnv();
+  const incidentRefs = [
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/pull/855',
+  ].join(',');
+  const eventPath = withDispatchEvent(t, env, incidentRefs);
+
+  const state = adminMfaBootstrapWorkflowState(env);
+  assert.equal(state.requested, true);
+  assert.equal(state.authorized, true);
+  assert.equal(state.requestSource, 'protected-owner-recovery');
+  assert.deepEqual(validateProductionWorkflowEnv(env), []);
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), true);
+  assert.equal(JSON.parse(readFileSync(eventPath, 'utf8')).inputs.incident_evidence_refs, marker);
+
+  const configured = validEnv();
+  configured.E2E_FOUNDER_TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
+  withDispatchEvent(t, configured, incidentRefs);
+  const configuredState = adminMfaBootstrapWorkflowState(configured);
+  assert.equal(configuredState.requested, false);
+  assert.equal(configuredState.authorized, false);
+  assert.equal(configuredState.requestSource, null);
+  assert.deepEqual(validateProductionWorkflowEnv(configured), []);
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(configured), false);
+});
+
+test('lookalike owner recovery references or identities do not authorize bootstrap', (t) => {
+  const validReferences = [
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/pull/855',
+  ].join(',');
+  const cases = [
+    ['wrong issue', validReferences.replace('/issues/434', '/issues/999'), {}],
+    ['wrong repository', validReferences.replace('bin-group-super-app/pull', 'other-repo/pull'), {}],
+    ['wrong actor', validReferences, { authorization_actor: 'other-user' }],
+    ['wrong founder', validReferences, { founder_email: 'other@bin-groups.com' }],
+    ['wrong confirmation', validReferences, { confirmation: 'NO' }],
+    ['wrong expected SHA', validReferences, { expected_commit_sha: 'b'.repeat(40) }],
+  ];
+
+  for (const [name, refs, extraInputs] of cases) {
+    const env = validEnv();
+    withDispatchEvent(t, env, refs, extraInputs);
+    const state = adminMfaBootstrapWorkflowState(env);
+    assert.equal(state.requested, false, name);
+    assert.match(
+      validateProductionWorkflowEnv(env).join('\n'),
+      /valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE/,
+      name,
+    );
+    assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false, name);
+  }
 });
