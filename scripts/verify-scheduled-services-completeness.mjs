@@ -85,8 +85,11 @@ const checks = [
   {
     path: 'apps/admin-panel/src/App.tsx',
     required: [
-      "import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperationsPage'",
+      "const ScheduledServicesOperationsPage = lazy(() => import('./pages/ops/ScheduledServicesOperationsPage'))",
       '<Route path="/tenant-services" element={<ProtectedRoute><ScheduledServicesOperationsPage /></ProtectedRoute>} />',
+    ],
+    forbidden: [
+      "import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperationsPage'",
     ],
   },
   {
