@@ -47,6 +47,9 @@ if (!existsSync(manifestPath)) fail(`missing ${manifestPath}`);
 
 const indexHtml = readFileSync(indexPath, 'utf8');
 if (!/<div\s+id=["']root["']/.test(indexHtml)) fail('index.html does not contain the React root element');
+if (!/<script\s+defer\s+src=["'][^"']*admin-init-recovery\.js["']/i.test(indexHtml)) {
+  fail('admin-init-recovery.js must remain a deferred same-origin bootstrap helper');
+}
 
 let manifest;
 try {
@@ -66,21 +69,37 @@ const scriptSources = [...indexHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/g
   .map((match) => String(match[1] || '').trim())
   .filter(Boolean);
 if (scriptSources.length === 0) fail('index.html contains no JavaScript bundle reference');
+const normalizedScriptSources = scriptSources.map(normalizeAssetPath);
+for (const entrypoint of manifestJavaScriptEntrypoints) {
+  if (!normalizedScriptSources.includes(entrypoint)) fail(`manifest JavaScript entrypoint is missing from index.html: ${entrypoint}`);
+}
 
 const entryAssets = [];
+const manifestEntryAssets = [];
+const staticBootstrapAssets = [];
 let mergedEntryJavaScript = '';
 for (const source of scriptSources) {
   if (/^(?:https?:)?\/\//i.test(source)) fail(`external JavaScript bundle is not allowed: ${source}`);
   const relativeAsset = normalizeAssetPath(source);
   if (!relativeAsset.endsWith('.js')) fail(`non-JavaScript script source found: ${source}`);
-  if (!manifestJavaScriptEntrypoints.includes(relativeAsset)) fail(`index.html script is not declared as a manifest entrypoint: ${relativeAsset}`);
+
+  const isManifestEntrypoint = manifestJavaScriptEntrypoints.includes(relativeAsset);
+  const isAllowedStaticBootstrap = relativeAsset === 'admin-init-recovery.js';
+  if (!isManifestEntrypoint && !isAllowedStaticBootstrap) {
+    fail(`index.html script is neither a manifest entrypoint nor an approved static bootstrap helper: ${relativeAsset}`);
+  }
+
   const assetPath = path.resolve(buildDirectory, relativeAsset);
   const relativeCheck = path.relative(buildDirectory, assetPath);
   if (relativeCheck.startsWith('..') || path.isAbsolute(relativeCheck)) fail(`script source escapes the Admin build directory: ${source}`);
   const verified = verifyJavaScriptAsset(assetPath);
   mergedEntryJavaScript += `\n${verified.content}`;
-  entryAssets.push({ path: relativeAsset, size: verified.size });
-  console.log(`[admin-build-assets] PASS entry=${relativeAsset} bytes=${verified.size}`);
+
+  const evidence = { path: relativeAsset, size: verified.size };
+  entryAssets.push(evidence);
+  if (isManifestEntrypoint) manifestEntryAssets.push(evidence);
+  else staticBootstrapAssets.push(evidence);
+  console.log(`[admin-build-assets] PASS ${isManifestEntrypoint ? 'entry' : 'deferred-bootstrap'}=${relativeAsset} bytes=${verified.size}`);
 }
 
 const generatedPaths = collectJavaScript(path.join(buildDirectory, 'static', 'js')).sort();
@@ -154,6 +173,11 @@ writeFileSync(evidencePath, `${JSON.stringify({
   manifestPresent: true,
   indexScriptAssetCount: entryAssets.length,
   indexScriptAssets: entryAssets,
+  manifestEntryAssetCount: manifestEntryAssets.length,
+  manifestEntryAssets,
+  staticBootstrapAssetCount: staticBootstrapAssets.length,
+  staticBootstrapAssets,
+  staticBootstrapDeferred: true,
   manifestEntrypointCount: manifestEntrypoints.length,
   manifestJavaScriptEntrypoints,
   generatedScriptAssetCount: generatedAssets.length,
