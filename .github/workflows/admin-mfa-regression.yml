@@ -21,7 +21,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   CI: true
@@ -74,7 +73,10 @@ jobs:
       github.event.pull_request.base.sha == 'ccf622fdac1ba9cfd4322d040533d9488612fa99'
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: production
+    environment: founder-enrollment-preview
+    permissions:
+      contents: read
+      id-token: write
     env:
       GCP_PROJECT_ID: bin-group-57c60
       FOUNDER_PREVIEW_SITE: bin-founder-totp-260801174030
