@@ -10,6 +10,9 @@ const EXPECTED_MAIN_URL = 'https://bin-group-57c60.web.app';
 const EXPECTED_ADMIN_URL = 'https://bin-group-admin-panel.web.app';
 const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const ADMIN_MFA_BOOTSTRAP_MARKER = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
+const CANONICAL_INCIDENT_REFERENCE = 'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434';
+const OWNER_REQUEST_REFERENCE_RE = /^https:\/\/github\.com\/rashidpvt420-lang\/bin-group-super-app\/pull\/\d+$/;
+const AUTHORIZED_OWNER_ACTOR = 'rashidpvt420-lang';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const GOOGLE_API_KEY_RE = /^AIza[0-9A-Za-z_-]{30,}$/;
 const FIREBASE_APP_ID_RE = /^1:\d{6,20}:web:[0-9A-Za-z]+$/;
@@ -109,9 +112,31 @@ function readWorkflowDispatchEvent(env = process.env) {
 
 export function adminMfaBootstrapWorkflowState(env = process.env) {
   const dispatch = readWorkflowDispatchEvent(env);
-  const nestedMarker = String(dispatch.deploymentPayload?.incident_evidence_refs || '').trim();
+  const incidentEvidenceRefs = String(dispatch.deploymentPayload?.incident_evidence_refs || '').trim();
   const compatibilityMarker = String(dispatch.inputs?.incident_evidence_refs || '').trim();
-  const requested = nestedMarker === ADMIN_MFA_BOOTSTRAP_MARKER || compatibilityMarker === ADMIN_MFA_BOOTSTRAP_MARKER;
+  const explicitMarkerRequested =
+    incidentEvidenceRefs === ADMIN_MFA_BOOTSTRAP_MARKER ||
+    compatibilityMarker === ADMIN_MFA_BOOTSTRAP_MARKER;
+
+  const founderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '');
+  const founderMfaConfigured =
+    (founderTotp.length >= 16 && /^[A-Z2-7]+$/.test(founderTotp)) ||
+    /^\d{6}$/.test(value(env, 'E2E_FOUNDER_REAL_MFA_CODE'));
+  const incidentReferences = incidentEvidenceRefs.split(',').map((entry) => entry.trim()).filter(Boolean);
+  const canonicalOwnerRecoveryRequested =
+    !founderMfaConfigured &&
+    incidentReferences.length === 2 &&
+    incidentReferences[0] === CANONICAL_INCIDENT_REFERENCE &&
+    OWNER_REQUEST_REFERENCE_RE.test(incidentReferences[1]) &&
+    String(dispatch.inputs?.authorization_actor || '').trim() === AUTHORIZED_OWNER_ACTOR &&
+    String(dispatch.inputs?.founder_email || '').trim().toLowerCase() === CANONICAL_FOUNDER_EMAIL &&
+    String(dispatch.inputs?.confirmation || '').trim() === 'DEPLOY_PRODUCTION_BIN_GROUP_57C60' &&
+    String(dispatch.inputs?.hard_launch_confirmation || '').trim() === 'AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP' &&
+    String(dispatch.inputs?.expected_commit_sha || '').trim() === value(env, 'GITHUB_SHA') &&
+    String(dispatch.inputs?.launch_mode || '').trim() === 'bank-pilot' &&
+    String(dispatch.inputs?.run_public_release_gate || '').trim() === 'false';
+
+  const requested = explicitMarkerRequested || canonicalOwnerRecoveryRequested;
   const exactMainSha = /^[0-9a-f]{40}$/.test(value(env, 'GITHUB_SHA'));
   const authorized =
     requested &&
@@ -127,6 +152,11 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
     marker: ADMIN_MFA_BOOTSTRAP_MARKER,
     requested,
     authorized,
+    requestSource: explicitMarkerRequested
+      ? 'explicit-marker'
+      : canonicalOwnerRecoveryRequested
+        ? 'protected-owner-recovery'
+        : null,
     eventPath: dispatch.eventPath,
     dispatchError: dispatch.error,
   };
