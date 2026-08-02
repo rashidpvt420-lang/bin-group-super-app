@@ -316,24 +316,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
-        setError(null);
-        setIsAuthenticated(false);
-        setStatus('verifying-token');
-
-        try {
-            await timeout(getIdTokenResult(currentUser, true), 15000, 'AUTH_TOKEN_TIMEOUT');
-            if (auth.currentUser?.uid !== currentUser.uid) {
-                throw new Error('AUTH_SESSION_CHANGED');
-            }
-            await authorizeFirebaseUser(currentUser);
-        } catch (retryError: any) {
-            invalidateActiveAttempt();
-            setIsAuthenticated(false);
-            setUser(null);
-            resetMfaState();
-            setError(messageForAuthorizationError(retryError));
-            setStatus('failed');
-        }
+        // authorizeFirebaseUser owns the forced token refresh, generation,
+        // timeout, stale-attempt rejection, and final state mutation. Starting
+        // a separate preliminary refresh here races the auth-state listener.
+        await authorizeFirebaseUser(currentUser);
     }, [authorizeFirebaseUser, invalidateActiveAttempt, resetMfaState, setStatus]);
 
     useEffect(() => {
