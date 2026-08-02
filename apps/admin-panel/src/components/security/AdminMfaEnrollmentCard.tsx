@@ -440,11 +440,14 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
         ? String((error as { code?: unknown }).code || '')
         : '';
       if (codeValue === 'auth/requires-recent-login') {
-        clearTotpSecretState();
-        sessionStorage.removeItem('bin-admin-security-session');
-        void signOut(auth).finally(() => {
-          window.location.href = '/login?reason=recent-auth-required';
-        });
+        clearTotpSecretState(true);
+        setTotpNotice({ type: 'error', text: friendlyError(error) });
+        window.setTimeout(() => {
+          sessionStorage.removeItem('bin-admin-security-session');
+          void signOut(auth).finally(() => {
+            window.location.href = '/login?reason=recent-auth-required';
+          });
+        }, 3000);
         return;
       }
       setTotpNotice({ type: 'error', text: friendlyError(error) });
@@ -524,11 +527,14 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
         ? String((error as { code?: unknown }).code || '')
         : '';
       if (codeValue === 'auth/requires-recent-login') {
-        clearTotpSecretState();
-        sessionStorage.removeItem('bin-admin-security-session');
-        void signOut(auth).finally(() => {
-          window.location.href = '/login?reason=recent-auth-required';
-        });
+        clearTotpSecretState(true);
+        setTotpNotice({ type: 'error', text: friendlyError(error) });
+        window.setTimeout(() => {
+          sessionStorage.removeItem('bin-admin-security-session');
+          void signOut(auth).finally(() => {
+            window.location.href = '/login?reason=recent-auth-required';
+          });
+        }, 3000);
         return;
       }
       setTotpNotice({ type: 'error', text: friendlyError(error) });

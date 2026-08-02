@@ -1,6 +1,6 @@
 // Dedicated BIN GROUP operational admin application.
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { Box, Button, Typography, CssBaseline, CircularProgress, Alert } from '@mui/material';
 import { LogOut, User as UserIcon } from 'lucide-react';
@@ -80,8 +80,21 @@ import { functions as adminFunctions } from './lib/firebase';
 const cacheRtl = createCache({ key: 'muirtl-admin', stylisPlugins: [prefixer, rtlPlugin] });
 const cacheLtr = createCache({ key: 'muiltr-admin' });
 
+function AuthenticatedLoginRedirect() {
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const returnTo = queryParams.get('returnTo');
+    let destination = '/dashboard';
+    
+    if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+        destination = returnTo;
+    }
+    
+    return <Navigate to={destination} replace />;
+}
+
 function AppContent() {
-    const { isAuthenticated, loading, error } = useAuth();
+    const { isAuthenticated, status, loading, error } = useAuth();
     const { t, isRTL } = useLanguage();
 
     if (loading) {
@@ -97,7 +110,13 @@ function AppContent() {
 
     return (
         <Routes>
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login" element={
+                isAuthenticated && status === 'authorized' ? (
+                    <AuthenticatedLoginRedirect />
+                ) : (
+                    <LoginPage />
+                )
+            } />
 
             {isAuthenticated && (
                 <Route element={<Layout />}>
@@ -142,7 +161,6 @@ function AppContent() {
                     <Route path="/ops/rfq" element={<ProtectedRoute adminOnly><RfqTrustWorkflowPage /></ProtectedRoute>} />
                     <Route path="/ops/vendors" element={<ProtectedRoute adminOnly><VendorCommandCenterPage /></ProtectedRoute>} />
                     <Route path="/ops/data-governance" element={<ProtectedRoute adminOnly><DataGovernanceAuditPage /></ProtectedRoute>} />
-                    <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
                     <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
@@ -157,6 +175,7 @@ function AppContent() {
                     <Route path="/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
                     <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
                     <Route path="/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+                    <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
 
                     <Route path="/ops/amenity-control" element={<ProtectedRoute adminOnly><AmenityControlPage /></ProtectedRoute>} />
                     <Route path="/ops/announcements" element={<ProtectedRoute adminOnly><AnnouncementsPage /></ProtectedRoute>} />

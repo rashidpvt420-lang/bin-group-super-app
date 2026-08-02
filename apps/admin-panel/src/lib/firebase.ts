@@ -18,7 +18,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -52,6 +52,8 @@ const firebaseConfig: BinFirebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
+let appCheckInstance: any = null;
+
 if (typeof window !== 'undefined') {
     const enableAppCheck = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
     const isLocal = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
@@ -83,7 +85,7 @@ if (typeof window !== 'undefined') {
 
         if (siteKey) {
             try {
-                initializeAppCheck(app, {
+                appCheckInstance = initializeAppCheck(app, {
                     provider: new ReCaptchaV3Provider(siteKey),
                     isTokenAutoRefreshEnabled: true
                 });
@@ -101,6 +103,25 @@ if (typeof window !== 'undefined') {
         console.log('App Check is disabled via environment configuration.');
     }
 }
+
+export const verifyAdminAppCheckToken = async () => {
+    if (!appCheckInstance) {
+        const isLocal = typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'));
+        const appCheckRequired = process.env.NODE_ENV === 'production' && !isLocal;
+        if (!appCheckRequired) {
+            return { initialized: false, provider: 'none', hostname: window?.location?.hostname, success: true };
+        }
+        return { initialized: false, provider: 'recaptcha-v3', hostname: window?.location?.hostname, success: false, error: 'ADMIN_APPCHECK_NOT_INITIALIZED' };
+    }
+    try {
+        await getAppCheckToken(appCheckInstance, true);
+        return { initialized: true, provider: 'recaptcha-v3', hostname: window?.location?.hostname, success: true };
+    } catch (err: any) {
+        const code = String(err?.code || '').toLowerCase();
+        const mappedError = code.includes('recaptcha') ? 'ADMIN_APPCHECK_RECAPTCHA_FAILED' : 'ADMIN_APPCHECK_TOKEN_FAILED';
+        return { initialized: true, provider: 'recaptcha-v3', hostname: window?.location?.hostname, success: false, error: mappedError, sanitizedCode: code };
+    }
+};
 
 const db = getFirestore(app);
 const auth = getAuth(app);

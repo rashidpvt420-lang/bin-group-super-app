@@ -11,6 +11,7 @@ import { getMultiFactorResolver, sendPasswordResetEmail, signOut } from 'firebas
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ state: null, search: '?email=admin@bingroup.com' }),
 }));
 
 jest.mock('../../context/AuthContext', () => ({
@@ -86,6 +87,7 @@ describe('UnifiedLogin', () => {
       error: null,
       isAuthenticated: false,
       status: 'idle',
+      retryAuthorization: jest.fn(),
     });
 
     g.__mockSignIn.mockReset();
@@ -205,6 +207,7 @@ describe('UnifiedLogin', () => {
       error: 'Invalid Admin Claims',
       isAuthenticated: false,
       status: 'failed',
+      retryAuthorization: jest.fn(),
     });
     
     rerender(<UnifiedLogin />);
@@ -218,6 +221,7 @@ describe('UnifiedLogin', () => {
       error: 'Context Error Message',
       isAuthenticated: false,
       status: 'failed',
+      retryAuthorization: jest.fn(),
     });
     render(<UnifiedLogin />);
     expect(screen.getByText('Context Error Message')).toBeInTheDocument();
@@ -228,6 +232,7 @@ describe('UnifiedLogin', () => {
       error: null,
       isAuthenticated: false,
       status: 'verifying-token',
+      retryAuthorization: jest.fn(),
     });
     render(<UnifiedLogin />);
     expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
@@ -238,6 +243,7 @@ describe('UnifiedLogin', () => {
       error: null,
       isAuthenticated: false,
       status: 'verifying-profile',
+      retryAuthorization: jest.fn(),
     });
     render(<UnifiedLogin />);
     expect(screen.getByText('common.auth_sync')).toBeInTheDocument();
@@ -260,7 +266,7 @@ describe('UnifiedLogin', () => {
     fireEvent.click(screen.getByText(/Reset secure session/i));
     
     await waitFor(() => {
-      expect(window.location.replace).toHaveBeenCalledWith('/login?session=reset');
+      expect(window.location.replace).toHaveBeenCalledWith('/login?email=admin%40bingroup.com&session=reset');
     });
   });
 });

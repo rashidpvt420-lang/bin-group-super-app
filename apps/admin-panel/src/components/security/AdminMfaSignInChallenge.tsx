@@ -11,7 +11,7 @@ import { auth } from '../../lib/firebase';
 
 type Props = {
   resolver: MultiFactorResolver;
-  onResolved: () => void;
+  onResolved: (credential: any) => void;
   onCancel: () => void;
 };
 
@@ -150,9 +150,9 @@ export default function AdminMfaSignInChallenge({ resolver, onResolved, onCancel
         : PhoneMultiFactorGenerator.assertion(
             PhoneAuthProvider.credential(verificationId, code),
           );
-      await resolver.resolveSignIn(assertion);
+      const credential = await resolver.resolveSignIn(assertion);
       clearVerifier();
-      onResolved();
+      onResolved(credential);
     } catch (mfaError) {
       setError(friendlyError(mfaError));
     } finally {
