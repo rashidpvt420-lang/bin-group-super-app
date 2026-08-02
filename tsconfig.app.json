@@ -28,7 +28,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
       "@bin/shared": ["./src/shared-exports.ts"],
       "@/*": ["./src/*"],
