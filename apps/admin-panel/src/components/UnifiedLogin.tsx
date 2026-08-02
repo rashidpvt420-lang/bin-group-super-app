@@ -30,7 +30,8 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, code: string): Promise
 });
 
 export default function UnifiedLogin() {
-    const { error: authError, isAuthenticated, status, retryAuthorization } = useAuth();
+    const { error: authError, isAuthenticated, status: rawStatus, retryAuthorization } = useAuth();
+    const status = rawStatus as any;
     const { t, isRTL } = useLanguage();
     const navigate = useNavigate();
     
