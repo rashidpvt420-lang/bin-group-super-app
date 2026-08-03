@@ -1,4 +1,5 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc as firestoreAddDoc,
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp,
@@ -19,6 +20,7 @@ import {
 import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import type { AppCheck } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -37,6 +39,7 @@ const clean = (value?: string): string => {
 };
 
 const ADMIN_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
+const ADMIN_FIREBASE_APP_NAME = 'bin-group-admin';
 
 // CRA/CRACO only embeds process.env.REACT_APP_* when references are static.
 // The Admin panel must never consume the main web app's generic app ID. Use
@@ -50,7 +53,12 @@ const firebaseConfig: BinFirebaseConfig = {
     appId: clean(process.env.REACT_APP_ADMIN_FIREBASE_APP_ID) || ADMIN_FIREBASE_APP_ID
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// Never reuse the unnamed default app. Shared packages can evaluate their own
+// Firebase initializer before the Admin module, and import order must not be
+// allowed to select a different web-app identity for privileged authentication.
+const existingAdminApp = getApps().find((candidate) => candidate.name === ADMIN_FIREBASE_APP_NAME);
+const app: FirebaseApp = existingAdminApp || initializeApp(firebaseConfig, ADMIN_FIREBASE_APP_NAME);
+let appCheck: AppCheck | null = null;
 
 if (typeof window !== 'undefined') {
     const enableAppCheck = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
@@ -83,7 +91,7 @@ if (typeof window !== 'undefined') {
 
         if (siteKey) {
             try {
-                initializeAppCheck(app, {
+                appCheck = initializeAppCheck(app, {
                     provider: new ReCaptchaV3Provider(siteKey),
                     isTokenAutoRefreshEnabled: true
                 });
@@ -244,7 +252,7 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
 }) as typeof firestoreAddDoc;
 
 export {
-    app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
+    app, appCheck, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
     onAuthStateChanged,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
     ref, uploadBytes, getDownloadURL, signInWithRedirect, signInWithEmailAndPassword, setPersistence, browserLocalPersistence
