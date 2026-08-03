@@ -20,8 +20,8 @@ Do not use a Google Workspace Admin Console 2-step-verification setting for this
 1. Open Firebase Console and select **bin-group-57c60**.
 2. Open **Security → App Check → Apps**.
 3. Find the web app whose app ID ends with `285cb53bc26626d699f3b6`.
-4. Register or manage that exact app with **reCAPTCHA v3**.
-5. In the reCAPTCHA v3 console, confirm that the matching site key allows both production hosts:
+4. Register or manage that exact app with **reCAPTCHA Enterprise**.
+5. In Google Cloud reCAPTCHA Enterprise, confirm that the matching website key allows the required hosts:
    - `bin-group-admin-panel.web.app`
    - `bin-group-57c60.web.app`
 6. Confirm that the matching public site key is stored only in the protected GitHub production environment as `VITE_APP_CHECK_SITE_KEY`.
@@ -40,6 +40,7 @@ In Firebase Console for **bin-group-57c60**:
    - `bin-group-admin-panel.web.app`
    - `bin-group-57c60.web.app`
    - `bin-group-57c60.firebaseapp.com`
+   - the approved temporary Founder recovery hostname while the controlled recovery is active.
 4. Open **Users** and confirm `ceo@bin-groups.com` exists, is enabled, and has a verified email.
 5. Do not create a second Founder account to work around a broken account.
 
@@ -68,9 +69,9 @@ Verify through the approved Admin recovery tooling that:
 
 Both the Admin AuthContext and the protected Admin security Functions read `users/{uid}`. Do not create a parallel `admin_users/{uid}` document as a workaround. Do not weaken Firestore rules, bypass App Check, remove MFA, or grant broad Admin claims from the browser.
 
-## 5. Production proof order
+## 5. Exact-SHA proof order
 
-Run the protected production workflow only after all console registrations and protected secrets are complete. The required order is:
+Run the verification-only Founder preflight only after all console registrations, protected secrets, and manual MFA enrollment are complete. The required evidence order is:
 
 1. exact-current-`main` build;
 2. Admin Hosting deployment;
@@ -80,4 +81,4 @@ Run the protected production workflow only after all console registrations and p
 6. Founder claims and `users/{uid}` authorization;
 7. exact-SHA evidence artifacts.
 
-A static bundle check, a successful Hosting upload, or a correct password alone is not production login proof. Public release, marketing, Stripe, and Bank Transfer remain disabled until the exact-SHA protected evidence gates pass.
+Do not dispatch the Firebase production deployment workflow as part of recovery verification. A static bundle check, a successful Hosting preview upload, or a correct password alone is not production login proof. Public release, marketing, Stripe, and Bank Transfer remain disabled until the exact-SHA protected evidence gates pass.

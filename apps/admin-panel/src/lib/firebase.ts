@@ -238,7 +238,10 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     const dedupeKey = `${action}|${targetType}|${targetId}`;
     let pending = pendingAuditWrites.get(dedupeKey);
     if (!pending) {
-        const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
+        // Audit logging is best-effort and must never invalidate an otherwise
+        // valid Admin session. Use the raw callable so an audit-only 401 does
+        // not trigger the global stale-session sign-out wrapper.
+        const logUserAuditAction = firebaseHttpsCallable(functions, 'logUserAuditAction');
         pending = logUserAuditAction({ action, targetType, targetId, metadata: auditMetadata }).then(() => undefined);
         pendingAuditWrites.set(dedupeKey, pending);
         const cleanup = () => queueMicrotask(() => {

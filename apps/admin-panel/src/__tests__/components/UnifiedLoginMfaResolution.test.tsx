@@ -64,7 +64,7 @@ jest.mock('firebase/firestore', () => ({ getFirestore: jest.fn(), connectFiresto
 jest.mock('firebase/storage', () => ({ getStorage: jest.fn() }));
 jest.mock('firebase/functions', () => ({ getFunctions: jest.fn() }));
 jest.mock('firebase/messaging', () => ({ getMessaging: jest.fn() }));
-jest.mock('firebase/app-check', () => ({ initializeAppCheck: jest.fn(), ReCaptchaV3Provider: jest.fn() }));
+jest.mock('firebase/app-check', () => ({ initializeAppCheck: jest.fn(), ReCaptchaEnterpriseProvider: jest.fn() }));
 
 describe('UnifiedLogin MFA authorization handoff', () => {
   const originalLocation = window.location;
