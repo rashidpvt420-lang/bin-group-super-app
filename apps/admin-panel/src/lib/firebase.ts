@@ -18,7 +18,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -84,7 +84,7 @@ if (typeof window !== 'undefined') {
         if (siteKey) {
             try {
                 initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider(siteKey),
+                    provider: new ReCaptchaEnterpriseProvider(siteKey),
                     isTokenAutoRefreshEnabled: true
                 });
                 console.log('App Check active.');
@@ -230,7 +230,10 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     const dedupeKey = `${action}|${targetType}|${targetId}`;
     let pending = pendingAuditWrites.get(dedupeKey);
     if (!pending) {
-        const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction');
+        // Audit logging is best-effort and must never invalidate an otherwise
+        // valid Admin session. Use the raw callable so an audit-only 401 does
+        // not trigger the global stale-session sign-out wrapper.
+        const logUserAuditAction = firebaseHttpsCallable(functions, 'logUserAuditAction');
         pending = logUserAuditAction({ action, targetType, targetId, metadata: auditMetadata }).then(() => undefined);
         pendingAuditWrites.set(dedupeKey, pending);
         const cleanup = () => queueMicrotask(() => {

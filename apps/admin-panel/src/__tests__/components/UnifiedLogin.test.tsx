@@ -20,7 +20,7 @@ jest.mock('../../context/AuthContext', () => ({
 jest.mock('@bin/shared', () => ({
   __esModule: true,
   useLanguage: () => ({ t: (k: string) => k, isRTL: false }),
-}));
+}), { virtual: true });
 
 jest.mock('../../components/security/AdminMfaSignInChallenge', () => {
   return function MockAdminMfaSignInChallenge() {
@@ -41,7 +41,7 @@ jest.mock('firebase/auth', () => {
   const g = global as any;
   if (!g.__mockSignIn) g.__mockSignIn = jest.fn();
   if (!g.__mockSetPersistence) g.__mockSetPersistence = jest.fn(() => Promise.resolve());
-  
+
   return {
     __esModule: true,
     getAuth: jest.fn(() => ({ config: { authDomain: 'test-domain.firebaseapp.com' } })),
@@ -59,7 +59,7 @@ jest.mock('firebase/firestore', () => ({ getFirestore: jest.fn(), connectFiresto
 jest.mock('firebase/storage', () => ({ getStorage: jest.fn() }));
 jest.mock('firebase/functions', () => ({ getFunctions: jest.fn() }));
 jest.mock('firebase/messaging', () => ({ getMessaging: jest.fn() }));
-jest.mock('firebase/app-check', () => ({ initializeAppCheck: jest.fn(), ReCaptchaV3Provider: jest.fn() }));
+jest.mock('firebase/app-check', () => ({ initializeAppCheck: jest.fn(), ReCaptchaEnterpriseProvider: jest.fn() }));
 
 describe('UnifiedLogin', () => {
   const originalLocation = window.location;
@@ -90,7 +90,7 @@ describe('UnifiedLogin', () => {
 
     g.__mockSignIn.mockReset();
     g.__mockSetPersistence.mockReset();
-    
+
     g.__mockSignIn.mockReturnValue(new Promise(() => {}));
     g.__mockSetPersistence.mockResolvedValue(undefined);
     (signOut as jest.Mock).mockResolvedValue(undefined);
@@ -112,7 +112,7 @@ describe('UnifiedLogin', () => {
   test('3. sets loading and calls signInWithEmailAndPassword', async () => {
     g.__mockSignIn.mockResolvedValueOnce({ user: { uid: '123' } });
     render(<UnifiedLogin />);
-    
+
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'test@admin.com' } });
     fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'password123' } });
     fireEvent.click(screen.getByRole('button', { name: 'login.signin' }));
@@ -126,7 +126,7 @@ describe('UnifiedLogin', () => {
   test('4. handles auth/wrong-password mapped error', async () => {
     const error = Object.assign(new Error('Wrong'), { code: 'auth/wrong-password' });
     g.__mockSignIn.mockRejectedValueOnce(error);
-    
+
     render(<UnifiedLogin />);
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'test@admin.com' } });
     fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'wrongpass' } });
@@ -141,7 +141,7 @@ describe('UnifiedLogin', () => {
     const mfaError = Object.assign(new Error('MFA'), { code: 'auth/multi-factor-auth-required' });
     g.__mockSignIn.mockRejectedValueOnce(mfaError);
     (getMultiFactorResolver as jest.Mock).mockReturnValueOnce({ hints: [] });
-    
+
     render(<UnifiedLogin />);
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'test@admin.com' } });
     fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'password123' } });
@@ -156,7 +156,7 @@ describe('UnifiedLogin', () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const error = Object.assign(new Error('Network'), { code: 'auth/network-request-failed' });
     g.__mockSignIn.mockRejectedValueOnce(error);
-    
+
     render(<UnifiedLogin />);
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'secret@admin.com' } });
     fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'SUPER_SECRET_PASSWORD' } });
@@ -174,16 +174,16 @@ describe('UnifiedLogin', () => {
   test('7. handles ADMIN_SIGN_IN_TIMEOUT', async () => {
     jest.useFakeTimers();
     g.__mockSignIn.mockReturnValueOnce(new Promise(() => {}));
-    
+
     render(<UnifiedLogin />);
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'test@admin.com' } });
     fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'password123' } });
     fireEvent.click(screen.getByRole('button', { name: 'login.signin' }));
-    
+
     await waitFor(() => {
       expect(g.__mockSignIn).toHaveBeenCalled();
     });
-    
+
     act(() => {
       jest.advanceTimersByTime(25000); // Exceeds 20_000ms
     });
@@ -196,7 +196,7 @@ describe('UnifiedLogin', () => {
 
   test('8. clears loading state if useAuth status becomes failed', () => {
     const { rerender } = render(<UnifiedLogin />);
-    
+
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'test@test.com' } });
     fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: 'login.signin' }));
@@ -206,9 +206,9 @@ describe('UnifiedLogin', () => {
       isAuthenticated: false,
       status: 'failed',
     });
-    
+
     rerender(<UnifiedLogin />);
-    
+
     expect(screen.getByText('Invalid Admin Claims')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'login.signin' })).not.toBeDisabled();
   });
@@ -246,7 +246,7 @@ describe('UnifiedLogin', () => {
   test('12. handles reset password email success', async () => {
     (sendPasswordResetEmail as jest.Mock).mockResolvedValueOnce(undefined);
     render(<UnifiedLogin />);
-    
+
     fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'admin@bingroup.com' } });
     fireEvent.click(screen.getByText('login.forgot_password'));
 
@@ -258,7 +258,7 @@ describe('UnifiedLogin', () => {
   test('13. reset secure session correctly signs out and replaces window location', async () => {
     render(<UnifiedLogin />);
     fireEvent.click(screen.getByText(/Reset secure session/i));
-    
+
     await waitFor(() => {
       expect(window.location.replace).toHaveBeenCalledWith('/login?session=reset');
     });
