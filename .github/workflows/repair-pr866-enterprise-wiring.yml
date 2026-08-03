@@ -98,7 +98,7 @@ jobs:
           node scripts/verify-audit-write-bridge.mjs
           node --test tests/launch/admin-production-security-registration.test.mjs
 
-      - name: Commit repair and remove this one-shot workflow
+      - name: Commit repair and report exact commit
         run: |
           set -euo pipefail
           git rm .github/workflows/repair-pr866-enterprise-wiring.yml
@@ -108,4 +108,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "fix(admin): finish Enterprise recovery wiring"
+          echo "REPAIR_COMMIT_SHA=$(git rev-parse HEAD)"
           git push origin HEAD:fix/admin-enterprise-appcheck-provider
