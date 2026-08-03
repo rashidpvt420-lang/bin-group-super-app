@@ -3,6 +3,8 @@
 import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 
+const ADMIN_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
+
 const required = [
   'VITE_APP_CHECK_SITE_KEY',
   'VITE_FIREBASE_API_KEY',
@@ -39,6 +41,7 @@ const adminLines = [
   ['REACT_APP_ENABLE_HR_MODULE', 'true'],
   ['REACT_APP_APP_CHECK_SITE_KEY', process.env.VITE_APP_CHECK_SITE_KEY],
   ['REACT_APP_FIREBASE_API_KEY', process.env.VITE_FIREBASE_API_KEY],
+  ['REACT_APP_ADMIN_FIREBASE_APP_ID', ADMIN_FIREBASE_APP_ID],
   ['REACT_APP_FIREBASE_APP_ID', process.env.VITE_FIREBASE_APP_ID],
   ['REACT_APP_FIREBASE_MESSAGING_SENDER_ID', process.env.VITE_FIREBASE_MESSAGING_SENDER_ID],
   ['REACT_APP_FIREBASE_AUTH_DOMAIN', 'bin-group-57c60.firebaseapp.com'],
@@ -55,4 +58,4 @@ copyFileSync('.env.production', '.env.local');
 mkdirSync(path.resolve('apps/admin-panel'), { recursive: true });
 writeFileSync('apps/admin-panel/.env.production', serialize(adminLines), { mode: 0o600 });
 copyFileSync('apps/admin-panel/.env.production', 'apps/admin-panel/.env.local');
-console.log('[production-env] production environment files created with App Check and HR enabled');
+console.log('[production-env] production environment files created with App Check, HR and canonical Admin Firebase identity enabled');
