@@ -65,6 +65,8 @@ test('Admin App Check verifier is app-specific and never persists the returned t
 test('frontend, Functions and operator guide agree on users/{uid} authorization profile', () => {
   assert.match(authContext, /doc\(db, 'users', firebaseUser\.uid\)/);
   assert.match(adminSecurityFunction, /db\.collection\("users"\)\.doc\(auth\.uid\)/);
+  assert.match(securityGuide, /Canonical Admin authorization profile: `users\/\{uid\}`/);
   assert.match(securityGuide, /`users\/\{uid\}` exists and is active/);
-  assert.doesNotMatch(securityGuide, /admin_users\/\{uid\}/);
+  assert.match(securityGuide, /Do not create a parallel `admin_users\/\{uid\}` document as a workaround/);
+  assert.doesNotMatch(securityGuide, /Canonical Admin authorization profile: `admin_users\/\{uid\}`/);
 });
