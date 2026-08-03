@@ -1,0 +1,82 @@
+name: One-shot PR 866 Enterprise wiring repair
+
+on:
+  push:
+    branches:
+      - fix/admin-enterprise-appcheck-provider
+    paths:
+      - .github/workflows/repair-pr866-enterprise-wiring.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pr866-enterprise-wiring
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.repository == 'rashidpvt420-lang/bin-group-super-app' && github.ref == 'refs/heads/fix/admin-enterprise-appcheck-provider'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: fix/admin-enterprise-appcheck-provider
+          fetch-depth: 0
+
+      - name: Patch only the Admin Enterprise environment wiring
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/firebase-production-deploy.yml')
+          text = path.read_text(encoding='utf-8')
+          dollar = chr(36)
+
+          def expression(name: str) -> str:
+              return f"{dollar}{{{{ {name} }}}}"
+
+          old_site = f"REACT_APP_APP_CHECK_SITE_KEY: {expression('secrets.VITE_APP_CHECK_SITE_KEY')}"
+          new_site = f"REACT_APP_APP_CHECK_SITE_KEY: {expression('secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY')}"
+          old_app_id = f"REACT_APP_FIREBASE_APP_ID: {expression('secrets.VITE_FIREBASE_APP_ID')}"
+          new_app_id = "REACT_APP_ADMIN_FIREBASE_APP_ID: 1:123413252227:web:285cb53bc26626d699f3b6"
+          public_marker = f"  VITE_APP_CHECK_SITE_KEY: {expression('secrets.VITE_APP_CHECK_SITE_KEY')}\n"
+          enterprise_env = f"  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: {expression('secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY')}\n"
+
+          if text.count(old_site) != 2:
+              raise SystemExit(f'Expected exactly 2 legacy Admin site-key mappings, found {text.count(old_site)}')
+          if text.count(old_app_id) != 2:
+              raise SystemExit(f'Expected exactly 2 legacy Admin app-ID mappings, found {text.count(old_app_id)}')
+          if text.count(public_marker) != 1:
+              raise SystemExit(f'Expected exactly 1 public Vite site-key marker, found {text.count(public_marker)}')
+          if enterprise_env in text:
+              raise SystemExit('Dedicated Enterprise environment mapping already exists; refusing ambiguous rewrite')
+
+          text = text.replace(old_site, new_site)
+          text = text.replace(old_app_id, new_app_id)
+          text = text.replace(public_marker, public_marker + enterprise_env, 1)
+
+          if old_site in text or old_app_id in text:
+              raise SystemExit('Legacy Admin mapping remained after replacement')
+          if text.count(new_site) != 2:
+              raise SystemExit('Enterprise Admin site-key mapping count is not exactly 2')
+          if text.count(new_app_id) != 2:
+              raise SystemExit('Canonical Admin app-ID mapping count is not exactly 2')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+          node --test tests/launch/admin-production-security-registration.test.mjs
+
+      - name: Commit repair and remove this one-shot workflow
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/repair-pr866-enterprise-wiring.yml
+          git add .github/workflows/firebase-production-deploy.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(deploy): wire Admin builds to Enterprise App Check"
+          git push origin HEAD:fix/admin-enterprise-appcheck-provider
