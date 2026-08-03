@@ -52,21 +52,26 @@ jobs:
           new_site = f"REACT_APP_APP_CHECK_SITE_KEY: {expression('secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY')}"
           old_app_id = f"REACT_APP_FIREBASE_APP_ID: {expression('secrets.VITE_FIREBASE_APP_ID')}"
           new_app_id = "REACT_APP_ADMIN_FIREBASE_APP_ID: 1:123413252227:web:285cb53bc26626d699f3b6"
-          public_marker = f"  VITE_APP_CHECK_SITE_KEY: {expression('secrets.VITE_APP_CHECK_SITE_KEY')}\n"
-          enterprise_env = f"  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: {expression('secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY')}\n"
+          top_level_public = f"  VITE_APP_CHECK_SITE_KEY: {expression('secrets.VITE_APP_CHECK_SITE_KEY')}\n  VITE_ENABLE_FIREBASE_APPCHECK: 'true'\n"
+          top_level_enterprise = (
+              f"  VITE_APP_CHECK_SITE_KEY: {expression('secrets.VITE_APP_CHECK_SITE_KEY')}\n"
+              f"  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: {expression('secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY')}\n"
+              "  VITE_ENABLE_FIREBASE_APPCHECK: 'true'\n"
+          )
+          malformed_enterprise = f"\n  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: {expression('secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY')}\n          E2E_BASE_URL:"
 
           if text.count(old_site) != 2:
               raise SystemExit(f'Expected exactly 2 legacy Admin site-key mappings, found {text.count(old_site)}')
           if text.count(old_app_id) != 2:
               raise SystemExit(f'Expected exactly 2 legacy Admin app-ID mappings, found {text.count(old_app_id)}')
-          if text.count(public_marker) != 2:
-              raise SystemExit(f'Expected exactly 2 public Vite site-key markers, found {text.count(public_marker)}')
-          if enterprise_env in text:
+          if text.count(top_level_public) != 1:
+              raise SystemExit(f'Expected exactly 1 top-level public App Check block, found {text.count(top_level_public)}')
+          if 'FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY:' in text:
               raise SystemExit('Dedicated Enterprise environment mapping already exists; refusing ambiguous rewrite')
 
           text = text.replace(old_site, new_site)
           text = text.replace(old_app_id, new_app_id)
-          text = text.replace(public_marker, public_marker + enterprise_env)
+          text = text.replace(top_level_public, top_level_enterprise, 1)
 
           if old_site in text or old_app_id in text:
               raise SystemExit('Legacy Admin mapping remained after replacement')
@@ -74,8 +79,10 @@ jobs:
               raise SystemExit('Enterprise Admin site-key mapping count is not exactly 2')
           if text.count(new_app_id) != 2:
               raise SystemExit('Canonical Admin app-ID mapping count is not exactly 2')
-          if text.count(enterprise_env) != 2:
-              raise SystemExit('Dedicated Enterprise environment mapping count is not exactly 2')
+          if text.count('  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY:') != 1:
+              raise SystemExit('Enterprise workflow-scope mapping count is not exactly 1')
+          if malformed_enterprise in text:
+              raise SystemExit('Enterprise variable was inserted at invalid E2E-step indentation')
 
           workflow_path.write_text(text, encoding='utf-8')
 
