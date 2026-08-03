@@ -7,6 +7,7 @@ const requiredBridges = [
   'apps/admin-panel/src/lib/firebase.ts',
   'packages/shared/src/lib/firebase.ts',
 ];
+const adminBridgePath = 'apps/admin-panel/src/lib/firebase.ts';
 
 function read(path) {
   if (!existsSync(path)) {
@@ -24,7 +25,23 @@ for (const path of requiredBridges) {
   const source = read(path);
   assert(source.includes('addDoc as firestoreAddDoc'), `${path} must alias the native Firestore addDoc export.`);
   assert(source.includes("collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs'"), `${path} must intercept both legacy audit collection names.`);
-  assert(source.includes("httpsCallable(functions, 'logUserAuditAction')"), `${path} must route audit events through logUserAuditAction.`);
+
+  if (path === adminBridgePath) {
+    assert(
+      source.includes("firebaseHttpsCallable(functions, 'logUserAuditAction')"),
+      `${path} must route best-effort audit events through the raw logUserAuditAction callable.`,
+    );
+    assert(
+      !source.includes("const logUserAuditAction = httpsCallable(functions, 'logUserAuditAction')"),
+      `${path} must not route best-effort audit events through the session-expiry wrapper.`,
+    );
+  } else {
+    assert(
+      source.includes("httpsCallable(functions, 'logUserAuditAction')"),
+      `${path} must route audit events through logUserAuditAction.`,
+    );
+  }
+
   assert(source.includes('return firestoreAddDoc(reference, data);'), `${path} must preserve native writes for non-audit collections.`);
   assert(source.includes('pendingAuditWrites'), `${path} must deduplicate simultaneous legacy dual-audit writes.`);
   assert(source.includes('inferLegacyAuditTarget'), `${path} must normalize legacy audit target fields.`);
@@ -91,4 +108,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Audit write bridge verification passed. Legacy audit writes are callable-backed and rules-compatible.');
+console.log('Audit write bridge verification passed. Legacy audit writes are callable-backed, rules-compatible, and Admin audit failures cannot expire a valid session.');
