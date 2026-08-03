@@ -42,7 +42,7 @@ test('Admin source and protected workflow agree on the production Firebase app',
   assert.ok(adminFirebase.includes(`const ADMIN_FIREBASE_APP_ID = '${canonical.adminAppId}'`));
   assert.ok(adminFirebase.includes(`'${canonical.projectId}'`));
   assert.ok(adminFirebase.includes(`'${canonical.authDomain}'`));
-  assert.match(adminFirebase, /ReCaptchaEnterpriseProvider/);
+  assert.match(adminFirebase, /provider:\s*new\s+ReCaptchaEnterpriseProvider\s*\(/);
   assert.doesNotMatch(adminFirebase, /new\s+ReCaptchaV3Provider\s*\(/);
   assert.ok(adminFirebase.includes('process.env.REACT_APP_APP_CHECK_SITE_KEY'));
   assert.equal(adminFirebase.includes('process.env.VITE_FIREBASE_APPCHECK_SITE_KEY'), false);
