@@ -38,6 +38,18 @@ test('Admin credentials stay behind an exact runtime App Check gate', () => {
   assert.doesNotMatch(gate, /FIREBASE_APPCHECK_DEBUG_TOKEN\s*=\s*true/);
 });
 
+test('already-authorized sessions leave /login before the credential gate can remount', () => {
+  assert.match(loginPage, /const \{ isAuthenticated, status \} = useAuth\(\)/);
+  assert.match(loginPage, /const \{ search \} = useLocation\(\)/);
+  assert.match(loginPage, /if \(isAuthenticated && status === 'authorized'\)/);
+  assert.match(loginPage, /<Navigate to=\{adminReturnToFromSearch\(search\)\} replace \/>/);
+
+  const authorizedRedirect = loginPage.indexOf("if (isAuthenticated && status === 'authorized')");
+  const gateMount = loginPage.indexOf('<AdminAppCheckGate>');
+  assert.ok(authorizedRedirect >= 0, 'authorized login-route redirect must exist');
+  assert.ok(gateMount > authorizedRedirect, 'authorized sessions must redirect before the App Check/login gate mounts');
+});
+
 test('Admin runtime uses a dedicated named Firebase app and one exported App Check instance', () => {
   assert.ok(adminFirebase.includes(`const ADMIN_FIREBASE_APP_ID = '${canonical.appId}'`));
   assert.match(adminFirebase, /const ADMIN_FIREBASE_APP_NAME = 'bin-group-admin'/);
