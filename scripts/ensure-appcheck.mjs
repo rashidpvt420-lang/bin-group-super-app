@@ -7,6 +7,9 @@ import { existsSync } from 'node:fs';
 import { config as loadDotenv } from 'dotenv';
 import path from 'node:path';
 
+const EXPECTED_PROJECT = 'bin-group-57c60';
+const EXPECTED_ADMIN_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
+
 const possibleConfigPaths = [
   path.resolve(process.cwd(), '.env.e2e'),
   path.resolve(process.cwd(), 'bin-group-super-app/.env.e2e'),
@@ -39,13 +42,20 @@ function mask(token) {
 
 const token = String(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || '').trim();
 const mainAppId = String(process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_WEB_APP_ID || '').trim();
-const adminAppId = String(process.env.REACT_APP_FIREBASE_APP_ID || process.env.ADMIN_FIREBASE_APP_ID || '').trim();
-const expectedProject = 'bin-group-57c60';
+const adminAppId = String(
+  process.env.REACT_APP_ADMIN_FIREBASE_APP_ID ||
+  process.env.ADMIN_FIREBASE_APP_ID ||
+  EXPECTED_ADMIN_APP_ID,
+).trim();
 
-console.log(`[APPCHECK_ENSURE] project_expected=${expectedProject}`);
-console.log(`[APPCHECK_ENSURE] main_web_app_id=${mainAppId ? `${mainAppId.slice(0, 12)}…` : '(not set — register token for main web app in Console)'}`);
-console.log(`[APPCHECK_ENSURE] admin_web_app_id=${adminAppId ? `${adminAppId.slice(0, 12)}…` : '(not set — register SAME token for admin web app in Console)'}`);
+console.log(`[APPCHECK_ENSURE] project_expected=${EXPECTED_PROJECT}`);
+console.log(`[APPCHECK_ENSURE] main_web_app_id=${mainAppId ? `${mainAppId.slice(0, 12)}…` : '(not set)'}`);
+console.log(`[APPCHECK_ENSURE] admin_web_app_id=${`${adminAppId.slice(0, 12)}…${adminAppId.slice(-6)}`}`);
 
+if (adminAppId !== EXPECTED_ADMIN_APP_ID) {
+  console.error('[APPCHECK_ENSURE] FAIL Admin Firebase app ID does not match the canonical production web app');
+  process.exit(1);
+}
 if (!token) {
   console.error('[APPCHECK_ENSURE] FAIL missing VITE_FIREBASE_APPCHECK_DEBUG_TOKEN');
   process.exit(1);
@@ -61,6 +71,6 @@ if (!UUID_RE.test(token)) {
 
 console.log(`[APPCHECK_ENSURE] token_fingerprint=${mask(token)}`);
 console.log(
-  '[APPCHECK_ENSURE] ok — register this UUID under Firebase Console → App Check → BIN GROUP Web → Debug tokens.',
+  '[APPCHECK_ENSURE] ok — register this UUID for the exact production web app in Firebase Console App Check; the registration must permit both the public and Admin Hosting domains.',
 );
 process.exit(0);
