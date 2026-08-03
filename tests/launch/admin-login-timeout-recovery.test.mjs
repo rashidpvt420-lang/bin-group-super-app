@@ -10,12 +10,18 @@ const authContext = await readFile(new URL('../../apps/admin-panel/src/context/A
 
 test('Admin password login is bounded and exposes targeted secure-session recovery', () => {
   assert.match(login, /AUTH_PERSISTENCE_TIMEOUT_MS\s*=\s*8_000/);
+  assert.match(login, /AUTH_MEMORY_PERSISTENCE_TIMEOUT_MS\s*=\s*3_000/);
   assert.match(login, /AUTH_SIGN_IN_TIMEOUT_MS\s*=\s*20_000/);
   assert.doesNotMatch(login, /AUTH_VERIFICATION_TIMEOUT_MS/);
   assert.doesNotMatch(login, /startAuthorizationTimer/);
   assert.doesNotMatch(login, /clearVerificationTimer/);
   assert.match(login, /browserSessionPersistence/);
-  assert.match(login, /withTimeout\(setPersistence\(auth, browserSessionPersistence\)/);
+  assert.match(login, /inMemoryPersistence/);
+  assert.match(login, /withTimeout\(\s*setPersistence\(auth, browserSessionPersistence\)/);
+  assert.match(login, /withTimeout\(\s*setPersistence\(auth, inMemoryPersistence\)/);
+  assert.match(login, /isSessionPersistenceUnavailable/);
+  assert.match(login, /ADMIN_MEMORY_PERSISTENCE_TIMEOUT/);
+  assert.match(login, /Sign-in was stopped before credentials were submitted/);
   assert.doesNotMatch(login, /setPersistence\(auth, browserLocalPersistence\)/);
   assert.match(login, /signInWithEmailAndPassword/);
   assert.match(login, /Reset secure session/i);

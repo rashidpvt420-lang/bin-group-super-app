@@ -51,6 +51,7 @@ jest.mock('firebase/auth', () => {
     getAuth: jest.fn(() => g.__mockFocusedAuth),
     browserLocalPersistence: 'browserLocalPersistence',
     browserSessionPersistence: 'browserSessionPersistence',
+    inMemoryPersistence: 'inMemoryPersistence',
     setPersistence: (...args: any[]) => g.__mockFocusedPersistence(...args),
     signInWithEmailAndPassword: (...args: any[]) => g.__mockFocusedSignIn(...args),
     getMultiFactorResolver: jest.fn(),
@@ -109,6 +110,36 @@ describe('UnifiedLogin MFA authorization handoff', () => {
 
     await waitFor(() => expect(screen.getByTestId('mfa-challenge')).toBeInTheDocument());
   };
+
+  test('falls back to a bounded in-memory session when mobile browser storage is unavailable', async () => {
+    g.__mockFocusedPersistence
+      .mockRejectedValueOnce(Object.assign(new Error('storage unavailable'), { code: 'auth/web-storage-unsupported' }))
+      .mockResolvedValueOnce(undefined);
+
+    render(<UnifiedLogin />);
+    await enterPrimaryCredential();
+
+    expect(g.__mockFocusedPersistence).toHaveBeenNthCalledWith(1, g.__mockFocusedAuth, 'browserSessionPersistence');
+    expect(g.__mockFocusedPersistence).toHaveBeenNthCalledWith(2, g.__mockFocusedAuth, 'inMemoryPersistence');
+    expect(g.__mockFocusedSignIn).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('admin-persistence-warning')).toHaveTextContent('this Admin session will end when the page reloads');
+  });
+
+  test('stops before credential submission when the protected in-memory fallback cannot initialize', async () => {
+    g.__mockFocusedPersistence
+      .mockRejectedValueOnce(Object.assign(new Error('storage unavailable'), { code: 'auth/web-storage-unsupported' }))
+      .mockRejectedValueOnce(Object.assign(new Error('memory timeout'), { code: 'ADMIN_MEMORY_PERSISTENCE_TIMEOUT' }));
+
+    render(<UnifiedLogin />);
+    fireEvent.change(screen.getByPlaceholderText('login.email'), { target: { value: 'founder@example.test' } });
+    fireEvent.change(screen.getByPlaceholderText('login.password'), { target: { value: 'not-a-real-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'login.signin' }));
+
+    expect(await screen.findByText('Secure in-memory Admin session could not be initialized. Sign-in was stopped before credentials were submitted.')).toBeInTheDocument();
+    expect(g.__mockFocusedPersistence).toHaveBeenCalledTimes(2);
+    expect(g.__mockFocusedSignIn).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('mfa-challenge')).not.toBeInTheDocument();
+  });
 
   test('resolved MFA recovers a published session when the auth-state listener does not start authorization', async () => {
     window.location.search = '?returnTo=%2Fprofile%3Ftab%3Dmfa';

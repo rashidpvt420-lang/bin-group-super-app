@@ -62,9 +62,14 @@ describe('AuthContext post-MFA authorization contract', () => {
     expect(unifiedLoginSource).toContain('isAuthenticated || auth.currentUser');
   });
 
-  test('uses session-scoped Firebase persistence so Admin login does not depend on IndexedDB local persistence', () => {
+  test('uses session persistence with a bounded fail-closed in-memory fallback and never local persistence', () => {
     expect(unifiedLoginSource).toContain('browserSessionPersistence');
+    expect(unifiedLoginSource).toContain('inMemoryPersistence');
     expect(unifiedLoginSource).toContain('setPersistence(auth, browserSessionPersistence)');
+    expect(unifiedLoginSource).toContain('setPersistence(auth, inMemoryPersistence)');
+    expect(unifiedLoginSource).toContain('AUTH_MEMORY_PERSISTENCE_TIMEOUT_MS');
+    expect(unifiedLoginSource).toContain("'ADMIN_MEMORY_PERSISTENCE_TIMEOUT'");
+    expect(unifiedLoginSource).toContain('Sign-in was stopped before credentials were submitted.');
     expect(unifiedLoginSource).not.toContain('setPersistence(auth, browserLocalPersistence)');
   });
 });
