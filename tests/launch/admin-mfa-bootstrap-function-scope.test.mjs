@@ -19,10 +19,18 @@ test('Admin MFA bootstrap function allowlist is exact and does not expand to the
   assert.ok(allowlistMatch, 'bootstrap function allowlist must be declared explicitly');
   const actual = [...allowlistMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual(actual, expected);
-  assert.match(source, /adminBootstrapDeployComponents = Object\.freeze\(\[/);
-  assert.match(source, /\.\.\.adminBootstrapFunctions\.map\(\(functionName\) => `functions:\$\{functionName\}`\)/);
+  assert.match(
+    source,
+    /const adminBootstrapFunctionComponents = Object\.freeze\(\s*adminBootstrapFunctions\.map\(\(functionName\) => `functions:\$\{functionName\}`\),\s*\);/,
+  );
+  assert.match(
+    source,
+    /adminBootstrapDeployComponents = Object\.freeze\(\[\s*adminBootstrapHostingTarget,\s*\.\.\.adminBootstrapFunctionComponents,\s*\]\);/,
+  );
+  assert.match(source, /const adminBootstrapFunctionTarget = adminBootstrapFunctionComponents\.join\(','\);/);
   assert.match(source, /\['getAdminMfaReadinessOverview', adminReadinessSource\]/);
   assert.match(source, /sendEmailVerification/);
   assert.match(source, /admin-mfa-readiness-overview/);
   assert.doesNotMatch(allowlistMatch[1], /createAdminMfaRecoveryRequest|approveAdminMfaRecoveryRequest|listAdminMfaRecoveryRequests/);
+  assert.doesNotMatch(source, /retryFirebase\(['"]functions['"]/);
 });
