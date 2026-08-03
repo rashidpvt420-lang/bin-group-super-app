@@ -6,6 +6,13 @@ on:
       - fix/admin-enterprise-appcheck-provider
     paths:
       - .github/workflows/repair-pr866-enterprise-wiring.yml
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+    paths:
+      - .github/workflows/repair-pr866-enterprise-wiring.yml
 
 permissions:
   contents: write
@@ -16,7 +23,10 @@ concurrency:
 
 jobs:
   repair:
-    if: github.repository == 'rashidpvt420-lang/bin-group-super-app' && github.ref == 'refs/heads/fix/admin-enterprise-appcheck-provider'
+    if: >-
+      github.repository == 'rashidpvt420-lang/bin-group-super-app' &&
+      (github.ref == 'refs/heads/fix/admin-enterprise-appcheck-provider' ||
+       github.event.pull_request.head.ref == 'fix/admin-enterprise-appcheck-provider')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch head
