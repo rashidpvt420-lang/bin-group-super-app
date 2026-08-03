@@ -21,23 +21,32 @@ const canonical = Object.freeze({
 
 test('Admin credentials stay behind an exact runtime App Check gate', () => {
   assert.match(loginPage, /<AdminAppCheckGate>[\s\S]*<UnifiedLogin \/>[\s\S]*<\/AdminAppCheckGate>/);
-  assert.match(gate, /getToken\(getAppCheck\(app\), false\)/);
+  assert.match(gate, /getToken\(appCheck, false\)/);
   assert.match(gate, /ADMIN_FIREBASE_IDENTITY_MISMATCH/);
+  assert.match(gate, /ADMIN_APPCHECK_NOT_INITIALIZED/);
   assert.match(gate, /No email or password was submitted/);
 
   for (const value of Object.values(canonical)) {
     assert.ok(gate.includes(value), `Admin App Check gate must bind ${value}`);
   }
 
-  const tokenCheck = gate.indexOf('getToken(getAppCheck(app), false)');
+  const tokenCheck = gate.indexOf('getToken(appCheck, false)');
   const childRender = gate.indexOf("if (gate.status === 'ready') return <>{children}</>");
   assert.ok(tokenCheck >= 0, 'runtime App Check token exchange must exist');
   assert.ok(childRender > tokenCheck, 'credentials must render only after the token-check path is defined');
+  assert.doesNotMatch(gate, /getAppCheck/);
   assert.doesNotMatch(gate, /FIREBASE_APPCHECK_DEBUG_TOKEN\s*=\s*true/);
 });
 
-test('Admin runtime and production environment use the canonical web-app identity', () => {
+test('Admin runtime uses a dedicated named Firebase app and one exported App Check instance', () => {
   assert.ok(adminFirebase.includes(`const ADMIN_FIREBASE_APP_ID = '${canonical.appId}'`));
+  assert.match(adminFirebase, /const ADMIN_FIREBASE_APP_NAME = 'bin-group-admin'/);
+  assert.match(adminFirebase, /getApps\(\)\.find\(\(candidate\) => candidate\.name === ADMIN_FIREBASE_APP_NAME\)/);
+  assert.match(adminFirebase, /initializeApp\(firebaseConfig, ADMIN_FIREBASE_APP_NAME\)/);
+  assert.match(adminFirebase, /let appCheck: AppCheck \| null = null/);
+  assert.match(adminFirebase, /appCheck = initializeAppCheck\(app,/);
+  assert.match(adminFirebase, /app, appCheck, db, auth/);
+  assert.doesNotMatch(adminFirebase, /getApps\(\)\.length === 0 \? initializeApp\(firebaseConfig\) : getApp\(\)/);
   assert.match(adminFirebase, /process\.env\.REACT_APP_ADMIN_FIREBASE_APP_ID/);
   assert.ok(productionEnvWriter.includes(`const ADMIN_FIREBASE_APP_ID = '${canonical.appId}'`));
   assert.match(productionEnvWriter, /\['REACT_APP_ADMIN_FIREBASE_APP_ID', ADMIN_FIREBASE_APP_ID\]/);
