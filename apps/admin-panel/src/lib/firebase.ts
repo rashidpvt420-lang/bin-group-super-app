@@ -18,7 +18,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -84,7 +84,7 @@ if (typeof window !== 'undefined') {
         if (siteKey) {
             try {
                 initializeAppCheck(app, {
-                    provider: new ReCaptchaV3Provider(siteKey),
+                    provider: new ReCaptchaEnterpriseProvider(siteKey),
                     isTokenAutoRefreshEnabled: true
                 });
                 console.log('App Check active.');
