@@ -59,14 +59,14 @@ jobs:
               raise SystemExit(f'Expected exactly 2 legacy Admin site-key mappings, found {text.count(old_site)}')
           if text.count(old_app_id) != 2:
               raise SystemExit(f'Expected exactly 2 legacy Admin app-ID mappings, found {text.count(old_app_id)}')
-          if text.count(public_marker) != 1:
-              raise SystemExit(f'Expected exactly 1 public Vite site-key marker, found {text.count(public_marker)}')
+          if text.count(public_marker) != 2:
+              raise SystemExit(f'Expected exactly 2 public Vite site-key markers, found {text.count(public_marker)}')
           if enterprise_env in text:
               raise SystemExit('Dedicated Enterprise environment mapping already exists; refusing ambiguous rewrite')
 
           text = text.replace(old_site, new_site)
           text = text.replace(old_app_id, new_app_id)
-          text = text.replace(public_marker, public_marker + enterprise_env, 1)
+          text = text.replace(public_marker, public_marker + enterprise_env)
 
           if old_site in text or old_app_id in text:
               raise SystemExit('Legacy Admin mapping remained after replacement')
@@ -74,6 +74,8 @@ jobs:
               raise SystemExit('Enterprise Admin site-key mapping count is not exactly 2')
           if text.count(new_app_id) != 2:
               raise SystemExit('Canonical Admin app-ID mapping count is not exactly 2')
+          if text.count(enterprise_env) != 2:
+              raise SystemExit('Dedicated Enterprise environment mapping count is not exactly 2')
 
           workflow_path.write_text(text, encoding='utf-8')
 
