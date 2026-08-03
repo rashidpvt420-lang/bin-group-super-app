@@ -25,14 +25,14 @@ jobs:
           ref: fix/admin-enterprise-appcheck-provider
           fetch-depth: 0
 
-      - name: Patch only the Admin Enterprise environment wiring
+      - name: Patch only the remaining verified wiring and test-harness gaps
         run: |
           set -euo pipefail
           python <<'PY'
           from pathlib import Path
 
-          path = Path('.github/workflows/firebase-production-deploy.yml')
-          text = path.read_text(encoding='utf-8')
+          workflow_path = Path('.github/workflows/firebase-production-deploy.yml')
+          text = workflow_path.read_text(encoding='utf-8')
           dollar = chr(36)
 
           def expression(name: str) -> str:
@@ -65,18 +65,35 @@ jobs:
           if text.count(new_app_id) != 2:
               raise SystemExit('Canonical Admin app-ID mapping count is not exactly 2')
 
-          path.write_text(text, encoding='utf-8')
+          workflow_path.write_text(text, encoding='utf-8')
+
+          test_path = Path('apps/admin-panel/src/__tests__/components/UnifiedLogin.test.tsx')
+          test_source = test_path.read_text(encoding='utf-8')
+          old_mock = """jest.mock('@bin/shared', () => ({
+            __esModule: true,
+            useLanguage: () => ({ t: (k: string) => k, isRTL: false }),
+          }));"""
+          new_mock = """jest.mock('@bin/shared', () => ({
+            __esModule: true,
+            useLanguage: () => ({ t: (k: string) => k, isRTL: false }),
+          }), { virtual: true });"""
+          if test_source.count(old_mock) != 1:
+              raise SystemExit(f'Expected exactly 1 non-virtual shared mock, found {test_source.count(old_mock)}')
+          test_path.write_text(test_source.replace(old_mock, new_mock, 1), encoding='utf-8')
           PY
 
           git diff --check
+          node scripts/verify-audit-write-bridge.mjs
           node --test tests/launch/admin-production-security-registration.test.mjs
 
       - name: Commit repair and remove this one-shot workflow
         run: |
           set -euo pipefail
           git rm .github/workflows/repair-pr866-enterprise-wiring.yml
-          git add .github/workflows/firebase-production-deploy.yml
+          git add \
+            .github/workflows/firebase-production-deploy.yml \
+            apps/admin-panel/src/__tests__/components/UnifiedLogin.test.tsx
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix(deploy): wire Admin builds to Enterprise App Check"
+          git commit -m "fix(admin): finish Enterprise recovery wiring"
           git push origin HEAD:fix/admin-enterprise-appcheck-provider
