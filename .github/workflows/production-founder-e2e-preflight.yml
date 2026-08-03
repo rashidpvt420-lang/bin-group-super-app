@@ -24,6 +24,16 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Verify exact Admin App Check token exchange
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+          REACT_APP_ADMIN_FIREBASE_APP_ID: '1:123413252227:web:285cb53bc26626d699f3b6'
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          E2E_ADMIN_BASE_URL: https://bin-group-admin-panel.web.app
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/verify-admin-appcheck-exchange.mjs
+
       - name: Print set/missing/redacted status
         env:
           E2E_FOUNDER_EMAIL: 'ceo@bin-groups.com'
