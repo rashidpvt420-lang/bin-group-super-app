@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -24,6 +25,12 @@ const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
 const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 const adminBaseUrl = text(process.env.E2E_ADMIN_BASE_URL) || `https://${EXPECTED_ADMIN_HOST}`;
 const commitSha = text(process.env.EXPECTED_COMMIT_SHA || process.env.GITHUB_SHA);
+const gitHeadResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+  cwd: process.cwd(),
+  encoding: 'utf8',
+  shell: false,
+});
+const checkedOutSha = text(gitHeadResult.stdout);
 
 if (projectId !== EXPECTED_PROJECT_ID) fail(`GCP_PROJECT_ID must equal ${EXPECTED_PROJECT_ID}`);
 if (appId !== EXPECTED_ADMIN_APP_ID) fail('Admin Firebase app ID does not match the canonical production web app');
@@ -32,6 +39,9 @@ if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
   fail('a registered App Check debug UUID is required');
 }
 if (!/^[0-9a-f]{40}$/.test(commitSha)) fail('an exact 40-character commit SHA is required');
+if ((gitHeadResult.status ?? 1) !== 0 || checkedOutSha !== commitSha) {
+  fail(`checked-out SHA ${checkedOutSha || '(unresolved)'} must equal expected SHA ${commitSha}`);
+}
 
 let parsedAdminUrl;
 try {
@@ -73,6 +83,7 @@ const evidence = {
   status: 'passed',
   source: 'admin-appcheck-debug-exchange-preflight',
   commitSha,
+  checkedOutSha,
   projectId,
   appId,
   adminHost: parsedAdminUrl.hostname,
@@ -86,4 +97,5 @@ const outputPath = path.resolve('launch_package/admin-appcheck-preflight.json');
 mkdirSync(path.dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
 console.log(`[admin-appcheck] PASS — exact Admin app token exchange returned HTTP ${response.status}`);
+console.log(`[admin-appcheck] commit_sha=${commitSha}`);
 console.log(`[admin-appcheck] evidence=${outputPath}`);
