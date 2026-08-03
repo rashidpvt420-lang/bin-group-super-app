@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { getAppCheck, getToken } from 'firebase/app-check';
+import { getToken } from 'firebase/app-check';
 import { AlertTriangle, RotateCcw, ShieldCheck } from 'lucide-react';
-import { app } from '../../lib/firebase';
+import { app, appCheck } from '../../lib/firebase';
 
 const EXPECTED_ADMIN_FIREBASE = Object.freeze({
     projectId: 'bin-group-57c60',
@@ -46,6 +46,9 @@ const errorCode = (error: unknown) => {
 const publicMessage = (code: string) => {
     if (code === 'ADMIN_FIREBASE_IDENTITY_MISMATCH') {
         return 'The Admin portal loaded a Firebase identity that does not match the approved production application.';
+    }
+    if (code === 'ADMIN_APPCHECK_NOT_INITIALIZED') {
+        return 'The Admin App Check client was not initialized for this portal.';
     }
     if (code === 'ADMIN_APPCHECK_TIMEOUT') {
         return 'The Admin security handshake timed out. Check the connection and retry.';
@@ -98,9 +101,14 @@ export default function AdminAppCheckGate({ children }: { children: React.ReactN
                     code: 'ADMIN_FIREBASE_IDENTITY_MISMATCH',
                 });
             }
+            if (!appCheck) {
+                throw Object.assign(new Error('ADMIN_APPCHECK_NOT_INITIALIZED'), {
+                    code: 'ADMIN_APPCHECK_NOT_INITIALIZED',
+                });
+            }
 
             const result = await withTimeout(
-                getToken(getAppCheck(app), false),
+                getToken(appCheck, false),
                 APP_CHECK_TIMEOUT_MS,
             );
             if (!clean(result.token)) {
