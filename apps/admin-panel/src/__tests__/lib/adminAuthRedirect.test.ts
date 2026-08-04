@@ -1,7 +1,3 @@
-// The focused Admin MFA workflow executes this file explicitly. Import the
-// route-level suite so restored-session redirect behavior is exercised in the
-// same exact-head regression job as the returnTo sanitizer.
-import '../LoginPage.test';
 import { adminReturnToFromSearch, sanitizeAdminReturnTo } from '../../lib/adminAuthRedirect';
 
 describe('adminAuthRedirect', () => {
