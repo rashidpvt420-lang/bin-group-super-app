@@ -1,6 +1,6 @@
 // packages/shared/src/lib/firebase.ts
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
 
 import {
@@ -123,8 +123,14 @@ const firebaseConfig: BinFirebaseConfig = {
     '1:123413252227:web:285cb53bc26626d699f3b6',
 };
 
-const firebaseApp: FirebaseApp =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// Prefer the default app when present. In the standalone Admin bundle the
+// privileged initializer may intentionally create only the named
+// `bin-group-admin` app first, so selecting the first compatible app avoids
+// getApp() throwing app/no-app before React and the App Check gate can mount.
+const existingApps = getApps();
+const firebaseApp: FirebaseApp = existingApps.length === 0
+  ? initializeApp(firebaseConfig)
+  : existingApps.find((candidate) => candidate.name === '[DEFAULT]') || existingApps[0];
 
 const getSafeMessaging = (): Messaging | null => {
   if (typeof window === 'undefined') return null;
