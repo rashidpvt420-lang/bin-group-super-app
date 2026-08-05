@@ -77,6 +77,21 @@ async function createAssignmentNotification(
     .createHash("sha256")
     .update(`${ticketId}|${technicianId}|${eventKey}`, "utf8")
     .digest("hex");
+  const tokenSnapshot = await db.collection("users").doc(technicianId).collection("fcmTokens").limit(1).get();
+  const hasRegisteredPushToken = tokenSnapshot.docs.some((tokenDoc) => {
+    const token = clean(tokenDoc.data()?.token, 4096);
+    return Boolean(token) && crypto.createHash("sha256").update(token, "utf8").digest("hex") === tokenDoc.id;
+  });
+  const initialPushReceipt = hasRegisteredPushToken
+    ? { pushDeliveryState: "PENDING_TRIGGER" }
+    : {
+        pushAttemptedAt: now,
+        pushTokenCount: 0,
+        pushSuccessCount: 0,
+        pushFailureCount: 0,
+        pushPrunedCount: 0,
+        pushDeliveryState: "NO_REGISTERED_TOKEN",
+      };
 
   const created = await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(notificationRef);
@@ -101,6 +116,7 @@ async function createAssignmentNotification(
       createdByUid: "SYSTEM_DISPATCH",
       deliverySource: "trigger:technicianDispatchNotifications",
       assignmentFingerprint,
+      ...initialPushReceipt,
     });
     return true;
   });
