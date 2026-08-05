@@ -34,6 +34,7 @@ const runWriter = (overrides = {}) => {
       GITHUB_ACTIONS: '',
       GITHUB_WORKFLOW: '',
       GITHUB_JOB: '',
+      GITHUB_ENV: path.join(workingDirectory, 'github-env'),
       DEPLOYMENT_ENVIRONMENT: '',
       ...overrides,
     },
@@ -61,6 +62,14 @@ test('exact Firebase production validation job may compile with a non-deployable
     );
     assert.match(
       adminEnvironment,
+      new RegExp(`^REACT_APP_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}$`, 'm'),
+    );
+    const githubEnvironment = readFileSync(
+      path.join(execution.workingDirectory, 'github-env'),
+      'utf8',
+    );
+    assert.match(
+      githubEnvironment,
       new RegExp(`^REACT_APP_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}$`, 'm'),
     );
     assert.match(execution.result.stderr, /non-deployable Enterprise App Check placeholder/);
