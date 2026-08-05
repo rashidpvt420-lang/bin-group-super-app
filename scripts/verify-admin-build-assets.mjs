@@ -10,6 +10,15 @@ const repositoryRoot = path.resolve(scriptDirectory, '..');
 const buildDirectory = path.join(repositoryRoot, 'apps', 'admin-panel', 'build');
 const indexPath = path.join(buildDirectory, 'index.html');
 const evidencePath = path.join(repositoryRoot, 'launch_package', 'admin-build-assets.json');
+const VALIDATION_ONLY_ENTERPRISE_SITE_KEY = 'BIN_GROUP_VALIDATION_ONLY_ENTERPRISE_SITE_KEY';
+
+const clean = (value) => String(value || '').trim();
+const isExactProductionValidationJob = () => (
+  clean(process.env.GITHUB_ACTIONS) === 'true' &&
+  clean(process.env.GITHUB_WORKFLOW) === 'Firebase Production Deploy' &&
+  clean(process.env.GITHUB_JOB) === 'validate-production-build' &&
+  clean(process.env.DEPLOYMENT_ENVIRONMENT) !== 'production'
+);
 
 const fail = (message) => {
   console.error(`[admin-build-assets] FAIL: ${message}`);
@@ -78,14 +87,24 @@ for (const marker of [
   if (!mergedJavaScript.includes(marker)) fail(`built Admin chunks are missing Firebase marker: ${marker}`);
 }
 
-const productionAppCheckRequired = String(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK || '').trim() === 'true';
-const siteKey = String(process.env.REACT_APP_APP_CHECK_SITE_KEY || '').trim();
+const productionAppCheckRequired = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
+const configuredSiteKey = clean(process.env.REACT_APP_APP_CHECK_SITE_KEY);
+const validationOnlyAppCheck = productionAppCheckRequired &&
+  isExactProductionValidationJob() &&
+  (!configuredSiteKey || configuredSiteKey === VALIDATION_ONLY_ENTERPRISE_SITE_KEY);
+const siteKey = validationOnlyAppCheck
+  ? VALIDATION_ONLY_ENTERPRISE_SITE_KEY
+  : configuredSiteKey;
 let appCheckSiteKeyFingerprint = null;
 if (productionAppCheckRequired) {
-  if (!siteKey || /REPLACE|PLACEHOLDER|process\.env/i.test(siteKey) || siteKey.length < 20) fail('protected production build requested App Check but no plausible Admin site key was supplied');
+  if (!validationOnlyAppCheck && (!siteKey || /REPLACE|PLACEHOLDER|process\.env/i.test(siteKey) || siteKey.length < 20)) fail('protected production build requested App Check but no plausible Admin site key was supplied');
   if (!mergedJavaScript.includes(siteKey)) fail('protected production App Check site key was not embedded in the Admin chunks');
-  appCheckSiteKeyFingerprint = createHash('sha256').update(siteKey).digest('hex');
-  console.log(`[admin-build-assets] PASS protected App Check fingerprint=${appCheckSiteKeyFingerprint.slice(0, 12)}…`);
+  if (validationOnlyAppCheck) {
+    console.log('[admin-build-assets] PASS exact validation job compiled with the non-deployable Enterprise App Check placeholder');
+  } else {
+    appCheckSiteKeyFingerprint = createHash('sha256').update(siteKey).digest('hex');
+    console.log(`[admin-build-assets] PASS protected App Check fingerprint=${appCheckSiteKeyFingerprint.slice(0, 12)}…`);
+  }
 }
 
 // Firebase Auth ships testing-related API symbol names in its SDK bundle. Their
@@ -114,6 +133,8 @@ writeFileSync(evidencePath, `${JSON.stringify({
   firebaseProjectId: 'bin-group-57c60',
   firebaseAdminAppIdSuffix: '285cb53bc26626d699f3b6',
   productionAppCheckRequired,
+  validationOnlyAppCheck,
+  deployableAppCheckSiteKeyVerified: productionAppCheckRequired && !validationOnlyAppCheck,
   appCheckSiteKeyFingerprint,
   sourceLevelUnsafeMfaChecksRequired: true,
   sensitiveValuesExcluded: true,
