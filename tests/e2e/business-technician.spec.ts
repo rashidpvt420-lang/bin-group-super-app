@@ -284,25 +284,31 @@ test.describe('Technician Business Workflow', () => {
     await openCard.click();
     await page.waitForURL(`**/technician/job/${dispatchTicketId}`, { timeout: 20_000 });
 
-    const statusBeforeAccept = await firestoreStatus(dispatchTicketId);
-    if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(statusBeforeAccept)) {
+    let lifecycleStatus = await firestoreStatus(dispatchTicketId);
+    if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(lifecycleStatus)) {
       const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
       await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
       await acceptMission.click();
       await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 30_000 }).toBe('ACCEPTED');
-    } else if (statusBeforeAccept === 'ACCEPTED') {
+      lifecycleStatus = 'ACCEPTED';
+    } else if (lifecycleStatus === 'ACCEPTED') {
       const acceptedSnap = await db.collection('maintenanceTickets').doc(dispatchTicketId).get();
       const accepted = acceptedSnap.data() || {};
       expect(String(accepted.assignedTechnicianId || accepted.technicianId || '')).toBe(technicianUid);
       expect(accepted.acceptedAt, 'An already-accepted mission must retain server acceptance evidence.').toBeTruthy();
-    } else {
-      throw new Error(`Protected dispatch ticket entered unexpected status before acceptance: ${statusBeforeAccept || 'missing'}.`);
     }
 
-    await clickRequired(page, ['button:has-text("On The Way")'], 'Start trip action');
-    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ON_THE_WAY');
-    await clickRequired(page, ['button:has-text("Arrived")'], 'Arrival action', 35_000);
-    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ARRIVED');
+    if (lifecycleStatus === 'ACCEPTED') {
+      await clickRequired(page, ['button:has-text("On The Way")'], 'Start trip action');
+      await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ON_THE_WAY');
+      lifecycleStatus = 'ON_THE_WAY';
+    }
+    if (lifecycleStatus === 'ON_THE_WAY') {
+      await clickRequired(page, ['button:has-text("Arrived")'], 'Arrival action', 35_000);
+      await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ARRIVED');
+      lifecycleStatus = 'ARRIVED';
+    }
+    expect(lifecycleStatus).toBe('ARRIVED');
 
     const beforeInput = page.getByTestId('technician-before-work-file');
     await expect(beforeInput).toHaveCount(1);

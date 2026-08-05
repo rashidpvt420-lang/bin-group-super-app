@@ -28,7 +28,9 @@ test('Tenant and Technician evidence prove persisted lifecycle state without sta
   assert.ok(tenant.includes('Technician Start Trip must persist canonical ON_THE_WAY in production Firestore.'));
   assert.ok(technician.includes("toBe('ON_THE_WAY')"));
   assert.ok(technician.includes('EVIDENCE_RUN_KEY'));
-  assert.ok(technician.includes('statusBeforeAccept'));
+  assert.ok(technician.includes('let lifecycleStatus'));
+  assert.ok(technician.includes("lifecycleStatus === 'ACCEPTED'"));
+  assert.ok(technician.includes("lifecycleStatus === 'ON_THE_WAY'"));
   assert.ok(technician.includes('accepted.acceptedAt'));
 });
 

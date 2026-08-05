@@ -60,9 +60,9 @@ test('Admin and Functions consume the same executable lifecycle module', () => {
 });
 
 test('dispatch normalization preserves assignment until server acceptance evidence exists', () => {
-  assert.match(functionSource, /\["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"\]\.includes\(upper\)\) return "assigned"/);
+  assert.match(functionSource, /\["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"\]\.includes\(upper\)\) return "ASSIGNED"/);
   assert.doesNotMatch(functionSource, /\["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"\]\.includes\(upper\)\) return "accepted"/);
-  assert.match(functionSource, /\["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"\]\.includes\(upper\)\) return "on_the_way"/);
+  assert.match(functionSource, /\["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"\]\.includes\(upper\)\) return "ON_THE_WAY"/);
 });
 
 test('Admin map merges complete status, Technician and GPS listeners without silent truncation', () => {

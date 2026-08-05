@@ -132,6 +132,11 @@ async function login(page: Page) {
 }
 
 async function expectAcquiredOwnerDashboard(page: Page) {
+  // The default Owner route is intentionally the decision-focused Simple
+  // dashboard. Prove the activated property on the real advanced portfolio
+  // route instead of expecting the Simple page to render inventory rows.
+  await page.goto('/owner/dashboard/full', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/owner\/dashboard\/full/);
   await expect(page.locator('body'), 'Owner dashboard must render the server-generated activation property').toContainText(
     new RegExp(ACQUIRED_PROPERTY, 'i'),
     { timeout: 30_000 },
