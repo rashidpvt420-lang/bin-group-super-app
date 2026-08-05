@@ -205,8 +205,8 @@ test.describe('Technician Business Workflow', () => {
       db.collection('users').doc(technicianUid).set(readiness, { merge: true }),
       db.collection('technicians').doc(technicianUid).set(readiness, { merge: true }),
       db.collection('maintenanceTickets').doc(dispatchTicketId).set(fixtureTicket(dispatchTicketId, 'PENDING_ASSIGNMENT', false)),
-      db.collection('maintenanceTickets').doc(gpsDeniedTicketId).set(fixtureTicket(gpsDeniedTicketId, 'EN_ROUTE', true)),
-      db.collection('maintenanceTickets').doc(gpsPoorTicketId).set(fixtureTicket(gpsPoorTicketId, 'EN_ROUTE', true)),
+      db.collection('maintenanceTickets').doc(gpsDeniedTicketId).set(fixtureTicket(gpsDeniedTicketId, 'ON_THE_WAY', true)),
+      db.collection('maintenanceTickets').doc(gpsPoorTicketId).set(fixtureTicket(gpsPoorTicketId, 'ON_THE_WAY', true)),
       db.collection('maintenanceTickets').doc(offlineTicketId).set(fixtureTicket(offlineTicketId, 'ACCEPTED', true)),
     ]);
     await clearAssignmentNotifications(dispatchTicketId);
@@ -300,7 +300,7 @@ test.describe('Technician Business Workflow', () => {
     }
 
     await clickRequired(page, ['button:has-text("On The Way")'], 'Start trip action');
-    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('EN_ROUTE');
+    await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ON_THE_WAY');
     await clickRequired(page, ['button:has-text("Arrived")'], 'Arrival action', 35_000);
     await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ARRIVED');
 
@@ -338,7 +338,7 @@ test.describe('Technician Business Workflow', () => {
     await page.goto(`/technician/job/${gpsDeniedTicketId}`, { waitUntil: 'domcontentloaded' });
     await clickRequired(page, ['button:has-text("Arrived")'], 'Denied GPS arrival action', 20_000);
     await expect(page.locator('body')).toContainText(/GPS permission is required|Arrival was not recorded/i, { timeout: 25_000 });
-    await expect.poll(() => firestoreStatus(gpsDeniedTicketId), { timeout: 15_000 }).toBe('EN_ROUTE');
+    await expect.poll(() => firestoreStatus(gpsDeniedTicketId), { timeout: 15_000 }).toBe('ON_THE_WAY');
   });
 
   test('poor GPS accuracy keeps arrival fail-closed', async ({ page, context }) => {
@@ -347,7 +347,7 @@ test.describe('Technician Business Workflow', () => {
     await page.goto(`/technician/job/${gpsPoorTicketId}`, { waitUntil: 'domcontentloaded' });
     await clickRequired(page, ['button:has-text("Arrived")'], 'Poor accuracy arrival action', 20_000);
     await expect(page.locator('body')).toContainText(/GPS signal is too weak|Move to an open area/i, { timeout: 25_000 });
-    await expect.poll(() => firestoreStatus(gpsPoorTicketId), { timeout: 15_000 }).toBe('EN_ROUTE');
+    await expect.poll(() => firestoreStatus(gpsPoorTicketId), { timeout: 15_000 }).toBe('ON_THE_WAY');
   });
 
   test('offline EN_ROUTE action automatically replays after connectivity returns', async ({ page, context }) => {
@@ -362,7 +362,7 @@ test.describe('Technician Business Workflow', () => {
     }), { timeout: 15_000 }).toBe(true);
 
     await context.setOffline(false);
-    await expect.poll(() => firestoreStatus(offlineTicketId), { timeout: 45_000 }).toBe('EN_ROUTE');
+    await expect.poll(() => firestoreStatus(offlineTicketId), { timeout: 45_000 }).toBe('ON_THE_WAY');
     await expect.poll(async () => page.evaluate(() => {
       const queue = JSON.parse(localStorage.getItem('bin_offline_queue') || '[]');
       return queue.some((item: any) => String(item.payload || '').includes('EN_ROUTE'));
