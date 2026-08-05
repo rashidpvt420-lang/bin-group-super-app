@@ -242,8 +242,8 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await expect.poll(async () => {
       const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
       return String(lifecycleSnap.data()?.status || '').toUpperCase();
-    }, { timeout: 40_000, message: 'Technician Start Trip must persist EN_ROUTE in production Firestore.' }).toBe('EN_ROUTE');
-    await expect(page.locator('body')).toContainText(/EN ROUTE|Status updated/i, { timeout: 20_000 });
+    }, { timeout: 40_000, message: 'Technician Start Trip must persist canonical ON_THE_WAY in production Firestore.' }).toBe('ON_THE_WAY');
+    await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated/i, { timeout: 20_000 });
 
     await clickRequired(page, [
       'button:has-text("Arrived")',
