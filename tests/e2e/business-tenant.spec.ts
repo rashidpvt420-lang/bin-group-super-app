@@ -231,7 +231,10 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     if (await acceptMission.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
       await acceptMission.click();
-      await expect(page.locator('body')).toContainText(/Mission accepted|ACCEPTED/i, { timeout: 20_000 });
+      await expect.poll(async () => {
+        const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+        return String(lifecycleSnap.data()?.status || '').toUpperCase();
+      }, { timeout: 40_000, message: 'Technician acceptance must reach production Firestore before the next UI action.' }).toBe('ACCEPTED');
     }
 
     await clickRequired(page, [
@@ -250,6 +253,10 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
       'button:has-text("I have arrived")',
       'button:has-text("On Site")',
     ], 'Arrival action', 40_000);
+    await expect.poll(async () => {
+      const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      return String(lifecycleSnap.data()?.status || '').toUpperCase();
+    }, { timeout: 40_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
     await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 25_000 });
 
     const ppe = page.locator('#ppe');

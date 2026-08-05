@@ -17,6 +17,8 @@ test('Staff Access UI is callable-only and fail-closed', () => {
   assert.doesNotMatch(staffPage, /tempPassword/);
   assert.doesNotMatch(staffPage, /value: 'admin'/);
   assert.match(staffPage, /failed request creates no fallback record/i);
+  assert.match(staffPage, /<InputLabel id="staff-role-label"[^>]*>Role<\/InputLabel>/);
+  assert.match(staffPage, /id="staff-role-select" labelId="staff-role-label" data-testid="staff-role-select"/);
 });
 
 test('staff provisioning backend rejects unsafe identity conversion and binds modules', () => {

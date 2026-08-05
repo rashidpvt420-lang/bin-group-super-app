@@ -7,12 +7,13 @@
  */
 import { test, expect, type Page, type Response } from '@playwright/test';
 import admin from 'firebase-admin';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
 const PASSWORD = String(process.env.E2E_ADMIN_PASSWORD || '').trim();
 const REAL_MFA_CODE = String(process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
+const FOUNDER_TOTP_SECRET = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').toUpperCase().replace(/[\s=-]/g, '');
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').trim().replace(/\/+$/, '');
 const PROJECT_ID = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
 const STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'bin-group-57c60.firebasestorage.app';
@@ -73,12 +74,32 @@ function requireLaunchCredentials() {
   const missing = [
     !EMAIL ? 'E2E_ADMIN_EMAIL' : '',
     !PASSWORD ? 'E2E_ADMIN_PASSWORD' : '',
-    !/^\d{6}$/.test(REAL_MFA_CODE) ? 'E2E_ADMIN_REAL_MFA_CODE' : '',
+    !(/^[A-Z2-7]{16,}$/.test(FOUNDER_TOTP_SECRET) || /^\d{6}$/.test(REAL_MFA_CODE))
+      ? 'E2E_FOUNDER_TOTP_SECRET_or_E2E_ADMIN_REAL_MFA_CODE'
+      : '',
   ].filter(Boolean);
   if (missing.length) throw new Error(`Missing or invalid ${missing.join(', ')}. Admin business proof cannot be skipped.`);
   if (EMAIL !== 'ceo@bin-groups.com') {
     throw new Error('The full Admin business proof requires the canonical Founder account because Owner property approval is Founder-only.');
   }
+}
+
+function currentAdminMfaCode() {
+  if (!FOUNDER_TOTP_SECRET) return REAL_MFA_CODE;
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const character of FOUNDER_TOTP_SECRET) bits += alphabet.indexOf(character).toString(2).padStart(5, '0');
+  const key = Buffer.from(Array.from({ length: Math.floor(bits.length / 8) }, (_, index) =>
+    Number.parseInt(bits.slice(index * 8, index * 8 + 8), 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
+  const digest = createHmac('sha1', key).update(counter).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, '0');
 }
 
 function parseServiceAccount() {
@@ -164,7 +185,7 @@ async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<type
     await expect(challenge, 'the canonical Founder must receive the real enrolled Firebase MFA challenge').toBeVisible({ timeout: 30_000 });
     await page.getByTestId('admin-mfa-send-signin-code').click();
     await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('admin-mfa-signin-code').fill(REAL_MFA_CODE);
+    await page.getByTestId('admin-mfa-signin-code').fill(currentAdminMfaCode());
     await page.getByTestId('admin-mfa-resolve-signin').click();
 
     await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 45_000 });
@@ -509,7 +530,7 @@ async function createStaffThroughUi(page: Page, name: string, email: string, rol
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Full Name').fill(name);
   await dialog.getByLabel('Email Address').fill(email);
-  await dialog.getByLabel('Role').click();
+  await dialog.getByTestId('staff-role-select').click({ timeout: 15_000 });
   await page.getByRole('option', { name: new RegExp(roleLabel, 'i') }).click();
   await dialog.getByRole('button', { name: /CREATE & SEND INVITATION/i }).click();
   await expect(dialog).not.toBeVisible({ timeout: 45_000 });

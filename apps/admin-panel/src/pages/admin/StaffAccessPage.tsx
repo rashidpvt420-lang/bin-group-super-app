@@ -324,8 +324,8 @@ export default function StaffAccessPage() {
                             <Grid item xs={12} md={6}><TextField fullWidth label="Email Address" type="email" value={formData.email} onChange={(event) => setFormData((previous) => ({ ...previous, email: event.target.value }))} disabled={editMode} sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }} /></Grid>
                             <Grid item xs={12}>
                                 <FormControl fullWidth>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
-                                    <Select value={formData.role} onChange={(event) => handleRoleChange(event.target.value)} label="Role" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' } }}>
+                                    <InputLabel id="staff-role-label" sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
+                                    <Select id="staff-role-select" labelId="staff-role-label" data-testid="staff-role-select" value={formData.role} onChange={(event) => handleRoleChange(event.target.value)} label="Role" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' } }}>
                                         {STAFF_ROLES.map((role) => <MenuItem key={role.value} value={role.value}><Box><Typography variant="body2" fontWeight={700}>{role.label}</Typography><Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.55)' }}>{role.description}</Typography></Box></MenuItem>)}
                                     </Select>
                                 </FormControl>

@@ -47,6 +47,11 @@ test('dispatch assignment creates an idempotent technician notification with del
     /recipientRole: "technician"/,
     /link: `\/technician\/job\/\$\{ticketId\}`/,
     /TECHNICIAN_ASSIGNMENT_NOTIFICATION_CREATED/,
+    /collection\("fcmTokens"\)\.limit\(1\)\.get\(\)/,
+    /hasRegisteredPushToken/,
+    /pushDeliveryState: "PENDING_TRIGGER"/,
+    /pushTokenCount: 0/,
+    /pushDeliveryState: "NO_REGISTERED_TOKEN"/,
   ], 'assignment notification trigger');
   expectAll(delivery, [
     /pushDeliveryState: deliveryState/,

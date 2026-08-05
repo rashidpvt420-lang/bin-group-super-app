@@ -52,4 +52,6 @@ test('Admin proof captures loader, Firebase response, page and asset diagnostics
   assert.match(adminSpec, /failedScriptUrl/);
   assert.match(adminSpec, /AUTHENTICATING SOVEREIGN IDENTITY/);
   assert.match(adminSpec, /E2E_ADMIN_REAL_MFA_CODE/);
+  assert.match(adminSpec, /function currentAdminMfaCode\(\)/);
+  assert.match(adminSpec, /fill\(currentAdminMfaCode\(\)\)/);
 });
