@@ -227,36 +227,46 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await expect(page).toHaveURL(new RegExp(`/technician/job/${ticketId}`), { timeout: 20_000 });
     await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 25_000 });
 
+    let lifecycleStatus = String((await db.collection('maintenanceTickets').doc(ticketId).get()).data()?.status || '').toUpperCase();
     const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
-    if (await acceptMission.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(lifecycleStatus) && await acceptMission.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
       await acceptMission.click();
       await expect.poll(async () => {
         const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
         return String(lifecycleSnap.data()?.status || '').toUpperCase();
       }, { timeout: 40_000, message: 'Technician acceptance must reach production Firestore before the next UI action.' }).toBe('ACCEPTED');
+      lifecycleStatus = 'ACCEPTED';
     }
 
-    await clickRequired(page, [
-      'button:has-text("On The Way")',
-      'button:has-text("Start Trip")',
-      'button:has-text("En Route")',
-    ], 'Start trip action');
-    await expect.poll(async () => {
-      const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
-      return String(lifecycleSnap.data()?.status || '').toUpperCase();
-    }, { timeout: 40_000, message: 'Technician Start Trip must persist canonical ON_THE_WAY in production Firestore.' }).toBe('ON_THE_WAY');
+    if (lifecycleStatus === 'ACCEPTED') {
+      await clickRequired(page, [
+        'button:has-text("On The Way")',
+        'button:has-text("Start Trip")',
+        'button:has-text("En Route")',
+      ], 'Start trip action');
+      await expect.poll(async () => {
+        const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+        return String(lifecycleSnap.data()?.status || '').toUpperCase();
+      }, { timeout: 40_000, message: 'Technician Start Trip must persist canonical ON_THE_WAY in production Firestore.' }).toBe('ON_THE_WAY');
+      lifecycleStatus = 'ON_THE_WAY';
+    }
+    expect(['ON_THE_WAY', 'ARRIVED']).toContain(lifecycleStatus);
     await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated/i, { timeout: 20_000 });
 
-    await clickRequired(page, [
-      'button:has-text("Arrived")',
-      'button:has-text("I have arrived")',
-      'button:has-text("On Site")',
-    ], 'Arrival action', 40_000);
-    await expect.poll(async () => {
-      const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
-      return String(lifecycleSnap.data()?.status || '').toUpperCase();
-    }, { timeout: 40_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
+    if (lifecycleStatus === 'ON_THE_WAY') {
+      await clickRequired(page, [
+        'button:has-text("Arrived")',
+        'button:has-text("I have arrived")',
+        'button:has-text("On Site")',
+      ], 'Arrival action', 40_000);
+      await expect.poll(async () => {
+        const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+        return String(lifecycleSnap.data()?.status || '').toUpperCase();
+      }, { timeout: 40_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
+      lifecycleStatus = 'ARRIVED';
+    }
+    expect(lifecycleStatus).toBe('ARRIVED');
     await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 25_000 });
 
     const ppe = page.locator('#ppe');
