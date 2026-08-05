@@ -19,13 +19,17 @@ function normalizeStatus(value: unknown): string | null {
   // Assignment and acceptance are distinct security events. Never let the
   // compatibility normalizer manufacture acceptance without the callable's
   // server-authored acceptedAt evidence.
-  if (["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"].includes(upper)) return "assigned";
-  if (["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"].includes(upper)) return "on_the_way";
-  if (upper === "ARRIVED") return "arrived";
-  if (["IN_PROGRESS", "WORK_STARTED"].includes(upper)) return "in_progress";
-  if (upper === "WAITING_PARTS") return "waiting_parts";
-  if (["COMPLETED", "RESOLVED", "CLOSED"].includes(upper)) return "completed";
-  if (upper === "OPEN") return "open";
+  // Write one canonical status vocabulary. Read paths still accept legacy
+  // lowercase aliases, but rewriting new server states back to lowercase can
+  // hide an assignment from the Technician UI and break the next lifecycle
+  // transition (for example ON_THE_WAY -> ARRIVED).
+  if (["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"].includes(upper)) return "ASSIGNED";
+  if (["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"].includes(upper)) return "ON_THE_WAY";
+  if (upper === "ARRIVED") return "ARRIVED";
+  if (["IN_PROGRESS", "WORK_STARTED"].includes(upper)) return "IN_PROGRESS";
+  if (upper === "WAITING_PARTS") return "WAITING_PARTS";
+  if (["COMPLETED", "RESOLVED", "CLOSED"].includes(upper)) return "COMPLETED";
+  if (upper === "OPEN") return "OPEN";
 
   return status;
 }
