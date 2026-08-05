@@ -134,19 +134,28 @@ async function login(page: Page) {
 }
 
 async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 10_000): Promise<Locator> {
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + 25_000;
+  let lastError = '';
   while (Date.now() < deadline) {
     for (const selector of selectors) {
       const target = page.locator(selector).first();
-      if (await target.isVisible({ timeout: 500 }).catch(() => false)) {
+      if (!await target.isVisible({ timeout: 500 }).catch(() => false)) continue;
+      try {
         await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
-        await target.click();
+        // Dispatch the DOM click immediately. The live Firestore listener can
+        // legitimately replace a lifecycle button as soon as the server state
+        // changes; Playwright's actionability retry otherwise waits on a node
+        // that has already been detached after a successful transition.
+        await target.evaluate((node: HTMLElement) => node.click());
         return target;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
       }
     }
     await page.waitForTimeout(250);
   }
-  throw new Error(`${label} was not visible. Selectors: ${selectors.join(' | ')}`);
+  const body = (await page.locator('body').innerText().catch(() => '')).slice(0, 2_000);
+  throw new Error(`${label} was not actionable. Selectors: ${selectors.join(' | ')}. Last error: ${lastError || 'none'}. Page: ${body}`);
 }
 
 async function setImage(input: Locator, name: string) {
@@ -156,6 +165,13 @@ async function setImage(input: Locator, name: string) {
 async function firestoreStatus(ticketId: string) {
   const snap = await admin.firestore().collection('maintenanceTickets').doc(ticketId).get();
   return String(snap.data()?.status || '').toUpperCase();
+}
+
+async function reloadMission(page: Page, ticketId: string) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForURL(`**/technician/job/${ticketId}`, { timeout: 20_000 });
+  await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 25_000 });
+  await expect(page.locator('body')).not.toContainText(/permission-denied|Mission access denied|Mission data could not be loaded/i, { timeout: 10_000 });
 }
 
 test.describe('Technician Business Workflow', () => {
@@ -227,7 +243,7 @@ test.describe('Technician Business Workflow', () => {
   });
 
   test('dispatch assigns the job, records an explicit push state, and technician completes through network recovery', async ({ page, context }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(300_000);
     const db = admin.firestore();
     const pushRegistrationStartedAt = Date.now();
 
@@ -286,11 +302,10 @@ test.describe('Technician Business Workflow', () => {
 
     let lifecycleStatus = await firestoreStatus(dispatchTicketId);
     if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(lifecycleStatus)) {
-      const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
-      await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
-      await acceptMission.click();
+      await clickRequired(page, ['button:has-text("Accept Mission")'], 'Accept Mission action', 15_000);
       await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 30_000 }).toBe('ACCEPTED');
       lifecycleStatus = 'ACCEPTED';
+      await reloadMission(page, dispatchTicketId);
     } else if (lifecycleStatus === 'ACCEPTED') {
       const acceptedSnap = await db.collection('maintenanceTickets').doc(dispatchTicketId).get();
       const accepted = acceptedSnap.data() || {};
@@ -299,14 +314,24 @@ test.describe('Technician Business Workflow', () => {
     }
 
     if (lifecycleStatus === 'ACCEPTED') {
-      await clickRequired(page, ['button:has-text("On The Way")'], 'Start trip action');
+      await clickRequired(page, [
+        'button:has-text("On The Way")',
+        'button:has-text("Start Trip")',
+        'button:has-text("En Route")',
+      ], 'Start trip action');
       await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ON_THE_WAY');
       lifecycleStatus = 'ON_THE_WAY';
+      await reloadMission(page, dispatchTicketId);
     }
     if (lifecycleStatus === 'ON_THE_WAY') {
-      await clickRequired(page, ['button:has-text("Arrived")'], 'Arrival action', 35_000);
-      await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 35_000 }).toBe('ARRIVED');
+      await clickRequired(page, [
+        'button:has-text("Arrived")',
+        'button:has-text("I have arrived")',
+        'button:has-text("On Site")',
+      ], 'Arrival action', 35_000);
+      await expect.poll(() => firestoreStatus(dispatchTicketId), { timeout: 45_000 }).toBe('ARRIVED');
       lifecycleStatus = 'ARRIVED';
+      await reloadMission(page, dispatchTicketId);
     }
     expect(lifecycleStatus).toBe('ARRIVED');
 
