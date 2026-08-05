@@ -16,7 +16,10 @@ function normalizeStatus(value: unknown): string | null {
   if (!status) return null;
   const upper = normalizeMaintenanceTicketStatus(status);
 
-  if (["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"].includes(upper)) return "accepted";
+  // Assignment and acceptance are distinct security events. Never let the
+  // compatibility normalizer manufacture acceptance without the callable's
+  // server-authored acceptedAt evidence.
+  if (["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"].includes(upper)) return "assigned";
   if (["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"].includes(upper)) return "on_the_way";
   if (upper === "ARRIVED") return "arrived";
   if (["IN_PROGRESS", "WORK_STARTED"].includes(upper)) return "in_progress";

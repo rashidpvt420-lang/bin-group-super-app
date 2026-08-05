@@ -76,7 +76,11 @@ export async function resolveProductionMailboxIdentities(env = process.env) {
   }
 
   for (const mailboxEmail of [ownerEmail, brokerEmail]) console.log(`::add-mask::${mailboxEmail}`);
-  appendFileSync(githubEnv, `E2E_OWNER_MAILBOX_EMAIL=${ownerEmail}\nE2E_BROKER_MAILBOX_EMAIL=${brokerEmail}\n`, 'utf8');
+  appendFileSync(
+    githubEnv,
+    `E2E_OWNER_MAILBOX_EMAIL=${ownerEmail}\nE2E_OWNER_EMAIL=${ownerEmail}\nE2E_BROKER_MAILBOX_EMAIL=${brokerEmail}\n`,
+    'utf8',
+  );
   console.log('Resolved protected Owner and Broker Gmail mailbox identities from authenticated profiles.');
   return { ownerEmail, brokerEmail };
 }

@@ -606,6 +606,9 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      - name: Verify or synchronize canonical Founder evidence credential
+        run: node scripts/synchronize-founder-evidence-credential.mjs
+
       - name: Validate full live E2E secrets and App Check UUID
         env:
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
