@@ -9,10 +9,12 @@ import { test, expect, type Page, type Response } from '@playwright/test';
 import admin from 'firebase-admin';
 import { createHash, randomBytes } from 'node:crypto';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { generateTotp } from './helpers/adminMfa';
 
-const EMAIL = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
-const PASSWORD = String(process.env.E2E_ADMIN_PASSWORD || '').trim();
-const REAL_MFA_CODE = String(process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
+const EMAIL = String(process.env.E2E_FOUNDER_EMAIL || process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+const PASSWORD = String(process.env.E2E_FOUNDER_PASSWORD || process.env.E2E_ADMIN_PASSWORD || '').trim();
+const TOTP_SECRET = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').trim();
+const REAL_MFA_CODE = String(process.env.E2E_FOUNDER_REAL_MFA_CODE || process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').trim().replace(/\/+$/, '');
 const PROJECT_ID = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
 const STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'bin-group-57c60.firebasestorage.app';
@@ -71,9 +73,9 @@ const serverTimestamp = () => admin.firestore.FieldValue.serverTimestamp();
 
 function requireLaunchCredentials() {
   const missing = [
-    !EMAIL ? 'E2E_ADMIN_EMAIL' : '',
-    !PASSWORD ? 'E2E_ADMIN_PASSWORD' : '',
-    !/^\d{6}$/.test(REAL_MFA_CODE) ? 'E2E_ADMIN_REAL_MFA_CODE' : '',
+    !EMAIL ? 'E2E_FOUNDER_EMAIL' : '',
+    !PASSWORD ? 'E2E_FOUNDER_PASSWORD' : '',
+    (!TOTP_SECRET && !/^\d{6}$/.test(REAL_MFA_CODE)) ? 'E2E_FOUNDER_TOTP_SECRET (or E2E_FOUNDER_REAL_MFA_CODE)' : '',
   ].filter(Boolean);
   if (missing.length) throw new Error(`Missing or invalid ${missing.join(', ')}. Admin business proof cannot be skipped.`);
   if (EMAIL !== 'ceo@bin-groups.com') {
@@ -162,9 +164,16 @@ async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<type
 
     const challenge = page.getByTestId('admin-mfa-signin-challenge');
     await expect(challenge, 'the canonical Founder must receive the real enrolled Firebase MFA challenge').toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('admin-mfa-send-signin-code').click();
-    await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('admin-mfa-signin-code').fill(REAL_MFA_CODE);
+    const totpSelected = page.getByTestId('admin-mfa-totp-selected');
+    if (TOTP_SECRET && await totpSelected.isVisible().catch(() => false)) {
+      await page.getByTestId('admin-mfa-send-signin-code').click();
+      await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 10_000 });
+      await page.getByTestId('admin-mfa-signin-code').fill(generateTotp(TOTP_SECRET));
+    } else {
+      await page.getByTestId('admin-mfa-send-signin-code').click();
+      await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('admin-mfa-signin-code').fill(REAL_MFA_CODE);
+    }
     await page.getByTestId('admin-mfa-resolve-signin').click();
 
     await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 45_000 });
