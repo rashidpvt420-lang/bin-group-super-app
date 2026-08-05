@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 
 const ADMIN_FIREBASE_APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
@@ -57,6 +57,14 @@ if (useValidationOnlyEnterpriseSiteKey) {
   console.warn(
     '[production-env] using a non-deployable Enterprise App Check placeholder for the exact validation job only; the protected production deployment job must supply FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY and rebuild',
   );
+  const githubEnvironmentPath = clean(process.env.GITHUB_ENV);
+  if (githubEnvironmentPath) {
+    appendFileSync(
+      githubEnvironmentPath,
+      `REACT_APP_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}\n`,
+      { mode: 0o600 },
+    );
+  }
 }
 
 const rootLines = [
