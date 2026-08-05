@@ -19,8 +19,11 @@ test('Owner inspection-first submission embeds concrete timestamps in array valu
 test('technician assignment records a truthful initial push state', async () => {
   const source = await read('functions/technicianDispatchNotifications.ts');
 
-  assert.match(source, /collection\("fcmTokens"\)\.limit\(1\)\.get\(\)/);
+  assert.match(source, /collection\("fcmTokens"\)\.get\(\)/);
   assert.match(source, /const hasRegisteredPushToken = tokenSnapshot\.docs\.some/);
+  assert.match(source, /CURRENT_PUSH_TOKEN_MAX_AGE_MS/);
+  assert.match(source, /data\.active !== false/);
+  assert.match(source, /permission === "granted"/);
   assert.match(source, /pushDeliveryState: "PENDING_TRIGGER"/);
   assert.match(source, /pushTokenCount: 0/);
   assert.match(source, /pushDeliveryState: "NO_REGISTERED_TOKEN"/);
@@ -39,6 +42,7 @@ test('Admin staff role is accessible and MFA is generated at challenge time', as
   assert.match(spec, /Math\.floor\(Date\.now\(\) \/ 30_000\)/);
   assert.match(spec, /fill\(currentAdminMfaCode\(\)\)/);
   assert.match(spec, /getByTestId\('staff-role-select'\)\.click\(\{ timeout: 15_000 \}\)/);
+  assert.match(spec, /\[role="option"\]\[data-value="\$\{roleValue\}"\]/);
 });
 
 test('Technician evidence waits for canonical server lifecycle state between actions', async () => {
