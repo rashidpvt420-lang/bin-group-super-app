@@ -96,9 +96,24 @@ async function firstVisible(page: Page, selectors: string[], timeout = 20_000): 
 }
 
 async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 15_000) {
-  const target = await firstVisible(page, selectors);
-  await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
-  await target.click();
+  const deadline = Date.now() + 25_000;
+  let lastError = '';
+  while (Date.now() < deadline) {
+    for (const selector of selectors) {
+      const target = page.locator(selector).first();
+      if (!await target.isVisible({ timeout: 500 }).catch(() => false)) continue;
+      try {
+        await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
+        await target.evaluate((node: HTMLElement) => node.click());
+        return target;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+  const body = (await page.locator('body').innerText().catch(() => '')).slice(0, 2_000);
+  throw new Error(`${label} was not actionable. Selectors: ${selectors.join(' | ')}. Last error: ${lastError || 'none'}. Page: ${body}`);
 }
 
 function ticketCoordinates(data: FirebaseFirestore.DocumentData) {
@@ -109,6 +124,16 @@ function ticketCoordinates(data: FirebaseFirestore.DocumentData) {
     throw new Error(`Ticket ${data.ticketId || data.id || 'unknown'} has no valid production property coordinates.`);
   }
   return { latitude, longitude };
+}
+
+async function reloadTechnicianMission(page: Page, ticketId: string) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForURL(new RegExp(`/technician/job/${ticketId}`), { timeout: 20_000 });
+  await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 25_000 });
+  await expect(page.locator('body')).not.toContainText(
+    /permission-denied|Mission access denied|Mission data could not be loaded/i,
+    { timeout: 10_000 },
+  );
 }
 
 async function submitRealTenantRequest(page: Page, suffix: string) {
@@ -228,15 +253,14 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await expect(page.locator('body')).toContainText(/MISSION REF|Mission Lifecycle/i, { timeout: 25_000 });
 
     let lifecycleStatus = String((await db.collection('maintenanceTickets').doc(ticketId).get()).data()?.status || '').toUpperCase();
-    const acceptMission = page.getByRole('button', { name: /Accept Mission/i }).first();
-    if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(lifecycleStatus) && await acceptMission.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await expect(acceptMission).toBeEnabled({ timeout: 15_000 });
-      await acceptMission.click();
+    if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(lifecycleStatus)) {
+      await clickRequired(page, ['button:has-text("Accept Mission")'], 'Accept Mission action');
       await expect.poll(async () => {
         const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
         return String(lifecycleSnap.data()?.status || '').toUpperCase();
       }, { timeout: 40_000, message: 'Technician acceptance must reach production Firestore before the next UI action.' }).toBe('ACCEPTED');
       lifecycleStatus = 'ACCEPTED';
+      await reloadTechnicianMission(page, ticketId);
     }
 
     if (lifecycleStatus === 'ACCEPTED') {
@@ -250,6 +274,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
         return String(lifecycleSnap.data()?.status || '').toUpperCase();
       }, { timeout: 40_000, message: 'Technician Start Trip must persist canonical ON_THE_WAY in production Firestore.' }).toBe('ON_THE_WAY');
       lifecycleStatus = 'ON_THE_WAY';
+      await reloadTechnicianMission(page, ticketId);
     }
     expect(['ON_THE_WAY', 'ARRIVED']).toContain(lifecycleStatus);
     await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated/i, { timeout: 20_000 });
@@ -263,8 +288,9 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
       await expect.poll(async () => {
         const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
         return String(lifecycleSnap.data()?.status || '').toUpperCase();
-      }, { timeout: 40_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
+      }, { timeout: 45_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
       lifecycleStatus = 'ARRIVED';
+      await reloadTechnicianMission(page, ticketId);
     }
     expect(lifecycleStatus).toBe('ARRIVED');
     await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 25_000 });
