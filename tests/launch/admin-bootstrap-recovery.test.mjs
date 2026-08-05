@@ -5,6 +5,7 @@ import test from 'node:test';
 const indexSource = await readFile(new URL('../../apps/admin-panel/src/index.tsx', import.meta.url), 'utf8');
 const packageSource = JSON.parse(await readFile(new URL('../../apps/admin-panel/package.json', import.meta.url), 'utf8'));
 const verifierSource = await readFile(new URL('../../scripts/verify-admin-build-assets.mjs', import.meta.url), 'utf8');
+const productionEnvironmentWriterSource = await readFile(new URL('../../scripts/write-production-env.mjs', import.meta.url), 'utf8');
 
 test('Admin installs bootstrap failure handling before loading the application graph', () => {
   assert.doesNotMatch(indexSource, /import\s+App\s+from\s+['"]\.\/App['"]/);
@@ -28,7 +29,18 @@ test('every Admin build verifies index entries and all generated JavaScript chun
   assert.match(verifierSource, /built Admin chunks are missing Firebase marker/);
   assert.match(verifierSource, /protected production build requested App Check/);
   assert.match(verifierSource, /protected production App Check site key was not embedded in the Admin chunks/);
+  assert.match(verifierSource, /BIN_GROUP_VALIDATION_ONLY_ENTERPRISE_SITE_KEY/);
+  assert.match(verifierSource, /isExactProductionValidationJob/);
+  assert.match(verifierSource, /validationOnlyAppCheck/);
+  assert.match(verifierSource, /deployableAppCheckSiteKeyVerified/);
+  assert.match(verifierSource, /DEPLOYMENT_ENVIRONMENT.*production/);
   assert.match(verifierSource, /sourceLevelUnsafeMfaChecksRequired: true/);
   assert.match(verifierSource, /sensitiveValuesExcluded: true/);
   assert.match(verifierSource, /hardLaunchClaim: false/);
+});
+
+test('validation-only Admin App Check value reaches the subsequent protected build step', () => {
+  assert.match(productionEnvironmentWriterSource, /process\.env\.GITHUB_ENV/);
+  assert.match(productionEnvironmentWriterSource, /appendFileSync/);
+  assert.match(productionEnvironmentWriterSource, /REACT_APP_APP_CHECK_SITE_KEY=\$\{VALIDATION_ONLY_ENTERPRISE_SITE_KEY\}/);
 });
