@@ -14,6 +14,7 @@ const MAX_PUSH_TOKENS_PER_USER = 10;
 const MAX_FCM_MULTICAST_TOKENS = 500;
 const PUSH_TOKEN_MIN_LENGTH = 50;
 const PUSH_TOKEN_MAX_LENGTH = 4096;
+const CURRENT_PUSH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PUSH_TOKEN_RE = /^[A-Za-z0-9_:\-.]+$/;
 const PUSH_PLATFORMS = new Set(["web", "android-web", "ios-pwa"]);
 const PUSH_ENABLED_ROLES = new Set([
@@ -186,8 +187,17 @@ async function registrationsForUser(userId: string): Promise<PushRegistration[]>
     const tokenDocs = await db.collection("users").doc(userId).collection("fcmTokens").get();
     const registrations: PushRegistration[] = [];
     for (const tokenDoc of tokenDocs.docs) {
-        const token = String(tokenDoc.data()?.token || "").trim();
-        if (!token || tokenHash(token) !== tokenDoc.id) continue;
+        const data = tokenDoc.data() || {};
+        const token = String(data.token || "").trim();
+        const permission = cleanString(data.permission, 32).toLowerCase();
+        const registeredAtMs = timestampMillis(data.lastRegisteredAt || data.updatedAt || data.createdAt);
+        if (
+            !token ||
+            tokenHash(token) !== tokenDoc.id ||
+            data.active === false ||
+            (permission && permission !== "granted") ||
+            registeredAtMs < Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS
+        ) continue;
         registrations.push({ token, tokenHash: tokenDoc.id, userId, ref: tokenDoc.ref });
     }
     return registrations;
