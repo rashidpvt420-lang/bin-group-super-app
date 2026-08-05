@@ -16,7 +16,8 @@ test('mailbox identities are derived from authenticated Gmail profiles', () => {
   assert.match(resolver, /OAuth identity does not match the configured mailbox/);
   assert.match(resolver, /E2E role email collision/);
   assert.match(resolver, /seenRoleByEmail/);
-  assert.match(resolver, /appendFileSync\(githubEnv/);
+  assert.match(resolver, /appendFileSync\(\s*githubEnv/);
+  assert.match(resolver, /E2E_OWNER_EMAIL=\$\{ownerEmail\}/);
   assert.match(resolver, /::add-mask::/);
   assert.doesNotMatch(resolver, /console\.log\([^\n]*ownerEmail/);
   assert.doesNotMatch(resolver, /console\.log\([^\n]*brokerEmail/);
