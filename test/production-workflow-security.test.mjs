@@ -93,10 +93,26 @@ test('Admin Enterprise App Check config is resolved only after protected cloud a
     'Create strict production environment files',
     resolveConfig,
   );
+  const buildAdmin = workflow.indexOf('Build dedicated admin panel', writeEnvironment);
+  const verifyAdmin = workflow.indexOf(
+    'Verify admin Firebase project embedding before deploy',
+    buildAdmin,
+  );
+  const deployAdminBuildBlock = workflow.slice(buildAdmin, verifyAdmin);
 
   assert.ok(deployJob >= 0 && authenticate > deployJob);
-  assert.ok(resolveConfig > authenticate && writeEnvironment > resolveConfig);
+  assert.ok(
+    resolveConfig > authenticate &&
+    writeEnvironment > resolveConfig &&
+    buildAdmin > writeEnvironment &&
+    verifyAdmin > buildAdmin,
+  );
   assert.match(workflow, /node scripts\/resolve-admin-app-check-site-key\.mjs/);
+  assert.doesNotMatch(
+    deployAdminBuildBlock,
+    /REACT_APP_APP_CHECK_SITE_KEY:\s*\$\{\{\s*secrets\./,
+    'the deploy Admin build must inherit the authenticated resolver value from GITHUB_ENV',
+  );
 });
 
 test('protected production job receives every five-role credential and App Check UUID', () => {
