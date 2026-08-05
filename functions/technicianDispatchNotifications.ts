@@ -5,6 +5,7 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
+const CURRENT_PUSH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 function clean(value: unknown, maxLength = 240) {
   return String(value || "").trim().slice(0, maxLength);
@@ -32,6 +33,26 @@ function timestampKey(value: unknown) {
   if (Number.isFinite(seconds)) return `${seconds}:${Number.isFinite(nanos) ? nanos : 0}`;
   const parsed = Date.parse(String(value));
   return Number.isFinite(parsed) ? String(parsed) : clean(value, 120) || "missing-time";
+}
+
+function timestampMillis(value: unknown) {
+  if (value && typeof (value as any)?.toMillis === "function") return Number((value as any).toMillis());
+  const seconds = Number((value as any)?.seconds ?? (value as any)?._seconds);
+  if (Number.isFinite(seconds)) return seconds * 1000;
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isCurrentRegisteredPushToken(tokenDoc: FirebaseFirestore.QueryDocumentSnapshot) {
+  const data = tokenDoc.data() || {};
+  const token = clean(data.token, 4096);
+  const permission = clean(data.permission, 32).toLowerCase();
+  const registeredAtMs = timestampMillis(data.lastRegisteredAt || data.updatedAt || data.createdAt);
+  return Boolean(token)
+    && crypto.createHash("sha256").update(token, "utf8").digest("hex") === tokenDoc.id
+    && data.active !== false
+    && (!permission || permission === "granted")
+    && registeredAtMs >= Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS;
 }
 
 function assignmentEventKey(data: FirebaseFirestore.DocumentData | undefined) {
@@ -77,11 +98,8 @@ async function createAssignmentNotification(
     .createHash("sha256")
     .update(`${ticketId}|${technicianId}|${eventKey}`, "utf8")
     .digest("hex");
-  const tokenSnapshot = await db.collection("users").doc(technicianId).collection("fcmTokens").limit(1).get();
-  const hasRegisteredPushToken = tokenSnapshot.docs.some((tokenDoc) => {
-    const token = clean(tokenDoc.data()?.token, 4096);
-    return Boolean(token) && crypto.createHash("sha256").update(token, "utf8").digest("hex") === tokenDoc.id;
-  });
+  const tokenSnapshot = await db.collection("users").doc(technicianId).collection("fcmTokens").get();
+  const hasRegisteredPushToken = tokenSnapshot.docs.some(isCurrentRegisteredPushToken);
   const initialPushReceipt = hasRegisteredPushToken
     ? { pushDeliveryState: "PENDING_TRIGGER" }
     : {
