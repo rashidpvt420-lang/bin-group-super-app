@@ -268,8 +268,24 @@ async function seedOperationalFixtures() {
       ownerId: OWNER_REVIEW_UID,
       ownerUid: OWNER_REVIEW_UID,
       emirate: 'Dubai',
+      city: 'Dubai',
+      area: 'Dubai Marina',
       serviceZone: 'Dubai Marina',
       address: 'Protected E2E approval fixture',
+      submittedGeo: {
+        lat: 25.2048,
+        lng: 55.2708,
+        latitude: 25.2048,
+        longitude: 55.2708,
+        address: 'Protected E2E approval fixture',
+        emirate: 'Dubai',
+        city: 'Dubai',
+        area: 'Dubai Marina',
+        source: 'protected_e2e_fixture',
+        submittedSource: 'protected_e2e_fixture',
+        accuracyMeters: 15,
+        capturedAt: freshGps,
+      },
       status: 'pending_review',
       e2eRunId: RUN_ID,
       createdAt: serverTimestamp(),
@@ -636,9 +652,30 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     const approvePropertyRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
     await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
-    page.once('dialog', async (dialog) => dialog.accept());
+    let approvalDialogMessage = '';
+    page.once('dialog', async (dialog) => {
+      approvalDialogMessage = dialog.message();
+      await dialog.accept();
+    });
     await approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
+    expect(approvalDialogMessage).toMatch(/approved successfully/i);
+    expect(approvalDialogMessage).not.toMatch(/error|failed/i);
+    const approvedProperty = (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data() || {};
+    expect(approvedProperty.geo).toMatchObject({
+      lat: 25.2048,
+      lng: 55.2708,
+      verified: true,
+      dispatchReady: true,
+      requiresGeoReview: false,
+      source: 'admin_manual',
+      verificationVersion: 1,
+    });
+    expect(approvedProperty.geoVerification).toMatchObject({
+      state: 'VERIFIED',
+      source: 'FOUNDER_MFA_REVIEW',
+      verificationVersion: 1,
+    });
 
     const rejectPropertyRow = page.getByRole('row').filter({ hasText: REJECT_PROPERTY_NAME }).first();
     await expect(rejectPropertyRow).toBeVisible({ timeout: 30_000 });
