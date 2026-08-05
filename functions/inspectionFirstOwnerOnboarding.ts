@@ -394,7 +394,11 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
   const fullName = text(data.ownerName || companyProfile.contactPerson || data.signatureName).slice(0, 160);
   const mobile = text(data.ownerMobile || companyProfile.phone).slice(0, 60);
   const contractId = intakeId;
-  const now = ts();
+  // A concrete server timestamp is required because normalizedProperties is
+  // also embedded inside intake/contract arrays. Firestore field transforms
+  // (including serverTimestamp) are invalid inside array values and otherwise
+  // make this callable fail as an opaque HTTP 500.
+  const now = admin.firestore.Timestamp.now();
   const paymentRef = db.collection("payment_transactions").doc(intakeId);
   const contractRef = db.collection("contracts").doc(contractId);
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
