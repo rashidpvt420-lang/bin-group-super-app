@@ -531,7 +531,8 @@ async function createStaffThroughUi(page: Page, name: string, email: string, rol
   await dialog.getByLabel('Full Name').fill(name);
   await dialog.getByLabel('Email Address').fill(email);
   await dialog.getByTestId('staff-role-select').click({ timeout: 15_000 });
-  await page.getByRole('option', { name: new RegExp(roleLabel, 'i') }).click();
+  const roleValue = roleLabel === 'Technician' ? 'technician' : 'support_admin';
+  await page.locator(`[role="option"][data-value="${roleValue}"]`).click();
   await dialog.getByRole('button', { name: /CREATE & SEND INVITATION/i }).click();
   await expect(dialog).not.toBeVisible({ timeout: 45_000 });
   await expect.poll(async () => Boolean(await findAuthUser(email)), { timeout: 45_000 }).toBe(true);
