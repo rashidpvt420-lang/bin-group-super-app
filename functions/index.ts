@@ -349,6 +349,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
         ACCEPTED: ["EN_ROUTE"],
         ASSIGNED: ["EN_ROUTE"],
         EN_ROUTE: ["ARRIVED"],
+        ON_THE_WAY: ["ARRIVED"],
         ARRIVED: ["IN_PROGRESS"],
         IN_PROGRESS: ["COMPLETED", "COMPLETED_PENDING_APPROVAL"],
     };
