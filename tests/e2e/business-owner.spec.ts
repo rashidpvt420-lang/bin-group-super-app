@@ -131,6 +131,24 @@ async function login(page: Page) {
   );
 }
 
+async function acceptLegalAgreementIfRequired(page: Page) {
+  const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  if (!await agreement.isVisible({ timeout: 5_000 }).catch(() => false)) return;
+
+  const content = agreement.locator('.MuiDialogContent-root').first();
+  await expect(content, 'Owner legal agreement must expose its scrollable content').toBeVisible({ timeout: 10_000 });
+  await content.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+    node.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+
+  const agree = agreement.getByRole('button', { name: /I AGREE & ENTER/i });
+  await expect(agree, 'Owner legal consent must become enabled after the full agreement is reviewed').toBeEnabled({ timeout: 10_000 });
+  await agree.click();
+  await expect(agreement).not.toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('body')).not.toContainText(/SOVEREIGN INSTITUTIONAL AGREEMENT/i, { timeout: 10_000 });
+}
+
 async function expectAcquiredOwnerDashboard(page: Page) {
   // The default Owner route is intentionally the decision-focused Simple
   // dashboard. Prove the activated property on the real advanced portfolio
@@ -164,6 +182,7 @@ test.describe('Owner Business Workflow', () => {
     (page as any).__binAppCheckMonitor = monitor;
     await monitor.assertTokenFingerprint();
     await login(page);
+    await acceptLegalAgreementIfRequired(page);
   });
 
   test.afterEach(async ({ page }) => {
@@ -264,7 +283,7 @@ test.describe('Owner Business Workflow', () => {
     await page.goto('/owner/financials', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/owner\/financials/, { timeout: 20_000 });
     await expect(page.locator('body')).not.toContainText(
-      /permission-denied|missing or insufficient permissions|application error|minified react error/i,
+      /permission-denied|missing or insufficient permissions|application error|minified react error|SOVEREIGN INSTITUTIONAL AGREEMENT/i,
       { timeout: 10_000 },
     );
     await expect(page.locator('body')).toContainText(/AED|payment|financial|invoice|billing/i, { timeout: 20_000 });
