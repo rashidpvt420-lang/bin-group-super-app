@@ -368,6 +368,9 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Resolve canonical Admin Enterprise App Check config
+        run: node scripts/resolve-admin-app-check-site-key.mjs
+
       - name: Verify predeploy hard-clearance run provenance
         if: ${{ inputs.launch_mode == 'public' }}
         env:

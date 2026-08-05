@@ -79,6 +79,26 @@ test('production deployment remains approval-gated and same-run bound', () => {
   assert.match(workflow, /verify-same-run-deployment-artifact\.mjs/);
 });
 
+test('Admin Enterprise App Check config is resolved only after protected cloud authentication', () => {
+  const deployJob = workflow.indexOf('deploy-firebase-production-stack:');
+  const authenticate = workflow.indexOf(
+    'Authenticate to Google Cloud by Workload Identity Federation',
+    deployJob,
+  );
+  const resolveConfig = workflow.indexOf(
+    'Resolve canonical Admin Enterprise App Check config',
+    deployJob,
+  );
+  const writeEnvironment = workflow.indexOf(
+    'Create strict production environment files',
+    resolveConfig,
+  );
+
+  assert.ok(deployJob >= 0 && authenticate > deployJob);
+  assert.ok(resolveConfig > authenticate && writeEnvironment > resolveConfig);
+  assert.match(workflow, /node scripts\/resolve-admin-app-check-site-key\.mjs/);
+});
+
 test('protected production job receives every five-role credential and App Check UUID', () => {
   const mailboxRoles = new Set(['OWNER', 'BROKER']);
   for (const role of ['ADMIN', 'OWNER', 'TENANT', 'TECHNICIAN', 'BROKER']) {

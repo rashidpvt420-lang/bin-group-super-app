@@ -25,11 +25,11 @@ Do not use a Google Workspace Admin Console 2-step-verification setting for this
    - `bin-group-admin-panel.web.app`
    - `bin-group-57c60.web.app`
    - approved temporary Founder recovery hosts only while the controlled recovery is active.
-6. Confirm that the matching public Enterprise site key is stored only in the protected GitHub environment as `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY`.
+6. Confirm that Firebase App Check returns the matching public Enterprise site key for the canonical Admin app. The protected production job resolves this read-only config after Workload Identity authentication. `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY` remains an optional protected-environment override.
 7. Confirm that the protected App Check debug UUID used by CI is registered for this exact Firebase web app.
 8. Do not paste a secret key into source code. Do not commit a debug token. Do not reuse a key or debug registration belonging to another Firebase project or web app.
 
-The Admin build initializes `ReCaptchaEnterpriseProvider` with `REACT_APP_APP_CHECK_SITE_KEY`, which protected workflows map from `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY`. Firebase App Check must register the dedicated Admin web app with the matching Enterprise provider configuration before a token exchange can succeed.
+The Admin build initializes `ReCaptchaEnterpriseProvider` with `REACT_APP_APP_CHECK_SITE_KEY`. The protected production workflow obtains that public site key from the canonical Firebase App Check Enterprise config, or from the validated `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY` override. Firebase App Check must register the dedicated Admin web app with the matching Enterprise provider configuration before a token exchange can succeed.
 
 ## 2. Repair Firebase Authentication access
 
