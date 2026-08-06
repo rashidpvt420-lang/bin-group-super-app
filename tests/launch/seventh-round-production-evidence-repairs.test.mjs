@@ -1,3 +1,4 @@
+// Exact-head validation trigger after the deterministic source repair completed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
