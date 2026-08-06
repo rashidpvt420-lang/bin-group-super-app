@@ -408,9 +408,14 @@ test.describe('Technician Business Workflow', () => {
   test('offline EN_ROUTE action automatically replays after connectivity returns', async ({ page, context }) => {
     test.setTimeout(120_000);
     await page.goto(`/technician/job/${offlineTicketId}`, { waitUntil: 'domcontentloaded' });
+    const offlineStartTrip = page.getByRole('button', { name: /On The Way/i }).first();
+    await expect(offlineStartTrip).toBeVisible({ timeout: 30_000 });
+    await expect(offlineStartTrip).toBeEnabled({ timeout: 30_000 });
+    await expect(page.locator('body')).toContainText(/Mission Lifecycle|On The Way/i, { timeout: 30_000 });
     await context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')));
     await expect(page.locator('body')).toContainText(/Offline mode/i, { timeout: 15_000 });
-    await clickRequired(page, ['button:has-text("On The Way")'], 'Offline start trip action');
+    await offlineStartTrip.click();
     await expect.poll(async () => page.evaluate(() => {
       const queue = JSON.parse(localStorage.getItem('bin_offline_queue') || '[]');
       return queue.some((item: any) => String(item.payload || '').includes('EN_ROUTE'));
