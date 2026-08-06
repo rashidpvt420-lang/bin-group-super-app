@@ -372,6 +372,16 @@ service cloud.firestore {
         isNotSuspended();
     }
 
+    function canGetAssignedTechnicianTicket(data) {
+      // Direct mission reloads must use the same fail-closed Technician boundary
+      // without evaluating unrelated Owner, Tenant, Broker and dispatcher paths.
+      return signedIn() &&
+        claimedRole() in ['technician', 'tech'] &&
+        techOwns(data) &&
+        hasApprovedTechnicianRecord() &&
+        isNotSuspended();
+    }
+
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
 
     function staffRequestCreate(data) {
@@ -1175,12 +1185,14 @@ service cloud.firestore {
 
     match /tickets/{ticketId} {
       allow list: if canListAssignedTechnicianTicket(resource.data);
+      allow get: if canGetAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create, update, delete: if false;
     }
 
     match /maintenanceTickets/{ticketId} {
       allow list: if canListAssignedTechnicianTicket(resource.data);
+      allow get: if canGetAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create: if isAdmin();
       allow update: if safeTicketUpdateByActor();

@@ -181,6 +181,8 @@ export default function TechnicianJobDetailPage() {
         || listLength(ticket?.tenantPhotos) > 0
         || listLength(ticket?.photos) > 0
         || listLength(ticket?.initialPhotoUrls) > 0;
+    const hasTechnicianBeforeProof = Boolean(ticket?.technicianBeforePhotoUrl)
+        || listLength(ticket?.technicianBeforePhotos) > 0;
     const hasAfterProof = hasAnyPhoto || hasExistingAfterProof;
     const hasResolutionNotes = notes.trim().length >= 10 || String(ticket?.technicianNotes || ticket?.notes || '').trim().length >= 10;
     const hasPartsDisposition = materials.trim().length >= 2 || listLength(ticket?.materialsUsed) > 0 || Boolean(ticket?.partsUsed || ticket?.noPartsRequired);
@@ -461,10 +463,15 @@ export default function TechnicianJobDetailPage() {
                                     <Stack direction="row" flexWrap="wrap" gap={2}>
                                         <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
                                         <Button variant="outlined" disabled={actionLoading || !['EN_ROUTE', 'ON_THE_WAY'].includes(status)} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
-                                        <Button variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
+                                        <Button data-testid="technician-start-work" variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !hasTechnicianBeforeProof || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
                                     </Stack>
                                     {status === 'ARRIVED' && (
                                         <Paper sx={{ p: 2, bgcolor: alpha('#f59e0b', 0.05), border: `1px dashed ${alpha('#f59e0b', 0.3)}`, borderRadius: 3 }}>
+                                            {!hasTechnicianBeforeProof && (
+                                                <Alert data-testid="technician-start-work-proof-required" severity="warning" sx={{ mb: 2 }}>
+                                                    {tx('tech.job.before_work_required', 'Capture and verify the before-work site photo above before Start Work can be enabled.')}
+                                                </Alert>
+                                            )}
                                             <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 950, display: 'block', mb: 1 }}>{tx('tech.job.safety_check', 'PRE-WORK SAFETY PROTOCOL')}</Typography>
                                             <Stack spacing={1}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

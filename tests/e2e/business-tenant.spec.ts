@@ -295,6 +295,21 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     expect(lifecycleStatus).toBe('ARRIVED');
     await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 25_000 });
 
+    const beforeWorkInput = page.getByTestId('technician-before-work-file');
+    await expect(beforeWorkInput).toHaveCount(1);
+    await beforeWorkInput.setInputFiles({
+      name: `technician-before-${ticketId}.png`,
+      mimeType: 'image/png',
+      buffer: IMAGE_BUFFER,
+    });
+    await expect(page.getByTestId('technician-before-work-success')).toBeVisible({ timeout: 45_000 });
+    await expect.poll(async () => {
+      const beforeWorkSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      const beforeWork = beforeWorkSnap.data() || {};
+      return Boolean(beforeWork.technicianBeforePhotoUrl)
+        || (Array.isArray(beforeWork.technicianBeforePhotos) && beforeWork.technicianBeforePhotos.length > 0);
+    }, { timeout: 45_000, message: 'Technician before-work evidence must persist before Start Work.' }).toBe(true);
+
     const ppe = page.locator('#ppe');
     const safety = page.locator('#safety');
     await expect(ppe).toBeVisible({ timeout: 10_000 });

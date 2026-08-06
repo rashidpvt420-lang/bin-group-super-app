@@ -186,6 +186,26 @@ test.describe('Technician Business Workflow', () => {
     initializeAdminSdk();
     const technician = await admin.auth().getUserByEmail(EMAIL);
     technicianUid = technician.uid;
+    await admin.auth().setCustomUserClaims(technicianUid, {
+      ...(technician.customClaims || {}),
+      role: 'technician',
+      userRole: 'technician',
+      primaryRole: 'technician',
+      technician: true,
+      admin: false,
+      isAdmin: false,
+      superAdmin: false,
+      super_admin: false,
+      suspended: false,
+    });
+    const canonicalTechnician = await admin.auth().getUser(technicianUid);
+    expect(canonicalTechnician.customClaims).toMatchObject({
+      role: 'technician',
+      userRole: 'technician',
+      primaryRole: 'technician',
+      technician: true,
+      suspended: false,
+    });
     const suffix = technicianUid.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 48);
     dispatchTicketId = `e2e-tech-dispatch-${EVIDENCE_RUN_KEY}-${suffix}`;
     gpsDeniedTicketId = `e2e-tech-gps-denied-${EVIDENCE_RUN_KEY}-${suffix}`;
