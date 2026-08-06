@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   Dialog, 
   DialogTitle, 
@@ -23,14 +23,33 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   const [loading, setLoading] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = () => {
+  const evaluateScrollReadiness = useCallback(() => {
     if (contentRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
-      if (scrollTop + clientHeight >= scrollHeight - 20) {
-        setScrolledToBottom(true);
-      }
+      // Some desktop and accessibility layouts show the complete agreement
+      // without a scrollbar. In that case no scroll event is emitted, so the
+      // consent action must become available immediately rather than remain
+      // permanently disabled.
+      setScrolledToBottom(
+        scrollHeight <= clientHeight + 20 ||
+        scrollTop + clientHeight >= scrollHeight - 20,
+      );
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return undefined;
+    const frame = window.requestAnimationFrame(evaluateScrollReadiness);
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(evaluateScrollReadiness)
+      : null;
+    observer?.observe(content);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [evaluateScrollReadiness]);
 
   const handleAgree = () => {
     if (loading) return;
@@ -91,7 +110,9 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
       
       <DialogContent 
         ref={contentRef} 
-        onScroll={handleScroll}
+        onScroll={evaluateScrollReadiness}
+        data-testid="legal-agreement-content"
+        tabIndex={0}
         sx={{ py: 4, maxHeight: '60vh' }}
       >
         <Typography variant="body2" paragraph sx={{ mb: 4, color: '#D4AF37', fontWeight: 'bold' }}>

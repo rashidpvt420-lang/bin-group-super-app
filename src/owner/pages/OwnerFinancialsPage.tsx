@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Typography, Paper, Stack, Chip, CircularProgress,
+    Alert, Box, Typography, Paper, Stack, Chip, CircularProgress,
     Grid, alpha, Button, Divider,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
@@ -9,7 +9,7 @@ import {
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle, FileText
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -43,10 +43,17 @@ export default function OwnerFinancialsPage() {
     });
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
-        if (!user?.email || !user?.uid) return;
+        if (!user?.email || !user?.uid) {
+            setLoading(false);
+            setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
+            return undefined;
+        }
 
+        setLoading(true);
+        setLoadError('');
         const email = user.email.toLowerCase();
 
         const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
@@ -67,11 +74,28 @@ export default function OwnerFinancialsPage() {
                 managementFees: fees,
                 maintenanceDeductions: maint
             });
+            setLoading(false);
+        }, (error) => {
+            console.error('Owner financial passport stream failed:', error);
+            setLoadError('The property financial summary could not be loaded. Invoice and payout records remain available below.');
+            setLoading(false);
         });
 
-        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), orderBy('createdAt', 'desc'), limit(10));
+        // Sort the Owner-scoped result on the client. Combining where +
+        // orderBy previously required a production composite index and left
+        // the page on an infinite loader when that stream failed.
+        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email));
         const unsubscribeTrans = onSnapshot(transQ, (snap) => {
-            setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const rows = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
+                .slice(0, 10);
+            setTransactions(rows);
+            setLoading(false);
+        }, (error) => {
+            console.error('Owner payout stream failed:', error);
+            setTransactions([]);
+            setLoadError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
             setLoading(false);
         });
 
@@ -81,6 +105,12 @@ export default function OwnerFinancialsPage() {
             setInvoices(
                 rows.sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
             );
+            setLoading(false);
+        }, (error) => {
+            console.error('Owner invoice stream failed:', error);
+            setInvoices([]);
+            setLoadError('Owner invoices could not be loaded. Please retry before approving or paying any amount.');
+            setLoading(false);
         });
 
         return () => {
@@ -106,6 +136,10 @@ export default function OwnerFinancialsPage() {
 
     return (
         <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
+            {loadError && (
+                <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>
+            )}
+
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.fin.ledger_title', 'INSTITUTIONAL REVENUE LEDGER')}</Typography>

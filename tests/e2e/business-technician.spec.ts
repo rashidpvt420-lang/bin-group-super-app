@@ -194,6 +194,10 @@ test.describe('Technician Business Workflow', () => {
 
     const db = admin.firestore();
     const readiness = {
+      uid: technicianUid,
+      authUid: technicianUid,
+      userId: technicianUid,
+      email: EMAIL.toLowerCase(),
       role: 'technician',
       status: 'active',
       approvalStatus: 'approved',

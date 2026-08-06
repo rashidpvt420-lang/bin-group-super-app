@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Authenticated production business proof for the Tenant role.
  *
  * This suite deliberately does not seed a completed ticket. Every reviewable
@@ -239,7 +239,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
   const coordinates = ticketCoordinates({ id: ticketId, ...ticketSnap.data() });
   const context: BrowserContext = await browser.newContext({
     baseURL: BASE_URL,
-    geolocation: { longitude: coordinates.longitude, latitude: coordinates.latitude },
+    geolocation: { longitude: coordinates.longitude, latitude: coordinates.latitude, accuracy: 15 },
     permissions: ['geolocation', 'notifications'],
   });
   const page = await context.newPage();
