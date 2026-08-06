@@ -328,10 +328,8 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await expect(materials).toBeVisible({ timeout: 10_000 });
     await materials.fill('No parts required');
 
-    const completionInput = await firstVisible(page, [
-      'input[type="file"][accept*="image"]',
-      'input[type="file"]',
-    ], 20_000);
+    const completionInput = page.getByTestId('technician-after-work-file');
+    await expect(completionInput).toHaveCount(1, { timeout: 20_000 });
     await completionInput.setInputFiles({
       name: `technician-after-${ticketId}.png`,
       mimeType: 'image/png',

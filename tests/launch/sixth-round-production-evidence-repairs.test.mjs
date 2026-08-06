@@ -39,11 +39,18 @@ test('all protected business evidence specs compile before deployment', () => {
   }
 });
 
-test('Admin property and payment approval dialogs use distinct identifiers', () => {
+test('Admin property alert handlers and payment approval dialog use distinct identifiers', () => {
   const source = read('tests/e2e/business-admin.spec.ts');
-  assert.match(source, /const propertyApprovalBrowserDialog = await approvalDialogPromise/);
+  assert.match(source, /const propertyApprovalDialogHandler = async/);
+  assert.match(source, /const propertyRejectionDialogHandler = async/);
+  assert.notEqual(
+    source.indexOf('propertyApprovalDialogHandler'),
+    source.indexOf('propertyRejectionDialogHandler'),
+    'Property approval and rejection handlers must remain distinct.',
+  );
   assert.match(source, /const approvalDialog = page\.getByRole\('dialog', \{ name: \/Confirm Payment & Unlock Owner\/i \}\)/);
   assert.equal((source.match(/const approvalDialog\s*=/g) || []).length, 1);
+  assert.doesNotMatch(source, /const propertyApprovalBrowserDialog/);
 });
 
 test('assigned Technician direct mission reads have a narrow fail-closed rule', () => {

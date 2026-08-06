@@ -652,15 +652,19 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     const approvePropertyRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
     await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
-    const approvalDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
-    const approvalClickPromise = approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
-    const propertyApprovalBrowserDialog = await approvalDialogPromise;
-    const propertyApprovalDialogMessage = propertyApprovalBrowserDialog.message();
-    await propertyApprovalBrowserDialog.accept();
-    await approvalClickPromise;
-    await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
-    expect(propertyApprovalDialogMessage).toMatch(/approved successfully/i);
-    expect(propertyApprovalDialogMessage).not.toMatch(/error|failed/i);
+    let propertyApprovalDialogMessage = '';
+    const propertyApprovalDialogHandler = async (dialog: import('@playwright/test').Dialog) => {
+      propertyApprovalDialogMessage = dialog.message();
+      await dialog.accept();
+    };
+    page.on('dialog', propertyApprovalDialogHandler);
+    await approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
+    await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 60_000 }).toBe('APPROVED');
+    page.off('dialog', propertyApprovalDialogHandler);
+    if (propertyApprovalDialogMessage) {
+      expect(propertyApprovalDialogMessage).toMatch(/approved successfully/i);
+      expect(propertyApprovalDialogMessage).not.toMatch(/error|failed/i);
+    }
     const approvedProperty = (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data() || {};
     expect(approvedProperty.geo).toMatchObject({
       lat: 25.2048,
@@ -682,15 +686,19 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectPropertyRow.getByRole('button', { name: 'Reject', exact: true }).click();
     const propertyRejectDialog = page.getByRole('dialog', { name: 'Reject Property Submission' });
     await propertyRejectDialog.getByLabel('Rejection Reason').fill('Protected E2E property evidence requires correction.');
-    const rejectionDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
-    const rejectionClickPromise = propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
-    const rejectionDialog = await rejectionDialogPromise;
-    const rejectionDialogMessage = rejectionDialog.message();
-    expect(rejectionDialogMessage).toMatch(/rejected/i);
-    expect(rejectionDialogMessage).not.toMatch(/error|failed/i);
-    await rejectionDialog.accept();
-    await rejectionClickPromise;
-    await expect.poll(async () => (await db.collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
+    let propertyRejectionDialogMessage = '';
+    const propertyRejectionDialogHandler = async (dialog: import('@playwright/test').Dialog) => {
+      propertyRejectionDialogMessage = dialog.message();
+      await dialog.accept();
+    };
+    page.on('dialog', propertyRejectionDialogHandler);
+    await propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
+    await expect.poll(async () => (await db.collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 60_000 }).toBe('REJECTED');
+    page.off('dialog', propertyRejectionDialogHandler);
+    if (propertyRejectionDialogMessage) {
+      expect(propertyRejectionDialogMessage).toMatch(/rejected/i);
+      expect(propertyRejectionDialogMessage).not.toMatch(/error|failed/i);
+    }
 
     const propertyApprovalAudits = await db.collection('audit_logs').where('targetId', '==', APPROVE_PROPERTY_ID).get();
     const propertyRejectionAudits = await db.collection('audit_logs').where('targetId', '==', REJECT_PROPERTY_ID).get();

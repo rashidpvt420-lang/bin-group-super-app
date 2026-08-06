@@ -505,7 +505,7 @@ export default function TechnicianJobDetailPage() {
                                 <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used / No parts required')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
                                 <Button component="label" variant="outlined" startIcon={<Camera />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.25)', mb: 2 }}>
                                     {tx('tech.job.add_photos', 'Add after-work proof photos')}
-                                    <input hidden type="file" accept="image/*" multiple onChange={handlePhotoChange} />
+                                    <input data-testid="technician-after-work-file" hidden type="file" accept="image/*" multiple onChange={handlePhotoChange} />
                                 </Button>
                                 <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mb: 2 }}>
                                     {previews.map((url, i) => <Box key={i} component="img" src={url} sx={{ width: 82, height: 82, borderRadius: 2, objectFit: 'cover' }} />)}

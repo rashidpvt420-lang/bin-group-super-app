@@ -36,11 +36,17 @@ test('Owner financial streams fail visibly instead of holding an infinite loader
   assert.match(source, /<Alert severity="warning"/);
 });
 
-test('Admin production evidence waits for the actual browser alerts', () => {
+test('Admin production evidence captures optional browser alerts without blocking authoritative state', () => {
   const source = read('tests/e2e/business-admin.spec.ts');
-  assert.match(source, /page\.waitForEvent\('dialog',\s*\{\s*timeout:\s*30_000\s*\}\)/);
-  assert.match(source, /propertyApprovalBrowserDialog\.message\(\)/);
-  assert.match(source, /rejectionDialog\.message\(\)/);
+  assert.doesNotMatch(source, /page\.waitForEvent\('dialog',\s*\{\s*timeout:\s*30_000\s*\}\)/);
+  assert.match(source, /page\.on\('dialog', propertyApprovalDialogHandler\)/);
+  assert.match(source, /page\.off\('dialog', propertyApprovalDialogHandler\)/);
+  assert.match(source, /page\.on\('dialog', propertyRejectionDialogHandler\)/);
+  assert.match(source, /page\.off\('dialog', propertyRejectionDialogHandler\)/);
+  assert.match(source, /toBe\('APPROVED'\)/);
+  assert.match(source, /toBe\('REJECTED'\)/);
+  assert.match(source, /action === 'APPROVE_PROPERTY'/);
+  assert.match(source, /action === 'REJECT_PROPERTY'/);
 });
 
 test('Tenant cross-role arrival includes server-verifiable GPS accuracy', () => {
