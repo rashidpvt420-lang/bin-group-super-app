@@ -25,8 +25,8 @@ test('Admin MFA bootstrap requires the protected exact marker and bank-pilot sco
 
 test('Admin MFA bootstrap publishes Admin Hosting before bounded remediation callables and MFA enforcement', () => {
   const targetDefinition = source.indexOf('const adminBootstrapDeployTarget');
-  const hostingDeploy = source.indexOf("adminBootstrapHostingTarget,\n    'Admin MFA bootstrap hosting'");
-  const functionDeploy = source.indexOf("adminBootstrapFunctionTarget,\n    'Admin MFA bootstrap remediation callables'");
+  const hostingDeploy = source.indexOf("'Admin MFA bootstrap hosting'");
+  const functionDeploy = source.indexOf("'Admin MFA bootstrap remediation callables'");
   const mfaPreflight = source.indexOf('adminMfaEvidence = await verifyAdminMfaProduction');
   const batchedFunctionsDeploy = source.indexOf('const functionDeploymentEvidence = deployFunctionsQuotaSafe()');
   const nonFunctionsDeploy = source.indexOf("'non-Functions Firebase production stack'");

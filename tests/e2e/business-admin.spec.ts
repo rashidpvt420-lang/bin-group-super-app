@@ -183,6 +183,18 @@ async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<type
 
     const challenge = page.getByTestId('admin-mfa-signin-challenge');
     await expect(challenge, 'the canonical Founder must receive the real enrolled Firebase MFA challenge').toBeVisible({ timeout: 30_000 });
+    const factorSelect = page.getByTestId('admin-mfa-factor-select');
+    if (await factorSelect.isVisible().catch(() => false)) {
+      const options = await factorSelect.locator('option').all();
+      for (const opt of options) {
+        const optText = await opt.innerText();
+        if (/authenticator/i.test(optText)) {
+          const val = await opt.getAttribute('value');
+          if (val) await factorSelect.selectOption(val);
+          break;
+        }
+      }
+    }
     await page.getByTestId('admin-mfa-send-signin-code').click();
     await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('admin-mfa-signin-code').fill(currentAdminMfaCode());

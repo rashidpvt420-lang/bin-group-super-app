@@ -95,6 +95,20 @@ export async function loginAdminWithRealMfa(
     expect(authResponse.status(), 'Firebase Auth password endpoint returned an error status.').toBeLessThan(400);
 
     await expect(page.getByTestId('admin-mfa-signin-challenge')).toBeVisible({ timeout: 30_000 });
+    if (credentials.totpSecret) {
+      const factorSelect = page.getByTestId('admin-mfa-factor-select');
+      if (await factorSelect.isVisible().catch(() => false)) {
+        const options = await factorSelect.locator('option').all();
+        for (const opt of options) {
+          const optText = await opt.innerText();
+          if (/authenticator/i.test(optText)) {
+            const val = await opt.getAttribute('value');
+            if (val) await factorSelect.selectOption(val);
+            break;
+          }
+        }
+      }
+    }
     const totpSelected = page.getByTestId('admin-mfa-totp-selected');
     if (await totpSelected.isVisible().catch(() => false)) {
       if (!credentials.totpSecret) {
