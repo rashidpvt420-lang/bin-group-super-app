@@ -1,0 +1,245 @@
+diff --git a/src/context/RoleContext.tsx b/src/context/RoleContext.tsx
+index f3dfd33..0000000 100644
+--- a/src/context/RoleContext.tsx
++++ b/src/context/RoleContext.tsx
+@@ -226,8 +226,15 @@ export function RoleProvider({ children }: { children: ReactNode }) {
+                 setUser({
+                     ...currentUser,
+                     ...data,
++                    // The authenticated Firebase identity is authoritative. A
++                    // stale or malformed profile document must never replace
++                    // the live Auth UID or email-verification state used by
++                    // assignment-bound Owner/Tenant/Technician workflows.
++                    uid: currentUser.uid,
++                    email: currentUser.email || data.email || null,
++                    emailVerified: currentUser.emailVerified,
+                     role: resolvedRole,
+                     status: resolvedStatus,
+                     isAdmin: resolvedIsAdmin,
+                     onboardingComplete: resolvedOnboardingComplete,
+                 } as SovereignUser);
+diff --git a/src/components/LegalModal.tsx b/src/components/LegalModal.tsx
+index 3d18760..0000000 100644
+--- a/src/components/LegalModal.tsx
++++ b/src/components/LegalModal.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState, useRef } from 'react';
++import React, { useCallback, useEffect, useRef, useState } from 'react';
+ import { 
+   Dialog, 
+   DialogTitle, 
+@@ -20,15 +20,30 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
+   const [loading, setLoading] = useState(false);
+   const contentRef = useRef<HTMLDivElement>(null);
+ 
+-  const handleScroll = () => {
++  const evaluateScrollReadiness = useCallback(() => {
+     if (contentRef.current) {
+       const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
+-      if (scrollTop + clientHeight >= scrollHeight - 20) {
+-        setScrolledToBottom(true);
+-      }
++      // Some desktop and accessibility layouts show the complete agreement
++      // without a scrollbar. In that case no scroll event is emitted, so the
++      // consent action must become available immediately rather than remain
++      // permanently disabled.
++      setScrolledToBottom(
++        scrollHeight <= clientHeight + 20 ||
++        scrollTop + clientHeight >= scrollHeight - 20,
++      );
+     }
+-  };
++  }, []);
++
++  useEffect(() => {
++    const content = contentRef.current;
++    if (!content) return undefined;
++    const frame = window.requestAnimationFrame(evaluateScrollReadiness);
++    const observer = typeof ResizeObserver !== 'undefined'
++      ? new ResizeObserver(evaluateScrollReadiness)
++      : null;
++    observer?.observe(content);
++    return () => {
++      window.cancelAnimationFrame(frame);
++      observer?.disconnect();
++    };
++  }, [evaluateScrollReadiness]);
+ 
+   const handleAgree = () => {
+     if (loading) return;
+@@ -91,8 +106,10 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
+       
+       <DialogContent 
+         ref={contentRef} 
+-        onScroll={handleScroll}
++        onScroll={evaluateScrollReadiness}
++        data-testid="legal-agreement-content"
++        tabIndex={0}
+         sx={{ py: 4, maxHeight: '60vh' }}
+       >
+         <Typography variant="body2" paragraph sx={{ mb: 4, color: '#D4AF37', fontWeight: 'bold' }}>
+diff --git a/src/owner/pages/OwnerFinancialsPage.tsx b/src/owner/pages/OwnerFinancialsPage.tsx
+index 2c4a9b1..0000000 100644
+--- a/src/owner/pages/OwnerFinancialsPage.tsx
++++ b/src/owner/pages/OwnerFinancialsPage.tsx
+@@ -1,6 +1,6 @@
+ import React, { useState, useEffect } from 'react';
+ import {
+-    Box, Typography, Paper, Stack, Chip, CircularProgress,
++    Alert, Box, Typography, Paper, Stack, Chip, CircularProgress,
+     Grid, alpha, Button, Divider,
+     Table, TableBody, TableCell, TableContainer, TableHead, TableRow
+ } from '@mui/material';
+@@ -8,7 +8,7 @@ import {
+     Clock, CheckCircle2,
+     Shield, TrendingUp, AlertCircle, FileText
+ } from 'lucide-react';
+-import { db, collection, query, where, onSnapshot, orderBy, limit } from '../../lib/firebase';
++import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
+ import { useRole } from '../../context/RoleContext';
+ import { useLanguage } from '../../context/LanguageContext';
+ import { binThemeTokens } from '../../theme/binGroupTheme';
+@@ -45,10 +45,17 @@ export default function OwnerFinancialsPage() {
+     });
+     const [transactions, setTransactions] = useState<any[]>([]);
+     const [invoices, setInvoices] = useState<any[]>([]);
++    const [loadError, setLoadError] = useState('');
+ 
+     useEffect(() => {
+-        if (!user?.email || !user?.uid) return;
++        if (!user?.email || !user?.uid) {
++            setLoading(false);
++            setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
++            return undefined;
++        }
+ 
++        setLoading(true);
++        setLoadError('');
+         const email = user.email.toLowerCase();
+ 
+         const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
+@@ -67,19 +74,39 @@ export default function OwnerFinancialsPage() {
+                 managementFees: fees,
+                 maintenanceDeductions: maint
+             });
++            setLoading(false);
++        }, (error) => {
++            console.error('Owner financial passport stream failed:', error);
++            setLoadError('The property financial summary could not be loaded. Invoice and payout records remain available below.');
++            setLoading(false);
+         });
+ 
+-        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), orderBy('createdAt', 'desc'), limit(10));
++        // Sort the Owner-scoped result on the client. Combining where +
++        // orderBy previously required a production composite index and left
++        // the page on an infinite loader when that stream failed.
++        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email));
+         const unsubscribeTrans = onSnapshot(transQ, (snap) => {
+-            setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
++            const rows = snap.docs
++                .map(d => ({ id: d.id, ...d.data() }))
++                .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
++                .slice(0, 10);
++            setTransactions(rows);
++            setLoading(false);
++        }, (error) => {
++            console.error('Owner payout stream failed:', error);
++            setTransactions([]);
++            setLoadError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
+             setLoading(false);
+         });
+ 
+         const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(20));
+         const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
+             const rows: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+             setInvoices(
+                 rows.sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
+             );
++            setLoading(false);
++        }, (error) => {
++            console.error('Owner invoice stream failed:', error);
++            setInvoices([]);
++            setLoadError('Owner invoices could not be loaded. Please retry before approving or paying any amount.');
++            setLoading(false);
+         });
+ 
+         return () => {
+@@ -107,6 +134,10 @@ export default function OwnerFinancialsPage() {
+ 
+     return (
+         <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
++            {loadError && (
++                <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>
++            )}
++
+             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                 <Box>
+                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.fin.ledger_title', 'INSTITUTIONAL REVENUE LEDGER')}</Typography>
+diff --git a/tests/e2e/business-admin.spec.ts b/tests/e2e/business-admin.spec.ts
+index 2f1ff1a..0000000 100644
+--- a/tests/e2e/business-admin.spec.ts
++++ b/tests/e2e/business-admin.spec.ts
+@@ -651,15 +651,17 @@ test.describe('Admin protected operational business workflow', () => {
+     await waitForLoader(page);
+     const approvePropertyRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
+     await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
+-    let approvalDialogMessage = '';
+-    page.once('dialog', async (dialog) => {
+-      approvalDialogMessage = dialog.message();
+-      await dialog.accept();
+-    });
+-    await approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
++    const approvalDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
++    const approvalClickPromise = approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
++    const approvalDialog = await approvalDialogPromise;
++    const approvalDialogMessage = approvalDialog.message();
++    await approvalDialog.accept();
++    await approvalClickPromise;
+     await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
+     expect(approvalDialogMessage).toMatch(/approved successfully/i);
+     expect(approvalDialogMessage).not.toMatch(/error|failed/i);
+@@ -681,8 +683,13 @@ test.describe('Admin protected operational business workflow', () => {
+     await rejectPropertyRow.getByRole('button', { name: 'Reject', exact: true }).click();
+     const propertyRejectDialog = page.getByRole('dialog', { name: 'Reject Property Submission' });
+     await propertyRejectDialog.getByLabel('Rejection Reason').fill('Protected E2E property evidence requires correction.');
+-    page.once('dialog', async (dialog) => dialog.accept());
+-    await propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
++    const rejectionDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
++    const rejectionClickPromise = propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
++    const rejectionDialog = await rejectionDialogPromise;
++    const rejectionDialogMessage = rejectionDialog.message();
++    expect(rejectionDialogMessage).toMatch(/rejected/i);
++    expect(rejectionDialogMessage).not.toMatch(/error|failed/i);
++    await rejectionDialog.accept();
++    await rejectionClickPromise;
+     await expect.poll(async () => (await db.collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
+ 
+     const propertyApprovalAudits = await db.collection('audit_logs').where('targetId', '==', APPROVE_PROPERTY_ID).get();
+diff --git a/tests/e2e/business-tenant.spec.ts b/tests/e2e/business-tenant.spec.ts
+index fae2b1d..0000000 100644
+--- a/tests/e2e/business-tenant.spec.ts
++++ b/tests/e2e/business-tenant.spec.ts
+@@ -237,7 +237,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
+   const coordinates = ticketCoordinates({ id: ticketId, ...ticketSnap.data() });
+   const context: BrowserContext = await browser.newContext({
+     baseURL: BASE_URL,
+-    geolocation: { longitude: coordinates.longitude, latitude: coordinates.latitude },
++    geolocation: { longitude: coordinates.longitude, latitude: coordinates.latitude, accuracy: 15 },
+     permissions: ['geolocation', 'notifications'],
+   });
+   const page = await context.newPage();
+diff --git a/tests/e2e/business-technician.spec.ts b/tests/e2e/business-technician.spec.ts
+index 27d1e21..0000000 100644
+--- a/tests/e2e/business-technician.spec.ts
++++ b/tests/e2e/business-technician.spec.ts
+@@ -194,6 +194,10 @@ test.describe('Technician Business Workflow', () => {
+ 
+     const db = admin.firestore();
+     const readiness = {
++      uid: technicianUid,
++      authUid: technicianUid,
++      userId: technicianUid,
++      email: EMAIL.toLowerCase(),
+       role: 'technician',
+       status: 'active',
+       approvalStatus: 'approved',
