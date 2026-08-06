@@ -1,10 +1,12 @@
+// Owner-authored validation trigger for the exact sixth-round repair candidate.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(new URL('../..', import.meta.url).pathname);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (relativePath) => readFileSync(path.join(root, relativePath), 'utf8');
 
 test('all protected business evidence specs compile before deployment', () => {
