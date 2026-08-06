@@ -654,13 +654,13 @@ test.describe('Admin protected operational business workflow', () => {
     await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
     const approvalDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
     const approvalClickPromise = approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
-    const approvalDialog = await approvalDialogPromise;
-    const approvalDialogMessage = approvalDialog.message();
-    await approvalDialog.accept();
+    const propertyApprovalBrowserDialog = await approvalDialogPromise;
+    const propertyApprovalDialogMessage = propertyApprovalBrowserDialog.message();
+    await propertyApprovalBrowserDialog.accept();
     await approvalClickPromise;
     await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
-    expect(approvalDialogMessage).toMatch(/approved successfully/i);
-    expect(approvalDialogMessage).not.toMatch(/error|failed/i);
+    expect(propertyApprovalDialogMessage).toMatch(/approved successfully/i);
+    expect(propertyApprovalDialogMessage).not.toMatch(/error|failed/i);
     const approvedProperty = (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data() || {};
     expect(approvedProperty.geo).toMatchObject({
       lat: 25.2048,
