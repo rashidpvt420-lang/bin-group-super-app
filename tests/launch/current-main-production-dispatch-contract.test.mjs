@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 const workflowPath = '.github/workflows/firebase-production-dispatch-current-main.yml';
 
-test('production dispatcher binds a stable current main before one protected dispatch', async () => {
+test('production dispatcher binds a stable current main before one protected dispatch endpoint', async () => {
   const source = await read(workflowPath);
 
   assert.match(source, /name: START HERE - Firebase Production Deploy/);
@@ -46,16 +46,20 @@ test('operator form cannot mistype incident attestation or manually misreport th
   assert.match(source, /mandatory 30-minute cooling period/);
 });
 
-test('dispatcher correlates the accepted dispatch by exact SHA and baseline run IDs', async () => {
+test('dispatcher retries transient dispatch failures and correlates by exact SHA plus baseline run IDs', async () => {
   const source = await read(workflowPath);
 
   assert.match(source, /baseline_ids=.*workflow_runs\[\]\.id/);
-  assert.match(source, /for poll in \$\(seq 1 60\)/);
+  assert.match(source, /for attempt in 1 2 3 4 5 6/);
+  assert.match(source, /Protected workflow dispatch attempt \$attempt failed/);
+  assert.match(source, /Checking whether GitHub created the run despite the API error/);
+  assert.match(source, /for poll in \$\(seq 1 90\)/);
   assert.match(source, /select\(\.head_sha == \$sha\)/);
   assert.match(source, /\$old \| index\(\$id\)/);
   assert.doesNotMatch(source, /\.actor\.login == \$actor/);
   assert.doesNotMatch(source, /Could not resolve the dispatched production run; retrying/);
   assert.match(source, /No duplicate dispatch was attempted/);
+  assert.match(source, /no new exact-SHA run was observable after 180 seconds/i);
 });
 
 test('dispatcher cancels the exact dispatched run when main advances after dispatch', async () => {
