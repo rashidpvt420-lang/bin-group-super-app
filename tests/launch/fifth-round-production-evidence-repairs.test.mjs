@@ -1,3 +1,4 @@
+// Owner-authored validation trigger for the exact fifth-round repair candidate.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
