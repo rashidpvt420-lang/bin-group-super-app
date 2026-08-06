@@ -462,6 +462,10 @@ async function createRecoveryTenant() {
     status: 'active',
     approvalStatus: 'approved',
     emailVerified: true,
+    // This fixture exercises unit-link recovery, not first-login legal consent.
+    // Mark the temporary Tenant as having already accepted the agreement so
+    // the global modal cannot obscure the recovery form.
+    legalAcceptedAt: new Date().toISOString(),
     e2eTenantRecovery: true,
     e2eRunMarker: RUN_MARKER,
     expiresAtMs: Date.now() + (30 * 60 * 1000),
@@ -600,11 +604,17 @@ test.describe('Tenant Business Workflow', () => {
     await cleanupRunData();
   });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
     (page as any).__binAppCheckMonitor = monitor;
     await monitor.assertTokenFingerprint();
-    await login(page, 'tenant', TENANT_EMAIL, TENANT_PASSWORD);
+    // The recovery test signs in as a separate temporary Tenant. Starting it
+    // with the canonical Tenant session leaves Firebase Auth persistence in
+    // IndexedDB and makes /login redirect before the recovery credentials can
+    // be entered.
+    if (!testInfo.title.startsWith('Unassigned-residence fallback')) {
+      await login(page, 'tenant', TENANT_EMAIL, TENANT_PASSWORD);
+    }
   });
 
   test.afterEach(async ({ page }) => {
@@ -700,6 +710,7 @@ test.describe('Tenant Business Workflow', () => {
 
     await login(page, 'tenant', RECOVERY_EMAIL, RECOVERY_PASSWORD);
     await page.goto(`/tenant/request?recovery=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('legal-agreement-content')).toHaveCount(0);
     const fallback = page.getByTestId('tenant-unit-link-fallback');
     await expect(fallback).toBeVisible({ timeout: 35_000 });
     await page.getByTestId('tenant-unit-link-property').fill(recoveryTarget.propertyName);
