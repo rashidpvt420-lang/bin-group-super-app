@@ -358,6 +358,7 @@ jobs:
           [[ ${#APPROVAL_HMAC_KEY} -ge 32 ]]
 
       - name: Authenticate to Google Cloud by Workload Identity Federation
+        id: gcp_auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -586,6 +587,8 @@ jobs:
         env:
           DEPLOYMENT_ENVIRONMENT: production
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.gcp_auth.outputs.credentials_file_path }}
           VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
         run: node scripts/deploy-firebase-production.mjs
 
