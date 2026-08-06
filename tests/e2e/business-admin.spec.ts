@@ -652,12 +652,12 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     const approvePropertyRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
     await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
-    let approvalDialogMessage = '';
-    page.once('dialog', async (dialog) => {
-      approvalDialogMessage = dialog.message();
-      await dialog.accept();
-    });
-    await approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
+    const approvalDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
+    const approvalClickPromise = approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
+    const approvalDialog = await approvalDialogPromise;
+    const approvalDialogMessage = approvalDialog.message();
+    await approvalDialog.accept();
+    await approvalClickPromise;
     await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
     expect(approvalDialogMessage).toMatch(/approved successfully/i);
     expect(approvalDialogMessage).not.toMatch(/error|failed/i);
@@ -682,8 +682,14 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectPropertyRow.getByRole('button', { name: 'Reject', exact: true }).click();
     const propertyRejectDialog = page.getByRole('dialog', { name: 'Reject Property Submission' });
     await propertyRejectDialog.getByLabel('Rejection Reason').fill('Protected E2E property evidence requires correction.');
-    page.once('dialog', async (dialog) => dialog.accept());
-    await propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
+    const rejectionDialogPromise = page.waitForEvent('dialog', { timeout: 30_000 });
+    const rejectionClickPromise = propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
+    const rejectionDialog = await rejectionDialogPromise;
+    const rejectionDialogMessage = rejectionDialog.message();
+    expect(rejectionDialogMessage).toMatch(/rejected/i);
+    expect(rejectionDialogMessage).not.toMatch(/error|failed/i);
+    await rejectionDialog.accept();
+    await rejectionClickPromise;
     await expect.poll(async () => (await db.collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
 
     const propertyApprovalAudits = await db.collection('audit_logs').where('targetId', '==', APPROVE_PROPERTY_ID).get();

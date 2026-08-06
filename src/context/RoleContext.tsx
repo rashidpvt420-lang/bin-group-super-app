@@ -226,6 +226,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setUser({
                     ...currentUser,
                     ...data,
+                    // The authenticated Firebase identity is authoritative. A
+                    // stale or malformed profile document must never replace
+                    // the live Auth UID or email-verification state used by
+                    // assignment-bound Owner/Tenant/Technician workflows.
+                    uid: currentUser.uid,
+                    email: currentUser.email || data.email || null,
+                    emailVerified: currentUser.emailVerified,
                     role: resolvedRole,
                     status: resolvedStatus,
                     isAdmin: resolvedIsAdmin,
