@@ -36,10 +36,10 @@ test('Owner financial streams fail visibly instead of holding an infinite loader
   assert.match(source, /<Alert severity="warning"/);
 });
 
-test('Admin production evidence waits for the actual browser alert', () => {
+test('Admin production evidence waits for the actual browser alerts', () => {
   const source = read('tests/e2e/business-admin.spec.ts');
   assert.match(source, /page\.waitForEvent\('dialog',\s*\{\s*timeout:\s*30_000\s*\}\)/);
-  assert.match(source, /approvalDialog\.message\(\)/);
+  assert.match(source, /propertyApprovalBrowserDialog\.message\(\)/);
   assert.match(source, /rejectionDialog\.message\(\)/);
 });
 
