@@ -35,12 +35,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Apply exact reviewed patch and remove transport files
+      - name: Apply deterministic transformations and remove transport files
         shell: bash
         run: |
           set -euo pipefail
-          git apply --check .github/round5-repair.patch
-          git apply .github/round5-repair.patch
+          python3 .github/round5-repair.patch
           git rm .github/round5-repair.patch .github/workflows/apply-round5-repair.yml
           git diff --check
 
