@@ -16,12 +16,16 @@ test('START HERE resolves only a newly created downstream run on the exact SHA',
   assert.doesNotMatch(source, /\.actor\.login/);
 });
 
-test('START HERE dispatches once and never creates duplicates when run discovery is delayed', async () => {
+test('START HERE retries transient dispatch failures and never duplicates a protected run', async () => {
   const source = await read(workflowPath);
 
   assert.equal((source.match(/firebase-production-deploy\.yml\/dispatches/g) || []).length, 1);
-  assert.match(source, /for poll in \$\(seq 1 60\)/);
-  assert.match(source, /no new exact-SHA run was observable after 120 seconds/i);
+  assert.match(source, /for attempt in 1 2 3 4 5 6/);
+  assert.match(source, /Protected workflow dispatch attempt \$attempt failed/);
+  assert.match(source, /Checking whether GitHub created the run despite the API error/);
+  assert.match(source, /Detected protected deploy run \$run_id after a failed dispatch response/);
+  assert.match(source, /for poll in \$\(seq 1 90\)/);
+  assert.match(source, /no new exact-SHA run was observable after 180 seconds/i);
   assert.match(source, /No duplicate dispatch was attempted/);
 });
 
