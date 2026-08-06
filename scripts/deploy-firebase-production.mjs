@@ -171,6 +171,16 @@ function retryFirebase(target, label, options = {}) {
     console.log(
       `[production-deploy] ${label} attempt ${attempt}/${attempts} (timeout=${commandTimeoutSeconds}s)`,
     );
+    const deployEnv = { ...process.env };
+    try {
+      const tokenRes = spawnSync('gcloud', ['auth', 'print-access-token'], { encoding: 'utf8', shell: false });
+      const freshToken = String(tokenRes.stdout || '').trim();
+      if (freshToken) {
+        deployEnv.GOOGLE_OAUTH_ACCESS_TOKEN = freshToken;
+      }
+    } catch {
+      // Fallback to default process.env authentication
+    }
     const status = run('npx', [
       'firebase',
       'deploy',
@@ -181,6 +191,7 @@ function retryFirebase(target, label, options = {}) {
       '--non-interactive',
       '--force',
     ], {
+      env: deployEnv,
       timeout: commandTimeoutSeconds * 1000,
       killSignal: 'SIGTERM',
     });
