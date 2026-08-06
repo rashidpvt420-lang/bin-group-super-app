@@ -1,0 +1,50 @@
+name: Apply seventh-round five-role evidence repair
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/round7-repair.py
+      - .github/workflows/apply-round7-repair.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: apply-round7-repair-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply exact reviewed seventh-round repair
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.ref == 'agent/repair-seventh-round-five-role-evidence-20260806' &&
+      github.event.pull_request.title == 'Repair seventh-round five-role production evidence failures'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply deterministic transformations and remove transport files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/round7-repair.py
+          git rm .github/round7-repair.py .github/workflows/apply-round7-repair.yml
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(production): repair seventh-round five-role evidence'
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
