@@ -83,13 +83,13 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
   const callableResponse = await callableResponsePromise;
   const callablePayload = await callableResponse.json().catch(() => ({})) as any;
   if (!callableResponse.ok() || callablePayload?.error) {
-    throw new Error(\`createTenantServiceTicket failed HTTP \${callableResponse.status()}: \${JSON.stringify(callablePayload)}\`);
+    throw new Error(`createTenantServiceTicket failed HTTP ${callableResponse.status()}: ${JSON.stringify(callablePayload)}`);
   }
   const ticketId = String(callablePayload?.result?.ticketId || callablePayload?.data?.ticketId || '').trim();
   expect(ticketId, 'createTenantServiceTicket must return the exact production ticket ID.').toMatch(/^tenant_/);
   await page.waitForURL('**/tenant/tickets', { timeout: 60_000 });
   await page.waitForTimeout(250);
-  if (dialogMessage) throw new Error(\`Tenant request UI reported an error: \${dialogMessage}\`);
+  if (dialogMessage) throw new Error(`Tenant request UI reported an error: ${dialogMessage}`);
   await expect(page.locator('body')).not.toContainText(
     /Failed to submit|Property GPS location is missing|No property assigned|Missing or insufficient permissions/i,
     { timeout: 5_000 },
@@ -98,7 +98,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
   const db = admin.firestore();
   await expect.poll(async () => (await db.collection('maintenanceTickets').doc(ticketId).get()).exists, {
     timeout: 40_000,
-    message: \`Exact callable-created ticket \${ticketId} must exist in production Firestore.\`,
+    message: `Exact callable-created ticket ${ticketId} must exist in production Firestore.`,
   }).toBe(true);
 `;
     patched = replaceExactlyOnce(patched, before, after, label);
@@ -108,25 +108,25 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
     const completionBeforeTwoSpace = `  await expect.poll(async () => {
     const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
     const data = snap.data() || {};
-    return \`\${data.status}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+    return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
   }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
 `;
     const completionAfterTwoSpace = `  await expect.poll(async () => {
     const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
     const data = snap.data() || {};
-    return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+    return `${String(data.status || '').toUpperCase()}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
   }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
 `;
     const completionBeforeFourSpace = `    await expect.poll(async () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
-      return \`\${data.status}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
     }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
 `;
     const completionAfterFourSpace = `    await expect.poll(async () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
-      return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+      return `${String(data.status || '').toUpperCase()}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
     }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
 `;
     patched = replaceFirstAvailable(patched, [
@@ -138,7 +138,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
   if (!patched.includes('page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i)')) {
     const notesBefore = `    const notes = page.getByLabel(/Resolution notes/i).first();
     await expect(notes).toBeVisible({ timeout: 10_000 });
-    await notes.fill(\`Cross-role completion \${RUN_MARKER}: inspected, repaired, tested, and left operational.\`);
+    await notes.fill(`Cross-role completion ${RUN_MARKER}: inspected, repaired, tested, and left operational.`);
 
     const materials = page.getByLabel(/Materials used|No parts required/i).first();
 `;
@@ -149,7 +149,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
       notes = page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i).first();
     }
     await expect(notes).toBeVisible({ timeout: 20_000 });
-    await notes.fill(\`Cross-role completion \${RUN_MARKER}: inspected, repaired, tested, and left operational.\`);
+    await notes.fill(`Cross-role completion ${RUN_MARKER}: inspected, repaired, tested, and left operational.`);
 
     const materials = page.getByLabel(/Materials used|No parts required|Materials/i).first();
 `;
@@ -160,6 +160,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
 }
 
 export function patchAdminBusinessEvidence(source, label = ADMIN_FILE) {
+  if (source.includes("getByTestId('admin-payment-approve')")) return source;
   if (source.includes('const verifyAndUnlockButton = activationRow.getByRole')) return source;
 
   const before = `    const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
@@ -229,10 +230,10 @@ export function patchTechnicianBusinessEvidence(source, label = TECHNICIAN_FILE)
 `;
     patched = replaceExactlyOnce(patched, tokenBefore, tokenAfter, `${label}: token readiness`);
 
-    const receiptBefore = `    const receipt = page.locator(\`[data-testid="technician-job-notification-receipt"][data-ticket-id="\${dispatchTicketId}"]\`);
+    const receiptBefore = `    const receipt = page.locator(`[data-testid="technician-job-notification-receipt"][data-ticket-id="${dispatchTicketId}"]`);
     await expect(receipt).toHaveAttribute('data-delivery-state', /SUCCESS|PARTIAL/, { timeout: 60_000 });
 `;
-    const receiptAfter = `    const receipt = page.locator(\`[data-testid="technician-job-notification-receipt"][data-ticket-id="\${dispatchTicketId}"]\`);
+    const receiptAfter = `    const receipt = page.locator(`[data-testid="technician-job-notification-receipt"][data-ticket-id="${dispatchTicketId}"]`);
     await expect(receipt).toHaveAttribute(
       'data-delivery-state',
       registeredPushReady ? /SUCCESS|PARTIAL/ : /NO_REGISTERED_TOKEN/,
