@@ -113,6 +113,8 @@ if (remoteMainSha !== githubSha) {
   );
   process.exit(1);
 }
+process.env.PRODUCTION_EXACT_MAIN_VERIFIED_SHA = remoteMainSha;
+console.log(`[production-deploy] exact current origin/main verified before secret preflight: ${remoteMainSha}`);
 
 try {
   await verifyFirebaseProductionSecrets({ projectId, launchMode });
