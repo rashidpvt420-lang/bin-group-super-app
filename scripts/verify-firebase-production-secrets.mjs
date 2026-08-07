@@ -1,5 +1,4 @@
 import firebaseTools from 'firebase-tools';
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { ensureAdminMfaAuthorizedDomains } from './ensure-admin-mfa-authorized-domains.mjs';
 
@@ -47,7 +46,7 @@ function readWorkflowInputs(env) {
   }
 }
 
-function resolveCheckedOutOriginMainSha({ env = process.env, apiStatus = 'unknown' } = {}) {
+function resolveDeployVerifiedMainSha({ env = process.env, apiStatus = 'unknown' } = {}) {
   const githubSha = String(env.GITHUB_SHA || '').trim();
   const inputs = readWorkflowInputs(env);
   const expectedInputSha = String(inputs.expected_commit_sha || '').trim();
@@ -57,24 +56,12 @@ function resolveCheckedOutOriginMainSha({ env = process.env, apiStatus = 'unknow
     );
   }
 
-  for (const ref of ['refs/remotes/origin/main', 'origin/main']) {
-    try {
-      const localMainSha = execFileSync('git', ['rev-parse', ref], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-      if (/^[0-9a-f]{40}$/.test(localMainSha)) {
-        console.warn(
-          `[firebase-production-preflight] GitHub API current-main lookup returned HTTP ${apiStatus}; using checked-out ${ref} fallback ${localMainSha}.`,
-        );
-        return localMainSha;
-      }
-    } catch {
-      // Try the next local remote ref shape.
-    }
-  }
-
-  return '';
+  const verifiedMainSha = String(env.PRODUCTION_EXACT_MAIN_VERIFIED_SHA || '').trim();
+  if (!/^[0-9a-f]{40}$/.test(verifiedMainSha)) return '';
+  console.warn(
+    `[firebase-production-preflight] GitHub API current-main lookup returned HTTP ${apiStatus}; using deploy-verified origin/main binding ${verifiedMainSha}.`,
+  );
+  return verifiedMainSha;
 }
 
 export async function assertExactCurrentMain({
@@ -113,15 +100,15 @@ export async function assertExactCurrentMain({
     const status = response?.status || 'unknown';
     const isPrivateRepoAuthorizationFailure = Number(status) === 403;
     if (isPrivateRepoAuthorizationFailure) {
-      const fallbackMainSha = resolveCheckedOutOriginMainSha({ env, apiStatus: status });
-      if (fallbackMainSha) {
-        if (fallbackMainSha !== githubSha) {
+      const verifiedMainSha = resolveDeployVerifiedMainSha({ env, apiStatus: status });
+      if (verifiedMainSha) {
+        if (verifiedMainSha !== githubSha) {
           throw new Error(
-            `Refusing stale production mutation: checked-out origin/main is ${fallbackMainSha}, but this workflow is ${githubSha}. Start a fresh exact-SHA deployment.`,
+            `Refusing stale production mutation: deploy-verified origin/main is ${verifiedMainSha}, but this workflow is ${githubSha}. Start a fresh exact-SHA deployment.`,
           );
         }
-        console.log(`[firebase-production-preflight] exact current main verified from checked-out origin/main: ${githubSha}`);
-        return fallbackMainSha;
+        console.log(`[firebase-production-preflight] exact current main verified from deploy binding: ${githubSha}`);
+        return verifiedMainSha;
       }
     }
     throw new Error(`Refusing production mutation: current origin/main could not be resolved through GitHub API (HTTP ${status}).`);
