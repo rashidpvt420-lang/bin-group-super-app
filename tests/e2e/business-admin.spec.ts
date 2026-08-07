@@ -722,9 +722,9 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
     await expect(activationRow).toBeVisible({ timeout: 35_000 });
-    await activationRow.getByRole('button', { name: /Verify & Unlock/i }).click();
-    const approvalDialog = page.getByRole('dialog', { name: /Confirm Payment & Unlock Owner/i });
-    const confirmApproval = approvalDialog.getByRole('button', { name: /Confirm & Unlock Owner/i });
+    await activationRow.getByTestId('admin-payment-approve').click();
+    const approvalDialog = page.getByTestId('admin-payment-approval-dialog');
+    const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
     await expect(confirmApproval).toBeEnabled();
     await confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); });
 
