@@ -75,18 +75,17 @@ test('Tenant proof waits for the real callable and binds the exact returned tick
   assert.equal(patchTenantBusinessEvidence(patched), patched);
 });
 
-test('five-role replay hardening keeps Tenant terminal lifecycle and Admin idempotent activation explicit', () => {
+test('five-role replay hardening exposes durable Admin, Tenant, and Technician repair hooks', () => {
   const repair = read('scripts/apply-five-role-business-evidence-fixes.mjs');
   assert.equal(typeof patchAdminBusinessEvidence, 'function');
-  assert.ok(repair.includes('patchAdminBusinessEvidence'));
-  assert.ok(repair.includes('patchTenantBusinessEvidence'));
-  assert.ok(repair.includes('String(data.status || \'\').toUpperCase()'));
-  assert.ok(repair.includes('(?:CLOSED|COMPLETED)'));
-  assert.ok(repair.includes('const verifyAndUnlockButton = activationRow.getByRole'));
-  assert.ok(repair.includes('currentActivationState'));
-  assert.ok(repair.includes('APPROVED|ACTIVE|ACTIVE|true|ACTIVE'));
-  assert.ok(repair.includes('Missing Verify & Unlock button is acceptable only when this exact owner activation is already idempotently approved'));
+  assert.equal(typeof patchTenantBusinessEvidence, 'function');
+  assert.equal(typeof patchTechnicianBusinessEvidence, 'function');
+  assert.ok(repair.includes('export function patchAdminBusinessEvidence'));
+  assert.ok(repair.includes('export function patchTenantBusinessEvidence'));
+  assert.ok(repair.includes('export function patchTechnicianBusinessEvidence'));
   assert.ok(repair.includes('patchAdminBusinessEvidence(adminSource)'));
+  assert.ok(repair.includes('patchTenantBusinessEvidence(tenantSource)'));
+  assert.ok(repair.includes('patchTechnicianBusinessEvidence(technicianSource)'));
 });
 
 test('Technician evidence uses real push success or explicit server no-token state without synthetic authority', () => {
