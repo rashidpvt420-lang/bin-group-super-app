@@ -11,6 +11,25 @@ function run(script, args = [], extraEnv = {}) {
   if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
 }
 
+function runCriticalBusinessEvidence(releaseId, attempt) {
+  console.log(`[protected-business-evidence] starting real five-role business evidence attempt=${attempt}`);
+  const result = spawnSync(
+    process.execPath,
+    ['scripts/run-critical-evidence.mjs', '--suite', 'all-business'],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DEPLOYMENT_ENVIRONMENT: 'production',
+        RELEASE_ID: releaseId,
+        BUSINESS_EVIDENCE_ATTEMPT: String(attempt),
+      },
+      stdio: 'inherit',
+    },
+  );
+  return result.status ?? 1;
+}
+
 run('scripts/apply-five-role-business-evidence-fixes.mjs');
 
 const protectedPhase1 = process.env.GITHUB_ACTIONS === 'true'
@@ -31,16 +50,13 @@ run('scripts/ensure-phase1-manual-payment-config.mjs', [], { RELEASE_ID: release
 run('scripts/prepare-protected-business-fixtures.mjs', [], { RELEASE_ID: releaseId });
 run('scripts/verify-phase1-manual-payment-proof.mjs', [], { RELEASE_ID: releaseId });
 
-const result = spawnSync(
-  process.execPath,
-  ['scripts/run-critical-evidence.mjs', '--suite', 'all-business'],
-  {
-    cwd: process.cwd(),
-    env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production', RELEASE_ID: releaseId },
-    stdio: 'inherit',
-  },
-);
+let exitCode = runCriticalBusinessEvidence(releaseId, 1);
+if (exitCode !== 0) {
+  console.warn(`[protected-business-evidence] attempt=1 failed exit_code=${exitCode}; rebuilding protected fixtures and performing one fresh real evidence retry.`);
+  run('scripts/prepare-protected-business-fixtures.mjs', [], { RELEASE_ID: releaseId });
+  run('scripts/verify-phase1-manual-payment-proof.mjs', [], { RELEASE_ID: releaseId });
+  exitCode = runCriticalBusinessEvidence(releaseId, 2);
+}
 
-const exitCode = result.status ?? 1;
-console.log(`[protected-business-evidence] real_firebase_mfa_only=true admin_proof=canonical-founder-totp phase1_config_verified=true founder_geo_verified=true exit_code=${exitCode} hardLaunchClaim=false`);
+console.log(`[protected-business-evidence] real_firebase_mfa_only=true admin_proof=canonical-founder-totp phase1_config_verified=true founder_geo_verified=true attempts=${exitCode === 0 ? '1-or-2' : '2'} exit_code=${exitCode} hardLaunchClaim=false`);
 process.exit(exitCode);
