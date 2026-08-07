@@ -6,17 +6,41 @@ const ADMIN_FILE = 'tests/e2e/business-admin.spec.ts';
 const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
 const TECHNICIAN_FILE = 'tests/e2e/business-technician.spec.ts';
 
+function normalizeNewlines(value) {
+  return value.replace(/\r\n/g, '\n');
+}
+
+function restoreNewlines(value, hadCrlf) {
+  return hadCrlf ? value.replace(/\n/g, '\r\n') : value;
+}
+
 function replaceExactlyOnce(source, before, after, label) {
-  const isCrlf = source.includes('\r\n');
-  const normSource = source.replace(/\r\n/g, '\n');
-  const normBefore = before.replace(/\r\n/g, '\n');
-  const normAfter = after.replace(/\r\n/g, '\n');
+  const hadCrlf = source.includes('\r\n');
+  const normSource = normalizeNewlines(source);
+  const normBefore = normalizeNewlines(before);
+  const normAfter = normalizeNewlines(after);
 
   const first = normSource.indexOf(normBefore);
   if (first < 0) throw new Error(`${label}: expected source anchor was not found.`);
-  if (normSource.indexOf(normBefore, first + normBefore.length) >= 0) throw new Error(`${label}: source anchor was not unique.`);
+  if (normSource.indexOf(normBefore, first + normBefore.length) >= 0) {
+    throw new Error(`${label}: source anchor was not unique.`);
+  }
   const patched = `${normSource.slice(0, first)}${normAfter}${normSource.slice(first + normBefore.length)}`;
-  return isCrlf ? patched.replace(/\n/g, '\r\n') : patched;
+  return restoreNewlines(patched, hadCrlf);
+}
+
+function replaceFirstAvailable(source, replacements, label) {
+  let lastNotFound = '';
+  for (const { before, after } of replacements) {
+    try {
+      return replaceExactlyOnce(source, before, after, label);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('expected source anchor was not found')) throw error;
+      lastNotFound = message;
+    }
+  }
+  throw new Error(lastNotFound || `${label}: expected source anchor was not found.`);
 }
 
 export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
@@ -79,19 +103,34 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
   }
 
   if (!patched.includes('(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true')) {
-    const completionBefore = `  await expect.poll(async () => {
+    const completionBeforeTwoSpace = `  await expect.poll(async () => {
     const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
     const data = snap.data() || {};
     return \`\${data.status}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
   }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
 `;
-    const completionAfter = `  await expect.poll(async () => {
+    const completionAfterTwoSpace = `  await expect.poll(async () => {
     const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
     const data = snap.data() || {};
     return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
   }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
 `;
-    patched = replaceExactlyOnce(patched, completionBefore, completionAfter, `${label}: tenant completion terminal status`);
+    const completionBeforeFourSpace = `    await expect.poll(async () => {
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      const data = snap.data() || {};
+      return \`\${data.status}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+    }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
+`;
+    const completionAfterFourSpace = `    await expect.poll(async () => {
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      const data = snap.data() || {};
+      return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+    }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
+`;
+    patched = replaceFirstAvailable(patched, [
+      { before: completionBeforeFourSpace, after: completionAfterFourSpace },
+      { before: completionBeforeTwoSpace, after: completionAfterTwoSpace },
+    ], `${label}: tenant completion terminal status`);
   }
 
   if (!patched.includes('page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i)')) {
