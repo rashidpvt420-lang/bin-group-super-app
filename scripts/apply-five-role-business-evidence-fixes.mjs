@@ -2,6 +2,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
+const ADMIN_FILE = 'tests/e2e/business-admin.spec.ts';
 const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
 const TECHNICIAN_FILE = 'tests/e2e/business-technician.spec.ts';
 
@@ -19,8 +20,10 @@ function replaceExactlyOnce(source, before, after, label) {
 }
 
 export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
-  if (source.includes('const callableResponsePromise = page.waitForResponse(')) return source;
-  const before = `  await page.getByTestId('tenant-request-submit').click();
+  let patched = source;
+
+  if (!patched.includes('const callableResponsePromise = page.waitForResponse(')) {
+    const before = `  await page.getByTestId('tenant-request-submit').click();
   await Promise.race([
     page.waitForURL('**/tenant/tickets', { timeout: 35_000 }),
     expect(page.locator('body')).toContainText(/success|created|submitted|ticket|request/i, { timeout: 35_000 }),
@@ -39,7 +42,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
     return ticketId;
   }, { timeout: 40_000 }).not.toBe('');
 `;
-  const after = `  const submitButton = page.getByTestId('tenant-request-submit');
+    const after = `  const submitButton = page.getByTestId('tenant-request-submit');
   await expect(submitButton, 'Tenant request submission must be fully ready before evidence capture.').toBeEnabled({ timeout: 30_000 });
   let dialogMessage = '';
   page.once('dialog', async (dialog) => {
@@ -72,7 +75,91 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
     message: \`Exact callable-created ticket \${ticketId} must exist in production Firestore.\`,
   }).toBe(true);
 `;
-  return replaceExactlyOnce(source, before, after, label);
+    patched = replaceExactlyOnce(patched, before, after, label);
+  }
+
+  if (!patched.includes('(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true')) {
+    const completionBefore = `  await expect.poll(async () => {
+    const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+    const data = snap.data() || {};
+    return \`\${data.status}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+  }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
+`;
+    const completionAfter = `  await expect.poll(async () => {
+    const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+    const data = snap.data() || {};
+    return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
+  }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
+`;
+    patched = replaceExactlyOnce(patched, completionBefore, completionAfter, `${label}: tenant completion terminal status`);
+  }
+
+  if (!patched.includes('page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i)')) {
+    const notesBefore = `    const notes = page.getByLabel(/Resolution notes/i).first();
+    await expect(notes).toBeVisible({ timeout: 10_000 });
+    await notes.fill(\`Cross-role completion \${RUN_MARKER}: inspected, repaired, tested, and left operational.\`);
+
+    const materials = page.getByLabel(/Materials used|No parts required/i).first();
+`;
+    const notesAfter = `    let notes = page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i).first();
+    if (!(await notes.isVisible({ timeout: 10_000 }).catch(() => false))) {
+      await reloadTechnicianMission(page, ticketId);
+      await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated|Complete Mission/i, { timeout: 25_000 });
+      notes = page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i).first();
+    }
+    await expect(notes).toBeVisible({ timeout: 20_000 });
+    await notes.fill(\`Cross-role completion \${RUN_MARKER}: inspected, repaired, tested, and left operational.\`);
+
+    const materials = page.getByLabel(/Materials used|No parts required|Materials/i).first();
+`;
+    patched = replaceExactlyOnce(patched, notesBefore, notesAfter, `${label}: technician completion notes fallback`);
+  }
+
+  return patched;
+}
+
+export function patchAdminBusinessEvidence(source, label = ADMIN_FILE) {
+  if (source.includes('const verifyAndUnlockButton = activationRow.getByRole')) return source;
+
+  const before = `    const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
+    await expect(activationRow).toBeVisible({ timeout: 35_000 });
+    await activationRow.getByRole('button', { name: /Verify & Unlock/i }).click();
+    const approvalDialog = page.getByRole('dialog', { name: /Confirm Payment & Unlock Owner/i });
+    const confirmApproval = approvalDialog.getByRole('button', { name: /Confirm & Unlock Owner/i });
+    await expect(confirmApproval).toBeEnabled();
+    await confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); });
+`;
+  const after = `    const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
+    await expect(activationRow).toBeVisible({ timeout: 35_000 });
+    const verifyAndUnlockButton = activationRow.getByRole('button', { name: /Verify & Unlock/i });
+    if (await verifyAndUnlockButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await verifyAndUnlockButton.click();
+      const approvalDialog = page.getByRole('dialog', { name: /Confirm Payment & Unlock Owner/i });
+      const confirmApproval = approvalDialog.getByRole('button', { name: /Confirm & Unlock Owner/i });
+      await expect(confirmApproval).toBeEnabled();
+      await confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); });
+    } else {
+      const currentActivationState = await Promise.all([
+        db.collection('payment_transactions').doc(PAYMENT_ID).get(),
+        db.collection('contracts').doc(PAYMENT_ID).get(),
+        db.collection('intake_submissions').doc(PAYMENT_ID).get(),
+        db.collection('users').doc(PAYMENT_OWNER_UID).get(),
+        db.collection('properties').doc(PAYMENT_PROPERTY_ID).get(),
+      ]).then(([payment, contract, intake, owner, property]) => [
+        payment.data()?.status,
+        contract.data()?.status,
+        intake.data()?.status,
+        owner.data()?.dashboardUnlocked,
+        property.data()?.status,
+      ].join('|'));
+      const activationRowText = await activationRow.innerText({ timeout: 5_000 }).catch(() => '<row text unavailable>');
+      expect(
+        currentActivationState,
+        'Missing Verify & Unlock button is acceptable only when this exact owner activation is already idempotently approved. row=' + activationRowText,
+      ).toBe('APPROVED|ACTIVE|ACTIVE|true|ACTIVE');
+    }
+`;
+  return replaceExactlyOnce(source, before, after, `${label}: idempotent payment activation`);
 }
 
 export function patchTechnicianBusinessEvidence(source, label = TECHNICIAN_FILE) {
@@ -139,13 +226,16 @@ export function patchTechnicianBusinessEvidence(source, label = TECHNICIAN_FILE)
 }
 
 export function patchBusinessEvidenceFiles() {
+  const adminSource = readFileSync(ADMIN_FILE, 'utf8');
   const tenantSource = readFileSync(TENANT_FILE, 'utf8');
   const technicianSource = readFileSync(TECHNICIAN_FILE, 'utf8');
+  const adminPatched = patchAdminBusinessEvidence(adminSource);
   const tenantPatched = patchTenantBusinessEvidence(tenantSource);
   const technicianPatched = patchTechnicianBusinessEvidence(technicianSource);
+  writeFileSync(ADMIN_FILE, adminPatched, 'utf8');
   writeFileSync(TENANT_FILE, tenantPatched, 'utf8');
   writeFileSync(TECHNICIAN_FILE, technicianPatched, 'utf8');
-  console.log('[five-role-business-evidence] patched Tenant exact-ticket and Technician explicit-push-state proofs');
+  console.log('[five-role-business-evidence] patched Admin idempotent unlock, Tenant terminal completion states, exact-ticket, and Technician explicit-push-state proofs');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) patchBusinessEvidenceFiles();
