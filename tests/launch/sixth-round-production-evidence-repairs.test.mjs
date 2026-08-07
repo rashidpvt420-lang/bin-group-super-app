@@ -39,7 +39,7 @@ test('all protected business evidence specs compile before deployment', () => {
   }
 });
 
-test('Admin property alert handlers and payment approval dialog use distinct identifiers', () => {
+test('Admin property alert handlers and stable payment approval contracts use distinct identifiers', () => {
   const source = read('tests/e2e/business-admin.spec.ts');
   assert.match(source, /const propertyApprovalDialogHandler = async/);
   assert.match(source, /const propertyRejectionDialogHandler = async/);
@@ -48,8 +48,11 @@ test('Admin property alert handlers and payment approval dialog use distinct ide
     source.indexOf('propertyRejectionDialogHandler'),
     'Property approval and rejection handlers must remain distinct.',
   );
-  assert.match(source, /const approvalDialog = page\.getByRole\('dialog', \{ name: \/Confirm Payment & Unlock Owner\/i \}\)/);
+  assert.match(source, /const approvalDialog = page\.getByTestId\('admin-payment-approval-dialog'\)/);
+  assert.match(source, /const confirmApproval = approvalDialog\.getByTestId\('admin-payment-confirm-approval'\)/);
+  assert.match(source, /activationRow\.getByTestId\('admin-payment-approve'\)/);
   assert.equal((source.match(/const approvalDialog\s*=/g) || []).length, 1);
+  assert.doesNotMatch(source, /Confirm Payment & Unlock Owner/);
   assert.doesNotMatch(source, /const propertyApprovalBrowserDialog/);
 });
 
