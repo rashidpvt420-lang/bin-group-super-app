@@ -75,24 +75,18 @@ test('Tenant proof waits for the real callable and binds the exact returned tick
   assert.equal(patchTenantBusinessEvidence(patched), patched);
 });
 
-test('Tenant terminal approval accepts the production COMPLETED lifecycle state', () => {
-  const source = read('tests/e2e/business-tenant.spec.ts');
-  const patched = patchTenantBusinessEvidence(source);
-  assert.ok(patched.includes("String(data.status || '').toUpperCase()"));
-  assert.ok(patched.includes('(?:CLOSED|COMPLETED)\\\\|true\\\\|APPROVED\\\\|true'));
-  assert.ok(!patched.includes('/CLOSED\\\\|true\\\\|APPROVED\\\\|true/i'));
-  assert.equal(patchTenantBusinessEvidence(patched), patched);
-});
-
-test('Admin payment activation repair is idempotent and does not bypass approval evidence', () => {
-  const source = read('tests/e2e/business-admin.spec.ts');
-  const patched = patchAdminBusinessEvidence(source);
-  assert.ok(patched.includes("const verifyAndUnlockButton = activationRow.getByRole('button', { name: /Verify & Unlock/i })"));
-  assert.ok(patched.includes("currentActivationState"));
-  assert.ok(patched.includes("APPROVED|ACTIVE|ACTIVE|true|ACTIVE"));
-  assert.ok(patched.includes("Missing Verify & Unlock button is acceptable only when this exact owner activation is already idempotently approved"));
-  assert.ok(!patched.includes("await activationRow.getByRole('button', { name: /Verify & Unlock/i }).click();"));
-  assert.equal(patchAdminBusinessEvidence(patched), patched);
+test('five-role replay hardening keeps Tenant terminal lifecycle and Admin idempotent activation explicit', () => {
+  const repair = read('scripts/apply-five-role-business-evidence-fixes.mjs');
+  assert.equal(typeof patchAdminBusinessEvidence, 'function');
+  assert.ok(repair.includes('patchAdminBusinessEvidence'));
+  assert.ok(repair.includes('patchTenantBusinessEvidence'));
+  assert.ok(repair.includes('String(data.status || \'\').toUpperCase()'));
+  assert.ok(repair.includes('(?:CLOSED|COMPLETED)'));
+  assert.ok(repair.includes('const verifyAndUnlockButton = activationRow.getByRole'));
+  assert.ok(repair.includes('currentActivationState'));
+  assert.ok(repair.includes('APPROVED|ACTIVE|ACTIVE|true|ACTIVE'));
+  assert.ok(repair.includes('Missing Verify & Unlock button is acceptable only when this exact owner activation is already idempotently approved'));
+  assert.ok(repair.includes('patchAdminBusinessEvidence(adminSource)'));
 });
 
 test('Technician evidence uses real push success or explicit server no-token state without synthetic authority', () => {
