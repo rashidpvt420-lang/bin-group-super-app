@@ -36,6 +36,17 @@ export function requiredFirebaseProductionSecretsForMode(launchMode) {
     : requiredFirebaseBankPilotSecrets;
 }
 
+function readWorkflowInputs(env) {
+  const eventPath = String(env.GITHUB_EVENT_PATH || '').trim();
+  if (!eventPath || !existsSync(eventPath)) return {};
+  try {
+    const event = JSON.parse(readFileSync(eventPath, 'utf8'));
+    return event?.inputs && typeof event.inputs === 'object' ? event.inputs : {};
+  } catch {
+    return {};
+  }
+}
+
 function resolveCheckedOutOriginMainSha({ env = process.env, apiStatus = 'unknown' } = {}) {
   const githubSha = String(env.GITHUB_SHA || '').trim();
   const inputs = readWorkflowInputs(env);
@@ -99,17 +110,21 @@ export async function assertExactCurrentMain({
     },
   );
   if (!response?.ok) {
-    const fallbackMainSha = resolveCheckedOutOriginMainSha({ env, apiStatus: response?.status || 'unknown' });
-    if (fallbackMainSha) {
-      if (fallbackMainSha !== githubSha) {
-        throw new Error(
-          `Refusing stale production mutation: checked-out origin/main is ${fallbackMainSha}, but this workflow is ${githubSha}. Start a fresh exact-SHA deployment.`,
-        );
+    const status = response?.status || 'unknown';
+    const isPrivateRepoAuthorizationFailure = Number(status) === 403;
+    if (isPrivateRepoAuthorizationFailure) {
+      const fallbackMainSha = resolveCheckedOutOriginMainSha({ env, apiStatus: status });
+      if (fallbackMainSha) {
+        if (fallbackMainSha !== githubSha) {
+          throw new Error(
+            `Refusing stale production mutation: checked-out origin/main is ${fallbackMainSha}, but this workflow is ${githubSha}. Start a fresh exact-SHA deployment.`,
+          );
+        }
+        console.log(`[firebase-production-preflight] exact current main verified from checked-out origin/main: ${githubSha}`);
+        return fallbackMainSha;
       }
-      console.log(`[firebase-production-preflight] exact current main verified from checked-out origin/main: ${githubSha}`);
-      return fallbackMainSha;
     }
-    throw new Error(`Refusing production mutation: current origin/main could not be resolved through GitHub API (HTTP ${response?.status || 'unknown'}).`);
+    throw new Error(`Refusing production mutation: current origin/main could not be resolved through GitHub API (HTTP ${status}).`);
   }
 
   let payload;
@@ -130,17 +145,6 @@ export async function assertExactCurrentMain({
 
   console.log(`[firebase-production-preflight] exact current main verified: ${githubSha}`);
   return remoteMainSha;
-}
-
-function readWorkflowInputs(env) {
-  const eventPath = String(env.GITHUB_EVENT_PATH || '').trim();
-  if (!eventPath || !existsSync(eventPath)) return {};
-  try {
-    const event = JSON.parse(readFileSync(eventPath, 'utf8'));
-    return event?.inputs && typeof event.inputs === 'object' ? event.inputs : {};
-  } catch {
-    return {};
-  }
 }
 
 export function requireAdminMfaDomainRepairContext({
