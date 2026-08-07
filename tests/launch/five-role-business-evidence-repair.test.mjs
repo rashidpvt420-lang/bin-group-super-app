@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  patchAdminBusinessEvidence,
   patchTenantBusinessEvidence,
   patchTechnicianBusinessEvidence,
 } from '../../scripts/apply-five-role-business-evidence-fixes.mjs';
@@ -72,6 +73,26 @@ test('Tenant proof waits for the real callable and binds the exact returned tick
   assert.ok(patched.includes("db.collection('maintenanceTickets').doc(ticketId).get()"));
   assert.ok(!patched.includes("where('description', '==', description)"));
   assert.equal(patchTenantBusinessEvidence(patched), patched);
+});
+
+test('Tenant terminal approval accepts the production COMPLETED lifecycle state', () => {
+  const source = read('tests/e2e/business-tenant.spec.ts');
+  const patched = patchTenantBusinessEvidence(source);
+  assert.ok(patched.includes("String(data.status || '').toUpperCase()"));
+  assert.ok(patched.includes('(?:CLOSED|COMPLETED)\\\\|true\\\\|APPROVED\\\\|true'));
+  assert.ok(!patched.includes('/CLOSED\\\\|true\\\\|APPROVED\\\\|true/i'));
+  assert.equal(patchTenantBusinessEvidence(patched), patched);
+});
+
+test('Admin payment activation repair is idempotent and does not bypass approval evidence', () => {
+  const source = read('tests/e2e/business-admin.spec.ts');
+  const patched = patchAdminBusinessEvidence(source);
+  assert.ok(patched.includes("const verifyAndUnlockButton = activationRow.getByRole('button', { name: /Verify & Unlock/i })"));
+  assert.ok(patched.includes("currentActivationState"));
+  assert.ok(patched.includes("APPROVED|ACTIVE|ACTIVE|true|ACTIVE"));
+  assert.ok(patched.includes("Missing Verify & Unlock button is acceptable only when this exact owner activation is already idempotently approved"));
+  assert.ok(!patched.includes("await activationRow.getByRole('button', { name: /Verify & Unlock/i }).click();"));
+  assert.equal(patchAdminBusinessEvidence(patched), patched);
 });
 
 test('Technician evidence uses real push success or explicit server no-token state without synthetic authority', () => {
