@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 const ADMIN_FILE = 'tests/e2e/business-admin.spec.ts';
 const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
@@ -277,4 +279,6 @@ export function patchBusinessEvidenceFiles() {
   console.log('[five-role-business-evidence] patched Admin idempotent unlock, Tenant terminal completion states, exact-ticket, and Technician explicit-push-state proofs');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) patchBusinessEvidenceFiles();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  patchBusinessEvidenceFiles();
+}

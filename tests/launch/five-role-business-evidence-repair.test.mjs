@@ -76,6 +76,11 @@ test('five-role replay helper exports and invokes all protected repair hooks', (
   assert.ok(repair.includes('patchAdminBusinessEvidence(adminSource)'));
   assert.ok(repair.includes('patchTenantBusinessEvidence(tenantSource)'));
   assert.ok(repair.includes('patchTechnicianBusinessEvidence(technicianSource)'));
+
+  // Verify all patches execute cleanly against existing spec files without throwing source anchor errors
+  assert.doesNotThrow(() => patchAdminBusinessEvidence(read('tests/e2e/business-admin.spec.ts')));
+  assert.doesNotThrow(() => patchTenantBusinessEvidence(read('tests/e2e/business-tenant.spec.ts')));
+  assert.doesNotThrow(() => patchTechnicianBusinessEvidence(read('tests/e2e/business-technician.spec.ts')));
 });
 
 test('Tenant replay hardening binds the callable-created ticket and accepts valid terminal lifecycle states', () => {
