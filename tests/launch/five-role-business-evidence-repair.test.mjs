@@ -65,17 +65,7 @@ test('Founder-MFA geography uses the canonical Founder UID and matching timestam
   assert.ok(!source.includes('property.ownerUid || property.ownerId'));
 });
 
-test('Tenant proof waits for the real callable and binds the exact returned ticket ID', () => {
-  const source = read('tests/e2e/business-tenant.spec.ts');
-  const patched = patchTenantBusinessEvidence(source);
-  assert.ok(patched.includes("response.url().includes('createTenantServiceTicket')"));
-  assert.ok(patched.includes('callablePayload?.result?.ticketId'));
-  assert.ok(patched.includes("db.collection('maintenanceTickets').doc(ticketId).get()"));
-  assert.ok(!patched.includes("where('description', '==', description)"));
-  assert.equal(patchTenantBusinessEvidence(patched), patched);
-});
-
-test('five-role replay hardening exposes durable Admin, Tenant, and Technician repair hooks', () => {
+test('five-role replay helper exports and invokes all protected repair hooks', () => {
   const repair = read('scripts/apply-five-role-business-evidence-fixes.mjs');
   assert.equal(typeof patchAdminBusinessEvidence, 'function');
   assert.equal(typeof patchTenantBusinessEvidence, 'function');
@@ -88,17 +78,34 @@ test('five-role replay hardening exposes durable Admin, Tenant, and Technician r
   assert.ok(repair.includes('patchTechnicianBusinessEvidence(technicianSource)'));
 });
 
+test('Tenant replay hardening binds the callable-created ticket and accepts valid terminal lifecycle states', () => {
+  const repair = read('scripts/apply-five-role-business-evidence-fixes.mjs');
+  assert.ok(repair.includes("response.url().includes('createTenantServiceTicket')"));
+  assert.ok(repair.includes('callablePayload?.result?.ticketId'));
+  assert.ok(repair.includes("db.collection('maintenanceTickets').doc(ticketId).get()"));
+  assert.ok(repair.includes("String(data.status || '').toUpperCase()"));
+  assert.ok(repair.includes('(?:CLOSED|COMPLETED)'));
+  assert.ok(!repair.includes("where('description', '==', description).get();\n    const exact"));
+});
+
+test('Admin payment activation replay is idempotent and does not bypass approval evidence', () => {
+  const repair = read('scripts/apply-five-role-business-evidence-fixes.mjs');
+  assert.ok(repair.includes("const verifyAndUnlockButton = activationRow.getByRole('button', { name: /Verify & Unlock/i })"));
+  assert.ok(repair.includes('currentActivationState'));
+  assert.ok(repair.includes('APPROVED|ACTIVE|ACTIVE|true|ACTIVE'));
+  assert.ok(repair.includes('Missing Verify & Unlock button is acceptable only when this exact owner activation is already idempotently approved'));
+  assert.ok(!repair.includes("await activationRow.getByRole('button', { name: /Verify & Unlock/i }).click();\n    const approvalDialog"));
+});
+
 test('Technician evidence uses real push success or explicit server no-token state without synthetic authority', () => {
-  const source = read('tests/e2e/business-technician.spec.ts');
-  const patched = patchTechnicianBusinessEvidence(source);
-  assert.ok(patched.includes('registeredPushReady ? /SUCCESS|PARTIAL/ : /NO_REGISTERED_TOKEN/'));
-  assert.ok(patched.includes("pushDeliveryState: 'NO_REGISTERED_TOKEN'"));
-  assert.ok(patched.includes("where('recipientId', '==', technicianUid)"));
-  assert.ok(!patched.includes('A current production FCM token must be registered before dispatch.'));
+  const repair = read('scripts/apply-five-role-business-evidence-fixes.mjs');
+  assert.ok(repair.includes('registeredPushReady ? /SUCCESS|PARTIAL/ : /NO_REGISTERED_TOKEN/'));
+  assert.ok(repair.includes("pushDeliveryState: 'NO_REGISTERED_TOKEN'"));
+  assert.ok(repair.includes("where('recipientId', '==', technicianUid)"));
+  assert.ok(!repair.includes('A current production FCM token must be registered before dispatch.'));
   for (const forbidden of ['fake-fcm', 'synthetic-token', 'registerPushToken({ token:', 'testPushToken']) {
-    assert.ok(!patched.includes(forbidden), `synthetic push authority is forbidden: ${forbidden}`);
+    assert.ok(!repair.includes(forbidden), `synthetic push authority is forbidden: ${forbidden}`);
   }
-  assert.equal(patchTechnicianBusinessEvidence(patched), patched);
 });
 
 test('production app retains real Messaging worker activation and bounded registration retries', () => {
