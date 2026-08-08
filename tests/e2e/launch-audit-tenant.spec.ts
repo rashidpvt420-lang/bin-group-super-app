@@ -21,8 +21,12 @@ function requireAuditCredentials() {
 
 async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
+  const email = page.locator('input[type="email"], input[name*="email" i]').first();
+  const password = page.locator('input[type="password"]').first();
+  await expect(email).toBeVisible({ timeout: 20_000 });
+  await expect(password).toBeVisible({ timeout: 20_000 });
+  await email.fill(EMAIL);
+  await password.fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_500);
@@ -126,7 +130,7 @@ test.describe('Tenant launch audit', () => {
     await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, '/tenant/dashboard');
-    const langBtn = page.locator('button:has-text("AR"), button:has-text("EN")').first();
+    const langBtn = page.getByTestId('tenant-language-toggle');
     await expect(langBtn, 'Language toggle must be visible in tenant shell').toBeVisible({ timeout: 10_000 });
     await langBtn.click();
     await page.waitForTimeout(1_200);
@@ -134,8 +138,7 @@ test.describe('Tenant launch audit', () => {
     expect(afterText.trim().length, 'Content must render after AR switch').toBeGreaterThan(0);
     expect(afterText, 'No crash after language switch').not.toMatch(/application error|unhandled runtime error/i);
     await expect.poll(() => new URL(page.url()).pathname).toBe('/tenant/dashboard');
-    const langBtnAfter = page.locator('button:has-text("AR"), button:has-text("EN")').first();
-    await langBtnAfter.click();
+    await page.getByTestId('tenant-language-toggle').click();
     await page.waitForTimeout(500);
   });
 });
