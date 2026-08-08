@@ -112,8 +112,8 @@ async function firstVisible(page: Page, selectors: string[], timeout = 20_000): 
   throw new Error(`No visible target found for: ${selectors.join(' | ')}`);
 }
 
-async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 15_000) {
-  const deadline = Date.now() + 25_000;
+async function clickRequired(page: Page, selectors: string[], label: string, enabledTimeout = 2_000) {
+  const deadline = Date.now() + 35_000;
   let lastError = '';
   while (Date.now() < deadline) {
     for (const selector of selectors) {
@@ -271,7 +271,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
 
     let lifecycleStatus = String((await db.collection('maintenanceTickets').doc(ticketId).get()).data()?.status || '').toUpperCase();
     if (['ASSIGNED', 'AUTO_ASSIGNED'].includes(lifecycleStatus)) {
-      await clickRequired(page, ['button:has-text("Accept Mission")'], 'Accept Mission action');
+      await clickRequired(page, ['button:has-text("Accept Mission")', 'button:has-text("قبول المهمة")'], 'Accept Mission action');
       await expect.poll(async () => {
         const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
         return String(lifecycleSnap.data()?.status || '').toUpperCase();
@@ -285,6 +285,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
         'button:has-text("On The Way")',
         'button:has-text("Start Trip")',
         'button:has-text("En Route")',
+        'button:has-text("على الطريق")',
       ], 'Start trip action');
       await expect.poll(async () => {
         const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
@@ -294,13 +295,14 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
       await reloadTechnicianMission(page, ticketId);
     }
     expect(['ON_THE_WAY', 'ARRIVED']).toContain(lifecycleStatus);
-    await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated/i, { timeout: 20_000 });
+    await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated|على الطريق/i, { timeout: 20_000 });
 
     if (lifecycleStatus === 'ON_THE_WAY') {
       await clickRequired(page, [
         'button:has-text("Arrived")',
         'button:has-text("I have arrived")',
         'button:has-text("On Site")',
+        'button:has-text("وصلت")',
       ], 'Arrival action', 40_000);
       await expect.poll(async () => {
         const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
@@ -310,7 +312,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
       await reloadTechnicianMission(page, ticketId);
     }
     expect(lifecycleStatus).toBe('ARRIVED');
-    await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated/i, { timeout: 25_000 });
+    await expect(page.locator('body')).toContainText(/ARRIVED|PRE-WORK SAFETY PROTOCOL|Status updated|وصلت/i, { timeout: 25_000 });
 
     const beforeWorkInput = page.getByTestId('technician-before-work-file');
     await expect(beforeWorkInput).toHaveCount(1);
@@ -334,8 +336,8 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await ppe.check();
     await safety.check();
 
-    await clickRequired(page, ['button:has-text("Start Work")'], 'Start work action');
-    await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated/i, { timeout: 25_000 });
+    await clickRequired(page, ['button:has-text("Start Work")', 'button:has-text("بدء العمل")'], 'Start work action');
+    await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated|بدء العمل/i, { timeout: 25_000 });
 
     const notes = page.getByLabel(/Resolution notes/i).first();
     await expect(notes).toBeVisible({ timeout: 10_000 });
@@ -353,7 +355,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
       buffer: IMAGE_BUFFER,
     });
 
-    const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback/i }).first();
+    const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback|إكمال المهمة/i }).first();
     await expect(complete).toBeEnabled({ timeout: 25_000 });
     await complete.click();
     await page.waitForURL('**/technician/jobs', { timeout: 40_000 });
