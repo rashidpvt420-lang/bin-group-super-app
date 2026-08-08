@@ -28,13 +28,18 @@ test('Admin hard-launch exact-route proof uses canonical Founder MFA', () => {
   assert.match(source, /ceo@bin-groups\.com/);
 });
 
-test('Owner and Tenant language proofs bind to explicit controls instead of substring selectors', () => {
-  const owner = read('tests/e2e/launch-audit-owner.spec.ts');
-  const tenant = read('tests/e2e/launch-audit-tenant.spec.ts');
-  assert.match(owner, /getByTestId\('owner-language-toggle'\)/);
-  assert.match(tenant, /getByTestId\('tenant-language-toggle'\)/);
-  assert.doesNotMatch(owner, /button:has-text\("AR"\)/);
-  assert.doesNotMatch(tenant, /button:has-text\("AR"\)/);
+test('portal language proofs bind to explicit controls instead of substring selectors', () => {
+  const cases = [
+    ['tests/e2e/launch-audit-owner.spec.ts', 'owner-language-toggle'],
+    ['tests/e2e/launch-audit-tenant.spec.ts', 'tenant-language-toggle'],
+    ['tests/e2e/launch-audit-technician.spec.ts', 'technician-language-toggle'],
+    ['tests/e2e/launch-audit-broker.spec.ts', 'broker-language-toggle'],
+  ];
+  for (const [path, testId] of cases) {
+    const source = read(path);
+    assert.match(source, new RegExp(`getByTestId\\('${testId}'\\)`));
+    assert.doesNotMatch(source, /button:has-text\("AR"\)|button:has-text\("EN"\)/);
+  }
 });
 
 test('live launch audit has a protected no-deploy workflow with always-on diagnostics', () => {
