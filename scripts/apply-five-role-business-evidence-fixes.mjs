@@ -8,6 +8,10 @@ import {
   patchTenantBusinessEvidence as legacyPatchTenantBusinessEvidence,
   patchTechnicianBusinessEvidence as legacyPatchTechnicianBusinessEvidence,
 } from './apply-five-role-business-evidence-fixes-legacy.mjs';
+import {
+  patchAdminProtectedInteractions,
+  patchTenantProtectedInteractions,
+} from './patch-protected-business-interactions.mjs';
 
 const ADMIN_FILE = 'tests/e2e/business-admin.spec.ts';
 const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
@@ -162,11 +166,13 @@ export function patchAdminBusinessEvidence(source, label = ADMIN_FILE) {
       source.includes("getByTestId('admin-payment-confirm-approval')"))) {
     patched = legacyPatchAdminBusinessEvidence(source, label);
   }
-  return patchAdminPhase1PaymentFixture(patched, label);
+  patched = patchAdminPhase1PaymentFixture(patched, label);
+  return patchAdminProtectedInteractions(patched, label);
 }
 
 export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
-  return legacyPatchTenantBusinessEvidence(source, label);
+  const patched = legacyPatchTenantBusinessEvidence(source, label);
+  return patchTenantProtectedInteractions(patched, label);
 }
 
 export function patchTechnicianBusinessEvidence(source, label = TECHNICIAN_FILE) {
@@ -183,7 +189,7 @@ export function patchBusinessEvidenceFiles() {
   writeFileSync(ADMIN_FILE, adminPatched, 'utf8');
   writeFileSync(TENANT_FILE, tenantPatched, 'utf8');
   writeFileSync(TECHNICIAN_FILE, technicianPatched, 'utf8');
-  console.log('[five-role-business-evidence] Phase 1 CASH Admin fixture bound to immutable receipt/config; Tenant and Technician replay hardening applied');
+  console.log('[five-role-business-evidence] Phase 1 CASH Admin fixture plus exact UI interaction contracts applied; Tenant and Technician replay hardening applied');
 }
 
 /*
