@@ -24,6 +24,7 @@ for (const p of possibleConfigPaths) {
 const hasExplicitBaseURL = Boolean(process.env.E2E_BASE_URL);
 const baseURL = process.env.E2E_BASE_URL || 'http://localhost:4173';
 const ciMode = Boolean(process.env.CI);
+const strictLiveMode = String(process.env.E2E_STRICT_LIVE || '').toLowerCase() === 'true';
 
 const projects = ciMode
   ? [
@@ -36,7 +37,11 @@ export default defineConfig({
   testDir: './tests/e2e',
   timeout: 60_000,
   expect: { timeout: 15_000 },
-  retries: ciMode ? 1 : 0,
+  // Protected production evidence must be deterministic and must not hammer the
+  // same live Auth identities concurrently. One worker also keeps Founder MFA,
+  // App Check, and role-fixture state transitions ordered and reproducible.
+  workers: strictLiveMode ? 1 : undefined,
+  retries: strictLiveMode ? 0 : (ciMode ? 1 : 0),
   reporter: ciMode ? [['html', { outputFolder: 'playwright-report', open: 'never' }], ['list']] : 'list',
   webServer: hasExplicitBaseURL
     ? undefined
