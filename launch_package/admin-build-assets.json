@@ -6,7 +6,7 @@
   "indexScriptAssetCount": 2,
   "indexScriptAssets": [
     {
-      "path": "static/js/main.47d22837.js",
+      "path": "static/js/main.47226059.js",
       "size": 148758
     },
     {
@@ -25,12 +25,8 @@
       "size": 139972
     },
     {
-      "path": "static/js/519.13d9c226.chunk.js",
-      "size": 685832
-    },
-    {
-      "path": "static/js/613.9f0bd50f.chunk.js",
-      "size": 1904588
+      "path": "static/js/613.3225643a.chunk.js",
+      "size": 1904555
     },
     {
       "path": "static/js/614.63ade29d.chunk.js",
@@ -45,19 +41,21 @@
       "size": 721314
     },
     {
+      "path": "static/js/964.a4d0715f.chunk.js",
+      "size": 678747
+    },
+    {
       "path": "static/js/977.e75088cf.chunk.js",
       "size": 27172
     },
     {
-      "path": "static/js/main.47d22837.js",
+      "path": "static/js/main.47226059.js",
       "size": 148758
     }
   ],
   "firebaseProjectId": "bin-group-57c60",
   "firebaseAdminAppIdSuffix": "285cb53bc26626d699f3b6",
   "productionAppCheckRequired": false,
-  "validationOnlyAppCheck": false,
-  "deployableAppCheckSiteKeyVerified": false,
   "appCheckSiteKeyFingerprint": null,
   "sourceLevelUnsafeMfaChecksRequired": true,
   "sensitiveValuesExcluded": true,

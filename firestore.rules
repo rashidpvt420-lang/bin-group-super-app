@@ -1185,6 +1185,7 @@ service cloud.firestore {
 
     match /tickets/{ticketId} {
       allow list: if canListAssignedTechnicianTicket(resource.data);
+      allow get: if canGetAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create, update, delete: if false;
     }
