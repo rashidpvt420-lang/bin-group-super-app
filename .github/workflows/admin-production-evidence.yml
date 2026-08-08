@@ -159,7 +159,9 @@ jobs:
           E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
           E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
-        run: node scripts/run-critical-evidence.mjs --suite adminCredentialLogin
+        run: |
+          node scripts/apply-five-role-business-evidence-fixes.mjs
+          node scripts/run-critical-evidence.mjs --suite adminCredentialLogin
 
       - name: Upload exact-SHA Admin evidence
         if: always()
