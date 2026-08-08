@@ -1,5 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { loginAdminWithRealMfa, requireAdminMfaCredentials } from './helpers/adminMfa';
 import { existsSync } from 'fs';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
@@ -80,8 +81,17 @@ function requireRoleConfiguration(role: RoleCase) {
 
 async function login(page: Page, role: RoleCase) {
   requireRoleConfiguration(role);
-  const loginUrl = role.baseUrl ? `${role.baseUrl}/login` : '/login';
-  await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
+
+  if (role.name === 'Admin') {
+    const founder = requireAdminMfaCredentials('E2E_FOUNDER');
+    if (founder.email !== 'ceo@bin-groups.com') {
+      throw new Error('Admin hard-launch exact-route audit requires the canonical Founder MFA identity.');
+    }
+    await loginAdminWithRealMfa(page, role.baseUrl || '', founder);
+    return;
+  }
+
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   const emailInput = page.locator('[data-testid="login-email"], input[type="email"], input[name*="email" i], input[autocomplete="email"]').first();
   const passwordInput = page.locator('[data-testid="login-password"], input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
   await expect(emailInput, `${role.name} login email must be visible`).toBeVisible({ timeout: 25_000 });
