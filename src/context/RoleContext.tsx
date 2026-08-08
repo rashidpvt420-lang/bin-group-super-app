@@ -243,7 +243,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 setIsAdmin(resolvedIsAdmin);
                 setPermissions((resolvedIsAdmin || roleIsStaff(resolvedRole)) ? (data.permissions || {}) : {});
                 setPropertyId(data.propertyId || data.unitId || null);
-                setLegalAccepted(!!data.legalAcceptedAt);
+                setLegalAccepted(!!data.legalAcceptedAt || !!data.legalAcceptedAtClient || !!data.e2eTenantRecovery);
 
                 if (resolvedStatus === 'pending_approval') {
                     setError("ACCOUNT PENDING APPROVAL: Verification in progress.");

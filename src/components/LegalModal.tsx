@@ -38,6 +38,18 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   }, []);
 
   useEffect(() => {
+    try {
+      const globalAccepted = localStorage.getItem('bin_legal_terms_accepted_v7_1');
+      const userAccepted = userId ? localStorage.getItem(`bin_legal_terms_accepted_v7_1_${userId}`) : null;
+      if (globalAccepted || userAccepted) {
+        onAccepted();
+      }
+    } catch {
+      // Ignore storage errors in restricted environments
+    }
+  }, [userId, onAccepted]);
+
+  useEffect(() => {
     const content = contentRef.current;
     if (!content) return undefined;
     const frame = window.requestAnimationFrame(evaluateScrollReadiness);
