@@ -28,8 +28,7 @@ async function login(page: Page) {
   await email.fill(EMAIL);
   await password.fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2_500);
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
 async function assertHealthy(page: Page, expectedPath: string) {

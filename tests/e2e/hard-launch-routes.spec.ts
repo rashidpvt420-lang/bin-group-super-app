@@ -81,7 +81,6 @@ function requireRoleConfiguration(role: RoleCase) {
 
 async function login(page: Page, role: RoleCase) {
   requireRoleConfiguration(role);
-
   if (role.name === 'Admin') {
     const founder = requireAdminMfaCredentials('E2E_FOUNDER');
     if (founder.email !== 'ceo@bin-groups.com') {
@@ -91,7 +90,8 @@ async function login(page: Page, role: RoleCase) {
     return;
   }
 
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  const loginUrl = role.baseUrl ? `${role.baseUrl}/login` : '/login';
+  await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
   const emailInput = page.locator('[data-testid="login-email"], input[type="email"], input[name*="email" i], input[autocomplete="email"]').first();
   const passwordInput = page.locator('[data-testid="login-password"], input[type="password"], input[name*="password" i], input[autocomplete="current-password"]').first();
   await expect(emailInput, `${role.name} login email must be visible`).toBeVisible({ timeout: 25_000 });
@@ -99,9 +99,7 @@ async function login(page: Page, role: RoleCase) {
   await emailInput.fill(role.email);
   await passwordInput.fill(role.password);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2_000);
-  await expect(page, `${role.name} must leave the login route`).not.toHaveURL(/\/login/, { timeout: 15_000 });
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
 async function assertExactRoute(page: Page, role: RoleCase, route: string) {

@@ -38,14 +38,7 @@ function runProtectedFixture(script, label) {
 let exitCode = 1;
 try {
   if (protectedProductionRun) {
-    exitCode = runProtectedFixture('scripts/seed-e2e-auth.mjs', 'E2E account seeding');
-    if (exitCode === 0) {
-      // Business evidence immediately before this audit is allowed to mutate its
-      // own E2E fixtures. Rebuild the canonical five-role graph here so launch
-      // audit starts from a known active Owner contract + occupied Tenant unit,
-      // not from whatever state a previous proof intentionally exercised.
-      exitCode = runProtectedFixture('scripts/seed-live-role-test-data.mjs', 'canonical live-role fixture seeding');
-    }
+    exitCode = runProtectedFixture('scripts/seed-gate11-fixtures.mjs', 'Gate 11 fixture seeding');
   }
 
   if (!protectedProductionRun || exitCode === 0) {
