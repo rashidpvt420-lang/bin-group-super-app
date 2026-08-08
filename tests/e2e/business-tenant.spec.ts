@@ -64,18 +64,35 @@ function initializeAdminSdk() {
 async function login(page: Page, role: 'tenant' | 'technician', email: string, password: string) {
   await page.context().clearCookies();
   await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => {
+  await page.evaluate((loginEmail) => {
     localStorage.clear();
     sessionStorage.clear();
-  });
+    const now = new Date().toISOString();
+    localStorage.setItem('bin_legal_terms_accepted_v7_1', now);
+    if (loginEmail) {
+      localStorage.setItem(`bin_legal_terms_accepted_v7_1_${loginEmail.toLowerCase()}`, now);
+    }
+    localStorage.setItem('bin_pdpl_consent', 'true');
+    localStorage.setItem('bin_gps_consent', 'true');
+  }, email);
   await page.goto(`/login?intendedRole=${role}&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('body')).not.toContainText(
     /CONTINUE AS ADMIN|SOVEREIGN_FAILURE|System Interruption|Minified React error/i,
     { timeout: 10_000 },
   );
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page.locator('form button[type="submit"]').first().click();
+  const emailInput = page.locator('input[type="email"], input[name*="email" i]').first();
+  await expect(emailInput, 'Login email input must be visible before filling.').toBeVisible({ timeout: 20_000 });
+  await expect(emailInput, 'Login email input must be enabled before filling.').toBeEnabled({ timeout: 20_000 });
+  await emailInput.fill(email);
+
+  const passwordInput = page.locator('input[type="password"]').first();
+  await expect(passwordInput, 'Login password input must be visible before filling.').toBeVisible({ timeout: 20_000 });
+  await passwordInput.fill(password);
+
+  const submitButton = page.locator('form button[type="submit"]').first();
+  await expect(submitButton, 'Login submit button must be enabled before clicking.').toBeEnabled({ timeout: 20_000 });
+  await submitButton.click();
+
   await page.waitForURL(`**/${role}/dashboard`, { timeout: 30_000 });
   await expect(page.locator('body')).not.toContainText(
     /Network|SOVEREIGN_FAILURE|System Interruption|Minified React error|permission-denied/i,
@@ -710,7 +727,8 @@ test.describe('Tenant Business Workflow', () => {
 
     await login(page, 'tenant', RECOVERY_EMAIL, RECOVERY_PASSWORD);
     await page.goto(`/tenant/request?recovery=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('legal-agreement-content')).toHaveCount(0);
+    await expect(page.locator('.MuiBackdrop-root')).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByTestId('legal-agreement-content')).toHaveCount(0, { timeout: 20_000 });
     const fallback = page.getByTestId('tenant-unit-link-fallback');
     await expect(fallback).toBeVisible({ timeout: 35_000 });
     await page.getByTestId('tenant-unit-link-property').fill(recoveryTarget.propertyName);
@@ -718,7 +736,10 @@ test.describe('Tenant Business Workflow', () => {
     await page.getByTestId('tenant-unit-link-lease').fill(`LEASE-${RUN_MARKER}`);
     await page.getByTestId('tenant-unit-link-code').fill(`VERIFY-${RUN_MARKER}`);
     await page.getByTestId('tenant-unit-link-notes').fill(notes);
-    await page.getByTestId('tenant-unit-link-submit').click();
+
+    const submitBtn = page.getByTestId('tenant-unit-link-submit');
+    await expect(submitBtn, 'Unit link submit button must be visible and enabled').toBeEnabled({ timeout: 30_000 });
+    await submitBtn.click();
     await expect(page.getByTestId('tenant-unit-link-notice')).toContainText(/submitted for admin verification/i, { timeout: 35_000 });
 
     let requestId = '';

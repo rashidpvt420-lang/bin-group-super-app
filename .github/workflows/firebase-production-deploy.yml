@@ -157,7 +157,7 @@ jobs:
           node-version: '22'
 
       - name: Use Java 21 for Firebase emulators
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -459,7 +459,7 @@ jobs:
         run: npm run test:e2e:env
 
       - name: Use Java 21 for Firestore rules emulator
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'

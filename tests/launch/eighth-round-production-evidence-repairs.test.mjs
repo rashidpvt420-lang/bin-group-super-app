@@ -27,5 +27,5 @@ test('Recovery Tenant starts without an existing canonical Tenant session', () =
 test('Recovery Tenant fixture cannot be blocked by the unrelated legal modal', () => {
   const source = read('tests/e2e/business-tenant.spec.ts');
   assert.match(source, /legalAcceptedAt:\s*new Date\(\)\.toISOString\(\)/);
-  assert.match(source, /getByTestId\('legal-agreement-content'\)\)\.toHaveCount\(0\)/);
+  assert.match(source, /getByTestId\('legal-agreement-content'\)\)\.toHaveCount\(0/);
 });

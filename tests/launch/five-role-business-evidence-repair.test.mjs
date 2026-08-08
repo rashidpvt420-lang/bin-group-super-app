@@ -33,7 +33,9 @@ test('protected runner prepares exact policy and Founder geography before five-r
   assert.ok(runner.includes("run('scripts/ensure-phase1-manual-payment-config.mjs'"));
   assert.ok(runner.includes("run('scripts/prepare-protected-business-fixtures.mjs'"));
   assert.ok(runner.includes("run('scripts/verify-phase1-manual-payment-proof.mjs'"));
-  assert.ok(runner.indexOf('prepare-protected-business-fixtures.mjs') < runner.indexOf("'scripts/run-critical-evidence.mjs'"));
+  const fixtureIndex = runner.indexOf('prepare-protected-business-fixtures.mjs');
+  const executeEvidenceIndex = runner.indexOf('runCriticalBusinessEvidence(releaseId, 1)');
+  assert.ok(fixtureIndex > 0 && executeEvidenceIndex > 0 && fixtureIndex < executeEvidenceIndex);
 });
 
 test('Owner restoration preserves inspection-first lifecycle and re-applies downstream authority', () => {
