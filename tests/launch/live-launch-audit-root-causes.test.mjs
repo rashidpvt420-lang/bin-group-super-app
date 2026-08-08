@@ -36,3 +36,13 @@ test('Owner and Tenant language proofs bind to explicit controls instead of subs
   assert.doesNotMatch(owner, /button:has-text\("AR"\)/);
   assert.doesNotMatch(tenant, /button:has-text\("AR"\)/);
 });
+
+test('live launch audit has a protected no-deploy workflow with always-on diagnostics', () => {
+  const workflow = read('.github/workflows/live-launch-audit.yml');
+  assert.match(workflow, /name:\s*Live Launch Audit/);
+  assert.match(workflow, /environment:\s*production/);
+  assert.match(workflow, /npm run test:e2e:launch-audit:live/);
+  assert.match(workflow, /if:\s*\$\{\{ always\(\) \}\}/);
+  assert.match(workflow, /launch_package\/artifacts\/\*\.json/);
+  assert.doesNotMatch(workflow, /deploy-firebase-production\.mjs|firebase deploy|Deploy and verify Firebase production stack/i);
+});
