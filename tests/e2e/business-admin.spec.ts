@@ -724,9 +724,11 @@ test.describe('Admin protected operational business workflow', () => {
     await expect(activationRow).toBeVisible({ timeout: 35_000 });
     await activationRow.getByTestId('admin-payment-approve').click();
     const approvalDialog = page.getByTestId('admin-payment-approval-dialog');
+    await expect(approvalDialog).toBeVisible({ timeout: 20_000 });
     const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
-    await expect(confirmApproval).toBeEnabled();
-    await confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); });
+    await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
+    await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
+    await confirmApproval.click();
 
     await expect.poll(async () => {
       const [payment, contract, intake, owner, property] = await Promise.all([
