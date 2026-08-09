@@ -51,11 +51,12 @@ owner_locate_new_exact_sha_workflow_run() {
         node scripts/select-new-exact-sha-workflow-run.mjs "$expected_sha" "$baseline_file" \
           2>"$selector_error"
     )"; then
-      local run_id run_url run_status run_conclusion
+      local run_id run_url matched_run run_status run_conclusion
       run_id="$(jq -r '.runId // empty' <<<"$selected")"
       run_url="$(jq -r '.runUrl // empty' <<<"$selected")"
-      run_status="$(jq -r '.status // "unknown"' <<<"$selected")"
-      run_conclusion="$(jq -r '.conclusion // ""' <<<"$selected")"
+      matched_run="$(jq -c --argjson id "$run_id" '[.[] | select(.id == $id)] | first // {}' <<<"$runs_json")"
+      run_status="$(jq -r '.status // "unknown"' <<<"$matched_run")"
+      run_conclusion="$(jq -r '.conclusion // ""' <<<"$matched_run")"
       printf '[owner-correlation] selected workflow=%s run=%s status=%s conclusion=%s poll=%s/%s url=%s\n' \
         "$workflow" "$run_id" "$run_status" "${run_conclusion:-pending}" "$poll" "$max_polls" "$run_url" >&2
       rm -f "$selector_error"
