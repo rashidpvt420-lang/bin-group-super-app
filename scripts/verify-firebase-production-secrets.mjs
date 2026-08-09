@@ -12,10 +12,19 @@ export const requiredFirebaseAiSecrets = Object.freeze([
   'GEMINI_API_KEY',
 ]);
 
+// These secrets are bound by deployable production Functions even when the
+// product is running in the restricted bank-pilot mode. They must be verified
+// before the quota-safe Functions rollout starts; otherwise Firebase can spend
+// an hour updating earlier batches before discovering an inaccessible secret.
+export const requiredFirebaseInfrastructureSecrets = Object.freeze([
+  'IOT_GATEWAY_TOKEN',
+]);
+
 export const requiredFirebaseBankPilotSecrets = Object.freeze([
   'SMTP_USER',
   'SMTP_PASS',
   'OWNER_CONTRACT_OTP_PEPPER',
+  ...requiredFirebaseInfrastructureSecrets,
   ...requiredFirebaseAiSecrets,
 ]);
 
@@ -180,6 +189,22 @@ export function requireAdminMfaDomainRepairContext({
   return true;
 }
 
+function normalizeFirebaseSecretLookupFailure(secretName, error) {
+  const message = error instanceof Error ? error.message : 'metadata lookup failed';
+  const normalized = String(message).toLowerCase();
+  if (
+    normalized.includes('requires billing to be enabled') ||
+    normalized.includes('please enable billing') ||
+    normalized.includes('check billing account associated')
+  ) {
+    return `${secretName}: Google Cloud billing is not enabled/usable for ${expectedProjectId}; Firebase Functions deployment is blocked (${message})`;
+  }
+  if (normalized.includes('permission') || normalized.includes('access denied') || normalized.includes('forbidden')) {
+    return `${secretName}: production deploy identity cannot access this Secret Manager secret (${message})`;
+  }
+  return `${secretName}: ${message}`;
+}
+
 export async function verifyFirebaseSecretMetadata({
   projectId = String(process.env.GCP_PROJECT_ID || '').trim(),
   launchMode = String(process.env.LAUNCH_MODE || '').trim(),
@@ -211,8 +236,7 @@ export async function verifyFirebaseSecretMetadata({
       verifiedSecretNames.push(secretName);
       console.log(`Verified Firebase production secret metadata: ${secretName}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'metadata lookup failed';
-      failures.push(`${secretName}: ${message}`);
+      failures.push(normalizeFirebaseSecretLookupFailure(secretName, error));
     }
   }
 
