@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   requiredFirebaseAiSecrets,
+  requiredFirebaseInfrastructureSecrets,
   requiredFirebaseBankPilotSecrets,
   requiredFirebasePublicSecrets,
   requiredFirebaseProductionSecretsForMode,
@@ -18,10 +19,15 @@ const expectedAiSecrets = [
   'GEMINI_API_KEY',
 ];
 
+const expectedInfrastructureSecrets = [
+  'IOT_GATEWAY_TOKEN',
+];
+
 const expectedBankPilotSecrets = [
   'SMTP_USER',
   'SMTP_PASS',
   'OWNER_CONTRACT_OTP_PEPPER',
+  ...expectedInfrastructureSecrets,
   ...expectedAiSecrets,
 ];
 
@@ -46,8 +52,9 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('bank-pilot requires SMTP, Owner OTP pepper, and AI while public mode additionally requires Stripe', () => {
+test('bank-pilot requires SMTP, Owner OTP pepper, deploy infrastructure, and AI while public mode additionally requires Stripe', () => {
   assert.deepEqual(requiredFirebaseAiSecrets, expectedAiSecrets);
+  assert.deepEqual(requiredFirebaseInfrastructureSecrets, expectedInfrastructureSecrets);
   assert.deepEqual(requiredFirebaseBankPilotSecrets, expectedBankPilotSecrets);
   assert.deepEqual(requiredFirebasePublicSecrets, expectedPublicSecrets);
   assert.deepEqual(requiredFirebaseProductionSecretsForMode('bank-pilot'), expectedBankPilotSecrets);
