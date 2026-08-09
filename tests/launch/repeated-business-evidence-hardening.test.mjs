@@ -29,8 +29,9 @@ test('App Check synchronization is scoped to protected main and never deletes to
   assert.match(source, /GITHUB_REF !== 'refs\/heads\/main'/);
   assert.match(source, /GITHUB_WORKFLOW !== 'Firebase Production Deploy'/);
   assert.match(source, /REACT_APP_ADMIN_FIREBASE_APP_ID/);
+  assert.match(source, /projectNumberOf/);
   assert.match(source, /exchangeDebugToken/);
-  assert.match(source, /firebaseappcheck\.googleapis\.com\/v1\/\$\{parent\}\/debugTokens/);
+  assert.match(source, /firebaseappcheck\.googleapis\.com\/v1beta\/\$\{parent\}\/debugTokens/);
   assert.doesNotMatch(source, /method:\s*'DELETE'/);
 });
 
