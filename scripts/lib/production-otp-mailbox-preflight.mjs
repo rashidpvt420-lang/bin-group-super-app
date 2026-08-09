@@ -39,7 +39,19 @@ function defaultSecretResolver(name, { env, projectId }) {
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env },
     ));
   } catch {
-    throw new Error(`${name} is missing or inaccessible in Firebase Secret Manager.`);
+    try {
+      return text(execFileSync(
+        'gcloud',
+        ['secrets', 'versions', 'access', 'latest', '--secret', name, '--project', projectId, '--quiet'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env },
+      ));
+    } catch (gErr) {
+      const msg = text(gErr.stderr || gErr.stdout || (gErr instanceof Error ? gErr.message : ''));
+      if (/BILLING_DISABLED|billing to be enabled/i.test(msg)) {
+        throw new Error(`Cloud Billing is disabled on project ${projectId}. Enable billing at https://console.developers.google.com/billing/enable?project=${projectId}`);
+      }
+      throw new Error(`${name} is missing or inaccessible in Firebase Secret Manager.`);
+    }
   }
 }
 
