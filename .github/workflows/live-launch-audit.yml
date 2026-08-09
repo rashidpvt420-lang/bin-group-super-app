@@ -1,0 +1,121 @@
+name: Live Launch Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/run-live-launch-audit.mjs'
+      - 'playwright.config.ts'
+      - 'tests/e2e/launch-audit-*.spec.ts'
+      - 'tests/e2e/hard-launch-routes.spec.ts'
+      - 'tests/e2e/helpers/**'
+      - '.github/workflows/live-launch-audit.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: live-launch-audit-production
+  cancel-in-progress: false
+
+jobs:
+  live-launch-audit:
+    name: Protected live launch audit only
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    env:
+      CI: true
+      DEPLOYMENT_ENVIRONMENT: production
+      GCP_PROJECT_ID: bin-group-57c60
+      GCLOUD_PROJECT: bin-group-57c60
+      GOOGLE_CLOUD_PROJECT: bin-group-57c60
+      E2E_BASE_URL: https://bin-group-57c60.web.app
+      E2E_ADMIN_BASE_URL: ${{ secrets.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app' }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_FOUNDER_EMAIL: ceo@bin-groups.com
+      E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+      E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+      E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
+      E2E_REQUIRE_FOUNDER_MFA: 'true'
+      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+      E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+      E2E_TECHNICIAN_B_EMAIL: ${{ secrets.E2E_TECHNICIAN_B_EMAIL }}
+      E2E_TECHNICIAN_B_PASSWORD: ${{ secrets.E2E_TECHNICIAN_B_PASSWORD }}
+      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+      E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+      E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+      E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+      E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+      E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+      E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+      E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+      E2E_STRICT_ROLES: 'true'
+      E2E_STRICT_LIVE: 'true'
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+      FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+
+    steps:
+      - name: Enforce exact main-only audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != 'refs/heads/main' ]]; then
+            echo "::error::Live production audit is restricted to refs/heads/main."
+            exit 1
+          fi
+
+      - name: Checkout exact main commit
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Authenticate Google Cloud for protected audit fixtures
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Verify exact checked-out main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          EXACT_MAIN="$(git rev-parse origin/main)"
+          if [[ "${GITHUB_SHA}" != "${EXACT_MAIN}" ]]; then
+            echo "::error::Audit SHA ${GITHUB_SHA} is not exact current main ${EXACT_MAIN}."
+            exit 1
+          fi
+
+      - name: Run protected live launch audit without Firebase deploy
+        run: npm run test:e2e:launch-audit:live
+
+      - name: Upload live launch audit diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: live-launch-audit-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            launch_package/artifacts/*.json
+            launch_package/artifacts/*.stdio.log
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14

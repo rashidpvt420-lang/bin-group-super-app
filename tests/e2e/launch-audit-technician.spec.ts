@@ -5,14 +5,13 @@
  * history, HR, profile, AR/EN switch.
  */
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TECHNICIAN_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
-const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -22,11 +21,14 @@ function requireAuditCredentials() {
 
 async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
+  const email = page.locator('input[type="email"], input[name*="email" i]').first();
+  const password = page.locator('input[type="password"]').first();
+  await expect(email).toBeVisible({ timeout: 20_000 });
+  await expect(password).toBeVisible({ timeout: 20_000 });
+  await email.fill(EMAIL);
+  await password.fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2_500);
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
 async function assertHealthy(page: Page, context: string) {
@@ -37,9 +39,8 @@ async function assertHealthy(page: Page, context: string) {
 }
 
 test.describe('Technician launch audit', () => {
-  // Grant geolocation so the map page doesn't block on a permission prompt
   test.use({
-    geolocation: { latitude: 25.2048, longitude: 55.2708 }, // Dubai
+    geolocation: { latitude: 25.2048, longitude: 55.2708 },
     permissions: ['geolocation'],
   });
 
@@ -57,7 +58,6 @@ test.describe('Technician launch audit', () => {
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
 
-
   test('technician dashboard loads with duty toggle', async ({ page }) => {
     await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
@@ -68,7 +68,6 @@ test.describe('Technician launch audit', () => {
     expect(collectAppCheckFailures(errors), 'App Check/403/429 console failures').toEqual([]);
     expect(errors.join('\n')).not.toMatch(ACCESS_DENIED);
 
-    // Verify duty toggle button is present (START DUTY / END DUTY or Arabic equivalent)
     const dutyBtn = page.locator(
       'button:has-text("DUTY"), button:has-text("START"), button:has-text("Duty"), button:has-text("واجب"), button:has-text("بدء")'
     ).first();
@@ -84,12 +83,10 @@ test.describe('Technician launch audit', () => {
 
   test('technician map page loads (geolocation granted)', async ({ page }) => {
     await page.goto('/technician/map', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3_000); // Allow map tile load
+    await page.waitForTimeout(3_000);
     await assertHealthy(page, 'technician/map');
-    // Map container should render — div with leaflet, google maps, or a map-related element
     const mapContainer = page.locator('[class*="map"], [id*="map"], #map, .leaflet-container, [data-testid*="map"]').first();
-    const hasMap = await mapContainer.isVisible({ timeout: 10_000 }).catch(() => false);
-    // Map renders OR the page shows a meaningful fallback (not a crash)
+    await mapContainer.isVisible({ timeout: 10_000 }).catch(() => false);
     const body = await page.locator('body').innerText();
     expect(body, 'Map page must not crash').not.toMatch(CRASH_PATTERN);
   });
@@ -122,9 +119,8 @@ test.describe('Technician launch audit', () => {
     await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
 
-    const langBtn = page.locator('button:has-text("AR"), button:has-text("EN")').first();
+    const langBtn = page.getByTestId('technician-language-toggle');
     await expect(langBtn, 'Language toggle must be visible in technician shell').toBeVisible({ timeout: 10_000 });
-
     await langBtn.click();
     await page.waitForTimeout(1_200);
 
@@ -132,9 +128,7 @@ test.describe('Technician launch audit', () => {
     expect(afterText.trim().length, 'Content must render after language switch').toBeGreaterThan(0);
     expect(afterText, 'No crash after language switch').not.toMatch(CRASH_PATTERN);
 
-    // Switch back
-    const langBtnAfter = page.locator('button:has-text("AR"), button:has-text("EN")').first();
-    await langBtnAfter.click();
+    await page.getByTestId('technician-language-toggle').click();
     await page.waitForTimeout(500);
   });
 });

@@ -2,17 +2,16 @@
  * launch-audit-broker.spec.ts
  * Deep E2E launch audit for the Broker role.
  * Verifies: dashboard KPIs, leads, referrals, commissions, documents,
- * profile, AR/EN switch (including fixed @bin/shared import).
+ * profile, AR/EN switch.
  */
 import { expect, Page, test } from '@playwright/test';
-import { installAppCheckDebugToken, assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_BROKER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
-const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!EMAIL || !PASSWORD) {
@@ -22,11 +21,14 @@ function requireAuditCredentials() {
 
 async function login(page: Page) {
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(EMAIL);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
+  const email = page.locator('input[type="email"], input[name*="email" i]').first();
+  const password = page.locator('input[type="password"]').first();
+  await expect(email).toBeVisible({ timeout: 20_000 });
+  await expect(password).toBeVisible({ timeout: 20_000 });
+  await email.fill(EMAIL);
+  await password.fill(PASSWORD);
   await page.locator('form button[type="submit"]').first().click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2_500);
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
 async function assertHealthy(page: Page, context: string) {
@@ -50,7 +52,6 @@ test.describe('Broker launch audit', () => {
     monitor.assertClean(test.info().title);
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });
-
 
   test('broker dashboard loads with KPI cards', async ({ page }) => {
     await assertAppCheckDebugTokenInPage(page);
@@ -96,14 +97,11 @@ test.describe('Broker launch audit', () => {
   test('broker nav bar renders correct labels (not hardcoded English)', async ({ page }) => {
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
-
-    // After fix: nav buttons should use tx() — verify at least the Dashboard nav button is visible
     const dashBtn = page.locator('#broker-nav-dashboard, button[id="broker-nav-dashboard"]').first();
     const hasDashBtn = await dashBtn.isVisible({ timeout: 8_000 }).catch(() => false);
-    // If element not found by ID, fall back to text-based check
     if (!hasDashBtn) {
       const navText = await page.locator('body').innerText({ timeout: 8_000 });
-      expect(navText, 'Broker nav must contain Dashboard text').toMatch(/dashboard|لوحة القيادة/i);
+      expect(navText, 'Broker nav must contain Dashboard text').toMatch(/dashboard|لوحة القيادة|لوحة التحكم/i);
     }
   });
 
@@ -111,41 +109,30 @@ test.describe('Broker launch audit', () => {
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
 
-    // The fixed BrokerApp has a Globe + "AR"/"EN" button
-    const langBtn = page.locator('#broker-lang-toggle, button:has-text("AR"), button:has-text("EN")').first();
+    const langBtn = page.getByTestId('broker-language-toggle');
     await expect(langBtn, 'Language toggle must be visible in broker shell').toBeVisible({ timeout: 10_000 });
-
     await langBtn.click();
     await page.waitForTimeout(1_500);
 
     const afterText = await page.locator('body').innerText({ timeout: 10_000 });
     expect(afterText.trim().length, 'Content must render after AR switch').toBeGreaterThan(0);
     expect(afterText, 'No crash after language switch').not.toMatch(CRASH_PATTERN);
-
-    // After Arabic switch, BIN BROKER header should now show Arabic text (وسيط BIN)
-    // or at minimum the nav labels should have changed
-    const dir = await page.evaluate(() => document.documentElement.dir || document.body.getAttribute('dir') || '');
-    // Direction should flip or language content should be Arabic
     const hasArabicContent = /[\u0600-\u06FF]/.test(afterText);
     expect(hasArabicContent, 'Arabic content must appear after language switch').toBe(true);
 
-    // Switch back to EN
-    const langBtnAfter = page.locator('#broker-lang-toggle, button:has-text("AR"), button:has-text("EN")').first();
-    await langBtnAfter.click();
+    await page.getByTestId('broker-language-toggle').click();
     await page.waitForTimeout(500);
   });
 
   test('broker mobile nav renders (viewport: mobile)', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 }); // iPhone 14
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/dashboard (mobile)');
 
-    // Mobile bottom nav should be visible
     const mobileNav = page.locator('#broker-mobile-nav-dashboard, [id^="broker-mobile-nav-"]').first();
     const hasMobileNav = await mobileNav.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!hasMobileNav) {
-      // Fallback: just verify no crash
       const body = await page.locator('body').innerText();
       expect(body, 'Mobile broker layout must not crash').not.toMatch(CRASH_PATTERN);
     }

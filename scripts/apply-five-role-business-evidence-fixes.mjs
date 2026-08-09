@@ -18,12 +18,29 @@ const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
 const TECHNICIAN_FILE = 'tests/e2e/business-technician.spec.ts';
 const ADMIN_PHASE1_MARKER = "const phase1PaymentConfigurationSnap = await db.collection('system_payment_config').doc('current').get();";
 
+function normalizeNewlines(value) {
+  return value.replace(/\r\n/g, '\n');
+}
+
+function restoreNewlines(value, hadCrlf) {
+  return hadCrlf ? value.replace(/\n/g, '\r\n') : value;
+}
+
 function replaceExactlyOnce(source, before, after, label, purpose) {
-  const matches = source.split(before).length - 1;
-  if (matches !== 1) {
-    throw new Error(`[five-role-business-evidence] ${label}: expected exactly one ${purpose} anchor, found ${matches}`);
+  const hadCrlf = source.includes('\r\n');
+  const normSource = normalizeNewlines(source);
+  const normBefore = normalizeNewlines(before);
+  const normAfter = normalizeNewlines(after);
+
+  const first = normSource.indexOf(normBefore);
+  if (first < 0) {
+    throw new Error(`[five-role-business-evidence] ${label}: expected exactly one ${purpose} anchor, found 0`);
   }
-  return source.replace(before, after);
+  if (normSource.indexOf(normBefore, first + normBefore.length) >= 0) {
+    throw new Error(`[five-role-business-evidence] ${label}: expected exactly one ${purpose} anchor, found multiple`);
+  }
+  const patched = `${normSource.slice(0, first)}${normAfter}${normSource.slice(first + normBefore.length)}`;
+  return restoreNewlines(patched, hadCrlf);
 }
 
 function patchAdminPhase1PaymentFixture(source, label = ADMIN_FILE) {
