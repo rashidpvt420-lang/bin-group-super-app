@@ -44,6 +44,18 @@ if (!protectedPhase1) {
   process.exit(1);
 }
 
+// App Check debug tokens belong to individual Firebase apps. The protected
+// business suite exercises both the public and dedicated Admin web apps, so
+// verify (and only when missing, synchronize) the same stable CI UUID for both
+// before any callable with enforceAppCheck can become an opaque E2E failure.
+run('scripts/ensure-protected-appcheck-debug-tokens.mjs');
+
+// Apply run-time-only hardening after the legacy compatibility patches so the
+// committed tests stay representative while production replay gets deterministic
+// listener convergence, stale synthetic correction cleanup, and exact callable
+// error diagnostics.
+run('scripts/harden-repeated-business-evidence.mjs');
+
 const releaseId = String(process.env.RELEASE_ID || '').trim()
   || `${process.env.GITHUB_RUN_ID || 'unknown'}-${process.env.GITHUB_RUN_ATTEMPT || '1'}`;
 run('scripts/ensure-phase1-manual-payment-config.mjs', [], { RELEASE_ID: releaseId });
@@ -58,5 +70,5 @@ if (exitCode !== 0) {
   exitCode = runCriticalBusinessEvidence(releaseId, 2);
 }
 
-console.log(`[protected-business-evidence] real_firebase_mfa_only=true admin_proof=canonical-founder-totp phase1_config_verified=true founder_geo_verified=true attempts=${exitCode === 0 ? '1-or-2' : '2'} exit_code=${exitCode} hardLaunchClaim=false`);
+console.log(`[protected-business-evidence] real_firebase_mfa_only=true admin_proof=canonical-founder-totp phase1_config_verified=true founder_geo_verified=true appcheck_dual_app_verified=true attempts=${exitCode === 0 ? '1-or-2' : '2'} exit_code=${exitCode} hardLaunchClaim=false`);
 process.exit(exitCode);
