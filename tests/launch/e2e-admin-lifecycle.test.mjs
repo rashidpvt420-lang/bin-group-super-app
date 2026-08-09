@@ -109,7 +109,7 @@ test('business evidence always retires the ephemeral Admin even when a suite fai
 });
 
 test('live launch audit recreates the Admin for evidence and retires it in finally', () => {
-  const seedIndex = liveAuditSource.indexOf("['scripts/seed-gate11-fixtures.mjs']");
+  const seedIndex = liveAuditSource.indexOf("runProtectedFixture('scripts/seed-gate11-fixtures.mjs'");
   const auditIndex = liveAuditSource.indexOf("['scripts/run-critical-evidence.mjs', '--suite', 'launchAuditLive']");
   const finallyIndex = liveAuditSource.indexOf('} finally {');
   const cleanupIndex = liveAuditSource.indexOf("'--phase=post-launch-audit'");
