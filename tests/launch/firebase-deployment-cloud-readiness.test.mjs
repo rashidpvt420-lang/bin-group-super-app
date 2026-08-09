@@ -88,12 +88,18 @@ test('compiled Function secret contract fails closed on drift without accessing 
 test('production workflows run the read-only cloud readiness gate before any deploy', () => {
   const deployWorkflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const preflightWorkflow = readFileSync('.github/workflows/production-readiness-preflight.yml', 'utf8');
-  const deployInstall = deployWorkflow.indexOf('Install dependencies with retry');
-  const deployReadiness = deployWorkflow.indexOf('Verify Firebase project billing and Cloud Functions deployment access');
-  const deployCommand = deployWorkflow.indexOf('node scripts/deploy-firebase-production.mjs');
-  const deployFunctionsBuild = deployWorkflow.lastIndexOf('Build Firebase Functions');
-  const deploySecretContract = deployWorkflow.lastIndexOf('Verify compiled Firebase Function secret contract');
+  const deployJob = deployWorkflow.indexOf('deploy-firebase-production-stack:');
+  const deployAuth = deployWorkflow.indexOf('Authenticate to Google Cloud by Workload Identity Federation', deployJob);
+  const deployInstall = deployWorkflow.indexOf('Install dependencies with retry', deployJob);
+  const deployGcloudSetup = deployWorkflow.indexOf('Set up Google Cloud CLI for protected Secret Manager checks', deployJob);
+  const deployReadiness = deployWorkflow.indexOf('Verify Firebase project billing and Cloud Functions deployment access', deployJob);
+  const deployCommand = deployWorkflow.indexOf('node scripts/deploy-firebase-production.mjs', deployJob);
+  const deployFunctionsBuild = deployWorkflow.indexOf('Build Firebase Functions', deployJob);
+  const deploySecretContract = deployWorkflow.indexOf('Verify compiled Firebase Function secret contract', deployJob);
 
+  assert.ok(deployJob >= 0, 'production deploy job must exist');
+  assert.ok(deployGcloudSetup > deployAuth, 'production deploy must configure gcloud after Workload Identity authentication');
+  assert.ok(deployInstall > deployGcloudSetup, 'production deploy must configure gcloud before installing dependencies');
   assert.ok(deployReadiness > deployInstall, 'production deploy must install dependencies before the readiness script');
   assert.ok(deployCommand > deployReadiness, 'production deploy must verify cloud readiness before Firebase mutations');
   assert.ok(deploySecretContract > deployFunctionsBuild, 'production deploy must verify the compiled Function secret contract after building Functions');
@@ -102,6 +108,7 @@ test('production workflows run the read-only cloud readiness gate before any dep
   assert.match(preflightWorkflow, /node scripts\/verify-firebase-deployment-readiness\.mjs/);
   assert.match(preflightWorkflow, /Build Firebase Functions for deployment-secret contract verification/);
   assert.match(preflightWorkflow, /verify-firebase-deployed-function-secret-contract\.mjs/);
+  assert.match(deployWorkflow, /google-github-actions\/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db/);
 });
 
 test('the deploy runner exits instead of retrying permanent Google Cloud failures', () => {

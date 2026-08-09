@@ -367,6 +367,16 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      # production-otp-mailbox-preflight falls back to `gcloud secrets
+      # versions access` when the Firebase CLI cannot read a protected value.
+      # Install it explicitly; relying on the hosted runner image made the
+      # fallback fail closed with an indistinguishable missing-secret error.
+      - name: Set up Google Cloud CLI for protected Secret Manager checks
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          version: '>= 416.0.0'
+          project_id: bin-group-57c60
+
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 

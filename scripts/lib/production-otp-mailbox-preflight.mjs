@@ -28,6 +28,33 @@ const MAILBOXES = [
 
 const text = (value) => String(value ?? '').trim();
 
+function commandFailureText(error) {
+  if (!error || typeof error !== 'object') return text(error);
+  return text(error.stderr || error.stdout || error.message);
+}
+
+// Keep this output deliberately diagnostic but value-free: it is emitted by a
+// protected deployment gate and must never turn a provider error (or a secret
+// value) into workflow output.
+export function classifyProtectedSecretAccessFailure(name, error, { projectId = EXPECTED_PROJECT_ID } = {}) {
+  const safeName = text(name);
+  const failure = commandFailureText(error).toLowerCase();
+
+  if (/enoent|command not found|gcloud[^\n]*not found/.test(failure)) {
+    return `${safeName} could not be checked because the Google Cloud CLI is unavailable. Run google-github-actions/setup-gcloud after Workload Identity authentication.`;
+  }
+  if (/billing_disabled|billing to be enabled|requires billing|enable billing/.test(failure)) {
+    return `Cloud Billing is disabled on project ${projectId}. Enable billing before resolving ${safeName}.`;
+  }
+  if (/permission[_ -]?denied|forbidden|not authorized|access denied|secretmanager\.versions\.access|\b403\b/.test(failure)) {
+    return `${safeName} is inaccessible in Firebase Secret Manager: grant the deployment service account roles/secretmanager.secretAccessor on this secret.`;
+  }
+  if (/not[_ -]?found|does not exist|could not find|no (?:enabled )?versions|does not have any versions|secret version.*not found|\b404\b/.test(failure)) {
+    return `${safeName} is missing or has no enabled version in Firebase Secret Manager.`;
+  }
+  return `${safeName} is missing or inaccessible in Firebase Secret Manager.`;
+}
+
 function defaultSecretResolver(name, { env, projectId }) {
   const injected = text(env[name]);
   if (injected) return injected;
@@ -46,11 +73,7 @@ function defaultSecretResolver(name, { env, projectId }) {
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env },
       ));
     } catch (gErr) {
-      const msg = text(gErr.stderr || gErr.stdout || (gErr instanceof Error ? gErr.message : ''));
-      if (/BILLING_DISABLED|billing to be enabled/i.test(msg)) {
-        throw new Error(`Cloud Billing is disabled on project ${projectId}. Enable billing at https://console.developers.google.com/billing/enable?project=${projectId}`);
-      }
-      throw new Error(`${name} is missing or inaccessible in Firebase Secret Manager.`);
+      throw new Error(classifyProtectedSecretAccessFailure(name, gErr, { projectId }));
     }
   }
 }
@@ -76,8 +99,12 @@ export async function runProductionOtpMailboxPreflight({
       const value = text(resolveSecret(name, { env, projectId }));
       if (!value) blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
       return value;
-    } catch {
-      blockers.push(`${name} is missing or inaccessible in Firebase Secret Manager.`);
+    } catch (error) {
+      const message = text(error instanceof Error ? error.message : '');
+      const safeMessage = message.startsWith(`${name} `)
+        ? message
+        : `${name} is missing or inaccessible in Firebase Secret Manager.`;
+      blockers.push(safeMessage);
       return '';
     }
   };

@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { runProductionOtpMailboxPreflight } from '../../scripts/lib/production-otp-mailbox-preflight.mjs';
+import {
+  classifyProtectedSecretAccessFailure,
+  runProductionOtpMailboxPreflight,
+} from '../../scripts/lib/production-otp-mailbox-preflight.mjs';
 
 const predeploy = readFileSync('scripts/predeploy-approval-gate.mjs', 'utf8');
 const preflightSource = readFileSync('scripts/lib/production-otp-mailbox-preflight.mjs', 'utf8');
@@ -67,6 +70,25 @@ test('preflight rejects weak peppers before mailbox access', async () => {
     resolveSecret: (name) => name === 'BROKER_PAYOUT_OTP_PEPPER' ? 'short' : secretValues.get(name) || '',
   }), /must contain at least 32 characters/);
   assert.equal(fetchCalled, false);
+});
+
+test('protected Secret Manager diagnostics distinguish runner, IAM and secret-state failures without provider output', () => {
+  assert.match(
+    classifyProtectedSecretAccessFailure('OWNER_CONTRACT_OTP_PEPPER', { message: 'spawnSync gcloud ENOENT' }),
+    /Google Cloud CLI is unavailable/,
+  );
+  assert.match(
+    classifyProtectedSecretAccessFailure('BROKER_PAYOUT_OTP_PEPPER', { stderr: 'PERMISSION_DENIED: secretmanager.versions.access' }),
+    /roles\/secretmanager\.secretAccessor/,
+  );
+  assert.match(
+    classifyProtectedSecretAccessFailure('BROKER_PAYOUT_OTP_PEPPER', { stderr: 'NOT_FOUND: no enabled versions' }),
+    /missing or has no enabled version/,
+  );
+  assert.doesNotMatch(
+    classifyProtectedSecretAccessFailure('OWNER_CONTRACT_OTP_PEPPER', { stderr: 'PERMISSION_DENIED: sensitive-provider-detail' }),
+    /sensitive-provider-detail/,
+  );
 });
 
 test('production predeploy invokes mailbox verification before authorization result', () => {
