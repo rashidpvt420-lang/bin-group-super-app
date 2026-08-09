@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   classifyProtectedSecretAccessFailure,
+  resolveProtectedSecretValue,
   runProductionOtpMailboxPreflight,
 } from '../../scripts/lib/production-otp-mailbox-preflight.mjs';
 
@@ -88,6 +89,34 @@ test('protected Secret Manager diagnostics distinguish runner, IAM and secret-st
   assert.doesNotMatch(
     classifyProtectedSecretAccessFailure('OWNER_CONTRACT_OTP_PEPPER', { stderr: 'PERMISSION_DENIED: sensitive-provider-detail' }),
     /sensitive-provider-detail/,
+  );
+});
+
+test('secret resolver falls back to gcloud when Firebase CLI returns an empty payload', () => {
+  const calls = [];
+  const value = resolveProtectedSecretValue('OWNER_CONTRACT_OTP_PEPPER', {
+    env: {},
+    projectId: 'bin-group-57c60',
+    execFile: (command) => {
+      calls.push(command);
+      return command.startsWith('npx') ? '' : 'g'.repeat(48);
+    },
+  });
+
+  assert.equal(value, 'g'.repeat(48));
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /^npx/);
+  assert.equal(calls[1], 'gcloud');
+});
+
+test('secret resolver reports an empty gcloud payload without exposing values', () => {
+  assert.throws(
+    () => resolveProtectedSecretValue('BROKER_PAYOUT_OTP_PEPPER', {
+      env: {},
+      projectId: 'bin-group-57c60',
+      execFile: () => '',
+    }),
+    /empty latest enabled value/,
   );
 });
 
