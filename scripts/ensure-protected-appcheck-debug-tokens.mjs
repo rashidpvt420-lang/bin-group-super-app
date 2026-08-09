@@ -13,6 +13,8 @@ const ADMIN_APP_ID = String(
   || '1:123413252227:web:285cb53bc26626d699f3b6',
 ).trim();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const projectNumberOf = (appId) => String(appId).match(/^1:(\d+):/)?.[1] || '';
+const PROJECT_NUMBER = projectNumberOf(MAIN_APP_ID) || projectNumberOf(ADMIN_APP_ID);
 
 const fail = (message) => {
   console.error(`[appcheck-protected-sync] FAIL ${message}`);
@@ -32,9 +34,15 @@ if (!API_KEY) fail('missing VITE_FIREBASE_API_KEY');
 if (!UUID_RE.test(DEBUG_TOKEN)) fail('VITE_FIREBASE_APPCHECK_DEBUG_TOKEN must be the stable registered UUID');
 if (!MAIN_APP_ID) fail('missing VITE_FIREBASE_APP_ID for the main web app');
 if (!ADMIN_APP_ID) fail('missing Admin Firebase web app ID');
+if (!PROJECT_NUMBER) fail('unable to derive Firebase project number from the web app IDs');
+if ([MAIN_APP_ID, ADMIN_APP_ID].some((appId) => projectNumberOf(appId) !== PROJECT_NUMBER)) {
+  fail('main and Admin Firebase app IDs are not bound to the same project number');
+}
 
 async function exchange(appId) {
-  const url = `https://content-firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}`
+  // exchangeDebugToken accepts a Firebase project ID in place of the project
+  // number. Keep this aligned with the existing production verifier.
+  const url = `https://firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}`
     + `/apps/${encodeURIComponent(appId)}:exchangeDebugToken?key=${encodeURIComponent(API_KEY)}`;
   const response = await fetch(url, {
     method: 'POST',
@@ -58,10 +66,12 @@ async function register(appId, label) {
     const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     authClient = await auth.getClient();
   }
-  const parent = `projects/${PROJECT_ID}/apps/${appId}`;
+  // CreateDebugToken's documented parent uses the project number. v1beta is
+  // the management API surface for creating the per-app token resource.
+  const parent = `projects/${PROJECT_NUMBER}/apps/${encodeURIComponent(appId)}`;
   try {
     await authClient.request({
-      url: `https://firebaseappcheck.googleapis.com/v1/${parent}/debugTokens`,
+      url: `https://firebaseappcheck.googleapis.com/v1beta/${parent}/debugTokens`,
       method: 'POST',
       data: {
         displayName: `Playwright E2E Stable ${label}`,
