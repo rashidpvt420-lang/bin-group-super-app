@@ -55,27 +55,52 @@ export function classifyProtectedSecretAccessFailure(name, error, { projectId = 
   return `${safeName} is missing or inaccessible in Firebase Secret Manager.`;
 }
 
-function defaultSecretResolver(name, { env, projectId }) {
+export function resolveProtectedSecretValue(
+  name,
+  {
+    env = process.env,
+    projectId = EXPECTED_PROJECT_ID,
+    execFile = execFileSync,
+  } = {},
+) {
   const injected = text(env[name]);
   if (injected) return injected;
   const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   try {
-    return text(execFileSync(
+    const firebaseValue = text(execFile(
       executable,
       ['firebase', 'functions:secrets:access', name, '--project', projectId],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env },
     ));
+    // Firebase CLI can acknowledge the request without writing the payload.
+    // Treat that as inconclusive, not as a valid (empty) protected value.
+    if (firebaseValue) return firebaseValue;
   } catch {
-    try {
-      return text(execFileSync(
-        'gcloud',
-        ['secrets', 'versions', 'access', 'latest', '--secret', name, '--project', projectId, '--quiet'],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env },
-      ));
-    } catch (gErr) {
-      throw new Error(classifyProtectedSecretAccessFailure(name, gErr, { projectId }));
-    }
+    // The gcloud read below is the durable fallback for Firebase CLI failures.
   }
+
+  let gcloudValue = '';
+  try {
+    gcloudValue = text(execFile(
+      'gcloud',
+      ['secrets', 'versions', 'access', 'latest', '--secret', name, '--project', projectId, '--quiet'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env },
+    ));
+  } catch (gErr) {
+    throw new Error(classifyProtectedSecretAccessFailure(name, gErr, { projectId }));
+  }
+
+  if (!gcloudValue) {
+    throw new Error(
+      `${name} has an empty latest enabled value in Firebase Secret Manager. Restore or rotate it through the protected secret workflow.`,
+    );
+  }
+
+  return gcloudValue;
+}
+
+function defaultSecretResolver(name, { env, projectId }) {
+  return resolveProtectedSecretValue(name, { env, projectId });
 }
 
 export async function runProductionOtpMailboxPreflight({
