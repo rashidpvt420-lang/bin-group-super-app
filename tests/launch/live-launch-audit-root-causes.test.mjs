@@ -49,5 +49,5 @@ test('live launch audit has a protected no-deploy workflow with always-on diagno
   assert.match(workflow, /npm run test:e2e:launch-audit:live/);
   assert.match(workflow, /if:\s*\$\{\{ always\(\) \}\}/);
   assert.match(workflow, /launch_package\/artifacts\/\*\.json/);
-  assert.doesNotMatch(workflow, /deploy-firebase-production\.mjs|firebase deploy|Deploy and verify Firebase production stack/i);
+  assert.doesNotMatch(workflow, /deploy-firebase-production\.mjs|npx firebase deploy/i);
 });

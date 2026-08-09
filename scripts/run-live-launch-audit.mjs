@@ -38,7 +38,10 @@ function runProtectedFixture(script, label) {
 let exitCode = 1;
 try {
   if (protectedProductionRun) {
-    exitCode = runProtectedFixture('scripts/seed-gate11-fixtures.mjs', 'Gate 11 fixture seeding');
+    exitCode = runProtectedFixture('scripts/seed-e2e-auth.mjs', 'E2E account seeding');
+    if (exitCode === 0) {
+      exitCode = runProtectedFixture('scripts/seed-live-role-test-data.mjs', 'canonical live-role fixture seeding');
+    }
   }
 
   if (!protectedProductionRun || exitCode === 0) {
