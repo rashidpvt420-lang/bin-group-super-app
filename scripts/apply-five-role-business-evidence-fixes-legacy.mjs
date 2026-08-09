@@ -104,7 +104,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
     patched = replaceExactlyOnce(patched, before, after, label);
   }
 
-  if (!patched.includes('(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true')) {
+  if (!patched.includes('${String(data.status || \'\').toUpperCase()}')) {
     const completionBeforeTwoSpace = `  await expect.poll(async () => {
     const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
     const data = snap.data() || {};
@@ -115,7 +115,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
     const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
     const data = snap.data() || {};
     return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
-  }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
+  }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
 `;
     const completionBeforeFourSpace = `    await expect.poll(async () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
@@ -127,7 +127,7 @@ export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
       return \`\${String(data.status || '').toUpperCase()}|\${data.tenantApproved}|\${data.tenantApprovalStatus}|\${data.finalApproval}\`;
-    }, { timeout: 40_000 }).toMatch(/(?:CLOSED|COMPLETED)\\|true\\|APPROVED\\|true/i);
+    }, { timeout: 40_000 }).toMatch(/CLOSED\\|true\\|APPROVED\\|true/i);
 `;
     patched = replaceFirstAvailable(patched, [
       { before: completionBeforeFourSpace, after: completionAfterFourSpace },

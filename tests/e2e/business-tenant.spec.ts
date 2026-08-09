@@ -121,7 +121,7 @@ async function clickRequired(page: Page, selectors: string[], label: string, ena
       if (!await target.isVisible({ timeout: 500 }).catch(() => false)) continue;
       try {
         await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
-        await target.evaluate((node: HTMLElement) => node.click());
+        await target.click({ timeout: enabledTimeout }); // target.evaluate((node: HTMLElement) => node.click())
         return target;
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
@@ -336,14 +336,27 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await ppe.check();
     await safety.check();
 
-    await clickRequired(page, ['button:has-text("Start Work")', 'button:has-text("بدء العمل")'], 'Start work action');
+    const startWorkButton = page.getByTestId('technician-start-work');
+    // button:has-text("Start Work")
+    await expect(ppe, 'PPE confirmation must remain checked before Start Work.').toBeChecked();
+    await expect(safety, 'Safety confirmation must remain checked before Start Work.').toBeChecked();
+    await expect(
+      startWorkButton,
+      'Start Work must become enabled after persisted before-work evidence reaches the Technician page listener.',
+    ).toBeEnabled({ timeout: 45_000 });
+    await startWorkButton.click();
     await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated|بدء العمل/i, { timeout: 25_000 });
 
-    const notes = page.getByLabel(/Resolution notes/i).first();
-    await expect(notes).toBeVisible({ timeout: 10_000 });
+    let notes = page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i).first();
+    if (!(await notes.isVisible({ timeout: 10_000 }).catch(() => false))) {
+      await reloadTechnicianMission(page, ticketId);
+      await expect(page.locator('body')).toContainText(/IN PROGRESS|Proof readiness|Status updated|Complete Mission/i, { timeout: 25_000 });
+      notes = page.getByLabel(/Resolution notes|Completion notes|Work summary|Resolution summary/i).first();
+    }
+    await expect(notes).toBeVisible({ timeout: 20_000 });
     await notes.fill(`Cross-role completion ${RUN_MARKER}: inspected, repaired, tested, and left operational.`);
 
-    const materials = page.getByLabel(/Materials used|No parts required/i).first();
+    const materials = page.getByLabel(/Materials used|No parts required|Materials/i).first();
     await expect(materials).toBeVisible({ timeout: 10_000 });
     await materials.fill('No parts required');
 
@@ -661,7 +674,7 @@ test.describe('Tenant Business Workflow', () => {
     await expect.poll(async () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
-      return `${data.status}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
+      return `${String(data.status || '').toUpperCase()}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;
     }, { timeout: 40_000 }).toMatch(/CLOSED\|true\|APPROVED\|true/i);
   });
 
@@ -710,8 +723,14 @@ test.describe('Tenant Business Workflow', () => {
     const requestedValue = `E2E Correction ${RUN_MARKER}`;
     const reason = `Main Tenant business correction evidence ${RUN_MARKER}`;
     createdCorrectionValues.add(requestedValue);
-    await page.getByTestId('tenant-correction-value').getByRole('textbox').fill(requestedValue);
-    await page.getByTestId('tenant-correction-reason').getByRole('textbox').fill(reason);
+    const valueInput = page.getByTestId('tenant-correction-value').getByRole('textbox');
+    await expect(valueInput).toBeVisible({ timeout: 10_000 });
+    await expect(valueInput).toHaveValue('', { timeout: 10_000 });
+    await valueInput.fill(requestedValue);
+    await expect(valueInput).toHaveValue(requestedValue, { timeout: 10_000 });
+    const reasonInput = page.getByTestId('tenant-correction-reason').getByRole('textbox');
+    await reasonInput.fill(reason);
+    await expect(reasonInput).toHaveValue(reason, { timeout: 10_000 });
     await page.getByTestId('tenant-correction-submit').click();
     await expect(page.getByTestId('tenant-correction-success')).toContainText(/submitted|تم إرسال/i, { timeout: 30_000 });
     const history = page.getByTestId('tenant-correction-history');

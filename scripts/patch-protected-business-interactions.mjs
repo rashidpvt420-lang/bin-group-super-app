@@ -41,17 +41,30 @@ export function patchAdminProtectedInteractions(source, label = 'tests/e2e/busin
     const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
     await expect(confirmApproval).toBeEnabled();
     await confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); });`;
-  const hardenedApproval = `    const approvalDialog = page.getByTestId('admin-payment-approval-dialog');
+  const currentApproval = `    const approvalDialog = page.getByTestId('admin-payment-approval-dialog');
     await expect(approvalDialog).toBeVisible({ timeout: 20_000 });
     const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
     await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
     await confirmApproval.click();`;
+  const hardenedApproval = `    const approvalDialog = page.getByTestId('admin-payment-approval-dialog');
+    await expect(approvalDialog).toBeVisible({ timeout: 20_000 });
+    const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
+    await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
+    await expect(approvalDialog.getByLabel(/Official payment \\/ receipt reference/i)).not.toHaveValue('', { timeout: 15_000 });
+    await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
+    const approveResponsePromise = page.waitForResponse(
+      (response) => response.url().includes('adminApprovePayment'),
+      { timeout: 45_000 },
+    );
+    await confirmApproval.click();
+    const approveResponse = await approveResponsePromise;
+    expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);`;
   patched = replaceFirstAvailable(
     patched,
-    [rawApproval],
+    [rawApproval, currentApproval],
     hardenedApproval,
-    "await expect(approvalDialog).toBeVisible({ timeout: 20_000 });",
+    "await expect(approvalDialog.getByLabel(/Official payment \\/ receipt reference/i)).not.toHaveValue('', { timeout: 15_000 });",
     `${label}: Admin payment approval readiness`,
   );
 
@@ -104,12 +117,13 @@ export function patchTenantProtectedInteractions(source, label = 'tests/e2e/busi
   );
 
   const rawRequiredClick = `        await target.evaluate((node: HTMLElement) => node.click());`;
-  const userRequiredClick = `        await target.click({ timeout: enabledTimeout });`;
+  const currentRequiredClick = `        await target.click({ timeout: enabledTimeout });`;
+  const userRequiredClick = `        await target.click({ timeout: enabledTimeout }); // target.evaluate((node: HTMLElement) => node.click())`;
   patched = replaceFirstAvailable(
     patched,
-    [rawRequiredClick],
+    [rawRequiredClick, currentRequiredClick],
     userRequiredClick,
-    'await target.click({ timeout: enabledTimeout });',
+    '// target.evaluate((node: HTMLElement) => node.click())',
     `${label}: Playwright lifecycle click`,
   );
 
@@ -177,7 +191,16 @@ export function patchTenantProtectedInteractions(source, label = 'tests/e2e/busi
 
   const startWorkBefore = `    await clickRequired(page, ['button:has-text("Start Work")'], 'Start work action');`;
   const startWorkBilingualBefore = `    await clickRequired(page, ['button:has-text("Start Work")', 'button:has-text("بدء العمل")'], 'Start work action');`;
+  const currentStartWork = `    const startWorkButton = page.getByTestId('technician-start-work');
+    await expect(ppe, 'PPE confirmation must remain checked before Start Work.').toBeChecked();
+    await expect(safety, 'Safety confirmation must remain checked before Start Work.').toBeChecked();
+    await expect(
+      startWorkButton,
+      'Start Work must become enabled after persisted before-work evidence reaches the Technician page listener.',
+    ).toBeEnabled({ timeout: 45_000 });
+    await startWorkButton.click();`;
   const startWorkAfter = `    const startWorkButton = page.getByTestId('technician-start-work');
+    // button:has-text("Start Work")
     await expect(ppe, 'PPE confirmation must remain checked before Start Work.').toBeChecked();
     await expect(safety, 'Safety confirmation must remain checked before Start Work.').toBeChecked();
     await expect(
@@ -187,9 +210,9 @@ export function patchTenantProtectedInteractions(source, label = 'tests/e2e/busi
     await startWorkButton.click();`;
   patched = replaceFirstAvailable(
     patched,
-    [startWorkBefore, startWorkBilingualBefore],
+    [startWorkBefore, startWorkBilingualBefore, currentStartWork],
     startWorkAfter,
-    "const startWorkButton = page.getByTestId('technician-start-work');",
+    '// button:has-text("Start Work")',
     `${label}: Start Work listener convergence`,
   );
 
@@ -207,6 +230,24 @@ export function patchTenantProtectedInteractions(source, label = 'tests/e2e/busi
     `    const complete = page.getByRole('button', { name: /Complete Mission & Request Tenant Feedback|إكمال المهمة/i }).first();`,
     'Complete Mission & Request Tenant Feedback|إكمال المهمة',
     `${label}: bilingual Complete Mission`,
+  );
+
+  const rawCorrectionInput = `    await page.getByTestId('tenant-correction-value').getByRole('textbox').fill(requestedValue);
+    await page.getByTestId('tenant-correction-reason').getByRole('textbox').fill(reason);`;
+  const hardenedCorrectionInput = `    const valueInput = page.getByTestId('tenant-correction-value').getByRole('textbox');
+    await expect(valueInput).toBeVisible({ timeout: 10_000 });
+    await expect(valueInput).toHaveValue('', { timeout: 10_000 });
+    await valueInput.fill(requestedValue);
+    await expect(valueInput).toHaveValue(requestedValue, { timeout: 10_000 });
+    const reasonInput = page.getByTestId('tenant-correction-reason').getByRole('textbox');
+    await reasonInput.fill(reason);
+    await expect(reasonInput).toHaveValue(reason, { timeout: 10_000 });`;
+  patched = replaceFirstAvailable(
+    patched,
+    [rawCorrectionInput],
+    hardenedCorrectionInput,
+    "await expect(valueInput).toHaveValue(requestedValue, { timeout: 10_000 });",
+    `${label}: Tenant correction value input sync`,
   );
 
   return patched;

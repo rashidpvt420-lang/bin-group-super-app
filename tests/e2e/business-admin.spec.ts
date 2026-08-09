@@ -265,6 +265,72 @@ async function seedOperationalFixtures() {
   const future = admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000);
   const freshGps = admin.firestore.Timestamp.now();
 
+  // Protected Phase 1 Admin evidence must use the live Cash/Cheque policy, not
+  // the retired Stripe activation fixture. Seed one real immutable CASH receipt
+  // and bind it to the exact active payment-configuration hash. The Admin UI
+  // still performs the approval itself under the canonical Founder MFA session.
+  const phase1PaymentConfigurationSnap = await db.collection('system_payment_config').doc('current').get();
+  if (!phase1PaymentConfigurationSnap.exists) throw new Error('Protected Phase 1 payment configuration is missing.');
+  const phase1PaymentConfigurationRaw = phase1PaymentConfigurationSnap.data() || {};
+  const phase1Upper = (value: unknown) => String(value || '').trim().toUpperCase();
+  const phase1ApprovedMethods = Array.isArray(phase1PaymentConfigurationRaw.approvedMethods)
+    ? Array.from(new Set(
+      phase1PaymentConfigurationRaw.approvedMethods
+        .map((value: unknown) => phase1Upper(value))
+        .filter((value: string) => ['BANK_TRANSFER', 'CHEQUE', 'CASH', 'STRIPE'].includes(value)),
+    ))
+    : [];
+  if (!phase1ApprovedMethods.includes('CASH')) {
+    throw new Error('Protected Phase 1 Admin payment evidence requires CASH to be active.');
+  }
+  const phase1BankTransferEnabled = phase1ApprovedMethods.includes('BANK_TRANSFER');
+  const phase1EffectiveAt = phase1PaymentConfigurationRaw.effectiveAt || phase1PaymentConfigurationRaw.updatedAt;
+  const phase1EffectiveAtMs = typeof phase1EffectiveAt?.toMillis === 'function'
+    ? Number(phase1EffectiveAt.toMillis())
+    : Date.parse(String(phase1EffectiveAt || ''));
+  const phase1PaymentConfiguration = {
+    version: String(phase1PaymentConfigurationRaw.version || '').trim(),
+    effectiveAtMs: phase1EffectiveAtMs,
+    legalBeneficiary: String(phase1PaymentConfigurationRaw.legalBeneficiary || phase1PaymentConfigurationRaw.beneficiaryName || '').trim(),
+    bankName: phase1BankTransferEnabled ? String(phase1PaymentConfigurationRaw.bankName || '').trim() : '',
+    accountNumber: phase1BankTransferEnabled ? String(phase1PaymentConfigurationRaw.accountNumber || '').replace(/\s+/g, '') : '',
+    iban: phase1BankTransferEnabled ? phase1Upper(phase1PaymentConfigurationRaw.iban).replace(/\s+/g, '') : '',
+    swiftBic: phase1BankTransferEnabled ? phase1Upper(phase1PaymentConfigurationRaw.swiftBic || phase1PaymentConfigurationRaw.swift || phase1PaymentConfigurationRaw.bic).replace(/\s+/g, '') : '',
+    currency: 'AED',
+    officeLocation: String(phase1PaymentConfigurationRaw.officeLocation || phase1PaymentConfigurationRaw.cashOfficeLocation || '').trim(),
+    approvedMethods: phase1ApprovedMethods,
+  };
+  if (!phase1PaymentConfiguration.version || !Number.isFinite(phase1PaymentConfiguration.effectiveAtMs)) {
+    throw new Error('Protected Phase 1 payment configuration is incomplete.');
+  }
+  const phase1PaymentConfigHash = createHash('sha256').update(JSON.stringify(phase1PaymentConfiguration)).digest('hex');
+  const phase1PaymentReferenceId = 'CASH-' + RUN_ID;
+  const phase1ReceiptPayload = Buffer.from('%PDF-1.4\n% BIN GROUP protected Phase 1 CASH receipt evidence\n%%EOF\n');
+  const phase1ReceiptHash = createHash('sha256').update(phase1ReceiptPayload).digest('hex');
+  const phase1ReceiptPath = 'payment-references/owners/' + PAYMENT_OWNER_UID + '/' + PAYMENT_ID + '/' + PREFIX + '-cash-receipt.pdf';
+  const phase1ReceiptToken = randomBytes(16).toString('hex');
+  const phase1Bucket = admin.storage().bucket();
+  await phase1Bucket.file(phase1ReceiptPath).save(phase1ReceiptPayload, {
+    resumable: false,
+    contentType: 'application/pdf',
+    metadata: {
+      metadata: {
+        firebaseStorageDownloadTokens: phase1ReceiptToken,
+        ownerUid: PAYMENT_OWNER_UID,
+        paymentId: PAYMENT_ID,
+        intakeId: PAYMENT_ID,
+        evidenceType: 'owner_payment_receipt',
+        receiptHash: phase1ReceiptHash,
+        uploadedByAdmin: 'protected-e2e-seed',
+        uploadedAt: new Date().toISOString(),
+      },
+    },
+  });
+  const [phase1ReceiptMetadata] = await phase1Bucket.file(phase1ReceiptPath).getMetadata();
+  const phase1ReceiptGeneration = String(phase1ReceiptMetadata.generation || '').trim();
+  if (!phase1ReceiptGeneration) throw new Error('Protected Phase 1 CASH receipt has no immutable Storage generation.');
+  const phase1ReceiptUrl = 'https://firebasestorage.googleapis.com/v0/b/' + phase1Bucket.name + '/o/' + encodeURIComponent(phase1ReceiptPath) + '?alt=media&token=' + phase1ReceiptToken;
+
   await Promise.all([
     db.collection('owners').doc(OWNER_REVIEW_UID).set({
       name: `E2E Review Owner ${RUN_ID}`,
@@ -374,12 +440,43 @@ async function seedOperationalFixtures() {
       amount: PAYMENT_DEPOSIT,
       activationDeposit: PAYMENT_DEPOSIT,
       currency: 'AED',
-      paymentMethod: 'STRIPE',
-      stripeSessionId: `cs_e2e_${RUN_ID}`,
-      verified: true,
-      paymentVerified: true,
+      paymentMethod: 'CASH',
+      method: 'CASH',
+      paymentReferenceId: phase1PaymentReferenceId,
+      paymentReference: phase1PaymentReferenceId,
+      verified: false,
+      paymentVerified: false,
+      paymentConfigVersion: phase1PaymentConfiguration.version,
+      paymentConfigurationVersion: phase1PaymentConfiguration.version,
+      paymentConfigHash: phase1PaymentConfigHash,
+      paymentConfigurationHash: phase1PaymentConfigHash,
+      paymentManifest: {
+        configVersion: phase1PaymentConfiguration.version,
+        configHash: phase1PaymentConfigHash,
+        legalBeneficiary: phase1PaymentConfiguration.legalBeneficiary,
+        currency: phase1PaymentConfiguration.currency,
+        officeLocation: phase1PaymentConfiguration.officeLocation,
+        approvedMethods: phase1PaymentConfiguration.approvedMethods,
+        selectedMethod: 'CASH',
+        capturedAt: new Date().toISOString(),
+      },
+      paymentProofUrl: phase1ReceiptUrl,
+      paymentProofPath: phase1ReceiptPath,
+      paymentProofHash: phase1ReceiptHash,
+      paymentProofGeneration: phase1ReceiptGeneration,
+      paymentProofEvidence: {
+        receiptUrl: phase1ReceiptUrl,
+        storagePath: phase1ReceiptPath,
+        receiptHash: phase1ReceiptHash,
+        generation: phase1ReceiptGeneration,
+        recordedBy: 'protected-e2e-seed',
+      },
+      receiptUrl: phase1ReceiptUrl,
+      receiptPath: phase1ReceiptPath,
+      receiptHash: phase1ReceiptHash,
+      receiptGeneration: phase1ReceiptGeneration,
       status: 'PENDING',
-      paymentStatus: 'PAID',
+      paymentStatus: 'PENDING_ADMIN_APPROVAL',
       verificationState: 'PENDING_ADMIN',
       adminApprovalRequired: true,
       unlocksDashboard: false,
@@ -547,6 +644,7 @@ async function cleanupOperationalFixtures() {
 
   await Promise.all(BROKER_DOCUMENT_TYPES.map((type) => db.collection('brokerDocuments').doc(`${PREFIX}-${type}`).delete().catch(() => undefined)));
   await Promise.all(BROKER_STORAGE_PATHS.map((storagePath) => admin.storage().bucket().file(storagePath).delete({ ignoreNotFound: true }).catch(() => undefined)));
+  await admin.storage().bucket().file('payment-references/owners/' + PAYMENT_OWNER_UID + '/' + PAYMENT_ID + '/' + PREFIX + '-cash-receipt.pdf').delete({ ignoreNotFound: true }).catch(() => undefined);
   await deleteQuery('invoice_registry', 'entityId', PAYMENT_INVOICE_ID).catch(() => undefined);
 
   for (const [field, value] of [
@@ -732,8 +830,15 @@ test.describe('Admin protected operational business workflow', () => {
     await expect(approvalDialog).toBeVisible({ timeout: 20_000 });
     const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
     await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
+    await expect(approvalDialog.getByLabel(/Official payment \/ receipt reference/i)).not.toHaveValue('', { timeout: 15_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
+    const approveResponsePromise = page.waitForResponse(
+      (response) => response.url().includes('adminApprovePayment'),
+      { timeout: 45_000 },
+    );
     await confirmApproval.click();
+    const approveResponse = await approveResponsePromise;
+    expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);
 
     await expect.poll(async () => {
       const [payment, contract, intake, owner, property] = await Promise.all([
@@ -760,9 +865,9 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     const rejectPaymentRow = page.getByRole('row').filter({ hasText: REJECT_PAYMENT_ID }).first();
     await expect(rejectPaymentRow).toBeVisible({ timeout: 35_000 });
-    await rejectPaymentRow.getByRole('button', { name: /Reject \/ Return/i }).click();
-    const rejectPaymentDialog = page.getByRole('dialog', { name: /Return \/ Reject Payment Proof/i });
-    await rejectPaymentDialog.getByLabel('Return reason / admin review note').fill('Protected E2E payment evidence does not match the submitted reference.');
+    await rejectPaymentRow.getByRole('button', { name: /^(?:Return|Reject \/ Return)$/i }).click({ timeout: 20_000 });
+    const rejectPaymentDialog = page.getByRole('dialog', { name: /Return \/ Reject Payment (?:Evidence|Proof)/i });
+    await rejectPaymentDialog.getByLabel(/Return reason \/ Admin review note/i).fill('Protected E2E payment evidence does not match the submitted reference.');
     await rejectPaymentDialog.getByRole('button', { name: /Return \/ Reject/i }).click();
     await expect.poll(async () => (await db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
 
