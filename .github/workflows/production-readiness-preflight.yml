@@ -73,6 +73,16 @@ jobs:
 
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
+
+      - name: Verify Firebase project billing and Cloud Functions deployment access
+        run: node scripts/verify-firebase-deployment-readiness.mjs
+
+      - name: Build Firebase Functions for deployment-secret contract verification
+        run: npm run build:functions
+
+      - name: Verify compiled Firebase Function secret contract
+        run: node scripts/verify-firebase-deployed-function-secret-contract.mjs
+
       - name: Resolve protected Gmail mailbox identities
         env:
           E2E_OWNER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
@@ -103,6 +113,8 @@ jobs:
           - Branch: \`$GITHUB_REF_NAME\`
           - Exact SHA: \`$GITHUB_SHA\`
           - Launch mode: \`$LAUNCH_MODE\`
+          - Cloud Billing and Cloud Functions deployment access: passed
+          - Compiled Firebase Function secret contract: passed
           - Firebase secret metadata: passed
           - Phone Auth / UAE SMS MFA configuration: passed
           - Main and Admin Authentication domains: passed

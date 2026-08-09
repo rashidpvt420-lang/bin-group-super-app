@@ -14,6 +14,8 @@ test('production readiness preflight is protected, exact-main and read-only', as
   assert.match(workflow, /id-token: write/);
   assert.match(workflow, /\[\[ "\$GITHUB_REF" == "refs\/heads\/main" \]\]/);
   assert.match(workflow, /check-firebase-production-secret-metadata\.mjs/);
+  assert.match(workflow, /Build Firebase Functions for deployment-secret contract verification/);
+  assert.match(workflow, /verify-firebase-deployed-function-secret-contract\.mjs/);
   assert.match(workflow, /verify-firebase-phone-auth-production\.mjs/);
   assert.match(workflow, /verify-admin-mfa-production\.mjs/);
   assert.match(workflow, /FIREBASE_PHONE_AUTH_REQUIRED_SMS_REGION: AE/);

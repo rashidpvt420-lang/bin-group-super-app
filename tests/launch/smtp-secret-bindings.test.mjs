@@ -48,11 +48,12 @@ test('Owner contract OTP callables separate SMTP delivery from the HMAC pepper',
 });
 
 test('production secret preflight requires the Owner OTP pepper for every launch mode', () => {
-  const bankPilotBlock = productionSecretPreflight.slice(
+  const deploymentContract = productionSecretPreflight.slice(
+    productionSecretPreflight.indexOf('requiredFirebaseDeploymentSecrets'),
     productionSecretPreflight.indexOf('requiredFirebaseBankPilotSecrets'),
-    productionSecretPreflight.indexOf('requiredFirebasePublicSecrets'),
   );
-  assert.match(bankPilotBlock, /OWNER_CONTRACT_OTP_PEPPER/);
+  assert.match(deploymentContract, /OWNER_CONTRACT_OTP_PEPPER/);
+  assert.match(productionSecretPreflight, /\.\.\.requiredFirebaseDeploymentSecrets/);
   assert.match(productionSecretPreflight, /\.\.\.requiredFirebaseBankPilotSecrets/);
 });
 
