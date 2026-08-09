@@ -370,6 +370,9 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Verify Firebase project billing and Cloud Functions deployment access
+        run: node scripts/verify-firebase-deployment-readiness.mjs
+
       - name: Resolve canonical Admin Enterprise App Check config
         run: node scripts/resolve-admin-app-check-site-key.mjs
 
@@ -498,6 +501,13 @@ jobs:
         run: |
           set -euo pipefail
           npm run build:functions
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify compiled Firebase Function secret contract
+        id: function_secret_contract
+        run: |
+          set -euo pipefail
+          node scripts/verify-firebase-deployed-function-secret-contract.mjs
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Measure Functions discovery load

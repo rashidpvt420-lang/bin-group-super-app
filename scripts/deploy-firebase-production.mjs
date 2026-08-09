@@ -6,6 +6,7 @@ import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
 import { verifyFirebaseProductionSecrets } from './verify-firebase-production-secrets.mjs';
 import { verifyFirebasePhoneAuthProduction } from './verify-firebase-phone-auth-production.mjs';
 import { verifyAdminMfaProduction } from './verify-admin-mfa-production.mjs';
+import { classifyPermanentFirebaseDeploymentFailure } from './lib/firebase-deployment-failure-classifier.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
@@ -116,6 +117,11 @@ if (remoteMainSha !== githubSha) {
 process.env.PRODUCTION_EXACT_MAIN_VERIFIED_SHA = remoteMainSha;
 console.log(`[production-deploy] exact current origin/main verified before secret preflight: ${remoteMainSha}`);
 
+const functionSecretContractStatus = run(process.execPath, [
+  'scripts/verify-firebase-deployed-function-secret-contract.mjs',
+]);
+if (functionSecretContractStatus !== 0) process.exit(functionSecretContractStatus);
+
 try {
   await verifyFirebaseProductionSecrets({ projectId, launchMode });
 } catch (error) {
@@ -140,6 +146,32 @@ function run(command, args, options = {}) {
     console.error(`[production-deploy] ${command} terminated by ${result.signal}`);
   }
   return result.status ?? 1;
+}
+
+function runFirebaseDeploy(args, options = {}) {
+  const result = spawnSync('npx', args, {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+    ...options,
+  });
+  const stdout = String(result.stdout || '');
+  const stderr = String(result.stderr || '');
+  if (stdout) process.stdout.write(stdout);
+  if (stderr) process.stderr.write(stderr);
+  if (result.error) {
+    const code = String(result.error.code || 'unknown');
+    console.error(`[production-deploy] firebase deploy failed to complete (${code})`);
+  }
+  if (result.signal) {
+    console.error(`[production-deploy] firebase deploy terminated by ${result.signal}`);
+  }
+  return {
+    status: result.status ?? 1,
+    output: `${stdout}\n${stderr}`,
+  };
 }
 
 function boundedInteger(name, fallback, minimum, maximum) {
@@ -183,7 +215,7 @@ function retryFirebase(target, label, options = {}) {
     } catch {
       // Fallback to default process.env authentication
     }
-    const status = run('npx', [
+    const result = runFirebaseDeploy([
       'firebase',
       'deploy',
       '--only',
@@ -197,7 +229,14 @@ function retryFirebase(target, label, options = {}) {
       timeout: commandTimeoutSeconds * 1000,
       killSignal: 'SIGTERM',
     });
-    if (status === 0) return;
+    if (result.status === 0) return;
+    const permanentFailure = classifyPermanentFirebaseDeploymentFailure(result.output);
+    if (permanentFailure) {
+      console.error(
+        `[production-deploy] ${label} will not retry (${permanentFailure.code}): ${permanentFailure.message}`,
+      );
+      process.exit(1);
+    }
     if (attempt < attempts) {
       sleepSeconds(retryDelaySeconds * attempt, `before retrying ${label}`);
     }

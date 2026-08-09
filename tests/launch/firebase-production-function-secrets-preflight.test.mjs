@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   requiredFirebaseAiSecrets,
   requiredFirebaseInfrastructureSecrets,
   requiredFirebaseBankPilotSecrets,
+  requiredFirebaseDeploymentSecrets,
   requiredFirebasePublicSecrets,
   requiredFirebaseProductionSecretsForMode,
 } from '../../scripts/verify-firebase-production-secrets.mjs';
@@ -27,14 +29,20 @@ const expectedBankPilotSecrets = [
   'SMTP_USER',
   'SMTP_PASS',
   'OWNER_CONTRACT_OTP_PEPPER',
+  'BROKER_PAYOUT_OTP_PEPPER',
   ...expectedInfrastructureSecrets,
+  'QR_SIGNING_SECRET',
   ...expectedAiSecrets,
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'WHATSAPP_TOKEN',
+  'WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_VERIFY_TOKEN',
+  'WHATSAPP_APP_SECRET',
 ];
 
 const expectedPublicSecrets = [
   ...expectedBankPilotSecrets,
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
 ];
 
 test('production secret preflight uses Firebase metadata API without child processes or secret access', () => {
@@ -52,9 +60,10 @@ test('production secret preflight uses Firebase metadata API without child proce
   assert.doesNotMatch(script, /secretValue|result\.stdout|const\s+value\s*=/);
 });
 
-test('bank-pilot requires SMTP, Owner OTP pepper, deploy infrastructure, and AI while public mode additionally requires Stripe', () => {
+test('both launch modes require the full deployed Function secret contract', () => {
   assert.deepEqual(requiredFirebaseAiSecrets, expectedAiSecrets);
   assert.deepEqual(requiredFirebaseInfrastructureSecrets, expectedInfrastructureSecrets);
+  assert.deepEqual(requiredFirebaseDeploymentSecrets, expectedBankPilotSecrets);
   assert.deepEqual(requiredFirebaseBankPilotSecrets, expectedBankPilotSecrets);
   assert.deepEqual(requiredFirebasePublicSecrets, expectedPublicSecrets);
   assert.deepEqual(requiredFirebaseProductionSecretsForMode('bank-pilot'), expectedBankPilotSecrets);
@@ -65,15 +74,43 @@ test('bank-pilot requires SMTP, Owner OTP pepper, deploy infrastructure, and AI 
   );
 });
 
+test('canonical deployment secret contract covers every Function Secret Manager definition', () => {
+  const discovered = new Set();
+  const sourceFiles = [];
+  const collectSourceFiles = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === 'lib') continue;
+      const entryPath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        collectSourceFiles(entryPath);
+      } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
+        sourceFiles.push(entryPath);
+      }
+    }
+  };
+  collectSourceFiles('functions');
+
+  for (const filename of sourceFiles) {
+    const source = readFileSync(filename, 'utf8');
+    const pattern = /defineSecret\(\s*['"]([A-Z][A-Z0-9_]*)['"]\s*\)/g;
+    let match;
+    while ((match = pattern.exec(source))) discovered.add(match[1]);
+  }
+  assert.deepEqual([...requiredFirebaseDeploymentSecrets].sort(), [...discovered].sort());
+});
+
 test('protected production deploy imports mode-aware secret preflight before Firebase deployment', () => {
   const contextIndex = deploy.indexOf("process.env.GITHUB_ACTIONS !== 'true'");
   const mainIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
+  const contractIndex = deploy.indexOf('scripts/verify-firebase-deployed-function-secret-contract.mjs');
   const secretIndex = deploy.indexOf('await verifyFirebaseProductionSecrets({ projectId, launchMode });');
   const deployIndex = deploy.indexOf("'firebase',\n      'deploy'");
   assert.match(deploy, /import \{ verifyFirebaseProductionSecrets \} from ['"]\.\/verify-firebase-production-secrets\.mjs['"]/);
   assert.match(deploy, /const launchMode = String\(process\.env\.LAUNCH_MODE \|\| ['"]['"]\)\.trim\(\)/);
   assert.ok(contextIndex >= 0, 'protected GitHub Actions context gate is required');
   assert.ok(mainIndex > contextIndex, 'origin/main binding must be checked after protected context');
+  assert.ok(contractIndex > mainIndex, 'compiled Function secret contract must be checked after exact-main verification');
+  assert.ok(secretIndex > contractIndex, 'secret metadata preflight must follow the compiled Function secret contract');
   assert.ok(secretIndex > mainIndex, 'secret preflight must run after exact-main verification');
   assert.ok(deployIndex > secretIndex, 'secret preflight must run before the first Firebase deploy');
   assert.doesNotMatch(deploy, /secretPreflightStatus|run\(process\.execPath,\s*\[\s*['"]scripts\/verify-firebase-production-secrets\.mjs/);

@@ -20,18 +20,36 @@ export const requiredFirebaseInfrastructureSecrets = Object.freeze([
   'IOT_GATEWAY_TOKEN',
 ]);
 
-export const requiredFirebaseBankPilotSecrets = Object.freeze([
+// Firebase deploy analyzes the compiled runtime as one codebase.  A Function
+// may be feature-gated at request time, but every Secret Manager key attached
+// to any exported endpoint must still exist with an enabled version before a
+// Functions deployment can succeed.  Keep this list in lockstep with
+// functions/lib/runtimeAll.js; the compiled-runtime contract verifier and its
+// regression test fail closed when it drifts.
+export const requiredFirebaseDeploymentSecrets = Object.freeze([
   'SMTP_USER',
   'SMTP_PASS',
   'OWNER_CONTRACT_OTP_PEPPER',
+  'BROKER_PAYOUT_OTP_PEPPER',
   ...requiredFirebaseInfrastructureSecrets,
+  'QR_SIGNING_SECRET',
   ...requiredFirebaseAiSecrets,
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'WHATSAPP_TOKEN',
+  'WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_VERIFY_TOKEN',
+  'WHATSAPP_APP_SECRET',
+]);
+
+// Launch mode controls user-facing release gates, not the deployed Functions
+// secret contract. Both supported modes deploy the same compiled runtime.
+export const requiredFirebaseBankPilotSecrets = Object.freeze([
+  ...requiredFirebaseDeploymentSecrets,
 ]);
 
 export const requiredFirebasePublicSecrets = Object.freeze([
   ...requiredFirebaseBankPilotSecrets,
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
 ]);
 
 export function requiredFirebaseProductionSecretsForMode(launchMode) {
