@@ -18,13 +18,28 @@ owner_locate_new_exact_sha_workflow_run() {
   local workflow="$1"
   local expected_sha="$2"
   local baseline_file="$3"
-  local max_polls="${4:-60}"
+  local requested_max_polls="${4:-60}"
   local delay_seconds="${5:-5}"
+  local max_polls="$requested_max_polls"
   local selector_error
+  local runs_json='[]'
   selector_error="$(mktemp)"
 
-  for _ in $(seq 1 "$max_polls"); do
-    local runs_json selected rc
+  # Protected production dispatches can sit in the GitHub Actions queue for
+  # several minutes. Keep ordinary correlations unchanged, but give the two
+  # production-chain workflows enough time to become observable without
+  # weakening any exact-SHA, baseline, or success requirement.
+  case "$workflow" in
+    firebase-production-dispatch-current-main.yml|firebase-production-deploy.yml)
+      if (( max_polls < 180 )); then
+        max_polls=180
+      fi
+      ;;
+  esac
+
+  local poll
+  for poll in $(seq 1 "$max_polls"); do
+    local selected rc
     runs_json="$(
       gh api --paginate --slurp \
         "repos/$REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=100" |
@@ -36,6 +51,13 @@ owner_locate_new_exact_sha_workflow_run() {
         node scripts/select-new-exact-sha-workflow-run.mjs "$expected_sha" "$baseline_file" \
           2>"$selector_error"
     )"; then
+      local run_id run_url run_status run_conclusion
+      run_id="$(jq -r '.runId // empty' <<<"$selected")"
+      run_url="$(jq -r '.runUrl // empty' <<<"$selected")"
+      run_status="$(jq -r '.status // "unknown"' <<<"$selected")"
+      run_conclusion="$(jq -r '.conclusion // ""' <<<"$selected")"
+      printf '[owner-correlation] selected workflow=%s run=%s status=%s conclusion=%s poll=%s/%s url=%s\n' \
+        "$workflow" "$run_id" "$run_status" "${run_conclusion:-pending}" "$poll" "$max_polls" "$run_url" >&2
       rm -f "$selector_error"
       printf '%s' "$selected"
       return 0
@@ -48,8 +70,29 @@ owner_locate_new_exact_sha_workflow_run() {
       rm -f "$selector_error"
       return "$rc"
     fi
+
+    if (( poll % 30 == 0 )); then
+      printf '[owner-correlation] waiting workflow=%s expected_sha=%s poll=%s/%s\n' \
+        "$workflow" "$expected_sha" "$poll" "$max_polls" >&2
+    fi
     sleep "$delay_seconds"
   done
+
+  local baseline_json
+  baseline_json="$(cat "$baseline_file")"
+  printf '[owner-correlation] timeout workflow=%s expected_sha=%s after=%ss. New workflow-dispatch candidates (sanitized):\n' \
+    "$workflow" "$expected_sha" "$((max_polls * delay_seconds))" >&2
+  printf '%s' "$runs_json" |
+    jq -c --argjson baseline "$baseline_json" '
+      [ .[]
+        | select((.id as $id | ($baseline | index($id))) == null)
+        | {id, head_sha, status, conclusion, created_at, html_url}
+      ]
+      | sort_by(.created_at)
+      | reverse
+      | .[:10]
+    ' >&2 || true
+  printf '::error::Timed out waiting for a new exact-SHA run of %s for %s.\n' "$workflow" "$expected_sha" >&2
 
   rm -f "$selector_error"
   return 2
