@@ -34,6 +34,7 @@ test('repeated evidence hardening preserves strict business outcomes while fixin
   assert.match(hardening, /cleanupStaleE2eCorrectionRequests/);
   assert.match(hardening, /tenant-correction-error/);
   assert.match(hardening, /Admin payment approval callable failed HTTP/);
+  assert.match(hardening, /response\.request\(\)\.method\(\) === 'POST'/);
 
   // The activation contract is enforced by the Admin business evidence spec,
   // not by the patching script itself. Assert it against the authoritative
