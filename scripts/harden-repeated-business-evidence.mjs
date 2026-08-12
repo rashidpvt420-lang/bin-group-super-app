@@ -27,12 +27,12 @@ function replaceOnce(source, before, after, label) {
 function hasAdminCallableDiagnostics(source) {
   const text = normalize(source);
 
-  // The durable Phase 1 interaction patch now installs this shorter, committed
-  // variant before this runtime-only hardener runs. Treat it as an equivalent
-  // contract rather than attempting to apply an obsolete pre-patch anchor.
+  // A callable can emit an OPTIONS preflight before its POST response. Only a
+  // method-specific response waiter plus an error-body diagnostic is strong
+  // enough to qualify as hardened production evidence.
   const protectedInteractionContract = text.includes('const approveResponsePromise = page.waitForResponse(')
-    && text.includes("response.url().includes('adminApprovePayment')")
-    && text.includes("expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);");
+    && text.includes("response.request().method() === 'POST' && response.url().includes('adminApprovePayment')")
+    && text.includes('Admin payment approval callable failed HTTP');
 
   const runtimeDiagnosticContract = text.includes('const approvalResponsePromise = page.waitForResponse(')
     && text.includes("response.request().method() === 'POST' && response.url().includes('adminApprovePayment')")
