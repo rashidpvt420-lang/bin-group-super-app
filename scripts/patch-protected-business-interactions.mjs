@@ -47,6 +47,33 @@ export function patchAdminProtectedInteractions(source, label = 'tests/e2e/busin
     await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
     await confirmApproval.click();`;
+  const methodAgnosticCallableWaiter = `    const approveResponsePromise = page.waitForResponse(
+      (response) => response.url().includes('adminApprovePayment'),
+      { timeout: 45_000 },
+    );
+    await confirmApproval.click();
+    const approveResponse = await approveResponsePromise;
+    expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);`;
+  const postCallableDiagnostics = `    const approveResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().includes('adminApprovePayment'),
+      { timeout: 45_000 },
+    );
+    await confirmApproval.click();
+    const approveResponse = await approveResponsePromise;
+    const approveResponseText = await approveResponse.text().catch(() => '');
+    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveResponseText)) {
+      throw new Error(
+        \`Admin payment approval callable failed HTTP \${approveResponse.status()}: \${approveResponseText.slice(0, 1_500)}\`,
+      );
+    }`;
+  if (normalizeNewlines(patched).includes(normalizeNewlines(methodAgnosticCallableWaiter))) {
+    patched = replaceExactlyOnce(
+      patched,
+      methodAgnosticCallableWaiter,
+      postCallableDiagnostics,
+      `${label}: Admin payment approval POST diagnostics`,
+    );
+  }
   const hardenedApproval = `    const approvalDialog = page.getByTestId('admin-payment-approval-dialog');
     await expect(approvalDialog).toBeVisible({ timeout: 20_000 });
     const confirmApproval = approvalDialog.getByTestId('admin-payment-confirm-approval');
@@ -54,12 +81,17 @@ export function patchAdminProtectedInteractions(source, label = 'tests/e2e/busin
     await expect(approvalDialog.getByLabel(/Official payment \\/ receipt reference/i)).not.toHaveValue('', { timeout: 15_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
     const approveResponsePromise = page.waitForResponse(
-      (response) => response.url().includes('adminApprovePayment'),
+      (response) => response.request().method() === 'POST' && response.url().includes('adminApprovePayment'),
       { timeout: 45_000 },
     );
     await confirmApproval.click();
     const approveResponse = await approveResponsePromise;
-    expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);`;
+    const approveResponseText = await approveResponse.text().catch(() => '');
+    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveResponseText)) {
+      throw new Error(
+        \`Admin payment approval callable failed HTTP \${approveResponse.status()}: \${approveResponseText.slice(0, 1_500)}\`,
+      );
+    }`;
   patched = replaceFirstAvailable(
     patched,
     [rawApproval, currentApproval],

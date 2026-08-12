@@ -24,6 +24,23 @@ function replaceOnce(source, before, after, label) {
   return hadCrlf ? patched.replace(/\n/g, '\r\n') : patched;
 }
 
+function hasAdminCallableDiagnostics(source) {
+  const text = normalize(source);
+
+  // A callable can emit an OPTIONS preflight before its POST response. Only a
+  // method-specific response waiter plus an error-body diagnostic is strong
+  // enough to qualify as hardened production evidence.
+  const protectedInteractionContract = text.includes('const approveResponsePromise = page.waitForResponse(')
+    && text.includes("response.request().method() === 'POST' && response.url().includes('adminApprovePayment')")
+    && text.includes('Admin payment approval callable failed HTTP');
+
+  const runtimeDiagnosticContract = text.includes('const approvalResponsePromise = page.waitForResponse(')
+    && text.includes("response.request().method() === 'POST' && response.url().includes('adminApprovePayment')")
+    && text.includes('Admin payment approval callable failed HTTP');
+
+  return protectedInteractionContract || runtimeDiagnosticContract;
+}
+
 function patchTechnician(source) {
   if (source.includes('Technician before-work evidence must persist before Start Work.')) return source;
 
@@ -143,7 +160,7 @@ async function cleanupRunData() {`;
 }
 
 function patchAdmin(source) {
-  if (source.includes('Admin payment approval callable failed HTTP')) return source;
+  if (hasAdminCallableDiagnostics(source)) return source;
 
   const before = `    await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });

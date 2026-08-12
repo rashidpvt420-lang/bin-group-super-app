@@ -833,12 +833,17 @@ test.describe('Admin protected operational business workflow', () => {
     await expect(approvalDialog.getByLabel(/Official payment \/ receipt reference/i)).not.toHaveValue('', { timeout: 15_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
     const approveResponsePromise = page.waitForResponse(
-      (response) => response.url().includes('adminApprovePayment'),
+      (response) => response.request().method() === 'POST' && response.url().includes('adminApprovePayment'),
       { timeout: 45_000 },
     );
     await confirmApproval.click();
     const approveResponse = await approveResponsePromise;
-    expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);
+    const approveResponseText = await approveResponse.text().catch(() => '');
+    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveResponseText)) {
+      throw new Error(
+        `Admin payment approval callable failed HTTP ${approveResponse.status()}: ${approveResponseText.slice(0, 1_500)}`,
+      );
+    }
 
     await expect.poll(async () => {
       const [payment, contract, intake, owner, property] = await Promise.all([
