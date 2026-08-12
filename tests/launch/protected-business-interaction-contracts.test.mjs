@@ -14,6 +14,9 @@ test('Admin protected replay matches the current Phase 1 payment-return UI and f
 
   assert.ok(patched.includes("await expect(approvalDialog).toBeVisible({ timeout: 20_000 });"));
   assert.ok(patched.includes("await confirmApproval.click();"));
+  assert.ok(patched.includes("response.request().method() === 'POST' && response.url().includes('adminApprovePayment')"));
+  assert.ok(patched.includes('Admin payment approval callable failed HTTP'));
+  assert.ok(!patched.includes("(response) => response.url().includes('adminApprovePayment'),"));
   assert.ok(!patched.includes('confirmApproval.evaluate((node: HTMLElement) => { node.click(); node.click(); })'));
   assert.ok(patched.includes("name: /^(?:Return|Reject \\/ Return)$/i"));
   assert.ok(patched.includes('Return \\/ Reject Payment (?:Evidence|Proof)'));
@@ -24,6 +27,36 @@ test('Admin protected replay matches the current Phase 1 payment-return UI and f
   assert.ok(ui.includes('Return / Reject Payment Evidence'));
   assert.ok(ui.includes('Return reason / Admin review note'));
   assert.ok(ui.includes('>Return</Button>'));
+});
+
+test('Admin protected replay upgrades a method-agnostic callable waiter before it can accept CORS preflight', () => {
+  const source = read('tests/e2e/business-admin.spec.ts');
+  const postCallableDiagnostics = `    const approveResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().includes('adminApprovePayment'),
+      { timeout: 45_000 },
+    );
+    await confirmApproval.click();
+    const approveResponse = await approveResponsePromise;
+    const approveResponseText = await approveResponse.text().catch(() => '');
+    if (!approveResponse.ok() || /\\\"error\\\"\\s*:/i.test(approveResponseText)) {
+      throw new Error(
+        \`Admin payment approval callable failed HTTP \${approveResponse.status()}: \${approveResponseText.slice(0, 1_500)}\`,
+      );
+    }`;
+  const methodAgnosticCallableWaiter = `    const approveResponsePromise = page.waitForResponse(
+      (response) => response.url().includes('adminApprovePayment'),
+      { timeout: 45_000 },
+    );
+    await confirmApproval.click();
+    const approveResponse = await approveResponsePromise;
+    expect(approveResponse.status(), 'adminApprovePayment Callable endpoint returned error status').toBeLessThan(400);`;
+  const legacySource = source.replace(postCallableDiagnostics, methodAgnosticCallableWaiter);
+  assert.notEqual(legacySource, source, 'fixture must model the preflight-vulnerable waiter');
+
+  const patched = patchAdminBusinessEvidence(legacySource);
+  assert.ok(patched.includes("response.request().method() === 'POST' && response.url().includes('adminApprovePayment')"));
+  assert.ok(patched.includes('Admin payment approval callable failed HTTP'));
+  assert.ok(!patched.includes("(response) => response.url().includes('adminApprovePayment'),"));
 });
 
 test('Tenant-to-Technician protected replay waits for Firestore listener convergence before Start Work', () => {
