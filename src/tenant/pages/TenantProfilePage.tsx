@@ -74,17 +74,27 @@ export default function TenantProfilePage() {
                 const userData = userSnap.exists() ? userSnap.data() : {};
                 setProfileData(userData);
 
-                const lookups = [
+                // The UID links are the canonical, rules-authorized residence
+                // lookup.  An email query is only a legacy fallback; launching
+                // it in parallel can reject an otherwise valid profile when an
+                // old session has no verified-email claim yet.
+                const uidLookups = [
                     getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid))),
                     getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid))),
-                    ...(user.email
-                        ? [getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())))]
-                        : []),
+                    getDocs(query(collection(db, 'units'), where('currentTenantId', '==', user.uid))),
                 ];
-                const snapshots = await Promise.all(lookups);
+                const snapshots = await Promise.all(uidLookups);
                 const deduplicated = new Map<string, ResidenceRecord>();
                 for (const snapshot of snapshots) {
                     for (const unitDoc of snapshot.docs) {
+                        deduplicated.set(unitDoc.id, { id: unitDoc.id, ...unitDoc.data() });
+                    }
+                }
+                if (deduplicated.size === 0 && user.email) {
+                    const emailSnapshot = await getDocs(
+                        query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())),
+                    );
+                    for (const unitDoc of emailSnapshot.docs) {
                         deduplicated.set(unitDoc.id, { id: unitDoc.id, ...unitDoc.data() });
                     }
                 }
