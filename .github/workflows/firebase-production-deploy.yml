@@ -386,6 +386,9 @@ jobs:
       - name: Resolve canonical Admin Enterprise App Check config
         run: node scripts/resolve-admin-app-check-site-key.mjs
 
+      - name: Verify canonical Founder TOTP sign-in before deploy
+        run: node scripts/verify-founder-totp-signin.mjs
+
       - name: Verify predeploy hard-clearance run provenance
         if: ${{ inputs.launch_mode == 'public' }}
         env:

@@ -61,14 +61,52 @@ export default function TenantUnitPage() {
       if (!user?.uid && !user?.email) return;
       setLoading(true);
       setError(null);
+      setProperty(null);
       try {
-        let snap = user?.uid ? await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid))) : null;
-        if ((!snap || snap.empty) && user?.email) snap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())));
-        if (!snap || snap.empty) {
+        const preferredUnitId = String(user?.unitId || '').trim();
+        const preferredPropertyId = String(user?.propertyId || '').trim();
+        let unitData: UnitDoc | null = null;
+
+        // The tenant profile contains the canonical unit/property binding. A
+        // direct read of that unit is rules-authorized and avoids selecting an
+        // arbitrary stale unit from an older tenant assignment.
+        if (preferredUnitId) {
+          try {
+            const preferredUnit = await getDoc(doc(db, 'units', preferredUnitId));
+            if (preferredUnit.exists()) {
+              const candidate = { id: preferredUnit.id, ...preferredUnit.data() } as UnitDoc;
+              if (!preferredPropertyId || candidate.propertyId === preferredPropertyId) {
+                unitData = candidate;
+              }
+            }
+          } catch {
+            // A stale profile link must not surface a policy error or prevent a
+            // valid tenant-bound query from resolving the current assignment.
+          }
+        }
+
+        if (!unitData) {
+          let snap = user?.uid ? await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid))) : null;
+          if ((!snap || snap.empty) && user?.email) {
+            snap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase())));
+          }
+          if (!snap || snap.empty) {
+            if (!cancelled) setError('No assigned unit found for this tenant profile.');
+            return;
+          }
+
+          const candidates = snap.docs.map((document) => ({ id: document.id, ...document.data() } as UnitDoc));
+          unitData = candidates.find((candidate) =>
+            candidate.id === preferredUnitId && (!preferredPropertyId || candidate.propertyId === preferredPropertyId),
+          ) || (preferredPropertyId
+            ? candidates.find((candidate) => candidate.propertyId === preferredPropertyId) || null
+            : null) || candidates[0] || null;
+        }
+
+        if (!unitData) {
           if (!cancelled) setError('No assigned unit found for this tenant profile.');
           return;
         }
-        const unitData = { id: snap.docs[0].id, ...snap.docs[0].data() } as UnitDoc;
         if (!cancelled) setUnit(unitData);
         if (unitData.propertyId) {
           const propSnap = await getDoc(doc(db, 'properties', unitData.propertyId));
@@ -82,7 +120,7 @@ export default function TenantUnitPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [user?.uid, user?.email]);
+  }, [user?.uid, user?.email, user?.unitId, user?.propertyId]);
 
   const submitHandoverInspection = async () => {
     if (!unit?.id || !unit?.propertyId) {

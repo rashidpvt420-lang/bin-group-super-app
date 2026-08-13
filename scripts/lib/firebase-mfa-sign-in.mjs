@@ -5,6 +5,8 @@ import { generateTotp } from './totp.mjs';
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const FOUNDER_ROLES = new Set(['ceo', 'super_admin']);
+const TOTP_PERIOD_MS = 30_000;
+const MIN_TOTP_LIFETIME_MS = 10_000;
 
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
@@ -21,6 +23,28 @@ function providerError(payload, fallback) {
   const code = text(payload?.error?.message || payload?.error?.status);
   return code ? code.slice(0, 180) : fallback;
 }
+
+function totpWindowRemainingMs(timestamp = Date.now()) {
+  return TOTP_PERIOD_MS - (timestamp % TOTP_PERIOD_MS);
+}
+
+async function waitForFreshTotpWindow(nowImpl, waitImpl) {
+  const remaining = totpWindowRemainingMs(nowImpl());
+  if (remaining < MIN_TOTP_LIFETIME_MS) await waitImpl(remaining + 250);
+}
+
+async function waitForNextTotpWindow(nowImpl, waitImpl) {
+  await waitImpl(totpWindowRemainingMs(nowImpl()) + 250);
+}
+
+function isRetryableTotpRejection(response, payload) {
+  if (response?.status !== 400) return false;
+  return /INVALID_VERIFICATION_CODE|INVALID_CODE|CODE_EXPIRED|INCORRECT|EXPIRED/i.test(
+    providerError(payload, ''),
+  );
+}
+
+const defaultWait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function defaultVerifyIdToken(idToken) {
   const projectId = resolveFirebaseAdminProjectId();
@@ -86,6 +110,8 @@ export async function signInWithRequiredTotpMfa({
   referer = 'https://admin.bin-groups.com/',
   fetchImpl = fetch,
   verifyIdTokenImpl = defaultVerifyIdToken,
+  nowImpl = () => Date.now(),
+  waitImpl = defaultWait,
 }) {
   const normalizedApiKey = text(apiKey);
   const normalizedEmail = text(email).toLowerCase();
@@ -136,29 +162,46 @@ export async function signInWithRequiredTotpMfa({
     throw new Error('Firebase did not return an enrolled TOTP challenge for the Founder account.');
   }
 
-  const verificationCode = generateTotp(normalizedTotpSecret);
-  if (!/^\d{6}$/.test(verificationCode)) {
-    throw new Error('Founder TOTP generation did not produce a six-digit code.');
-  }
-
   const finalizeEndpoint = new URL('https://identitytoolkit.googleapis.com/v2/accounts/mfaSignIn:finalize');
   finalizeEndpoint.searchParams.set('key', normalizedApiKey);
-  const finalizeResponse = await fetchImpl(finalizeEndpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', Referer: referer },
-    body: JSON.stringify({
-      mfaPendingCredential: pendingCredential,
-      mfaEnrollmentId: enrollmentId,
-      totpVerificationInfo: { verificationCode },
-    }),
-  });
-  const finalizePayload = await parseJson(finalizeResponse);
-  const idToken = text(finalizePayload?.idToken);
-  if (!finalizeResponse.ok || !idToken) {
+  const finalize = async () => {
+    const verificationCode = generateTotp(normalizedTotpSecret, nowImpl());
+    if (!/^\d{6}$/.test(verificationCode)) {
+      throw new Error('Founder TOTP generation did not produce a six-digit code.');
+    }
+    const response = await fetchImpl(finalizeEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Referer: referer },
+      body: JSON.stringify({
+        mfaPendingCredential: pendingCredential,
+        mfaEnrollmentId: enrollmentId,
+        totpVerificationInfo: { verificationCode },
+      }),
+    });
+    const payload = await parseJson(response);
+    return { response, payload, idToken: text(payload?.idToken) };
+  };
+
+  // Avoid starting the challenge with a nearly expired code. The live browser
+  // audit uses the same boundary protection because Firebase accepts TOTP only
+  // for its current 30-second window.
+  await waitForFreshTotpWindow(nowImpl, waitImpl);
+  let finalized = await finalize();
+  if (!finalized.response.ok && isRetryableTotpRejection(finalized.response, finalized.payload)) {
+    // A rejection can still occur if the request crossed a window boundary.
+    // Retry once in a distinct window; do not conceal a lasting secret mismatch.
+    await waitForNextTotpWindow(nowImpl, waitImpl);
+    finalized = await finalize();
+  }
+  if (!finalized.response.ok || !finalized.idToken) {
+    const suffix = isRetryableTotpRejection(finalized.response, finalized.payload)
+      ? ' after two consecutive TOTP windows'
+      : '';
     throw new Error(
-      `Firebase TOTP sign-in failed: ${providerError(finalizePayload, `HTTP ${finalizeResponse.status}`)}`,
+      `Firebase TOTP sign-in failed${suffix}: ${providerError(finalized.payload, `HTTP ${finalized.response.status}`)}`,
     );
   }
+  const idToken = finalized.idToken;
 
   const verified = await requireVerifiedTotpMfaToken(idToken, verifyIdTokenImpl);
   if (verified.secondFactorIdentifier !== enrollmentId) {
