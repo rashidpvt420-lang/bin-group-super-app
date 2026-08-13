@@ -28,6 +28,49 @@ test('Admin hard-launch exact-route proof uses canonical Founder MFA', () => {
   assert.match(source, /ceo@bin-groups\.com/);
 });
 
+test('live launch audits reuse one real session per serial role suite', () => {
+  for (const [path, contextName] of [
+    ['tests/e2e/launch-audit-admin.spec.ts', 'adminContext'],
+    ['tests/e2e/launch-audit-owner.spec.ts', 'ownerContext'],
+    ['tests/e2e/launch-audit-tenant.spec.ts', 'tenantContext'],
+    ['tests/e2e/launch-audit-technician.spec.ts', 'technicianContext'],
+    ['tests/e2e/launch-audit-broker.spec.ts', 'brokerContext'],
+  ]) {
+    const source = read(path);
+    assert.match(source, /test\.describe\.configure\(\{ mode: 'serial' \}\)/);
+    assert.match(source, /test\.beforeAll\(async \(\{ browser \}\)/);
+    assert.match(source, new RegExp(`${contextName} = await browser\\.newContext`));
+    assert.doesNotMatch(source, /test\.beforeEach\(async \(\{ page \}\)/);
+  }
+
+  const adminSource = read('tests/e2e/launch-audit-admin.spec.ts');
+  assert.match(adminSource, /await loginAdminWithRealMfa\(adminPage/);
+});
+
+test('launch fixtures preserve rules-authorized owner and tenant links', () => {
+  const source = read('scripts/seed-live-role-test-data.mjs');
+  assert.match(source, /db\.collection\('owners'\)\.doc\(ownerUid\)\.set/);
+  assert.match(source, /db\.collection\('tenants'\)\.doc\(tenantUid\)\.set/);
+  assert.match(source, /currentTenantId: tenantUid/);
+  assert.match(source, /authUid: tenantUid/);
+});
+
+test('live role dashboards do not make policy-incompatible fallback reads', () => {
+  const ownerSource = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
+  const tenantSource = read('src/tenant/pages/TenantProfilePage.tsx');
+  assert.doesNotMatch(ownerSource, /getCollectionDocs\('contracts', 'emailDelivery\.recipient'/);
+  assert.match(tenantSource, /where\('currentTenantId', '==', user\.uid\)/);
+  assert.match(tenantSource, /if \(deduplicated\.size === 0 && user\.email\)/);
+});
+
+test('production workflow preserves failed live-audit diagnostics and reports the Admin App Check app ID', () => {
+  const workflow = read('.github/workflows/firebase-production-deploy.yml');
+  const appCheck = read('scripts/ensure-appcheck.mjs');
+  assert.match(workflow, /Upload failed live launch audit diagnostics/);
+  assert.match(workflow, /live-launch-audit-diagnostics-/);
+  assert.match(appCheck, /REACT_APP_ADMIN_FIREBASE_APP_ID/);
+});
+
 test('portal language proofs bind to explicit controls instead of substring selectors', () => {
   const cases = [
     ['tests/e2e/launch-audit-owner.spec.ts', 'owner-language-toggle'],
