@@ -4,8 +4,8 @@
  * Verifies: dashboard (duty toggle), jobs, map (with geolocation grant),
  * history, HR, profile, AR/EN switch.
  */
-import { expect, Page, test } from '@playwright/test';
-import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TECHNICIAN_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TECHNICIAN_PASSWORD ?? '';
@@ -39,26 +39,51 @@ async function assertHealthy(page: Page, context: string) {
 }
 
 test.describe('Technician launch audit', () => {
-  test.use({
-    geolocation: { latitude: 25.2048, longitude: 55.2708 },
-    permissions: ['geolocation'],
-  });
+  // Keep one real authenticated Technician session for the serial route audit
+  // so the proof does not create an avoidable burst of password sign-ins.
+  test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+  let technicianContext: BrowserContext | null = null;
+  let technicianPage: Page | null = null;
+  let appCheckMonitor: AppCheckMonitor | null = null;
+
+  const pageForAudit = () => {
+    if (!technicianPage) throw new Error('Technician launch-audit session was not initialized.');
+    return technicianPage;
+  };
+
+  test.beforeAll(async ({ browser }) => {
+    technicianContext = await browser.newContext({
+      geolocation: { latitude: 25.2048, longitude: 55.2708 },
+      permissions: ['geolocation'],
+    });
+    technicianPage = await technicianContext.newPage();
+    appCheckMonitor = await attachAuthenticatedAppCheckMonitor(technicianPage);
+    await appCheckMonitor.assertTokenFingerprint();
     requireAuditCredentials();
-    await login(page);
-  });
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+    await login(technicianPage);
   });
 
-  test('technician dashboard loads with duty toggle', async ({ page }) => {
+  test.afterEach(async ({}, testInfo) => {
+    if (!appCheckMonitor) return;
+    appCheckMonitor.assertClean(testInfo.title);
+    appCheckMonitor.assertAuthenticatedFirebaseRead(testInfo.title);
+  });
+
+  test.afterAll(async () => {
+    try {
+      appCheckMonitor?.assertClean('Technician launch audit shared session');
+      appCheckMonitor?.assertAuthenticatedFirebaseRead('Technician launch audit shared session');
+    } finally {
+      await technicianContext?.close();
+      technicianContext = null;
+      technicianPage = null;
+      appCheckMonitor = null;
+    }
+  });
+
+  test('technician dashboard loads with duty toggle', async () => {
+    const page = pageForAudit();
     await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -75,13 +100,15 @@ test.describe('Technician launch audit', () => {
     expect(dutyVisible, 'Duty toggle button must be visible on technician dashboard').toBe(true);
   });
 
-  test('technician jobs list loads', async ({ page }) => {
+  test('technician jobs list loads', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/jobs', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'technician/jobs');
   });
 
-  test('technician map page loads (geolocation granted)', async ({ page }) => {
+  test('technician map page loads (geolocation granted)', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/map', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3_000);
     await assertHealthy(page, 'technician/map');
@@ -91,31 +118,36 @@ test.describe('Technician launch audit', () => {
     expect(body, 'Map page must not crash').not.toMatch(CRASH_PATTERN);
   });
 
-  test('technician history page loads', async ({ page }) => {
+  test('technician history page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/history', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'technician/history');
   });
 
-  test('technician HR/duty page loads', async ({ page }) => {
+  test('technician HR/duty page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/hr', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'technician/hr');
   });
 
-  test('technician profile page loads', async ({ page }) => {
+  test('technician profile page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/profile', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'technician/profile');
   });
 
-  test('technician chat page loads', async ({ page }) => {
+  test('technician chat page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/chat', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'technician/chat');
   });
 
-  test('technician AR/EN language switch works', async ({ page }) => {
+  test('technician AR/EN language switch works', async () => {
+    const page = pageForAudit();
     await page.goto('/technician/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
 

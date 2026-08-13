@@ -4,8 +4,8 @@
  * Verifies: dashboard, properties, contracts, financials, tenants,
  * documents, property passport, tickets, AR/EN switch.
  */
-import { expect, Page, test } from '@playwright/test';
-import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_OWNER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_OWNER_PASSWORD ?? '';
@@ -40,21 +40,49 @@ async function assertHealthy(page: Page, expectedPath: string) {
 }
 
 test.describe('Owner launch audit', () => {
-  test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+  // Audit routes are read-only checks of one live Owner identity.  Reusing one
+  // authenticated session avoids turning an audit into a burst of equivalent
+  // Firebase password sign-ins while preserving real browser Auth and reads.
+  test.describe.configure({ mode: 'serial' });
+
+  let ownerContext: BrowserContext | null = null;
+  let ownerPage: Page | null = null;
+  let appCheckMonitor: AppCheckMonitor | null = null;
+
+  const pageForAudit = () => {
+    if (!ownerPage) throw new Error('Owner launch-audit session was not initialized.');
+    return ownerPage;
+  };
+
+  test.beforeAll(async ({ browser }) => {
+    ownerContext = await browser.newContext();
+    ownerPage = await ownerContext.newPage();
+    appCheckMonitor = await attachAuthenticatedAppCheckMonitor(ownerPage);
+    await appCheckMonitor.assertTokenFingerprint();
     requireAuditCredentials();
-    await login(page);
-  });
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+    await login(ownerPage);
   });
 
-  test('owner dashboard loads with portfolio content', async ({ page }) => {
+  test.afterEach(async ({}, testInfo) => {
+    if (!appCheckMonitor) return;
+    appCheckMonitor.assertClean(testInfo.title);
+    appCheckMonitor.assertAuthenticatedFirebaseRead(testInfo.title);
+  });
+
+  test.afterAll(async () => {
+    try {
+      appCheckMonitor?.assertClean('Owner launch audit shared session');
+      appCheckMonitor?.assertAuthenticatedFirebaseRead('Owner launch audit shared session');
+    } finally {
+      await ownerContext?.close();
+      ownerContext = null;
+      ownerPage = null;
+      appCheckMonitor = null;
+    }
+  });
+
+  test('owner dashboard loads with portfolio content', async () => {
+    const page = pageForAudit();
     await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -77,14 +105,16 @@ test.describe('Owner launch audit', () => {
     ['owner ROI page loads', '/owner/roi'],
     ['owner activation/onboarding-status page loads', '/owner/activation'],
   ] as const) {
-    test(title, async ({ page }) => {
+    test(title, async () => {
+      const page = pageForAudit();
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1_500);
       await assertHealthy(page, route);
     });
   }
 
-  test('owner AR/EN switch works in shell', async ({ page }) => {
+  test('owner AR/EN switch works in shell', async () => {
+    const page = pageForAudit();
     await page.goto('/owner/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, '/owner/dashboard');

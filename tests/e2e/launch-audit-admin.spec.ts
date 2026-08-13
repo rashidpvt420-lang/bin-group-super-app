@@ -3,8 +3,8 @@
  * Verifies: real Founder MFA, dashboard KPIs, key nav clicks, AR/EN switch,
  * authenticated Firebase reads and no runtime errors.
  */
-import { expect, type Page, test } from '@playwright/test';
-import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 import { loginAdminWithRealMfa, requireAdminMfaCredentials } from './helpers/adminMfa';
 
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
@@ -42,21 +42,50 @@ async function consoleCollector(page: Page) {
 }
 
 test.describe('Admin launch audit', () => {
-  test.beforeEach(async ({ page }) => {
-    const appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = appCheckMonitor;
+  // Firebase MFA sign-in is deliberately real, but repeatedly resolving the
+  // same Founder challenge for every read-only route can hit the provider's
+  // throttling window. Keep one fresh, authenticated Founder session for this
+  // serial route audit; every assertion below still executes against the real
+  // production Admin app and authenticated Firestore reads.
+  test.describe.configure({ mode: 'serial' });
+
+  let adminContext: BrowserContext | null = null;
+  let adminPage: Page | null = null;
+  let appCheckMonitor: AppCheckMonitor | null = null;
+
+  const pageForAudit = () => {
+    if (!adminPage) throw new Error('Admin launch-audit session was not initialized.');
+    return adminPage;
+  };
+
+  test.beforeAll(async ({ browser }) => {
+    adminContext = await browser.newContext();
+    adminPage = await adminContext.newPage();
+    appCheckMonitor = await attachAuthenticatedAppCheckMonitor(adminPage);
     await appCheckMonitor.assertTokenFingerprint();
-    await loginAdminWithRealMfa(page, ADMIN_BASE_URL, requireAuditCredentials());
+    await loginAdminWithRealMfa(adminPage, ADMIN_BASE_URL, requireAuditCredentials());
   });
 
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+  test.afterEach(async ({}, testInfo) => {
+    if (!appCheckMonitor) return;
+    appCheckMonitor.assertClean(testInfo.title);
+    appCheckMonitor.assertAuthenticatedFirebaseRead(testInfo.title);
   });
 
-  test('admin dashboard loads with KPI cards', async ({ page }) => {
+  test.afterAll(async () => {
+    try {
+      appCheckMonitor?.assertClean('Admin launch audit shared session');
+      appCheckMonitor?.assertAuthenticatedFirebaseRead('Admin launch audit shared session');
+    } finally {
+      await adminContext?.close();
+      adminContext = null;
+      adminPage = null;
+      appCheckMonitor = null;
+    }
+  });
+
+  test('admin dashboard loads with KPI cards', async () => {
+    const page = pageForAudit();
     const errors = await consoleCollector(page);
     await page.goto(adminUrl('/dashboard'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
@@ -64,44 +93,51 @@ test.describe('Admin launch audit', () => {
     expect(errors.join('\n')).not.toMatch(ACCESS_DENIED);
   });
 
-  test('admin owners list loads', async ({ page }) => {
+  test('admin owners list loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/owners'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/owners');
   });
 
-  test('admin tenants list loads', async ({ page }) => {
+  test('admin tenants list loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/tenants'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/tenants');
   });
 
-  test('admin tickets list loads', async ({ page }) => {
+  test('admin tickets list loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/tickets');
   });
 
-  test('admin technicians list loads', async ({ page }) => {
+  test('admin technicians list loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/technicians'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/technicians');
   });
 
-  test('admin SOS feed loads', async ({ page }) => {
+  test('admin SOS feed loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/sos'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/sos');
     await expect(page.getByTestId('admin-sos-feed')).toBeVisible({ timeout: 10_000 });
   });
 
-  test('admin financials loads', async ({ page }) => {
+  test('admin financials loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/financials'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/financials');
   });
 
-  test('admin contract control remains on the real route', async ({ page }) => {
+  test('admin contract control remains on the real route', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/contracts'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await expect(page).toHaveURL(adminUrl('/contracts'));
@@ -109,13 +145,15 @@ test.describe('Admin launch audit', () => {
     await assertHealthy(page, 'admin/contracts');
   });
 
-  test('admin audit log loads', async ({ page }) => {
+  test('admin audit log loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/audit'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'admin/audit');
   });
 
-  test('admin AR/EN language switch works and shows no raw i18n keys', async ({ page }) => {
+  test('admin AR/EN language switch works and shows no raw i18n keys', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/dashboard'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     const languageButton = page.locator(
@@ -129,7 +167,8 @@ test.describe('Admin launch audit', () => {
     await page.waitForTimeout(500);
   });
 
-  test('admin live map page loads', async ({ page }) => {
+  test('admin live map page loads', async () => {
+    const page = pageForAudit();
     await page.goto(adminUrl('/technicians/map'), { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     await assertHealthy(page, 'admin/technicians/map');
