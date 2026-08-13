@@ -8,7 +8,7 @@ import './property-geo-authority-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import fs from 'fs';
 
 let testEnv;
@@ -364,6 +364,64 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(tenantADb, 'properties/prop_a')));
     await assertFails(getDoc(doc(tenantADb, 'properties/prop_b')));
     await assertFails(getDoc(doc(tenantBDb, 'properties/prop_a')));
+  });
+
+  it('live launch tenant fixture resolves its profile, residence aliases, and assigned property', async () => {
+    await seedServerDocument('users/tenant_live', {
+      uid: 'tenant_live',
+      role: 'tenant',
+      status: 'active',
+      propertyId: 'live_property',
+      unitId: 'live_unit',
+    });
+    await seedServerDocument('properties/live_property', {
+      ownerId: 'owner_live',
+      tenantId: 'tenant_live',
+      tenantUid: 'tenant_live',
+      currentTenantId: 'tenant_live',
+      tenantEmail: 'tenant-live@example.com',
+    });
+    await seedServerDocument('units/live_unit', {
+      propertyId: 'live_property',
+      tenantId: 'tenant_live',
+      tenantUid: 'tenant_live',
+      currentTenantId: 'tenant_live',
+      userId: 'tenant_live',
+      authUid: 'tenant_live',
+      tenantEmail: 'tenant-live@example.com',
+    });
+
+    const tenantDb = testEnv.authenticatedContext('tenant_live', {
+      role: 'tenant',
+      email: 'tenant-live@example.com',
+      email_verified: true,
+    }).firestore();
+
+    await assertSucceeds(getDoc(doc(tenantDb, 'users/tenant_live')));
+    await assertSucceeds(getDocs(query(collection(tenantDb, 'units'), where('tenantId', '==', 'tenant_live'))));
+    await assertSucceeds(getDocs(query(collection(tenantDb, 'units'), where('tenantUid', '==', 'tenant_live'))));
+    await assertSucceeds(getDocs(query(collection(tenantDb, 'units'), where('currentTenantId', '==', 'tenant_live'))));
+    await assertSucceeds(getDocs(query(collection(tenantDb, 'units'), where('tenantEmail', '==', 'tenant-live@example.com'))));
+    await assertSucceeds(getDoc(doc(tenantDb, 'properties/live_property')));
+  });
+
+  it('owner contract lookup uses owner identity fields and does not grant access from delivery recipients', async () => {
+    await seedServerDocument('contracts/owner_live_contract', {
+      ownerId: 'owner_live',
+      ownerUid: 'owner_live',
+      ownerEmail: 'owner-live@example.com',
+      emailDelivery: { recipient: 'owner-live@example.com' },
+    });
+
+    const ownerDb = testEnv.authenticatedContext('owner_live', {
+      role: 'owner',
+      email: 'owner-live@example.com',
+      email_verified: true,
+    }).firestore();
+
+    await assertSucceeds(getDocs(query(collection(ownerDb, 'contracts'), where('ownerId', '==', 'owner_live'))));
+    await assertSucceeds(getDocs(query(collection(ownerDb, 'contracts'), where('ownerUid', '==', 'owner_live'))));
+    await assertFails(getDocs(query(collection(ownerDb, 'contracts'), where('emailDelivery.recipient', '==', 'owner-live@example.com'))));
   });
 
   it('notifications abuse guard: user cannot create notification for another recipient', async () => {
