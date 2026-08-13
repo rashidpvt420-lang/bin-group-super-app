@@ -4,8 +4,8 @@
  * Verifies: dashboard KPIs, leads, referrals, commissions, documents,
  * profile, AR/EN switch.
  */
-import { expect, Page, test } from '@playwright/test';
-import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_BROKER_MAILBOX_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_BROKER_PASSWORD ?? '';
@@ -39,21 +39,49 @@ async function assertHealthy(page: Page, context: string) {
 }
 
 test.describe('Broker launch audit', () => {
-  test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+  // Keep a single authenticated Broker session for the serial route audit.
+  // This still validates real browser authentication and Firebase reads while
+  // avoiding repeated equivalent sign-ins during one deploy gate.
+  test.describe.configure({ mode: 'serial' });
+
+  let brokerContext: BrowserContext | null = null;
+  let brokerPage: Page | null = null;
+  let appCheckMonitor: AppCheckMonitor | null = null;
+
+  const pageForAudit = () => {
+    if (!brokerPage) throw new Error('Broker launch-audit session was not initialized.');
+    return brokerPage;
+  };
+
+  test.beforeAll(async ({ browser }) => {
+    brokerContext = await browser.newContext();
+    brokerPage = await brokerContext.newPage();
+    appCheckMonitor = await attachAuthenticatedAppCheckMonitor(brokerPage);
+    await appCheckMonitor.assertTokenFingerprint();
     requireAuditCredentials();
-    await login(page);
-  });
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+    await login(brokerPage);
   });
 
-  test('broker dashboard loads with KPI cards', async ({ page }) => {
+  test.afterEach(async ({}, testInfo) => {
+    if (!appCheckMonitor) return;
+    appCheckMonitor.assertClean(testInfo.title);
+    appCheckMonitor.assertAuthenticatedFirebaseRead(testInfo.title);
+  });
+
+  test.afterAll(async () => {
+    try {
+      appCheckMonitor?.assertClean('Broker launch audit shared session');
+      appCheckMonitor?.assertAuthenticatedFirebaseRead('Broker launch audit shared session');
+    } finally {
+      await brokerContext?.close();
+      brokerContext = null;
+      brokerPage = null;
+      appCheckMonitor = null;
+    }
+  });
+
+  test('broker dashboard loads with KPI cards', async () => {
+    const page = pageForAudit();
     await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -64,37 +92,43 @@ test.describe('Broker launch audit', () => {
     expect(errors.join('\n')).not.toMatch(ACCESS_DENIED);
   });
 
-  test('broker leads page loads', async ({ page }) => {
+  test('broker leads page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/leads', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/leads');
   });
 
-  test('broker referrals page loads', async ({ page }) => {
+  test('broker referrals page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/referrals', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/referrals');
   });
 
-  test('broker commissions page loads', async ({ page }) => {
+  test('broker commissions page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/commissions');
   });
 
-  test('broker documents page loads', async ({ page }) => {
+  test('broker documents page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/documents', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/documents');
   });
 
-  test('broker profile page loads', async ({ page }) => {
+  test('broker profile page loads', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/profile', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/profile');
   });
 
-  test('broker nav bar renders correct labels (not hardcoded English)', async ({ page }) => {
+  test('broker nav bar renders correct labels (not hardcoded English)', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     const dashBtn = page.locator('#broker-nav-dashboard, button[id="broker-nav-dashboard"]').first();
@@ -105,7 +139,8 @@ test.describe('Broker launch audit', () => {
     }
   });
 
-  test('broker AR/EN language switch works (including shell labels)', async ({ page }) => {
+  test('broker AR/EN language switch works (including shell labels)', async () => {
+    const page = pageForAudit();
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
 
@@ -124,7 +159,8 @@ test.describe('Broker launch audit', () => {
     await page.waitForTimeout(500);
   });
 
-  test('broker mobile nav renders (viewport: mobile)', async ({ page }) => {
+  test('broker mobile nav renders (viewport: mobile)', async () => {
+    const page = pageForAudit();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
