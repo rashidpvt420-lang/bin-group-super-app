@@ -5,9 +5,10 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('ticket normalization preserves the canonical lifecycle vocabulary', async () => {
-  const [normalizer, lifecycle] = await Promise.all([
+  const [normalizer, lifecycle, tenantReview] = await Promise.all([
     read('functions/ticketNormalization.ts'),
     read('functions/index.ts'),
+    read('functions/tenantTicketReview.ts'),
   ]);
 
   assert.match(normalizer, /return "ASSIGNED"/);
@@ -15,6 +16,10 @@ test('ticket normalization preserves the canonical lifecycle vocabulary', async 
   assert.match(normalizer, /return "ARRIVED"/);
   assert.doesNotMatch(normalizer, /return "assigned"/);
   assert.doesNotMatch(normalizer, /return "on_the_way"/);
+  assert.match(normalizer, /TERMINAL_MAINTENANCE_TICKET_STATUSES/);
+  assert.match(normalizer, /canonicalTerminalStatuses\.has\(upper\)\) return upper/);
+  assert.doesNotMatch(normalizer, /\["COMPLETED", "RESOLVED", "CLOSED"\]\.includes\(upper\)\) return "COMPLETED"/);
+  assert.match(tenantReview, /status: "CLOSED"/);
   assert.match(lifecycle, /ON_THE_WAY: \["ARRIVED"\]/);
 });
 

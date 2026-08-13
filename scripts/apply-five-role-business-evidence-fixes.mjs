@@ -17,6 +17,10 @@ const ADMIN_FILE = 'tests/e2e/business-admin.spec.ts';
 const TENANT_FILE = 'tests/e2e/business-tenant.spec.ts';
 const TECHNICIAN_FILE = 'tests/e2e/business-technician.spec.ts';
 const ADMIN_PHASE1_MARKER = "const phase1PaymentConfigurationSnap = await db.collection('system_payment_config').doc('current').get();";
+const LEGACY_ADMIN_PAYMENT_PROOF_OVERRIDE = `      paymentProofPath: \`paymentProofs/\${PAYMENT_ID}/receipt.pdf\`,
+      paymentProofHash: createHash('sha256').update(\`receipt:\${PREFIX}\`).digest('hex'),
+      paymentProofGeneration: '1000000000000000',
+`;
 
 function normalizeNewlines(value) {
   return value.replace(/\r\n/g, '\n');
@@ -43,8 +47,21 @@ function replaceExactlyOnce(source, before, after, label, purpose) {
   return restoreNewlines(patched, hadCrlf);
 }
 
+function removeLegacyAdminPaymentProofOverride(source, label) {
+  if (!source.includes(LEGACY_ADMIN_PAYMENT_PROOF_OVERRIDE)) return source;
+  return replaceExactlyOnce(
+    source,
+    LEGACY_ADMIN_PAYMENT_PROOF_OVERRIDE,
+    '',
+    label,
+    'legacy Admin payment proof override',
+  );
+}
+
 function patchAdminPhase1PaymentFixture(source, label = ADMIN_FILE) {
-  if (source.includes(ADMIN_PHASE1_MARKER)) return source;
+  if (source.includes(ADMIN_PHASE1_MARKER)) {
+    return removeLegacyAdminPaymentProofOverride(source, label);
+  }
 
   const seedAnchor = `  const freshGps = admin.firestore.Timestamp.now();
 
@@ -165,6 +182,7 @@ function patchAdminPhase1PaymentFixture(source, label = ADMIN_FILE) {
       status: 'PENDING',
       paymentStatus: 'PENDING_ADMIN_APPROVAL',`;
   patched = replaceExactlyOnce(patched, stripeFixture, phase1CashFixture, label, 'retired Stripe activation fixture');
+  patched = removeLegacyAdminPaymentProofOverride(patched, label);
 
   const cleanupAnchor = `  await Promise.all(BROKER_STORAGE_PATHS.map((storagePath) => admin.storage().bucket().file(storagePath).delete({ ignoreNotFound: true }).catch(() => undefined)));
   await deleteQuery('invoice_registry', 'entityId', PAYMENT_INVOICE_ID).catch(() => undefined);`;
