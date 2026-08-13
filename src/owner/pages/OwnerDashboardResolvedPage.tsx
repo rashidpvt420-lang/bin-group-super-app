@@ -212,9 +212,15 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
     for (const c of await getCollectionDocs('contracts', 'ownerUid', authUid)) contracts.set(c.id, c);
   }
 
-  for (const email of trustedEmails) {
-    for (const c of await getCollectionDocs('contracts', 'ownerEmail', email)) contracts.set(c.id, c);
-    for (const c of await getCollectionDocs('contracts', 'emailDelivery.recipient', email)) contracts.set(c.id, c);
+  // UID-backed contract fields are the authoritative owner relationship and
+  // are explicitly queryable by the Firestore policy.  Email is retained only
+  // as a legacy fallback when older contracts have no owner UID.  Do not query
+  // nested delivery recipients here: that field is not an ownership grant and
+  // would turn a harmless fallback into a permission-denied Firebase request.
+  if (contracts.size === 0) {
+    for (const email of trustedEmails) {
+      for (const c of await getCollectionDocs('contracts', 'ownerEmail', email)) contracts.set(c.id, c);
+    }
   }
 
   const contractList = Array.from(contracts.values()).sort((a, b) => Number(isOwnerContractActivated(b)) - Number(isOwnerContractActivated(a)) || sortByRecent(a, b));
