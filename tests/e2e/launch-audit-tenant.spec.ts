@@ -4,8 +4,8 @@
  * Verifies: dashboard, unit, request form, tickets, documents,
  * emergency form, chat, profile, reviewed correction history, gate pass, AR/EN switch.
  */
-import { expect, Page, test } from '@playwright/test';
-import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
 
 const EMAIL    = process.env.E2E_TENANT_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
@@ -40,21 +40,49 @@ async function assertHealthy(page: Page, expectedPath: string) {
 }
 
 test.describe('Tenant launch audit', () => {
-  test.beforeEach(async ({ page }) => {
-    const __appCheckMonitor = await attachAuthenticatedAppCheckMonitor(page);
-    (page as any).__binAppCheckMonitor = __appCheckMonitor;
-    await __appCheckMonitor.assertTokenFingerprint();
+  // The suite navigates a single Tenant account through read-only routes plus
+  // one correction submission. A serial shared session prevents repeated
+  // identical sign-ins from being mistaken for abusive traffic.
+  test.describe.configure({ mode: 'serial' });
+
+  let tenantContext: BrowserContext | null = null;
+  let tenantPage: Page | null = null;
+  let appCheckMonitor: AppCheckMonitor | null = null;
+
+  const pageForAudit = () => {
+    if (!tenantPage) throw new Error('Tenant launch-audit session was not initialized.');
+    return tenantPage;
+  };
+
+  test.beforeAll(async ({ browser }) => {
+    tenantContext = await browser.newContext();
+    tenantPage = await tenantContext.newPage();
+    appCheckMonitor = await attachAuthenticatedAppCheckMonitor(tenantPage);
+    await appCheckMonitor.assertTokenFingerprint();
     requireAuditCredentials();
-    await login(page);
-  });
-  test.afterEach(async ({ page }) => {
-    const monitor = (page as any).__binAppCheckMonitor;
-    if (!monitor) return;
-    monitor.assertClean(test.info().title);
-    monitor.assertAuthenticatedFirebaseRead(test.info().title);
+    await login(tenantPage);
   });
 
-  test('tenant dashboard loads with unit card', async ({ page }) => {
+  test.afterEach(async ({}, testInfo) => {
+    if (!appCheckMonitor) return;
+    appCheckMonitor.assertClean(testInfo.title);
+    appCheckMonitor.assertAuthenticatedFirebaseRead(testInfo.title);
+  });
+
+  test.afterAll(async () => {
+    try {
+      appCheckMonitor?.assertClean('Tenant launch audit shared session');
+      appCheckMonitor?.assertAuthenticatedFirebaseRead('Tenant launch audit shared session');
+    } finally {
+      await tenantContext?.close();
+      tenantContext = null;
+      tenantPage = null;
+      appCheckMonitor = null;
+    }
+  });
+
+  test('tenant dashboard loads with unit card', async () => {
+    const page = pageForAudit();
     await assertAppCheckDebugTokenInPage(page);
     const errors: string[] = [];
     page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
@@ -74,14 +102,16 @@ test.describe('Tenant launch audit', () => {
     ['tenant gate pass page renders', '/tenant/gate-pass'],
     ['tenant amenities page renders', '/tenant/amenities'],
   ] as const) {
-    test(title, async ({ page }) => {
+    test(title, async () => {
+      const page = pageForAudit();
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1_500);
       await assertHealthy(page, route);
     });
   }
 
-  test('tenant maintenance request form renders', async ({ page }) => {
+  test('tenant maintenance request form renders', async () => {
+    const page = pageForAudit();
     await page.goto('/tenant/request', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, '/tenant/request');
@@ -89,7 +119,8 @@ test.describe('Tenant launch audit', () => {
     await expect(requestForm, 'Maintenance request form must render an input').toBeVisible({ timeout: 20_000 });
   });
 
-  test('tenant emergency page renders (no submit)', async ({ page }) => {
+  test('tenant emergency page renders (no submit)', async () => {
+    const page = pageForAudit();
     await page.goto('/tenant/emergency', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, '/tenant/emergency');
@@ -97,7 +128,8 @@ test.describe('Tenant launch audit', () => {
     expect(body, 'Emergency page must have relevant content').toMatch(/emergency|sos|urgent|استغاثة|طارئ/i);
   });
 
-  test('tenant correction submission and immutable history are reachable', async ({ page }) => {
+  test('tenant correction submission and immutable history are reachable', async () => {
+    const page = pageForAudit();
     test.setTimeout(90_000);
     await page.goto('/tenant/profile', { waitUntil: 'domcontentloaded' });
     await assertHealthy(page, '/tenant/profile');
@@ -125,7 +157,8 @@ test.describe('Tenant launch audit', () => {
     await expect(requestCard).toContainText(/E2E Emergency Contact Baseline/i);
   });
 
-  test('tenant AR/EN language switch works in shell', async ({ page }) => {
+  test('tenant AR/EN language switch works in shell', async () => {
+    const page = pageForAudit();
     await page.goto('/tenant/dashboard', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
     await assertHealthy(page, '/tenant/dashboard');
