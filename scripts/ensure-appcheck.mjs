@@ -39,7 +39,12 @@ function mask(token) {
 
 const token = String(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || '').trim();
 const mainAppId = String(process.env.VITE_FIREBASE_APP_ID || process.env.FIREBASE_WEB_APP_ID || '').trim();
-const adminAppId = String(process.env.REACT_APP_FIREBASE_APP_ID || process.env.ADMIN_FIREBASE_APP_ID || '').trim();
+const adminAppId = String(
+  process.env.REACT_APP_ADMIN_FIREBASE_APP_ID ||
+  process.env.REACT_APP_FIREBASE_APP_ID ||
+  process.env.ADMIN_FIREBASE_APP_ID ||
+  '',
+).trim();
 const expectedProject = 'bin-group-57c60';
 
 console.log(`[APPCHECK_ENSURE] project_expected=${expectedProject}`);
