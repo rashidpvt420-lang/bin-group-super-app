@@ -1,11 +1,16 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
-import { normalizeMaintenanceTicketStatus } from "./shared/maintenanceTicketLifecycle";
+import {
+  normalizeMaintenanceTicketStatus,
+  TERMINAL_MAINTENANCE_TICKET_STATUSES,
+} from "./shared/maintenanceTicketLifecycle";
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+
+const canonicalTerminalStatuses = new Set<string>(TERMINAL_MAINTENANCE_TICKET_STATUSES);
 
 function cleanString(value: unknown): string {
   return String(value || "").trim();
@@ -28,7 +33,10 @@ function normalizeStatus(value: unknown): string | null {
   if (upper === "ARRIVED") return "ARRIVED";
   if (["IN_PROGRESS", "WORK_STARTED"].includes(upper)) return "IN_PROGRESS";
   if (upper === "WAITING_PARTS") return "WAITING_PARTS";
-  if (["COMPLETED", "RESOLVED", "CLOSED"].includes(upper)) return "COMPLETED";
+  // Technician completion and Tenant-approved closure are distinct business
+  // events. Preserve every canonical terminal state so this compatibility
+  // trigger cannot turn a Tenant-approved CLOSED ticket back into COMPLETED.
+  if (canonicalTerminalStatuses.has(upper)) return upper;
   if (upper === "OPEN") return "OPEN";
 
   return status;
