@@ -75,6 +75,7 @@ test('Owner portfolio and Tenant unit pages use rule-provable canonical bindings
   assert.match(tenantSource, /const preferredUnitId = String\(user\?\.unitId \|\| ''\)\.trim\(\)/);
   assert.match(tenantSource, /const preferredPropertyId = String\(user\?\.propertyId \|\| ''\)\.trim\(\)/);
   assert.match(tenantSource, /getDoc\(doc\(db, 'units', preferredUnitId\)\)/);
+  assert.match(tenantSource, /\|\| candidates\[0\] \|\| null/);
   assert.doesNotMatch(tenantSource, /snap\.docs\[0\]/);
 });
 

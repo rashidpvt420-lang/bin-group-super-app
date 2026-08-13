@@ -100,7 +100,7 @@ export default function TenantUnitPage() {
             candidate.id === preferredUnitId && (!preferredPropertyId || candidate.propertyId === preferredPropertyId),
           ) || (preferredPropertyId
             ? candidates.find((candidate) => candidate.propertyId === preferredPropertyId) || null
-            : candidates[0] || null);
+            : null) || candidates[0] || null;
         }
 
         if (!unitData) {
