@@ -10,6 +10,9 @@ export type AdminMfaCredentials = {
 };
 
 const FIREBASE_PASSWORD_ENDPOINT = /identitytoolkit\.googleapis\.com\/v1\/accounts:signInWithPassword/;
+const FIREBASE_MFA_FINALIZE_ENDPOINT = /identitytoolkit\.googleapis\.com\/v2\/accounts\/mfaSignIn:finalize/;
+const TOTP_PERIOD_MS = 30_000;
+const MIN_TOTP_LIFETIME_MS = 10_000;
 
 function decodeBase32(input: string) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -44,6 +47,25 @@ export function generateTotp(secret: string, timestamp = Date.now()) {
   return String(binary % 1_000_000).padStart(6, '0');
 }
 
+export function totpWindowRemainingMs(timestamp = Date.now()) {
+  const elapsed = timestamp % TOTP_PERIOD_MS;
+  return TOTP_PERIOD_MS - elapsed;
+}
+
+export async function waitForFreshTotpWindow(
+  page: Pick<Page, 'waitForTimeout'>,
+  minimumLifetimeMs = MIN_TOTP_LIFETIME_MS,
+) {
+  const minimum = Math.max(0, Math.min(minimumLifetimeMs, TOTP_PERIOD_MS - 1));
+  const remaining = totpWindowRemainingMs();
+  if (remaining >= minimum) return;
+  await page.waitForTimeout(remaining + 250);
+}
+
+async function waitForNextTotpWindow(page: Pick<Page, 'waitForTimeout'>) {
+  await page.waitForTimeout(totpWindowRemainingMs() + 250);
+}
+
 export function requireAdminMfaCredentials(prefix = 'E2E_FOUNDER') {
   const email = String(process.env[`${prefix}_EMAIL`] || '').trim().toLowerCase();
   const password = String(process.env[`${prefix}_PASSWORD`] || '').trim();
@@ -61,6 +83,22 @@ export function requireAdminMfaCredentials(prefix = 'E2E_FOUNDER') {
 
 function isFirebasePasswordResponse(response: Response) {
   return FIREBASE_PASSWORD_ENDPOINT.test(response.url());
+}
+
+function isFirebaseMfaFinalizeResponse(response: Response) {
+  return FIREBASE_MFA_FINALIZE_ENDPOINT.test(response.url());
+}
+
+async function submitMfaCode(page: Page) {
+  const responsePromise = page.waitForResponse(isFirebaseMfaFinalizeResponse, { timeout: 15_000 }).catch(() => null);
+  await page.getByTestId('admin-mfa-resolve-signin').click();
+  return responsePromise;
+}
+
+async function visibleMfaError(page: Page) {
+  const error = page.getByTestId('admin-mfa-signin-error');
+  await error.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
+  return String((await error.textContent().catch(() => '')) || '').trim();
 }
 
 export async function loginAdminWithRealMfa(
@@ -110,12 +148,14 @@ export async function loginAdminWithRealMfa(
       }
     }
     const totpSelected = page.getByTestId('admin-mfa-totp-selected');
-    if (await totpSelected.isVisible().catch(() => false)) {
+    const usesTotp = await totpSelected.isVisible().catch(() => false);
+    if (usesTotp) {
       if (!credentials.totpSecret) {
         throw new Error(`${credentials.label || 'Admin'} has a TOTP factor selected, but no TOTP secret was injected.`);
       }
       await page.getByTestId('admin-mfa-send-signin-code').click();
       await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 10_000 });
+      await waitForFreshTotpWindow(page);
       await page.getByTestId('admin-mfa-signin-code').fill(generateTotp(credentials.totpSecret));
     } else {
       if (!/^\d{6}$/.test(String(credentials.realPhoneCode || ''))) {
@@ -125,7 +165,24 @@ export async function loginAdminWithRealMfa(
       await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
       await page.getByTestId('admin-mfa-signin-code').fill(String(credentials.realPhoneCode));
     }
-    await page.getByTestId('admin-mfa-resolve-signin').click();
+
+    const firstMfaResponse = await submitMfaCode(page);
+    if (usesTotp && firstMfaResponse && !firstMfaResponse.ok()) {
+      const firstError = await visibleMfaError(page);
+      if (!/incorrect|expired/i.test(firstError)) {
+        throw new Error(`${credentials.label || 'Admin'} TOTP sign-in failed with Firebase status ${firstMfaResponse.status()}.`);
+      }
+
+      // A code can be generated just before its 30-second window closes. Retry
+      // exactly once in a distinct window; any second rejection is a credential
+      // synchronization failure, not something this test should hide.
+      await waitForNextTotpWindow(page);
+      await page.getByTestId('admin-mfa-signin-code').fill(generateTotp(credentials.totpSecret!));
+      const retryMfaResponse = await submitMfaCode(page);
+      if (retryMfaResponse && !retryMfaResponse.ok()) {
+        throw new Error(`${credentials.label || 'Admin'} TOTP was rejected in two consecutive windows. Reconcile E2E_FOUNDER_TOTP_SECRET with the enrolled Firebase Authenticator factor.`);
+      }
+    }
     await page.waitForURL(`${baseUrl}/dashboard`, { timeout: 45_000 });
     await page.waitForLoadState('domcontentloaded');
     await page.locator('.MuiCircularProgress-root').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => undefined);

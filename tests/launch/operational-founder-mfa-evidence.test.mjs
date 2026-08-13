@@ -93,6 +93,41 @@ test('verified Founder TOTP returns the unique server-verified factor identifier
   assert.equal(result.secondFactor, fixture.factorId);
 });
 
+test('Founder TOTP retries a boundary rejection once in a fresh window', async () => {
+  const fixture = fixtures();
+  let call = 0;
+  let timestamp = 60_000;
+  const waits = [];
+  const result = await signInWithRequiredTotpMfa({
+    apiKey: fixture.apiKey,
+    email: 'ceo@bin-groups.com',
+    password: fixture.password,
+    totpSecret: fixture.totpSecret,
+    nowImpl: () => timestamp,
+    waitImpl: async (milliseconds) => {
+      waits.push(milliseconds);
+      timestamp += milliseconds;
+    },
+    fetchImpl: async () => {
+      call += 1;
+      if (call === 1) {
+        return response({
+          mfaPendingCredential: fixture.pendingCredential,
+          mfaInfo: [{ mfaEnrollmentId: fixture.factorId, totpInfo: {} }],
+        });
+      }
+      if (call === 2) return response({ error: { message: 'INVALID_VERIFICATION_CODE' } }, 400);
+      return response({ idToken: jwt({ sub: fixture.uid }) });
+    },
+    verifyIdTokenImpl: async () => verifiedClaims(fixture),
+  });
+
+  assert.equal(call, 3);
+  assert.equal(waits.length, 1);
+  assert.ok(waits[0] >= 30_000);
+  assert.equal(result.secondFactorIdentifier, fixture.factorId);
+});
+
 test('Founder TOTP rejects unverified, non-Founder and mismatched-factor tokens', async () => {
   const cases = [
     [{ email_verified: false }, /canonical Founder email/],

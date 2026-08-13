@@ -63,6 +63,38 @@ test('live role dashboards do not make policy-incompatible fallback reads', () =
   assert.match(tenantSource, /if \(deduplicated\.size === 0 && user\.email\)/);
 });
 
+test('Owner portfolio and Tenant unit pages use rule-provable canonical bindings', () => {
+  const ownerSource = read('src/owner/pages/OwnerPropertiesPage.tsx');
+  const tenantSource = read('src/tenant/pages/TenantUnitPage.tsx');
+
+  assert.match(ownerSource, /where\('ownerId', '==', user\.uid\)/);
+  assert.match(ownerSource, /where\('ownerEmail', '==', email\)/);
+  assert.doesNotMatch(ownerSource, /where\('propertyId', '==', p\.id\)/);
+  assert.match(ownerSource, /passportsByPropertyId/);
+
+  assert.match(tenantSource, /const preferredUnitId = String\(user\?\.unitId \|\| ''\)\.trim\(\)/);
+  assert.match(tenantSource, /const preferredPropertyId = String\(user\?\.propertyId \|\| ''\)\.trim\(\)/);
+  assert.match(tenantSource, /getDoc\(doc\(db, 'units', preferredUnitId\)\)/);
+  assert.doesNotMatch(tenantSource, /snap\.docs\[0\]/);
+});
+
+test('Founder TOTP evidence is protected from near-boundary codes before deployment and in browser audits', () => {
+  const helper = read('tests/e2e/helpers/adminMfa.ts');
+  const serverHelper = read('scripts/lib/firebase-mfa-sign-in.mjs');
+  const workflow = read('.github/workflows/firebase-production-deploy.yml');
+  const preflight = read('scripts/verify-founder-totp-signin.mjs');
+
+  assert.match(helper, /waitForFreshTotpWindow/);
+  assert.match(helper, /waitForNextTotpWindow/);
+  assert.match(helper, /two consecutive windows/);
+  assert.match(serverHelper, /waitForFreshTotpWindow/);
+  assert.match(serverHelper, /waitForNextTotpWindow/);
+  assert.match(serverHelper, /after two consecutive TOTP windows/);
+  assert.match(workflow, /Verify canonical Founder TOTP sign-in before deploy/);
+  assert.match(preflight, /signInWithRequiredTotpMfa/);
+  assert.match(preflight, /sensitiveValuesExcluded: true/);
+});
+
 test('production workflow preserves failed live-audit diagnostics and reports the Admin App Check app ID', () => {
   const workflow = read('.github/workflows/firebase-production-deploy.yml');
   const appCheck = read('scripts/ensure-appcheck.mjs');

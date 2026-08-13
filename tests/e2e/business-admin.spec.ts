@@ -84,6 +84,9 @@ function requireLaunchCredentials() {
   }
 }
 
+// Keep the TOTP derivation in this protected proof as well as the shared
+// launch-audit helper. This makes the production evidence self-describing and
+// always derives the code immediately before it is submitted.
 function currentAdminMfaCode() {
   if (!FOUNDER_TOTP_SECRET) return REAL_MFA_CODE;
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -131,6 +134,10 @@ function isFirebasePasswordResponse(response: Response) {
   return /identitytoolkit\.googleapis\.com\/v1\/accounts:signInWithPassword/.test(response.url());
 }
 
+function isFirebaseMfaFinalizeResponse(response: Response) {
+  return /identitytoolkit\.googleapis\.com\/v2\/accounts\/mfaSignIn:finalize/.test(response.url());
+}
+
 async function collectDiagnostics(page: Page) {
   const errors: string[] = [];
   const failedRequests: string[] = [];
@@ -164,6 +171,28 @@ async function waitForLoader(page: Page) {
   await page.waitForTimeout(600);
 }
 
+async function waitForFreshTotpWindow(page: Page) {
+  const remaining = 30_000 - (Date.now() % 30_000);
+  if (remaining < 10_000) await page.waitForTimeout(remaining + 250);
+}
+
+async function waitForNextTotpWindow(page: Page) {
+  const remaining = 30_000 - (Date.now() % 30_000);
+  await page.waitForTimeout(remaining + 250);
+}
+
+async function submitMfaCode(page: Page) {
+  const responsePromise = page.waitForResponse(isFirebaseMfaFinalizeResponse, { timeout: 15_000 }).catch(() => null);
+  await page.getByTestId('admin-mfa-resolve-signin').click();
+  return responsePromise;
+}
+
+async function visibleMfaError(page: Page) {
+  const error = page.getByTestId('admin-mfa-signin-error');
+  await error.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
+  return String((await error.textContent().catch(() => '')) || '').trim();
+}
+
 async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<typeof collectDiagnostics>>) {
   let authResponse: Response | null = null;
   try {
@@ -195,10 +224,29 @@ async function loginWithRealMfa(page: Page, diagnostics: Awaited<ReturnType<type
         }
       }
     }
+
+    const usesTotp = await page.getByTestId('admin-mfa-totp-selected').isVisible().catch(() => false);
+    if (usesTotp && !FOUNDER_TOTP_SECRET) {
+      throw new Error('Canonical Founder selected a TOTP factor but E2E_FOUNDER_TOTP_SECRET is not configured.');
+    }
     await page.getByTestId('admin-mfa-send-signin-code').click();
     await expect(page.getByTestId('admin-mfa-signin-code')).toBeVisible({ timeout: 30_000 });
+    if (usesTotp) await waitForFreshTotpWindow(page);
     await page.getByTestId('admin-mfa-signin-code').fill(currentAdminMfaCode());
-    await page.getByTestId('admin-mfa-resolve-signin').click();
+
+    const firstMfaResponse = await submitMfaCode(page);
+    if (usesTotp && firstMfaResponse && !firstMfaResponse.ok()) {
+      const firstError = await visibleMfaError(page);
+      if (!/incorrect|expired/i.test(firstError)) {
+        throw new Error(`Canonical Founder TOTP sign-in failed with Firebase status ${firstMfaResponse.status()}.`);
+      }
+      await waitForNextTotpWindow(page);
+      await page.getByTestId('admin-mfa-signin-code').fill(currentAdminMfaCode());
+      const retryMfaResponse = await submitMfaCode(page);
+      if (retryMfaResponse && !retryMfaResponse.ok()) {
+        throw new Error('Canonical Founder TOTP was rejected in two consecutive windows. Reconcile E2E_FOUNDER_TOTP_SECRET with the enrolled Firebase Authenticator factor.');
+      }
+    }
 
     await page.waitForURL(`${ADMIN_BASE_URL}/dashboard`, { timeout: 45_000 });
     await waitForLoader(page);

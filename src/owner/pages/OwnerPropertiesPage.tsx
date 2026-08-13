@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Stack, Chip, CircularProgress, 
+import {
+    Alert, Box, Typography, Paper, Stack, Chip, CircularProgress,
     Grid, alpha, Button, IconButton, Divider
 } from '@mui/material';
 import { 
@@ -18,30 +18,75 @@ export default function OwnerPropertiesPage() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [properties, setProperties] = useState<any[]>([]);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         if (!user?.email) return;
 
         const email = user.email.toLowerCase();
         const propQ = query(collection(db, 'properties'), where('ownerEmail', '==', email));
+        let active = true;
         
-        const unsubscribe = onSnapshot(propQ, async (snap) => {
-            const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            
-            // Enrich with passport data for occupancy/revenue
-            const enriched = await Promise.all(props.map(async (p) => {
-                const passportQ = query(collection(db, 'propertyPassports'), where('propertyId', '==', p.id));
-                const passportSnap = await getDocs(passportQ);
-                const passport = passportSnap.docs[0]?.data() || {};
-                return { ...p, passport };
-            }));
-            
-            setProperties(enriched);
-            setLoading(false);
-        });
+        const unsubscribe = onSnapshot(
+            propQ,
+            async (snap) => {
+                const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                try {
+                    // Firestore evaluates list permissions against the query, not
+                    // against documents after the client filters them. Fetch only
+                    // owner-authorized passports, then associate them locally.
+                    const passportQueries = [
+                        getDocs(query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email))),
+                    ];
+                    if (user?.uid) {
+                        passportQueries.unshift(
+                            getDocs(query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid))),
+                        );
+                    }
+                    const passportSnapshots = await Promise.all(passportQueries);
+                    const passportsByPropertyId = new Map<string, any>();
+                    for (const passportSnapshot of passportSnapshots) {
+                        for (const passportDoc of passportSnapshot.docs) {
+                            const passport: any = { id: passportDoc.id, ...passportDoc.data() };
+                            const propertyId = String(passport.propertyId || '').trim();
+                            if (propertyId && !passportsByPropertyId.has(propertyId)) {
+                                passportsByPropertyId.set(propertyId, passport);
+                            }
+                        }
+                    }
 
-        return () => unsubscribe();
-    }, [user?.email]);
+                    if (!active) return;
+                    setProperties(props.map((property) => ({
+                        ...property,
+                        passport: passportsByPropertyId.get(property.id) || {},
+                    })));
+                    setLoadError('');
+                } catch (error) {
+                    // The primary property listener is still useful when a legacy
+                    // passport record is malformed. Do not leave the page in an
+                    // endless loading state or issue a policy-incompatible retry.
+                    if (!active) return;
+                    setProperties(props.map((property) => ({ ...property, passport: {} })));
+                    setLoadError('Portfolio metrics are temporarily unavailable. Property access remains active.');
+                    console.warn('[OwnerProperties] authorized passport enrichment failed:', error);
+                } finally {
+                    if (active) setLoading(false);
+                }
+            },
+            (error) => {
+                if (!active) return;
+                setProperties([]);
+                setLoadError('Unable to load the property portfolio. Please refresh and try again.');
+                setLoading(false);
+                console.warn('[OwnerProperties] property listener failed:', error);
+            },
+        );
+
+        return () => {
+            active = false;
+            unsubscribe();
+        };
+    }, [user?.email, user?.uid]);
 
     if (loading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
@@ -63,6 +108,8 @@ export default function OwnerPropertiesPage() {
                     <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
                 </Stack>
             </Box>
+
+            {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
 
             {properties.length === 0 ? (
                 <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
