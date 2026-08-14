@@ -243,6 +243,7 @@ jobs:
 
       - name: Verify controlled-pilot eligibility
         run: node scripts/launch-status.mjs
+
       - name: Upload live launch evidence
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -312,7 +313,7 @@ jobs:
             echo "::error::Incident confirmation phrase mismatch."
             exit 1
           fi
-          if [[ "$ROLLBACK_CONFIRMIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
+          if [[ "$ROLLBACK_CONFIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
             echo "::error::Rollback confirmation phrase mismatch."
             exit 1
           fi
