@@ -152,7 +152,8 @@ jobs:
             [[ "$PUBLIC_GATE" == "true" ]] || fail "Public mode requires the public-release gate."
             [[ "$incident_evidence_refs" != "ADMIN_MFA_BOOTSTRAP_HOSTING" ]] || fail "ADMIN_MFA_BOOTSTRAP_HOSTING is permitted only in bank-pilot mode."
             [[ "$hard_clearance_run_id" =~ ^[1-9][0-9]*$ ]] || fail "Public mode requires a numeric hard-clearance workflow run ID."
-            [[ -z "$stripe_session_id" && -z "$stripe_event_id" ]] || fail "Phase 1 manual public mode must not provide Stripe proof identifiers."
+            [[ "$stripe_session_id" =~ ^cs_live_[A-Za-z0-9_]+$ ]] || fail "Public mode requires a valid live Stripe checkout session ID."
+            [[ "$stripe_event_id" =~ ^evt_[A-Za-z0-9_]+$ ]] || fail "Public mode requires a valid Stripe webhook event ID."
           else
             [[ "$PUBLIC_GATE" == "false" ]] || fail "Bank-pilot mode requires the public-release gate to remain disabled."
             [[ -z "${hard_clearance_run_id}${stripe_session_id}${stripe_event_id}" ]] || fail "Bank-pilot mode requires all public-only evidence fields to remain blank."
