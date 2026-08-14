@@ -77,8 +77,9 @@ test('dispatcher keeps incident, rollback and public-mode validation fail closed
   assert.match(source, /incident_active_json must be a valid JSON array/);
   assert.match(source, /A rollback reason is required when the rollback hold is enabled/);
   assert.match(source, /Public mode requires a numeric hard-clearance workflow run ID/);
-  assert.match(source, /Public mode requires a valid live Stripe checkout session ID/);
-  assert.match(source, /Public mode requires a valid Stripe webhook event ID/);
+  assert.match(source, /Phase 1 manual public mode must not provide Stripe proof identifiers/);
+  assert.doesNotMatch(source, /Public mode requires a valid live Stripe checkout session ID/);
+  assert.doesNotMatch(source, /Public mode requires a valid Stripe webhook event ID/);
   assert.match(source, /Bank-pilot mode requires all public-only evidence fields to remain blank/);
 });
 
