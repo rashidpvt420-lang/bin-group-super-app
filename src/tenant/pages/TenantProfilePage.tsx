@@ -105,9 +105,20 @@ export default function TenantProfilePage() {
                 });
                 setResidences(nextResidences);
 
+                // Firestore only authorizes a direct property read through the
+                // canonical property binding on this profile.  Residence
+                // history can contain older, still-tenant-linked unit records
+                // whose property document is intentionally not readable. Keep
+                // those records visible using their embedded display fields,
+                // but never turn a stale link into a forbidden property read.
+                const canonicalPropertyIds = new Set(
+                    [userData.propertyId]
+                        .map((value) => String(value || '').trim())
+                        .filter(Boolean),
+                );
                 const propertyIds = [...new Set(
-                    nextResidences.map((item) => String(item.propertyId || '')).filter(Boolean),
-                )];
+                    nextResidences.map((item) => String(item.propertyId || '').trim()).filter(Boolean),
+                )].filter((propertyId) => canonicalPropertyIds.has(propertyId));
                 const propertyEntries = await Promise.all(propertyIds.map(async (propertyId) => {
                     const propertySnap = await getDoc(doc(db, 'properties', propertyId));
                     return [propertyId, propertySnap.exists() ? propertySnap.data() as PropertySummary : {}] as const;
