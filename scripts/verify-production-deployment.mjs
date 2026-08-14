@@ -252,10 +252,29 @@ const admin = await verifySite('admin', PRODUCTION.adminUrl, 'admin');
 
 const httpChecksOk = main.httpOk === true && admin.httpOk === true;
 const bundleVerified = main.bundleVerified === true && admin.bundleVerified === true;
+const liveEvidenceVerification =
+  process.env.GITHUB_ACTIONS === 'true' &&
+  process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests' &&
+  process.env.GITHUB_REF === 'refs/heads/main';
+const clientEvidenceEnv = liveEvidenceVerification && existing
+  ? {
+      ...process.env,
+      GITHUB_SHA: commitSha,
+      GITHUB_REPOSITORY: String(existing.repository || process.env.GITHUB_REPOSITORY || ''),
+      GITHUB_REF: String(existing.workflowRef || process.env.GITHUB_REF || ''),
+      GITHUB_RUN_ID: String(existing.workflowRunId || ''),
+      GITHUB_RUN_ATTEMPT: String(existing.workflowRunAttempt || ''),
+    }
+  : process.env;
 const clientRuntimeConfig = buildHostedClientConfigEvidence({
   main: main.runtimeSummary,
   admin: admin.runtimeSummary,
-}, { env: process.env, now: new Date() });
+}, { env: clientEvidenceEnv, now: new Date() });
+if (liveEvidenceVerification) {
+  clientRuntimeConfig.verificationWorkflowName = process.env.GITHUB_WORKFLOW;
+  clientRuntimeConfig.verificationWorkflowRunId = String(process.env.GITHUB_RUN_ID || '');
+  clientRuntimeConfig.verificationWorkflowRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null;
+}
 
 if (!httpChecksOk) fail('HTTP checks failed for main and/or admin hosting');
 if (!bundleVerified) fail('Firebase bundle/project/client configuration verification failed');
