@@ -16,7 +16,7 @@ test('protected business evidence separates exact Phase 1 payment policy from Fo
   assert.ok(payment.includes("approvedMethods: EXPECTED_METHODS"));
   assert.ok(payment.includes('bankTransferEnabled: false'));
   assert.ok(payment.includes('stripeEnabled: false'));
-  assert.ok(preparer.includes("process.env.GITHUB_WORKFLOW !== 'Firebase Production Deploy'"));
+  assert.ok(preparer.includes("['Firebase Production Deploy', 'Live Role Smoke Tests'].includes(protectedWorkflow)"));
   assert.ok(preparer.includes("process.env.GITHUB_REF !== 'refs/heads/main'"));
   assert.ok(preparer.includes("E2E_PROPERTY_ID = 'e2e-live-role-property'"));
   assert.ok(preparer.includes('admin.auth().getUserByEmail(founderEmail)'));
