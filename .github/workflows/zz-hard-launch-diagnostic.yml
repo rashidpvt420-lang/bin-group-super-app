@@ -1,0 +1,43 @@
+name: Hard Launch Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/zz-hard-launch-diagnostic.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect exact-main production and live-evidence history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          echo "MAIN_SHA=$main_sha"
+
+          production_runs="$(gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+          echo "PRODUCTION_RUNS_FOR_MAIN_SHA"
+          jq -r --arg sha "$main_sha" '.workflow_runs[] | select(.head_sha == $sha) | [.id,.run_number,.status,.conclusion,.created_at,.updated_at,.html_url] | @tsv' <<<"$production_runs"
+
+          live_runs="$(gh api "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+          echo "LIVE_ROLE_SMOKE_RUNS_FOR_MAIN_SHA"
+          mapfile -t ids < <(jq -r --arg sha "$main_sha" '.workflow_runs[] | select(.head_sha == $sha) | .id' <<<"$live_runs")
+          if [[ "${#ids[@]}" -eq 0 ]]; then
+            echo "NO_LIVE_ROLE_SMOKE_RUNS_FOR_MAIN_SHA"
+          fi
+
+          for run_id in "${ids[@]}"; do
+            run="$(jq -c --argjson id "$run_id" '.workflow_runs[] | select(.id == $id)' <<<"$live_runs")"
+            jobs="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+            job_names="$(jq -r '[.jobs[].name] | join(" | ")' <<<"$jobs")"
+            echo "LIVE_RUN id=$(jq -r '.id' <<<"$run") number=$(jq -r '.run_number' <<<"$run") status=$(jq -r '.status' <<<"$run") conclusion=$(jq -r '.conclusion // ""' <<<"$run") created=$(jq -r '.created_at' <<<"$run") updated=$(jq -r '.updated_at' <<<"$run") jobs=$job_names url=$(jq -r '.html_url' <<<"$run")"
+          done
