@@ -34,6 +34,7 @@
   "scripts": {
     "start": "craco start",
     "dev": "npm start",
+    "prebuild": "node ../../scripts/write-admin-firebase-messaging-config.mjs",
     "build": "craco build",
     "postbuild": "node ../../scripts/verify-admin-build-assets.mjs",
     "test": "craco test",

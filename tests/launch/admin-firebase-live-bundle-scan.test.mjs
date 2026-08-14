@@ -71,11 +71,16 @@ test('Admin Firebase verifier follows lazy-loaded same-origin JavaScript chunks'
   }
 });
 
-test('Admin Messaging worker carries the canonical Firebase app configuration', () => {
+test('Admin Messaging worker loads generated canonical Firebase configuration', () => {
   const worker = readFileSync(path.join(root, 'apps/admin-panel/public/firebase-messaging-sw.js'), 'utf8');
+  const generator = readFileSync(path.join(root, 'scripts/write-admin-firebase-messaging-config.mjs'), 'utf8');
+  assert.match(worker, /importScripts\('\/firebase-messaging-config\.js'\)/);
+  assert.match(worker, /firebase\.initializeApp\(self\.__BIN_GROUP_ADMIN_FIREBASE_CONFIG\)/);
   assert.match(worker, /firebasejs\/10\.14\.1\/firebase-app-compat\.js/);
-  assert.match(worker, /projectId:\s*'bin-group-57c60'/);
-  assert.match(worker, /storageBucket:\s*'bin-group-57c60\.firebasestorage\.app'/);
-  assert.match(worker, /appId:\s*'1:123413252227:web:285cb53bc26626d699f3b6'/);
-  assert.doesNotMatch(worker, /REPLACED_BY_BUILD|admin-panel-id/);
+  assert.doesNotMatch(worker, /AIza|REPLACED_BY_BUILD|admin-panel-id/);
+  assert.match(generator, /REACT_APP_FIREBASE_API_KEY/);
+  assert.match(generator, /projectId:\s*'bin-group-57c60'/);
+  assert.match(generator, /storageBucket:\s*'bin-group-57c60\.firebasestorage\.app'/);
+  assert.match(generator, /appId:\s*'1:123413252227:web:285cb53bc26626d699f3b6'/);
+  assert.match(generator, /__BIN_GROUP_ADMIN_FIREBASE_CONFIG/);
 });
