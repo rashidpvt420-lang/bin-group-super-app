@@ -1,9 +1,10 @@
 name: One-shot Exact-SHA Live Evidence Dispatch
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/hard-public-phase1-dispatch
+      - main
+    types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/zz-dispatch-live-evidence-once.yml
 
@@ -13,6 +14,10 @@ permissions:
 
 jobs:
   dispatch:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/hard-public-phase1-dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch exact deployed SHA live evidence once
