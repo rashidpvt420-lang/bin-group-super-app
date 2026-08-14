@@ -21,7 +21,8 @@ test('completion email ignores client-written fields and retries transient Auth 
 test('Tenant lifecycle helpers are invoked in the executable proof chain', () => {
   const source = read('tests/e2e/business-tenant.spec.ts');
   assert.match(source, /await completeThroughTechnicianUi\(browser, created\.ticketId\)/);
-  assert.match(source, /await assertTenantDeliveryReceipt\(created\.ticketId\)/);
+  assert.match(source, /await assertTenantDeliveryReceipt\(created\.ticketId, requireProviderReceipt\)/);
+  assert.match(source, /createAndComplete\(browser, page, 'dispute', false\)/);
   assert.match(source, /toMatch\(\/CLOSED\\\|true\\\|APPROVED\\\|true\/i/);
 });
 

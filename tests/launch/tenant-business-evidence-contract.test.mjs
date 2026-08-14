@@ -21,6 +21,10 @@ test('Tenant main business evidence requires provider delivery, dispute, correct
   assert.match(source, /assertTenantDeliveryReceipt/);
   assert.match(source, /pushDeliveryState === 'SUCCESS'/);
   assert.match(source, /mail\?\.delivery\?\.state === 'SUCCESS'/);
+  assert.match(source, /trigger:onTenantCompletionReviewRequired/);
+  assert.match(source, /firebase_auth_verified_email/);
+  assert.match(source, /createAndComplete\(browser, page, 'dispute', false\)/);
+  assert.match(source, /Last observed state/);
   assert.match(source, /Tenant dispute opens Admin review/);
   assert.match(source, /TENANT_DISPUTED_TICKET/);
   assert.match(source, /Tenant correction submission and immutable history/);
