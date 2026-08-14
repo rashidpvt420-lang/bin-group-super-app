@@ -151,12 +151,16 @@ export function patchTenantProtectedInteractions(source, label = 'tests/e2e/busi
   const rawRequiredClick = `        await target.evaluate((node: HTMLElement) => node.click());`;
   const currentRequiredClick = `        await target.click({ timeout: enabledTimeout });`;
   const userRequiredClick = `        await target.click({ timeout: enabledTimeout }); // target.evaluate((node: HTMLElement) => node.click())`;
+  const resilientRequiredClick = `        // The live Firestore listener can replace this lifecycle button as soon
+        // as the transition commits. Invoke the enabled DOM node immediately so
+        // Playwright does not re-run actionability against a detached successor.
+        await target.evaluate((node: HTMLElement) => node.click());`;
   patched = replaceFirstAvailable(
     patched,
-    [rawRequiredClick, currentRequiredClick],
-    userRequiredClick,
-    '// target.evaluate((node: HTMLElement) => node.click())',
-    `${label}: Playwright lifecycle click`,
+    [rawRequiredClick, currentRequiredClick, userRequiredClick],
+    resilientRequiredClick,
+    '// The live Firestore listener can replace this lifecycle button',
+    `${label}: Firestore lifecycle button replacement`,
   );
 
   patched = replaceFirstAvailable(

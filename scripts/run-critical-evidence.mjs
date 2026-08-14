@@ -157,6 +157,7 @@ function runPlaywrightSuite(suiteKey, def) {
   const reportPath = path.join(artifactsDir, `${def.suiteName}-${commitSha.slice(0, 8)}.json`);
   const diagPath = `${reportPath}.stdio.log`;
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const outputDir = path.join('test-results', suiteKey);
 
   const envGate = spawnSync(process.execPath, ['scripts/verify-e2e-env.mjs'], { stdio: 'inherit', env: process.env });
   if ((envGate.status ?? 1) !== 0) return { ok: false, exitCode: envGate.status ?? 1, startedAt, finishedAt: new Date().toISOString() };
@@ -183,6 +184,7 @@ function runPlaywrightSuite(suiteKey, def) {
     'test',
     ...def.specs,
     '--project=chromium-desktop',
+    `--output=${outputDir}`,
     '--reporter=json',
   ];
   const env = {

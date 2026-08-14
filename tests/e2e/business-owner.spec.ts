@@ -137,11 +137,13 @@ async function acceptLegalAgreementIfRequired(page: Page) {
 
   const content = agreement.getByTestId('legal-agreement-content');
   await expect(content, 'Owner legal agreement must expose its scrollable content').toBeVisible({ timeout: 10_000 });
-  const agree = agreement.getByRole('button', { name: /I AGREE & ENTER/i });
+  const agree = agreement.getByTestId('legal-agreement-accept');
+  await expect(agree).toHaveAccessibleName(/I AGREE & ENTER/i);
   await expect.poll(async () => {
     // Fonts and responsive Dialog layout can change the scroll height after the
     // first synthetic scroll. Re-apply the real end position until React has
     // observed the final layout instead of racing one fire-and-forget event.
+    await agreement.getByTestId('legal-agreement-end').scrollIntoViewIfNeeded();
     await content.evaluate((node) => {
       node.scrollTop = node.scrollHeight;
       node.dispatchEvent(new Event('scroll', { bubbles: true }));

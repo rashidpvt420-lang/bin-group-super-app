@@ -29,10 +29,11 @@ test('Tenant and Technician lifecycle evidence survives live Firestore button re
   ]);
 
   for (const source of [tenant, technician]) {
-    assert.match(source, /target\.evaluate\(\(node: HTMLElement\) => node\.click\(\)\)/);
+    assert.match(source, /^\s*await target\.evaluate\(\(node: HTMLElement\) => node\.click\(\)\);\s*$/m);
     assert.match(source, /button:has-text\(\"Accept Mission\"\)/);
     assert.match(source, /button:has-text\(\"On The Way\"\)/);
     assert.match(source, /button:has-text\(\"Arrived\"\)/);
     assert.match(source, /page\.reload\(\{ waitUntil: 'domcontentloaded' \}\)/);
   }
+  assert.doesNotMatch(tenant, /^\s*await target\.click\(\{ timeout: enabledTimeout \}\);/m);
 });

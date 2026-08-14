@@ -367,7 +367,7 @@ test('failed business evidence uploads Playwright diagnostics before later gates
     workflow.indexOf('      - name: Run current-commit live launch audit'),
   );
   assert.match(block, /if:\s*\$\{\{\s*failure\(\)\s*\}\}/);
-  assert.match(block, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\s+# v4/);
+  assert.match(block, /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\s+# v7\.0\.1/);
   assert.match(block, /launch_package\/artifacts\/\*\.json/);
   assert.match(block, /launch_package\/artifacts\/\*\.stdio\.log/);
 });

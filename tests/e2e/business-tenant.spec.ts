@@ -121,7 +121,10 @@ async function clickRequired(page: Page, selectors: string[], label: string, ena
       if (!await target.isVisible({ timeout: 500 }).catch(() => false)) continue;
       try {
         await expect(target, `${label} must be enabled`).toBeEnabled({ timeout: enabledTimeout });
-        await target.click({ timeout: enabledTimeout }); // target.evaluate((node: HTMLElement) => node.click())
+        // The live Firestore listener can replace this lifecycle button as soon
+        // as the transition commits. Invoke the enabled DOM node immediately so
+        // Playwright does not re-run actionability against a detached successor.
+        await target.evaluate((node: HTMLElement) => node.click());
         return target;
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
@@ -174,7 +177,11 @@ async function convergeTechnicianAction(
       const action = page.locator(selector).first();
       if (!await action.isVisible({ timeout: 500 }).catch(() => false)) continue;
       if (!await action.isEnabled({ timeout: 500 }).catch(() => false)) continue;
-      await action.click({ timeout: 5_000 });
+      // A Firestore snapshot can replace the lifecycle control between an
+      // actionability probe and a normal Playwright click. Invoke the verified
+      // enabled node immediately; the following Firestore poll proves whether
+      // the authoritative transition actually committed.
+      await action.evaluate((node: HTMLElement) => node.click());
       return;
     }
 

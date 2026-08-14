@@ -55,6 +55,19 @@ test('workflow uses least-privilege permissions', () => {
   assert.match(workflow, /^\s*id-token:\s*write\s*$/m);
 });
 
+test('production workflow pins Node 24 action runtimes', () => {
+  const expected = [
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
+    'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0',
+    'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
+    'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3',
+  ];
+  expected.forEach((action) => assert.ok(workflow.includes(action), `missing reviewed action pin: ${action}`));
+  assert.doesNotMatch(workflow, /actions\/(?:checkout|setup-node)@v4/);
+  assert.doesNotMatch(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
+  assert.doesNotMatch(workflow, /google-github-actions\/auth@v2/);
+});
+
 test('dispatch values are passed through step environment variables', () => {
   assert.match(workflow, /DISPATCH_CONFIRMATION:\s*\$\{\{\s*inputs\.confirmation\s*\}\}/);
   assert.match(workflow, /EXPECTED_COMMIT_SHA:\s*\$\{\{\s*inputs\.expected_commit_sha\s*\}\}/);
