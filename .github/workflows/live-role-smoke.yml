@@ -204,6 +204,12 @@ jobs:
         env:
           E2E_STRICT_ROLES: 'true'
           E2E_REQUIRE_FOUNDER_MFA: 'true'
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: |
           node scripts/verify-e2e-env.mjs
           node scripts/ensure-appcheck.mjs
@@ -237,7 +243,6 @@ jobs:
 
       - name: Verify controlled-pilot eligibility
         run: node scripts/launch-status.mjs
-
       - name: Upload live launch evidence
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -307,7 +312,7 @@ jobs:
             echo "::error::Incident confirmation phrase mismatch."
             exit 1
           fi
-          if [[ "$ROLLBACK_CONFIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
+          if [[ "$ROLLBACK_CONFIRMIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
             echo "::error::Rollback confirmation phrase mismatch."
             exit 1
           fi
