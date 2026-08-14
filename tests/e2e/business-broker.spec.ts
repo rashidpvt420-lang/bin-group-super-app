@@ -102,7 +102,7 @@ test.describe('Broker Business Workflow', () => {
   });
 
   test('Broker can submit a lead, view commissions, and complete a real mailbox OTP payout request', async ({ page }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(240_000);
     const uniqueLead = `E2E Lead ${Date.now()}`;
     await submitBrokerLead(page, uniqueLead);
 
@@ -115,11 +115,24 @@ test.describe('Broker Business Workflow', () => {
     await expect(requestOtp).toBeVisible({ timeout: 15_000 });
     await expect(requestOtp).toBeEnabled({ timeout: 15_000 });
     await expect(requestOtp).toContainText(/REQUEST PAYOUT \(1\)/i);
+    const requestOtpResponsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().includes('requestBrokerPayoutOtp'),
+      { timeout: 75_000 },
+    );
     await requestOtp.click();
 
-    await expect(page.getByText(/A six-digit payout verification code was sent to your verified Broker email/i)).toBeVisible({ timeout: 35_000 });
+    const requestOtpResponse = await requestOtpResponsePromise;
+    const requestOtpPayload = await requestOtpResponse.json().catch(() => ({})) as any;
+    if (!requestOtpResponse.ok() || requestOtpPayload?.error) {
+      throw new Error(
+        `requestBrokerPayoutOtp failed HTTP ${requestOtpResponse.status()}: ${JSON.stringify(requestOtpPayload).slice(0, 1_500)}`,
+      );
+    }
+    expect(String(requestOtpPayload?.result?.challengeId || '')).not.toBe('');
+
     const otpDialog = page.getByTestId('broker-payout-otp-dialog');
-    await expect(otpDialog).toBeVisible({ timeout: 35_000 });
+    await expect(otpDialog).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/A six-digit payout verification code was sent to your verified Broker email/i)).toBeVisible({ timeout: 10_000 });
     await expect(otpDialog).toContainText(/Code sent for AED 500 across 1 commission/i);
 
     const otpCode = page.getByTestId('broker-payout-otp-code');

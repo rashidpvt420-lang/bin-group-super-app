@@ -135,15 +135,23 @@ async function acceptLegalAgreementIfRequired(page: Page) {
   const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
   if (!await agreement.isVisible({ timeout: 5_000 }).catch(() => false)) return;
 
-  const content = agreement.locator('.MuiDialogContent-root').first();
+  const content = agreement.getByTestId('legal-agreement-content');
   await expect(content, 'Owner legal agreement must expose its scrollable content').toBeVisible({ timeout: 10_000 });
-  await content.evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
-    node.dispatchEvent(new Event('scroll', { bubbles: true }));
-  });
-
   const agree = agreement.getByRole('button', { name: /I AGREE & ENTER/i });
-  await expect(agree, 'Owner legal consent must become enabled after the full agreement is reviewed').toBeEnabled({ timeout: 10_000 });
+  await expect.poll(async () => {
+    // Fonts and responsive Dialog layout can change the scroll height after the
+    // first synthetic scroll. Re-apply the real end position until React has
+    // observed the final layout instead of racing one fire-and-forget event.
+    await content.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+      node.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+    return agree.isEnabled().catch(() => false);
+  }, {
+    timeout: 20_000,
+    intervals: [100, 250, 500, 1_000],
+    message: 'Owner legal consent must become enabled after the full agreement is reviewed',
+  }).toBe(true);
   await agree.click();
   await expect(agreement).not.toBeVisible({ timeout: 20_000 });
   await expect(page.locator('body')).not.toContainText(/SOVEREIGN INSTITUTIONAL AGREEMENT/i, { timeout: 10_000 });

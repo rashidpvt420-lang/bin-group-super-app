@@ -65,6 +65,9 @@ test('Broker live evidence fetches a real OTP from Gmail and submits it — canc
   // Must issue the OTP request
   assert.match(brokerSpec, /broker-payout-request-otp/);
   assert.ok(brokerSpec.includes('REQUEST PAYOUT \\(1\\)'), 'live evidence must require exactly one prepared commission');
+  assert.match(brokerSpec, /requestOtpResponsePromise/);
+  assert.match(brokerSpec, /response\.request\(\)\.method\(\) === 'POST'/);
+  assert.match(brokerSpec, /requestBrokerPayoutOtp failed HTTP/);
   assert.match(brokerSpec, /broker-payout-otp-dialog/);
   assert.match(brokerSpec, /broker-payout-otp-code/);
 
