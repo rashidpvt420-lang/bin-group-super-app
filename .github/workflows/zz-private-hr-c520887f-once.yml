@@ -1,0 +1,85 @@
+name: One-shot Exact-SHA Private-HR Dry Run c520887f
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+    paths:
+      - .github/workflows/zz-private-hr-c520887f-once.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'ops/private-hr-c520887f'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Dispatch and verify exact-main Private-HR dry run once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: c520887f32df3f6313c2da0198f97a65fd7e1a55
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved from $TARGET_SHA to $current_main; refusing stale Private-HR evidence."
+            exit 1
+          }
+
+          runs_url="repos/$REPOSITORY/actions/workflows/private-hr-migration-dispatch-current-main.yml/runs?event=workflow_dispatch&branch=main&per_page=100"
+          baseline="$(gh api "$runs_url" | jq -c '[.workflow_runs[].id]')"
+
+          jq -n --arg ref main '{ref:$ref,inputs:{mode:"dry-run",confirmation:"REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP"}}' > dispatch.json
+          gh api --method POST "repos/$REPOSITORY/actions/workflows/private-hr-migration-dispatch-current-main.yml/dispatches" --input dispatch.json
+
+          run_id=""
+          for _ in $(seq 1 60); do
+            sleep 5
+            runs="$(gh api "$runs_url")"
+            run_id="$(jq -r --arg sha "$TARGET_SHA" --argjson old "$baseline" '[.workflow_runs[] | select(.head_sha == $sha) | select((.id as $id | ($old | index($id))) == null)] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            [[ "$run_id" =~ ^[0-9]+$ ]] && break
+          done
+          [[ "$run_id" =~ ^[0-9]+$ ]] || { echo '::error::Private-HR dispatch accepted but exact-SHA run not found.'; exit 1; }
+          echo "PRIVATE_HR_RUN_ID=$run_id"
+
+          for _ in $(seq 1 180); do
+            state="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.status')"
+            conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.conclusion // ""')"
+            if [[ "$state" == 'completed' ]]; then
+              [[ "$conclusion" == 'success' ]] || { echo "::error::Private-HR run $run_id concluded $conclusion"; exit 1; }
+              break
+            fi
+            sleep 10
+          done
+
+          artifact_name="private-hr-migration-dry-run-$TARGET_SHA"
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+          artifact_id="$(jq -r --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]] || { echo "::error::Missing exact-SHA Private-HR artifact $artifact_name"; exit 1; }
+          gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > private-hr.zip
+          mkdir private-hr
+          unzip -q private-hr.zip -d private-hr
+          report="$(find private-hr -type f -name private-hr-migration.json -print -quit)"
+          [[ -n "$report" && -s "$report" ]]
+          jq -e --arg sha "$TARGET_SHA" '
+            .schemaVersion == 2 and
+            .commitSha == $sha and
+            .mode == "DRY_RUN" and
+            .failureCount == 0 and
+            .executionRequired == false and
+            .recommendedNextAction == "SKIP_EXECUTE_PROCEED_TO_BANK_PILOT" and
+            .sensitiveValuesLogged == false and
+            .rawIdentifiersLogged == false and
+            .hardLaunchClaim == false
+          ' "$report" >/dev/null
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$TARGET_SHA" ]] || { echo '::error::main moved during Private-HR validation.'; exit 1; }
+          echo "PRIVATE_HR_VALIDATED=true"
