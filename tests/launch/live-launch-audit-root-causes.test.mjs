@@ -58,9 +58,20 @@ test('launch fixtures preserve rules-authorized owner and tenant links', () => {
 test('live role dashboards do not make policy-incompatible fallback reads', () => {
   const ownerSource = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
   const tenantSource = read('src/tenant/pages/TenantProfilePage.tsx');
+  const correctionFixtureSource = read('scripts/prepare-tenant-correction-e2e.mjs');
   assert.doesNotMatch(ownerSource, /getCollectionDocs\('contracts', 'emailDelivery\.recipient'/);
   assert.match(tenantSource, /where\('currentTenantId', '==', user\.uid\)/);
   assert.match(tenantSource, /if \(deduplicated\.size === 0 && user\.email\)/);
+  assert.match(tenantSource, /const canonicalPropertyIds = new Set/);
+  assert.match(tenantSource, /\[userData\.propertyId\]/);
+  assert.match(tenantSource, /filter\(\(propertyId\) => canonicalPropertyIds\.has\(propertyId\)\)/);
+  assert.doesNotMatch(tenantSource, /userData\.assignedPropertyId/);
+  assert.match(correctionFixtureSource, /canonical propertyId and unitId from the live-role fixture/);
+  assert.match(correctionFixtureSource, /const legacyUnitRef = db\.collection\('units'\)\.doc\(`e2e-launch-unit-\$\{tenantUid\}`\)/);
+  assert.match(correctionFixtureSource, /legacyUnitSnap\.data\(\)\?\.e2eLaunchSeed === true/);
+  assert.doesNotMatch(correctionFixtureSource, /collection\('properties'\)\.doc\([^\n]+\)\.set/);
+  assert.doesNotMatch(correctionFixtureSource, /collection\('units'\)\.doc\([^\n]+\)\.set/);
+  assert.doesNotMatch(correctionFixtureSource, /const e2ePropertyId = 'e2e-launch-property'/);
 });
 
 test('Owner portfolio and Tenant unit pages use rule-provable canonical bindings', () => {
