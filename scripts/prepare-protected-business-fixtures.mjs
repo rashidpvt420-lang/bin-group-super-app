@@ -18,7 +18,10 @@ const fail = (message) => {
 };
 
 if (process.env.GITHUB_ACTIONS !== 'true') fail('GitHub Actions is required.');
-if (process.env.GITHUB_WORKFLOW !== 'Firebase Production Deploy') fail('Firebase Production Deploy workflow is required.');
+const protectedWorkflow = text(process.env.GITHUB_WORKFLOW);
+if (!['Firebase Production Deploy', 'Live Role Smoke Tests'].includes(protectedWorkflow)) {
+  fail('Protected business fixtures require Firebase Production Deploy or Live Role Smoke Tests.');
+}
 if (process.env.GITHUB_REF !== 'refs/heads/main') fail('refs/heads/main is required.');
 if (text(process.env.DEPLOYMENT_ENVIRONMENT).toLowerCase() !== 'production') fail('DEPLOYMENT_ENVIRONMENT=production is required.');
 if (text(process.env.PAYMENT_POLICY).toLowerCase() !== 'phase1-manual') fail('PAYMENT_POLICY=phase1-manual is required.');
