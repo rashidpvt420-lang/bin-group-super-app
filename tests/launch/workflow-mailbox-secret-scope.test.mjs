@@ -107,6 +107,26 @@ test('every Admin production strict-live consumer receives protected Gmail OAuth
   }
 });
 
+test('every Live Role Smoke strict-live consumer receives protected Gmail OAuth secrets', () => {
+  const source = readFileSync('.github/workflows/live-role-smoke.yml', 'utf8');
+  const consumers = [
+    {
+      name: 'Validate role credentials and App Check',
+      command: /node scripts\/verify-e2e-env\.mjs/,
+    },
+    {
+      name: 'Run every required live evidence suite',
+      command: /node scripts\/run-critical-evidence\.mjs --suite all-required/,
+    },
+  ];
+
+  for (const consumer of consumers) {
+    const step = workflowStep(source, consumer.name);
+    assert.match(step, consumer.command, `${consumer.name} no longer invokes the expected strict-live guard path`);
+    assertOAuthMappings(step, `Live Role Smoke: ${consumer.name}`);
+  }
+});
+
 test('public live-proof environment validates OAuth credentials without persisting them', () => {
   const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const step = workflowStep(source, 'Create E2E environment for live proofs');
