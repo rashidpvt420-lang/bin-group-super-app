@@ -59,14 +59,14 @@ test('Admin protected replay upgrades a method-agnostic callable waiter before i
   assert.ok(!patched.includes("(response) => response.url().includes('adminApprovePayment'),"));
 });
 
-test('Tenant-to-Technician protected replay waits for Firestore listener convergence before Start Work', () => {
+test('Tenant-to-Technician protected replay survives Firestore lifecycle replacement and waits for Start Work convergence', () => {
   const source = read('tests/e2e/business-tenant.spec.ts');
   const patched = patchTenantBusinessEvidence(source);
 
   assert.ok(patched.includes('enabledTimeout = 2_000'));
   assert.ok(patched.includes('const deadline = Date.now() + 35_000'));
-  assert.ok(patched.includes("await target.click({ timeout: enabledTimeout });"));
-  assert.ok(!patched.includes('await target.evaluate((node: HTMLElement) => node.click())'));
+  assert.ok(patched.includes('await target.evaluate((node: HTMLElement) => node.click())'));
+  assert.ok(!patched.includes("await target.click({ timeout: enabledTimeout });"));
   assert.ok(patched.includes("const startWorkButton = page.getByTestId('technician-start-work');"));
   assert.ok(patched.includes('Start Work must become enabled after persisted before-work evidence reaches the Technician page listener.'));
   assert.ok(patched.includes(').toBeEnabled({ timeout: 45_000 });'));

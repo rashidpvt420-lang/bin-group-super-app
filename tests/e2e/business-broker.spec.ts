@@ -115,12 +115,12 @@ test.describe('Broker Business Workflow', () => {
     await expect(requestOtp).toBeVisible({ timeout: 15_000 });
     await expect(requestOtp).toBeEnabled({ timeout: 15_000 });
     await expect(requestOtp).toContainText(/REQUEST PAYOUT \(1\)/i);
+    const otpStartMs = Date.now();
     const requestOtpResponsePromise = page.waitForResponse(
       (response) => response.request().method() === 'POST' && response.url().includes('requestBrokerPayoutOtp'),
       { timeout: 75_000 },
     );
     await requestOtp.click();
-
     const requestOtpResponse = await requestOtpResponsePromise;
     const requestOtpPayload = await requestOtpResponse.json().catch(() => ({})) as any;
     if (!requestOtpResponse.ok() || requestOtpPayload?.error) {
@@ -139,7 +139,6 @@ test.describe('Broker Business Workflow', () => {
     await expect(otpCode).toHaveValue('');
     await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
 
-    const otpStartMs = Date.now();
     const otp = await getLatestOtp('broker', {
       timeoutMs: 90_000,
       afterMs: otpStartMs - 10_000,

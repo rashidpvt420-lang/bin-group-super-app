@@ -3,6 +3,7 @@ import * as crypto from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { sendSmtpWithRetry } from "./smtpDeliveryRetry";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -165,14 +166,14 @@ async function deliverOtp(email: string, otp: string, amount: number, count: num
     secure: port === 465,
     auth: { user, pass },
   });
-  const info = await transport.sendMail({
+  const { value: info, attempts } = await sendSmtpWithRetry(() => transport.sendMail({
     from: process.env.MAIL_FROM || process.env.SMTP_FROM || "BIN GROUP <ceo@bin-groups.com>",
     to: email,
     subject: "BIN GROUP payout verification code",
     text: `Your payout code is ${otp}. It authorizes AED ${amount.toFixed(2)} across ${count} commission(s) and expires in 10 minutes. Verification reference: ${correlationId}.`,
-  });
+  }));
   if (!text(info.messageId)) throw new HttpsError("internal", "OTP provider did not confirm delivery.");
-  return text(info.messageId);
+  return { messageId: text(info.messageId), attempts };
 }
 
 export const requestBrokerPayoutOtp = onCall({
@@ -189,7 +190,7 @@ export const requestBrokerPayoutOtp = onCall({
   const ref = db.collection("broker_payout_otps").doc();
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
   const correlationId = crypto.randomUUID();
-  const messageId = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length, correlationId);
+  const delivery = await deliverOtp(broker.email, otp, commissions.amount, commissions.ids.length, correlationId);
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OTP_TTL_MS);
   await db.runTransaction(async (tx) => {
     tx.set(ref, {
@@ -207,7 +208,7 @@ export const requestBrokerPayoutOtp = onCall({
       attempts: 0,
       status: "PENDING",
       expiresAt,
-      delivery: { messageId, sentAt: FieldValue.serverTimestamp() },
+      delivery: { messageId: delivery.messageId, attempts: delivery.attempts, sentAt: FieldValue.serverTimestamp() },
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

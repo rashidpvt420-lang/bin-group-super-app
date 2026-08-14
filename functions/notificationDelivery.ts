@@ -462,7 +462,11 @@ export const createNotification = onCall(
   },
 );
 
-export const deliverNotificationPush = onDocumentCreated("notifications/{notificationId}", async (event) => {
+export const deliverNotificationPush = onDocumentCreated({
+    document: "notifications/{notificationId}",
+    region: "europe-west3",
+    retry: true,
+}, async (event) => {
     const snap = event.data;
     if (!snap) return null;
 

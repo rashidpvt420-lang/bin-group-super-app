@@ -22,6 +22,18 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
   const [loading, setLoading] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const markAgreementReviewed = useCallback(() => {
+    // Review readiness is intentionally monotonic. A late ResizeObserver
+    // callback must not disable consent after the user already reached the end.
+    setScrolledToBottom(true);
+    try {
+      sessionStorage.setItem(`bin_legal_terms_reviewed_v7_1_${userId || 'guest'}`, 'true');
+    } catch {
+      // Ignore storage errors in restricted environments.
+    }
+  }, [userId]);
 
   const evaluateScrollReadiness = useCallback(() => {
     if (contentRef.current) {
@@ -30,12 +42,14 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
       // without a scrollbar. In that case no scroll event is emitted, so the
       // consent action must become available immediately rather than remain
       // permanently disabled.
-      setScrolledToBottom(
+      if (
         scrollHeight <= clientHeight + 20 ||
-        scrollTop + clientHeight >= scrollHeight - 20,
-      );
+        scrollTop + clientHeight >= scrollHeight - 20
+      ) {
+        markAgreementReviewed();
+      }
     }
-  }, []);
+  }, [markAgreementReviewed]);
 
   useEffect(() => {
     try {
@@ -50,6 +64,16 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
   }, [userId, onAccepted]);
 
   useEffect(() => {
+    let reviewed = false;
+    try {
+      reviewed = sessionStorage.getItem(`bin_legal_terms_reviewed_v7_1_${userId || 'guest'}`) === 'true';
+    } catch {
+      // Ignore storage errors in restricted environments.
+    }
+    setScrolledToBottom(reviewed);
+  }, [userId]);
+
+  useEffect(() => {
     const content = contentRef.current;
     if (!content) return undefined;
     const frame = window.requestAnimationFrame(evaluateScrollReadiness);
@@ -57,11 +81,23 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
       ? new ResizeObserver(evaluateScrollReadiness)
       : null;
     observer?.observe(content);
+    content.addEventListener('scroll', evaluateScrollReadiness, { passive: true });
+    const endObserver = typeof IntersectionObserver !== 'undefined' && endRef.current
+      ? new IntersectionObserver(
+        ([entry]) => {
+          if (entry?.isIntersecting) markAgreementReviewed();
+        },
+        { root: content, threshold: 0.75 },
+      )
+      : null;
+    if (endObserver && endRef.current) endObserver.observe(endRef.current);
     return () => {
       window.cancelAnimationFrame(frame);
       observer?.disconnect();
+      endObserver?.disconnect();
+      content.removeEventListener('scroll', evaluateScrollReadiness);
     };
-  }, [evaluateScrollReadiness]);
+  }, [evaluateScrollReadiness, markAgreementReviewed]);
 
   const handleAgree = () => {
     if (loading) return;
@@ -146,6 +182,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
             BY CLICKING 'I AGREE', YOU PROVIDE EXPLICIT CONSENT FOR DATA PROCESSING AND LOCATION TRACKING UNDER THE LAWS OF THE UNITED ARAB EMIRATES.
           </Typography>
         </Box>
+        <Box ref={endRef} data-testid="legal-agreement-end" sx={{ height: 1 }} aria-hidden="true" />
       </DialogContent>
 
       <Divider sx={{ bgcolor: '#333' }} />
@@ -155,6 +192,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
           {scrolledToBottom ? '✓ Terms Reviewed' : '⇩ Scroll to bottom to enable'}
         </Typography>
         <Button 
+          data-testid="legal-agreement-accept"
           variant="contained" 
           disabled={!scrolledToBottom || loading}
           onClick={handleAgree}

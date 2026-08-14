@@ -3,6 +3,7 @@ import { defineSecret } from "firebase-functions/params";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { isTransientSmtpError, sendSmtpWithRetry, smtpAttemptCount } from "./smtpDeliveryRetry";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -71,13 +72,24 @@ async function deliverMail(mailId: string, data: any) {
     return { skipped: true, reason: "missing_recipient" };
   }
 
-  const currentState = asText(data?.delivery?.state).toUpperCase();
+  const current = await ref.get();
+  const currentState = asText(current.data()?.delivery?.state || data?.delivery?.state).toUpperCase();
   if (currentState === "SUCCESS") return { skipped: true, reason: "already_delivered" };
 
   await ref.set({ delivery: { state: "PROCESSING", provider: "cloud_function_smtp", attemptedAt: FieldValue.serverTimestamp() } }, { merge: true });
 
   try {
-    const info = await (await createTransporter()).sendMail({ from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined });
+    const transporter = await createTransporter();
+    const { value: info, attempts } = await sendSmtpWithRetry(() => transporter.sendMail({
+      from,
+      replyTo,
+      to,
+      cc,
+      bcc,
+      subject,
+      html: html || undefined,
+      text: text || undefined,
+    }));
     const messageId = asText(info.messageId);
     if (!messageId) {
       throw new Error("SMTP provider did not return a message ID.");
@@ -89,6 +101,7 @@ async function deliverMail(mailId: string, data: any) {
         messageId,
         accepted: info.accepted || [],
         rejected: info.rejected || [],
+        attempts,
         from,
         replyTo,
         deliveredAt: FieldValue.serverTimestamp(),
@@ -102,16 +115,23 @@ async function deliverMail(mailId: string, data: any) {
         state: "ERROR",
         provider: "cloud_function_smtp",
         error: error?.message || "SMTP delivery failed",
+        attempts: smtpAttemptCount(error),
         failedAt: FieldValue.serverTimestamp(),
       },
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    throw error;
+    // Eventarc should retry provider/network failures, but permanent SMTP
+    // configuration or recipient errors must settle as ERROR instead of
+    // creating an unbounded retry storm.
+    if (isTransientSmtpError(error)) throw error;
+    return { delivered: false, error: error?.message || "SMTP delivery failed" };
   }
 }
 
 export const sendQueuedMailOnCreate = onDocumentCreated({
   document: "mail/{mailId}",
+  region: "europe-west3",
+  retry: true,
   secrets: [smtpUser, smtpPass],
 }, async (event) => {
   const snap = event.data;

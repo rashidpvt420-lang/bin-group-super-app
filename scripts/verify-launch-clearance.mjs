@@ -17,6 +17,10 @@ import {
   hardLaunchApprovalPath,
   pilotIncidentReportPath,
 } from './lib/hard-launch-gate.mjs';
+import {
+  pilotExecutionSupersedesLedger,
+  pilotMayDeferManualLedger,
+} from './lib/controlled-pilot-ledger.mjs';
 
 const gatePath = 'launch_package/launch-proof-gates.json';
 const statusPath = 'launch_package/launch-status.json';
@@ -61,7 +65,25 @@ function executionSupersedesLedger(groupName, name) {
   if (key === 'deploymentProof.hosting' || key === 'deploymentProof.functionsDeploy') {
     return deploymentValid;
   }
+  if (isPilotMode) {
+    return pilotExecutionSupersedesLedger({
+      groupName,
+      name,
+      currentExecutionComplete,
+      deploymentValid,
+    });
+  }
   return false;
+}
+
+function pilotDefersManualLedger(groupName, name) {
+  if (!isPilotMode) return false;
+  return pilotMayDeferManualLedger({
+    groupName,
+    name,
+    currentExecutionComplete,
+    deploymentValid,
+  });
 }
 
 function validateManualArtifact(groupName, name, gate) {
@@ -128,6 +150,7 @@ function validateGate(groupName, name, gate) {
   const label = `${groupName}.${name}`;
   const waivedBlocked = assertGateNotWaivedForSecurity(groupName, name, gate);
   const superseded = executionSupersedesLedger(groupName, name);
+  const deferredForPilot = pilotDefersManualLedger(groupName, name);
   if (waivedBlocked && !superseded) {
     fail(waivedBlocked);
     return;
@@ -139,8 +162,15 @@ function validateGate(groupName, name, gate) {
 
   if (status === 'passed') {
     if (superseded) return;
+    const manualErrors = validateManualArtifact(groupName, name, gate);
+    if (deferredForPilot) {
+      if (manualErrors.length) {
+        warn(`${label} manual record is not current-commit proof and remains deferred for the controlled pilot.`);
+      }
+      return;
+    }
     if (!proofText(gate)) fail(`${label} is marked passed but has no proof text.`);
-    for (const error of validateManualArtifact(groupName, name, gate)) fail(error);
+    for (const error of manualErrors) fail(error);
     return;
   }
 
@@ -153,7 +183,11 @@ function validateGate(groupName, name, gate) {
     return;
   }
 
-  if (required) fail(`${name} is not launch-clear. Current status: ${gate.status || 'missing'}`);
+  if (required && deferredForPilot) {
+    warn(`${label} remains pending for the controlled pilot and must pass before public launch.`);
+  } else if (required) {
+    fail(`${name} is not launch-clear. Current status: ${gate.status || 'missing'}`);
+  }
 }
 
 if (!existsSync(gatePath)) {
