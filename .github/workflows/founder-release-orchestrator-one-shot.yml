@@ -1,0 +1,181 @@
+name: Founder One-Shot Protected Release Orchestrator
+run-name: Protected release orchestration · ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/founder-release-orchestrator-one-shot.yml
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: founder-release-orchestrator-one-shot
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    name: Deploy, prove live roles, then build signed Android AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Run protected release sequence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+          FOUNDER_NAME: Rashid AbdulGhani
+          FOUNDER_EMAIL: ceo@bin-groups.com
+          AUTHORIZATION_ACTOR: rashidpvt420-lang
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          assert_main() {
+            local current
+            current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            [[ "$current" == "$TARGET_SHA" ]] || fail "main moved from protected target $TARGET_SHA to $current; refusing to continue."
+          }
+
+          workflow_ids() {
+            local workflow="$1"
+            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&per_page=100" --jq '.workflow_runs[].id' 2>/dev/null || true
+          }
+
+          find_new_exact_sha_run() {
+            local workflow="$1"
+            local baseline="$2"
+            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&per_page=100" \
+              | jq -r --arg sha "$TARGET_SHA" --arg baseline "$baseline" '
+                  ($baseline | split("\n") | map(select(length > 0) | tonumber)) as $old
+                  | [.workflow_runs[]
+                      | select(.head_sha == $sha)
+                      | select((.id as $id | ($old | index($id))) == null)]
+                  | sort_by(.created_at)
+                  | last
+                  | .id // empty'
+          }
+
+          wait_for_new_run() {
+            local workflow="$1"
+            local baseline="$2"
+            local label="$3"
+            local run_id=""
+            for _ in $(seq 1 180); do
+              run_id="$(find_new_exact_sha_run "$workflow" "$baseline")"
+              if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
+                echo "$run_id"
+                return 0
+              fi
+              sleep 10
+            done
+            fail "$label dispatch was accepted but no exact-SHA run appeared within 30 minutes."
+          }
+
+          wait_for_success() {
+            local run_id="$1"
+            local label="$2"
+            for _ in $(seq 1 300); do
+              local state conclusion
+              state="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.status')"
+              conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.conclusion // ""')"
+              echo "$label run $run_id: status=$state conclusion=${conclusion:-pending}"
+              if [[ "$state" == "completed" ]]; then
+                [[ "$conclusion" == "success" ]] || fail "$label run $run_id completed with conclusion '$conclusion'. Downstream release steps were not started."
+                return 0
+              fi
+              sleep 60
+            done
+            fail "$label run $run_id did not complete within the protected wait window."
+          }
+
+          assert_main
+          production_baseline="$(workflow_ids firebase-production-deploy.yml)"
+
+          echo "Dispatching protected current-main production wrapper for $TARGET_SHA"
+          jq -n \
+            --arg ref main \
+            --arg confirmation DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
+            --arg hard AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP \
+            --arg sha "$TARGET_SHA" \
+            --arg actor "$AUTHORIZATION_ACTOR" \
+            --arg founderName "$FOUNDER_NAME" \
+            --arg founderEmail "$FOUNDER_EMAIL" \
+            '{
+              ref:$ref,
+              inputs:{
+                confirmation:$confirmation,
+                hard_launch_confirmation:$hard,
+                expected_commit_sha:$sha,
+                authorization_actor:$actor,
+                authorization_source_pr:"",
+                founder_name:$founderName,
+                founder_email:$founderEmail,
+                launch_mode:"bank-pilot",
+                run_public_release_gate:false,
+                deployment_payload_json:""
+              }
+            }' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/$REPOSITORY/actions/workflows/firebase-production-dispatch-current-main.yml/dispatches" \
+                --input -
+
+          production_run_id="$(wait_for_new_run firebase-production-deploy.yml "$production_baseline" "Firebase Production Deploy")"
+          echo "Protected Firebase Production Deploy run: $production_run_id"
+          wait_for_success "$production_run_id" "Firebase Production Deploy"
+
+          assert_main
+          live_baseline="$(workflow_ids live-role-smoke.yml)"
+          echo "Dispatching Live Role Smoke Tests live-evidence for $TARGET_SHA"
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            --arg deployRun "$production_run_id" \
+            '{ref:$ref,inputs:{mode:"live-evidence",expected_commit_sha:$sha,production_deploy_run_id:$deployRun}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/dispatches" \
+                --input -
+
+          live_run_id="$(wait_for_new_run live-role-smoke.yml "$live_baseline" "Live Role Smoke Tests")"
+          echo "Live Role Smoke Tests run: $live_run_id"
+          wait_for_success "$live_run_id" "Live Role Smoke Tests"
+
+          assert_main
+          aab_baseline="$(workflow_ids android-store-release.yml)"
+          echo "Dispatching signed Android AAB build for $TARGET_SHA"
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
+                --input -
+
+          aab_run_id="$(wait_for_new_run android-store-release.yml "$aab_baseline" "Android Store Release AAB")"
+          echo "Android Store Release AAB run: $aab_run_id"
+          wait_for_success "$aab_run_id" "Android Store Release AAB"
+
+          live_artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$live_run_id/artifacts" --jq '[.artifacts[] | {id,name,expired}]')"
+          aab_artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$aab_run_id/artifacts" --jq '[.artifacts[] | {id,name,expired}]')"
+
+          {
+            echo "## Protected release sequence complete"
+            echo
+            echo "- Target SHA: \`$TARGET_SHA\`"
+            echo "- Firebase Production Deploy run: \`$production_run_id\`"
+            echo "- Live Role Smoke Tests run: \`$live_run_id\`"
+            echo "- Android Store Release AAB run: \`$aab_run_id\`"
+            echo "- Live evidence artifacts: \`$live_artifacts\`"
+            echo "- Android artifacts: \`$aab_artifacts\`"
+          } >> "$GITHUB_STEP_SUMMARY"
