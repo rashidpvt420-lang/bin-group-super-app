@@ -107,6 +107,14 @@ test('every Admin production strict-live consumer receives protected Gmail OAuth
   }
 });
 
+test('Live Role Smoke strict-live credential validation receives protected Gmail OAuth secrets', () => {
+  const source = readFileSync('.github/workflows/live-role-smoke.yml', 'utf8');
+  const step = workflowStep(source, 'Validate role credentials and App Check');
+
+  assert.match(step, /node scripts\/verify-e2e-env\.mjs/);
+  assertOAuthMappings(step, 'Live Role Smoke: Validate role credentials and App Check');
+});
+
 test('public live-proof environment validates OAuth credentials without persisting them', () => {
   const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const step = workflowStep(source, 'Create E2E environment for live proofs');
