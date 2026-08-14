@@ -69,6 +69,7 @@ test('live role dashboards do not make policy-incompatible fallback reads', () =
   assert.match(correctionFixtureSource, /canonical propertyId and unitId from the live-role fixture/);
   assert.match(correctionFixtureSource, /const legacyUnitRef = db\.collection\('units'\)\.doc\(`e2e-launch-unit-\$\{tenantUid\}`\)/);
   assert.match(correctionFixtureSource, /legacyUnitSnap\.data\(\)\?\.e2eLaunchSeed === true/);
+  assert.doesNotMatch(correctionFixtureSource, /legacyUnitSnap\.data\(\)\?\.propertyId/);
   assert.doesNotMatch(correctionFixtureSource, /collection\('properties'\)\.doc\([^\n]+\)\.set/);
   assert.doesNotMatch(correctionFixtureSource, /collection\('units'\)\.doc\([^\n]+\)\.set/);
   assert.doesNotMatch(correctionFixtureSource, /const e2ePropertyId = 'e2e-launch-property'/);

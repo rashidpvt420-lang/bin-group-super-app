@@ -86,7 +86,6 @@ let legacyUnitDeleted = false;
 if (
   legacyUnitSnap.exists
   && legacyUnitSnap.data()?.e2eLaunchSeed === true
-  && String(legacyUnitSnap.data()?.propertyId || '').trim() === 'e2e-launch-property'
 ) {
   await legacyUnitRef.delete();
   legacyUnitDeleted = true;
