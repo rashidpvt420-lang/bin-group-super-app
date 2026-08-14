@@ -1,0 +1,86 @@
+name: One-shot Exact-SHA Live Evidence Dispatch 376f507d
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/zz-dispatch-live-evidence-376f507d-once.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'ops/live-evidence-376f507d-31822062142'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch exact deployed SHA live evidence once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: 376f507d595e4fd15e753180615f43a770b1f182
+          PRODUCTION_RUN_ID: '31822062142'
+          EXPECTED_ARTIFACT: production-deployment-376f507d595e4fd15e753180615f43a770b1f182
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved from the deployed SHA; refusing to start a stale pilot clock."
+            exit 1
+          }
+
+          production="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID")"
+          [[ "$(jq -r '.name' <<<"$production")" == 'Firebase Production Deploy' ]]
+          [[ "$(jq -r '.event' <<<"$production")" == 'workflow_dispatch' ]]
+          [[ "$(jq -r '.head_branch' <<<"$production")" == 'main' ]]
+          [[ "$(jq -r '.head_sha' <<<"$production")" == "$TARGET_SHA" ]]
+          [[ "$(jq -r '.status' <<<"$production")" == 'completed' ]]
+          [[ "$(jq -r '.conclusion' <<<"$production")" == 'success' ]]
+
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID/artifacts?per_page=100")"
+          artifact_count="$(jq -r --arg expected "$EXPECTED_ARTIFACT" '[.artifacts[] | select(.name == $expected and .expired == false)] | length' <<<"$artifacts")"
+          [[ "$artifact_count" == '1' ]] || {
+            echo "::error::Expected exactly one non-expired exact-SHA production artifact, found $artifact_count."
+            exit 1
+          }
+
+          runs_url="repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100"
+          existing="$(gh api "$runs_url")"
+          if jq -e --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | length > 0' <<<"$existing" >/dev/null; then
+            echo "EXISTING_EXACT_SHA_LIVE_EVIDENCE=true"
+            jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.head_sha == $sha) | [.id,.status,.conclusion,.html_url] | @tsv' <<<"$existing"
+            exit 0
+          fi
+
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            --arg deploy "$PRODUCTION_RUN_ID" \
+            '{ref:$ref,inputs:{mode:"live-evidence",expected_commit_sha:$sha,production_deploy_run_id:$deploy,live_evidence_run_id:"",clearance_payload_json:"{\"confirmation\":\"\",\"incident_confirmation\":\"\",\"rollback_confirmation\":\"\",\"open_p0\":\"0\",\"open_p1\":\"0\",\"incident_reference\":\"\",\"rollback_reference\":\"\",\"monitoring_reference\":\"\"}"}}' \
+            > dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/dispatches" \
+            --input dispatch.json
+
+          for _ in $(seq 1 30); do
+            sleep 2
+            runs="$(gh api "$runs_url")"
+            selected="$(jq -c --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | last // empty' <<<"$runs")"
+            if [[ -n "$selected" ]]; then
+              echo "LIVE_EVIDENCE_RUN_ID=$(jq -r '.id' <<<"$selected")"
+              echo "LIVE_EVIDENCE_RUN_URL=$(jq -r '.html_url' <<<"$selected")"
+              exit 0
+            fi
+          done
+
+          echo "::error::Dispatch was accepted but the exact-SHA live-evidence run was not observable within 60 seconds."
+          exit 1
