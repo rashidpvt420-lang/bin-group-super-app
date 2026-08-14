@@ -30,6 +30,7 @@ const includeLive = args.includes('--include-live') || !buildExplicitlyRequested
 const siteUrl = argValue('url') || process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app';
 const localBuildDir = argValue('build') || path.resolve('apps/admin-panel/build');
 const sourceFile = path.resolve('apps/admin-panel/src/lib/firebase.ts');
+const MAX_LIVE_BUNDLE_ASSETS = 250;
 
 function mask(value) {
   const text = String(value || '');
@@ -154,6 +155,77 @@ async function fetchText(url) {
   return response.text();
 }
 
+function discoverJavascriptUrls(source, baseUrl, origin) {
+  const urls = [];
+  const patterns = [
+    /(?:src|href)=["']([^"']+\.(?:js|mjs)(?:\?[^"']*)?)["']/g,
+    /["'`]([^"'`\\\s]+\.(?:js|mjs)(?:\?[^"'`\\\s]*)?)["'`]/g,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of String(source || '').matchAll(pattern)) {
+      try {
+        const resolved = new URL(match[1], baseUrl);
+        if (resolved.origin === origin) urls.push(resolved.toString());
+      } catch {
+        // Ignore non-URL source fragments.
+      }
+    }
+  }
+
+  return urls;
+}
+
+async function discoverManifestJavascriptUrls(site, origin) {
+  const manifestUrl = new URL('/asset-manifest.json', site).toString();
+  try {
+    const manifest = JSON.parse(await fetchText(manifestUrl));
+    const candidates = [
+      ...Object.values(manifest?.files || {}),
+      ...(Array.isArray(manifest?.entrypoints) ? manifest.entrypoints : []),
+    ];
+    return candidates
+      .filter((value) => /\.(?:js|mjs)(?:\?[^"'`\s]*)?$/.test(String(value || '')))
+      .map((value) => {
+        try {
+          return new URL(String(value), site).toString();
+        } catch {
+          return '';
+        }
+      })
+      .filter((url) => url && new URL(url).origin === origin);
+  } catch {
+    return [];
+  }
+}
+
+async function crawlLiveJavascriptAssets(html, site) {
+  const origin = new URL(site).origin;
+  const queue = discoverJavascriptUrls(html, site, origin);
+  queue.push(...await discoverManifestJavascriptUrls(site, origin));
+  const visited = new Set();
+  const texts = [];
+
+  while (queue.length > 0 && visited.size < MAX_LIVE_BUNDLE_ASSETS) {
+    const assetUrl = queue.shift();
+    if (!assetUrl || visited.has(assetUrl)) continue;
+    visited.add(assetUrl);
+    try {
+      const source = await fetchText(assetUrl);
+      texts.push(source);
+      for (const discovered of discoverJavascriptUrls(source, assetUrl, origin)) {
+        if (!visited.has(discovered) && queue.length + visited.size < MAX_LIVE_BUNDLE_ASSETS * 2) {
+          queue.push(discovered);
+        }
+      }
+    } catch (error) {
+      console.warn(`[admin-firebase] skip asset ${assetUrl}: ${error.message}`);
+    }
+  }
+
+  return { texts, assetCount: visited.size };
+}
+
 function collectLocalJs(dir) {
   if (!existsSync(dir)) return [];
   const out = [];
@@ -212,20 +284,13 @@ if (includeLive) {
   try {
     console.log(`[admin-firebase] fetching live admin site ${siteUrl}`);
     const html = await fetchText(siteUrl);
-    const assetUrls = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|mjs))["']/g)].map((match) =>
-      new URL(match[1], siteUrl).toString(),
-    );
+    const { texts: liveBundleTexts, assetCount } = await crawlLiveJavascriptAssets(html, siteUrl);
     const liveConfig = {};
-    for (const assetUrl of assetUrls.slice(0, 30)) {
-      try {
-        Object.assign(liveConfig, extractConfig(await fetchText(assetUrl)));
-      } catch (error) {
-        console.warn(`[admin-firebase] skip asset ${assetUrl}: ${error.message}`);
-      }
-    }
+    for (const source of liveBundleTexts) Object.assign(liveConfig, extractConfig(source));
     if (!Object.keys(liveConfig).length) {
       failures.push('live admin site: could not extract Firebase config from bundles');
     } else {
+      console.log(`[admin-firebase] live bundle assets=${assetCount}`);
       assertConfig('admin-live', liveConfig, failures);
     }
   } catch (error) {
