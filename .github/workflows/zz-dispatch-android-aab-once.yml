@@ -1,0 +1,71 @@
+name: One-shot Exact-SHA Android Store Dispatch
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    if: github.head_ref == 'ops/android-aab-376f507' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      TARGET_SHA: 376f507d595e4fd15e753180615f43a770b1f182
+      PRODUCTION_RUN_ID: '31822062142'
+    steps:
+      - name: Dispatch protected Android AAB build once
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved from $TARGET_SHA to $current_main; refusing stale store dispatch."
+            exit 1
+          }
+
+          production="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID")"
+          [[ "$(jq -r '.name' <<<"$production")" == 'Firebase Production Deploy' ]]
+          [[ "$(jq -r '.event' <<<"$production")" == 'workflow_dispatch' ]]
+          [[ "$(jq -r '.head_branch' <<<"$production")" == 'main' ]]
+          [[ "$(jq -r '.head_sha' <<<"$production")" == "$TARGET_SHA" ]]
+          [[ "$(jq -r '.status' <<<"$production")" == 'completed' ]]
+          [[ "$(jq -r '.conclusion' <<<"$production")" == 'success' ]]
+
+          expected_artifact="production-deployment-$TARGET_SHA"
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID/artifacts?per_page=100")"
+          jq -e --arg expected "$expected_artifact" '[.artifacts[] | select(.name == $expected and .expired == false)] | length == 1' <<<"$artifacts" >/dev/null || {
+            echo "::error::Expected exact-SHA production deployment artifact is missing or ambiguous."
+            exit 1
+          }
+
+          android_runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+          if jq -e --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | length > 0' <<<"$android_runs" >/dev/null; then
+            echo "::error::An Android Store Release AAB workflow_dispatch already exists for this exact SHA; refusing duplicate dispatch."
+            exit 1
+          fi
+
+          controlled_runs="$(gh api "repos/$REPOSITORY/actions/workflows/controlled-production-store-release.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+          if jq -e --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | length > 0' <<<"$controlled_runs" >/dev/null; then
+            echo "::error::A Controlled Production Store Release already exists for this exact SHA; refusing duplicate dispatch."
+            exit 1
+          fi
+
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            --arg deploy "$PRODUCTION_RUN_ID" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,production_deployment_run_id:$deploy,build_android:"true",build_ios:"false",ios_build_number:"1",upload_ios_to_testflight:"false",confirmation:"RELEASE_CONTROLLED_PRODUCTION_TO_STORES"}}' \
+            > dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/controlled-production-store-release.yml/dispatches" \
+            --input dispatch.json
+
+          echo "Exact-SHA Android store release request accepted for $TARGET_SHA."
