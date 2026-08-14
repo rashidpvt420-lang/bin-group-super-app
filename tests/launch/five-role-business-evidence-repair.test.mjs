@@ -51,7 +51,7 @@ test('Owner restoration preserves inspection-first lifecycle and re-applies down
 test('Founder-MFA geography uses the canonical Founder UID and matching timestamps', () => {
   const source = read('scripts/prepare-protected-business-fixtures.mjs');
   for (const required of [
-    "process.env.GITHUB_WORKFLOW !== 'Firebase Production Deploy'",
+    "['Firebase Production Deploy', 'Live Role Smoke Tests'].includes(protectedWorkflow)",
     "process.env.GITHUB_REF !== 'refs/heads/main'",
     "E2E_PROPERTY_ID = 'e2e-live-role-property'",
     'admin.auth().getUserByEmail(founderEmail)',
