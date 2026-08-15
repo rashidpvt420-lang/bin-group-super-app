@@ -1,0 +1,54 @@
+name: One-shot Production Provider Readiness Dispatch
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - .github/workflows/one-shot-production-provider-readiness.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: startsWith(github.event.pull_request.head.ref, 'ops/provider-readiness-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Dispatch and verify exact-SHA SMTP readiness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: 781557154cda62566d27c77efc5eb4d0b4c25e80
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current" == "$TARGET_SHA" ]] || { echo "::error::main moved to $current"; exit 1; }
+          baseline="$(gh api "repos/$REPOSITORY/actions/workflows/production-provider-readiness.yml/runs?branch=main&event=workflow_dispatch&per_page=100" --jq '.workflow_runs[].id' || true)"
+          jq -n --arg ref main --arg sha "$TARGET_SHA" '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"VERIFY_PRODUCTION_PROVIDER_READINESS_BIN_GROUP"}}' \
+            | gh api --method POST -H 'Accept: application/vnd.github+json' \
+                "repos/$REPOSITORY/actions/workflows/production-provider-readiness.yml/dispatches" --input -
+          run_id=""
+          for _ in $(seq 1 90); do
+            run_id="$(gh api "repos/$REPOSITORY/actions/workflows/production-provider-readiness.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
+              | jq -r --arg sha "$TARGET_SHA" --arg baseline "$baseline" '
+                ($baseline | split("\n") | map(select(length > 0) | tonumber)) as $old
+                | [.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch") | select((.id as $id | ($old | index($id))) == null)] | sort_by(.created_at) | last | .id // empty')"
+            [[ "$run_id" =~ ^[1-9][0-9]*$ ]] && break
+            sleep 5
+          done
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || { echo '::error::No exact-SHA provider readiness run appeared.'; exit 1; }
+          echo "Provider readiness run: $run_id"
+          for _ in $(seq 1 120); do
+            status="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.status')"
+            conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.conclusion // ""')"
+            echo "readiness run $run_id status=$status conclusion=${conclusion:-pending}"
+            if [[ "$status" == completed ]]; then
+              [[ "$conclusion" == success ]] || { echo "::error::Provider readiness run $run_id concluded $conclusion"; exit 1; }
+              exit 0
+            fi
+            sleep 5
+          done
+          echo '::error::Provider readiness timed out.'
+          exit 1
