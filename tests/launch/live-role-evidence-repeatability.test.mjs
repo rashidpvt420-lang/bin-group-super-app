@@ -19,11 +19,13 @@ test('Tenant business evidence resets correction state before running', () => {
 test('production reconciliation compiles Firebase Functions runtime first', () => {
   const buildHelper = source.indexOf('function buildFunctionsRuntimeForVerification()');
   const buildCommand = source.indexOf("['--prefix', 'functions', 'run', 'build']", buildHelper);
-  const productionVerifier = source.indexOf("['scripts/verify-production-deployment.mjs', '--write-evidence']");
-  const buildCall = source.indexOf('buildFunctionsRuntimeForVerification()', buildHelper + 1);
+  const productionFunction = source.indexOf('async function runProductionDeployment()');
+  const buildCall = source.indexOf('buildFunctionsRuntimeForVerification()', productionFunction);
+  const productionVerifier = source.indexOf("['scripts/verify-production-deployment.mjs', '--write-evidence']", productionFunction);
 
   assert.ok(buildHelper >= 0, 'Functions build helper must exist');
   assert.ok(buildCommand > buildHelper, 'Functions build helper must invoke the Functions build');
-  assert.ok(buildCall > buildHelper && buildCall < productionVerifier,
-    'Functions runtime must compile before production deployment reconciliation');
+  assert.ok(productionFunction > buildHelper, 'production deployment verifier must be defined after the build helper');
+  assert.ok(buildCall > productionFunction && buildCall < productionVerifier,
+    'Functions runtime must compile inside runProductionDeployment before reconciliation');
 });
