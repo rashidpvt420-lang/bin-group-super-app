@@ -1,5 +1,5 @@
 request=dispatch-protected-privileged-account-cleanup
-review_workflow_run_id=30154621784
-expected_target_count=2
+review_workflow_run_id=31890623466
+expected_target_count=1
 mutation_allowed=true
 hard_launch_claim=false
