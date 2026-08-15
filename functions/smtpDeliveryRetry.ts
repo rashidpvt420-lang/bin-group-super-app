@@ -18,8 +18,14 @@ function normalizedError(error: unknown): SmtpError {
   return new Error(String(error || "SMTP delivery failed")) as SmtpError;
 }
 
+export function isPermanentSmtpCapacityError(error: unknown) {
+  const smtpError = normalizedError(error);
+  return /maximum credits exceeded|credits? (?:are )?exhausted|quota (?:is )?exceeded|quota exceeded|resource exhausted/i.test(smtpError.message);
+}
+
 export function isTransientSmtpError(error: unknown) {
   const smtpError = normalizedError(error);
+  if (isPermanentSmtpCapacityError(smtpError)) return false;
   const responseCode = Number(smtpError.responseCode || 0);
   if (responseCode >= 400 && responseCode < 500) return true;
   if (RETRYABLE_CODES.has(String(smtpError.code || "").toUpperCase())) return true;
