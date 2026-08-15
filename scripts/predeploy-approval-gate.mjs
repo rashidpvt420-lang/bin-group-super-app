@@ -21,6 +21,7 @@ import {
 } from './lib/launch-gate-common.mjs';
 import { HARD_LAUNCH_CLAIM } from './lib/launch-honesty.mjs';
 import { runProductionOtpMailboxPreflight } from './lib/production-otp-mailbox-preflight.mjs';
+import { runSmtpProviderPreflight } from './lib/smtp-provider-preflight.mjs';
 
 export function runPredeployApprovalGate({
   root = process.cwd(),
@@ -152,8 +153,10 @@ if (isDirectRun) {
   try {
     const secretPreflight = await runProductionOtpMailboxPreflight();
     console.log(`PASS — OTP peppers=${secretPreflight.peppersVerified} verified mailboxes=${secretPreflight.mailboxesVerified}; secret values were not logged.`);
+    const smtpPreflight = await runSmtpProviderPreflight();
+    console.log(`PASS — SMTP provider authentication verified without sending mail; host=${smtpPreflight.providerHost} port=${smtpPreflight.providerPort}.`);
   } catch (error) {
-    console.error(`FAIL — protected OTP/mailbox preflight blocked deployment: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`FAIL — protected provider preflight blocked deployment: ${error instanceof Error ? error.message : String(error)}`);
     console.error(`hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
     process.exit(1);
   }
