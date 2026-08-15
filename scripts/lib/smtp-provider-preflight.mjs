@@ -1,8 +1,10 @@
+import { createRequire } from 'node:module';
 import { resolveProtectedSecretValue } from './production-otp-mailbox-preflight.mjs';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const DEFAULT_SMTP_HOST = 'smtp.sendgrid.net';
 const DEFAULT_SMTP_PORT = 465;
+const requireFunctionsDependency = createRequire(new URL('../../functions/package.json', import.meta.url));
 
 const text = (value) => String(value ?? '').trim();
 
@@ -27,8 +29,7 @@ export function classifySmtpProviderFailure(error) {
 }
 
 async function defaultVerifySmtp({ env, user, pass }) {
-  const module = await import('nodemailer');
-  const nodemailer = module.default || module;
+  const nodemailer = requireFunctionsDependency('nodemailer');
   const host = text(env.SMTP_HOST || DEFAULT_SMTP_HOST);
   const port = Number(env.SMTP_PORT || DEFAULT_SMTP_PORT);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
