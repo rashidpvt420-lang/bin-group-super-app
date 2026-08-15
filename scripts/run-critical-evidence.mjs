@@ -83,6 +83,10 @@ function retireEphemeralE2eAdmin(phase) {
 }
 
 const SUITE_FIXTURES = Object.freeze({
+  businessTenant: {
+    label: 'repeatable Tenant correction evidence',
+    script: 'scripts/prepare-tenant-correction-e2e.mjs',
+  },
   businessBroker: {
     label: 'request-only Broker payout OTP evidence',
     script: 'scripts/prepare-broker-payout-otp-e2e.mjs',
@@ -252,8 +256,27 @@ function runPlaywrightSuite(suiteKey, def) {
   return { ok: true, exitCode: 0, startedAt, finishedAt, reportPath, parsed };
 }
 
+function buildFunctionsRuntimeForVerification() {
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  console.log('[critical-evidence] compiling Firebase Functions runtime for deployment reconciliation');
+  const build = spawnSync(npmCmd, ['--prefix', 'functions', 'run', 'build'], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  const status = build.status ?? 1;
+  if (status !== 0) {
+    console.error(`[critical-evidence] Firebase Functions runtime build failed with exit code ${status}`);
+  }
+  return status;
+}
+
 async function runProductionDeployment() {
   const startedAt = new Date().toISOString();
+  const functionsBuildStatus = buildFunctionsRuntimeForVerification();
+  if (functionsBuildStatus !== 0) {
+    console.error('[critical-evidence] production deployment verification blocked because Functions runtime did not compile');
+    return { ok: false, exitCode: functionsBuildStatus };
+  }
   const verify = spawnSync(process.execPath, ['scripts/verify-production-deployment.mjs', '--write-evidence'], {
     encoding: 'utf8',
     env: process.env,
