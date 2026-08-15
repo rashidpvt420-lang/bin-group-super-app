@@ -40,7 +40,7 @@ jobs:
             || fail "Exact production deployment artifact is missing or ambiguous."
 
           existing="$(gh api "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
-            | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress" or (.status == "completed" and .conclusion == "success"))] | length')"
+            | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress" or (.status == "completed" and .conclusion == "success")))] | length')"
           [[ "$existing" == "0" ]] || fail "An exact-SHA protected orchestrator already exists; refusing duplicate dispatch."
 
           jq -n --arg ref main --arg sha "$TARGET_SHA" \
