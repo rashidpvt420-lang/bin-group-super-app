@@ -1,0 +1,51 @@
+name: One-shot final exact-SHA Live Role + Android dispatch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.event.pull_request.head.ref == 'ops/final-live-aab-561ea210' && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify frozen main, production evidence, and dispatch protected orchestrator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: 561ea210c5d8d46918278576bbfc2b728c225ff0
+          PRODUCTION_RUN_ID: '31891899728'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || fail "main moved to $current_main; refusing final evidence dispatch."
+
+          prod_status="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID" --jq '.status')"
+          prod_conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID" --jq '.conclusion // ""')"
+          prod_sha="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID" --jq '.head_sha')"
+          [[ "$prod_status" == "completed" && "$prod_conclusion" == "success" && "$prod_sha" == "$TARGET_SHA" ]] \
+            || fail "Production run $PRODUCTION_RUN_ID is not a successful exact-SHA deployment."
+
+          gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID/artifacts" \
+            | jq -e --arg name "production-deployment-$TARGET_SHA" \
+              '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' >/dev/null \
+            || fail "Exact production deployment artifact is missing or ambiguous."
+
+          existing="$(gh api "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
+            | jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress" or (.status == "completed" and .conclusion == "success"))] | length')"
+          [[ "$existing" == "0" ]] || fail "An exact-SHA protected orchestrator already exists; refusing duplicate dispatch."
+
+          jq -n --arg ref main --arg sha "$TARGET_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"RUN_PROTECTED_RELEASE_BIN_GROUP"}}' \
+            | gh api --method POST -H 'Accept: application/vnd.github+json' \
+              "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/dispatches" --input -
+
+          echo "Dispatched protected orchestrator for $TARGET_SHA. It must reuse production run $PRODUCTION_RUN_ID, run Live Role Smoke, and only then build the signed Android AAB."
