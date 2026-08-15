@@ -1,5 +1,6 @@
 name: Founder One-Shot Protected Release Orchestrator
 run-name: Protected release orchestration · ${{ github.sha }}
+# Retry marker: SendGrid trial quota reset confirmed with 100 Email API credits available on 2026-08-15.
 
 on:
   push:
