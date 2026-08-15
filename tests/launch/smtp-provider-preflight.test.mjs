@@ -76,9 +76,11 @@ test('production predeploy runs the SMTP readiness probe before authorization ca
   assert.ok(smtpCall >= 0 && approvalCall > smtpCall);
 });
 
-test('SMTP readiness source never sends mail or logs protected credentials', () => {
+test('SMTP readiness source never sends mail, logs credentials, or depends on root-level hoisting', () => {
   assert.doesNotMatch(source, /sendMail\s*\(/);
   assert.doesNotMatch(source, /console\.(?:log|error|warn)/);
+  assert.match(source, /createRequire\(new URL\('\.\.\/\.\.\/functions\/package\.json'/);
+  assert.match(source, /requireFunctionsDependency\('nodemailer'\)/);
   assert.match(source, /transport\.verify\(\)/);
   assert.match(source, /sendAttempted:\s*false/);
   assert.match(source, /secretValuesLogged:\s*false/);
