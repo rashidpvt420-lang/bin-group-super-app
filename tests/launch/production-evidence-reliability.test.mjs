@@ -10,7 +10,7 @@ test('critical Playwright suites preserve isolated diagnostics', async () => {
   assert.match(runner, /`--output=\$\{outputDir\}`/);
 });
 
-test('production mail and push triggers retry transient provider failures', async () => {
+test('production mail and push triggers retry transient provider failures but not exhausted SMTP credits', async () => {
   const [mail, push, retry] = await Promise.all([
     read('functions/mailDelivery.ts'),
     read('functions/notificationDelivery.ts'),
@@ -20,6 +20,9 @@ test('production mail and push triggers retry transient provider failures', asyn
   assert.match(push, /document: "notifications\/\{notificationId\}"[\s\S]*region: "europe-west3"[\s\S]*retry: true/);
   assert.match(mail, /sendSmtpWithRetry/);
   assert.match(mail, /if \(isTransientSmtpError\(error\)\) throw error/);
+  assert.match(retry, /isPermanentSmtpCapacityError/);
+  assert.match(retry, /maximum credits exceeded/);
+  assert.match(retry, /if \(isPermanentSmtpCapacityError\(smtpError\)\) return false/);
   assert.match(retry, /responseCode >= 400 && responseCode < 500/);
   assert.match(retry, /maxAttempts = 3/);
 });
