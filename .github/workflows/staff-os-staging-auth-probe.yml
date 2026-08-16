@@ -1,9 +1,9 @@
 name: Staff OS Staging Auth Probe
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches: [main]
+  push:
+    branches:
+      - feature/staff-operating-system
     paths:
       - .github/workflows/staff-os-staging-auth-probe.yml
 
@@ -11,47 +11,49 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: staff-os-staging-auth-probe
+  cancel-in-progress: true
+
 env:
-  STAGING_PROJECT_ID: studio-5724711541-8a962
+  STAGING_PROJECT_ID: bin-group-staging
   PRODUCTION_PROJECT_ID: bin-group-57c60
+  SOURCE_BRANCH: feature/staff-operating-system
 
 jobs:
   staging-auth-probe:
-    name: Verify PR-scoped staging deployment identity
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'feature/staff-operating-system'
+    name: Verify branch-scoped staging deployment identity
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      EXACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER || secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT || secrets.GCP_SERVICE_ACCOUNT }}
-      STAGING_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.STAGING_FIREBASE_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_STAGING_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_SERVICE_ACCOUNT_STAGING_JSON || secrets.FIREBASE_SERVICE_ACCOUNT_STUDIO_5724711541_8A962 || secrets.STAGING_FIREBASE_SERVICE_ACCOUNT || secrets.GCP_STAGING_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_STAGING_CREDENTIALS }}
-      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT }}
     steps:
-      - name: Enforce staging-only and exact-PR boundaries
+      - name: Enforce staging-only and exact-branch boundaries
         shell: bash
         run: |
           set -euo pipefail
-          test "$STAGING_PROJECT_ID" = "studio-5724711541-8a962"
+          test "$GITHUB_REF" = "refs/heads/$SOURCE_BRANCH"
+          test "$STAGING_PROJECT_ID" = "bin-group-staging"
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
-          test "$EXACT_HEAD_SHA" = "${{ github.event.pull_request.head.sha }}"
           test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
           test -n "$GCP_SERVICE_ACCOUNT"
+          test "$GCP_WORKLOAD_IDENTITY_PROVIDER" = "projects/355288045402/locations/global/workloadIdentityPools/github-actions-staging/providers/github-bin-group-staging"
+          test "$GCP_SERVICE_ACCOUNT" = "github-staging-deploy@bin-group-staging.iam.gserviceaccount.com"
 
-      - name: Checkout exact pull-request head
+      - name: Checkout exact branch SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
 
       - name: Verify exact checkout
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "$EXACT_HEAD_SHA"
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 
-      - name: Authenticate with configured Workload Identity Federation
+      - name: Authenticate with staging Workload Identity Federation
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
         with:
+          project_id: ${{ env.STAGING_PROJECT_ID }}
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
@@ -62,75 +64,13 @@ jobs:
         with:
           version: '>= 416.0.0'
 
-      - name: Probe configured WIF identity against staging
-        id: wif_probe
+      - name: Verify identity can access staging and only targets staging
         shell: bash
         run: |
           set -euo pipefail
-          if gcloud projects describe "$STAGING_PROJECT_ID" --format='value(projectId)' > "$RUNNER_TEMP/wif-project-id.txt" 2> "$RUNNER_TEMP/wif-error.txt"; then
-            test "$(cat "$RUNNER_TEMP/wif-project-id.txt")" = "$STAGING_PROJECT_ID"
-            echo "usable=true" >> "$GITHUB_OUTPUT"
-            echo "Configured WIF identity can access staging."
-          else
-            echo "usable=false" >> "$GITHUB_OUTPUT"
-            echo "Configured WIF identity is not authorized for staging; checking existing staging service-account credentials next."
-          fi
-
-      - name: Probe existing staging service-account credential
-        id: key_probe
-        if: steps.wif_probe.outputs.usable != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          RAW="$STAGING_FIREBASE_SERVICE_ACCOUNT_JSON"
-          SOURCE="staging-specific-or-conventional"
-          if [[ -z "$RAW" ]]; then
-            RAW="$FIREBASE_SERVICE_ACCOUNT_JSON"
-            SOURCE="generic-firebase-service-account"
-          fi
-          if [[ -z "$RAW" ]]; then
-            echo "usable=false" >> "$GITHUB_OUTPUT"
-            echo "No staging or conventional Firebase service-account JSON secret is configured."
-            exit 0
-          fi
-          RAW="$RAW" node <<'NODE'
-          const fs = require('fs');
-          const raw = process.env.RAW || '';
-          let parsed;
-          try {
-            parsed = JSON.parse(raw);
-          } catch {
-            try {
-              parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
-            } catch {
-              throw new Error('Configured Firebase service-account value is neither JSON nor base64 JSON.');
-            }
-          }
-          if (parsed.type !== 'service_account' || !parsed.client_email || !parsed.private_key) {
-            throw new Error('Configured Firebase credential is not a valid service-account JSON object.');
-          }
-          fs.writeFileSync(process.env.RUNNER_TEMP + '/staging-candidate-service-account.json', JSON.stringify(parsed));
-          NODE
-          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/staging-candidate-service-account.json" --quiet >/dev/null
-          if gcloud projects describe "$STAGING_PROJECT_ID" --format='value(projectId)' > "$RUNNER_TEMP/key-project-id.txt" 2> "$RUNNER_TEMP/key-error.txt"; then
-            test "$(cat "$RUNNER_TEMP/key-project-id.txt")" = "$STAGING_PROJECT_ID"
-            echo "usable=true" >> "$GITHUB_OUTPUT"
-            echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
-            echo "An existing service-account credential can access staging."
-          else
-            echo "usable=false" >> "$GITHUB_OUTPUT"
-            echo "Existing Firebase service-account credential is not authorized for staging."
-          fi
-          rm -f "$RUNNER_TEMP/staging-candidate-service-account.json"
-
-      - name: Report staging credential readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${{ steps.wif_probe.outputs.usable }}" == "true" || "${{ steps.key_probe.outputs.usable }}" == "true" ]]; then
-            echo "STAGING_CREDENTIAL_READY=true"
-            echo "A staging deployment credential is available. No Firebase mutation was performed by this probe."
-          else
-            echo "STAGING_CREDENTIAL_READY=false"
-            echo "::warning::No existing GitHub credential is authorized for Firebase staging project $STAGING_PROJECT_ID."
-          fi
+          PROJECT="$(gcloud projects describe "$STAGING_PROJECT_ID" --format='value(projectId)')"
+          test "$PROJECT" = "$STAGING_PROJECT_ID"
+          test "$PROJECT" != "$PRODUCTION_PROJECT_ID"
+          test "$(gcloud config get-value project 2>/dev/null)" = "$STAGING_PROJECT_ID"
+          echo "STAGING_CREDENTIAL_READY=true"
+          echo "Verified branch-scoped Workload Identity Federation access to $STAGING_PROJECT_ID."
