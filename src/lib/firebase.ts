@@ -103,11 +103,14 @@ const firebaseConfig = {
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // Firebase App Check — production keeps the established v3 provider by default.
-// Isolated environments such as staging may opt into reCAPTCHA Enterprise with
-// VITE_APP_CHECK_PROVIDER=enterprise without changing production configuration.
+// The dedicated BIN GROUP staging project is explicitly Enterprise-only so its
+// root app and Admin can share one isolated staging App Check registration.
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
 const requestedAppCheckProvider = readEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
-const appCheckProvider = requestedAppCheckProvider === 'enterprise' ? 'enterprise' : 'v3';
+const appCheckProvider =
+  requestedAppCheckProvider === 'enterprise' || firebaseConfig.projectId === 'bin-group-staging'
+    ? 'enterprise'
+    : 'v3';
 const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
 const localAppCheckHost =
   typeof window !== 'undefined' &&
