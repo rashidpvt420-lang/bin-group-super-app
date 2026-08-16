@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Trigger marker: revalidate staging after Enterprise App Check registration.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, appendFileSync } from 'node:fs';
 
