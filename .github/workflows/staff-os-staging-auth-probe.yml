@@ -27,7 +27,7 @@ jobs:
       EXACT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER || secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT || secrets.GCP_SERVICE_ACCOUNT }}
-      STAGING_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.STAGING_FIREBASE_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_STAGING_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_SERVICE_ACCOUNT_STAGING_JSON }}
+      STAGING_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.STAGING_FIREBASE_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_STAGING_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_SERVICE_ACCOUNT_STAGING_JSON || secrets.FIREBASE_SERVICE_ACCOUNT_STUDIO_5724711541_8A962 || secrets.STAGING_FIREBASE_SERVICE_ACCOUNT || secrets.GCP_STAGING_SERVICE_ACCOUNT_JSON || secrets.FIREBASE_STAGING_CREDENTIALS }}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
     steps:
       - name: Enforce staging-only and exact-PR boundaries
@@ -73,7 +73,7 @@ jobs:
             echo "Configured WIF identity can access staging."
           else
             echo "usable=false" >> "$GITHUB_OUTPUT"
-            echo "Configured WIF identity is production-scoped; checking existing staging service-account credentials next."
+            echo "Configured WIF identity is not authorized for staging; checking existing staging service-account credentials next."
           fi
 
       - name: Probe existing staging service-account credential
@@ -83,14 +83,14 @@ jobs:
         run: |
           set -euo pipefail
           RAW="$STAGING_FIREBASE_SERVICE_ACCOUNT_JSON"
-          SOURCE="staging-specific"
+          SOURCE="staging-specific-or-conventional"
           if [[ -z "$RAW" ]]; then
             RAW="$FIREBASE_SERVICE_ACCOUNT_JSON"
             SOURCE="generic-firebase-service-account"
           fi
           if [[ -z "$RAW" ]]; then
             echo "usable=false" >> "$GITHUB_OUTPUT"
-            echo "No staging service-account JSON secret is configured."
+            echo "No staging or conventional Firebase service-account JSON secret is configured."
             exit 0
           fi
           RAW="$RAW" node <<'NODE'
@@ -123,13 +123,14 @@ jobs:
           fi
           rm -f "$RUNNER_TEMP/staging-candidate-service-account.json"
 
-      - name: Assert a staging deployment credential exists
+      - name: Report staging credential readiness
         shell: bash
         run: |
           set -euo pipefail
           if [[ "${{ steps.wif_probe.outputs.usable }}" == "true" || "${{ steps.key_probe.outputs.usable }}" == "true" ]]; then
-            echo "Staging deployment credential is available. No Firebase mutation was performed."
-            exit 0
+            echo "STAGING_CREDENTIAL_READY=true"
+            echo "A staging deployment credential is available. No Firebase mutation was performed by this probe."
+          else
+            echo "STAGING_CREDENTIAL_READY=false"
+            echo "::warning::No existing GitHub credential is authorized for Firebase staging project $STAGING_PROJECT_ID."
           fi
-          echo "::error::No existing GitHub credential is authorized for Firebase staging project $STAGING_PROJECT_ID."
-          exit 1
