@@ -73,7 +73,11 @@ import {
   isSupported,
   type Messaging,
 } from 'firebase/messaging';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  ReCaptchaV3Provider,
+} from 'firebase/app-check';
 
 const readEnv = (key: string): string => {
   const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
@@ -98,9 +102,12 @@ const firebaseConfig = {
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Firebase App Check — enabled only when VITE_APP_CHECK_SITE_KEY and
-// VITE_ENABLE_FIREBASE_APPCHECK=true are set. Safe to run without them in dev.
+// Firebase App Check — production keeps the established v3 provider by default.
+// Isolated environments such as staging may opt into reCAPTCHA Enterprise with
+// VITE_APP_CHECK_PROVIDER=enterprise without changing production configuration.
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
+const requestedAppCheckProvider = readEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
+const appCheckProvider = requestedAppCheckProvider === 'enterprise' ? 'enterprise' : 'v3';
 const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
 const localAppCheckHost =
   typeof window !== 'undefined' &&
@@ -130,8 +137,11 @@ if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined
       const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
       console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
     }
+    const provider = appCheckProvider === 'enterprise'
+      ? new ReCaptchaEnterpriseProvider(appCheckSiteKey)
+      : new ReCaptchaV3Provider(appCheckSiteKey);
     appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      provider,
       isTokenAutoRefreshEnabled: true,
     });
     appCheckInitialized = true;
@@ -294,6 +304,7 @@ export const getFirebaseRuntimeDiagnostics = () => ({
   authDomain: firebaseConfig.authDomain,
   functionsRegion: FUNCTIONS_REGION,
   hasAppCheckSiteKey: Boolean(appCheckSiteKey),
+  appCheckProvider,
   appCheckExplicitlyEnabled,
   appCheckInitialized,
   host: typeof window !== 'undefined' ? window.location.host : 'server',
