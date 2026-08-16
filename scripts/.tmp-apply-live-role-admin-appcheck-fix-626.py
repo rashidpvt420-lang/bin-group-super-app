@@ -110,7 +110,7 @@ admin.write_text(source, encoding="utf-8")
 
 test_file = Path("tests/launch/admin-app-check-evidence-resolution.test.mjs")
 test_file.write_text(
-    """import assert from 'node:assert/strict';
+    r"""import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
@@ -119,10 +119,18 @@ const resolver = read('scripts/resolve-admin-app-check-site-key.mjs');
 const live = read('.github/workflows/live-role-smoke.yml');
 const admin = read('.github/workflows/admin-production-evidence.yml');
 
+function section(source, startMarker, endMarker = '') {
+  const start = source.indexOf(startMarker);
+  assert.ok(start >= 0, `missing section start: ${startMarker}`);
+  const end = endMarker ? source.indexOf(endMarker, start + startMarker.length) : source.length;
+  assert.ok(end > start, `missing section end: ${endMarker}`);
+  return source.slice(start, end);
+}
+
 function assertOrdered(source, labels) {
   let previous = -1;
   for (const label of labels) {
-    const current = source.indexOf(label);
+    const current = source.indexOf(label, previous + 1);
     assert.ok(current >= 0, `missing required marker: ${label}`);
     assert.ok(current > previous, `marker out of order: ${label}`);
     previous = current;
@@ -139,24 +147,33 @@ test('Admin Enterprise site-key resolver is restricted to explicit protected wor
   assert.match(resolver, /GITHUB_ENV/);
 });
 
-test('Live Role resolves the Admin Enterprise key before hosted production reconciliation', () => {
-  assertOrdered(live, [
+test('Live Role resolves the Admin Enterprise key inside live-evidence before reconciliation', () => {
+  const liveEvidence = section(live, '\n  live-evidence:\n', '\n  hard-public-launch-clearance:\n');
+  assertOrdered(liveEvidence, [
     '- name: Authenticate Google Cloud',
     '- name: Install dependencies',
     '- name: Resolve Admin App Check Enterprise site key for hosted verification',
     '- name: Run every required live evidence suite',
   ]);
-  assert.match(live, /run: node scripts\/resolve-admin-app-check-site-key\.mjs/);
-  assert.match(live, /DEPLOYMENT_ENVIRONMENT: production/);
+  assert.ok(
+    liveEvidence.includes('run: node scripts/resolve-admin-app-check-site-key.mjs'),
+    'live-evidence must invoke the protected Admin App Check resolver',
+  );
+  assert.ok(live.includes('DEPLOYMENT_ENVIRONMENT: production'));
 });
 
 test('Admin Production Evidence resolves the same key and supplies hosted verifier expectations', () => {
-  assertOrdered(admin, [
+  const adminEvidence = section(admin, '\n  admin-operational-evidence:\n');
+  assertOrdered(adminEvidence, [
     '- name: Authenticate Google Cloud',
     '- name: Install dependencies',
     '- name: Resolve Admin App Check Enterprise site key for hosted verification',
     '- name: Restore and verify deployment evidence',
   ]);
+  assert.ok(
+    adminEvidence.includes('run: node scripts/resolve-admin-app-check-site-key.mjs'),
+    'Admin Production Evidence must invoke the protected Admin App Check resolver',
+  );
   for (const required of [
     'VITE_GOOGLE_MAPS_API_KEY:',
     'VITE_FIREBASE_API_KEY:',
