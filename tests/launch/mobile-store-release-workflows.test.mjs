@@ -82,6 +82,8 @@ test('Android store release is manual, exact-main, production-protected, and sig
   }
 
   assert.match(androidScript, /EXPECTED_APP_ID="ae\.bingroups\.superapp"/);
+  assert.match(androidScript, /bash \.\/gradlew --no-daemon clean :app:assembleRelease :app:bundleRelease/);
+  assert.doesNotMatch(androidScript, /^\s*\.\/gradlew --no-daemon/m);
   assert.match(androidScript, /:app:assembleRelease :app:bundleRelease/);
   assert.match(androidScript, /jarsigner -verify -verbose -certs/);
   assert.match(androidScript, /keytool -printcert -jarfile "\$AAB_PATH"/);
