@@ -124,6 +124,15 @@ patch(
       allow create, update, delete: if false;
     }
 
+    match /vehicles/{vehicleId} {
+      allow read: if isNotSuspended() && (
+        resource.data.get('assignedStaffUid', '') == request.auth.uid ||
+        resource.data.get('assignedDriverUid', '') == request.auth.uid ||
+        isOps() || isAdmin()
+      );
+      allow create, update, delete: if false;
+    }
+
     match /properties/{propertyId} {`,
   'match /staff_shifts/{shiftId}'
 );
