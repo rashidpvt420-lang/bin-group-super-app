@@ -8,7 +8,6 @@ const stagingProjectId = text(process.env.STAGING_PROJECT_ID);
 const productionProjectId = text(process.env.PRODUCTION_PROJECT_ID);
 const webAppIdFile = text(process.env.STAGING_WEB_APP_ID_FILE);
 const sitesFile = text(process.env.STAGING_HOSTING_SITES_FILE);
-const v3Override = text(process.env.STAGING_V3_APP_CHECK_SITE_KEY_OVERRIDE);
 const enterpriseOverride = text(process.env.STAGING_ENTERPRISE_APP_CHECK_SITE_KEY_OVERRIDE);
 const githubEnv = text(process.env.GITHUB_ENV);
 
@@ -49,10 +48,9 @@ function run(command, args) {
 const projectNumber = run('gcloud', ['projects', 'describe', stagingProjectId, '--format=value(projectNumber)']);
 if (!/^\d+$/.test(projectNumber)) throw new Error('Unable to resolve the staging Google Cloud project number.');
 
-// Do not infer API state from Service Usage permissions. The staging deploy
-// identity intentionally does not need serviceusage.services.get/enable. Query
-// Firebase App Check directly instead; if the API is disabled, the App Check
-// endpoint itself returns an authoritative error without broadening IAM.
+// The staging deploy identity intentionally does not need Service Usage Admin.
+// Query the App Check resource itself and use one Enterprise registration for
+// both staging frontends. Production remains on its existing provider defaults.
 const accessToken = run('gcloud', ['auth', 'print-access-token']);
 if (!accessToken) throw new Error('Unable to obtain a Google Cloud access token for staging App Check inspection.');
 
@@ -83,93 +81,33 @@ function plausibleSiteKey(value) {
   return /^6L[A-Za-z0-9_-]{30,}$/.test(key) && !/(example|replace|dummy|placeholder|test[_-]?key)/i.test(key);
 }
 
-async function extractKeysFromHostedSite(siteId) {
-  const base = `https://${siteId}.web.app/`;
-  let html;
-  try {
-    const response = await fetch(base, { redirect: 'follow' });
-    if (!response.ok) return [];
-    html = await response.text();
-  } catch {
-    return [];
-  }
-
-  const assetMatches = [...html.matchAll(/(?:src|href)=["']([^"']+\.js(?:\?[^"']*)?)["']/gi)]
-    .map((match) => match[1])
-    .slice(0, 12);
-  const keys = new Set();
-
-  for (const assetPath of assetMatches) {
-    try {
-      const assetUrl = new URL(assetPath, base).toString();
-      const response = await fetch(assetUrl, { redirect: 'follow' });
-      if (!response.ok) continue;
-      const js = await response.text();
-      for (const match of js.matchAll(/6L[A-Za-z0-9_-]{30,}/g)) {
-        if (plausibleSiteKey(match[0])) keys.add(match[0]);
-      }
-    } catch {
-      // Continue scanning other staging assets. A single stale/broken asset is not authoritative.
-    }
-  }
-
-  return [...keys];
-}
-
 let enterpriseSiteKey = enterpriseOverride;
+let enterpriseSource = enterpriseSiteKey ? 'explicit staging override' : '';
 if (!enterpriseSiteKey) {
   const enterpriseConfig = await getJson(`${appCheckBase}/recaptchaEnterpriseConfig`, { allowNotFound: true });
   enterpriseSiteKey = text(enterpriseConfig?.siteKey);
+  enterpriseSource = 'Firebase App Check API';
 }
+
 if (!plausibleSiteKey(enterpriseSiteKey)) {
-  throw new Error('Staging Web App has no usable reCAPTCHA Enterprise App Check site key.');
-}
-
-const v3Config = await getJson(`${appCheckBase}/recaptchaV3Config`, { allowNotFound: true });
-if (!v3Override && v3Config?.siteSecretSet !== true) {
-  throw new Error('Staging Web App does not have an active reCAPTCHA v3 App Check secret configuration.');
-}
-
-let v3SiteKey = v3Override;
-let v3Source = v3SiteKey ? 'explicit staging override' : '';
-if (!v3SiteKey) {
-  const nonAdminSites = siteIds.filter((siteId) => !siteId.toLowerCase().includes('admin'));
-  const scanOrder = [
-    ...preferredSiteOrder.filter((siteId) => nonAdminSites.includes(siteId)),
-    ...nonAdminSites.filter((siteId) => !preferredSiteOrder.includes(siteId)),
-  ];
-
-  for (const siteId of scanOrder) {
-    const keys = await extractKeysFromHostedSite(siteId);
-    if (keys.length === 1) {
-      v3SiteKey = keys[0];
-      v3Source = `existing staging bundle ${siteId}`;
-      break;
-    }
-    if (keys.length > 1) {
-      throw new Error(`Ambiguous App Check site keys found in existing staging bundle ${siteId}; refusing to guess.`);
-    }
-  }
-}
-
-if (!plausibleSiteKey(v3SiteKey)) {
-  throw new Error('Could not safely recover the staging reCAPTCHA v3 site key from a staging-only source.');
+  throw new Error(
+    `Staging Web App ${webAppId} has no usable reCAPTCHA Enterprise App Check site key. ` +
+    `Register this staging Web App with reCAPTCHA Enterprise in Firebase App Check and retry.`,
+  );
 }
 
 if (process.env.GITHUB_ACTIONS === 'true') {
-  console.log(`::add-mask::${v3SiteKey}`);
   console.log(`::add-mask::${enterpriseSiteKey}`);
 }
 
 appendFileSync(githubEnv, [
   `STAGING_HOSTING_SITE=${deploymentSite}`,
-  `VITE_APP_CHECK_SITE_KEY=${v3SiteKey}`,
+  `VITE_APP_CHECK_SITE_KEY=${enterpriseSiteKey}`,
   `REACT_APP_APP_CHECK_SITE_KEY=${enterpriseSiteKey}`,
 ].join('\n') + '\n');
 
 const fingerprint = (key) => `${key.slice(0, 6)}…${key.slice(-4)}`;
 console.log(`[staging-appcheck] project=${stagingProjectId} app=${webAppId}`);
 console.log(`[staging-appcheck] deploymentSite=${deploymentSite}`);
-console.log(`[staging-appcheck] v3=${fingerprint(v3SiteKey)} source=${v3Source}`);
-console.log(`[staging-appcheck] enterprise=${fingerprint(enterpriseSiteKey)} source=${enterpriseOverride ? 'explicit staging override' : 'Firebase App Check API'}`);
-console.log('[staging-appcheck] App Check configuration resolved from staging-only authority.');
+console.log(`[staging-appcheck] enterprise=${fingerprint(enterpriseSiteKey)} source=${enterpriseSource}`);
+console.log('[staging-appcheck] One Enterprise registration will protect both staging frontends.');
