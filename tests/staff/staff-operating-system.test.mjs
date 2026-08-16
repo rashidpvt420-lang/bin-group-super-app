@@ -18,7 +18,7 @@ test('TODAY dashboard uses live records and callable actions instead of local cl
 test('Quick Actions expose only wired contextual staff workflows and no fake assignment defaults', () => {
   const source = read('src/components/staff/ContextQuickActionsFab.tsx');
   for (const action of ['CLOCK_IN_OUT', 'ARRIVE', 'START_JOB', 'FINISH_JOB', 'REQUEST_OVERTIME', 'VEHICLE_BREAKDOWN', 'ACCIDENT_REPORT']) {
-    assert.match(source, new RegExp(action));
+    assert.equal(source.includes(action), true, `Expected Quick Action ${action}`);
   }
   assert.doesNotMatch(source, /JOB-184|Hilux 18|Dubai GPS/);
   assert.match(source, /No active job assigned/);
@@ -57,6 +57,6 @@ test('Incomplete Staff OS modules remain explicitly feature-flagged off', () => 
     'ENABLE_RECRUITMENT_PIPELINE',
     'ENABLE_CANDIDATE_MESSAGING',
   ]) {
-    assert.match(source, new RegExp(`${flag}: false`));
+    assert.equal(source.includes(`${flag}: false`), true, `Expected ${flag} to remain disabled`);
   }
 });
