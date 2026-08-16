@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Container,
   Typography,
   Grid,
   Card,
@@ -17,15 +16,16 @@ import {
   TableBody,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import {
   Warning as ExceptionIcon,
-  CheckCircle as ApproveIcon,
-  Cancel as RejectIcon,
-  Notifications as AlertIcon,
   DirectionsCar as FleetIcon,
   People as HrIcon,
-  ReceiptLong as FinanceIcon,
   AutoAwesome as AiIcon,
 } from "@mui/icons-material";
 import {
@@ -62,6 +62,13 @@ export const StaffExceptionsManagerPage: React.FC = () => {
   const [aiAuditRunning, setAiAuditRunning] = useState(false);
   const [aiAuditResult, setAiAuditResult] = useState<string | null>(null);
 
+  // Decision Modal State
+  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
+  const [selectedException, setSelectedException] = useState<StaffExceptionRecord | null>(null);
+  const [selectedAction, setSelectedAction] = useState<string>("RESOLVE");
+  const [humanReason, setHumanReason] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+
   // Live Subscription to staff_exceptions
   useEffect(() => {
     if (!currentUid) {
@@ -97,25 +104,43 @@ export const StaffExceptionsManagerPage: React.FC = () => {
     return () => unsub();
   }, [currentUid]);
 
-  // Execute Backend Resolution Callable
-  const handleResolveAction = async (exceptionId: string, action: string, reason: string) => {
+  // Open Decision Modal
+  const handleOpenDecisionModal = (exc: StaffExceptionRecord, action: string) => {
+    setSelectedException(exc);
+    setSelectedAction(action);
+    setHumanReason("");
+    setNotes("");
+    setDecisionModalOpen(true);
+  };
+
+  // Submit Backend Resolution Callable with Human Reason
+  const handleSubmitResolution = async () => {
+    if (!selectedException || !humanReason.trim()) {
+      alert("Resolution reason is required.");
+      return;
+    }
+
     try {
-      setResolvingId(exceptionId);
+      setResolvingId(selectedException.id);
+      setDecisionModalOpen(false);
+
       const resolveFn = httpsCallable(functions, "resolveStaffException");
       await resolveFn({
-        exceptionId,
-        resolutionAction: action,
-        resolutionReason: reason,
+        exceptionId: selectedException.id,
+        resolutionAction: selectedAction,
+        resolutionReason: humanReason.trim(),
+        notes: notes.trim(),
       });
     } catch (err: any) {
       console.error("[StaffExceptionsManagerPage] Resolution failed:", err);
       alert(err.message || "Failed to process exception resolution.");
     } finally {
       setResolvingId(null);
+      setSelectedException(null);
     }
   };
 
-  // Execute Backend AI Audit Callable
+  // Execute Backend Rules Audit Callable
   const handleRunAiAudit = async () => {
     try {
       setAiAuditRunning(true);
@@ -123,17 +148,16 @@ export const StaffExceptionsManagerPage: React.FC = () => {
       const auditFn = httpsCallable(functions, "runStaffAiAudit");
       const res: any = await auditFn({});
       if (res.data?.success) {
-        setAiAuditResult(res.data.message || `AI Audit completed across ${res.data.totalAudited} records.`);
+        setAiAuditResult(res.data.message || `Rules Audit completed across ${res.data.totalAudited} records.`);
       }
     } catch (err: any) {
-      console.error("[StaffExceptionsManagerPage] AI Audit failed:", err);
-      alert(err.message || "Failed to execute AI exception audit.");
+      console.error("[StaffExceptionsManagerPage] Rules Audit failed:", err);
+      alert(err.message || "Failed to execute exception audit.");
     } finally {
       setAiAuditRunning(false);
     }
   };
 
-  // Calculate Real Dynamic Counters
   const hrCount = exceptions.filter((e) => (e.department || e.type).includes("HR") || e.type.includes("CLOCK")).length;
   const fleetCount = exceptions.filter((e) => (e.department || e.type).includes("FLEET") || e.type.includes("VEHICLE")).length;
   const opsCount = exceptions.filter((e) => (e.department || e.type).includes("OPS") || e.type.includes("OVERTIME")).length;
@@ -175,7 +199,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
           sx={{ bgcolor: "#3b82f6", fontWeight: 700, borderRadius: 2 }}
           onClick={handleRunAiAudit}
         >
-          {aiAuditRunning ? "Running AI Audit..." : "Run AI Multi-Dept Audit"}
+          {aiAuditRunning ? "Running Audit..." : "Run Rules Exception Audit"}
         </Button>
       </Stack>
 
@@ -327,7 +351,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                               variant="contained"
                               color="success"
                               disabled={resolvingId === exc.id}
-                              onClick={() => handleResolveAction(exc.id, "APPROVE_CORRECTION", "Clock-out timestamp verified against work log.")}
+                              onClick={() => handleOpenDecisionModal(exc, "APPROVE_CORRECTION")}
                             >
                               Approve Correction
                             </Button>
@@ -336,7 +360,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                               variant="outlined"
                               color="error"
                               disabled={resolvingId === exc.id}
-                              onClick={() => handleResolveAction(exc.id, "REJECT", "Clock-out correction rejected.")}
+                              onClick={() => handleOpenDecisionModal(exc, "REJECT")}
                             >
                               Reject
                             </Button>
@@ -350,7 +374,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                               variant="contained"
                               color="success"
                               disabled={resolvingId === exc.id}
-                              onClick={() => handleResolveAction(exc.id, "APPROVE", "Overtime claim verified against emergency repair SLA.")}
+                              onClick={() => handleOpenDecisionModal(exc, "APPROVE")}
                             >
                               Approve
                             </Button>
@@ -359,7 +383,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                               variant="outlined"
                               color="error"
                               disabled={resolvingId === exc.id}
-                              onClick={() => handleResolveAction(exc.id, "REJECT", "Unusual overtime claim rejected.")}
+                              onClick={() => handleOpenDecisionModal(exc, "REJECT")}
                             >
                               Reject
                             </Button>
@@ -372,7 +396,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                             variant="contained"
                             color="secondary"
                             disabled={resolvingId === exc.id}
-                            onClick={() => handleResolveAction(exc.id, "CLOSE_INCIDENT", "Vehicle breakdown acknowledged and dispatch rerouted.")}
+                            onClick={() => handleOpenDecisionModal(exc, "CLOSE_INCIDENT")}
                           >
                             Close Incident
                           </Button>
@@ -384,7 +408,7 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                             variant="contained"
                             color="primary"
                             disabled={resolvingId === exc.id}
-                            onClick={() => handleResolveAction(exc.id, "RESOLVED", "Exception reviewed and resolved by manager.")}
+                            onClick={() => handleOpenDecisionModal(exc, "RESOLVE")}
                           >
                             Resolve Exception
                           </Button>
@@ -398,6 +422,53 @@ export const StaffExceptionsManagerPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Decision Reason Modal */}
+      <Dialog open={decisionModalOpen} onClose={() => setDecisionModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: "#1e293b", color: "#fff", fontWeight: 700 }}>
+          Confirm Exception Resolution ({selectedAction})
+        </DialogTitle>
+        <DialogContent sx={{ bgcolor: "#1e293b", pt: 2 }}>
+          <Typography variant="body2" sx={{ color: "#94a3b8", mb: 2 }}>
+            Exception ID: <strong>{selectedException?.id}</strong> ({selectedException?.type})
+          </Typography>
+          <TextField
+            fullWidth
+            required
+            label="Human-Supplied Resolution Reason"
+            value={humanReason}
+            onChange={(e) => setHumanReason(e.target.value)}
+            placeholder="Enter explicit reason for audit log..."
+            variant="outlined"
+            multiline
+            rows={3}
+            sx={{ mb: 2, "& .MuiInputBase-root": { color: "#fff" }, "& .MuiInputLabel-root": { color: "#94a3b8" } }}
+          />
+          <TextField
+            fullWidth
+            label="Optional Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Additional internal manager notes..."
+            variant="outlined"
+            size="small"
+            sx={{ "& .MuiInputBase-root": { color: "#fff" }, "& .MuiInputLabel-root": { color: "#94a3b8" } }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: "#1e293b", px: 3, pb: 3 }}>
+          <Button onClick={() => setDecisionModalOpen(false)} sx={{ color: "#94a3b8" }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={!humanReason.trim()}
+            onClick={handleSubmitResolution}
+          >
+            Submit Resolution
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

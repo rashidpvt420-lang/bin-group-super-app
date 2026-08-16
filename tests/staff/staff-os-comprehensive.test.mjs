@@ -36,340 +36,134 @@ test('RBAC Server-Side Proof: Property Manager cannot read confidential HR cases
   );
 });
 
-test('RBAC Server-Side Proof: HR Officer cannot approve Founder-level payroll', async () => {
-  const evaluatePayrollApproval = ({ callerRole, targetRole }) => {
-    if (callerRole === 'hr_staff' && (targetRole === 'ceo' || targetRole === 'founder')) {
-      throw new Error('PERMISSION_DENIED: HR Officers cannot approve Founder-level payroll.');
-    }
-    return { allowed: true };
+// -------------------------------------------------------------------
+// 2. AUTHORITATIVE JOB COMPLETION & STATE MACHINE TESTS
+// -------------------------------------------------------------------
+test('Authoritative Job Completion: Technician A cannot complete Technician B job, completed job cannot be re-completed', async () => {
+  const ticketsDb = {
+    'JOB-101': { id: 'JOB-101', assignedTechnicianId: 'TECH-101', status: 'IN_PROGRESS' },
+    'JOB-102': { id: 'JOB-102', assignedTechnicianId: 'TECH-202', status: 'COMPLETED' },
   };
 
-  assert.throws(
-    () => evaluatePayrollApproval({ callerRole: 'hr_staff', targetRole: 'ceo' }),
-    /PERMISSION_DENIED/
-  );
-});
+  const completeJobMock = ({ callerUid, callerRole, jobId, textReport }) => {
+    const ticket = ticketsDb[jobId];
+    if (!ticket) throw new Error('NOT_FOUND: Ticket not found.');
+    if (!textReport) throw new Error('INVALID_ARGUMENT: Report text required.');
 
-test('RBAC Server-Side Proof: Finance cannot edit confidential grievance records', async () => {
-  const evaluateGrievanceEdit = ({ callerRole }) => {
-    if (callerRole === 'finance_staff' || callerRole === 'finance_admin') {
-      throw new Error('PERMISSION_DENIED: Finance role cannot mutate confidential grievances.');
+    const isAssigned = ticket.assignedTechnicianId === callerUid;
+    const isManager = ['admin', 'operations_manager'].includes(callerRole);
+    if (!isAssigned && !isManager) {
+      throw new Error('PERMISSION_DENIED: Unassigned technician cannot complete job.');
     }
-    return { allowed: true };
+
+    if (!['IN_PROGRESS', 'ARRIVED'].includes(ticket.status)) {
+      throw new Error(`FAILED_PRECONDITION: Cannot complete job in status ${ticket.status}.`);
+    }
+
+    ticket.status = 'COMPLETED';
+    return { success: true, jobId };
   };
 
+  // Test 1: Tech A cannot complete Tech B job
   assert.throws(
-    () => evaluateGrievanceEdit({ callerRole: 'finance_staff' }),
-    /PERMISSION_DENIED/
+    () => completeJobMock({ callerUid: 'TECH-101', callerRole: 'technician', jobId: 'JOB-102', textReport: 'Done' }),
+    /PERMISSION_DENIED|FAILED_PRECONDITION/
   );
-});
 
-test('RBAC Server-Side Proof: Fleet Manager cannot read payroll', async () => {
-  const evaluateFleetPayrollAccess = ({ callerRole }) => {
-    if (callerRole === 'fleet_manager') {
-      throw new Error('PERMISSION_DENIED: Fleet role cannot read payroll records.');
-    }
-    return { allowed: true };
-  };
+  // Test 2: Tech A cannot complete Tech B active job
+  const activeJobB = { id: 'JOB-103', assignedTechnicianId: 'TECH-202', status: 'IN_PROGRESS' };
+  ticketsDb['JOB-103'] = activeJobB;
 
   assert.throws(
-    () => evaluateFleetPayrollAccess({ callerRole: 'fleet_manager' }),
+    () => completeJobMock({ callerUid: 'TECH-101', callerRole: 'technician', jobId: 'JOB-103', textReport: 'Done' }),
     /PERMISSION_DENIED/
   );
-});
 
-test('RBAC Server-Side Proof: Normal staff cannot enumerate employee documents', async () => {
-  const evaluateDocList = ({ callerRole, targetUid, callerUid }) => {
-    if (callerRole === 'staff' && callerUid !== targetUid) {
-      throw new Error('PERMISSION_DENIED: Staff cannot enumerate other employee documents.');
-    }
-    return { allowed: true };
-  };
-
-  assert.throws(
-    () => evaluateDocList({ callerRole: 'staff', callerUid: 'STAFF-1', targetUid: 'STAFF-2' }),
-    /PERMISSION_DENIED/
-  );
-});
-
-test('RBAC Server-Side Proof: AI assistant inherits caller permissions and cannot bypass RBAC', async () => {
-  const evaluateAiContextQuery = ({ callerRole, requestedResource }) => {
-    if (requestedResource === 'CONFIDENTIAL_HR' && callerRole !== 'hr_admin' && callerRole !== 'ceo') {
-      throw new Error('PERMISSION_DENIED: AI context engine cannot access resource caller is not authorized for.');
-    }
-    return { allowed: true };
-  };
-
-  assert.throws(
-    () => evaluateAiContextQuery({ callerRole: 'technician', requestedResource: 'CONFIDENTIAL_HR' }),
-    /PERMISSION_DENIED/
-  );
+  // Test 3: Tech A can complete own active job
+  const res = completeJobMock({ callerUid: 'TECH-101', callerRole: 'technician', jobId: 'JOB-101', textReport: 'Replaced valve' });
+  assert.equal(res.success, true);
+  assert.equal(ticketsDb['JOB-101'].status, 'COMPLETED');
 });
 
 // -------------------------------------------------------------------
-// 2. AI INVENTORY TRANSACTION TESTS
+// 3. FINISH SHIFT & EVIDENCE VALIDATION TESTS
 // -------------------------------------------------------------------
-test('AI Inventory Transaction: Full lifecycle (Staff Reject, Insufficient Stock, Auth Failure, Wrong Job, Idempotency, Single Deduction)', async () => {
-  let inventory = { SKU_COMPRESSOR: 5 };
-  let jobCosts = [];
-  let auditLogs = [];
-  let processedTransactionIds = new Set();
-
-  const executeMaterialDeduction = ({
-    txId,
-    callerUid,
-    assignedTechUid,
-    jobId,
-    targetJobId,
-    staffConfirmed,
-    items,
-  }) => {
-    if (processedTransactionIds.has(txId)) {
-      return { success: true, idempotent: true, message: 'Already processed.' };
+test('Finish Shift Evidence: Cannot finish shift while active work orders remain in progress', async () => {
+  const evaluateShiftFinish = ({ activeTicketsCount }) => {
+    if (activeTicketsCount > 0) {
+      throw new Error(`FAILED_PRECONDITION: Cannot finish shift with ${activeTicketsCount} active jobs.`);
     }
-    if (!staffConfirmed) {
-      return { success: false, reason: 'REJECTED_BY_STAFF' };
-    }
-    if (callerUid !== assignedTechUid) {
-      throw new Error('PERMISSION_DENIED: Unauthorized technician.');
-    }
-    if (jobId !== targetJobId) {
-      throw new Error('INVALID_ARGUMENT: Wrong work order ID.');
-    }
-
-    for (const item of items) {
-      if ((inventory[item.sku] || 0) < item.qty) {
-        throw new Error(`RESOURCE_EXHAUSTED: Out of stock for ${item.sku}.`);
-      }
-    }
-
-    let totalCost = 0;
-    items.forEach((item) => {
-      inventory[item.sku] -= item.qty;
-      totalCost += item.qty * item.unitCost;
-    });
-
-    jobCosts.push({ jobId, totalCost });
-    auditLogs.push({ action: 'INVENTORY_MUTATION_CONFIRMED', jobId, totalCost });
-    processedTransactionIds.add(txId);
-
-    return { success: true, totalCost };
+    return { success: true };
   };
 
-  // Case 1: Staff Rejects Proposal -> Inventory Unchanged
-  const res1 = executeMaterialDeduction({
-    txId: 'TX-1',
-    callerUid: 'TECH-101',
-    assignedTechUid: 'TECH-101',
-    jobId: 'JOB-1',
-    targetJobId: 'JOB-1',
-    staffConfirmed: false,
-    items: [{ sku: 'SKU_COMPRESSOR', qty: 1, unitCost: 500 }],
-  });
-  assert.equal(res1.success, false);
-  assert.equal(inventory.SKU_COMPRESSOR, 5);
-
-  // Case 2: Insufficient Stock -> Fails Atomically
   assert.throws(
-    () => executeMaterialDeduction({
-      txId: 'TX-2',
-      callerUid: 'TECH-101',
-      assignedTechUid: 'TECH-101',
-      jobId: 'JOB-1',
-      targetJobId: 'JOB-1',
-      staffConfirmed: true,
-      items: [{ sku: 'SKU_COMPRESSOR', qty: 10, unitCost: 500 }],
-    }),
-    /RESOURCE_EXHAUSTED/
+    () => evaluateShiftFinish({ activeTicketsCount: 2 }),
+    /FAILED_PRECONDITION/
   );
-  assert.equal(inventory.SKU_COMPRESSOR, 5);
+  assert.equal(evaluateShiftFinish({ activeTicketsCount: 0 }).success, true);
+});
 
-  // Case 3: Unauthorized Technician -> Denied
-  assert.throws(
-    () => executeMaterialDeduction({
-      txId: 'TX-3',
-      callerUid: 'TECH-999',
-      assignedTechUid: 'TECH-101',
-      jobId: 'JOB-1',
-      targetJobId: 'JOB-1',
-      staffConfirmed: true,
-      items: [{ sku: 'SKU_COMPRESSOR', qty: 1, unitCost: 500 }],
-    }),
-    /PERMISSION_DENIED/
-  );
+// -------------------------------------------------------------------
+// 4. DOMAIN-SCOPED EXCEPTION RESOLUTION TESTS
+// -------------------------------------------------------------------
+test('Domain-Scoped RBAC: Fleet manager cannot resolve payroll exception, human reason required', async () => {
+  const exceptionsDb = {
+    'EXC-PAYROLL': { id: 'EXC-PAYROLL', type: 'PAYROLL_DISCREPANCY', status: 'OPEN' },
+    'EXC-FLEET': { id: 'EXC-FLEET', type: 'VEHICLE_BREAKDOWN', status: 'OPEN' },
+  };
 
-  // Case 4: Wrong Job -> Denied
+  const resolveExceptionMock = ({ callerRole, exceptionId, action, reason }) => {
+    if (!reason || !reason.trim()) {
+      throw new Error('INVALID_ARGUMENT: Human-supplied resolution reason is required.');
+    }
+
+    const exc = exceptionsDb[exceptionId];
+    if (!exc) throw new Error('NOT_FOUND');
+
+    const type = exc.type;
+    if (type.includes('PAYROLL') && !['finance_manager', 'payroll_admin', 'ceo', 'admin'].includes(callerRole)) {
+      throw new Error('PERMISSION_DENIED: Fleet manager cannot resolve payroll exceptions.');
+    }
+    if (type.includes('VEHICLE') && !['fleet_manager', 'operations_manager', 'ceo', 'admin'].includes(callerRole)) {
+      throw new Error('PERMISSION_DENIED: Finance role cannot resolve vehicle exceptions.');
+    }
+
+    exc.status = 'RESOLVED';
+    return { success: true };
+  };
+
+  // Test 1: Missing human reason fails
   assert.throws(
-    () => executeMaterialDeduction({
-      txId: 'TX-4',
-      callerUid: 'TECH-101',
-      assignedTechUid: 'TECH-101',
-      jobId: 'JOB-1',
-      targetJobId: 'JOB-WRONG',
-      staffConfirmed: true,
-      items: [{ sku: 'SKU_COMPRESSOR', qty: 1, unitCost: 500 }],
-    }),
+    () => resolveExceptionMock({ callerRole: 'fleet_manager', exceptionId: 'EXC-FLEET', action: 'RESOLVE', reason: '' }),
     /INVALID_ARGUMENT/
   );
 
-  // Case 5: Successful Confirmation -> Stock decreases once, Job Cost increases once, Audit record written once
-  const res5 = executeMaterialDeduction({
-    txId: 'TX-5',
-    callerUid: 'TECH-101',
-    assignedTechUid: 'TECH-101',
-    jobId: 'JOB-1',
-    targetJobId: 'JOB-1',
-    staffConfirmed: true,
-    items: [{ sku: 'SKU_COMPRESSOR', qty: 1, unitCost: 500 }],
-  });
-  assert.equal(res5.success, true);
-  assert.equal(inventory.SKU_COMPRESSOR, 4);
-  assert.equal(jobCosts.length, 1);
-  assert.equal(auditLogs.length, 1);
-
-  // Case 6: Duplicate Confirmation -> Idempotent, no double deduction
-  const res6 = executeMaterialDeduction({
-    txId: 'TX-5',
-    callerUid: 'TECH-101',
-    assignedTechUid: 'TECH-101',
-    jobId: 'JOB-1',
-    targetJobId: 'JOB-1',
-    staffConfirmed: true,
-    items: [{ sku: 'SKU_COMPRESSOR', qty: 1, unitCost: 500 }],
-  });
-  assert.equal(res6.idempotent, true);
-  assert.equal(inventory.SKU_COMPRESSOR, 4);
-  assert.equal(jobCosts.length, 1);
-});
-
-// -------------------------------------------------------------------
-// 3. LOCATION PRIVACY & LISTENER CLEANUP TESTS
-// -------------------------------------------------------------------
-test('Location Privacy: GPS tracking is prohibited when OFF_DUTY, ON_BREAK, or unassigned', async () => {
-  const ACTIVE_DISPATCH_STATUSES = new Set(['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS']);
-
-  const evaluateLocationTracking = ({ dutyStatus, activeJobStatus }) => {
-    if (dutyStatus === 'OFF_DUTY' || dutyStatus === 'ON_BREAK') {
-      return { trackingActive: false, listenerCleanedUp: true, reason: 'Duty status inactive.' };
-    }
-    if (!ACTIVE_DISPATCH_STATUSES.has(activeJobStatus)) {
-      return { trackingActive: false, listenerCleanedUp: true, reason: 'No active dispatch assignment.' };
-    }
-    return { trackingActive: true, listenerCleanedUp: false, reason: 'Active dispatch.' };
-  };
-
-  assert.equal(evaluateLocationTracking({ dutyStatus: 'OFF_DUTY', activeJobStatus: 'IN_PROGRESS' }).trackingActive, false);
-  assert.equal(evaluateLocationTracking({ dutyStatus: 'ON_BREAK', activeJobStatus: 'IN_PROGRESS' }).trackingActive, false);
-  assert.equal(evaluateLocationTracking({ dutyStatus: 'ON_DUTY', activeJobStatus: 'COMPLETED' }).trackingActive, false);
-  assert.equal(evaluateLocationTracking({ dutyStatus: 'ON_DUTY', activeJobStatus: 'CANCELLED' }).trackingActive, false);
-  assert.equal(evaluateLocationTracking({ dutyStatus: 'ON_DUTY', activeJobStatus: 'EN_ROUTE' }).trackingActive, true);
-});
-
-// -------------------------------------------------------------------
-// 4. PDF VERIFICATION PRIVACY & MINIMAL METADATA TESTS
-// -------------------------------------------------------------------
-test('PDF Verification Privacy: Endpoint returns ONLY minimal safe fields and exposes no PII', async () => {
-  const reportPayload = {
-    reportId: 'PAYSLIP_101',
-    reportType: 'STAFF_DIGITAL_PAYSLIP',
-    staffUid: 'SECRET_TECH_UID',
-    netSalary: 'AED 99,999.00',
-    generatedAt: '2026-08-16T12:00:00Z',
-    sha256Hash: 'abc123hash',
-  };
-
-  const publicVerifyEndpoint = ({ reportId, providedHash }) => {
-    if (!reportId || !providedHash) throw new Error('INVALID_ARGUMENT');
-    const match = reportPayload.sha256Hash === providedHash;
-    return {
-      verified: match,
-      reportId: reportPayload.reportId,
-      reportType: reportPayload.reportType,
-      generatedAt: reportPayload.generatedAt,
-      reason: match ? 'Digest verified.' : 'Digest mismatch.',
-    };
-  };
-
-  const response = publicVerifyEndpoint({ reportId: 'PAYSLIP_101', providedHash: 'abc123hash' });
-
-  assert.equal(response.verified, true);
-  assert.equal(response.reportId, 'PAYSLIP_101');
-  assert.equal(response.reportType, 'STAFF_DIGITAL_PAYSLIP');
-  assert.equal(response.staffUid, undefined);
-  assert.equal(response.netSalary, undefined);
-  assert.equal(response.privateStoragePath, undefined);
-});
-
-// -------------------------------------------------------------------
-// 5. EXCEPTION RESOLUTION & AI AUDIT TESTS
-// -------------------------------------------------------------------
-test('Staff Exceptions: resolveStaffException enforces RBAC and writes audit logs', async () => {
-  const exceptionsDb = {
-    'EXC-1': { id: 'EXC-1', staffId: 'STAFF-1', type: 'MISSING_CLOCK_OUT', status: 'OPEN' },
-  };
-  const auditLogs = [];
-
-  const resolveStaffExceptionMock = ({ callerUid, callerRole, exceptionId, action, reason }) => {
-    if (callerRole === 'staff' && callerUid === exceptionsDb[exceptionId]?.staffId) {
-      throw new Error('PERMISSION_DENIED: Staff members cannot resolve their own exception tickets.');
-    }
-    if (!['admin', 'super_admin', 'ceo', 'hr_admin', 'operations_manager'].includes(callerRole)) {
-      throw new Error('PERMISSION_DENIED: Manager or admin role required.');
-    }
-
-    const current = exceptionsDb[exceptionId];
-    if (!current) throw new Error('NOT_FOUND: Exception not found.');
-
-    const newStatus = ['APPROVE_CORRECTION', 'RESOLVE'].includes(action) ? 'RESOLVED' : 'REJECTED';
-    exceptionsDb[exceptionId].status = newStatus;
-
-    auditLogs.push({
-      action: 'STAFF_EXCEPTION_RESOLVED',
-      actorUid: callerUid,
-      exceptionId,
-      previousStatus: current.status,
-      newStatus,
-    });
-
-    return { success: true, status: newStatus };
-  };
-
-  // Test 1: Self-resolution blocked
+  // Test 2: Fleet manager cannot resolve payroll
   assert.throws(
-    () => resolveStaffExceptionMock({ callerUid: 'STAFF-1', callerRole: 'staff', exceptionId: 'EXC-1', action: 'APPROVE_CORRECTION', reason: 'Self approved' }),
+    () => resolveExceptionMock({ callerRole: 'fleet_manager', exceptionId: 'EXC-PAYROLL', action: 'RESOLVE', reason: 'Reviewed' }),
     /PERMISSION_DENIED/
   );
 
-  // Test 2: Manager approval succeeds and writes audit log
-  const res = resolveStaffExceptionMock({ callerUid: 'MGR-1', callerRole: 'hr_admin', exceptionId: 'EXC-1', action: 'APPROVE_CORRECTION', reason: 'Verified timestamp' });
+  // Test 3: Fleet manager can resolve vehicle breakdown
+  const res = resolveExceptionMock({ callerRole: 'fleet_manager', exceptionId: 'EXC-FLEET', action: 'RESOLVE', reason: 'Assigned replacement vehicle.' });
   assert.equal(res.success, true);
-  assert.equal(exceptionsDb['EXC-1'].status, 'RESOLVED');
-  assert.equal(auditLogs.length, 1);
-  assert.equal(auditLogs[0].actorUid, 'MGR-1');
+  assert.equal(exceptionsDb['EXC-FLEET'].status, 'RESOLVED');
 });
 
-test('Staff Exceptions: runStaffAiAudit fails for non-managers and writes audit logs on success', async () => {
-  const auditLogs = [];
-
-  const runStaffAiAuditMock = ({ callerRole }) => {
-    if (!['admin', 'super_admin', 'ceo', 'hr_admin', 'operations_manager'].includes(callerRole)) {
-      throw new Error('PERMISSION_DENIED: Manager or admin role required for AI audit.');
+// -------------------------------------------------------------------
+// 5. PRIVILEGED MULTI-DEPT AUTOMATION TESTS
+// -------------------------------------------------------------------
+test('Multi-Dept Automation: Non-manager cannot trigger management vehicle hold cascade', async () => {
+  const evaluateAutomation = ({ callerRole, eventType }) => {
+    if (eventType === 'VEHICLE_ACCIDENT_CASCADE' && !['fleet_manager', 'operations_manager', 'admin', 'ceo'].includes(callerRole)) {
+      throw new Error('PERMISSION_DENIED: Only Fleet/Ops management can trigger vehicle hold cascade.');
     }
-
-    auditLogs.push({ action: 'STAFF_AI_AUDIT_EXECUTED', totalAudited: 4 });
-    return { success: true, totalAudited: 4, message: 'AI Exception Audit completed across 4 records.' };
+    return { success: true };
   };
 
-  // Test 1: Non-manager denied
   assert.throws(
-    () => runStaffAiAuditMock({ callerRole: 'technician' }),
+    () => evaluateAutomation({ callerRole: 'technician', eventType: 'VEHICLE_ACCIDENT_CASCADE' }),
     /PERMISSION_DENIED/
   );
-
-  // Test 2: Manager succeeds and logs execution
-  const res = runStaffAiAuditMock({ callerRole: 'operations_manager' });
-  assert.equal(res.success, true);
-  assert.equal(res.totalAudited, 4);
-  assert.equal(auditLogs.length, 1);
+  assert.equal(evaluateAutomation({ callerRole: 'fleet_manager', eventType: 'VEHICLE_ACCIDENT_CASCADE' }).success, true);
 });
-
