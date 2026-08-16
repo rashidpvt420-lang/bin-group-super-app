@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  STAGING_PROJECT_ID: studio-5724711541-8a962
+  STAGING_PROJECT_ID: bin-group-staging
   PRODUCTION_PROJECT_ID: bin-group-57c60
   SOURCE_BRANCH: feature/staff-operating-system
   CI: true
@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/$SOURCE_BRANCH"
-          test "$STAGING_PROJECT_ID" = "studio-5724711541-8a962"
+          test "$STAGING_PROJECT_ID" = "bin-group-staging"
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           test "$STAGING_PROJECT_ID" != "bin-group-57c60"
           echo "Staging-only deployment boundary accepted for $GITHUB_SHA"
@@ -94,8 +94,8 @@ jobs:
     needs: validate
     timeout-minutes: 55
     env:
-      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER || secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT || secrets.GCP_SERVICE_ACCOUNT }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT }}
       STAGING_V3_APP_CHECK_SITE_KEY_OVERRIDE: ${{ secrets.STAGING_V3_APP_CHECK_SITE_KEY || secrets.STAGING_APP_CHECK_SITE_KEY }}
       STAGING_ENTERPRISE_APP_CHECK_SITE_KEY_OVERRIDE: ${{ secrets.STAGING_ENTERPRISE_APP_CHECK_SITE_KEY || secrets.STAGING_APP_CHECK_ENTERPRISE_SITE_KEY }}
       STAGING_GOOGLE_MAPS_API_KEY: ${{ secrets.STAGING_GOOGLE_MAPS_API_KEY || secrets.VITE_GOOGLE_MAPS_API_KEY }}
@@ -105,10 +105,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = "refs/heads/$SOURCE_BRANCH"
-          test "$STAGING_PROJECT_ID" = "studio-5724711541-8a962"
+          test "$STAGING_PROJECT_ID" = "bin-group-staging"
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
           test -n "$GCP_SERVICE_ACCOUNT"
+          test "$GCP_WORKLOAD_IDENTITY_PROVIDER" = "projects/355288045402/locations/global/workloadIdentityPools/github-actions-staging/providers/github-bin-group-staging"
+          test "$GCP_SERVICE_ACCOUNT" = "github-staging-deploy@bin-group-staging.iam.gserviceaccount.com"
 
       - name: Checkout exact source SHA
         uses: actions/checkout@v4
