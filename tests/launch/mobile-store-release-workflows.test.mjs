@@ -90,6 +90,8 @@ test('Android store release is manual, exact-main, production-protected, and sig
   assert.match(androidScript, /Release AAB certificate does not match the protected upload keystore/);
   assert.match(androidScript, /apksigner.*verify --verbose --print-certs/s);
   assert.match(androidScript, /aapt dump badging/);
+  assert.match(androidScript, /package_name="\$\(sed -n "s\/\^name='/);
+  assert.doesNotMatch(androidScript, /package_name="\$\(sed -n "s\/\.\*name='/);
   assert.match(androidScript, /Release APK certificate does not match the protected upload keystore/);
   assert.match(androidScript, /aabCertificateMatchedUploadKeystore': True/);
   assert.match(androidScript, /trap cleanup EXIT/);
