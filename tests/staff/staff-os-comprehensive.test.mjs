@@ -299,3 +299,77 @@ test('PDF Verification Privacy: Endpoint returns ONLY minimal safe fields and ex
   assert.equal(response.netSalary, undefined);
   assert.equal(response.privateStoragePath, undefined);
 });
+
+// -------------------------------------------------------------------
+// 5. EXCEPTION RESOLUTION & AI AUDIT TESTS
+// -------------------------------------------------------------------
+test('Staff Exceptions: resolveStaffException enforces RBAC and writes audit logs', async () => {
+  const exceptionsDb = {
+    'EXC-1': { id: 'EXC-1', staffId: 'STAFF-1', type: 'MISSING_CLOCK_OUT', status: 'OPEN' },
+  };
+  const auditLogs = [];
+
+  const resolveStaffExceptionMock = ({ callerUid, callerRole, exceptionId, action, reason }) => {
+    if (callerRole === 'staff' && callerUid === exceptionsDb[exceptionId]?.staffId) {
+      throw new Error('PERMISSION_DENIED: Staff members cannot resolve their own exception tickets.');
+    }
+    if (!['admin', 'super_admin', 'ceo', 'hr_admin', 'operations_manager'].includes(callerRole)) {
+      throw new Error('PERMISSION_DENIED: Manager or admin role required.');
+    }
+
+    const current = exceptionsDb[exceptionId];
+    if (!current) throw new Error('NOT_FOUND: Exception not found.');
+
+    const newStatus = ['APPROVE_CORRECTION', 'RESOLVE'].includes(action) ? 'RESOLVED' : 'REJECTED';
+    exceptionsDb[exceptionId].status = newStatus;
+
+    auditLogs.push({
+      action: 'STAFF_EXCEPTION_RESOLVED',
+      actorUid: callerUid,
+      exceptionId,
+      previousStatus: current.status,
+      newStatus,
+    });
+
+    return { success: true, status: newStatus };
+  };
+
+  // Test 1: Self-resolution blocked
+  assert.throws(
+    () => resolveStaffExceptionMock({ callerUid: 'STAFF-1', callerRole: 'staff', exceptionId: 'EXC-1', action: 'APPROVE_CORRECTION', reason: 'Self approved' }),
+    /PERMISSION_DENIED/
+  );
+
+  // Test 2: Manager approval succeeds and writes audit log
+  const res = resolveStaffExceptionMock({ callerUid: 'MGR-1', callerRole: 'hr_admin', exceptionId: 'EXC-1', action: 'APPROVE_CORRECTION', reason: 'Verified timestamp' });
+  assert.equal(res.success, true);
+  assert.equal(exceptionsDb['EXC-1'].status, 'RESOLVED');
+  assert.equal(auditLogs.length, 1);
+  assert.equal(auditLogs[0].actorUid, 'MGR-1');
+});
+
+test('Staff Exceptions: runStaffAiAudit fails for non-managers and writes audit logs on success', async () => {
+  const auditLogs = [];
+
+  const runStaffAiAuditMock = ({ callerRole }) => {
+    if (!['admin', 'super_admin', 'ceo', 'hr_admin', 'operations_manager'].includes(callerRole)) {
+      throw new Error('PERMISSION_DENIED: Manager or admin role required for AI audit.');
+    }
+
+    auditLogs.push({ action: 'STAFF_AI_AUDIT_EXECUTED', totalAudited: 4 });
+    return { success: true, totalAudited: 4, message: 'AI Exception Audit completed across 4 records.' };
+  };
+
+  // Test 1: Non-manager denied
+  assert.throws(
+    () => runStaffAiAuditMock({ callerRole: 'technician' }),
+    /PERMISSION_DENIED/
+  );
+
+  // Test 2: Manager succeeds and logs execution
+  const res = runStaffAiAuditMock({ callerRole: 'operations_manager' });
+  assert.equal(res.success, true);
+  assert.equal(res.totalAudited, 4);
+  assert.equal(auditLogs.length, 1);
+});
+

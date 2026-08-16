@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Container,
@@ -15,68 +15,140 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  Badge,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
 import {
   Warning as ExceptionIcon,
   CheckCircle as ApproveIcon,
-  Cancel as ResolveIcon,
+  Cancel as RejectIcon,
   Notifications as AlertIcon,
   DirectionsCar as FleetIcon,
   People as HrIcon,
   ReceiptLong as FinanceIcon,
   AutoAwesome as AiIcon,
 } from "@mui/icons-material";
+import {
+  db,
+  auth,
+  functions,
+  httpsCallable,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "../../lib/firebase";
+
+export interface StaffExceptionRecord {
+  id: string;
+  staffId?: string;
+  staffName?: string;
+  role?: string;
+  type: string;
+  details?: string;
+  department?: string;
+  status: string;
+  severity?: string;
+  createdAt?: any;
+}
 
 export const StaffExceptionsManagerPage: React.FC = () => {
-  const [exceptions, setExceptions] = useState([
-    {
-      id: "EXC-101",
-      staffName: "Ahmed Al-Mansoori",
-      role: "Technician",
-      type: "UNUSUAL_OVERTIME",
-      details: "Claimed 1h 35m for emergency AC repair Villa 104.",
-      department: "HR / Operations",
-      status: "OPEN",
-      time: "10 mins ago",
-    },
-    {
-      id: "EXC-102",
-      staffName: "Khalid Omer",
-      role: "Driver",
-      type: "VEHICLE_BREAKDOWN",
-      details: "Vehicle Hilux 18 reported breakdown in Al Barsha.",
-      department: "Fleet / Operations",
-      status: "OPEN",
-      time: "25 mins ago",
-    },
-    {
-      id: "EXC-103",
-      staffName: "Fatima Al-Nuaimi",
-      role: "Coordinator",
-      type: "MISSING_CLOCK_OUT",
-      details: "Shift ended 17:00; no clock-out recorded by system.",
-      department: "HR",
-      status: "OPEN",
-      time: "1 hour ago",
-    },
-    {
-      id: "EXC-104",
-      staffName: "Saeed Rashidi",
-      role: "Senior Tech",
-      type: "EXPIRING_EMIRATES_ID",
-      details: "Emirates ID expires in 12 days. Reminder dispatched.",
-      department: "HR / Compliance",
-      status: "OPEN",
-      time: "3 hours ago",
-    },
-  ]);
+  const currentUid = auth.currentUser?.uid;
 
-  const handleResolve = (id: string) => {
-    setExceptions((prev) => prev.map((e) => (e.id === id ? { ...e, status: "RESOLVED" } : e)));
+  const [exceptions, setExceptions] = useState<StaffExceptionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [aiAuditRunning, setAiAuditRunning] = useState(false);
+  const [aiAuditResult, setAiAuditResult] = useState<string | null>(null);
+
+  // Live Subscription to staff_exceptions
+  useEffect(() => {
+    if (!currentUid) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const q = query(
+      collection(db, "staff_exceptions"),
+      where("status", "in", ["OPEN", "PENDING_REVIEW"])
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows: StaffExceptionRecord[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as StaffExceptionRecord[];
+        setExceptions(rows);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("[StaffExceptionsManagerPage] Error loading exceptions:", err);
+        setError("Failed to load staff exceptions. Please check your permissions or network.");
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [currentUid]);
+
+  // Execute Backend Resolution Callable
+  const handleResolveAction = async (exceptionId: string, action: string, reason: string) => {
+    try {
+      setResolvingId(exceptionId);
+      const resolveFn = httpsCallable(functions, "resolveStaffException");
+      await resolveFn({
+        exceptionId,
+        resolutionAction: action,
+        resolutionReason: reason,
+      });
+    } catch (err: any) {
+      console.error("[StaffExceptionsManagerPage] Resolution failed:", err);
+      alert(err.message || "Failed to process exception resolution.");
+    } finally {
+      setResolvingId(null);
+    }
   };
 
-  const openCount = exceptions.filter((e) => e.status === "OPEN").length;
+  // Execute Backend AI Audit Callable
+  const handleRunAiAudit = async () => {
+    try {
+      setAiAuditRunning(true);
+      setAiAuditResult(null);
+      const auditFn = httpsCallable(functions, "runStaffAiAudit");
+      const res: any = await auditFn({});
+      if (res.data?.success) {
+        setAiAuditResult(res.data.message || `AI Audit completed across ${res.data.totalAudited} records.`);
+      }
+    } catch (err: any) {
+      console.error("[StaffExceptionsManagerPage] AI Audit failed:", err);
+      alert(err.message || "Failed to execute AI exception audit.");
+    } finally {
+      setAiAuditRunning(false);
+    }
+  };
+
+  // Calculate Real Dynamic Counters
+  const hrCount = exceptions.filter((e) => (e.department || e.type).includes("HR") || e.type.includes("CLOCK")).length;
+  const fleetCount = exceptions.filter((e) => (e.department || e.type).includes("FLEET") || e.type.includes("VEHICLE")).length;
+  const opsCount = exceptions.filter((e) => (e.department || e.type).includes("OPS") || e.type.includes("OVERTIME")).length;
+  const openCount = exceptions.length;
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 6, textAlign: "center", bgcolor: "#0f172a", minHeight: "100vh", color: "#fff" }}>
+        <CircularProgress color="primary" />
+        <Typography variant="body1" sx={{ mt: 2, color: "#94a3b8" }}>
+          Loading authorized staff exceptions...
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 4, bgcolor: "#0f172a", color: "#f8fafc", minHeight: "100vh" }}>
@@ -87,26 +159,39 @@ export const StaffExceptionsManagerPage: React.FC = () => {
               Staff Exceptions & Multi-Dept Control
             </Typography>
             <Chip
-              label={`${openCount} OPEN EXCEPTIONS`}
+              label={`${openCount} ACTIVE EXCEPTIONS`}
               color={openCount > 0 ? "error" : "success"}
               sx={{ fontWeight: 800 }}
             />
           </Stack>
           <Typography variant="body2" sx={{ color: "#94a3b8", mt: 0.5 }}>
-            Exception-based management: 94% of normal workforce operations process automatically. Only flagged cases require human action.
+            Normal cases are processed automatically where configured. Exceptions requiring review appear here.
           </Typography>
         </Box>
         <Button
           variant="contained"
-          startIcon={<AiIcon />}
+          startIcon={aiAuditRunning ? <CircularProgress size={18} color="inherit" /> : <AiIcon />}
+          disabled={aiAuditRunning}
           sx={{ bgcolor: "#3b82f6", fontWeight: 700, borderRadius: 2 }}
-          onClick={() => alert("BIN AI cross-department automation sweep completed.")}
+          onClick={handleRunAiAudit}
         >
-          Run AI Multi-Dept Audit
+          {aiAuditRunning ? "Running AI Audit..." : "Run AI Multi-Dept Audit"}
         </Button>
       </Stack>
 
-      {/* Exception Counters */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      {aiAuditResult && (
+        <Alert severity="info" onClose={() => setAiAuditResult(null)} sx={{ mb: 3 }}>
+          {aiAuditResult}
+        </Alert>
+      )}
+
+      {/* Dynamic Exception Counters */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={4}>
           <Card sx={{ bgcolor: "#1e293b", border: "1px solid #ef4444", borderRadius: 3 }}>
@@ -117,10 +202,10 @@ export const StaffExceptionsManagerPage: React.FC = () => {
                     HR & ATTENDANCE
                   </Typography>
                   <Typography variant="h3" sx={{ fontWeight: 900, color: "#fff", my: 0.5 }}>
-                    2
+                    {hrCount}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                    1 Missing Clock-out • 1 Overtime Claim
+                  <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                    Attendance & Document Exceptions
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: "#ef4444", width: 48, height: 48 }}>
@@ -137,13 +222,13 @@ export const StaffExceptionsManagerPage: React.FC = () => {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
                   <Typography variant="caption" sx={{ color: "#f59e0b", fontWeight: 700 }}>
-                    FLEET & INCIDENTS
+                    FLEET & VEHICLES
                   </Typography>
                   <Typography variant="h3" sx={{ fontWeight: 900, color: "#fff", my: 0.5 }}>
-                    1
+                    {fleetCount}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                    1 Breakdown hold active
+                  <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                    Vehicle & Breakdown Incidents
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: "#f59e0b", width: 48, height: 48 }}>
@@ -155,22 +240,22 @@ export const StaffExceptionsManagerPage: React.FC = () => {
         </Grid>
 
         <Grid item xs={12} sm={4}>
-          <Card sx={{ bgcolor: "#1e293b", border: "1px solid #38bdf8", borderRadius: 3 }}>
+          <Card sx={{ bgcolor: "#1e293b", border: "1px solid #3b82f6", borderRadius: 3 }}>
             <CardContent sx={{ p: 3 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="caption" sx={{ color: "#38bdf8", fontWeight: 700 }}>
-                    COMPLIANCE & DOCUMENTS
+                  <Typography variant="caption" sx={{ color: "#3b82f6", fontWeight: 700 }}>
+                    OPERATIONS & OVERTIME
                   </Typography>
                   <Typography variant="h3" sx={{ fontWeight: 900, color: "#fff", my: 0.5 }}>
-                    1
+                    {opsCount}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#94a3b8" }}>
-                    1 Expiring Emirates ID
+                  <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                    Overtime & SLA Exceptions
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: "#38bdf8", width: 48, height: 48 }}>
-                  <FinanceIcon />
+                <Avatar sx={{ bgcolor: "#3b82f6", width: 48, height: 48 }}>
+                  <ExceptionIcon />
                 </Avatar>
               </Stack>
             </CardContent>
@@ -178,65 +263,139 @@ export const StaffExceptionsManagerPage: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Exception Table */}
+      {/* Exception Table / Empty State */}
       <Card sx={{ bgcolor: "#1e293b", border: "1px solid #334155", borderRadius: 3 }}>
         <CardContent sx={{ p: 0 }}>
-          <Table>
-            <TableHead sx={{ bgcolor: "#0f172a" }}>
-              <TableRow>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>ID</TableCell>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Staff Member</TableCell>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Exception Type</TableCell>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Details</TableCell>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Department</TableCell>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Status</TableCell>
-                <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }} align="right">Action</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {exceptions.map((row) => (
-                <TableRow key={row.id} sx={{ "&:hover": { bgcolor: "#334155" } }}>
-                  <TableCell sx={{ color: "#38bdf8", fontWeight: 700 }}>{row.id}</TableCell>
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    {row.staffName}
-                    <Typography variant="caption" sx={{ display: "block", color: "#94a3b8" }}>
-                      {row.role}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={row.type} color="warning" size="small" sx={{ fontWeight: 700 }} />
-                  </TableCell>
-                  <TableCell sx={{ color: "#cbd5e1" }}>{row.details}</TableCell>
-                  <TableCell sx={{ color: "#94a3b8" }}>{row.department}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={row.status}
-                      color={row.status === "OPEN" ? "error" : "success"}
-                      size="small"
-                      sx={{ fontWeight: 700 }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    {row.status === "OPEN" ? (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        onClick={() => handleResolve(row.id)}
-                        sx={{ fontWeight: 700, borderRadius: 1.5 }}
-                      >
-                        Approve / Resolve
-                      </Button>
-                    ) : (
-                      <Typography variant="caption" sx={{ color: "#22c55e", fontWeight: 700 }}>
-                        Resolved
-                      </Typography>
-                    )}
-                  </TableCell>
+          {exceptions.length === 0 ? (
+            <Box sx={{ p: 6, textAlign: "center" }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: "#fff", mb: 1 }}>
+                No Active Staff Exceptions
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#94a3b8" }}>
+                All workforce operations are proceeding within policy parameters.
+              </Typography>
+            </Box>
+          ) : (
+            <Table>
+              <TableHead sx={{ bgcolor: "#0f172a" }}>
+                <TableRow>
+                  <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Staff Member</TableCell>
+                  <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Exception Type</TableCell>
+                  <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Details</TableCell>
+                  <TableCell sx={{ color: "#94a3b8", fontWeight: 700 }}>Status</TableCell>
+                  <TableCell align="right" sx={{ color: "#94a3b8", fontWeight: 700 }}>Contextual Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {exceptions.map((exc) => (
+                  <TableRow key={exc.id} sx={{ "&:hover": { bgcolor: "#334155" } }}>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Avatar sx={{ bgcolor: "#3b82f6", width: 36, height: 36 }}>
+                          {(exc.staffName || "Staff").charAt(0)}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {exc.staffName || exc.staffId || "Staff Member"}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                            {exc.role || "Employee"}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={exc.type}
+                        size="small"
+                        color={exc.type.includes("BREAKDOWN") ? "error" : "warning"}
+                        sx={{ fontWeight: 800, fontSize: "0.7rem" }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ color: "#cbd5e1", maxWidth: 300 }}>
+                      {exc.details || "No details provided"}
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={exc.status} size="small" variant="outlined" sx={{ color: "#f59e0b", borderColor: "#f59e0b" }} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        {exc.type === "MISSING_CLOCK_OUT" && (
+                          <>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="success"
+                              disabled={resolvingId === exc.id}
+                              onClick={() => handleResolveAction(exc.id, "APPROVE_CORRECTION", "Clock-out timestamp verified against work log.")}
+                            >
+                              Approve Correction
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              disabled={resolvingId === exc.id}
+                              onClick={() => handleResolveAction(exc.id, "REJECT", "Clock-out correction rejected.")}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+
+                        {exc.type === "UNUSUAL_OVERTIME" && (
+                          <>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="success"
+                              disabled={resolvingId === exc.id}
+                              onClick={() => handleResolveAction(exc.id, "APPROVE", "Overtime claim verified against emergency repair SLA.")}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              disabled={resolvingId === exc.id}
+                              onClick={() => handleResolveAction(exc.id, "REJECT", "Unusual overtime claim rejected.")}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+
+                        {exc.type === "VEHICLE_BREAKDOWN" && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="secondary"
+                            disabled={resolvingId === exc.id}
+                            onClick={() => handleResolveAction(exc.id, "CLOSE_INCIDENT", "Vehicle breakdown acknowledged and dispatch rerouted.")}
+                          >
+                            Close Incident
+                          </Button>
+                        )}
+
+                        {exc.type !== "MISSING_CLOCK_OUT" && exc.type !== "UNUSUAL_OVERTIME" && exc.type !== "VEHICLE_BREAKDOWN" && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="primary"
+                            disabled={resolvingId === exc.id}
+                            onClick={() => handleResolveAction(exc.id, "RESOLVED", "Exception reviewed and resolved by manager.")}
+                          >
+                            Resolve Exception
+                          </Button>
+                        )}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </Box>
