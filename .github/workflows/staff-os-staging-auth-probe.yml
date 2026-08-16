@@ -55,17 +55,16 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Setup Google Cloud CLI pinned to staging
+      - name: Setup Google Cloud CLI
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
         with:
           version: '>= 416.0.0'
-          project_id: ${{ env.STAGING_PROJECT_ID }}
 
-      - name: Verify staging access without mutation
+      - name: Verify explicit staging access without mutation
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gcloud config get-value project 2>/dev/null)" = "$STAGING_PROJECT_ID"
+          test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           gcloud projects describe "$STAGING_PROJECT_ID" --format='value(projectId)' > "$RUNNER_TEMP/project-id.txt"
           test "$(cat "$RUNNER_TEMP/project-id.txt")" = "$STAGING_PROJECT_ID"
           echo "PR-scoped WIF identity can read the staging project. No Firebase mutation was performed."
