@@ -49,6 +49,43 @@ function run(command, args) {
 const projectNumber = run('gcloud', ['projects', 'describe', stagingProjectId, '--format=value(projectNumber)']);
 if (!/^\d+$/.test(projectNumber)) throw new Error('Unable to resolve the staging Google Cloud project number.');
 
+// This helper is staging-only by construction. New Firebase projects do not
+// necessarily have the App Check API enabled until App Check is opened in the
+// console for the first time, so make the deployment bootstrap deterministic.
+// The staging deploy service account must have serviceusage.services.enable.
+let appCheckServiceState = '';
+try {
+  appCheckServiceState = run('gcloud', [
+    'services',
+    'describe',
+    'firebaseappcheck.googleapis.com',
+    '--project',
+    stagingProjectId,
+    '--format=value(state)',
+  ]);
+} catch {
+  appCheckServiceState = '';
+}
+if (appCheckServiceState !== 'ENABLED') {
+  console.log(`[staging-appcheck] enabling firebaseappcheck.googleapis.com on ${stagingProjectId}`);
+  try {
+    run('gcloud', [
+      'services',
+      'enable',
+      'firebaseappcheck.googleapis.com',
+      '--project',
+      stagingProjectId,
+      '--quiet',
+    ]);
+  } catch (error) {
+    throw new Error(
+      `Firebase App Check API is disabled on staging and the deployment identity could not enable it. ` +
+      `Grant serviceusage.services.enable on ${stagingProjectId} (for example Service Usage Admin) and retry. ` +
+      `${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 const accessToken = run('gcloud', ['auth', 'print-access-token']);
 if (!accessToken) throw new Error('Unable to obtain a Google Cloud access token for staging App Check inspection.');
 
