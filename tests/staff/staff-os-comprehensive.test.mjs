@@ -1,169 +1,128 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
-const sha256 = (str) => createHash('sha256').update(str).digest('hex');
+const read = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 
-// -------------------------------------------------------------------
-// 1. RBAC SERVER-SIDE ISOLATION & NEGATIVE TESTS
-// -------------------------------------------------------------------
-test('RBAC Server-Side Proof: Technician cannot read another employee payroll', async () => {
-  const evaluatePayrollRead = ({ callerUid, callerRole, targetTechUid }) => {
-    if (callerRole === 'technician' && callerUid !== targetTechUid) {
-      throw new Error('PERMISSION_DENIED: Cannot access payroll of another technician.');
-    }
-    return { allowed: true };
-  };
+const staffBackend = () => read('functions/staffOperatingSystem.ts');
+const inventoryBackend = () => read('functions/staffInventoryEngine.ts');
+const pdfBackend = () => read('functions/staffPdfReporting.ts');
+const todayUi = () => read('src/components/staff/StaffTodayDashboard.tsx');
+const quickUi = () => read('src/components/staff/ContextQuickActionsFab.tsx');
+const voiceUi = () => read('src/components/staff/StaffVoicePaperworkDialog.tsx');
+const finishUi = () => read('src/components/staff/FinishShiftChecklistModal.tsx');
+const exceptionsUi = () => read('apps/admin-panel/src/pages/ops/StaffExceptionsManagerPage.tsx');
 
-  assert.throws(
-    () => evaluatePayrollRead({ callerUid: 'TECH-101', callerRole: 'technician', targetTechUid: 'TECH-202' }),
-    /PERMISSION_DENIED/
-  );
-  assert.equal(evaluatePayrollRead({ callerUid: 'TECH-101', callerRole: 'technician', targetTechUid: 'TECH-101' }).allowed, true);
+test('Staff callables require App Check and do not contain invented authoritative IDs', () => {
+  const source = staffBackend();
+  assert.match(source, /enforceAppCheck:\s*true/);
+  assert.match(source, /assertActiveAccount/);
+  assert.doesNotMatch(source, /VEHICLE-1|JOB-1/);
+  assert.doesNotMatch(source, /estimatedMinutes\s*\|\|\s*90/);
+  assert.doesNotMatch(source, /overtimeMinutes\s*\|\|\s*95/);
 });
 
-test('RBAC Server-Side Proof: Property Manager cannot read confidential HR cases', async () => {
-  const evaluateHrCaseAccess = ({ callerRole, isConfidential }) => {
-    if (callerRole === 'property_manager' && isConfidential) {
-      throw new Error('PERMISSION_DENIED: Property Managers cannot access confidential HR cases.');
-    }
-    return { allowed: true };
-  };
-
-  assert.throws(
-    () => evaluateHrCaseAccess({ callerRole: 'property_manager', isConfidential: true }),
-    /PERMISSION_DENIED/
-  );
+test('Job completion is preview-first, assignment-bound, state-validated and evidence-gated', () => {
+  const source = staffBackend();
+  assert.match(source, /confirmCompletion\s*=\s*data\.confirmCompletion\s*===\s*true/);
+  assert.match(source, /if\s*\(!confirmCompletion\)/);
+  assert.match(source, /assignedTechnicianUid/);
+  assert.match(source, /\["ARRIVED",\s*"IN_PROGRESS"\]/);
+  assert.match(source, /hasCompletionPhotoEvidence/);
+  assert.match(source, /Work-order assignment changed before completion/);
+  assert.match(source, /STAFF_JOB_COMPLETED/);
+  assert.doesNotMatch(source, /materialsDeducted:\s*proposedMaterials/);
 });
 
-// -------------------------------------------------------------------
-// 2. AUTHORITATIVE JOB COMPLETION & STATE MACHINE TESTS
-// -------------------------------------------------------------------
-test('Authoritative Job Completion: Technician A cannot complete Technician B job, completed job cannot be re-completed', async () => {
-  const ticketsDb = {
-    'JOB-101': { id: 'JOB-101', assignedTechnicianId: 'TECH-101', status: 'IN_PROGRESS' },
-    'JOB-102': { id: 'JOB-102', assignedTechnicianId: 'TECH-202', status: 'COMPLETED' },
-  };
-
-  const completeJobMock = ({ callerUid, callerRole, jobId, textReport }) => {
-    const ticket = ticketsDb[jobId];
-    if (!ticket) throw new Error('NOT_FOUND: Ticket not found.');
-    if (!textReport) throw new Error('INVALID_ARGUMENT: Report text required.');
-
-    const isAssigned = ticket.assignedTechnicianId === callerUid;
-    const isManager = ['admin', 'operations_manager'].includes(callerRole);
-    if (!isAssigned && !isManager) {
-      throw new Error('PERMISSION_DENIED: Unassigned technician cannot complete job.');
-    }
-
-    if (!['IN_PROGRESS', 'ARRIVED'].includes(ticket.status)) {
-      throw new Error(`FAILED_PRECONDITION: Cannot complete job in status ${ticket.status}.`);
-    }
-
-    ticket.status = 'COMPLETED';
-    return { success: true, jobId };
-  };
-
-  // Test 1: Tech A cannot complete Tech B job
-  assert.throws(
-    () => completeJobMock({ callerUid: 'TECH-101', callerRole: 'technician', jobId: 'JOB-102', textReport: 'Done' }),
-    /PERMISSION_DENIED|FAILED_PRECONDITION/
-  );
-
-  // Test 2: Tech A cannot complete Tech B active job
-  const activeJobB = { id: 'JOB-103', assignedTechnicianId: 'TECH-202', status: 'IN_PROGRESS' };
-  ticketsDb['JOB-103'] = activeJobB;
-
-  assert.throws(
-    () => completeJobMock({ callerUid: 'TECH-101', callerRole: 'technician', jobId: 'JOB-103', textReport: 'Done' }),
-    /PERMISSION_DENIED/
-  );
-
-  // Test 3: Tech A can complete own active job
-  const res = completeJobMock({ callerUid: 'TECH-101', callerRole: 'technician', jobId: 'JOB-101', textReport: 'Replaced valve' });
-  assert.equal(res.success, true);
-  assert.equal(ticketsDb['JOB-101'].status, 'COMPLETED');
+test('Overtime and shift finish use server-side shift/job evidence instead of fabricated defaults', () => {
+  const source = staffBackend();
+  assert.match(source, /Overtime can be requested only from an active shift/);
+  assert.match(source, /The overtime work order is not assigned to this staff member/);
+  assert.match(source, /An active overtime request is already pending review/);
+  assert.match(source, /Cannot finish shift with .*active work order/);
+  assert.match(source, /verificationSource:\s*"SERVER"/);
+  assert.match(source, /NOT_ASSERTED_BY_SHIFT_WORKFLOW/);
+  assert.doesNotMatch(source, /jobsCompletedCount\s*\|\|\s*1/);
+  assert.doesNotMatch(source, /photosUploadedCount\s*\|\|\s*2/);
+  assert.doesNotMatch(source, /RETURNED_CLEAN/);
+  assert.doesNotMatch(source, /ALL_ACCOUNTED_FOR/);
 });
 
-// -------------------------------------------------------------------
-// 3. FINISH SHIFT & EVIDENCE VALIDATION TESTS
-// -------------------------------------------------------------------
-test('Finish Shift Evidence: Cannot finish shift while active work orders remain in progress', async () => {
-  const evaluateShiftFinish = ({ activeTicketsCount }) => {
-    if (activeTicketsCount > 0) {
-      throw new Error(`FAILED_PRECONDITION: Cannot finish shift with ${activeTicketsCount} active jobs.`);
-    }
-    return { success: true };
-  };
-
-  assert.throws(
-    () => evaluateShiftFinish({ activeTicketsCount: 2 }),
-    /FAILED_PRECONDITION/
-  );
-  assert.equal(evaluateShiftFinish({ activeTicketsCount: 0 }).success, true);
+test('Inventory confirmation is idempotent and uses existing server stock/cost only', () => {
+  const source = inventoryBackend();
+  assert.match(source, /enforceAppCheck:\s*true/);
+  assert.match(source, /confirmationId/);
+  assert.match(source, /staff_inventory_confirmations/);
+  assert.match(source, /Stock records may not be invented during consumption/);
+  assert.match(source, /server-side unit cost/);
+  assert.match(source, /replayed/);
+  assert.doesNotMatch(source, /10\s*-\s*qty/);
+  assert.doesNotMatch(source, /\|\|\s*50/);
+  assert.doesNotMatch(source, /text\(item\.name\).*SKU/);
 });
 
-// -------------------------------------------------------------------
-// 4. DOMAIN-SCOPED EXCEPTION RESOLUTION TESTS
-// -------------------------------------------------------------------
-test('Domain-Scoped RBAC: Fleet manager cannot resolve payroll exception, human reason required', async () => {
-  const exceptionsDb = {
-    'EXC-PAYROLL': { id: 'EXC-PAYROLL', type: 'PAYROLL_DISCREPANCY', status: 'OPEN' },
-    'EXC-FLEET': { id: 'EXC-FLEET', type: 'VEHICLE_BREAKDOWN', status: 'OPEN' },
-  };
-
-  const resolveExceptionMock = ({ callerRole, exceptionId, action, reason }) => {
-    if (!reason || !reason.trim()) {
-      throw new Error('INVALID_ARGUMENT: Human-supplied resolution reason is required.');
-    }
-
-    const exc = exceptionsDb[exceptionId];
-    if (!exc) throw new Error('NOT_FOUND');
-
-    const type = exc.type;
-    if (type.includes('PAYROLL') && !['finance_manager', 'payroll_admin', 'ceo', 'admin'].includes(callerRole)) {
-      throw new Error('PERMISSION_DENIED: Fleet manager cannot resolve payroll exceptions.');
-    }
-    if (type.includes('VEHICLE') && !['fleet_manager', 'operations_manager', 'ceo', 'admin'].includes(callerRole)) {
-      throw new Error('PERMISSION_DENIED: Finance role cannot resolve vehicle exceptions.');
-    }
-
-    exc.status = 'RESOLVED';
-    return { success: true };
-  };
-
-  // Test 1: Missing human reason fails
-  assert.throws(
-    () => resolveExceptionMock({ callerRole: 'fleet_manager', exceptionId: 'EXC-FLEET', action: 'RESOLVE', reason: '' }),
-    /INVALID_ARGUMENT/
-  );
-
-  // Test 2: Fleet manager cannot resolve payroll
-  assert.throws(
-    () => resolveExceptionMock({ callerRole: 'fleet_manager', exceptionId: 'EXC-PAYROLL', action: 'RESOLVE', reason: 'Reviewed' }),
-    /PERMISSION_DENIED/
-  );
-
-  // Test 3: Fleet manager can resolve vehicle breakdown
-  const res = resolveExceptionMock({ callerRole: 'fleet_manager', exceptionId: 'EXC-FLEET', action: 'RESOLVE', reason: 'Assigned replacement vehicle.' });
-  assert.equal(res.success, true);
-  assert.equal(exceptionsDb['EXC-FLEET'].status, 'RESOLVED');
+test('Staff report functions create real PDF bytes from Firestore records with private Storage metadata', () => {
+  const source = pdfBackend();
+  assert.match(source, /PDFDocument/);
+  assert.match(source, /getStorage/);
+  assert.match(source, /staff_shifts/);
+  assert.match(source, /staff_request_trackers/);
+  assert.match(source, /payroll_entries/);
+  assert.match(source, /createHash\("sha256"\)\.update\(args\.buffer\)/);
+  assert.match(source, /staff-reports\/\$\{args\.staffUid\}/);
+  assert.doesNotMatch(source, /totalShiftsCompleted:\s*22/);
+  assert.doesNotMatch(source, /totalHoursWorked:\s*176/);
+  assert.doesNotMatch(source, /570/);
+  assert.doesNotMatch(source, /6,500|8,855|1,500/);
 });
 
-// -------------------------------------------------------------------
-// 5. PRIVILEGED MULTI-DEPT AUTOMATION TESTS
-// -------------------------------------------------------------------
-test('Multi-Dept Automation: Non-manager cannot trigger management vehicle hold cascade', async () => {
-  const evaluateAutomation = ({ callerRole, eventType }) => {
-    if (eventType === 'VEHICLE_ACCIDENT_CASCADE' && !['fleet_manager', 'operations_manager', 'admin', 'ceo'].includes(callerRole)) {
-      throw new Error('PERMISSION_DENIED: Only Fleet/Ops management can trigger vehicle hold cascade.');
-    }
-    return { success: true };
-  };
+test('Public PDF verifier returns minimal issuance metadata and not payroll/private storage data', () => {
+  const source = pdfBackend();
+  const verifierStart = source.indexOf('export const verifyReportPdfHash');
+  assert.ok(verifierStart >= 0, 'verifyReportPdfHash must exist');
+  const verifier = source.slice(verifierStart);
+  assert.match(verifier, /verified/);
+  assert.match(verifier, /reportType/);
+  assert.match(verifier, /generatedAt/);
+  assert.doesNotMatch(verifier, /netSalary/);
+  assert.doesNotMatch(verifier, /baseSalary/);
+  assert.doesNotMatch(verifier, /storagePath/);
+  assert.doesNotMatch(verifier, /signedUrl/);
+});
 
-  assert.throws(
-    () => evaluateAutomation({ callerRole: 'technician', eventType: 'VEHICLE_ACCIDENT_CASCADE' }),
-    /PERMISSION_DENIED/
-  );
-  assert.equal(evaluateAutomation({ callerRole: 'fleet_manager', eventType: 'VEHICLE_ACCIDENT_CASCADE' }).success, true);
+test('Admin exception UI consumes server-scoped queue and requires a human decision reason', () => {
+  const source = exceptionsUi();
+  assert.match(source, /getStaffExceptionsQueue/);
+  assert.match(source, /resolveStaffException/);
+  assert.match(source, /Run Rules Review/);
+  assert.match(source, /Decision reason/);
+  assert.doesNotMatch(source, /collection\(db,\s*["']staff_exceptions["']\)/);
+  assert.doesNotMatch(source, /Ahmed Al-Mansoori|Khalid Omer|Fatima Al-Nuaimi|Saeed Rashidi|Villa 104|Hilux 18/);
+});
+
+test('TODAY, Quick Actions, voice report and shift finish contain no simulated operational evidence', () => {
+  const combined = [todayUi(), quickUi(), voiceUi(), finishUi()].join('\n');
+  assert.doesNotMatch(combined, /Hilux 18|Villa 104|JOB-184|Dubai GPS|REG-UAE/);
+  assert.doesNotMatch(combined, /Fuel 82%|1h 35m|2 Photos verified|compressor was damaged/i);
+  assert.doesNotMatch(voiceUi(), /setTimeout\(/);
+  assert.doesNotMatch(finishUi(), /useState\(\{\s*jobsUpdated:\s*true/);
+  assert.match(todayUi(), /submitStaffQuickAction/);
+  assert.match(todayUi(), /requestStaffOvertime/);
+  assert.match(voiceUi(), /completeStaffJobWithAi/);
+  assert.match(finishUi(), /triggerStaffShiftFinish/);
+});
+
+test('Generated rules hardening keeps authoritative Staff OS writes server-only and protects report storage', () => {
+  const firestoreHardener = read('scripts/harden-owner-trust-rules.mjs');
+  const storageHardener = read('scripts/harden-private-hr-storage.mjs');
+
+  assert.match(firestoreHardener, /match \/staff_shifts\/\{shiftId\}/);
+  assert.match(firestoreHardener, /match \/staff_inventory_confirmations\/\{confirmationId\}/);
+  assert.match(firestoreHardener, /match \/job_costs\/\{costId\}/);
+  assert.match(firestoreHardener, /match \/pdf_reports\/\{reportId\}/);
+  assert.match(firestoreHardener, /allow create, update, delete: if false/);
+
+  assert.match(storageHardener, /match \/staff-reports\/\{staffId\}\/\{allPaths=\*\*\}/);
+  assert.match(storageHardener, /collection != 'staff-reports'/);
+  assert.match(storageHardener, /allow write: if false/);
 });
