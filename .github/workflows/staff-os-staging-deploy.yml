@@ -6,6 +6,7 @@ on:
       - feature/staff-operating-system
     paths:
       - .github/workflows/staff-os-staging-deploy.yml
+      - scripts/resolve-staging-appcheck-keys.mjs
 
 permissions:
   contents: read
@@ -91,14 +92,15 @@ jobs:
     name: Deploy exact SHA to Firebase staging only
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 45
+    timeout-minutes: 55
     env:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER || secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT || secrets.GCP_SERVICE_ACCOUNT }}
-      STAGING_APP_CHECK_SITE_KEY: ${{ secrets.STAGING_APP_CHECK_SITE_KEY || secrets.VITE_APP_CHECK_SITE_KEY }}
+      STAGING_V3_APP_CHECK_SITE_KEY_OVERRIDE: ${{ secrets.STAGING_V3_APP_CHECK_SITE_KEY || secrets.STAGING_APP_CHECK_SITE_KEY }}
+      STAGING_ENTERPRISE_APP_CHECK_SITE_KEY_OVERRIDE: ${{ secrets.STAGING_ENTERPRISE_APP_CHECK_SITE_KEY || secrets.STAGING_APP_CHECK_ENTERPRISE_SITE_KEY }}
       STAGING_GOOGLE_MAPS_API_KEY: ${{ secrets.STAGING_GOOGLE_MAPS_API_KEY || secrets.VITE_GOOGLE_MAPS_API_KEY }}
     steps:
-      - name: Enforce staging-only boundaries and required deployment credentials
+      - name: Enforce staging-only boundaries and required deployment identity
         shell: bash
         run: |
           set -euo pipefail
@@ -107,7 +109,6 @@ jobs:
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
           test -n "$GCP_SERVICE_ACCOUNT"
-          test -n "$STAGING_APP_CHECK_SITE_KEY"
 
       - name: Checkout exact source SHA
         uses: actions/checkout@v4
@@ -121,10 +122,14 @@ jobs:
       - name: Authenticate to Google Cloud with Workload Identity Federation
         uses: google-github-actions/auth@v2
         with:
+          project_id: ${{ env.STAGING_PROJECT_ID }}
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -141,6 +146,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(gcloud config get-value project 2>/dev/null)" = "$STAGING_PROJECT_ID"
           npx firebase-tools projects:list --json > "$RUNNER_TEMP/firebase-projects.json"
           node <<'NODE'
           const fs = require('fs');
@@ -224,23 +230,36 @@ jobs:
             REACT_APP_FIREBASE_MESSAGING_SENDER_ID: cfg.messagingSenderId,
             REACT_APP_ADMIN_FIREBASE_APP_ID: cfg.appId,
           };
-          fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(pairs).map(([k,v]) => `${k}=${v}`).join('\n') + '\n');
+          fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(pairs).map(([key, value]) => `${key}=${value}`).join('\n') + '\n');
           NODE
+
+      - name: Resolve staging Hosting inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools hosting:sites:list --project "$STAGING_PROJECT_ID" --json > "$RUNNER_TEMP/staging-sites.json"
+          test -s "$RUNNER_TEMP/staging-sites.json"
+
+      - name: Resolve staging-only App Check keys
+        env:
+          STAGING_WEB_APP_ID_FILE: ${{ runner.temp }}/staging-web-app-id.txt
+          STAGING_HOSTING_SITES_FILE: ${{ runner.temp }}/staging-sites.json
+        run: node scripts/resolve-staging-appcheck-keys.mjs
 
       - name: Build shared package and staging frontends
         env:
           CI: false
           VITE_ENABLE_FIREBASE_APPCHECK: 'true'
-          VITE_APP_CHECK_SITE_KEY: ${{ env.STAGING_APP_CHECK_SITE_KEY }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ env.STAGING_GOOGLE_MAPS_API_KEY }}
           REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-          REACT_APP_APP_CHECK_SITE_KEY: ${{ env.STAGING_APP_CHECK_SITE_KEY }}
           REACT_APP_GOOGLE_MAPS_API_KEY: ${{ env.STAGING_GOOGLE_MAPS_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
           test "$VITE_FIREBASE_PROJECT_ID" = "$STAGING_PROJECT_ID"
           test "$REACT_APP_FIREBASE_PROJECT_ID" = "$STAGING_PROJECT_ID"
+          test -n "$VITE_APP_CHECK_SITE_KEY"
+          test -n "$REACT_APP_APP_CHECK_SITE_KEY"
           npm run build --workspace=@bin/shared
           npm run build
           npm run build:admin
@@ -282,30 +301,11 @@ jobs:
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage --project "$STAGING_PROJECT_ID" --non-interactive
 
-      - name: Resolve an existing staging Hosting site
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx firebase-tools hosting:sites:list --project "$STAGING_PROJECT_ID" --json > "$RUNNER_TEMP/staging-sites.json"
-          node <<'NODE'
-          const fs = require('fs');
-          const payload = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/staging-sites.json', 'utf8'));
-          const rows = payload?.result?.sites || payload?.result || payload?.sites || [];
-          const sites = Array.isArray(rows) ? rows : [];
-          const ids = sites.map((site) => site.site || site.siteId || String(site.name || '').split('/').pop()).filter(Boolean);
-          const preferred = ids.includes(process.env.STAGING_PROJECT_ID) ? process.env.STAGING_PROJECT_ID : ids[0];
-          if (!preferred) throw new Error('No Firebase Hosting site exists in the staging project.');
-          if (preferred === process.env.PRODUCTION_PROJECT_ID || preferred === 'bin-group-admin-panel') {
-            throw new Error('Refusing a production Hosting site as staging destination.');
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, `STAGING_HOSTING_SITE=${preferred}\n`);
-          console.log(`Using staging Hosting site ${preferred}.`);
-          NODE
-
       - name: Generate isolated staging Hosting configs
         shell: bash
         run: |
           set -euo pipefail
+          test -n "$STAGING_HOSTING_SITE"
           node <<'NODE'
           const fs = require('fs');
           const source = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
@@ -314,6 +314,9 @@ jobs:
           const admin = entries.find((entry) => entry && entry.target === 'admin');
           if (!app || !admin) throw new Error('Canonical app/admin Hosting entries were not found.');
           const site = process.env.STAGING_HOSTING_SITE;
+          if (!site || site === process.env.PRODUCTION_PROJECT_ID || site === 'bin-group-admin-panel') {
+            throw new Error('Refusing production or empty Hosting destination.');
+          }
           const appConfig = JSON.parse(JSON.stringify(app));
           const adminConfig = JSON.parse(JSON.stringify(admin));
           delete appConfig.target;
@@ -346,6 +349,44 @@ jobs:
           echo "APP_CHANNEL=$APP_CHANNEL" >> "$GITHUB_ENV"
           echo "ADMIN_CHANNEL=$ADMIN_CHANNEL" >> "$GITHUB_ENV"
 
+      - name: Verify deployed exact-SHA manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const parseUrl = (file) => {
+            const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const result = payload?.result || payload;
+            const candidates = [
+              result?.url,
+              result?.previewUrl,
+              result?.hosting?.url,
+              result?.details?.url,
+            ].filter(Boolean);
+            const deep = JSON.stringify(result).match(/https:\/\/[^"\\]+\.web\.app[^"\\]*/g) || [];
+            return String(candidates[0] || deep[0] || '').replace(/\\u0026/g, '&');
+          };
+          const appUrl = parseUrl(process.env.RUNNER_TEMP + '/staff-app-preview.json');
+          const adminUrl = parseUrl(process.env.RUNNER_TEMP + '/staff-admin-preview.json');
+          if (!appUrl || !adminUrl) throw new Error('Could not resolve staging preview URLs from Firebase CLI evidence.');
+          fs.appendFileSync(process.env.GITHUB_ENV, `STAGING_APP_PREVIEW_URL=${appUrl}\nSTAGING_ADMIN_PREVIEW_URL=${adminUrl}\n`);
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/preview-urls.json', JSON.stringify({ appUrl, adminUrl }, null, 2));
+          NODE
+          MANIFEST="staff-os-staging-${GITHUB_SHA}.json"
+          curl --fail --silent --show-error --location "$STAGING_APP_PREVIEW_URL/$MANIFEST" -o "$RUNNER_TEMP/app-manifest.json"
+          curl --fail --silent --show-error --location "$STAGING_ADMIN_PREVIEW_URL/$MANIFEST" -o "$RUNNER_TEMP/admin-manifest.json"
+          node <<'NODE'
+          const fs = require('fs');
+          for (const file of ['app-manifest.json', 'admin-manifest.json']) {
+            const payload = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/' + file, 'utf8'));
+            if (payload.commitSha !== process.env.GITHUB_SHA) throw new Error(`${file} SHA mismatch.`);
+            if (payload.firebaseProjectId !== process.env.STAGING_PROJECT_ID) throw new Error(`${file} project mismatch.`);
+            if (payload.productionTouched !== false || payload.migrationExecuted !== false) throw new Error(`${file} safety marker mismatch.`);
+          }
+          console.log('Verified exact-SHA staging manifests on both preview channels.');
+          NODE
+
       - name: Record staging deployment evidence
         shell: bash
         run: |
@@ -353,6 +394,9 @@ jobs:
           mkdir -p staging_deployment_evidence
           cp "$RUNNER_TEMP/staff-app-preview.json" staging_deployment_evidence/staff-app-preview.json
           cp "$RUNNER_TEMP/staff-admin-preview.json" staging_deployment_evidence/staff-admin-preview.json
+          cp "$RUNNER_TEMP/preview-urls.json" staging_deployment_evidence/preview-urls.json
+          cp "$RUNNER_TEMP/app-manifest.json" staging_deployment_evidence/app-manifest.json
+          cp "$RUNNER_TEMP/admin-manifest.json" staging_deployment_evidence/admin-manifest.json
           node <<'NODE'
           const fs = require('fs');
           const evidence = {
@@ -363,6 +407,8 @@ jobs:
             hostingSite: process.env.STAGING_HOSTING_SITE,
             appPreviewChannel: process.env.APP_CHANNEL,
             adminPreviewChannel: process.env.ADMIN_CHANNEL,
+            appPreviewUrl: process.env.STAGING_APP_PREVIEW_URL,
+            adminPreviewUrl: process.env.STAGING_ADMIN_PREVIEW_URL,
             functionsDeployed: true,
             firestoreRulesDeployed: true,
             firestoreIndexesDeployed: true,
