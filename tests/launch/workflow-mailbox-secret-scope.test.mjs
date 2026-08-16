@@ -115,6 +115,14 @@ test('Live Role Smoke strict-live credential validation receives protected Gmail
   assertOAuthMappings(step, 'Live Role Smoke: Validate role credentials and App Check');
 });
 
+test('Live Role Smoke controlled-pilot eligibility receives protected Gmail OAuth secrets', () => {
+  const source = readFileSync('.github/workflows/live-role-smoke.yml', 'utf8');
+  const step = workflowStep(source, 'Verify controlled-pilot eligibility');
+
+  assert.match(step, /node scripts\/launch-status\.mjs/);
+  assertOAuthMappings(step, 'Live Role Smoke: Verify controlled-pilot eligibility');
+});
+
 test('public live-proof environment validates OAuth credentials without persisting them', () => {
   const source = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
   const step = workflowStep(source, 'Create E2E environment for live proofs');
