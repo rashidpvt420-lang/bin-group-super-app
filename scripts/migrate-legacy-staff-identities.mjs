@@ -110,7 +110,8 @@ export async function migrateLegacyStaffIdentities({
     totalExistingUsers: existingUserUids.size,
     technicianProfilesFound: technicianProfileCount,
     hrProfilesFound: hrProfileCount,
-    identitiesMigrated: migratedCount,
+    candidatesReadyForMigration: dryRun ? migratedCount : 0,
+    identitiesMigrated: dryRun ? 0 : migratedCount,
     duplicatesSkipped: duplicateCount,
     status: 'SUCCESS',
   };
