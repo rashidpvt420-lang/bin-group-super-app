@@ -49,43 +49,10 @@ function run(command, args) {
 const projectNumber = run('gcloud', ['projects', 'describe', stagingProjectId, '--format=value(projectNumber)']);
 if (!/^\d+$/.test(projectNumber)) throw new Error('Unable to resolve the staging Google Cloud project number.');
 
-// This helper is staging-only by construction. New Firebase projects do not
-// necessarily have the App Check API enabled until App Check is opened in the
-// console for the first time, so make the deployment bootstrap deterministic.
-// The staging deploy service account must have serviceusage.services.enable.
-let appCheckServiceState = '';
-try {
-  appCheckServiceState = run('gcloud', [
-    'services',
-    'describe',
-    'firebaseappcheck.googleapis.com',
-    '--project',
-    stagingProjectId,
-    '--format=value(state)',
-  ]);
-} catch {
-  appCheckServiceState = '';
-}
-if (appCheckServiceState !== 'ENABLED') {
-  console.log(`[staging-appcheck] enabling firebaseappcheck.googleapis.com on ${stagingProjectId}`);
-  try {
-    run('gcloud', [
-      'services',
-      'enable',
-      'firebaseappcheck.googleapis.com',
-      '--project',
-      stagingProjectId,
-      '--quiet',
-    ]);
-  } catch (error) {
-    throw new Error(
-      `Firebase App Check API is disabled on staging and the deployment identity could not enable it. ` +
-      `Grant serviceusage.services.enable on ${stagingProjectId} (for example Service Usage Admin) and retry. ` +
-      `${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
+// Do not infer API state from Service Usage permissions. The staging deploy
+// identity intentionally does not need serviceusage.services.get/enable. Query
+// Firebase App Check directly instead; if the API is disabled, the App Check
+// endpoint itself returns an authoritative error without broadening IAM.
 const accessToken = run('gcloud', ['auth', 'print-access-token']);
 if (!accessToken) throw new Error('Unable to obtain a Google Cloud access token for staging App Check inspection.');
 
@@ -99,6 +66,13 @@ async function getJson(url, { allowNotFound = false } = {}) {
   if (allowNotFound && response.status === 404) return null;
   if (!response.ok) {
     const body = await response.text();
+    const disabled = response.status === 403 && /has not been used|disabled/i.test(body);
+    if (disabled) {
+      throw new Error(
+        `Firebase App Check API is not yet available to the staging deployment identity for ${stagingProjectId}. ` +
+        `Confirm firebaseappcheck.googleapis.com is enabled on staging, wait for Google Cloud propagation, and retry.`,
+      );
+    }
     throw new Error(`App Check API request failed (${response.status}): ${body.slice(0, 300)}`);
   }
   return response.json();
