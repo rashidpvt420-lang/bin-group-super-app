@@ -2,6 +2,21 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 const FUNCTION_REGION = "europe-west3";
+const CALLABLE_OPTIONS = {
+  region: FUNCTION_REGION,
+  cors: true,
+  enforceAppCheck: true,
+} as const;
+
+const ACTIVE_JOB_STATUSES = [
+  "assigned",
+  "on_the_way",
+  "arrived",
+  "in_progress",
+  "EN_ROUTE",
+  "ARRIVED",
+  "IN_PROGRESS",
+];
 
 const ensureDb = () => {
   if (!admin.apps.length) {
@@ -10,76 +25,225 @@ const ensureDb = () => {
   return admin.firestore();
 };
 
-const text = (v: any) => String(v ?? "").trim();
+const text = (value: unknown) => String(value ?? "").trim();
+const upper = (value: unknown) => text(value).toUpperCase();
 
-function getCallerRole(token: any): string {
+function getCallerRole(token: Record<string, unknown>): string {
   return text(token.role || token.userRole || token.primaryRole).toLowerCase();
 }
 
+function isCeoOrAdmin(token: Record<string, unknown>, role = getCallerRole(token)): boolean {
+  return token.admin === true || token.super_admin === true || token.superAdmin === true ||
+    ["ceo", "super_admin", "admin"].includes(role);
+}
+
+async function assertActiveAccount(uid: string, token: Record<string, unknown>) {
+  const user = await admin.auth().getUser(uid);
+  if (user.disabled || token.suspended === true || user.customClaims?.suspended === true) {
+    throw new HttpsError("permission-denied", "This staff account is disabled or suspended.");
+  }
+}
+
+function dubaiDateKey(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) {
+    throw new HttpsError("internal", "Unable to resolve company-local date.");
+  }
+  return `${year}-${month}-${day}`;
+}
+
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  if (typeof value === "object" && value !== null) {
+    const maybe = value as { toDate?: () => Date; seconds?: number; _seconds?: number };
+    if (typeof maybe.toDate === "function") {
+      const date = maybe.toDate();
+      return Number.isFinite(date.getTime()) ? date : null;
+    }
+    const seconds = maybe.seconds ?? maybe._seconds;
+    if (Number.isFinite(Number(seconds))) {
+      const date = new Date(Number(seconds) * 1000);
+      return Number.isFinite(date.getTime()) ? date : null;
+    }
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  return null;
+}
+
+function assignedTechnicianUid(data: Record<string, unknown>): string {
+  return text(
+    data.assignedTechnicianId ||
+    data.technicianId ||
+    data.assignedTechId ||
+    data.technicianUid ||
+    data.techId,
+  );
+}
+
+function assignedVehicleUid(data: Record<string, unknown>): string {
+  return text(
+    data.assignedStaffUid ||
+    data.assignedDriverUid ||
+    data.currentDriverUid ||
+    data.driverUid ||
+    data.custodianUid,
+  );
+}
+
+function hasCompletionPhotoEvidence(data: Record<string, unknown>): boolean {
+  const single = text(
+    data.technicianAfterPhotoUrl ||
+    data.afterPhotoUrl ||
+    data.completionPhotoUrl,
+  );
+  const arrays = [
+    data.technicianAfterPhotos,
+    data.afterPhotos,
+    data.completionPhotos,
+    data.proofPhotos,
+  ];
+  return Boolean(single) || arrays.some((value) => Array.isArray(value) && value.length > 0);
+}
+
+async function loadActiveTicket(db: FirebaseFirestore.Firestore, uid: string) {
+  const snap = await db.collection("maintenanceTickets")
+    .where("assignedTechnicianId", "==", uid)
+    .where("status", "in", ACTIVE_JOB_STATUSES)
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0];
+}
+
+async function loadAssignedVehicle(db: FirebaseFirestore.Firestore, uid: string) {
+  const snap = await db.collection("vehicles")
+    .where("assignedStaffUid", "==", uid)
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0];
+}
+
+type ExceptionDomain = "HR_CONFIDENTIAL" | "HR" | "FLEET" | "FINANCE" | "OPERATIONS" | "GENERAL";
+
+function exceptionDomain(exceptionType: unknown): ExceptionDomain {
+  const type = upper(exceptionType);
+  if (type.includes("CONFIDENTIAL_HR") || type.includes("GRIEVANCE") || type.includes("ETHICS")) {
+    return "HR_CONFIDENTIAL";
+  }
+  if (type.includes("HR") || type.includes("CLOCK") || type.includes("ATTENDANCE") || type.includes("DOCUMENT")) {
+    return "HR";
+  }
+  if (type.includes("FLEET") || type.includes("VEHICLE") || type.includes("BREAKDOWN") || type.includes("ACCIDENT")) {
+    return "FLEET";
+  }
+  if (type.includes("PAYROLL") || type.includes("FINANCE") || type.includes("EXPENSE")) {
+    return "FINANCE";
+  }
+  if (type.includes("OPERATIONS") || type.includes("OVERTIME") || type.includes("SLA") || type.includes("JOB")) {
+    return "OPERATIONS";
+  }
+  return "GENERAL";
+}
+
+function canAccessExceptionDomain(token: Record<string, unknown>, role: string, domain: ExceptionDomain): boolean {
+  if (isCeoOrAdmin(token, role)) return true;
+  if (domain === "HR_CONFIDENTIAL") return role === "hr_confidential";
+  if (domain === "HR") return ["hr_admin", "hr_manager", "hr_staff"].includes(role);
+  if (domain === "FLEET") return ["fleet_manager", "operations_manager"].includes(role);
+  if (domain === "FINANCE") return ["finance_manager", "payroll_admin"].includes(role);
+  if (domain === "OPERATIONS") return ["operations_manager", "supervisor"].includes(role);
+  return false;
+}
+
+function allowedExceptionActions(domain: ExceptionDomain): Set<string> {
+  if (domain === "HR_CONFIDENTIAL") {
+    return new Set(["RESOLVE", "REJECT", "REQUEST_INFORMATION"]);
+  }
+  if (domain === "HR") {
+    return new Set(["APPROVE_CORRECTION", "MARK_VERIFIED", "RESOLVE", "REJECT", "REQUEST_INFORMATION"]);
+  }
+  if (domain === "FLEET") {
+    return new Set(["ACKNOWLEDGE", "ASSIGN_REPLACEMENT", "SEND_TO_WORKSHOP", "CLOSE_INCIDENT", "RESOLVE", "REQUEST_INFORMATION"]);
+  }
+  if (domain === "FINANCE") {
+    return new Set(["APPROVE", "REJECT", "RESOLVE", "REQUEST_INFORMATION"]);
+  }
+  if (domain === "OPERATIONS") {
+    return new Set(["APPROVE", "PARTIAL_APPROVE", "REJECT", "RESOLVE", "REQUEST_EVIDENCE", "REQUEST_INFORMATION"]);
+  }
+  return new Set(["RESOLVE", "REJECT", "REQUEST_INFORMATION"]);
+}
+
+function nextExceptionStatus(action: string): string {
+  if (action === "REJECT") return "REJECTED";
+  if (["RESOLVE", "APPROVE", "APPROVE_CORRECTION", "PARTIAL_APPROVE", "CLOSE_INCIDENT", "MARK_VERIFIED"].includes(action)) {
+    return "RESOLVED";
+  }
+  return "IN_REVIEW";
+}
+
 /**
- * 1. Submit Context-Aware Staff Quick Action Callable
- * Server-resolves active shift, vehicle custody, and job assignment.
+ * Context-aware staff quick actions.
+ * Only authoritative transitions implemented here are accepted; unsupported actions fail closed.
  */
-export const submitStaffQuickAction = onCall({ region: FUNCTION_REGION }, async (request) => {
+export const submitStaffQuickAction = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
   const uid = request.auth.uid;
+  const token = request.auth.token || {};
   const db = ensureDb();
   const data = request.data || {};
-  const actionType = text(data.actionType).toUpperCase();
+  const actionType = upper(data.actionType);
 
-  if (!actionType) {
-    throw new HttpsError("invalid-argument", "Action type is required.");
+  await assertActiveAccount(uid, token);
+
+  const supportedActions = new Set(["CLOCK_IN", "ARRIVE", "START_JOB", "BREAKDOWN_REPORT"]);
+  if (!supportedActions.has(actionType)) {
+    throw new HttpsError("unimplemented", `Quick action ${actionType || "(missing)"} is not wired to an authoritative workflow.`);
   }
 
-  // Server-resolve active shift
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = dubaiDateKey();
   const shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
   const shiftSnap = await shiftRef.get();
-  const currentShiftStatus = shiftSnap.exists ? (shiftSnap.data()?.status || "OFF_DUTY") : "OFF_DUTY";
+  const shiftStatus = upper(shiftSnap.data()?.status || "OFF_DUTY");
 
-  // Server-resolve active vehicle custody
-  const vehicleSnap = await db.collection("vehicles").where("assignedStaffUid", "==", uid).limit(1).get();
-  const serverVehicleId = vehicleSnap.empty ? null : vehicleSnap.docs[0].id;
+  const vehicleDoc = await loadAssignedVehicle(db, uid);
+  const serverVehicleId = vehicleDoc?.id || null;
+  const ticketDoc = await loadActiveTicket(db, uid);
+  const serverJobId = ticketDoc?.id || null;
 
-  // Validate client provided vehicleId if present
-  if (data.vehicleId && serverVehicleId && data.vehicleId !== serverVehicleId) {
-    throw new HttpsError("permission-denied", `Vehicle ID mismatch. Server custody vehicle is ${serverVehicleId}.`);
+  const requestedVehicleId = text(data.vehicleId);
+  const requestedJobId = text(data.jobId);
+
+  if (requestedVehicleId && requestedVehicleId !== serverVehicleId) {
+    throw new HttpsError("permission-denied", "Requested vehicle does not match current server-side custody.");
+  }
+  if (requestedJobId && requestedJobId !== serverJobId) {
+    throw new HttpsError("permission-denied", "Requested job does not match the current server-side assignment.");
   }
 
-  // Server-resolve active assigned job
-  const ticketSnap = await db.collection("maintenanceTickets")
-    .where("assignedTechnicianId", "==", uid)
-    .where("status", "in", ["assigned", "on_the_way", "arrived", "in_progress", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"])
-    .limit(1)
-    .get();
-  const serverJobId = ticketSnap.empty ? null : ticketSnap.docs[0].id;
-
-  if (data.jobId && serverJobId && data.jobId !== serverJobId) {
-    throw new HttpsError("permission-denied", `Job ID mismatch. Active assigned job is ${serverJobId}.`);
-  }
-
-  const logRef = db.collection("staff_quick_actions").doc();
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  let resultMessage = "";
 
-  await logRef.set({
-    actionId: logRef.id,
-    staffId: uid,
-    actionType,
-    context: {
-      vehicleId: serverVehicleId || data.vehicleId || null,
-      jobId: serverJobId || data.jobId || null,
-      location: data.location || null,
-      notes: text(data.notes),
-    },
-    createdAt: timestamp,
-  });
-
-  // State machine handling for shift transitions
   if (actionType === "CLOCK_IN") {
-    if (currentShiftStatus === "ACTIVE") {
-      throw new HttpsError("failed-precondition", "Shift is already ACTIVE.");
+    if (["ACTIVE", "ON_BREAK"].includes(shiftStatus)) {
+      throw new HttpsError("already-exists", "Shift is already active.");
+    }
+    if (shiftStatus === "COMPLETED") {
+      throw new HttpsError("failed-precondition", "Today's shift has already been completed.");
     }
     await shiftRef.set({
       staffId: uid,
@@ -88,325 +252,615 @@ export const submitStaffQuickAction = onCall({ region: FUNCTION_REGION }, async 
       shiftDate: todayStr,
       updatedAt: timestamp,
     }, { merge: true });
-  } else if (actionType === "BREAKDOWN_REPORT") {
-    if (!serverVehicleId && !data.vehicleId) {
-      throw new HttpsError("invalid-argument", "Vehicle reference is required for breakdown report.");
+    resultMessage = "Clock-in recorded.";
+  }
+
+  if (actionType === "ARRIVE") {
+    if (!ticketDoc) {
+      throw new HttpsError("failed-precondition", "No active assigned work order is available.");
     }
-    await db.collection("staff_exceptions").add({
+    const currentStatus = upper(ticketDoc.data()?.status);
+    if (!["ASSIGNED", "EN_ROUTE", "ON_THE_WAY"].includes(currentStatus)) {
+      throw new HttpsError("failed-precondition", `Cannot mark arrival from status ${currentStatus || "UNKNOWN"}.`);
+    }
+    await ticketDoc.ref.set({
+      status: "ARRIVED",
+      arrivedAt: timestamp,
+      updatedAt: timestamp,
+    }, { merge: true });
+    resultMessage = "Arrival recorded for the assigned work order.";
+  }
+
+  if (actionType === "START_JOB") {
+    if (!ticketDoc) {
+      throw new HttpsError("failed-precondition", "No active assigned work order is available.");
+    }
+    const currentStatus = upper(ticketDoc.data()?.status);
+    if (currentStatus !== "ARRIVED") {
+      throw new HttpsError("failed-precondition", `Job can start only after ARRIVED. Current status: ${currentStatus || "UNKNOWN"}.`);
+    }
+    await ticketDoc.ref.set({
+      status: "IN_PROGRESS",
+      workStartedAt: timestamp,
+      updatedAt: timestamp,
+    }, { merge: true });
+    resultMessage = "Assigned work order started.";
+  }
+
+  if (actionType === "BREAKDOWN_REPORT") {
+    if (!vehicleDoc || !serverVehicleId) {
+      throw new HttpsError("failed-precondition", "No vehicle is currently assigned to this staff member.");
+    }
+    const note = text(data.notes);
+    const exceptionRef = db.collection("staff_exceptions").doc();
+    await exceptionRef.set({
+      exceptionId: exceptionRef.id,
       staffId: uid,
       type: "VEHICLE_BREAKDOWN",
-      vehicleId: serverVehicleId || data.vehicleId,
-      details: text(data.notes) || "Vehicle breakdown reported by driver.",
+      domain: "FLEET",
+      vehicleId: serverVehicleId,
+      details: note || "Vehicle breakdown reported by assigned driver.",
       status: "OPEN",
       severity: "HIGH",
       createdAt: timestamp,
     });
+    resultMessage = `Vehicle breakdown report ${exceptionRef.id} created.`;
   }
+
+  const actionLogRef = db.collection("staff_quick_actions").doc();
+  const auditRef = db.collection("audit_logs").doc();
+  const batch = db.batch();
+  batch.set(actionLogRef, {
+    actionId: actionLogRef.id,
+    staffId: uid,
+    actionType,
+    context: {
+      vehicleId: serverVehicleId,
+      jobId: serverJobId,
+      reportedLocation: data.location || null,
+      notes: text(data.notes),
+    },
+    createdAt: timestamp,
+  });
+  batch.set(auditRef, {
+    action: "STAFF_QUICK_ACTION_EXECUTED",
+    actorUid: uid,
+    actorRole: getCallerRole(token),
+    actionType,
+    vehicleId: serverVehicleId,
+    jobId: serverJobId,
+    timestamp,
+  });
+  await batch.commit();
 
   return {
     success: true,
-    actionId: logRef.id,
+    actionId: actionLogRef.id,
     actionType,
     serverVehicleId,
     serverJobId,
-    message: `Quick Action ${actionType} executed with server-verified context.`,
+    message: resultMessage,
   };
 });
 
 /**
- * 2. Complete Job via Voice / Natural Text Paperwork Engine
- * Enforces assignment authorization, valid state machine transition, and proposes materials without direct stock mutation.
+ * Structured job-report preparation and confirmed completion.
+ * Preview calls do not mutate the work order. Confirmation revalidates authorization/state in a transaction.
  */
-export const completeStaffJobWithAi = onCall({ region: FUNCTION_REGION }, async (request) => {
+export const completeStaffJobWithAi = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
   const uid = request.auth.uid;
   const token = request.auth.token || {};
   const db = ensureDb();
   const data = request.data || {};
-
   const jobId = text(data.jobId);
   const rawSpokenText = text(data.rawSpokenText);
+  const confirmCompletion = data.confirmCompletion === true;
+
+  await assertActiveAccount(uid, token);
 
   if (!jobId) {
     throw new HttpsError("invalid-argument", "Job ID is required.");
   }
   if (!rawSpokenText) {
-    throw new HttpsError("invalid-argument", "Natural text / spoken report is required for completion.");
+    throw new HttpsError("invalid-argument", "Work summary is required.");
   }
 
-  // Load ticket server-side
   const ticketRef = db.collection("maintenanceTickets").doc(jobId);
-  const ticketSnap = await ticketRef.get();
-
-  if (!ticketSnap.exists) {
+  const initialSnap = await ticketRef.get();
+  if (!initialSnap.exists) {
     throw new HttpsError("not-found", `Work order ${jobId} not found.`);
   }
 
-  const ticketData = ticketSnap.data() || {};
-  const currentStatus = String(ticketData.status || "").toUpperCase();
-  const assignedTechId = text(ticketData.assignedTechnicianId);
-
-  // 1. Assignment & Authorization Check
+  const initialData = initialSnap.data() || {};
   const role = getCallerRole(token);
+  const assignedTechId = assignedTechnicianUid(initialData);
   const isAssignedTech = assignedTechId === uid;
-  const isManagerOrAdmin = token.admin === true || ["admin", "super_admin", "ceo", "operations_manager"].includes(role);
+  const isOperationsAuthority = isCeoOrAdmin(token, role) || role === "operations_manager";
 
-  if (!isAssignedTech && !isManagerOrAdmin) {
-    throw new HttpsError("permission-denied", "You are not the assigned technician or manager for this work order.");
+  if (!isAssignedTech && !isOperationsAuthority) {
+    throw new HttpsError("permission-denied", "You are not authorized to prepare or confirm this work order.");
   }
 
-  // 2. State Machine Transition Check
-  const COMPLETABLE_STATUSES = new Set(["IN_PROGRESS", "ARRIVED", "ON_THE_WAY", "EN_ROUTE", "ASSIGNED", "WORK_STARTED"]);
-  if (!COMPLETABLE_STATUSES.has(currentStatus)) {
-    throw new HttpsError("failed-precondition", `Cannot complete job in status ${currentStatus}. Must be IN_PROGRESS or ARRIVED.`);
+  const currentStatus = upper(initialData.status);
+  if (!["ARRIVED", "IN_PROGRESS"].includes(currentStatus)) {
+    throw new HttpsError("failed-precondition", `Cannot prepare completion from status ${currentStatus || "UNKNOWN"}.`);
   }
 
-  // Extract candidate proposed materials (DOES NOT MUTATE STOCK DIRECTLY)
-  const proposedMaterials = Array.isArray(data.materialsUsed) ? data.materialsUsed : ["Standard Consumables"];
+  const proposedMaterials = Array.isArray(data.proposedMaterials)
+    ? data.proposedMaterials.map((item: unknown) => text(item)).filter(Boolean).slice(0, 20)
+    : [];
 
-  const aiReport = {
+  const structuredReport = {
     summary: rawSpokenText,
-    workCompleted: "Work completed & verified via staff report.",
     proposedMaterials,
-    completedByUid: uid,
-    completedAt: new Date().toISOString(),
+    workOrderStatus: currentStatus,
+    assignmentVerified: true,
   };
 
-  // Commit ticket completion atomically
-  await ticketRef.set({
-    status: "COMPLETED",
-    completionNotes: rawSpokenText,
-    proposedMaterials,
-    completedByUid: uid,
-    completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+  if (!confirmCompletion) {
+    return {
+      success: true,
+      preview: true,
+      jobId,
+      report: structuredReport,
+      message: "Structured report prepared for staff review. No authoritative records were changed.",
+    };
+  }
 
-  // Write Audit Log
-  await db.collection("audit_logs").add({
-    action: "STAFF_JOB_COMPLETED",
-    actorUid: uid,
-    actorRole: role,
-    jobId,
-    previousStatus: currentStatus,
-    newStatus: "COMPLETED",
-    proposedMaterials,
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  await db.runTransaction(async (transaction) => {
+    const ticketSnap = await transaction.get(ticketRef);
+    if (!ticketSnap.exists) {
+      throw new HttpsError("not-found", `Work order ${jobId} not found.`);
+    }
+
+    const ticketData = ticketSnap.data() || {};
+    const liveStatus = upper(ticketData.status);
+    const liveAssignedTechId = assignedTechnicianUid(ticketData);
+    const liveAuthorized = liveAssignedTechId === uid || isOperationsAuthority;
+
+    if (!liveAuthorized) {
+      throw new HttpsError("permission-denied", "Work-order assignment changed before completion.");
+    }
+    if (!["ARRIVED", "IN_PROGRESS"].includes(liveStatus)) {
+      throw new HttpsError("failed-precondition", `Work order is no longer completable from status ${liveStatus || "UNKNOWN"}.`);
+    }
+    if (ticketData.requiresCompletionPhoto !== false && !hasCompletionPhotoEvidence(ticketData)) {
+      throw new HttpsError("failed-precondition", "Required after-work completion evidence is missing.");
+    }
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    transaction.set(ticketRef, {
+      status: "COMPLETED",
+      completionNotes: rawSpokenText,
+      proposedMaterials,
+      completedByUid: liveAssignedTechId || uid,
+      completionConfirmedByUid: uid,
+      completionConfirmedByRole: role,
+      completedAt: timestamp,
+      updatedAt: timestamp,
+    }, { merge: true });
+
+    const auditRef = db.collection("audit_logs").doc();
+    transaction.set(auditRef, {
+      action: "STAFF_JOB_COMPLETED",
+      actorUid: uid,
+      actorRole: role,
+      jobId,
+      assignedTechnicianUid: liveAssignedTechId || null,
+      previousStatus: liveStatus,
+      newStatus: "COMPLETED",
+      proposedMaterials,
+      timestamp,
+    });
   });
 
   return {
     success: true,
+    preview: false,
     jobId,
-    aiReport,
-    message: "Work order completed cleanly. Materials proposed for staff stock confirmation.",
+    report: structuredReport,
+    message: "Work order completion confirmed. Material proposals remain non-authoritative until inventory confirmation.",
   };
 });
 
 /**
- * 3. Context-Aware Overtime Request Callable
- * Requires explicit duration & reason. Validates active shift & job server-side.
+ * Overtime request bound to the caller's active shift and, when supplied, assigned job.
  */
-export const requestStaffOvertime = onCall({ region: FUNCTION_REGION }, async (request) => {
+export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
-  const uid = request.auth.uid;
-  const db = ensureDb();
-  const data = request.data || {};
 
-  const estimatedMinutes = Math.round(Number(data.estimatedMinutes));
-  const reason = text(data.reason);
-
-  if (!estimatedMinutes || estimatedMinutes <= 0 || estimatedMinutes > 360) {
-    throw new HttpsError("invalid-argument", "Valid estimated overtime minutes (1 - 360) required.");
-  }
-  if (!reason) {
-    throw new HttpsError("invalid-argument", "Overtime request reason is required.");
-  }
-
-  // Prevent duplicate active OT requests for same staff
-  const existingSnap = await db.collection("staff_request_trackers")
-    .where("staffId", "==", uid)
-    .where("requestType", "==", "OVERTIME_CLAIM")
-    .where("status", "in", ["SUBMITTED", "PENDING_REVIEW"])
-    .limit(1)
-    .get();
-
-  if (!existingSnap.empty) {
-    throw new HttpsError("already-exists", "You already have an active overtime request pending review.");
-  }
-
-  const trackerRef = db.collection("staff_request_trackers").doc();
-  await trackerRef.set({
-    trackerId: trackerRef.id,
-    staffId: uid,
-    requestType: "OVERTIME_CLAIM",
-    title: `Overtime Request: ${estimatedMinutes}m — ${reason}`,
-    jobId: data.jobId || null,
-    estimatedMinutes,
-    reason,
-    status: "SUBMITTED",
-    steps: [
-      { name: "Submitted", status: "COMPLETED", time: new Date().toISOString() },
-      { name: "Supervisor Reviewing", status: "IN_PROGRESS" },
-      { name: "HR Verification", status: "PENDING" },
-      { name: "Approved & Scheduled", status: "PENDING" },
-    ],
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  return {
-    success: true,
-    trackerId: trackerRef.id,
-    message: "Overtime request submitted and routed to supervisor.",
-  };
-});
-
-/**
- * 4. Guided Finish Shift & Clean Clock-out Callable
- * Server-calculates real metrics and blocks finish shift if active jobs remain.
- */
-export const triggerStaffShiftFinish = onCall({ region: FUNCTION_REGION }, async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "Authentication required.");
-  }
-  const uid = request.auth.uid;
-  const db = ensureDb();
-  const data = request.data || {};
-
-  // Check for active open work orders assigned to technician
-  const activeTicketsSnap = await db.collection("maintenanceTickets")
-    .where("assignedTechnicianId", "==", uid)
-    .where("status", "in", ["assigned", "on_the_way", "arrived", "in_progress", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"])
-    .get();
-
-  if (!activeTicketsSnap.empty) {
-    const activeCount = activeTicketsSnap.size;
-    throw new HttpsError(
-      "failed-precondition",
-      `Cannot finish shift. You have ${activeCount} active work order(s) in progress. Complete or re-assign them first.`
-    );
-  }
-
-  const todayStr = new Date().toISOString().split("T")[0];
-  const summaryRef = db.collection("staff_daily_summaries").doc(`SUMMARY_${uid}_${todayStr}`);
-
-  const summaryData = {
-    staffId: uid,
-    date: todayStr,
-    jobsCompleted: Number(data.jobsCompletedCount) || 0,
-    photosUploaded: Number(data.photosUploadedCount) || 0,
-    vehicleReturnStatus: text(data.vehicleReturnStatus) || "RETURNED",
-    toolsStatus: text(data.toolsStatus) || "ACCOUNTED",
-    handoverNotes: text(data.handoverNotes) || "Clean shift completion.",
-    finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-
-  await summaryRef.set(summaryData, { merge: true });
-
-  const shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
-  await shiftRef.set({
-    status: "COMPLETED",
-    clockOutTime: admin.firestore.FieldValue.serverTimestamp(),
-    dailySummaryRef: summaryRef.id,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  return {
-    success: true,
-    summaryId: summaryRef.id,
-    message: "Shift finished cleanly. All work orders verified completed.",
-  };
-});
-
-/**
- * 5. Multi-Department Cross-Automation Engine Callable
- * Differentiates REPORT from MANAGEMENT ACTION. Enforces role & custody authorization.
- */
-export const executeMultiDeptAutomation = onCall({ region: FUNCTION_REGION }, async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "Authentication required.");
-  }
   const uid = request.auth.uid;
   const token = request.auth.token || {};
   const db = ensureDb();
   const data = request.data || {};
-  const eventType = text(data.eventType).toUpperCase();
+  const estimatedMinutes = Math.round(Number(data.estimatedMinutes));
+  const reason = text(data.reason);
+  const jobId = text(data.jobId);
+
+  await assertActiveAccount(uid, token);
+
+  if (!Number.isInteger(estimatedMinutes) || estimatedMinutes < 1 || estimatedMinutes > 360) {
+    throw new HttpsError("invalid-argument", "Estimated overtime minutes must be an integer from 1 to 360.");
+  }
+  if (reason.length < 5) {
+    throw new HttpsError("invalid-argument", "A meaningful overtime reason is required.");
+  }
+
+  const todayStr = dubaiDateKey();
+  const shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
+  const shiftSnap = await shiftRef.get();
+  if (!shiftSnap.exists || !["ACTIVE", "ON_BREAK"].includes(upper(shiftSnap.data()?.status))) {
+    throw new HttpsError("failed-precondition", "Overtime can be requested only from an active shift.");
+  }
+
+  if (jobId) {
+    const ticketSnap = await db.collection("maintenanceTickets").doc(jobId).get();
+    if (!ticketSnap.exists) {
+      throw new HttpsError("not-found", `Work order ${jobId} not found.`);
+    }
+    if (assignedTechnicianUid(ticketSnap.data() || {}) !== uid) {
+      throw new HttpsError("permission-denied", "The overtime work order is not assigned to this staff member.");
+    }
+  }
+
+  const existingSnap = await db.collection("staff_request_trackers")
+    .where("staffId", "==", uid)
+    .where("requestType", "==", "OVERTIME_CLAIM")
+    .where("status", "in", ["SUBMITTED", "PENDING_REVIEW", "IN_REVIEW"])
+    .limit(1)
+    .get();
+
+  if (!existingSnap.empty) {
+    throw new HttpsError("already-exists", "An active overtime request is already pending review.");
+  }
+
+  const trackerRef = db.collection("staff_request_trackers").doc();
+  const auditRef = db.collection("audit_logs").doc();
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+
+  batch.set(trackerRef, {
+    trackerId: trackerRef.id,
+    staffId: uid,
+    requestType: "OVERTIME_CLAIM",
+    jobId: jobId || null,
+    estimatedMinutes,
+    reason,
+    status: "SUBMITTED",
+    steps: [
+      { name: "Submitted", status: "COMPLETED" },
+      { name: "Supervisor Reviewing", status: "IN_PROGRESS" },
+      { name: "HR Verification", status: "PENDING" },
+      { name: "Payroll Eligibility", status: "PENDING" },
+    ],
+    shiftId: shiftRef.id,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+
+  batch.set(auditRef, {
+    action: "STAFF_OVERTIME_REQUEST_SUBMITTED",
+    actorUid: uid,
+    trackerId: trackerRef.id,
+    jobId: jobId || null,
+    estimatedMinutes,
+    timestamp,
+  });
+
+  await batch.commit();
+
+  return {
+    success: true,
+    trackerId: trackerRef.id,
+    message: "Overtime request submitted for supervisor review.",
+  };
+});
+
+/**
+ * Server-authoritative end-of-shift verification.
+ * The client supplies handover notes only; operational evidence is calculated from Firestore.
+ */
+export const triggerStaffShiftFinish = onCall(CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const uid = request.auth.uid;
+  const token = request.auth.token || {};
+  const db = ensureDb();
+  const handoverNotes = text(request.data?.handoverNotes);
+
+  await assertActiveAccount(uid, token);
+
+  const todayStr = dubaiDateKey();
+  const shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
+  const shiftSnap = await shiftRef.get();
+
+  if (!shiftSnap.exists) {
+    throw new HttpsError("failed-precondition", "No active shift exists for today.");
+  }
+  const shiftStatus = upper(shiftSnap.data()?.status);
+  if (!["ACTIVE", "ON_BREAK"].includes(shiftStatus)) {
+    throw new HttpsError("failed-precondition", `Shift cannot be finished from status ${shiftStatus || "UNKNOWN"}.`);
+  }
+
+  const activeTicketsSnap = await db.collection("maintenanceTickets")
+    .where("assignedTechnicianId", "==", uid)
+    .where("status", "in", ACTIVE_JOB_STATUSES)
+    .get();
+
+  if (!activeTicketsSnap.empty) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Cannot finish shift with ${activeTicketsSnap.size} active work order(s). Complete or reassign them first.`,
+    );
+  }
+
+  const vehicleDoc = await loadAssignedVehicle(db, uid);
+  let vehicleReturnStatus = "NOT_ASSIGNED";
+  if (vehicleDoc) {
+    const vehicleData = vehicleDoc.data() || {};
+    const vehicleStatus = upper(vehicleData.status);
+    const returnRequired = vehicleData.returnRequiredAtShiftEnd === true;
+    const returned = ["RETURNED", "AVAILABLE", "DEPOT", "PARKED"].includes(vehicleStatus);
+    if (returnRequired && !returned) {
+      throw new HttpsError("failed-precondition", `Assigned vehicle ${vehicleDoc.id} must be returned before finishing the shift.`);
+    }
+    vehicleReturnStatus = returnRequired ? "RETURN_CONFIRMED" : "REMAINS_ASSIGNED";
+  }
+
+  const ticketsSnap = await db.collection("maintenanceTickets")
+    .where("assignedTechnicianId", "==", uid)
+    .limit(100)
+    .get();
+
+  let jobsCompleted = 0;
+  let photosUploaded = 0;
+  for (const ticket of ticketsSnap.docs) {
+    const ticketData = ticket.data() || {};
+    if (upper(ticketData.status) !== "COMPLETED") continue;
+    const completedAt = asDate(ticketData.completedAt);
+    if (!completedAt || dubaiDateKey(completedAt) !== todayStr) continue;
+    jobsCompleted += 1;
+    if (hasCompletionPhotoEvidence(ticketData)) photosUploaded += 1;
+  }
+
+  const overtimeSnap = await db.collection("staff_request_trackers")
+    .where("staffId", "==", uid)
+    .limit(100)
+    .get();
+
+  let approvedOvertimeMinutes = 0;
+  for (const tracker of overtimeSnap.docs) {
+    const trackerData = tracker.data() || {};
+    if (upper(trackerData.requestType) !== "OVERTIME_CLAIM") continue;
+    const status = upper(trackerData.status);
+    if (!["APPROVED", "PAYROLL_INCLUDED", "PAID"].includes(status)) continue;
+    const minutes = Number(trackerData.approvedMinutes);
+    if (Number.isFinite(minutes) && minutes > 0) approvedOvertimeMinutes += Math.round(minutes);
+  }
+
+  const warnings = [
+    "Tool/asset handover is not asserted unless recorded by its dedicated custody workflow.",
+  ];
+
+  const summaryRef = db.collection("staff_daily_summaries").doc(`SUMMARY_${uid}_${todayStr}`);
+  const auditRef = db.collection("audit_logs").doc();
+
+  await db.runTransaction(async (transaction) => {
+    const liveShift = await transaction.get(shiftRef);
+    if (!liveShift.exists || !["ACTIVE", "ON_BREAK"].includes(upper(liveShift.data()?.status))) {
+      throw new HttpsError("failed-precondition", "Shift state changed before completion.");
+    }
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    transaction.set(summaryRef, {
+      staffId: uid,
+      date: todayStr,
+      jobsCompleted,
+      completedJobsWithPhotoEvidence: photosUploaded,
+      vehicleReturnStatus,
+      approvedOvertimeMinutes,
+      toolAssetVerificationStatus: "NOT_ASSERTED_BY_SHIFT_WORKFLOW",
+      handoverNotes: handoverNotes || null,
+      warnings,
+      finishedAt: timestamp,
+      verificationSource: "SERVER",
+    }, { merge: true });
+
+    transaction.set(shiftRef, {
+      status: "COMPLETED",
+      clockOutTime: timestamp,
+      dailySummaryRef: summaryRef.id,
+      updatedAt: timestamp,
+    }, { merge: true });
+
+    transaction.set(auditRef, {
+      action: "STAFF_SHIFT_FINISHED",
+      actorUid: uid,
+      shiftId: shiftRef.id,
+      summaryId: summaryRef.id,
+      jobsCompleted,
+      vehicleReturnStatus,
+      approvedOvertimeMinutes,
+      timestamp,
+    });
+  });
+
+  return {
+    success: true,
+    summaryId: summaryRef.id,
+    summary: {
+      jobsCompleted,
+      completedJobsWithPhotoEvidence: photosUploaded,
+      vehicleReturnStatus,
+      approvedOvertimeMinutes,
+      toolAssetVerificationStatus: "NOT_ASSERTED_BY_SHIFT_WORKFLOW",
+      warnings,
+    },
+    message: "Shift closed after server-side verification.",
+  };
+});
+
+/**
+ * Cross-department accident reporting and privileged management cascade.
+ */
+export const executeMultiDeptAutomation = onCall(CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const uid = request.auth.uid;
+  const token = request.auth.token || {};
+  const db = ensureDb();
+  const data = request.data || {};
+  const eventType = upper(data.eventType);
+  const role = getCallerRole(token);
+  const managementAuthority = isCeoOrAdmin(token, role) || ["fleet_manager", "operations_manager"].includes(role);
+
+  await assertActiveAccount(uid, token);
 
   if (!eventType) {
     throw new HttpsError("invalid-argument", "Event type is required.");
   }
 
-  const role = getCallerRole(token);
-  const isManagerOrAdmin = token.admin === true || ["admin", "super_admin", "ceo", "fleet_manager", "operations_manager"].includes(role);
-
-  const cascadeResults: string[] = [];
-
   if (eventType === "VEHICLE_ACCIDENT_REPORT") {
-    // Reporting event allowed for assigned driver
     const vehicleId = text(data.vehicleId);
     if (!vehicleId) {
-      throw new HttpsError("invalid-argument", "Vehicle ID is required to report accident.");
+      throw new HttpsError("invalid-argument", "Vehicle ID is required to report an accident.");
     }
-    const hrRef = db.collection("staff_exceptions").doc();
-    await hrRef.set({
-      exceptionId: hrRef.id,
+
+    const vehicleRef = db.collection("vehicles").doc(vehicleId);
+    const vehicleSnap = await vehicleRef.get();
+    if (!vehicleSnap.exists) {
+      throw new HttpsError("not-found", `Vehicle ${vehicleId} not found.`);
+    }
+
+    const vehicleData = vehicleSnap.data() || {};
+    if (assignedVehicleUid(vehicleData) !== uid && !managementAuthority) {
+      throw new HttpsError("permission-denied", "Only the assigned driver or authorized Fleet/Operations manager may report this vehicle accident.");
+    }
+
+    const exceptionRef = db.collection("staff_exceptions").doc();
+    const auditRef = db.collection("audit_logs").doc();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
+
+    batch.set(exceptionRef, {
+      exceptionId: exceptionRef.id,
       staffId: uid,
-      type: "VEHICLE_BREAKDOWN",
+      type: "VEHICLE_ACCIDENT",
+      domain: "FLEET",
       vehicleId,
-      details: text(data.notes) || "Accident reported by driver.",
+      details: text(data.notes) || null,
       status: "OPEN",
       severity: "CRITICAL",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: timestamp,
     });
-    cascadeResults.push(`HR / Fleet: Accident report logged under ticket ${hrRef.id}.`);
-  } else if (eventType === "VEHICLE_ACCIDENT_CASCADE") {
-    // Privileged management action requiring Fleet/Ops/Admin role
-    if (!isManagerOrAdmin) {
-      throw new HttpsError("permission-denied", "Only Fleet, Operations, or Admin roles can trigger management vehicle holds.");
+
+    batch.set(auditRef, {
+      action: "VEHICLE_ACCIDENT_REPORTED",
+      actorUid: uid,
+      actorRole: role,
+      vehicleId,
+      exceptionId: exceptionRef.id,
+      timestamp,
+    });
+
+    await batch.commit();
+
+    return {
+      success: true,
+      eventType,
+      exceptionId: exceptionRef.id,
+      message: "Vehicle accident report submitted for Fleet/Operations review.",
+    };
+  }
+
+  if (eventType === "VEHICLE_ACCIDENT_CASCADE") {
+    if (!managementAuthority) {
+      throw new HttpsError("permission-denied", "Fleet/Operations management permission is required.");
     }
 
     const vehicleId = text(data.vehicleId);
     if (!vehicleId) {
-      throw new HttpsError("invalid-argument", "Vehicle ID is required for management cascade.");
+      throw new HttpsError("invalid-argument", "Vehicle ID is required for accident hold.");
     }
 
-    await db.collection("vehicles").doc(vehicleId).set({
+    const vehicleRef = db.collection("vehicles").doc(vehicleId);
+    const vehicleSnap = await vehicleRef.get();
+    if (!vehicleSnap.exists) {
+      throw new HttpsError("not-found", `Vehicle ${vehicleId} not found.`);
+    }
+
+    const currentStatus = upper(vehicleSnap.data()?.status);
+    if (currentStatus === "ACCIDENT_HOLD") {
+      return {
+        success: true,
+        eventType,
+        vehicleId,
+        replayed: true,
+        message: "Vehicle is already on accident hold.",
+      };
+    }
+
+    const auditRef = db.collection("audit_logs").doc();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
+    batch.set(vehicleRef, {
       status: "ACCIDENT_HOLD",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      accidentHoldByUid: uid,
+      accidentHoldAt: timestamp,
+      updatedAt: timestamp,
     }, { merge: true });
-    cascadeResults.push(`Fleet: Vehicle ${vehicleId} placed on ACCIDENT_HOLD by manager ${uid}.`);
-  } else {
-    throw new HttpsError("invalid-argument", `Unsupported automation event type: ${eventType}`);
+    batch.set(auditRef, {
+      action: "VEHICLE_ACCIDENT_HOLD_APPLIED",
+      actorUid: uid,
+      actorRole: role,
+      vehicleId,
+      previousStatus: currentStatus || null,
+      newStatus: "ACCIDENT_HOLD",
+      timestamp,
+    });
+    await batch.commit();
+
+    return {
+      success: true,
+      eventType,
+      vehicleId,
+      replayed: false,
+      message: "Vehicle placed on accident hold.",
+    };
   }
 
-  return {
-    success: true,
-    eventType,
-    cascadeResults,
-    message: `Multi-department automation executed.`,
-  };
+  throw new HttpsError("invalid-argument", `Unsupported automation event type: ${eventType}`);
 });
 
 /**
- * 6. Domain-Scoped Backend Exception Resolution Callable
- * Enforces domain authorization matching exception type to caller's permission scope.
+ * Domain-scoped exception resolution with state/action validation and immutable audit record.
  */
-export const resolveStaffException = onCall({ region: FUNCTION_REGION }, async (request) => {
+export const resolveStaffException = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
   const uid = request.auth.uid;
   const token = request.auth.token || {};
   const db = ensureDb();
   const data = request.data || {};
-
   const exceptionId = text(data.exceptionId);
-  const resolutionAction = text(data.resolutionAction);
+  const resolutionAction = upper(data.resolutionAction);
   const resolutionReason = text(data.resolutionReason);
   const notes = text(data.notes);
+  const role = getCallerRole(token);
+
+  await assertActiveAccount(uid, token);
 
   if (!exceptionId) {
     throw new HttpsError("invalid-argument", "Exception ID is required.");
@@ -414,13 +868,12 @@ export const resolveStaffException = onCall({ region: FUNCTION_REGION }, async (
   if (!resolutionAction) {
     throw new HttpsError("invalid-argument", "Resolution action is required.");
   }
-  if (!resolutionReason) {
+  if (resolutionReason.length < 3) {
     throw new HttpsError("invalid-argument", "Human-supplied resolution reason is required.");
   }
 
-  const role = getCallerRole(token);
   const exceptionRef = db.collection("staff_exceptions").doc(exceptionId);
-  let updatedRecord: any = null;
+  let resultStatus = "";
 
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(exceptionRef);
@@ -429,214 +882,186 @@ export const resolveStaffException = onCall({ region: FUNCTION_REGION }, async (
     }
 
     const currentData = snap.data() || {};
-    const excType = String(currentData.type || "").toUpperCase();
-    const previousStatus = currentData.status || "OPEN";
+    const previousStatus = upper(currentData.status || "OPEN");
+    if (!["OPEN", "PENDING_REVIEW", "IN_REVIEW"].includes(previousStatus)) {
+      throw new HttpsError("failed-precondition", `Exception cannot transition from terminal status ${previousStatus}.`);
+    }
 
-    // Self-resolution protection
-    if (currentData.staffId === uid && role !== "ceo" && token.admin !== true) {
+    if (currentData.staffId === uid && !isCeoOrAdmin(token, role)) {
       throw new HttpsError("permission-denied", "Staff members cannot resolve their own exception tickets.");
     }
 
-    // Domain-Scoped Authorization Enforcement
-    const isCeoOrAdmin = token.admin === true || ["ceo", "super_admin", "admin"].includes(role);
-
-    if (excType.includes("CONFIDENTIAL_HR") || excType.includes("GRIEVANCE")) {
-      if (!isCeoOrAdmin && role !== "hr_confidential") {
-        throw new HttpsError("permission-denied", "Only Confidential HR or CEO can resolve confidential HR cases.");
-      }
-    } else if (excType.includes("HR") || excType.includes("CLOCK") || excType.includes("ATTENDANCE")) {
-      if (!isCeoOrAdmin && !["hr_admin", "hr_manager", "hr_staff"].includes(role)) {
-        throw new HttpsError("permission-denied", "HR permission required to resolve HR/Attendance exceptions.");
-      }
-    } else if (excType.includes("FLEET") || excType.includes("VEHICLE") || excType.includes("BREAKDOWN")) {
-      if (!isCeoOrAdmin && !["fleet_manager", "operations_manager"].includes(role)) {
-        throw new HttpsError("permission-denied", "Fleet or Operations permission required to resolve vehicle exceptions.");
-      }
-    } else if (excType.includes("PAYROLL") || excType.includes("FINANCE") || excType.includes("EXPENSE")) {
-      if (!isCeoOrAdmin && !["finance_manager", "payroll_admin"].includes(role)) {
-        throw new HttpsError("permission-denied", "Finance permission required to resolve Payroll/Expense exceptions.");
-      }
-    } else if (excType.includes("OPERATIONS") || excType.includes("OVERTIME") || excType.includes("SLA")) {
-      if (!isCeoOrAdmin && !["operations_manager", "supervisor"].includes(role)) {
-        throw new HttpsError("permission-denied", "Operations permission required to resolve operational exceptions.");
-      }
-    } else if (!isCeoOrAdmin) {
-      throw new HttpsError("permission-denied", "Manager permission required to resolve exceptions.");
+    const domain = exceptionDomain(currentData.type);
+    if (!canAccessExceptionDomain(token, role, domain)) {
+      throw new HttpsError("permission-denied", `Caller is not authorized for ${domain} exceptions.`);
     }
 
-    const actionUpper = resolutionAction.toUpperCase();
-    const newStatus = ["APPROVE", "APPROVE_CORRECTION", "PARTIAL_APPROVE", "CLOSE_INCIDENT", "MARK_VERIFIED", "RESOLVE"].includes(actionUpper)
-      ? "RESOLVED"
-      : actionUpper === "REJECT"
-      ? "REJECTED"
-      : "IN_REVIEW";
+    const allowedActions = allowedExceptionActions(domain);
+    if (!allowedActions.has(resolutionAction)) {
+      throw new HttpsError("invalid-argument", `Action ${resolutionAction} is not valid for ${domain} exceptions.`);
+    }
 
-    updatedRecord = {
-      ...currentData,
+    const newStatus = nextExceptionStatus(resolutionAction);
+    resultStatus = newStatus;
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    const update: Record<string, unknown> = {
       status: newStatus,
       resolutionAction,
       resolutionReason,
       notes: notes || currentData.notes || null,
-      resolvedByUid: uid,
-      resolvedByRole: role,
-      resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      reviewedByUid: uid,
+      reviewedByRole: role,
+      updatedAt: timestamp,
     };
 
-    transaction.set(exceptionRef, updatedRecord, { merge: true });
+    if (["RESOLVED", "REJECTED"].includes(newStatus)) {
+      update.resolvedByUid = uid;
+      update.resolvedByRole = role;
+      update.resolvedAt = timestamp;
+    }
+
+    transaction.set(exceptionRef, update, { merge: true });
 
     const auditRef = db.collection("audit_logs").doc();
     transaction.set(auditRef, {
-      action: "STAFF_EXCEPTION_RESOLVED",
+      action: "STAFF_EXCEPTION_DECISION",
       actorUid: uid,
       actorRole: role,
       exceptionId,
-      exceptionType: excType,
+      exceptionType: upper(currentData.type),
+      exceptionDomain: domain,
       previousStatus,
       newStatus,
       decision: resolutionAction,
       reason: resolutionReason,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp,
     });
   });
 
   return {
     success: true,
     exceptionId,
-    status: updatedRecord?.status || "RESOLVED",
-    message: `Exception ${exceptionId} updated to ${updatedRecord?.status || "RESOLVED"}.`,
+    status: resultStatus,
+    message: `Exception ${exceptionId} updated to ${resultStatus}.`,
   };
 });
 
 /**
- * 7. Authorized Queue Fetch Callable for Staff Exceptions
- * Returns only records matching caller's domain permissions.
+ * Authorized exception queue. Filtering happens server-side before any records are returned.
  */
-export const getStaffExceptionsQueue = onCall({ region: FUNCTION_REGION }, async (request) => {
+export const getStaffExceptionsQueue = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
   const uid = request.auth.uid;
   const token = request.auth.token || {};
   const db = ensureDb();
-
   const role = getCallerRole(token);
-  const isCeoOrAdmin = token.admin === true || ["ceo", "super_admin", "admin"].includes(role);
 
-  const snap = await db.collection("staff_exceptions").where("status", "in", ["OPEN", "PENDING_REVIEW"]).limit(50).get();
+  await assertActiveAccount(uid, token);
 
-  const authorizedRows: any[] = [];
+  const snap = await db.collection("staff_exceptions")
+    .where("status", "in", ["OPEN", "PENDING_REVIEW", "IN_REVIEW"])
+    .limit(100)
+    .get();
 
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const excType = String(data.type || "").toUpperCase();
-
-    let isPermitted = isCeoOrAdmin;
-
-    if (!isPermitted) {
-      if (excType.includes("CONFIDENTIAL_HR")) {
-        isPermitted = role === "hr_confidential";
-      } else if (excType.includes("HR") || excType.includes("CLOCK") || excType.includes("ATTENDANCE")) {
-        isPermitted = ["hr_admin", "hr_manager", "hr_staff"].includes(role);
-      } else if (excType.includes("FLEET") || excType.includes("VEHICLE") || excType.includes("BREAKDOWN")) {
-        isPermitted = ["fleet_manager", "operations_manager"].includes(role);
-      } else if (excType.includes("PAYROLL") || excType.includes("FINANCE") || excType.includes("EXPENSE")) {
-        isPermitted = ["finance_manager", "payroll_admin"].includes(role);
-      } else if (excType.includes("OPERATIONS") || excType.includes("OVERTIME") || excType.includes("SLA")) {
-        isPermitted = ["operations_manager", "supervisor"].includes(role);
-      }
-    }
-
-    if (isPermitted) {
-      authorizedRows.push({ id: d.id, ...data });
-    }
-  });
+  const exceptions = snap.docs
+    .map((doc) => {
+      const data = doc.data() || {};
+      const domain = exceptionDomain(data.type);
+      return { id: doc.id, domain, data };
+    })
+    .filter((row) => canAccessExceptionDomain(token, role, row.domain))
+    .map((row) => ({
+      id: row.id,
+      staffId: row.data.staffId || null,
+      staffName: row.data.staffName || null,
+      role: row.data.role || null,
+      type: row.data.type || "GENERAL",
+      domain: row.domain,
+      details: row.data.details || null,
+      department: row.data.department || null,
+      status: row.data.status || "OPEN",
+      severity: row.data.severity || null,
+      createdAt: row.data.createdAt || null,
+    }));
 
   return {
     success: true,
     callerUid: uid,
     callerRole: role,
-    count: authorizedRows.length,
-    exceptions: authorizedRows,
+    count: exceptions.length,
+    exceptions,
   };
 });
 
 /**
- * 8. Domain-Scoped AI / Rules Exception Audit Callable
+ * Rules-based exception review. This is deterministic policy assistance, not model inference.
  */
-export const runStaffAiAudit = onCall({ region: FUNCTION_REGION }, async (request) => {
+export const runStaffAiAudit = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "Authentication required for AI audit.");
+    throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
   const uid = request.auth.uid;
   const token = request.auth.token || {};
   const db = ensureDb();
-
   const role = getCallerRole(token);
-  const isCeoOrAdmin = token.admin === true || ["ceo", "super_admin", "admin"].includes(role);
 
-  const snap = await db.collection("staff_exceptions").where("status", "in", ["OPEN", "PENDING_REVIEW"]).limit(50).get();
+  await assertActiveAccount(uid, token);
 
-  const permittedExceptions: any[] = [];
+  const snap = await db.collection("staff_exceptions")
+    .where("status", "in", ["OPEN", "PENDING_REVIEW", "IN_REVIEW"])
+    .limit(100)
+    .get();
 
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    const excType = String(data.type || "").toUpperCase();
+  const permitted = snap.docs
+    .map((doc) => {
+      const data = doc.data() || {};
+      const domain = exceptionDomain(data.type);
+      return { id: doc.id, domain, data };
+    })
+    .filter((row) => canAccessExceptionDomain(token, role, row.domain));
 
-    let isPermitted = isCeoOrAdmin;
-
-    if (!isPermitted) {
-      if (excType.includes("CONFIDENTIAL_HR")) {
-        isPermitted = role === "hr_confidential";
-      } else if (excType.includes("HR") || excType.includes("CLOCK") || excType.includes("ATTENDANCE")) {
-        isPermitted = ["hr_admin", "hr_manager", "hr_staff"].includes(role);
-      } else if (excType.includes("FLEET") || excType.includes("VEHICLE") || excType.includes("BREAKDOWN")) {
-        isPermitted = ["fleet_manager", "operations_manager"].includes(role);
-      } else if (excType.includes("PAYROLL") || excType.includes("FINANCE") || excType.includes("EXPENSE")) {
-        isPermitted = ["finance_manager", "payroll_admin"].includes(role);
-      } else if (excType.includes("OPERATIONS") || excType.includes("OVERTIME") || excType.includes("SLA")) {
-        isPermitted = ["operations_manager", "supervisor"].includes(role);
-      }
-    }
-
-    if (isPermitted) {
-      permittedExceptions.push({ id: d.id, ...data });
-    }
-  });
-
-  const recommendations: Array<{ exceptionId: string; type: string; recommendation: string }> = [];
-
-  permittedExceptions.forEach((data) => {
-    const type = String(data.type || "GENERAL").toUpperCase();
-    let recommendation = "Review evidence and confirm action.";
+  const recommendations = permitted.map((row) => {
+    const type = upper(row.data.type);
+    let recommendation = "Review the linked source records and record a human decision.";
 
     if (type.includes("MISSING_CLOCK")) {
-      recommendation = "Auto-verify geo-fencing timestamp from active work order log.";
+      recommendation = "Review shift records and authorized work-order evidence before approving any attendance correction.";
     } else if (type.includes("OVERTIME")) {
-      recommendation = "Compare claimed overtime against work order SLA completion logs.";
-    } else if (type.includes("BREAKDOWN") || type.includes("VEHICLE")) {
-      recommendation = "Check nearby idle fleet vehicles for instant replacement assignment.";
+      recommendation = "Compare approved shift time, work-order evidence, and requested overtime before deciding.";
+    } else if (type.includes("BREAKDOWN") || type.includes("VEHICLE") || type.includes("ACCIDENT")) {
+      recommendation = "Review vehicle custody, safety status, and replacement availability before operational action.";
     }
 
-    recommendations.push({
-      exceptionId: data.id,
+    return {
+      exceptionId: row.id,
       type,
+      domain: row.domain,
       recommendation,
-    });
+    };
   });
 
+  const domains = Array.from(new Set(permitted.map((row) => row.domain)));
   await db.collection("audit_logs").add({
     action: "STAFF_RULES_AUDIT_EXECUTED",
     actorUid: uid,
     actorRole: role,
-    auditedCount: permittedExceptions.length,
+    auditedCount: permitted.length,
+    domains,
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   return {
     success: true,
-    totalAudited: permittedExceptions.length,
+    totalAudited: permitted.length,
+    domains,
     recommendations,
-    message: `Rules-Based Exception Audit completed across ${permittedExceptions.length} authorized records.`,
+    message: `Rules-based exception review completed across ${permitted.length} authorized records.`,
   };
 });
+
+import type * as FirebaseFirestore from "firebase-admin/firestore";
