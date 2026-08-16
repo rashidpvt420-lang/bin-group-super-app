@@ -62,51 +62,70 @@ patch(
       allow create: if isAdmin();`
 );
 
+// Staff OS authoritative collections are mutated only by App Check-protected
+// Cloud Functions. Clients receive the minimum read access needed for their
+// own TODAY/request/report surfaces; manager cross-domain reads go through
+// server-scoped callables instead of broad Firestore collection reads.
 patch(
-  'propertyPassports security rules',
+  'staff operating system server-authoritative rules',
   `    match /properties/{propertyId} {`,
   `    match /staff_shifts/{shiftId} {
-      allow read: if isNotSuspended() && (canManageProperties() || staffCanRead(resource.data) || resource.data.get('staffId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
-      allow create, update: if isNotSuspended() && (canManageProperties() || resource.data.get('staffId', '') == request.auth.uid || request.resource.data.get('staffId', '') == request.auth.uid);
-      allow delete: if isNotSuspended() && isAdmin();
+      allow read: if isNotSuspended() && (
+        resource.data.get('staffId', '') == request.auth.uid ||
+        isHr() || isOps() || isAdmin()
+      );
+      allow create, update, delete: if false;
     }
 
     match /staff_daily_summaries/{summaryId} {
-      allow read: if isNotSuspended() && (canManageProperties() || staffCanRead(resource.data) || resource.data.get('staffId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
-      allow create, update: if isNotSuspended() && (canManageProperties() || resource.data.get('staffId', '') == request.auth.uid || request.resource.data.get('staffId', '') == request.auth.uid);
-      allow delete: if isNotSuspended() && isAdmin();
+      allow read: if isNotSuspended() && (
+        resource.data.get('staffId', '') == request.auth.uid ||
+        isHr() || isOps() || isAdmin()
+      );
+      allow create, update, delete: if false;
     }
 
     match /staff_quick_actions/{actionId} {
-      allow read: if isNotSuspended() && (canManageProperties() || staffCanRead(resource.data) || resource.data.get('staffId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
-      allow create, update: if isNotSuspended() && (canManageProperties() || resource.data.get('staffId', '') == request.auth.uid || request.resource.data.get('staffId', '') == request.auth.uid);
-      allow delete: if isNotSuspended() && isAdmin();
+      allow read: if isNotSuspended() && (
+        resource.data.get('staffId', '') == request.auth.uid ||
+        isOps() || isAdmin()
+      );
+      allow create, update, delete: if false;
     }
 
     match /staff_request_trackers/{trackerId} {
-      allow read: if isNotSuspended() && (canManageProperties() || staffCanRead(resource.data) || resource.data.get('staffId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
-      allow create, update: if isNotSuspended() && (canManageProperties() || resource.data.get('staffId', '') == request.auth.uid || request.resource.data.get('staffId', '') == request.auth.uid);
-      allow delete: if isNotSuspended() && isAdmin();
+      allow read: if isNotSuspended() && (
+        resource.data.get('staffId', '') == request.auth.uid ||
+        isHr() || isFinance() || isOps() || isAdmin()
+      );
+      allow create, update, delete: if false;
     }
 
     match /staff_exceptions/{exceptionId} {
-      allow read: if isNotSuspended() && (canManageProperties() || staffCanRead(resource.data) || resource.data.get('staffId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid);
-      allow create, update: if isNotSuspended() && (canManageProperties() || resource.data.get('staffId', '') == request.auth.uid || request.resource.data.get('staffId', '') == request.auth.uid);
-      allow delete: if isNotSuspended() && isAdmin();
+      allow read: if isNotSuspended() && resource.data.get('staffId', '') == request.auth.uid;
+      allow create, update, delete: if false;
     }
 
-    match /propertyPassports/{passportId} {
-      allow get, list, read: if isNotSuspended() && (canManageProperties() || isPropertyOwner(resource.data.get('propertyId', '')) || ownerCanRead(resource.data) || emailOwns(resource.data));
-      allow create, update, delete: if isNotSuspended() && canManageProperties();
+    match /staff_inventory_confirmations/{confirmationId} {
+      allow read: if isNotSuspended() && resource.data.get('staffId', '') == request.auth.uid;
+      allow create, update, delete: if false;
     }
 
-    match /property_passports/{passportId} {
-      allow get, list, read: if isNotSuspended() && (canManageProperties() || isPropertyOwner(resource.data.get('propertyId', '')) || ownerCanRead(resource.data) || emailOwns(resource.data));
-      allow create, update, delete: if isNotSuspended() && canManageProperties();
+    match /job_costs/{costId} {
+      allow read: if isNotSuspended() && (isFinance() || isOps() || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    match /pdf_reports/{reportId} {
+      allow read: if isNotSuspended() && (
+        resource.data.get('staffUid', '') == request.auth.uid ||
+        isHr() || isFinance() || isAdmin()
+      );
+      allow create, update, delete: if false;
     }
 
     match /properties/{propertyId} {`,
-  'match /propertyPassports/{passportId}'
+  'match /staff_shifts/{shiftId}'
 );
 
 if (changes > 0) {
