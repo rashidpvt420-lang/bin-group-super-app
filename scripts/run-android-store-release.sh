@@ -97,7 +97,7 @@ npx cap sync android
 : > "$GRADLE_LOG"
 (
   cd android
-  ./gradlew --no-daemon clean :app:assembleRelease :app:bundleRelease
+  bash ./gradlew --no-daemon clean :app:assembleRelease :app:bundleRelease
 ) 2>&1 | tee "$GRADLE_LOG"
 
 test -s "$AAB_PATH"
