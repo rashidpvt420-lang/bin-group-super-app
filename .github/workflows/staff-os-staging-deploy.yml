@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - feature/staff-operating-system
-    paths:
-      - .github/workflows/staff-os-staging-deploy.yml
-      - scripts/resolve-staging-appcheck-keys.mjs
 
 permissions:
   contents: read

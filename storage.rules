@@ -326,14 +326,28 @@ service firebase.storage {
       allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
     }
 
+    // Generated staff PDFs are immutable from client SDKs. Employees may read
+    // their own reports; HR/Finance/Admin access is role-bound. Cloud Functions
+    // use the Admin SDK for report creation and bypass these client rules.
+    match /staff-reports/{staffId}/{allPaths=**} {
+      allow read: if isAuth() && (
+        request.auth.uid == staffId ||
+        isHrRole() ||
+        hasAnyRole(['finance_admin', 'finance_staff', 'finance_manager', 'payroll_admin'])
+      );
+      allow write: if false;
+    }
+
     match /privateHrDocuments/{staffId}/{allPaths=**} {
       allow read, write: if false;
     }
 
-    // Unknown paths remain Founder/Admin-only, except private HR documents,
-    // which are written and read only through Admin SDK callables.
+    // Unknown paths remain Founder/Admin-only, except private HR documents and
+    // generated staff reports. Those paths are written only through Admin SDK callables.
     match /{collection}/{allPaths=**} {
-      allow read, write: if isAdmin() && collection != 'privateHrDocuments';
+      allow read, write: if isAdmin() &&
+        collection != 'privateHrDocuments' &&
+        collection != 'staff-reports';
     }
   }
 }
