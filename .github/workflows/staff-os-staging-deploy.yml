@@ -291,7 +291,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
-          npx firebase-tools deploy --only functions --project "$STAGING_PROJECT_ID" --non-interactive
+          npx firebase-tools deploy --only functions --project "$STAGING_PROJECT_ID" --force --non-interactive
 
       - name: Deploy Firestore rules, indexes, and Storage rules to staging
         shell: bash
