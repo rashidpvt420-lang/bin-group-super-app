@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const GMAIL_TRANSPORT_ATTEMPTS = 3;
+const GMAIL_TRANSPORT_RETRY_DELAY_MS = 250;
 
 function abortError(label) {
   const error = new Error(`${label} was aborted.`);
@@ -62,11 +64,19 @@ function stripHtml(value) {
 async function gmailJson(fetchImpl, url, options, label) {
   throwIfAborted(options?.signal, label);
   let response;
-  try {
-    response = await fetchImpl(url, options);
-  } catch (error) {
-    if (options?.signal?.aborted) throw abortError(label);
-    throw new Error(`${label} failed before an HTTP response.`);
+  for (let attempt = 1; attempt <= GMAIL_TRANSPORT_ATTEMPTS; attempt += 1) {
+    try {
+      response = await fetchImpl(url, options);
+      break;
+    } catch {
+      if (options?.signal?.aborted) throw abortError(label);
+      if (attempt === GMAIL_TRANSPORT_ATTEMPTS) {
+        throw new Error(
+          `${label} failed before an HTTP response after ${GMAIL_TRANSPORT_ATTEMPTS} transport attempts.`,
+        );
+      }
+      await sleep(GMAIL_TRANSPORT_RETRY_DELAY_MS * attempt, options?.signal, label);
+    }
   }
   let body = {};
   try {
