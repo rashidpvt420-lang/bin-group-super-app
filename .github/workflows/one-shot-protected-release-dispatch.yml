@@ -1,0 +1,57 @@
+name: One-shot Protected Release Dispatch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - .github/workflows/one-shot-protected-release-dispatch.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.event.pull_request.head.ref == 'ops/protected-release-f4dbc472'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      TARGET_SHA: f4dbc4721530c1bac044fd052103b9c407f9866f
+    steps:
+      - name: Dispatch exact-SHA protected release orchestrator
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current" == "$TARGET_SHA" ]] || { echo "::error::main moved to $current"; exit 1; }
+
+          baseline="$(gh api "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/runs?branch=main&event=workflow_dispatch&per_page=100" --jq '.workflow_runs[].id' || true)"
+
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"RUN_PROTECTED_RELEASE_BIN_GROUP"}}' \
+            | gh api --method POST -H 'Accept: application/vnd.github+json' \
+                "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/dispatches" --input -
+
+          run_id=""
+          for _ in $(seq 1 120); do
+            run_id="$(gh api "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
+              | jq -r --arg sha "$TARGET_SHA" --arg baseline "$baseline" '
+                ($baseline | split("\n") | map(select(length > 0) | tonumber)) as $old
+                | [.workflow_runs[]
+                    | select(.head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch")
+                    | select((.id as $id | ($old | index($id))) == null)]
+                | sort_by(.created_at) | last | .id // empty')"
+            [[ "$run_id" =~ ^[1-9][0-9]*$ ]] && break
+            sleep 5
+          done
+
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || { echo '::error::No exact-SHA protected-release run appeared.'; exit 1; }
+          echo "Protected release orchestrator run: $run_id"
+          echo "## Protected release dispatched" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Exact SHA: \`$TARGET_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Orchestrator run: \`$run_id\`" >> "$GITHUB_STEP_SUMMARY"
