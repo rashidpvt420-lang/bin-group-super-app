@@ -1,0 +1,99 @@
+name: One-shot Cancel Duplicate Protected Release 9f669403
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - .github/workflows/one-shot-cancel-duplicate-release-9f669403.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-duplicate:
+    if: github.event.pull_request.head.ref == 'ops/cancel-duplicate-release-9f669403'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      TARGET_SHA: 9f669403b45d7793dac83cabcea0f78ad7b782e5
+      CANONICAL_FIREBASE_RUN: '32056231945'
+      DUPLICATE_FIREBASE_RUN: '32056269880'
+      AMBIGUOUS_ORCHESTRATOR_RUN: '32055837624'
+    steps:
+      - name: Cancel only the duplicate exact-SHA runs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail() { echo "::error::$1"; exit 1; }
+
+          api_get() {
+            local endpoint="$1"
+            local out=""
+            for attempt in 1 2 3 4 5; do
+              if out="$(gh api "$endpoint")"; then
+                printf '%s' "$out"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          current="$(api_get "repos/$REPOSITORY/commits/main" | jq -r '.sha')"
+          [[ "$current" == "$TARGET_SHA" ]] || fail "main moved to $current; refusing duplicate cleanup."
+
+          canonical="$(api_get "repos/$REPOSITORY/actions/runs/$CANONICAL_FIREBASE_RUN")"
+          duplicate="$(api_get "repos/$REPOSITORY/actions/runs/$DUPLICATE_FIREBASE_RUN")"
+          orchestrator="$(api_get "repos/$REPOSITORY/actions/runs/$AMBIGUOUS_ORCHESTRATOR_RUN")"
+
+          [[ "$(jq -r '.head_sha' <<<"$canonical")" == "$TARGET_SHA" ]] || fail "Canonical Firebase run SHA mismatch."
+          [[ "$(jq -r '.head_sha' <<<"$duplicate")" == "$TARGET_SHA" ]] || fail "Duplicate Firebase run SHA mismatch."
+          [[ "$(jq -r '.head_sha' <<<"$orchestrator")" == "$TARGET_SHA" ]] || fail "Orchestrator run SHA mismatch."
+          [[ "$(jq -r '.name' <<<"$canonical")" == "Firebase Production Deploy" ]] || fail "Canonical run is not Firebase Production Deploy."
+          [[ "$(jq -r '.name' <<<"$duplicate")" == "Firebase Production Deploy" ]] || fail "Duplicate run is not Firebase Production Deploy."
+
+          cancel_if_active() {
+            local run_id="$1"
+            local label="$2"
+            local state status
+            state="$(api_get "repos/$REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$state")"
+            if [[ "$status" == "completed" ]]; then
+              echo "$label run $run_id already completed; no cancellation request sent."
+              return 0
+            fi
+            echo "Cancelling $label run $run_id (status=$status)."
+            if ! gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel" >/dev/null; then
+              state="$(api_get "repos/$REPOSITORY/actions/runs/$run_id")"
+              [[ "$(jq -r '.status' <<<"$state")" == "completed" ]] \
+                || fail "Cancellation request for $label run $run_id was inconclusive and the run is still active."
+            fi
+          }
+
+          cancel_if_active "$DUPLICATE_FIREBASE_RUN" "duplicate Firebase Production Deploy"
+          cancel_if_active "$AMBIGUOUS_ORCHESTRATOR_RUN" "ambiguous Founder orchestrator"
+
+          for _ in $(seq 1 30); do
+            duplicate="$(api_get "repos/$REPOSITORY/actions/runs/$DUPLICATE_FIREBASE_RUN")"
+            [[ "$(jq -r '.status' <<<"$duplicate")" == "completed" ]] && break
+            sleep 2
+          done
+          [[ "$(jq -r '.status' <<<"$duplicate")" == "completed" ]] \
+            || fail "Duplicate Firebase run did not stop within the cleanup window."
+
+          canonical="$(api_get "repos/$REPOSITORY/actions/runs/$CANONICAL_FIREBASE_RUN")"
+          [[ "$(jq -r '.status' <<<"$canonical")" != "completed" || "$(jq -r '.conclusion // ""' <<<"$canonical")" == "success" ]] \
+            || fail "Canonical Firebase run completed unsuccessfully during duplicate cleanup."
+
+          {
+            echo "## Duplicate protected-release cleanup complete"
+            echo "- Exact SHA: \`$TARGET_SHA\`"
+            echo "- Canonical Firebase run preserved: \`$CANONICAL_FIREBASE_RUN\`"
+            echo "- Duplicate Firebase run stopped: \`$DUPLICATE_FIREBASE_RUN\`"
+            echo "- Ambiguous orchestrator stopped if active: \`$AMBIGUOUS_ORCHESTRATOR_RUN\`"
+          } >> "$GITHUB_STEP_SUMMARY"
