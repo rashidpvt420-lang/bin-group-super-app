@@ -9,8 +9,10 @@ const [ownerEvidence, technicianEvidence] = await Promise.all([
 
 test('Owner dashboard converges server-created properties through owner-scoped live listeners', () => {
   assert.match(ownerEvidence, /collection\(db, 'properties'\)/);
-  assert.match(ownerEvidence, /where\('ownerId', '==', user\.uid\)/);
-  assert.match(ownerEvidence, /where\('ownerUid', '==', user\.uid\)/);
+  assert.match(ownerEvidence, /const attach = \(field: 'ownerId' \| 'ownerUid'/);
+  assert.match(ownerEvidence, /query\(collection\(db, 'properties'\), where\(field, '==', user\.uid\)\)/);
+  assert.match(ownerEvidence, /attach\('ownerId', byOwnerId\)/);
+  assert.match(ownerEvidence, /attach\('ownerUid', byOwnerUid\)/);
   assert.match(ownerEvidence, /onSnapshot\(/);
   assert.match(ownerEvidence, /liveProperties/);
   assert.match(ownerEvidence, /owner-live-property-portfolio/);
