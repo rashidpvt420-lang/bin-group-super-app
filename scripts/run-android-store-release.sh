@@ -122,7 +122,7 @@ apk_signing_report="$(mktemp)"
 "$apksigner" verify --verbose --print-certs "$APK_PATH" > "$apk_signing_report"
 
 package_line="$($aapt dump badging "$APK_PATH" | sed -n 's/^package: //p' | head -n 1)"
-package_name="$(sed -n "s/.*name='\([^']*\)'.*/\1/p" <<<"$package_line")"
+package_name="$(sed -n "s/^name='\([^']*\)'.*/\1/p" <<<"$package_line")"
 version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<<"$package_line")"
 version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$package_line")"
 if [[ "$package_name" != "$EXPECTED_APP_ID" ]]; then
