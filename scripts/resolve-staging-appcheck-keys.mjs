@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+// Trigger marker: revalidate staging after Functions workspace build fix.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, appendFileSync } from 'node:fs';
 
