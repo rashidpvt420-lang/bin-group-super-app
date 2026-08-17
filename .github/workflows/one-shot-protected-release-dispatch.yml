@@ -1,0 +1,95 @@
+name: One-shot Protected Release Dispatch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - .github/workflows/one-shot-protected-release-dispatch.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.event.pull_request.head.ref == 'ops/protected-release-9abfe137'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      TARGET_SHA: 9abfe137e34ac573f51b9ec8d5a684d1f6e6132d
+    steps:
+      - name: Dispatch exact-SHA protected release orchestrator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh_get() {
+            local endpoint="$1"
+            local output=""
+            for attempt in 1 2 3 4 5; do
+              if output="$(gh api "$endpoint")"; then
+                printf '%s' "$output"
+                return 0
+              fi
+              echo "GitHub API GET attempt $attempt failed; waiting before fail-closed retry." >&2
+              sleep $((attempt * 3))
+            done
+            echo "::error::GitHub API remained unavailable for a required read; refusing to dispatch ambiguously."
+            return 1
+          }
+
+          find_exact_run() {
+            jq -r --arg sha "$TARGET_SHA" '
+              [.workflow_runs[]
+                | select(.head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch")]
+              | sort_by(.created_at) | last | .id // empty'
+          }
+
+          current_json="$(gh_get "repos/$REPOSITORY/commits/main")"
+          current="$(printf '%s' "$current_json" | jq -r '.sha')"
+          [[ "$current" == "$TARGET_SHA" ]] || { echo "::error::main moved to $current"; exit 1; }
+
+          runs_endpoint="repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/runs?branch=main&event=workflow_dispatch&per_page=100"
+          runs_json="$(gh_get "$runs_endpoint")"
+          run_id="$(printf '%s' "$runs_json" | find_exact_run)"
+          if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Exact-SHA protected orchestrator already exists: $run_id"
+          else
+            payload="$(jq -n \
+              --arg ref main \
+              --arg sha "$TARGET_SHA" \
+              '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"RUN_PROTECTED_RELEASE_BIN_GROUP"}}')"
+
+            dispatched=false
+            for dispatch_attempt in 1 2 3; do
+              if printf '%s' "$payload" \
+                | gh api --method POST -H 'Accept: application/vnd.github+json' \
+                    "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/dispatches" --input -; then
+                dispatched=true
+              else
+                echo "GitHub dispatch POST attempt $dispatch_attempt was inconclusive; checking for an exact-SHA run before any retry." >&2
+              fi
+
+              for _ in $(seq 1 24); do
+                runs_json="$(gh_get "$runs_endpoint")"
+                run_id="$(printf '%s' "$runs_json" | find_exact_run)"
+                [[ "$run_id" =~ ^[1-9][0-9]*$ ]] && break
+                sleep 5
+              done
+              [[ "$run_id" =~ ^[1-9][0-9]*$ ]] && break
+
+              if [[ "$dispatched" == "true" ]]; then
+                echo "::error::Dispatch was accepted but no exact-SHA run became visible; refusing a second POST."
+                exit 1
+              fi
+            done
+          fi
+
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || { echo '::error::No exact-SHA protected-release run appeared.'; exit 1; }
+          echo "Protected release orchestrator run: $run_id"
+          echo "## Protected release dispatched" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Exact SHA: \`$TARGET_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Orchestrator run: \`$run_id\`" >> "$GITHUB_STEP_SUMMARY"
