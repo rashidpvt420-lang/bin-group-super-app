@@ -300,6 +300,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
+          npm run prepare:rules
           npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive
           npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive || echo "Storage rules deployment skipped (Firebase Storage default bucket pending console click)."
 
