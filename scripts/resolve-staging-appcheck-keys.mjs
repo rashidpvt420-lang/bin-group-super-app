@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Trigger marker: revalidate staging after Functions workspace build fix.
+// Trigger marker: deploy isolated Staff OS Functions runtime.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, appendFileSync } from 'node:fs';
 
