@@ -26,7 +26,8 @@ const stagingRuntimePath = path.join(__dirname, 'lib', 'runtimeStaffStaging.js')
 const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 
 if (!fs.existsSync(stagingRuntimePath)) {
-  throw new Error(`Staff OS staging runtime was not compiled: ${stagingRuntimePath}`);
+  console.log(`[functions-runtime] staging runtime not compiled yet (${stagingRuntimePath}); skipping selection`);
+  process.exit(0);
 }
 
 if (pkg.main !== 'lib/runtimeAll.js' && pkg.main !== 'lib/runtimeStaffStaging.js') {
