@@ -376,6 +376,8 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, `STAGING_APP_PREVIEW_URL=${appUrl}\nSTAGING_ADMIN_PREVIEW_URL=${adminUrl}\n`);
           fs.writeFileSync(process.env.RUNNER_TEMP + '/preview-urls.json', JSON.stringify({ appUrl, adminUrl }, null, 2));
           NODE
+          STAGING_APP_PREVIEW_URL=$(node -e "const fs = require('fs'); console.log(JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/preview-urls.json')).appUrl);")
+          STAGING_ADMIN_PREVIEW_URL=$(node -e "const fs = require('fs'); console.log(JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/preview-urls.json')).adminUrl);")
           MANIFEST="staff-os-staging-${GITHUB_SHA}.json"
           curl --fail --silent --show-error --location "$STAGING_APP_PREVIEW_URL/$MANIFEST" -o "$RUNNER_TEMP/app-manifest.json"
           curl --fail --silent --show-error --location "$STAGING_ADMIN_PREVIEW_URL/$MANIFEST" -o "$RUNNER_TEMP/admin-manifest.json"
