@@ -15,13 +15,21 @@ if (!source.includes(hardenedHrRole)) {
 const legacyCatchAll = `    match /{allPaths=**} {
       allow read, write: if isAdmin();
     }`;
-const hardenedCatchAll = `    // Unknown paths remain Founder/Admin-only, except private HR documents,
+const previousHardenedCatchAll = `    // Unknown paths remain Founder/Admin-only, except private HR documents,
     // which are written and read only through Admin SDK callables.
     match /{collection}/{allPaths=**} {
       allow read, write: if isAdmin() && collection != 'privateHrDocuments';
     }`;
+const hardenedCatchAll = `    // Unknown paths remain Founder/Admin-only, except private HR documents and
+    // generated staff reports. Those paths are written only through Admin SDK callables.
+    match /{collection}/{allPaths=**} {
+      allow read, write: if isAdmin() &&
+        collection != 'privateHrDocuments' &&
+        collection != 'staff-reports';
+    }`;
 
 if (source.includes(legacyCatchAll)) source = source.replace(legacyCatchAll, hardenedCatchAll);
+if (source.includes(previousHardenedCatchAll)) source = source.replace(previousHardenedCatchAll, hardenedCatchAll);
 if (!source.includes(hardenedCatchAll)) {
   throw new Error('[harden-private-hr-storage] global Storage fallback could not be bounded');
 }
@@ -32,9 +40,28 @@ const privateBlock = `    match /privateHrDocuments/{staffId}/{allPaths=**} {
 
 `;
 if (!source.includes('match /privateHrDocuments/{staffId}/{allPaths=**}')) {
-  const anchor = '    // Unknown paths remain Founder/Admin-only, except private HR documents,';
+  const anchor = '    // Unknown paths remain Founder/Admin-only, except private HR documents and';
   if (!source.includes(anchor)) throw new Error('[harden-private-hr-storage] private HR Storage anchor missing');
   source = source.replace(anchor, `${privateBlock}${anchor}`);
+}
+
+const staffReportsBlock = `    // Generated staff PDFs are immutable from client SDKs. Employees may read
+    // their own reports; HR/Finance/Admin access is role-bound. Cloud Functions
+    // use the Admin SDK for report creation and bypass these client rules.
+    match /staff-reports/{staffId}/{allPaths=**} {
+      allow read: if isAuth() && (
+        request.auth.uid == staffId ||
+        isHrRole() ||
+        hasAnyRole(['finance_admin', 'finance_staff', 'finance_manager', 'payroll_admin'])
+      );
+      allow write: if false;
+    }
+
+`;
+if (!source.includes('match /staff-reports/{staffId}/{allPaths=**}')) {
+  const anchor = '    match /privateHrDocuments/{staffId}/{allPaths=**} {';
+  if (!source.includes(anchor)) throw new Error('[harden-private-hr-storage] staff report Storage anchor missing');
+  source = source.replace(anchor, `${staffReportsBlock}${anchor}`);
 }
 
 const helperStart = source.indexOf('    function isHrRole() {');
@@ -46,6 +73,9 @@ if (/finance_admin|finance_staff|account_manager/.test(helperBlock)) {
 if (source.split('match /privateHrDocuments/{staffId}/{allPaths=**}').length - 1 !== 1) {
   throw new Error('[harden-private-hr-storage] private HR Storage block must exist exactly once');
 }
+if (source.split('match /staff-reports/{staffId}/{allPaths=**}').length - 1 !== 1) {
+  throw new Error('[harden-private-hr-storage] staff report Storage block must exist exactly once');
+}
 
 writeFileSync(rulesPath, source, 'utf8');
-console.log('[harden-private-hr-storage] HR documents exclude Finance/Account roles and privateHrDocuments is Admin-SDK-only');
+console.log('[harden-private-hr-storage] HR/private documents remain restricted and generated staff reports are immutable client-side');
