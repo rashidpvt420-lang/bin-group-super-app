@@ -21,6 +21,12 @@ function initialStatus(role: string) {
 export const assignPublicPortalRole = onCall({
   cors: true,
   region: "europe-west3",
+  // This is the authenticated bootstrap that creates the caller's first public
+  // portal claim. Keep operational callables App Check protected globally, but
+  // do not let browser/WebView attestation failure make the login bootstrap
+  // impossible. The callable still requires Firebase Auth and rejects every
+  // privileged/admin identity and every role outside PUBLIC_ROLES below.
+  enforceAppCheck: false,
 }, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Sign in before selecting a portal role.");

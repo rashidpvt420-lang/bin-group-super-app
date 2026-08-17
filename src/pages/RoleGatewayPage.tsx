@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { 
-    Box, Typography, Container, Grid, Card, CardContent, 
+import {
+    Box, Typography, Container, Grid, Card, CardContent,
     CardActionArea, alpha, Stack, Chip, Alert, CircularProgress
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
@@ -8,9 +8,9 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { auth, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
-import { 
-    User, Users, Wrench, Briefcase, ShieldCheck, 
-    ChevronRight, ArrowLeft 
+import {
+    User, Users, Wrench, Briefcase, ShieldCheck,
+    ChevronRight, ArrowLeft
 } from 'lucide-react';
 
 const PUBLIC_SELF_ASSIGN_ROLES = new Set(['owner', 'tenant', 'technician', 'broker']);
@@ -22,6 +22,9 @@ const roleHome: Record<string, string> = {
     broker: '/broker/dashboard',
 };
 
+const roleLoginTarget = (roleId: string) =>
+    `/login?intendedRole=${encodeURIComponent(roleId)}&returnTo=${encodeURIComponent('/gateway')}`;
+
 const RoleGatewayPage: React.FC = () => {
     const navigate = useNavigate();
     const { t, tx, isRTL, lang, setLang } = useLanguage();
@@ -30,34 +33,34 @@ const RoleGatewayPage: React.FC = () => {
     const [notice, setNotice] = useState<string | null>(null);
 
     const roles = [
-        { 
-            id: 'owner', 
-            label: tx('gateway.role.owner', 'Continue as Owner'), 
-            icon: <User size={40} />, 
+        {
+            id: 'owner',
+            label: tx('gateway.role.owner', 'Continue as Owner'),
+            icon: <User size={40} />,
             desc: 'Portfolio intelligence and asset control center.'
         },
-        { 
-            id: 'tenant', 
-            label: tx('gateway.role.tenant', 'Continue as Tenant'), 
-            icon: <Users size={40} />, 
+        {
+            id: 'tenant',
+            label: tx('gateway.role.tenant', 'Continue as Tenant'),
+            icon: <Users size={40} />,
             desc: 'Seamless issue reporting and residence management.'
         },
-        { 
-            id: 'technician', 
-            label: tx('gateway.role.technician', 'Continue as Technician'), 
-            icon: <Wrench size={40} />, 
+        {
+            id: 'technician',
+            label: tx('gateway.role.technician', 'Continue as Technician'),
+            icon: <Wrench size={40} />,
             desc: 'Mission dispatch and evidence-based work logs.'
         },
-        { 
-            id: 'broker', 
-            label: tx('gateway.role.broker', 'Continue as Broker'), 
-            icon: <Briefcase size={40} />, 
+        {
+            id: 'broker',
+            label: tx('gateway.role.broker', 'Continue as Broker'),
+            icon: <Briefcase size={40} />,
             desc: 'Referral management and commission tracking.'
         },
-        { 
-            id: 'admin', 
-            label: tx('gateway.role.admin', 'Continue as Admin'), 
-            icon: <ShieldCheck size={40} />, 
+        {
+            id: 'admin',
+            label: tx('gateway.role.admin', 'Continue as Admin'),
+            icon: <ShieldCheck size={40} />,
             desc: 'Unified in-app Admin Command Center.'
         }
     ];
@@ -65,18 +68,26 @@ const RoleGatewayPage: React.FC = () => {
     const handleRoleSelect = async (roleId: string) => {
         setNotice(null);
 
+        // Admin authentication is intentionally isolated in the dedicated
+        // Admin Panel. Route through LoginPage so canonical URL/email handling
+        // and MFA policy stay centralized there.
         if (roleId === 'admin') {
-            navigate('/admin/dashboard');
-            return;
-        }
-
-        if (!auth.currentUser && !user) {
-            navigate(`/login?intendedRole=${roleId}`);
+            navigate('/login?intendedRole=admin');
             return;
         }
 
         if (!PUBLIC_SELF_ASSIGN_ROLES.has(roleId)) {
             setNotice('This role is not available for self-selection.');
+            return;
+        }
+
+        // A RoleContext user is not sufficient proof that the Functions SDK
+        // currently owns an authenticated session. Only auth.currentUser can
+        // supply the callable ID token, so never attempt role assignment from a
+        // stale context snapshot.
+        const activeUser = auth.currentUser;
+        if (!activeUser) {
+            navigate(roleLoginTarget(roleId));
             return;
         }
 
@@ -87,17 +98,53 @@ const RoleGatewayPage: React.FC = () => {
 
         setSavingRole(roleId);
         try {
-            const activeUser = auth.currentUser || user;
-            if (!activeUser) throw new Error('No authenticated user found.');
+            // Refresh before the bootstrap call so the Functions SDK has a
+            // current Firebase Auth token even after a restored browser session.
+            await activeUser.getIdToken(true);
 
             const assignRole = httpsCallable(functions, 'assignPublicPortalRole');
-            await assignRole({ role: roleId });
+            try {
+                await assignRole({ role: roleId });
+            } catch (firstError: any) {
+                const firstCode = String(firstError?.code || '').toLowerCase();
+                const stillAuthenticated = auth.currentUser?.uid === activeUser.uid;
+
+                // One bounded retry repairs the narrow race where the restored
+                // Auth session exists locally but the first callable was issued
+                // before its fresh ID token was attached. Never retry if Auth
+                // itself has disappeared.
+                if (firstCode.includes('unauthenticated') && stillAuthenticated) {
+                    await activeUser.getIdToken(true);
+                    await assignRole({ role: roleId });
+                } else {
+                    throw firstError;
+                }
+            }
+
             await activeUser.getIdToken(true);
             await refreshRole();
             navigate(roleId === 'owner' ? '/onboarding' : (roleHome[roleId] || '/'));
         } catch (error: any) {
             console.error('[ROLE-GATEWAY] Failed to assign role:', error);
-            setNotice(error?.message || 'Unable to assign role. Please try again.');
+            const code = String(error?.code || '').toLowerCase();
+
+            if (code.includes('unauthenticated')) {
+                if (!auth.currentUser) {
+                    navigate(roleLoginTarget(roleId));
+                    return;
+                }
+                setNotice('Your secure sign-in session could not be verified. Please sign in again and retry.');
+            } else if (code.includes('failed-precondition')) {
+                setNotice('This account already has a different portal role or is managed as a privileged account.');
+            } else if (code.includes('invalid-argument')) {
+                setNotice('That portal role cannot be selected for this account.');
+            } else if (code.includes('permission-denied')) {
+                setNotice('Your account is not permitted to select this portal role.');
+            } else if (code.includes('unavailable') || code.includes('network')) {
+                setNotice('The secure role service is temporarily unreachable. Check your connection and try again.');
+            } else {
+                setNotice('Unable to activate this portal right now. Please try again.');
+            }
         } finally {
             setSavingRole(null);
         }
