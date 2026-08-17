@@ -203,6 +203,34 @@ function insertOwnerTrustWorkflowRules(input) {
   return input.replace(marker, `${block}\n${marker}`);
 }
 
+function normalizeOwnUserProfileReadRule(input) {
+  const legacyPrefix = `      allow get: if signedIn() && (
+                    (request.auth.uid == userId && (resource == null || profileAllowsAccess(resource.data))) ||
+                    (
+                      request.auth.uid != userId &&`;
+  const hardenedPrefix = `      allow get: if request.auth != null && (
+                    request.auth.uid == userId ||
+                    (
+                      signedIn() &&
+                      request.auth.uid != userId &&`;
+
+  if (input.includes(hardenedPrefix)) {
+    console.log('Already normalized/hardened: own user profile read rule');
+    return input;
+  }
+
+  if (!input.includes(legacyPrefix)) {
+    throw new Error('[rules-normalize] Missing own user profile read rule boundary.');
+  }
+
+  // Account state must remain readable by the authenticated account itself so
+  // the client can resolve suspended/rejected/disabled status instead of
+  // misclassifying a rule denial as a transient profile-verification outage.
+  // All non-self reads and all writes remain guarded by the existing suspension
+  // and authorization predicates.
+  return input.replace(legacyPrefix, hardenedPrefix);
+}
+
 function normalizePropertiesReadRule(input) {
   const legacyStart = "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) ||";
   const legacyEnd = "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');";
@@ -224,6 +252,7 @@ let output = firstDedupe.output;
 output = normalizePropertiesReadRule(output);
 output = normalizeNotificationBlock(output);
 output = insertOwnerTrustWorkflowRules(output);
+output = normalizeOwnUserProfileReadRule(output);
 
 let secondDedupe = dedupeLaunchHelpers(output);
 output = secondDedupe.output;
