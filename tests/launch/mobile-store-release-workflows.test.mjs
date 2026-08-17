@@ -58,6 +58,33 @@ test('store release shell scripts pass bash syntax validation', () => {
   assertBashSyntax('scripts/run-ios-app-store-release.sh');
 });
 
+test('Android SHA-256 fingerprint normalization accepts tool formatting differences', () => {
+  const bash = resolveBash();
+  assert.ok(bash, 'A usable GNU Bash executable is required for fingerprint normalization validation.');
+
+  const normalizer = androidScript.match(/normalize_sha256\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(normalizer, 'Android release script must define normalize_sha256().');
+
+  const bare = 'A1'.repeat(32);
+  const coloned = bare.match(/.{2}/g).join(':');
+  for (const input of [bare.toLowerCase(), coloned.toLowerCase(), `  ${coloned}  `]) {
+    const result = spawnSync(
+      bash,
+      ['-c', `${normalizer}\nnormalize_sha256 "$1"`, 'normalize-sha256', input],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(result.stdout, bare);
+  }
+
+  const malformed = spawnSync(
+    bash,
+    ['-c', `${normalizer}\nnormalize_sha256 "$1"`, 'normalize-sha256', 'AA:BB'],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(malformed.status, 0, 'Malformed SHA-256 fingerprints must fail closed.');
+});
+
 test('Android store release is manual, exact-main, production-protected, and signed', () => {
   assert.match(androidWorkflow, /^name: Android Store Release AAB/m);
   assert.match(androidWorkflow, /workflow_dispatch:/);
@@ -92,8 +119,14 @@ test('Android store release is manual, exact-main, production-protected, and sig
   assert.match(androidScript, /aapt dump badging/);
   assert.match(androidScript, /package_name="\$\(sed -n "s\/\^name='/);
   assert.doesNotMatch(androidScript, /package_name="\$\(sed -n "s\/\.\*name='/);
+  assert.match(androidScript, /normalize_sha256\(\)/);
+  assert.match(androidScript, /tr -cd '\[:xdigit:\]'/);
+  assert.match(androidScript, /apk_sha256_raw="\$\([\s\S]*Signer #1 certificate SHA-256 digest/);
+  assert.match(androidScript, /apk_sha256="\$\(normalize_sha256 "\$apk_sha256_raw"\)"/);
+  assert.doesNotMatch(androidScript, /apk_sha256="\$\([\s\S]*sed 's\/\.\.\/&:\/g/);
   assert.match(androidScript, /Release APK certificate does not match the protected upload keystore/);
   assert.match(androidScript, /aabCertificateMatchedUploadKeystore': True/);
+  assert.match(androidScript, /apkCertificateMatchedUploadKeystore': True/);
   assert.match(androidScript, /trap cleanup EXIT/);
   assert.match(androidScript, /rm -f "\$KEYSTORE_PATH" "\$KEYSTORE_PROPERTIES"/);
 
