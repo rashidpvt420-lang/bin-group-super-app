@@ -12,7 +12,10 @@ const sitesFile = text(process.env.STAGING_HOSTING_SITES_FILE);
 const enterpriseOverride = text(process.env.STAGING_ENTERPRISE_APP_CHECK_SITE_KEY_OVERRIDE);
 const githubEnv = text(process.env.GITHUB_ENV);
 
+const TRUSTED_ORIGIN = 'https://firebaseappcheck.googleapis.com';
+const TRUSTED_HOSTNAME = 'firebaseappcheck.googleapis.com';
 const canonicalStagingProjectId = 'bin-group-staging';
+const canonicalStagingProjectNumber = '355288045402';
 const canonicalStagingWebAppId = '1:355288045402:web:a4afd4661bf961068b4563';
 // reCAPTCHA Enterprise site keys are public client identifiers. This key is
 // domain-restricted to the isolated staging Hosting site and is never used by production.
@@ -61,22 +64,33 @@ function run(command, args) {
 
 const projectNumber = run('gcloud', ['projects', 'describe', stagingProjectId, '--format=value(projectNumber)']);
 if (!/^\d+$/.test(projectNumber)) throw new Error('Unable to resolve the staging Google Cloud project number.');
-if (projectNumber !== '355288045402') throw new Error(`Unexpected staging project number ${projectNumber}.`);
+if (projectNumber !== canonicalStagingProjectNumber) {
+  throw new Error(`Unexpected staging project number ${projectNumber}.`);
+}
 
 // The staging deploy identity intentionally does not need Service Usage Admin.
 // Firebase Admin includes the App Check get/update permissions needed here.
 const accessToken = run('gcloud', ['auth', 'print-access-token']);
 if (!accessToken) throw new Error('Unable to obtain a Google Cloud access token for staging App Check inspection.');
 
-const appIdPath = encodeURIComponent(webAppId);
-const appCheckBase = `https://firebaseappcheck.googleapis.com/v1/projects/${projectNumber}/apps/${appIdPath}`;
-const enterpriseConfigUrl = `${appCheckBase}/recaptchaEnterpriseConfig`;
+function validateTrustedEndpointUrl(targetUrl) {
+  const parsed = new URL(targetUrl);
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Endpoint URL protocol must be https:, got ${parsed.protocol}`);
+  }
+  if (parsed.hostname !== TRUSTED_HOSTNAME) {
+    throw new Error(`Endpoint URL hostname must be ${TRUSTED_HOSTNAME}, got ${parsed.hostname}`);
+  }
+}
 
-async function getJson(url, { allowNotFound = false } = {}) {
-  const response = await fetch(url, {
+async function getEnterpriseAppCheckConfig() {
+  const targetUrl = `${TRUSTED_ORIGIN}/v1/projects/${canonicalStagingProjectNumber}/apps/${encodeURIComponent(canonicalStagingWebAppId)}/recaptchaEnterpriseConfig`;
+  validateTrustedEndpointUrl(targetUrl);
+
+  const response = await fetch(targetUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (allowNotFound && response.status === 404) return null;
+  if (response.status === 404) return null;
   if (!response.ok) {
     const body = await response.text();
     const disabled = response.status === 403 && /has not been used|disabled/i.test(body);
@@ -92,8 +106,11 @@ async function getJson(url, { allowNotFound = false } = {}) {
 }
 
 async function bindEnterpriseSiteKey(siteKey) {
-  const name = `projects/${projectNumber}/apps/${webAppId}/recaptchaEnterpriseConfig`;
-  const response = await fetch(`${enterpriseConfigUrl}?updateMask=siteKey`, {
+  const targetUrl = `${TRUSTED_ORIGIN}/v1/projects/${canonicalStagingProjectNumber}/apps/${encodeURIComponent(canonicalStagingWebAppId)}/recaptchaEnterpriseConfig?updateMask=siteKey`;
+  validateTrustedEndpointUrl(targetUrl);
+
+  const name = `projects/${canonicalStagingProjectNumber}/apps/${canonicalStagingWebAppId}/recaptchaEnterpriseConfig`;
+  const response = await fetch(targetUrl, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -116,7 +133,7 @@ function plausibleSiteKey(value) {
 let enterpriseSiteKey = enterpriseOverride;
 let enterpriseSource = enterpriseSiteKey ? 'explicit staging override' : '';
 if (!enterpriseSiteKey) {
-  let enterpriseConfig = await getJson(enterpriseConfigUrl, { allowNotFound: true });
+  let enterpriseConfig = await getEnterpriseAppCheckConfig();
   enterpriseSiteKey = text(enterpriseConfig?.siteKey);
   enterpriseSource = 'Firebase App Check API';
 
