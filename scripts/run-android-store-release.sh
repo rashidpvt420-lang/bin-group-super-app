@@ -130,30 +130,63 @@ if [[ "$package_name" != "$EXPECTED_APP_ID" ]]; then
   exit 1
 fi
 
-keystore_sha256="$({
+normalize_sha256() {
+  local raw="$1"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
+  if [[ ! "$normalized" =~ ^[0-9A-F]{64}$ ]]; then
+    return 1
+  fi
+  printf '%s' "$normalized"
+}
+
+format_sha256() {
+  printf '%s' "$1" | sed 's/../&:/g;s/:$//'
+}
+
+keystore_sha256_raw="$({
   keytool -list -v \
     -keystore "$KEYSTORE_PATH" \
     -storepass "$ANDROID_KEYSTORE_PASSWORD" \
     -alias "$ANDROID_KEY_ALIAS"
-} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
-aab_certificate_sha256="$({
+aab_certificate_sha256_raw="$({
   keytool -printcert -jarfile "$AAB_PATH"
-} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
-apk_sha256="$(
-  sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$apk_signing_report" |
-  head -n 1 |
-  tr '[:lower:]' '[:upper:]' |
-  sed 's/../&:/g;s/:$//'
+apk_sha256_raw="$(
+  sed -n 's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' "$apk_signing_report" |
+  head -n 1
 )"
 rm -f "$apk_signing_report"
 
-if [[ -z "$keystore_sha256" || -z "$aab_certificate_sha256" || "$keystore_sha256" != "$aab_certificate_sha256" ]]; then
+keystore_sha256="$(normalize_sha256 "$keystore_sha256_raw")" || {
+  echo "::error::Could not normalize the protected upload-keystore SHA-256 fingerprint."
+  exit 1
+}
+aab_certificate_sha256="$(normalize_sha256 "$aab_certificate_sha256_raw")" || {
+  echo "::error::Could not normalize the release AAB SHA-256 certificate fingerprint."
+  exit 1
+}
+apk_sha256="$(normalize_sha256 "$apk_sha256_raw")" || {
+  echo "::error::Could not normalize the release APK SHA-256 certificate fingerprint."
+  exit 1
+}
+
+keystore_sha256_display="$(format_sha256 "$keystore_sha256")"
+aab_certificate_sha256_display="$(format_sha256 "$aab_certificate_sha256")"
+apk_sha256_display="$(format_sha256 "$apk_sha256")"
+
+echo "Protected upload certificate SHA-256: $keystore_sha256_display"
+echo "Release AAB certificate SHA-256: $aab_certificate_sha256_display"
+echo "Release APK certificate SHA-256: $apk_sha256_display"
+
+if [[ "$keystore_sha256" != "$aab_certificate_sha256" ]]; then
   echo "::error::Release AAB certificate does not match the protected upload keystore."
   exit 1
 fi
-if [[ -z "$apk_sha256" || "$keystore_sha256" != "$apk_sha256" ]]; then
+if [[ "$keystore_sha256" != "$apk_sha256" ]]; then
   echo "::error::Release APK certificate does not match the protected upload keystore."
   exit 1
 fi
@@ -165,7 +198,7 @@ EXPECTED_APP_ID="$EXPECTED_APP_ID" \
 PACKAGE_NAME="$package_name" \
 VERSION_CODE="$version_code" \
 VERSION_NAME="$version_name" \
-CERTIFICATE_SHA256="$keystore_sha256" \
+CERTIFICATE_SHA256="$keystore_sha256_display" \
 AAB_SHA256="$aab_sha256" \
 AAB_SIZE="$aab_size" \
 EVIDENCE_PATH="$EVIDENCE_PATH" \
