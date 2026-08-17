@@ -23,11 +23,24 @@ test('Technician verified signal waits for Firestore proof convergence after pro
   assert.match(technicianEvidence, /setAwaitingProofConvergence\(true\)/);
   assert.match(technicianEvidence, /if \(!awaitingProofConvergence \|\| !existingProof\) return;/);
   assert.match(technicianEvidence, /requestAnimationFrame/);
-  assert.match(technicianEvidence, /setSuccess\('Before-work site evidence verified/);
+  assert.match(
+    technicianEvidence,
+    /React\.useEffect\(\(\) => \{\s*if \(!awaitingProofConvergence \|\| !existingProof\) return;[\s\S]*?setSuccess\('Before-work site evidence verified[\s\S]*?\}, \[awaitingProofConvergence, existingProof\]\);/,
+  );
 
-  const callableIndex = technicianEvidence.indexOf('await submitEvidence({ ticketId, storagePath, downloadUrl });');
-  const pendingIndex = technicianEvidence.indexOf('setAwaitingProofConvergence(true);', callableIndex);
-  const successIndex = technicianEvidence.indexOf("setSuccess('Before-work site evidence verified");
-  assert.ok(callableIndex >= 0 && pendingIndex > callableIndex, 'Proof convergence wait must begin only after callable success.');
-  assert.ok(successIndex >= 0 && successIndex < callableIndex, 'Success rendering must live in the Firestore-convergence effect, not directly after the callable.');
+  const callableMarker = 'await submitEvidence({ ticketId, storagePath, downloadUrl });';
+  const callableIndex = technicianEvidence.indexOf(callableMarker);
+  assert.ok(callableIndex >= 0, 'Protected before-work evidence callable must remain present.');
+
+  const callableBlock = technicianEvidence.slice(callableIndex, technicianEvidence.indexOf('} catch', callableIndex));
+  assert.match(
+    callableBlock,
+    /await submitEvidence\(\{ ticketId, storagePath, downloadUrl \}\);\s*setAwaitingProofConvergence\(true\);/,
+    'Proof convergence wait must begin only after protected callable success.',
+  );
+  assert.doesNotMatch(
+    callableBlock,
+    /setSuccess\('Before-work site evidence verified/,
+    'Callable success must not directly signal Start Work readiness before Firestore convergence.',
+  );
 });
