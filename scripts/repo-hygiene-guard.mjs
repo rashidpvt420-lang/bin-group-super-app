@@ -21,6 +21,12 @@ const branchResidueNeedles = [
   ['fix', 'security', 'rbac', 'rules', 'hardening'].join('/'),
 ];
 
+const forbiddenTrackedPathspecs = [
+  ['.tmp', 'tracked temporary diagnostics'],
+  ['android_signing_package', 'tracked Android signing package material'],
+  [':(glob)staff-os-staging-*/**', 'tracked generated staff/staging deployment evidence'],
+];
+
 const violations = [];
 
 function relative(filePath) {
@@ -91,9 +97,11 @@ function inspectFile(filePath) {
   });
 }
 
-const trackedTempFiles = trackedFiles('.tmp');
-if (trackedTempFiles.length) {
-  violations.push(`tracked temporary diagnostics are forbidden: ${trackedTempFiles.join(', ')}`);
+for (const [pathspec, label] of forbiddenTrackedPathspecs) {
+  const files = trackedFiles(pathspec);
+  if (files.length) {
+    violations.push(`${label} are forbidden: ${files.join(', ')}`);
+  }
 }
 
 walk(root);
