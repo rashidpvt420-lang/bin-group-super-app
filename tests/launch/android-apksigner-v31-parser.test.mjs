@@ -54,7 +54,7 @@ test('Android signer parser accepts legacy apksigner signer-number output', asyn
   assert.equal(result.stdout, digest);
 });
 
-test('Android signer parser accepts apksigner v3.1 SDK-range output', async () => {
+test('Android signer parser accepts apksigner SDK-range output', async () => {
   const digest = 'B2'.repeat(32);
   const result = await resolveReport(
     [
@@ -68,7 +68,24 @@ test('Android signer parser accepts apksigner v3.1 SDK-range output', async () =
   assert.equal(result.stdout, digest);
 });
 
-test('Android signer parser accepts v3.1 dev-release labels and surrounding whitespace', async () => {
+test('Android signer parser accepts current V2 Signer label from protected runner', async () => {
+  const digest = '431aec82d731f2a6ed2521ac529722fcb4a51614ac857a20ab96da2d767bee91';
+  const result = await resolveReport(
+    [
+      'Verifies',
+      'Verified using v2 scheme (APK Signature Scheme v2): true',
+      'Number of signers: 1',
+      'V2 Signer: certificate DN: CN=BIN GROUP Android Upload, OU=Mobile Release, O=BIN GROUP General Maintenance and Property Management LLC, L=Al Ain, ST=Abu Dhabi, C=AE',
+      `V2 Signer: certificate SHA-256 digest: ${digest}`,
+      'V2 Signer: certificate SHA-1 digest: d131bbad40cdd876b51e6db0b48d4d00de6e4561',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stdout, digest.toUpperCase());
+});
+
+test('Android signer parser accepts dev-release labels and surrounding whitespace', async () => {
   const digest = 'C3'.repeat(32);
   const coloned = digest.match(/.{2}/g).join(':').toLowerCase();
   const result = await resolveReport(
@@ -83,7 +100,7 @@ test('Android signer parser fails closed on distinct signer fingerprints', async
   const second = 'E5'.repeat(32).toLowerCase();
   const result = await resolveReport(
     [
-      `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${first}`,
+      `V2 Signer: certificate SHA-256 digest: ${first}`,
       `Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: ${second}`,
       '',
     ].join('\n'),
@@ -91,7 +108,14 @@ test('Android signer parser fails closed on distinct signer fingerprints', async
   assert.equal(result.status, 2, 'Distinct APK signer fingerprints must fail closed.');
 });
 
-test('Android signer parser fails closed when no supported SHA-256 signer line exists', async () => {
-  const result = await resolveReport('Verifies\nNumber of signers: 1\n');
+test('Android signer parser ignores public-key hashes and fails closed when certificate SHA-256 is absent', async () => {
+  const result = await resolveReport(
+    [
+      'Verifies',
+      'Number of signers: 1',
+      'V2 Signer: public key SHA-256 digest: 4c12ece462b07996ef8eca064c56a0b47c1197f15a3f3c77734f1fd2c250cdf9',
+      '',
+    ].join('\n'),
+  );
   assert.notEqual(result.status, 0, 'Missing signer certificate evidence must fail closed.');
 });
