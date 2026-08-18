@@ -1,26 +1,84 @@
+import base64
 import os
 import secrets
 import string
 import subprocess
-import base64
 import textwrap
 from pathlib import Path
 
+
+def repo_root() -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent,
+        )
+        return Path(result.stdout.strip()).resolve()
+    except (OSError, subprocess.CalledProcessError):
+        return Path(__file__).resolve().parents[1]
+
+
+def is_inside(candidate: Path, parent: Path) -> bool:
+    try:
+        candidate.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def resolve_private_package_dir(root: Path) -> Path:
+    configured = os.environ.get("BIN_GROUP_PRIVATE_SIGNING_DIR", "").strip()
+    package_dir = (
+        Path(configured).expanduser()
+        if configured
+        else Path.home() / ".bin-group-private" / "android-signing-package"
+    ).resolve()
+
+    if is_inside(package_dir, root):
+        raise RuntimeError(
+            "Refusing to write Android signing material inside the Git repository. "
+            "Set BIN_GROUP_PRIVATE_SIGNING_DIR to a private path outside the checkout."
+        )
+
+    return package_dir
+
+
+def restrict_permissions(path: Path, mode: int) -> None:
+    try:
+        path.chmod(mode)
+    except OSError:
+        # Windows ACLs do not map cleanly to POSIX modes; the outside-repo guard is mandatory.
+        pass
+
+
 def main():
-    package_dir = Path("android_signing_package")
-    package_dir.mkdir(exist_ok=True)
+    root = repo_root()
+    package_dir = resolve_private_package_dir(root)
+    package_dir.mkdir(parents=True, exist_ok=True)
+    restrict_permissions(package_dir, 0o700)
 
     keystore = package_dir / "bin-group-upload.jks"
     cert_pem = package_dir / "bin-group-upload-certificate.pem"
     secrets_txt = package_dir / "github-production-android-secrets.txt"
     readme_txt = package_dir / "README.txt"
 
+    protected_outputs = (keystore, cert_pem, secrets_txt, readme_txt)
+    existing = [path.name for path in protected_outputs if path.exists()]
+    if existing:
+        raise RuntimeError(
+            "Refusing to overwrite an existing Android signing package: "
+            + ", ".join(existing)
+            + ". Move or securely archive the old private package first."
+        )
+
     alias = "bin-group-key"
     alphabet = string.ascii_letters + string.digits
     store_password = "".join(secrets.choice(alphabet) for _ in range(36))
     key_password = "".join(secrets.choice(alphabet) for _ in range(36))
 
-    # Generate 4096-bit RSA Upload Keystore
     cmd_gen = [
         "keytool", "-genkeypair",
         "-alias", alias,
@@ -36,8 +94,8 @@ def main():
         "-noprompt",
     ]
     subprocess.run(cmd_gen, check=True, capture_output=True, text=True)
+    restrict_permissions(keystore, 0o600)
 
-    # Export Public Certificate
     cmd_export = [
         "keytool", "-exportcert", "-rfc",
         "-alias", alias,
@@ -47,11 +105,8 @@ def main():
     ]
     subprocess.run(cmd_export, check=True, capture_output=True, text=True)
 
-    # Base64 encode the keystore file
-    keystore_bytes = keystore.read_bytes()
-    keystore_b64 = base64.b64encode(keystore_bytes).decode("ascii")
+    keystore_b64 = base64.b64encode(keystore.read_bytes()).decode("ascii")
 
-    # Write secrets text file
     secrets_txt.write_text(
         "BIN GROUP — GitHub Production Android Signing Secrets\n"
         "KEEP THIS FILE PRIVATE. DO NOT COMMIT IT TO GIT.\n\n"
@@ -61,18 +116,20 @@ def main():
         f"ANDROID_KEY_PASSWORD={key_password}\n",
         encoding="utf-8",
     )
+    restrict_permissions(secrets_txt, 0o600)
 
-    # Write Readme instructions
     readme_txt.write_text(
         textwrap.dedent(f"""\
         BIN GROUP Android Upload Signing Package
         ----------------------------------------
 
-        Files generated in this folder:
+        This directory is intentionally outside the Git repository.
+
+        Files generated in this private folder:
         - bin-group-upload.jks
           Private Android upload keystore. Keep offline backups. Never commit it to git.
         - bin-group-upload-certificate.pem
-          Public certificate only. Safe to provide to Google Play Console if an upload-key reset is required.
+          Public certificate used for Google Play upload-key registration/reset.
         - github-production-android-secrets.txt
           Contains the four GitHub production Environment secret values required by .github/workflows/android-store-release.yml.
 
@@ -87,7 +144,6 @@ def main():
         encoding="utf-8",
     )
 
-    # Verify keystore alias
     cmd_verify = [
         "keytool", "-list",
         "-keystore", str(keystore),
@@ -96,9 +152,10 @@ def main():
     ]
     subprocess.run(cmd_verify, check=True, capture_output=True, text=True)
 
-    print("[android-signing-generator] Successfully generated and verified BIN GROUP Android Upload Signing Package.")
-    print(f"Package Directory: {package_dir.resolve()}")
-    print(f"Secrets File: {secrets_txt.resolve()}")
+    print("[android-signing-generator] Successfully generated and verified a private Android upload signing package.")
+    print(f"Package Directory: {package_dir}")
+    print("Signing secrets were written only to the private package directory and were not printed.")
+
 
 if __name__ == "__main__":
     main()
