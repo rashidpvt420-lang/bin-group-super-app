@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const root = process.cwd();
 const selfPath = 'scripts/repo-hygiene-guard.mjs';
@@ -24,6 +25,21 @@ const violations = [];
 
 function relative(filePath) {
   return path.relative(root, filePath).replaceAll(path.sep, '/');
+}
+
+function trackedFiles(pathspec) {
+  try {
+    const output = execFileSync('git', ['ls-files', '--', pathspec], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    return output ? output.split(/\r?\n/).filter(Boolean) : [];
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    violations.push(`Unable to verify tracked-file hygiene with git: ${detail}`);
+    return [];
+  }
 }
 
 function shouldCheck(filePath) {
@@ -73,6 +89,11 @@ function inspectFile(filePath) {
       }
     }
   });
+}
+
+const trackedTempFiles = trackedFiles('.tmp');
+if (trackedTempFiles.length) {
+  violations.push(`tracked temporary diagnostics are forbidden: ${trackedTempFiles.join(', ')}`);
 }
 
 walk(root);
