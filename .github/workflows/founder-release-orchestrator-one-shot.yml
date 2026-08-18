@@ -67,6 +67,21 @@ jobs:
           [[ "$GITHUB_SHA" == "$TARGET_SHA" ]] \
             || fail "Workflow ref SHA $GITHUB_SHA does not equal protected target $TARGET_SHA."
 
+          assert_release_governance() {
+            local branch_json protected commit_json verified
+            branch_json="$(gh_get "repos/$REPOSITORY/branches/main")" \
+              || fail "Unable to verify main branch protection."
+            protected="$(jq -r '.protected // false' <<<"$branch_json")"
+            [[ "$protected" == "true" ]] \
+              || fail "main branch is not protected; refusing hard public release."
+
+            commit_json="$(gh_get "repos/$REPOSITORY/commits/$TARGET_SHA")" \
+              || fail "Unable to verify target commit signature."
+            verified="$(jq -r '.commit.verification.verified // false' <<<"$commit_json")"
+            [[ "$verified" == "true" ]] \
+              || fail "target commit $TARGET_SHA is not cryptographically verified; refusing hard public release."
+          }
+
           assert_main() {
             local current_json current
             current_json="$(gh_get "repos/$REPOSITORY/commits/main")" \
@@ -200,6 +215,7 @@ jobs:
             fail "$label run $run_id did not complete within the protected wait window."
           }
 
+          assert_release_governance
           assert_main
           production_artifact="production-deployment-$TARGET_SHA"
           production_run_id=""
