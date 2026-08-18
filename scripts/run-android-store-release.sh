@@ -8,6 +8,7 @@ AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
 APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
 EVIDENCE_PATH="android-store-release-evidence.json"
 GRADLE_LOG="android-store-release-gradle.log"
+COMPROMISED_UPLOAD_CERT_SHA256="431AEC82D731F2A6ED2521AC529722FCB4A51614AC857A20AB96DA2D767BEE91"
 
 required=(
   ANDROID_UPLOAD_KEYSTORE_BASE64
@@ -88,6 +89,21 @@ keytool -list \
   -keystore "$KEYSTORE_PATH" \
   -storepass "$ANDROID_KEYSTORE_PASSWORD" \
   -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+preflight_keystore_sha256="$({
+  keytool -list -v \
+    -keystore "$KEYSTORE_PATH" \
+    -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+    -alias "$ANDROID_KEY_ALIAS"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
+if [[ ! "$preflight_keystore_sha256" =~ ^[0-9A-F]{64}$ ]]; then
+  echo "::error::Could not validate the protected Android upload-key certificate fingerprint before build."
+  exit 1
+fi
+if [[ "$preflight_keystore_sha256" == "$COMPROMISED_UPLOAD_CERT_SHA256" ]]; then
+  echo "::error::Refusing Android release: the configured production upload key is the compromised credential exposed in public Git history. Rotate the production Android signing secrets and Play upload key before release."
+  exit 1
+fi
 
 npm ci --include=optional --legacy-peer-deps
 npm run test:mobile-store-readiness

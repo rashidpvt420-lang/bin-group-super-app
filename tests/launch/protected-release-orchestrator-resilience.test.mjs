@@ -14,6 +14,17 @@ test('protected release retries GitHub reads before failing closed', () => {
   assert.match(workflow, /current_json="\$\(gh_get "repos\/\$REPOSITORY\/commits\/main"\)"/);
 });
 
+test('protected release requires protected main and a cryptographically verified target commit', () => {
+  assert.match(workflow, /assert_release_governance\(\) \{/);
+  assert.match(workflow, /branch_json="\$\(gh_get "repos\/\$REPOSITORY\/branches\/main"\)"/);
+  assert.match(workflow, /protected="\$\(jq -r '\.protected \/\/ false'/);
+  assert.match(workflow, /main branch is not protected; refusing hard public release/);
+  assert.match(workflow, /commit_json="\$\(gh_get "repos\/\$REPOSITORY\/commits\/\$TARGET_SHA"\)"/);
+  assert.match(workflow, /verified="\$\(jq -r '\.commit\.verification\.verified \/\/ false'/);
+  assert.match(workflow, /target commit \$TARGET_SHA is not cryptographically verified; refusing hard public release/);
+  assert.match(workflow, /assert_release_governance\s+assert_main/);
+});
+
 test('protected release treats dispatch POST failures as ambiguous and correlates before retrying', () => {
   assert.match(workflow, /dispatch_and_locate\(\) \{/);
   assert.match(workflow, /for dispatch_attempt in 1 2 3; do/);

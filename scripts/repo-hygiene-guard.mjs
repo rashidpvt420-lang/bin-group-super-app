@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const root = process.cwd();
 const selfPath = 'scripts/repo-hygiene-guard.mjs';
@@ -20,10 +21,32 @@ const branchResidueNeedles = [
   ['fix', 'security', 'rbac', 'rules', 'hardening'].join('/'),
 ];
 
+const forbiddenTrackedPathspecs = [
+  ['.tmp', 'tracked temporary diagnostics'],
+  ['android_signing_package', 'tracked Android signing package material'],
+  [':(glob)staff-os-staging-*/**', 'tracked generated staff/staging deployment evidence'],
+  ['launch_package/privileged-account-cleanup.json', 'tracked privileged-account cleanup evidence'],
+];
+
 const violations = [];
 
 function relative(filePath) {
   return path.relative(root, filePath).replaceAll(path.sep, '/');
+}
+
+function trackedFiles(pathspec) {
+  try {
+    const output = execFileSync('git', ['ls-files', '--', pathspec], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    return output ? output.split(/\r?\n/).filter(Boolean) : [];
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    violations.push(`Unable to verify tracked-file hygiene with git: ${detail}`);
+    return [];
+  }
 }
 
 function shouldCheck(filePath) {
@@ -73,6 +96,13 @@ function inspectFile(filePath) {
       }
     }
   });
+}
+
+for (const [pathspec, label] of forbiddenTrackedPathspecs) {
+  const files = trackedFiles(pathspec);
+  if (files.length) {
+    violations.push(`${label} are forbidden: ${files.join(', ')}`);
+  }
 }
 
 walk(root);
