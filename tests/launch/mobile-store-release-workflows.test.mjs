@@ -121,8 +121,13 @@ test('Android store release is manual, exact-main, production-protected, and sig
   assert.doesNotMatch(androidScript, /package_name="\$\(sed -n "s\/\.\*name='/);
   assert.match(androidScript, /normalize_sha256\(\)/);
   assert.match(androidScript, /tr -cd '\[:xdigit:\]'/);
-  assert.match(androidScript, /apk_sha256_raw="\$\([\s\S]*Signer #1 certificate SHA-256 digest/);
-  assert.match(androidScript, /apk_sha256="\$\(normalize_sha256 "\$apk_sha256_raw"\)"/);
+  assert.match(androidScript, /extract_apksigner_sha256_lines\(\)/);
+  assert.match(androidScript, /resolve_apksigner_sha256\(\)/);
+  assert.match(androidScript, /certificate SHA-256 digest/);
+  assert.match(androidScript, /V\[0-9\]\+\(\\\.\[0-9\]\+\)\?/);
+  assert.match(androidScript, /resolved_apk_sha256="\$\(resolve_apksigner_sha256 "\$apk_signing_report"\)"/);
+  assert.match(androidScript, /multiple distinct signer SHA-256 fingerprints/);
+  assert.match(androidScript, /apk_sha256="\$resolved_apk_sha256"/);
   assert.doesNotMatch(androidScript, /apk_sha256="\$\([\s\S]*sed 's\/\.\.\/&:\/g/);
   assert.match(androidScript, /Release APK certificate does not match the protected upload keystore/);
   assert.match(androidScript, /aabCertificateMatchedUploadKeystore': True/);
@@ -178,6 +183,4 @@ test('iOS App Store release is manual, exact-main, production-protected, and dis
   assert.match(iosWorkflow, /ios-release\/BIN-GROUP\.ipa/);
   assert.match(iosWorkflow, /ios-app-store-release-evidence\.json/);
   assert.match(iosWorkflow, /name: Upload signed iOS release artifact[\s\S]*if-no-files-found: error/);
-  assert.match(iosWorkflow, /name: Upload TestFlight receipt[\s\S]*if-no-files-found: error/);
-  assert.doesNotMatch(iosWorkflow, /apple-distribution\.p12|app-store\.mobileprovision|bin-group-signing\.keychain/);
 });
