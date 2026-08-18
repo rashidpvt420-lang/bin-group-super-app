@@ -119,7 +119,7 @@ test -x "$apksigner"
 test -x "$aapt"
 
 apk_signing_report="$(mktemp)"
-"$apksigner" verify --verbose --print-certs "$APK_PATH" > "$apk_signing_report"
+"$apksigner" verify --verbose --print-certs "$APK_PATH" > "$apk_signing_report" 2>&1
 
 package_line="$($aapt dump badging "$APK_PATH" | sed -n 's/^package: //p' | head -n 1)"
 package_name="$(sed -n "s/^name='\([^']*\)'.*/\1/p" <<<"$package_line")"
@@ -140,6 +140,37 @@ normalize_sha256() {
   printf '%s' "$normalized"
 }
 
+extract_apksigner_certificate_sha256() {
+  local report_path="$1"
+  python3 - "$report_path" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+report = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+certificate_line = re.compile(
+    r'^\s*signer\s+#\d+\s+certificate\s+sha-256\s+digest\s*:\s*(.*?)\s*$',
+    re.IGNORECASE | re.MULTILINE,
+)
+fingerprint = re.compile(
+    r'(?i)(?<![0-9a-f])(?:[0-9a-f]{2}:){31}[0-9a-f]{2}(?![0-9a-f])|'
+    r'(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])'
+)
+
+candidates = []
+for line in certificate_line.findall(report):
+    for value in fingerprint.findall(line):
+        canonical = re.sub(r'[^0-9A-Fa-f]', '', value).upper()
+        if len(canonical) == 64:
+            candidates.append(canonical)
+
+unique = list(dict.fromkeys(candidates))
+if len(unique) != 1:
+    raise SystemExit(1)
+print(unique[0], end='')
+PY
+}
+
 format_sha256() {
   printf '%s' "$1" | sed 's/../&:/g;s/:$//'
 }
@@ -155,10 +186,11 @@ aab_certificate_sha256_raw="$({
   keytool -printcert -jarfile "$AAB_PATH"
 } | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
-apk_sha256_raw="$(
-  sed -n 's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' "$apk_signing_report" |
-  head -n 1
-)"
+apk_sha256_raw="$(extract_apksigner_certificate_sha256 "$apk_signing_report")" || {
+  rm -f "$apk_signing_report"
+  echo "::error::Could not extract exactly one release APK SHA-256 certificate fingerprint from apksigner output."
+  exit 1
+}
 rm -f "$apk_signing_report"
 
 keystore_sha256="$(normalize_sha256 "$keystore_sha256_raw")" || {
