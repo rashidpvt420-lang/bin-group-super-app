@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "commitSha": "7b450b31c44147a3d3e543c9ff2393ef725764cd",
+  "branch": "feature/staff-operating-system",
+  "firebaseProjectId": "bin-group-staging",
+  "hostingSite": "bin-group-staging",
+  "appPreviewChannel": "staff-app-7b450b31c441",
+  "adminPreviewChannel": "staff-admin-7b450b31c441",
+  "appPreviewUrl": "https://bin-group-staging--staff-app-7b450b31c441-0too75a8.web.app",
+  "adminPreviewUrl": "https://bin-group-staging--staff-admin-7b450b31c441-e8s8pjqu.web.app",
+  "functionsDeployed": true,
+  "staffFunctionsExpected": 13,
+  "staffFunctionsVerified": 13,
+  "functionRegion": "europe-west3",
+  "firestoreRulesDeployed": true,
+  "firestoreIndexesDeployed": true,
+  "storageRulesDeployed": true,
+  "storageLocation": "europe-west3",
+  "productionTouched": false,
+  "migrationExecuted": false,
+  "deploymentMode": "isolated-staging-preview",
+  "deployedAt": "2026-08-18T11:42:38.354Z"
+}

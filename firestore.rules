@@ -1045,9 +1045,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if signedIn() && (
-                    (request.auth.uid == userId && (resource == null || profileAllowsAccess(resource.data))) ||
+      allow get: if request.auth != null && (
+                    request.auth.uid == userId ||
                     (
+                      signedIn() &&
                       request.auth.uid != userId &&
                       isNotSuspended() &&
                       (

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "commitSha": "b89ae4e4e39b7df6a6590f4d990121914ce032eb",
+  "branch": "feature/staff-operating-system",
+  "firebaseProjectId": "bin-group-staging",
+  "productionProjectId": "bin-group-57c60",
+  "deploymentEnvironment": "staging",
+  "productionTouched": false,
+  "migrationExecuted": false,
+  "generatedAt": "2026-08-17T10:37:51.809Z"
+}

@@ -5,10 +5,30 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { existsSync } from 'node:fs';
+
 const androidScript = await readFile(
   new URL('../../scripts/run-android-store-release.sh', import.meta.url),
   'utf8',
 );
+
+function resolveBash() {
+  const candidates = [
+    'bash',
+    'C:\\Program Files\\Git\\bin\\bash.exe',
+    'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
+    'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+    'C:\\msys64\\usr\\bin\\bash.exe',
+  ];
+  for (const candidate of candidates) {
+    if (candidate !== 'bash' && !existsSync(candidate)) continue;
+    const result = spawnSync(candidate, ['--version'], { encoding: 'utf8' });
+    if (result.status === 0 && /GNU bash/.test(result.stdout)) return candidate;
+  }
+  return 'bash';
+}
+
+const bash = resolveBash();
 
 function extractFunction(name) {
   const match = androidScript.match(new RegExp(`${name}\\(\\) \\{[\\s\\S]*?\\n\\}`));
@@ -26,7 +46,7 @@ async function resolveReport(report) {
   await writeFile(reportPath, report, 'utf8');
   try {
     return spawnSync(
-      'bash',
+      bash,
       [
         '-c',
         [

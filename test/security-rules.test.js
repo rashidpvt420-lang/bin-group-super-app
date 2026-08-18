@@ -996,20 +996,23 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
-  it('stale-token suspended user is denied access', async () => {
+  it('stale-token suspended user can resolve own status while protected data stays denied', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     // Production suspension callables write status='suspended' before stale tokens refresh.
     await setDoc(doc(adminDb, 'users/suspended_user'), { status: 'suspended', suspended: false });
     await setDoc(doc(adminDb, 'properties/suspended_owner_prop'), { ownerId: 'suspended_user' });
 
-    // The user's token does NOT have suspended claim (stale token representation)
+    // The user's token does NOT have suspended claim (stale token representation).
+    // The account may read only its own profile so the client can resolve and render
+    // the authoritative blocked state instead of misclassifying it as connectivity loss.
     const staleTokenDb = testEnv.authenticatedContext('suspended_user', {
       role: 'owner'
     }).firestore();
 
     await assertFails(getDoc(doc(staleTokenDb, 'properties/suspended_owner_prop')));
-    await assertFails(getDoc(doc(staleTokenDb, 'users/suspended_user')));
+    const ownProfile = await assertSucceeds(getDoc(doc(staleTokenDb, 'users/suspended_user')));
+    assert.equal(ownProfile.data()?.status, 'suspended');
   });
 
   it('user push token and readiness subcollections are server-only while unknown paths fail closed', async () => {

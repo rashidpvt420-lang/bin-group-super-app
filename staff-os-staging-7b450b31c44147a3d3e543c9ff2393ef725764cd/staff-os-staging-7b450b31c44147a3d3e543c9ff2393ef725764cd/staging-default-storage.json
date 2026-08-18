@@ -1,0 +1,8 @@
+{
+  "name": "projects/bin-group-staging/defaultBucket",
+  "location": "EUROPE-WEST3",
+  "bucket": {
+    "name": "projects/bin-group-staging/buckets/bin-group-staging.firebasestorage.app"
+  },
+  "storageClass": "STANDARD"
+}

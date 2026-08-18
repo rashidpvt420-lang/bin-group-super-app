@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "result": {
+    "bin-group-staging": {
+      "site": "bin-group-staging",
+      "url": "https://bin-group-staging--staff-admin-7b450b31c441-e8s8pjqu.web.app",
+      "version": "",
+      "expireTime": "2026-08-25T11:42:30.791197111Z"
+    }
+  }
+}
