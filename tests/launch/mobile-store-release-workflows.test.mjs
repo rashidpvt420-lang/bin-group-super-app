@@ -183,4 +183,6 @@ test('iOS App Store release is manual, exact-main, production-protected, and dis
   assert.match(iosWorkflow, /ios-release\/BIN-GROUP\.ipa/);
   assert.match(iosWorkflow, /ios-app-store-release-evidence\.json/);
   assert.match(iosWorkflow, /name: Upload signed iOS release artifact[\s\S]*if-no-files-found: error/);
+  assert.match(iosWorkflow, /name: Upload TestFlight receipt[\s\S]*if-no-files-found: error/);
+  assert.doesNotMatch(iosWorkflow, /apple-distribution\.p12|app-store\.mobileprovision|bin-group-signing\.keychain/);
 });
