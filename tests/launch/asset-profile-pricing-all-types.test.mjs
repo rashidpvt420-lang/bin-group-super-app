@@ -20,6 +20,7 @@ const rootEngine = readFileSync(enginePaths[0], 'utf8');
 const rootMatrix = readFileSync(matrixPaths[0], 'utf8');
 const assetProfile = readFileSync('src/components/onboarding/AssetProfileStep.tsx', 'utf8');
 const onboardingStore = readFileSync('src/store/onboardingStore.ts', 'utf8');
+const titleDeedOcr = readFileSync('functions/titleDeedOcrV2.ts', 'utf8');
 
 let moduleUnderTest;
 let tempDir;
@@ -133,13 +134,32 @@ test('hotel is area-priced, labour/staff accommodation are bed-priced, and wareh
   assert.ok(camp.annualTotal >= 70_000 && camp.annualTotal < 200_000, `Labour camp annual per-bed quote is outside regression bounds: ${camp.annualTotal}`);
 });
 
-test('Asset Profile and store do not use the old silent pricing fallbacks', () => {
+test('missing pricing drivers fail closed instead of receiving invented quote inputs', () => {
+  const { calculateUaeQuote2026 } = moduleUnderTest;
+  const areaPriced = calculateUaeQuote2026({ assetClassId: 'warehouse', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 0, units: 0, beds: 0, propertyAge: 0, floors: 0, slaTier: 'standard', paymentPlan: 'annual' });
+  assert.equal(areaPriced.annualTotal, 0);
+  assert.ok(areaPriced.riskFlags.length > 0, 'Missing area must be flagged for review');
+
+  const bedPriced = calculateUaeQuote2026({ assetClassId: 'lab-camp', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 0, units: 0, beds: 0, propertyAge: 0, floors: 0, slaTier: 'standard', paymentPlan: 'annual' });
+  assert.equal(bedPriced.annualTotal, 0);
+  assert.ok(bedPriced.riskFlags.length > 0, 'Missing bed count must be flagged for review');
+});
+
+test('Asset Profile, portfolio store and OCR never seed missing property facts with demo values', () => {
   assert.doesNotMatch(rootEngine, /annualRent\s*\|\|\s*100000/);
   assert.doesNotMatch(rootEngine, /return\s+['\"]apt-std['\"]\s*;\s*\/\/\s*unknown/i);
   assert.match(onboardingStore, /resolveAssetClassIdForPropertyType\(property\.propertyType, property\.assetGrade\)/);
   assert.match(onboardingStore, /beds,/);
+  assert.doesNotMatch(onboardingStore, /sqft:\s*1200/);
+  assert.doesNotMatch(onboardingStore, /age:\s*5/);
+  assert.doesNotMatch(onboardingStore, /floors:\s*1,\s*units:\s*1/);
+  assert.match(onboardingStore, /const properties = get\(\)\.properties;/);
+  assert.match(onboardingStore, /if \(properties\.length === 0\)/);
   assert.match(assetProfile, /ASSET_TYPE_IDS\.has\(property\.propertyType\)/);
   assert.match(assetProfile, /Annual rent \/ managed revenue/);
   assert.match(assetProfile, /addProperty\(blankAssetCard\(\)\)/);
   assert.doesNotMatch(assetProfile, /addProperty\(\{\s*emirate:\s*active\?\.emirate\s*\|\|\s*['\"]Dubai['\"]/);
+  assert.match(titleDeedOcr, /sqft:\s*landAreaSqft/);
+  assert.match(titleDeedOcr, /units:\s*unitCount/);
+  assert.match(titleDeedOcr, /value === null \|\| value === undefined \|\| value === ['\"]{2}/);
 });
