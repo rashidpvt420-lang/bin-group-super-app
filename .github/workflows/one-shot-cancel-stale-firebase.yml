@@ -1,0 +1,69 @@
+name: One-shot Cancel Stale Firebase Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-stale-firebase:
+    if: github.event.pull_request.head.ref == 'ops/cancel-stale-firebase-a6472088'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify identity and cancel only stale Firebase run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CURRENT_SHA: f6b7d4ae4e1ea694bbf6e6e8fea7053a9465f5b4
+          STALE_SHA: a647208828bbd209f1f1bab661399117ccbc6497
+          STALE_RUN_ID: '32139717700'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current" == "$CURRENT_SHA" ]] || fail "main moved to $current; refusing stale-run cleanup against an outdated assumption."
+
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID")"
+          run_id="$(jq -r '.id' <<<"$run_json")"
+          head_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          head_branch="$(jq -r '.head_branch' <<<"$run_json")"
+          event="$(jq -r '.event' <<<"$run_json")"
+          path="$(jq -r '.path' <<<"$run_json")"
+          status="$(jq -r '.status' <<<"$run_json")"
+
+          [[ "$run_id" == "$STALE_RUN_ID" ]] || fail "Run identity mismatch."
+          [[ "$head_sha" == "$STALE_SHA" ]] || fail "Run SHA $head_sha is not the expected stale SHA $STALE_SHA."
+          [[ "$head_branch" == "main" ]] || fail "Stale run is not a main-branch run."
+          [[ "$event" == "workflow_dispatch" ]] || fail "Stale run is not workflow_dispatch."
+          [[ "$path" == '.github/workflows/firebase-production-deploy.yml' ]] || fail "Run is not the Firebase Production Deploy workflow."
+          [[ "$STALE_SHA" != "$CURRENT_SHA" ]] || fail "Refusing to cancel a current-main deployment."
+
+          if [[ "$status" == "completed" ]]; then
+            echo "Stale Firebase run $STALE_RUN_ID already completed; nothing to cancel."
+            exit 0
+          fi
+          [[ "$status" == "in_progress" || "$status" == "queued" || "$status" == "waiting" || "$status" == "requested" || "$status" == "pending" ]] \
+            || fail "Unexpected stale-run status '$status'."
+
+          gh api --method POST "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID/cancel"
+
+          for _ in $(seq 1 24); do
+            state_json="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID")"
+            state="$(jq -r '.status' <<<"$state_json")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$state_json")"
+            echo "stale Firebase run $STALE_RUN_ID: status=$state conclusion=${conclusion:-pending}"
+            if [[ "$state" == "completed" ]]; then
+              [[ "$conclusion" == "cancelled" || "$conclusion" == "success" || "$conclusion" == "failure" ]] \
+                || fail "Unexpected terminal conclusion '$conclusion'."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          fail "Stale Firebase cancellation did not reach a terminal state in time."
