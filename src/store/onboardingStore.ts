@@ -375,7 +375,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     }),
     {
       name: 'bin-group-onboarding-v3',
-      version: 6,
+      version: 5,
       partialize: (state) => ({
         step: clampOwnerPage(state.step),
         intakeId: state.intakeId,
