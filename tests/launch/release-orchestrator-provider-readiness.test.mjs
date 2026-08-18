@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const orchestrator = readFileSync('.github/workflows/founder-release-orchestrator-one-shot.yml', 'utf8');
+const androidRelease = readFileSync('.github/workflows/android-store-release.yml', 'utf8');
 const readiness = readFileSync('.github/workflows/production-provider-readiness.yml', 'utf8');
 const readinessScript = readFileSync('scripts/verify-production-smtp-provider.mjs', 'utf8');
 
@@ -22,6 +23,13 @@ test('protected release orchestrator is explicit and reuses only successful exac
   assert.match(orchestrator, /mode:"live-evidence"/);
   assert.match(orchestrator, /BUILD_SIGNED_ANDROID_AAB_BIN_GROUP/);
   assert.match(orchestrator, /assert_main/);
+});
+
+test('Android release publishes the exact immutable artifact name required by the protected orchestrator', () => {
+  assert.match(androidRelease, /name:\s*bin-group-android-release-\$\{\{ github\.sha \}\}/);
+  assert.doesNotMatch(androidRelease, /name:\s*android-store-release-\$\{\{ github\.sha \}\}-\$\{\{ github\.run_id \}\}/);
+  assert.match(androidRelease, /Verify main remained frozen through signing/);
+  assert.match(androidRelease, /Build and cryptographically verify signed AAB/);
 });
 
 test('provider readiness is manual, exact-SHA protected, and never deploys or sends email', () => {
