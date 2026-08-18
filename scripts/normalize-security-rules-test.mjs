@@ -79,6 +79,41 @@ const canonicalUserSubcollectionBlock = `  it('user push token and readiness sub
 
 `;
 
+const legacyStaleSuspensionBlock = `  it('stale-token suspended user is denied access', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    // Production suspension callables write status='suspended' before stale tokens refresh.
+    await setDoc(doc(adminDb, 'users/suspended_user'), { status: 'suspended', suspended: false });
+    await setDoc(doc(adminDb, 'properties/suspended_owner_prop'), { ownerId: 'suspended_user' });
+
+    // The user's token does NOT have suspended claim (stale token representation)
+    const staleTokenDb = testEnv.authenticatedContext('suspended_user', {
+      role: 'owner'
+    }).firestore();
+
+    await assertFails(getDoc(doc(staleTokenDb, 'properties/suspended_owner_prop')));
+    await assertFails(getDoc(doc(staleTokenDb, 'users/suspended_user')));
+  });`;
+
+const canonicalStaleSuspensionBlock = `  it('stale-token suspended user can resolve own status while protected data stays denied', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    // Production suspension callables write status='suspended' before stale tokens refresh.
+    await setDoc(doc(adminDb, 'users/suspended_user'), { status: 'suspended', suspended: false });
+    await setDoc(doc(adminDb, 'properties/suspended_owner_prop'), { ownerId: 'suspended_user' });
+
+    // The user's token does NOT have suspended claim (stale token representation).
+    // The account may read only its own profile so the client can resolve and render
+    // the authoritative blocked state instead of misclassifying it as connectivity loss.
+    const staleTokenDb = testEnv.authenticatedContext('suspended_user', {
+      role: 'owner'
+    }).firestore();
+
+    await assertFails(getDoc(doc(staleTokenDb, 'properties/suspended_owner_prop')));
+    const ownProfile = await assertSucceeds(getDoc(doc(staleTokenDb, 'users/suspended_user')));
+    assert.equal(ownProfile.data()?.status, 'suspended');
+  });`;
+
 const legacyTicketFixtureReplacements = [
   [
     "    await setDoc(doc(adminDb, 'tickets/open_ticket'), openTicket);",
@@ -146,6 +181,17 @@ if (legacyStartIndex >= 0) {
   );
 }
 
+const legacyStaleSuspensionCount = next.split(legacyStaleSuspensionBlock).length - 1;
+const canonicalStaleSuspensionCount = next.split(canonicalStaleSuspensionBlock).length - 1;
+if (legacyStaleSuspensionCount === 1 && canonicalStaleSuspensionCount === 0) {
+  next = next.replace(legacyStaleSuspensionBlock, canonicalStaleSuspensionBlock);
+} else if (!(legacyStaleSuspensionCount === 0 && canonicalStaleSuspensionCount === 1)) {
+  throw new Error(
+    `[normalize-rule-tests] expected one legacy or canonical stale-token suspension test; ` +
+    `found legacy=${legacyStaleSuspensionCount}, canonical=${canonicalStaleSuspensionCount}`,
+  );
+}
+
 for (const [legacy, canonical, label] of legacyTicketFixtureReplacements) {
   const legacyCount = next.split(legacy).length - 1;
   const canonicalCountForFixture = next.split(canonical).length - 1;
@@ -164,9 +210,9 @@ for (const requiredImport of [...requiredImports].reverse()) {
 }
 
 if (next === source) {
-  console.log('[normalize-rule-tests] callable-only lifecycle/Tenant tickets, read-only legacy fixtures, Broker KYC, five-profile, push-token and technician list tests already canonical');
+  console.log('[normalize-rule-tests] callable-only lifecycle/Tenant tickets, read-only legacy fixtures, blocked-profile status resolution, Broker KYC, five-profile, push-token and technician list tests already canonical');
   process.exit(0);
 }
 
 writeFileSync(file, next.replace(/\n/g, newline));
-console.log('[normalize-rule-tests] Tenant ticket creation, read-only legacy fixtures and protected role rules tests normalized');
+console.log('[normalize-rule-tests] Tenant ticket creation, read-only legacy fixtures, blocked-profile status resolution and protected role rules tests normalized');
