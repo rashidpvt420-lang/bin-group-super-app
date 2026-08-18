@@ -1,0 +1,52 @@
+name: One-shot Cancel Stale Protected Orchestrator
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - .github/workflows/one-shot-cancel-stale-orchestrator.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-stale:
+    if: github.event.pull_request.head.ref == 'ops/cancel-stale-orchestrator-a6472088'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      CURRENT_SHA: f6b7d4ae4e1ea694bbf6e6e8fea7053a9465f5b4
+      STALE_SHA: a647208828bbd209f1f1bab661399117ccbc6497
+      STALE_RUN_ID: '32139676791'
+    steps:
+      - name: Cancel only the verified stale orchestrator
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current" == "$CURRENT_SHA" ]] || {
+            echo "::error::Current main moved to $current; refusing stale-run cancellation under an outdated assumption."
+            exit 1
+          }
+
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID")"
+          run_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          run_path="$(jq -r '.path' <<<"$run_json")"
+          run_event="$(jq -r '.event' <<<"$run_json")"
+          run_status="$(jq -r '.status' <<<"$run_json")"
+
+          [[ "$run_sha" == "$STALE_SHA" ]] || { echo "::error::Run $STALE_RUN_ID is not the expected stale SHA."; exit 1; }
+          [[ "$run_path" == '.github/workflows/founder-release-orchestrator-one-shot.yml' ]] || { echo "::error::Run $STALE_RUN_ID is not the Founder protected orchestrator."; exit 1; }
+          [[ "$run_event" == 'workflow_dispatch' ]] || { echo "::error::Run $STALE_RUN_ID has unexpected event $run_event."; exit 1; }
+
+          if [[ "$run_status" == 'completed' ]]; then
+            echo "Stale orchestrator already completed; no cancellation required."
+            exit 0
+          fi
+
+          gh api --method POST "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID/cancel"
+          echo "Cancellation requested for stale protected orchestrator $STALE_RUN_ID ($STALE_SHA)."
