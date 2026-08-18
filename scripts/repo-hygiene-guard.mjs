@@ -25,6 +25,7 @@ const forbiddenTrackedPathspecs = [
   ['.tmp', 'tracked temporary diagnostics'],
   ['android_signing_package', 'tracked Android signing package material'],
   [':(glob)staff-os-staging-*/**', 'tracked generated staff/staging deployment evidence'],
+  ['launch_package/privileged-account-cleanup.json', 'tracked privileged-account cleanup evidence'],
 ];
 
 const violations = [];
