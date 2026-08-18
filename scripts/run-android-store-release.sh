@@ -140,6 +140,30 @@ normalize_sha256() {
   printf '%s' "$normalized"
 }
 
+extract_apksigner_sha256_lines() {
+  local report="$1"
+  sed -nE \
+    's/^[[:space:]]*Signer (#[0-9]+|\(.*\))[[:space:]]+certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+)[[:space:]]*$/\2/p' \
+    "$report"
+}
+
+resolve_apksigner_sha256() {
+  local report="$1"
+  local raw normalized resolved=""
+
+  while IFS= read -r raw; do
+    normalized="$(normalize_sha256 "$raw")" || return 1
+    if [[ -z "$resolved" ]]; then
+      resolved="$normalized"
+    elif [[ "$normalized" != "$resolved" ]]; then
+      return 2
+    fi
+  done < <(extract_apksigner_sha256_lines "$report")
+
+  [[ -n "$resolved" ]] || return 1
+  printf '%s' "$resolved"
+}
+
 format_sha256() {
   printf '%s' "$1" | sed 's/../&:/g;s/:$//'
 }
@@ -156,10 +180,11 @@ aab_certificate_sha256_raw="$({
 } | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
 apk_sha256_raw="$(
-  sed -n 's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' "$apk_signing_report" |
+  # Legacy apksigner output used `Signer #1 certificate SHA-256 digest`; newer
+  # v3.1 output uses `Signer (minSdkVersion=..., maxSdkVersion=...)` labels.
+  extract_apksigner_sha256_lines "$apk_signing_report" |
   head -n 1
 )"
-rm -f "$apk_signing_report"
 
 keystore_sha256="$(normalize_sha256 "$keystore_sha256_raw")" || {
   echo "::error::Could not normalize the protected upload-keystore SHA-256 fingerprint."
@@ -171,8 +196,27 @@ aab_certificate_sha256="$(normalize_sha256 "$aab_certificate_sha256_raw")" || {
 }
 apk_sha256="$(normalize_sha256 "$apk_sha256_raw")" || {
   echo "::error::Could not normalize the release APK SHA-256 certificate fingerprint."
+  cat "$apk_signing_report"
   exit 1
 }
+
+resolved_apk_sha256="$(resolve_apksigner_sha256 "$apk_signing_report")" || {
+  status=$?
+  if [[ "$status" -eq 2 ]]; then
+    echo "::error::Release APK exposes multiple distinct signer SHA-256 fingerprints; refusing ambiguous signing evidence."
+  else
+    echo "::error::Could not resolve a supported release APK SHA-256 certificate fingerprint from apksigner output."
+  fi
+  cat "$apk_signing_report"
+  exit 1
+}
+rm -f "$apk_signing_report"
+
+if [[ "$apk_sha256" != "$resolved_apk_sha256" ]]; then
+  echo "::error::Release APK signer extraction produced inconsistent SHA-256 evidence."
+  exit 1
+fi
+apk_sha256="$resolved_apk_sha256"
 
 keystore_sha256_display="$(format_sha256 "$keystore_sha256")"
 aab_certificate_sha256_display="$(format_sha256 "$aab_certificate_sha256")"
