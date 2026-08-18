@@ -20,13 +20,25 @@ const normalizeSha256 = extractFunction('normalize_sha256');
 const extractApksignerLines = extractFunction('extract_apksigner_sha256_lines');
 const resolveApksignerSha256 = extractFunction('resolve_apksigner_sha256');
 
+import { existsSync } from 'node:fs';
+
+function getBashCommand() {
+  if (process.platform === 'win32') {
+    const gitBash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+    if (existsSync(gitBash)) return gitBash;
+    const gitSh = 'C:\\Program Files\\Git\\bin\\sh.exe';
+    if (existsSync(gitSh)) return gitSh;
+  }
+  return 'bash';
+}
+
 async function resolveReport(report) {
   const dir = await mkdtemp(join(tmpdir(), 'bin-group-apksigner-'));
   const reportPath = join(dir, 'apksigner.txt');
   await writeFile(reportPath, report, 'utf8');
   try {
     return spawnSync(
-      'bash',
+      getBashCommand(),
       [
         '-c',
         [

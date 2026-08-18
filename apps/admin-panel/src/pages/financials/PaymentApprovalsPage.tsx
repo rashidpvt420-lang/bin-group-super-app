@@ -157,15 +157,7 @@ export default function PaymentApprovalsPage() {
         return () => { unsubscribePending(); unsubscribePaidAwaitingApproval(); };
     }, []);
 
-    React.useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const paymentId = params.get('paymentId');
-        if (!paymentId || !rows.length || approvalTarget) return;
-        const target = rows.find((row) => row.id === paymentId);
-        if (target) openApproveDialog(target);
-    }, [rows]);
-
-    const openApproveDialog = (row: PaymentRecord) => {
+    const openApproveDialog = React.useCallback((row: PaymentRecord) => {
         setApprovalTarget(row);
         setPaymentReferenceId(String(row.paymentReferenceId || row.paymentReference || row.referenceId || ''));
         setPaymentMethod(upper(row.paymentMethod || row.method || ''));
@@ -174,7 +166,15 @@ export default function PaymentApprovalsPage() {
         setReceiptFile(null);
         setError(null);
         setNotice(null);
-    };
+    }, []);
+
+    React.useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const paymentId = params.get('paymentId');
+        if (!paymentId || !rows.length || approvalTarget) return;
+        const target = rows.find((row) => row.id === paymentId);
+        if (target) openApproveDialog(target);
+    }, [approvalTarget, openApproveDialog, rows]);
 
     const openRejectDialog = (row: PaymentRecord) => {
         setRejectTarget(row);
