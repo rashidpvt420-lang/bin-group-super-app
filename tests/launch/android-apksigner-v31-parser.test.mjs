@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+
+const androidScript = await readFile(
+  new URL('../../scripts/run-android-store-release.sh', import.meta.url),
+  'utf8',
+);
+
+function extractFunction(name) {
+  const match = androidScript.match(new RegExp(`${name}\\(\\) \\{[\\s\\S]*?\\n\\}`));
+  assert.ok(match, `Android release script must define ${name}().`);
+  return match[0];
+}
+
+const normalizeSha256 = extractFunction('normalize_sha256');
+const extractApksignerLines = extractFunction('extract_apksigner_sha256_lines');
+const resolveApksignerSha256 = extractFunction('resolve_apksigner_sha256');
+
+async function resolveReport(report) {
+  const dir = await mkdtemp(join(tmpdir(), 'bin-group-apksigner-'));
+  const reportPath = join(dir, 'apksigner.txt');
+  await writeFile(reportPath, report, 'utf8');
+  try {
+    return spawnSync(
+      'bash',
+      [
+        '-c',
+        [
+          normalizeSha256,
+          extractApksignerLines,
+          resolveApksignerSha256,
+          'resolve_apksigner_sha256 "$1"',
+        ].join('\n'),
+        'resolve-apksigner',
+        reportPath,
+      ],
+      { encoding: 'utf8' },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test('Android signer parser accepts legacy apksigner signer-number output', async () => {
+  const digest = 'A1'.repeat(32);
+  const result = await resolveReport(
+    `Verifies\nSigner #1 certificate SHA-256 digest: ${digest.toLowerCase()}\n`,
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stdout, digest);
+});
+
+test('Android signer parser accepts apksigner v3.1 SDK-range output', async () => {
+  const digest = 'B2'.repeat(32);
+  const result = await resolveReport(
+    [
+      'Verifies',
+      `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${digest.toLowerCase()}`,
+      `Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: ${digest.toLowerCase()}`,
+      '',
+    ].join('\n'),
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stdout, digest);
+});
+
+test('Android signer parser accepts v3.1 dev-release labels and surrounding whitespace', async () => {
+  const digest = 'C3'.repeat(32);
+  const coloned = digest.match(/.{2}/g).join(':').toLowerCase();
+  const result = await resolveReport(
+    `  Signer (minSdkVersion=35 (dev release=true), maxSdkVersion=2147483647) certificate SHA-256 digest:   ${coloned}  \n`,
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stdout, digest);
+});
+
+test('Android signer parser fails closed on distinct signer fingerprints', async () => {
+  const first = 'D4'.repeat(32).toLowerCase();
+  const second = 'E5'.repeat(32).toLowerCase();
+  const result = await resolveReport(
+    [
+      `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${first}`,
+      `Signer (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: ${second}`,
+      '',
+    ].join('\n'),
+  );
+  assert.equal(result.status, 2, 'Distinct APK signer fingerprints must fail closed.');
+});
+
+test('Android signer parser fails closed when no supported SHA-256 signer line exists', async () => {
+  const result = await resolveReport('Verifies\nNumber of signers: 1\n');
+  assert.notEqual(result.status, 0, 'Missing signer certificate evidence must fail closed.');
+});
