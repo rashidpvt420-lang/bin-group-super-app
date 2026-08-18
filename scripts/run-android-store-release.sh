@@ -143,7 +143,7 @@ normalize_sha256() {
 extract_apksigner_sha256_lines() {
   local report="$1"
   sed -nE \
-    's/^[[:space:]]*Signer (#[0-9]+|\(.*\))[[:space:]]+certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+)[[:space:]]*$/\2/p' \
+    's/^[[:space:]]*(V[0-9]+[[:space:]]+)?Signer([[:space:]]+(#[0-9]+|\(.*\)))?:?[[:space:]]+certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+)[[:space:]]*$/\4/p' \
     "$report"
 }
 
@@ -180,8 +180,8 @@ aab_certificate_sha256_raw="$({
 } | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
 apk_sha256_raw="$(
-  # Legacy apksigner output used `Signer #1 certificate SHA-256 digest`; newer
-  # v3.1 output uses `Signer (minSdkVersion=..., maxSdkVersion=...)` labels.
+  # apksigner has emitted several certificate-label forms across build-tools:
+  # legacy `Signer #1`, SDK-range `Signer (...)`, and current `V2 Signer:`.
   extract_apksigner_sha256_lines "$apk_signing_report" |
   head -n 1
 )"
