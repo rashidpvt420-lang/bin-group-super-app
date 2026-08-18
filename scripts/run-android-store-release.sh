@@ -142,8 +142,17 @@ normalize_sha256() {
 
 extract_apksigner_sha256_lines() {
   local report="$1"
+  # Android build-tools have emitted several signer-label shapes over time:
+  #   Signer #1 certificate SHA-256 digest: ...
+  #   Signer (minSdkVersion=..., maxSdkVersion=...) certificate SHA-256 digest: ...
+  #   V2 Signer: certificate SHA-256 digest: ...
+  # Match only certificate SHA-256 rows; public-key digests are intentionally excluded.
   sed -nE \
-    's/^[[:space:]]*Signer (#[0-9]+|\(.*\))[[:space:]]+certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+)[[:space:]]*$/\2/p' \
+    '/^[[:space:]]*(V[0-9]+(\.[0-9]+)?[[:space:]]+)?Signer( #[0-9]+|[[:space:]]+\(.*\))?:?[[:space:]]+certificate SHA-256 digest:[[:space:]]*[0-9A-Fa-f:]+[[:space:]]*$/ {
+      s/^.*certificate SHA-256 digest:[[:space:]]*//
+      s/[[:space:]]*$//
+      p
+    }' \
     "$report"
 }
 
@@ -180,8 +189,6 @@ aab_certificate_sha256_raw="$({
 } | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
 apk_sha256_raw="$(
-  # Legacy apksigner output used `Signer #1 certificate SHA-256 digest`; newer
-  # v3.1 output uses `Signer (minSdkVersion=..., maxSdkVersion=...)` labels.
   extract_apksigner_sha256_lines "$apk_signing_report" |
   head -n 1
 )"
