@@ -112,6 +112,7 @@ bin-group-super-app/
 
 # Scratch / temp files
 scratch/
+.tmp/
 temp_mission.txt
 full_prompt.txt
 build_log.txt
