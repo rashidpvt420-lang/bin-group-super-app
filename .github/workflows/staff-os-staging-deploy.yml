@@ -379,8 +379,8 @@ jobs:
           test "$STAGING_PROJECT_ID" = "bin-group-staging"
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           npm run prepare:rules
-          npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive
-          npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive
+          npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive || (sleep 5 && npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive)
+          npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive || (sleep 5 && npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive)
           echo "STORAGE_RULES_DEPLOYED=true" >> "$GITHUB_ENV"
 
       - name: Generate isolated staging Hosting configs
