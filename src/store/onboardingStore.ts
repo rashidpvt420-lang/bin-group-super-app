@@ -210,10 +210,12 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
   });
 };
 
+// Safe blank asset. Never seed pricing drivers from guesses or legacy demo values.
+// Zone/plan enums remain operational defaults, but property facts and measurements stay blank/zero.
 const defaultProperty: PropertyData = {
-  id: '', emirate: 'Dubai', area: '', zone: 'B', propertyType: 'Residential', subType: 'Apartment',
-  useType: 'Rental', ownerType: 'Private', floors: 1, units: 1, bedrooms: 1, bathrooms: 1,
-  shops: 0, offices: 0, rooms: 0, sqft: 1200, age: 5, pool: false, lifts: 0, tank: false,
+  id: '', emirate: '', area: '', zone: 'B', propertyType: '', subType: '',
+  useType: '', ownerType: '', floors: 0, units: 0, bedrooms: 0, bathrooms: 0,
+  shops: 0, offices: 0, rooms: 0, sqft: 0, age: 0, pool: false, lifts: 0, tank: false,
   bmu: false, sira: false, fireAlarm: false, firePump: false, escalators: false, centralLPG: false,
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,
@@ -319,12 +321,16 @@ export const useOnboardingStore = create<OnboardingState>()(
         },
       })),
       calculateSummary: () => {
-        const properties = get().properties.length > 0 ? get().properties : [get().propertyData];
+        const properties = get().properties;
+        if (properties.length === 0) {
+          set({ portfolioSummary: emptySummary() });
+          return;
+        }
         const quoteResults: Record<string, QuoteOutput> = {};
         for (const property of properties) quoteResults[property.id] = calculatePropertyAnnualValue(property, get().selectedAddOns || []);
         const estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
         const summary: PortfolioSummary = {
-          totalProperties: get().properties.length > 0 ? properties.length : 1,
+          totalProperties: properties.length,
           totalUnits: properties.reduce((total, property) => total + (property.units || 0), 0),
           totalRentable: properties.filter((property) => property.useType === 'Rental' || property.useType === 'Mixed').length,
           totalPersonal: properties.filter((property) => property.useType === 'Personal').length,
