@@ -28,10 +28,10 @@ jobs:
           }
 
           snapshot() {
-            local workflow="$1" label="$2"
+            local workflow="$1" label="$2" data
             echo "${label}_BEGIN"
-            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100" \
-              --jq --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.head_sha == $sha) | [.id,.status,.conclusion,.head_sha,.created_at] | @tsv'
+            data="$(gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100")"
+            jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.head_sha == $sha) | [.id,.status,.conclusion,.head_sha,.created_at] | @tsv' <<<"$data"
             echo "${label}_END"
           }
 
