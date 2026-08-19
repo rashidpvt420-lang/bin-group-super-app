@@ -60,7 +60,12 @@ function Invoke-GhApiJson {
 
 function New-CryptoHex([int]$Bytes = 32) {
   $buffer = New-Object byte[] $Bytes
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($buffer)
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($buffer)
+  } finally {
+    $rng.Dispose()
+  }
   return ([System.BitConverter]::ToString($buffer)).Replace('-', '')
 }
 
@@ -162,7 +167,8 @@ if ($SkipAndroidRotation) {
 $resolvedOutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
 if ($repoRoot) {
   $resolvedRepoRoot = [System.IO.Path]::GetFullPath($repoRoot)
-  $repoPrefix = $resolvedRepoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+  $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+  $repoPrefix = $resolvedRepoRoot.TrimEnd($trimChars) + [System.IO.Path]::DirectorySeparatorChar
   if ($resolvedOutputRoot.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or $resolvedOutputRoot -eq $resolvedRepoRoot) {
     throw 'Refusing to generate Android signing material inside the Git repository.'
   }
@@ -231,12 +237,14 @@ try {
   }
 
   $keystoreBase64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($keystorePath))
-  @(
+  $secretLines = @(
     "ANDROID_UPLOAD_KEYSTORE_BASE64=$keystoreBase64",
     "ANDROID_KEYSTORE_PASSWORD=$storePassword",
     "ANDROID_KEY_ALIAS=$KeyAlias",
     "ANDROID_KEY_PASSWORD=$keyPassword"
-  ) | Set-Content -Path $secretBackupPath -Encoding UTF8
+  )
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllLines($secretBackupPath, $secretLines, $utf8NoBom)
 
   Write-Host 'Rotating GitHub production Android signing secrets...'
   & gh secret set -f $secretBackupPath --env $Environment --repo $Repo
