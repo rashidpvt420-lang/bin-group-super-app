@@ -1,0 +1,41 @@
+name: One-shot Release Stage Snapshot f8895366
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  snapshot-release-stages:
+    if: github.head_ref == 'ops/release-stage-snapshot-f8895366'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Snapshot exact-SHA release runs without mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: f889536649dece11c9402a82a0159b37759c6743
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved from $TARGET_SHA to $current"
+            exit 1
+          }
+
+          snapshot() {
+            local workflow="$1" label="$2"
+            echo "${label}_BEGIN"
+            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100" \
+              --jq --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.head_sha == $sha) | [.id,.status,.conclusion,.head_sha,.created_at] | @tsv'
+            echo "${label}_END"
+          }
+
+          snapshot founder-release-orchestrator-one-shot.yml FOUNDER
+          snapshot firebase-production-deploy.yml FIREBASE
+          snapshot live-role-smoke.yml LIVE
+          snapshot android-store-release.yml ANDROID
