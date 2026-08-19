@@ -4,7 +4,6 @@ import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType } from '../ut
 import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
 
 const OWNER_PAGE_COUNT = 5;
-
 const createOnboardingSessionId = () => {
   const secureCrypto = globalThis.crypto;
   if (!secureCrypto || typeof secureCrypto.getRandomValues !== 'function') {
@@ -19,7 +18,6 @@ const createOnboardingSessionId = () => {
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
-
 const clampOwnerPage = (value: number) => Math.min(Math.max(Number(value) || 1, 1), OWNER_PAGE_COUNT);
 
 export interface PropertyData {
@@ -190,10 +188,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     UAQ: 'ummAlQuwain', 'Umm Al Quwain': 'ummAlQuwain',
   };
   const units = isMosque ? Number(mosqueProfile.maxWorshipperCapacity) || property.units : property.units;
-  const beds = BED_PRICED_TYPES.has(property.propertyType)
-    ? Number(property.beds || property.units || property.rooms || 0)
-    : Number(property.beds || 0);
-
+  const beds = BED_PRICED_TYPES.has(property.propertyType) ? Number(property.beds || property.units || property.rooms || 0) : Number(property.beds || 0);
   return calculateUaeQuote2026({
     assetClassId,
     emirate: emirateMap[property.emirate] || property.emirate || '',
@@ -213,9 +208,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     hasCentralHVAC: isMosque ? true : property.hvac,
     hasDistrictCooling: property.districtCooling,
     hasCivilDefenseSystem: property.fireAlarm || property.firePump,
-    hasSiraCctv: isMosque
-      ? Boolean(property.sira || mosqueProfile.cctvInstalled || Number(mosqueProfile.cctvCameraCount) > 0)
-      : property.sira,
+    hasSiraCctv: isMosque ? Boolean(property.sira || mosqueProfile.cctvInstalled || Number(mosqueProfile.cctvCameraCount) > 0) : property.sira,
     hasGenerator: property.gen,
     hasBmu: property.bmu,
     addOns: selectedAddOns,
@@ -242,25 +235,12 @@ const defaultProperty: PropertyData = {
 };
 
 const emptySummary = (): PortfolioSummary => ({
-  totalProperties: 0,
-  totalUnits: 0,
-  totalRentable: 0,
-  totalPersonal: 0,
-  totalMajlis: 0,
-  totalSqFt: 0,
-  estimatedACV: 0,
-  recommendedTier: 'Premium',
-  isMixedUsePortfolio: false,
-  isSovereignPortfolio: false,
+  totalProperties: 0, totalUnits: 0, totalRentable: 0, totalPersonal: 0, totalMajlis: 0,
+  totalSqFt: 0, estimatedACV: 0, recommendedTier: 'Premium', isMixedUsePortfolio: false, isSovereignPortfolio: false,
 });
 
 const emptyProofDocuments = (): OnboardingState['proofDocuments'] => ({
-  propertyProof: null,
-  emiratesId: null,
-  passport: null,
-  tradeLicense: null,
-  tenancySupport: null,
-  labels: {},
+  propertyProof: null, emiratesId: null, passport: null, tradeLicense: null, tenancySupport: null, labels: {},
 });
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -301,11 +281,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       },
       bulkAddProperties: (items) => {
         const currentCount = get().properties.length;
-        const additions = items.map((item, index) => ({
-          ...defaultProperty,
-          ...item,
-          id: item.id || `prop-${currentCount + index + 1}`,
-        }));
+        const additions = items.map((item, index) => ({ ...defaultProperty, ...item, id: item.id || `prop-${currentCount + index + 1}` }));
         set((state) => ({ properties: [...state.properties, ...additions] }));
         get().calculateSummary();
       },
@@ -317,10 +293,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         set((state) => {
           const properties = [...state.properties];
           if (properties[index]) properties[index] = { ...properties[index], ...data };
-          return {
-            properties,
-            propertyData: index === 0 ? { ...state.propertyData, ...data } : state.propertyData,
-          };
+          return { properties, propertyData: index === 0 ? { ...state.propertyData, ...data } : state.propertyData };
         });
         get().calculateSummary();
       },
@@ -335,11 +308,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       setContractOtpVerificationId: (contractOtpVerificationId) => set({ contractOtpVerificationId }),
       setSelectedPlan: (selectedPlan) => set({ selectedPlan }),
       toggleAddOn: (id) => {
-        set((state) => ({
-          selectedAddOns: state.selectedAddOns.includes(id)
-            ? state.selectedAddOns.filter((item) => item !== id)
-            : [...state.selectedAddOns, id],
-        }));
+        set((state) => ({ selectedAddOns: state.selectedAddOns.includes(id) ? state.selectedAddOns.filter((item) => item !== id) : [...state.selectedAddOns, id] }));
         get().calculateSummary();
       },
       setContractId: (contractId) => set({ contractId }),
@@ -368,13 +337,9 @@ export const useOnboardingStore = create<OnboardingState>()(
           set({ portfolioSummary: emptySummary() });
           return;
         }
-
         const quoteResults: Record<string, QuoteOutput> = {};
-        for (const property of properties) {
-          quoteResults[property.id] = calculatePropertyAnnualValue(property, get().selectedAddOns || []);
-        }
-        const estimatedACV = Object.values(quoteResults)
-          .reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
+        for (const property of properties) quoteResults[property.id] = calculatePropertyAnnualValue(property, get().selectedAddOns || []);
+        const estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
         const summary: PortfolioSummary = {
           totalProperties: properties.length,
           totalUnits: properties.reduce((total, property) => total + (property.units || 0), 0),
@@ -385,11 +350,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           estimatedACV,
           recommendedTier: 'Premium',
           isMixedUsePortfolio: properties.some((property) => property.propertyType === 'Mixed-Use Tower' || property.useType === 'Mixed'),
-          isSovereignPortfolio: properties.some((property) => (
-            property.majlisType === 'government'
-            || property.assetGrade === 'Sovereign'
-            || isMosqueAsset(property)
-          )),
+          isSovereignPortfolio: properties.some((property) => property.majlisType === 'government' || property.assetGrade === 'Sovereign' || isMosqueAsset(property)),
           quoteResults,
         };
         if (summary.totalUnits > 100 || summary.isSovereignPortfolio) summary.recommendedTier = 'Sovereign Institutional';
