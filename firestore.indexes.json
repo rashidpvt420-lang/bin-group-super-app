@@ -37,7 +37,13 @@
     { "collectionGroup": "staffMoodCheckins", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "staffMoodCheckins", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "riskScore", "order": "DESCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "hrAiConversations", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
-    { "collectionGroup": "staffComplianceAlerts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
+    { "collectionGroup": "staffComplianceAlerts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "staff_shifts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "staffId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "staff_request_trackers", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "staffId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "staff_request_trackers", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "staffId", "order": "ASCENDING" }, { "fieldPath": "requestType", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+    { "collectionGroup": "staff_exceptions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "severity", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "pdf_reports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "staffUid", "order": "ASCENDING" }, { "fieldPath": "reportType", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "sku", "order": "ASCENDING" }, { "fieldPath": "quantityOnHand", "order": "ASCENDING" }] }
   ],
   "fieldOverrides": []
 }

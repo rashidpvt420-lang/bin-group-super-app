@@ -1,0 +1,76 @@
+name: Staff OS Staging Auth Probe
+
+on:
+  push:
+    branches:
+      - feature/staff-operating-system
+    paths:
+      - .github/workflows/staff-os-staging-auth-probe.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: staff-os-staging-auth-probe
+  cancel-in-progress: true
+
+env:
+  STAGING_PROJECT_ID: bin-group-staging
+  PRODUCTION_PROJECT_ID: bin-group-57c60
+  SOURCE_BRANCH: feature/staff-operating-system
+
+jobs:
+  staging-auth-probe:
+    name: Verify branch-scoped staging deployment identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT }}
+    steps:
+      - name: Enforce staging-only and exact-branch boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/$SOURCE_BRANCH"
+          test "$STAGING_PROJECT_ID" = "bin-group-staging"
+          test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
+          test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
+          test -n "$GCP_SERVICE_ACCOUNT"
+          test "$GCP_WORKLOAD_IDENTITY_PROVIDER" = "projects/355288045402/locations/global/workloadIdentityPools/github-actions-staging/providers/github-bin-group-staging"
+          test "$GCP_SERVICE_ACCOUNT" = "github-staging-deploy@bin-group-staging.iam.gserviceaccount.com"
+
+      - name: Checkout exact branch SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify exact checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Authenticate with staging Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          project_id: ${{ env.STAGING_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          version: '>= 416.0.0'
+
+      - name: Verify identity can access staging and only targets staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$(gcloud projects describe "$STAGING_PROJECT_ID" --format='value(projectId)')"
+          test "$PROJECT" = "$STAGING_PROJECT_ID"
+          test "$PROJECT" != "$PRODUCTION_PROJECT_ID"
+          test "$(gcloud config get-value project 2>/dev/null)" = "$STAGING_PROJECT_ID"
+          echo "STAGING_CREDENTIAL_READY=true"
+          echo "Verified branch-scoped Workload Identity Federation access to $STAGING_PROJECT_ID."

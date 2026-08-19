@@ -15,14 +15,20 @@ const PLACEHOLDER_RE = /(?:REPLACE|undefined|null|VALIDATION_ONLY)/i;
 
 const clean = (value) => String(value || '').trim();
 
+function isApprovedProtectedContext(env) {
+  const workflow = clean(env.GITHUB_WORKFLOW);
+  const job = clean(env.GITHUB_JOB);
+  return (
+    (workflow === 'Firebase Production Deploy' && job === 'deploy-firebase-production-stack') ||
+    (workflow === 'Live Role Smoke Tests' && job === 'live-evidence')
+  );
+}
+
 export function assertProtectedProductionContext(env = process.env) {
   const failures = [];
   if (clean(env.GITHUB_ACTIONS) !== 'true') failures.push('GITHUB_ACTIONS=true');
-  if (clean(env.GITHUB_WORKFLOW) !== 'Firebase Production Deploy') {
-    failures.push('the exact Firebase Production Deploy workflow');
-  }
-  if (clean(env.GITHUB_JOB) !== 'deploy-firebase-production-stack') {
-    failures.push('the deploy-firebase-production-stack job');
+  if (!isApprovedProtectedContext(env)) {
+    failures.push('an approved protected workflow/job pair');
   }
   if (clean(env.DEPLOYMENT_ENVIRONMENT) !== 'production') {
     failures.push('DEPLOYMENT_ENVIRONMENT=production');

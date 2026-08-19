@@ -52,7 +52,13 @@ export type SovereignPermission =
     | 'canManageProperties'
     | 'canDispatchJobs'
     | 'canViewAuditLogs'
-    | 'canExportReports';
+    | 'canExportReports'
+    | 'canViewHR'
+    | 'canManagePayroll'
+    | 'canManageFleet'
+    | 'canViewConfidentialHR'
+    | 'canApproveExpenses'
+    | 'canManageInventory';
 
 interface RoleContextType {
     role: string | null;

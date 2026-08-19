@@ -4,6 +4,12 @@ const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
+const DEFAULT_GMAIL_TRANSPORT = Object.freeze({
+  maxAttempts: 3,
+  baseDelayMs: 500,
+  timeoutMs: 15000,
+});
+
 function abortError(label) {
   const error = new Error(`${label} was aborted.`);
   error.name = 'AbortError';
@@ -12,6 +18,37 @@ function abortError(label) {
 
 function throwIfAborted(signal, label) {
   if (signal?.aborted) throw abortError(label);
+}
+
+function normalizeTransportOptions(value = {}) {
+  const maxAttempts = Number(value.maxAttempts ?? DEFAULT_GMAIL_TRANSPORT.maxAttempts);
+  const baseDelayMs = Number(value.baseDelayMs ?? DEFAULT_GMAIL_TRANSPORT.baseDelayMs);
+  const timeoutMs = Number(value.timeoutMs ?? DEFAULT_GMAIL_TRANSPORT.timeoutMs);
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
+    throw new Error('Gmail transport maxAttempts must be an integer from 1 to 5.');
+  }
+  if (!Number.isFinite(baseDelayMs) || baseDelayMs < 0 || baseDelayMs > 10000) {
+    throw new Error('Gmail transport baseDelayMs must be between 0 and 10000.');
+  }
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000) {
+    throw new Error('Gmail transport timeoutMs must be between 1 and 120000.');
+  }
+  return { maxAttempts, baseDelayMs, timeoutMs };
+}
+
+function retryableHttpStatus(status) {
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+function sanitizedTransportCause(error) {
+  const cause = error?.cause && typeof error.cause === 'object' ? error.cause : null;
+  const name = text(error?.name) || 'Error';
+  const code = text(error?.code || cause?.code);
+  const message = text(error?.message || cause?.message)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 180);
+  return [name, code, message].filter(Boolean).join('/');
 }
 
 function normalizeBase64Url(value) {
@@ -59,23 +96,94 @@ function stripHtml(value) {
     .trim();
 }
 
-async function gmailJson(fetchImpl, url, options, label) {
+function sleep(ms, signal, label) {
+  return new Promise((resolve, reject) => {
+    throwIfAborted(signal, label);
+    if (ms <= 0) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(abortError(label));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function fetchWithTimeout(fetchImpl, url, options, label, timeoutMs) {
   throwIfAborted(options?.signal, label);
-  let response;
+  const controller = new AbortController();
+  let timedOut = false;
+  const externalSignal = options?.signal;
+  const onExternalAbort = () => controller.abort(externalSignal?.reason);
+  externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new Error(`${label} request timeout`));
+  }, timeoutMs);
+
   try {
-    response = await fetchImpl(url, options);
+    return await fetchImpl(url, { ...options, signal: controller.signal });
   } catch (error) {
-    if (options?.signal?.aborted) throw abortError(label);
-    throw new Error(`${label} failed before an HTTP response.`);
+    if (externalSignal?.aborted) throw abortError(label);
+    if (timedOut) {
+      const timeoutError = new Error(`${label} request timed out after ${timeoutMs}ms.`);
+      timeoutError.cause = error;
+      throw timeoutError;
+    }
+    const transportError = new Error(
+      `${label} failed before an HTTP response (${sanitizedTransportCause(error)}).`,
+    );
+    transportError.cause = error;
+    throw transportError;
+  } finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
-  let body = {};
-  try {
-    body = await response.json();
-  } catch {
-    body = {};
+}
+
+async function gmailJson(fetchImpl, url, options, label, transportOptions = {}) {
+  const transport = normalizeTransportOptions(transportOptions);
+  throwIfAborted(options?.signal, label);
+
+  for (let attempt = 1; attempt <= transport.maxAttempts; attempt += 1) {
+    let response;
+    try {
+      response = await fetchWithTimeout(fetchImpl, url, options, label, transport.timeoutMs);
+    } catch (error) {
+      if (error?.name === 'AbortError' || options?.signal?.aborted) throw error;
+      if (attempt >= transport.maxAttempts) {
+        throw new Error(
+          `${label} exhausted ${transport.maxAttempts} transport attempts. Last failure: ${sanitizedTransportCause(error)}.`,
+          { cause: error },
+        );
+      }
+      await sleep(transport.baseDelayMs * (2 ** (attempt - 1)), options?.signal, label);
+      continue;
+    }
+
+    let body = {};
+    try {
+      body = await response.json();
+    } catch {
+      body = {};
+    }
+    if (response.ok) return body;
+
+    const status = Number(response.status || 0);
+    if (!retryableHttpStatus(status) || attempt >= transport.maxAttempts) {
+      throw new Error(`${label} failed with HTTP ${status || 'unknown'}.`);
+    }
+    await sleep(transport.baseDelayMs * (2 ** (attempt - 1)), options?.signal, label);
   }
-  if (!response.ok) throw new Error(`${label} failed with HTTP ${response.status}.`);
-  return body;
+
+  throw new Error(`${label} transport attempts were exhausted unexpectedly.`);
 }
 
 async function collectMimeText({
@@ -85,6 +193,7 @@ async function collectMimeText({
   fetchImpl,
   signal,
   label,
+  transportOptions,
 }) {
   if (!payload || typeof payload !== 'object') return '';
   const chunks = [];
@@ -101,6 +210,7 @@ async function collectMimeText({
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal },
       `${label} attachment read`,
+      transportOptions,
     );
     const decoded = decodeGmailBase64Url(attachment.data, `${label} attachment`);
     chunks.push(mimeType === 'text/html' ? stripHtml(decoded) : decoded);
@@ -113,24 +223,10 @@ async function collectMimeText({
       fetchImpl,
       signal,
       label,
+      transportOptions,
     }));
   }
   return chunks.filter(Boolean).join('\n');
-}
-
-function sleep(ms, signal, label) {
-  return new Promise((resolve, reject) => {
-    throwIfAborted(signal, label);
-    const timer = setTimeout(resolve, ms);
-    if (signal) {
-      const onAbort = () => {
-        clearTimeout(timer);
-        signal.removeEventListener('abort', onAbort);
-        reject(abortError(label));
-      };
-      signal.addEventListener('abort', onAbort, { once: true });
-    }
-  });
 }
 
 export async function exchangeGmailAccessToken({
@@ -140,6 +236,7 @@ export async function exchangeGmailAccessToken({
   fetchImpl = globalThis.fetch,
   signal,
   label = 'Gmail mailbox',
+  transportOptions,
 }) {
   if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required.');
   const credentials = {
@@ -160,7 +257,7 @@ export async function exchangeGmailAccessToken({
       grant_type: 'refresh_token',
     }).toString(),
     signal,
-  }, `${label} OAuth exchange`);
+  }, `${label} OAuth exchange`, transportOptions);
   const accessToken = text(result.access_token);
   if (!accessToken) throw new Error(`${label} OAuth exchange returned no access token.`);
   return accessToken;
@@ -172,6 +269,7 @@ export async function verifyGmailMailboxAccess({
   fetchImpl = globalThis.fetch,
   signal,
   label = 'Gmail mailbox',
+  transportOptions,
 }) {
   const token = text(accessToken);
   const expectedEmail = lower(expectedMailboxEmail);
@@ -182,6 +280,7 @@ export async function verifyGmailMailboxAccess({
     'https://gmail.googleapis.com/gmail/v1/users/me/profile',
     { headers, signal },
     `${label} profile verification`,
+    transportOptions,
   );
   if (lower(profile.emailAddress) !== expectedEmail) {
     throw new Error(`${label} OAuth identity does not match the configured mailbox.`);
@@ -191,6 +290,7 @@ export async function verifyGmailMailboxAccess({
     'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1',
     { headers, signal },
     `${label} messages.list sentinel`,
+    transportOptions,
   );
   const sentinelId = text(Array.isArray(list.messages) ? list.messages[0]?.id : '');
   if (!sentinelId) throw new Error(`${label} messages.list sentinel returned no readable message.`);
@@ -199,6 +299,7 @@ export async function verifyGmailMailboxAccess({
     `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(sentinelId)}?format=full`,
     { headers, signal },
     `${label} messages.get full sentinel`,
+    transportOptions,
   );
   await collectMimeText({
     payload: sentinel.payload,
@@ -207,6 +308,7 @@ export async function verifyGmailMailboxAccess({
     fetchImpl,
     signal,
     label: `${label} sentinel`,
+    transportOptions,
   });
   return {
     mailboxEmail: expectedEmail,
@@ -231,6 +333,7 @@ export async function readGmailOtp({
   timeoutMs = 120000,
   pollIntervalMs = 5000,
   label = 'Gmail OTP',
+  transportOptions,
 }) {
   const token = text(accessToken);
   const expectedSender = lower(sender);
@@ -249,6 +352,7 @@ export async function readGmailOtp({
     fetchImpl,
     signal,
     label,
+    transportOptions,
   });
   const deadline = Date.now() + timeoutMs;
   const query = `from:${expectedSender} to:${expectedRecipient} subject:"${expectedSubject.replaceAll('"', '')}" newer_than:1d`;
@@ -259,6 +363,7 @@ export async function readGmailOtp({
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${token}` }, signal },
       `${label} message search`,
+      transportOptions,
     );
     const matches = [];
     for (const candidate of Array.isArray(list.messages) ? list.messages : []) {
@@ -269,6 +374,7 @@ export async function readGmailOtp({
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(gmailMessageId)}?format=full`,
         { headers: { Authorization: `Bearer ${token}` }, signal },
         `${label} message read`,
+        transportOptions,
       );
       const internalDate = Number(message.internalDate || 0);
       if (!Number.isFinite(internalDate) || internalDate < requestedAt - 10000 || internalDate > Date.now() + 60000) continue;
@@ -284,6 +390,7 @@ export async function readGmailOtp({
         fetchImpl,
         signal,
         label,
+        transportOptions,
       });
       const correlationText = [
         headerValue(message, 'Subject'),

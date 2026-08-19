@@ -8,6 +8,7 @@ AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
 APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
 EVIDENCE_PATH="android-store-release-evidence.json"
 GRADLE_LOG="android-store-release-gradle.log"
+COMPROMISED_UPLOAD_CERT_SHA256="431AEC82D731F2A6ED2521AC529722FCB4A51614AC857A20AB96DA2D767BEE91"
 
 required=(
   ANDROID_UPLOAD_KEYSTORE_BASE64
@@ -89,6 +90,21 @@ keytool -list \
   -storepass "$ANDROID_KEYSTORE_PASSWORD" \
   -alias "$ANDROID_KEY_ALIAS" >/dev/null
 
+preflight_keystore_sha256="$({
+  keytool -list -v \
+    -keystore "$KEYSTORE_PATH" \
+    -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+    -alias "$ANDROID_KEY_ALIAS"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
+if [[ ! "$preflight_keystore_sha256" =~ ^[0-9A-F]{64}$ ]]; then
+  echo "::error::Could not validate the protected Android upload-key certificate fingerprint before build."
+  exit 1
+fi
+if [[ "$preflight_keystore_sha256" == "$COMPROMISED_UPLOAD_CERT_SHA256" ]]; then
+  echo "::error::Refusing Android release: the configured production upload key is the compromised credential exposed in public Git history. Rotate the production Android signing secrets and Play upload key before release."
+  exit 1
+fi
+
 npm ci --include=optional --legacy-peer-deps
 npm run test:mobile-store-readiness
 CI=false npm run build
@@ -97,7 +113,7 @@ npx cap sync android
 : > "$GRADLE_LOG"
 (
   cd android
-  ./gradlew --no-daemon clean :app:assembleRelease :app:bundleRelease
+  bash ./gradlew --no-daemon clean :app:assembleRelease :app:bundleRelease
 ) 2>&1 | tee "$GRADLE_LOG"
 
 test -s "$AAB_PATH"
@@ -122,7 +138,7 @@ apk_signing_report="$(mktemp)"
 "$apksigner" verify --verbose --print-certs "$APK_PATH" > "$apk_signing_report"
 
 package_line="$($aapt dump badging "$APK_PATH" | sed -n 's/^package: //p' | head -n 1)"
-package_name="$(sed -n "s/.*name='\([^']*\)'.*/\1/p" <<<"$package_line")"
+package_name="$(sed -n "s/^name='\([^']*\)'.*/\1/p" <<<"$package_line")"
 version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<<"$package_line")"
 version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$package_line")"
 if [[ "$package_name" != "$EXPECTED_APP_ID" ]]; then
@@ -130,30 +146,114 @@ if [[ "$package_name" != "$EXPECTED_APP_ID" ]]; then
   exit 1
 fi
 
-keystore_sha256="$({
+normalize_sha256() {
+  local raw="$1"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
+  if [[ ! "$normalized" =~ ^[0-9A-F]{64}$ ]]; then
+    return 1
+  fi
+  printf '%s' "$normalized"
+}
+
+extract_apksigner_sha256_lines() {
+  local report="$1"
+  # Android build-tools have emitted several signer-label shapes over time:
+  #   Signer #1 certificate SHA-256 digest: ...
+  #   Signer (minSdkVersion=..., maxSdkVersion=...) certificate SHA-256 digest: ...
+  #   V2 Signer: certificate SHA-256 digest: ...
+  # Match only certificate SHA-256 rows; public-key digests are intentionally excluded.
+  sed -nE \
+    '/^[[:space:]]*(V[0-9]+(\.[0-9]+)?[[:space:]]+)?Signer( #[0-9]+|[[:space:]]+\(.*\))?:?[[:space:]]+certificate SHA-256 digest:[[:space:]]*[0-9A-Fa-f:]+[[:space:]]*$/ {
+      s/^.*certificate SHA-256 digest:[[:space:]]*//
+      s/[[:space:]]*$//
+      p
+    }' \
+    "$report"
+}
+
+resolve_apksigner_sha256() {
+  local report="$1"
+  local raw normalized resolved=""
+
+  while IFS= read -r raw; do
+    normalized="$(normalize_sha256 "$raw")" || return 1
+    if [[ -z "$resolved" ]]; then
+      resolved="$normalized"
+    elif [[ "$normalized" != "$resolved" ]]; then
+      return 2
+    fi
+  done < <(extract_apksigner_sha256_lines "$report")
+
+  [[ -n "$resolved" ]] || return 1
+  printf '%s' "$resolved"
+}
+
+format_sha256() {
+  printf '%s' "$1" | sed 's/../&:/g;s/:$//'
+}
+
+keystore_sha256_raw="$({
   keytool -list -v \
     -keystore "$KEYSTORE_PATH" \
     -storepass "$ANDROID_KEYSTORE_PASSWORD" \
     -alias "$ANDROID_KEY_ALIAS"
-} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
-aab_certificate_sha256="$({
+aab_certificate_sha256_raw="$({
   keytool -printcert -jarfile "$AAB_PATH"
-} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr '[:lower:]' '[:upper:]')"
+} | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1)"
 
-apk_sha256="$(
-  sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$apk_signing_report" |
-  head -n 1 |
-  tr '[:lower:]' '[:upper:]' |
-  sed 's/../&:/g;s/:$//'
+apk_sha256_raw="$(
+  extract_apksigner_sha256_lines "$apk_signing_report" |
+  head -n 1
 )"
+
+keystore_sha256="$(normalize_sha256 "$keystore_sha256_raw")" || {
+  echo "::error::Could not normalize the protected upload-keystore SHA-256 fingerprint."
+  exit 1
+}
+aab_certificate_sha256="$(normalize_sha256 "$aab_certificate_sha256_raw")" || {
+  echo "::error::Could not normalize the release AAB SHA-256 certificate fingerprint."
+  exit 1
+}
+apk_sha256="$(normalize_sha256 "$apk_sha256_raw")" || {
+  echo "::error::Could not normalize the release APK SHA-256 certificate fingerprint."
+  cat "$apk_signing_report"
+  exit 1
+}
+
+resolved_apk_sha256="$(resolve_apksigner_sha256 "$apk_signing_report")" || {
+  status=$?
+  if [[ "$status" -eq 2 ]]; then
+    echo "::error::Release APK exposes multiple distinct signer SHA-256 fingerprints; refusing ambiguous signing evidence."
+  else
+    echo "::error::Could not resolve a supported release APK SHA-256 certificate fingerprint from apksigner output."
+  fi
+  cat "$apk_signing_report"
+  exit 1
+}
 rm -f "$apk_signing_report"
 
-if [[ -z "$keystore_sha256" || -z "$aab_certificate_sha256" || "$keystore_sha256" != "$aab_certificate_sha256" ]]; then
+if [[ "$apk_sha256" != "$resolved_apk_sha256" ]]; then
+  echo "::error::Release APK signer extraction produced inconsistent SHA-256 evidence."
+  exit 1
+fi
+apk_sha256="$resolved_apk_sha256"
+
+keystore_sha256_display="$(format_sha256 "$keystore_sha256")"
+aab_certificate_sha256_display="$(format_sha256 "$aab_certificate_sha256")"
+apk_sha256_display="$(format_sha256 "$apk_sha256")"
+
+echo "Protected upload certificate SHA-256: $keystore_sha256_display"
+echo "Release AAB certificate SHA-256: $aab_certificate_sha256_display"
+echo "Release APK certificate SHA-256: $apk_sha256_display"
+
+if [[ "$keystore_sha256" != "$aab_certificate_sha256" ]]; then
   echo "::error::Release AAB certificate does not match the protected upload keystore."
   exit 1
 fi
-if [[ -z "$apk_sha256" || "$keystore_sha256" != "$apk_sha256" ]]; then
+if [[ "$keystore_sha256" != "$apk_sha256" ]]; then
   echo "::error::Release APK certificate does not match the protected upload keystore."
   exit 1
 fi
@@ -165,7 +265,7 @@ EXPECTED_APP_ID="$EXPECTED_APP_ID" \
 PACKAGE_NAME="$package_name" \
 VERSION_CODE="$version_code" \
 VERSION_NAME="$version_name" \
-CERTIFICATE_SHA256="$keystore_sha256" \
+CERTIFICATE_SHA256="$keystore_sha256_display" \
 AAB_SHA256="$aab_sha256" \
 AAB_SIZE="$aab_size" \
 EVIDENCE_PATH="$EVIDENCE_PATH" \

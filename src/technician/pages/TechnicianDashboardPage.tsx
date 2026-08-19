@@ -57,6 +57,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { TICKET_STATUS } from '../../utils/ticketConstants';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
+import StaffTodayDashboard from '../../components/staff/StaffTodayDashboard';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { formatUiDate, normalizeEmail, textOrPending, uniqueRows } from '../utils/technicianDashboardFields';
 import {
@@ -365,6 +366,10 @@ export default function TechnicianDashboardPage() {
             </Box>
 
             <RoleJourneyStrip role="technician" />
+
+            <Box sx={{ mb: 3 }}>
+                <StaffTodayDashboard userName={technicianName} role={trade} isRtl={isRTL} />
+            </Box>
 
             <SectionCard sx={{ mb: 3.5, bgcolor: ui.platinum }}>
                 <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">

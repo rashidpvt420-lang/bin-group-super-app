@@ -6,7 +6,7 @@ import {
   patchTenantBusinessEvidence,
 } from '../../scripts/apply-five-role-business-evidence-fixes.mjs';
 
-const read = (file) => readFileSync(file, 'utf8');
+const read = (file) => readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 
 test('Admin protected replay matches the current Phase 1 payment-return UI and fails fast on selector drift', () => {
   const source = read('tests/e2e/business-admin.spec.ts');

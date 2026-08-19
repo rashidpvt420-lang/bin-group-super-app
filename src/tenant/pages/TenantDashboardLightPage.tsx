@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Avatar, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Alert, Avatar, Box, Button, Chip, Drawer, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -52,6 +52,7 @@ export default function TenantDashboardLightPage() {
   const [loading, setLoading] = useState(true);
   const [activeTickets, setActiveTickets] = useState<any[]>([]);
   const [ticketWarning, setTicketWarning] = useState('');
+  const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -430,10 +431,48 @@ export default function TenantDashboardLightPage() {
                   </Grid>
                 ))}
               </Grid>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => setMoreDrawerOpen(true)}
+                sx={{
+                  mt: 2,
+                  borderColor: binThemeTokens.goldHover,
+                  color: binThemeTokens.goldHover,
+                  fontWeight: 950,
+                  '&:hover': { borderColor: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.05) }
+                }}
+              >
+                More Services
+              </Button>
             </Paper>
           </Grid>
         </Grid>
       </Stack>
+
+      <Drawer
+        anchor={isRTL ? 'left' : 'right'}
+        open={moreDrawerOpen}
+        onClose={() => setMoreDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: 320,
+            bgcolor: binThemeTokens.canvas,
+            borderLeft: `1px solid ${binThemeTokens.border}`,
+            p: 3,
+          }
+        }}
+      >
+        <Stack spacing={3}>
+          <Typography variant="h6" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, mb: 1 }}>
+            More Services
+          </Typography>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/notices'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Notices</Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/marketplace'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Marketplace</Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/messages'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Messages</Button>
+          <Button onClick={() => { setMoreDrawerOpen(false); navigate('/tenant/profile'); }} sx={{ justifyContent: 'flex-start', color: '#fff', fontWeight: 900 }}>Link my unit</Button>
+        </Stack>
+      </Drawer>
     </Box>
   );
 }

@@ -65,6 +65,27 @@ if (!UUID_RE.test(token)) {
 }
 
 console.log(`[APPCHECK_ENSURE] token_fingerprint=${mask(token)}`);
+
+const protectedLiveEvidence =
+  process.env.GITHUB_ACTIONS === 'true' &&
+  process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests' &&
+  process.env.GITHUB_JOB === 'live-evidence' &&
+  process.env.DEPLOYMENT_ENVIRONMENT === 'production' &&
+  process.env.GITHUB_REF === 'refs/heads/main';
+
+if (protectedLiveEvidence) {
+  try {
+    const { resolveAdminAppCheckSiteKey } = await import('./resolve-admin-app-check-site-key.mjs');
+    const result = await resolveAdminAppCheckSiteKey();
+    console.log(
+      `[APPCHECK_ENSURE] admin_enterprise_config=${result.source === 'protected-environment' ? 'validated' : 'resolved'}`,
+    );
+  } catch (error) {
+    console.error(`[APPCHECK_ENSURE] FAIL ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
+
 console.log(
   '[APPCHECK_ENSURE] ok — register this UUID under Firebase Console → App Check → BIN GROUP Web → Debug tokens.',
 );

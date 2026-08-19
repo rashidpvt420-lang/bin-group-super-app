@@ -29,10 +29,13 @@ export default function TechnicianBeforeWorkEvidence() {
   }, [location.pathname]);
   const [ticket, setTicket] = React.useState<Record<string, any> | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [awaitingProofConvergence, setAwaitingProofConvergence] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
 
   React.useEffect(() => {
+    setAwaitingProofConvergence(false);
+    setSuccess('');
     if (!ticketId || !user?.uid) {
       setTicket(null);
       return undefined;
@@ -51,6 +54,15 @@ export default function TechnicianBeforeWorkEvidence() {
   const existingProof = Boolean(ticket?.technicianBeforePhotoUrl)
     || (Array.isArray(ticket?.technicianBeforePhotos) && ticket.technicianBeforePhotos.length > 0);
 
+  React.useEffect(() => {
+    if (!awaitingProofConvergence || !existingProof) return;
+    const frame = window.requestAnimationFrame(() => {
+      setAwaitingProofConvergence(false);
+      setSuccess('Before-work site evidence verified. Work can now begin after PPE and safety confirmation.');
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [awaitingProofConvergence, existingProof]);
+
   if (!ticketId || !ticket || status !== 'ARRIVED') return null;
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,6 +79,7 @@ export default function TechnicianBeforeWorkEvidence() {
     }
 
     setUploading(true);
+    setAwaitingProofConvergence(false);
     setError('');
     setSuccess('');
     try {
@@ -84,8 +97,9 @@ export default function TechnicianBeforeWorkEvidence() {
       const downloadUrl = await getDownloadURL(objectRef);
       const submitEvidence = httpsCallable(functions, 'submitTechnicianBeforeWorkEvidence');
       await submitEvidence({ ticketId, storagePath, downloadUrl });
-      setSuccess('Before-work site evidence verified. Work can now begin after PPE and safety confirmation.');
+      setAwaitingProofConvergence(true);
     } catch (err: any) {
+      setAwaitingProofConvergence(false);
       setError(err?.message || 'Before-work evidence could not be verified. Check the connection and retry.');
     } finally {
       setUploading(false);
@@ -116,11 +130,11 @@ export default function TechnicianBeforeWorkEvidence() {
         <Button
           component="label"
           variant={existingProof ? 'outlined' : 'contained'}
-          disabled={uploading}
-          startIcon={uploading ? <CircularProgress size={18} color="inherit" /> : <Camera size={18} />}
+          disabled={uploading || awaitingProofConvergence}
+          startIcon={(uploading || awaitingProofConvergence) ? <CircularProgress size={18} color="inherit" /> : <Camera size={18} />}
           sx={{ bgcolor: existingProof ? 'transparent' : binThemeTokens.gold, color: existingProof ? '#047857' : '#111827', fontWeight: 950 }}
         >
-          {existingProof ? 'REPLACE EVIDENCE' : 'CAPTURE BEFORE WORK'}
+          {awaitingProofConvergence ? 'VERIFYING EVIDENCE' : existingProof ? 'REPLACE EVIDENCE' : 'CAPTURE BEFORE WORK'}
           <input
             data-testid="technician-before-work-file"
             hidden

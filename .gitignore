@@ -82,10 +82,11 @@ android/local.properties
 .android/
 android-sdk/
 
-# Android signing secrets
+# Android signing secrets and locally generated signing packages
 android/keystore.properties
 android/app/*.jks
 android/app/*.keystore
+android_signing_package/
 *.jks
 *.keystore
 
@@ -112,9 +113,13 @@ bin-group-super-app/
 
 # Scratch / temp files
 scratch/
+.tmp/
 temp_mission.txt
 full_prompt.txt
 build_log.txt
+
+# Generated staff/staging deployment evidence
+staff-os-staging-*/
 
 # Legacy env backups (contain secrets)
 *.legacy-backup
@@ -162,4 +167,5 @@ launch_package/public-release-status.json
 launch_package/production-deployment.json
 launch_package/production-deployment-verify.log
 launch_package/production-incidents.json
+launch_package/privileged-account-cleanup.json
 launch_package/artifacts/

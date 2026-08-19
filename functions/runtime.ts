@@ -74,6 +74,9 @@ export * from "./ownerProfileReadiness";
 export * from "./technicianLiveLocation";
 export * from "./technicianLiveLocationOverflow";
 export * from "./proofVerification";
+export * from "./staffOperatingSystem";
+export * from "./staffInventoryEngine";
+export * from "./staffPdfReporting";
 
 export {
   resumeTechnicianDuty,

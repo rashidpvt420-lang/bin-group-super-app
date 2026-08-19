@@ -45,6 +45,21 @@ jobs:
             exit 1
           }
 
+          gh_get() {
+            local endpoint="$1"
+            local output=""
+            for attempt in 1 2 3 4 5; do
+              if output="$(gh api "$endpoint")"; then
+                printf '%s' "$output"
+                return 0
+              fi
+              echo "GitHub API GET attempt $attempt failed; waiting before fail-closed retry." >&2
+              sleep $((attempt * 3))
+            done
+            echo "::error::GitHub API remained unavailable for required read: $endpoint" >&2
+            return 1
+          }
+
           [[ "$CONFIRMATION" == "RUN_PROTECTED_RELEASE_BIN_GROUP" ]] \
             || fail "Invalid protected-release confirmation."
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] \
@@ -52,83 +67,143 @@ jobs:
           [[ "$GITHUB_SHA" == "$TARGET_SHA" ]] \
             || fail "Workflow ref SHA $GITHUB_SHA does not equal protected target $TARGET_SHA."
 
+          assert_release_governance() {
+            local branch_json protected commit_json verified
+            branch_json="$(gh_get "repos/$REPOSITORY/branches/main")" \
+              || fail "Unable to verify main branch protection."
+            protected="$(jq -r '.protected // false' <<<"$branch_json")"
+            [[ "$protected" == "true" ]] \
+              || fail "main branch is not protected; refusing hard public release."
+
+            commit_json="$(gh_get "repos/$REPOSITORY/commits/$TARGET_SHA")" \
+              || fail "Unable to verify target commit signature."
+            verified="$(jq -r '.commit.verification.verified // false' <<<"$commit_json")"
+            [[ "$verified" == "true" ]] \
+              || fail "target commit $TARGET_SHA is not cryptographically verified; refusing hard public release."
+          }
+
           assert_main() {
-            local current
-            current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+            local current_json current
+            current_json="$(gh_get "repos/$REPOSITORY/commits/main")" \
+              || fail "Unable to verify current main."
+            current="$(jq -r '.sha' <<<"$current_json")"
             [[ "$current" == "$TARGET_SHA" ]] \
               || fail "main moved from protected target $TARGET_SHA to $current; refusing to continue."
           }
 
           workflow_ids() {
             local workflow="$1"
-            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100" \
-              --jq '.workflow_runs[].id' 2>/dev/null || true
+            local runs_json
+            runs_json="$(gh_get "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100")" \
+              || fail "Unable to snapshot $workflow before dispatch."
+            jq -r '.workflow_runs[].id' <<<"$runs_json"
           }
 
+          NEW_RUN_ID=""
           find_new_exact_sha_run() {
             local workflow="$1"
             local baseline="$2"
-            gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100" \
-              | jq -r --arg sha "$TARGET_SHA" --arg baseline "$baseline" '
-                  ($baseline | split("\n") | map(select(length > 0) | tonumber)) as $old
-                  | [.workflow_runs[]
-                      | select(.head_branch == "main")
-                      | select(.event == "workflow_dispatch")
-                      | select(.head_sha == $sha)
-                      | select((.id as $id | ($old | index($id))) == null)]
-                  | sort_by(.created_at)
-                  | last
-                  | .id // empty'
+            local runs_json
+            NEW_RUN_ID=""
+            runs_json="$(gh_get "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100")" \
+              || fail "Unable to correlate $workflow after dispatch."
+            NEW_RUN_ID="$(jq -r --arg sha "$TARGET_SHA" --arg baseline "$baseline" '
+                ($baseline | split("\n") | map(select(length > 0) | tonumber)) as $old
+                | [.workflow_runs[]
+                    | select(.head_branch == "main")
+                    | select(.event == "workflow_dispatch")
+                    | select(.head_sha == $sha)
+                    | select((.id as $id | ($old | index($id))) == null)]
+                | sort_by(.created_at)
+                | last
+                | .id // empty' <<<"$runs_json")"
+            [[ "$NEW_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           }
 
+          artifact_exists() {
+            local run_id="$1"
+            local artifact_name="$2"
+            local artifacts_json
+            artifacts_json="$(gh_get "repos/$REPOSITORY/actions/runs/$run_id/artifacts")" \
+              || fail "Unable to verify artifact $artifact_name on run $run_id."
+            jq -e --arg name "$artifact_name" \
+              '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' \
+              <<<"$artifacts_json" >/dev/null
+          }
+
+          REUSABLE_RUN_ID=""
           find_reusable_success() {
             local workflow="$1"
             local artifact_name="$2"
-            local run_id
+            local runs_json run_id
+            REUSABLE_RUN_ID=""
+            runs_json="$(gh_get "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100")" \
+              || fail "Unable to inspect reusable $workflow runs."
             while read -r run_id; do
               [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || continue
-              if gh api "repos/$REPOSITORY/actions/runs/$run_id/artifacts" \
-                | jq -e --arg name "$artifact_name" \
-                    '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' >/dev/null; then
-                echo "$run_id"
+              if artifact_exists "$run_id" "$artifact_name"; then
+                REUSABLE_RUN_ID="$run_id"
                 return 0
               fi
             done < <(
-              gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=workflow_dispatch&per_page=100" \
-                | jq -r --arg sha "$TARGET_SHA" '
-                    [.workflow_runs[]
-                      | select(.head_branch == "main")
-                      | select(.event == "workflow_dispatch")
-                      | select(.head_sha == $sha)
-                      | select(.status == "completed" and .conclusion == "success")]
-                    | sort_by(.created_at) | reverse | .[].id'
+              jq -r --arg sha "$TARGET_SHA" '
+                [.workflow_runs[]
+                  | select(.head_branch == "main")
+                  | select(.event == "workflow_dispatch")
+                  | select(.head_sha == $sha)
+                  | select(.status == "completed" and .conclusion == "success")]
+                | sort_by(.created_at) | reverse | .[].id' <<<"$runs_json"
             )
             return 1
           }
 
-          wait_for_new_run() {
-            local workflow="$1"
-            local baseline="$2"
-            local label="$3"
-            local run_id=""
-            for _ in $(seq 1 180); do
-              run_id="$(find_new_exact_sha_run "$workflow" "$baseline")"
-              if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
-                echo "$run_id"
-                return 0
+          DISPATCHED_RUN_ID=""
+          dispatch_and_locate() {
+            local dispatch_workflow="$1"
+            local observed_workflow="$2"
+            local baseline="$3"
+            local label="$4"
+            local payload="$5"
+            local post_accepted="false"
+            DISPATCHED_RUN_ID=""
+
+            for dispatch_attempt in 1 2 3; do
+              post_accepted="false"
+              if printf '%s' "$payload" \
+                | gh api --method POST -H 'Accept: application/vnd.github+json' \
+                    "repos/$REPOSITORY/actions/workflows/$dispatch_workflow/dispatches" --input -; then
+                post_accepted="true"
+              else
+                echo "$label dispatch POST attempt $dispatch_attempt was inconclusive; checking for an exact-SHA run before any retry." >&2
               fi
-              sleep 10
+
+              for _ in $(seq 1 36); do
+                if find_new_exact_sha_run "$observed_workflow" "$baseline"; then
+                  DISPATCHED_RUN_ID="$NEW_RUN_ID"
+                  echo "$label exact-SHA run correlated: $DISPATCHED_RUN_ID"
+                  return 0
+                fi
+                sleep 5
+              done
+
+              if [[ "$post_accepted" == "true" ]]; then
+                fail "$label dispatch was accepted but no exact-SHA run appeared; refusing a duplicate POST."
+              fi
+              echo "$label POST was not accepted and no exact-SHA run appeared; retrying safely." >&2
             done
-            fail "$label dispatch was accepted but no exact-SHA workflow_dispatch run appeared within 30 minutes."
+
+            fail "$label could not be dispatched or correlated after protected retries."
           }
 
           wait_for_success() {
             local run_id="$1"
             local label="$2"
+            local run_json state conclusion
             for _ in $(seq 1 300); do
-              local state conclusion
-              state="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.status')"
-              conclusion="$(gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq '.conclusion // ""')"
+              run_json="$(gh_get "repos/$REPOSITORY/actions/runs/$run_id")" \
+                || fail "Unable to read $label run $run_id."
+              state="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
               echo "$label run $run_id: status=$state conclusion=${conclusion:-pending}"
               if [[ "$state" == "completed" ]]; then
                 [[ "$conclusion" == "success" ]] \
@@ -140,15 +215,17 @@ jobs:
             fail "$label run $run_id did not complete within the protected wait window."
           }
 
+          assert_release_governance
           assert_main
           production_artifact="production-deployment-$TARGET_SHA"
-          production_run_id="$(find_reusable_success firebase-production-deploy.yml "$production_artifact" || true)"
-          if [[ "$production_run_id" =~ ^[1-9][0-9]*$ ]]; then
+          production_run_id=""
+          if find_reusable_success firebase-production-deploy.yml "$production_artifact"; then
+            production_run_id="$REUSABLE_RUN_ID"
             echo "Reusing successful exact-SHA Firebase Production Deploy run $production_run_id"
           else
             production_baseline="$(workflow_ids firebase-production-deploy.yml)"
             echo "No reusable exact-SHA production artifact exists; dispatching protected bank-pilot deploy."
-            jq -n \
+            production_payload="$(jq -nc \
               --arg ref main \
               --arg confirmation DEPLOY_PRODUCTION_BIN_GROUP_57C60 \
               --arg hard AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP \
@@ -156,54 +233,62 @@ jobs:
               --arg actor "$AUTHORIZATION_ACTOR" \
               --arg founderName "$FOUNDER_NAME" \
               --arg founderEmail "$FOUNDER_EMAIL" \
-              '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:$actor,authorization_source_pr:"",founder_name:$founderName,founder_email:$founderEmail,launch_mode:"bank-pilot",run_public_release_gate:false,deployment_payload_json:""}}' \
-              | gh api --method POST -H 'Accept: application/vnd.github+json' \
-                  "repos/$REPOSITORY/actions/workflows/firebase-production-dispatch-current-main.yml/dispatches" --input -
-            production_run_id="$(wait_for_new_run firebase-production-deploy.yml "$production_baseline" "Firebase Production Deploy")"
+              '{ref:$ref,inputs:{confirmation:$confirmation,hard_launch_confirmation:$hard,expected_commit_sha:$sha,authorization_actor:$actor,authorization_source_pr:"",founder_name:$founderName,founder_email:$founderEmail,launch_mode:"bank-pilot",run_public_release_gate:false,deployment_payload_json:""}}')"
+            dispatch_and_locate \
+              firebase-production-dispatch-current-main.yml \
+              firebase-production-deploy.yml \
+              "$production_baseline" \
+              "Firebase Production Deploy" \
+              "$production_payload"
+            production_run_id="$DISPATCHED_RUN_ID"
             wait_for_success "$production_run_id" "Firebase Production Deploy"
-            gh api "repos/$REPOSITORY/actions/runs/$production_run_id/artifacts" \
-              | jq -e --arg name "$production_artifact" \
-                  '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' >/dev/null \
+            artifact_exists "$production_run_id" "$production_artifact" \
               || fail "Successful production run $production_run_id did not publish exactly one non-expired $production_artifact artifact."
           fi
 
           assert_main
           live_artifact="live-launch-evidence-$TARGET_SHA"
-          live_run_id="$(find_reusable_success live-role-smoke.yml "$live_artifact" || true)"
-          if [[ "$live_run_id" =~ ^[1-9][0-9]*$ ]]; then
+          live_run_id=""
+          if find_reusable_success live-role-smoke.yml "$live_artifact"; then
+            live_run_id="$REUSABLE_RUN_ID"
             echo "Reusing successful exact-SHA Live Role Smoke run $live_run_id"
           else
             live_baseline="$(workflow_ids live-role-smoke.yml)"
             echo "Dispatching exact-SHA Live Role Smoke Tests live-evidence."
-            jq -n --arg ref main --arg sha "$TARGET_SHA" --arg deployRun "$production_run_id" \
-              '{ref:$ref,inputs:{mode:"live-evidence",expected_commit_sha:$sha,production_deploy_run_id:$deployRun}}' \
-              | gh api --method POST -H 'Accept: application/vnd.github+json' \
-                  "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/dispatches" --input -
-            live_run_id="$(wait_for_new_run live-role-smoke.yml "$live_baseline" "Live Role Smoke Tests")"
+            live_payload="$(jq -nc --arg ref main --arg sha "$TARGET_SHA" --arg deployRun "$production_run_id" \
+              '{ref:$ref,inputs:{mode:"live-evidence",expected_commit_sha:$sha,production_deploy_run_id:$deployRun}}')"
+            dispatch_and_locate \
+              live-role-smoke.yml \
+              live-role-smoke.yml \
+              "$live_baseline" \
+              "Live Role Smoke Tests" \
+              "$live_payload"
+            live_run_id="$DISPATCHED_RUN_ID"
             wait_for_success "$live_run_id" "Live Role Smoke Tests"
-            gh api "repos/$REPOSITORY/actions/runs/$live_run_id/artifacts" \
-              | jq -e --arg name "$live_artifact" \
-                  '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' >/dev/null \
+            artifact_exists "$live_run_id" "$live_artifact" \
               || fail "Successful Live Role run $live_run_id did not publish exactly one non-expired $live_artifact artifact."
           fi
 
           assert_main
           aab_artifact="bin-group-android-release-$TARGET_SHA"
-          aab_run_id="$(find_reusable_success android-store-release.yml "$aab_artifact" || true)"
-          if [[ "$aab_run_id" =~ ^[1-9][0-9]*$ ]]; then
+          aab_run_id=""
+          if find_reusable_success android-store-release.yml "$aab_artifact"; then
+            aab_run_id="$REUSABLE_RUN_ID"
             echo "Reusing successful exact-SHA Android release run $aab_run_id"
           else
             aab_baseline="$(workflow_ids android-store-release.yml)"
             echo "Dispatching signed Android AAB build."
-            jq -n --arg ref main --arg sha "$TARGET_SHA" \
-              '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
-              | gh api --method POST -H 'Accept: application/vnd.github+json' \
-                  "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" --input -
-            aab_run_id="$(wait_for_new_run android-store-release.yml "$aab_baseline" "Android Store Release AAB")"
+            aab_payload="$(jq -nc --arg ref main --arg sha "$TARGET_SHA" \
+              '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}')"
+            dispatch_and_locate \
+              android-store-release.yml \
+              android-store-release.yml \
+              "$aab_baseline" \
+              "Android Store Release AAB" \
+              "$aab_payload"
+            aab_run_id="$DISPATCHED_RUN_ID"
             wait_for_success "$aab_run_id" "Android Store Release AAB"
-            gh api "repos/$REPOSITORY/actions/runs/$aab_run_id/artifacts" \
-              | jq -e --arg name "$aab_artifact" \
-                  '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' >/dev/null \
+            artifact_exists "$aab_run_id" "$aab_artifact" \
               || fail "Successful Android run $aab_run_id did not publish exactly one non-expired $aab_artifact artifact."
           fi
 
