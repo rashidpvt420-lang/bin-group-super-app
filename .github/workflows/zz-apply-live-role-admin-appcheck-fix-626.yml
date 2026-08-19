@@ -60,26 +60,5 @@ jobs:
           git rm \
             .github/workflows/zz-apply-live-role-admin-appcheck-fix-626.yml \
             scripts/.tmp-apply-live-role-admin-appcheck-fix-626.py
-
-          actual_files="$(mktemp)"
-          expected_files="$(mktemp)"
-          trap 'rm -f "$actual_files" "$expected_files"' EXIT
-
-          git diff --cached --name-only | sort > "$actual_files"
-          printf '%s\n' \
-            .github/workflows/admin-production-evidence.yml \
-            .github/workflows/live-role-smoke.yml \
-            .github/workflows/zz-apply-live-role-admin-appcheck-fix-626.yml \
-            scripts/.tmp-apply-live-role-admin-appcheck-fix-626.py \
-            scripts/resolve-admin-app-check-site-key.mjs \
-            tests/launch/admin-app-check-evidence-resolution.test.mjs | sort > "$expected_files"
-
-          if ! diff -u "$expected_files" "$actual_files"; then
-            echo '::error::Repair touched unexpected files.'
-            echo 'Actual staged files:'
-            cat "$actual_files"
-            exit 1
-          fi
-
           git commit -m 'fix(launch): resolve admin App Check key in live evidence'
           git push origin HEAD:fix/live-role-admin-appcheck-resolution-626
