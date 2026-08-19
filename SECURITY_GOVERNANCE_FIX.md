@@ -1,0 +1,1 @@
+This branch is an isolated hard-launch governance repair. It must not contain production secrets, generated staging evidence, or unrelated feature changes. The marker file is temporary and may be removed before merge.
