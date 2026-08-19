@@ -1,14 +1,10 @@
 name: Firebase Extension Manifest Guard
 
 on:
-  pull_request:
-    paths:
-      - 'firebase.json'
-      - 'extensions/**'
-      - 'package.json'
-      - 'scripts/**'
-      - '.github/workflows/**'
-      - 'tests/launch/firebase-extensions-decommission-guard.test.mjs'
+  # This check is required by branch protection, so it must always report a
+  # result for pull requests. Path-filtering a required PR check leaves it in
+  # an indefinite "Expected" state on unrelated changes and blocks merges.
+  pull_request: {}
   push:
     branches:
       - main
