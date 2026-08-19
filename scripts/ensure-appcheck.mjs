@@ -66,14 +66,16 @@ if (!UUID_RE.test(token)) {
 
 console.log(`[APPCHECK_ENSURE] token_fingerprint=${mask(token)}`);
 
-const protectedLiveEvidence =
+const protectedProductionEvidence =
   process.env.GITHUB_ACTIONS === 'true' &&
-  process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests' &&
-  process.env.GITHUB_JOB === 'live-evidence' &&
   process.env.DEPLOYMENT_ENVIRONMENT === 'production' &&
-  process.env.GITHUB_REF === 'refs/heads/main';
+  process.env.GITHUB_REF === 'refs/heads/main' &&
+  (
+    (process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests' && process.env.GITHUB_JOB === 'live-evidence') ||
+    (process.env.GITHUB_WORKFLOW === 'Admin Production Evidence' && process.env.GITHUB_JOB === 'admin-operational-evidence')
+  );
 
-if (protectedLiveEvidence) {
+if (protectedProductionEvidence) {
   try {
     const { resolveAdminAppCheckSiteKey } = await import('./resolve-admin-app-check-site-key.mjs');
     const result = await resolveAdminAppCheckSiteKey();

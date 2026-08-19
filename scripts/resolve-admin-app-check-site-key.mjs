@@ -12,16 +12,18 @@ const EXPECTED_CONFIG_NAME =
 const CONFIG_URL = `https://firebaseappcheck.googleapis.com/v1/${EXPECTED_CONFIG_NAME}`;
 const SITE_KEY_RE = /^[A-Za-z0-9_-]{30,100}$/;
 const PLACEHOLDER_RE = /(?:REPLACE|undefined|null|VALIDATION_ONLY)/i;
+const PROTECTED_WORKFLOW_JOBS = Object.freeze([
+  Object.freeze({ workflow: 'Firebase Production Deploy', job: 'deploy-firebase-production-stack' }),
+  Object.freeze({ workflow: 'Live Role Smoke Tests', job: 'live-evidence' }),
+  Object.freeze({ workflow: 'Admin Production Evidence', job: 'admin-operational-evidence' }),
+]);
 
 const clean = (value) => String(value || '').trim();
 
 function isApprovedProtectedContext(env) {
   const workflow = clean(env.GITHUB_WORKFLOW);
   const job = clean(env.GITHUB_JOB);
-  return (
-    (workflow === 'Firebase Production Deploy' && job === 'deploy-firebase-production-stack') ||
-    (workflow === 'Live Role Smoke Tests' && job === 'live-evidence')
-  );
+  return PROTECTED_WORKFLOW_JOBS.some((entry) => entry.workflow === workflow && entry.job === job);
 }
 
 export function assertProtectedProductionContext(env = process.env) {
