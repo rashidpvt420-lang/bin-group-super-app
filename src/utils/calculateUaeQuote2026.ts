@@ -360,8 +360,11 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   else if (safeInput.contractType === 'PM_ONLY') baseRate = ((safeInput.annualRent || 100000) * assetClass.managementRange.min) / 100;
   else baseRate = assetClass.combinedRange.min;
 
+  const isMajlisAsset = MAJLIS_ASSET_IDS.has(normalizedAssetClassId);
   let baseQuote = baseRate;
-  if (assetClass.pricingUnit === 'sqft' && safeInput.sqft) {
+  if (isMajlisAsset) {
+    pricingExplanation.push(`Flat annual Majlis facility rate of ${baseRate} AED applied once; room/unit counts do not multiply the contract base.`);
+  } else if (assetClass.pricingUnit === 'sqft' && safeInput.sqft) {
     baseQuote = baseRate * safeInput.sqft;
     pricingExplanation.push(`Base rate of ${baseRate} AED/sqft applied to ${safeInput.sqft} sqft.`);
   } else if (assetClass.pricingUnit === 'unit' && safeInput.units) {
@@ -426,7 +429,8 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (appliedSlaMultiplier > 1) pricingExplanation.push(`${safeInput.slaTier.toUpperCase()} Performance Service Level Agreement applied.`);
 
   const mergedAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
-  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, safeInput);
+  const addOnPricingDriver = isMajlisAsset ? { ...safeInput, units: 1, offices: 0, shops: 0 } : safeInput;
+  const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, addOnPricingDriver);
   const subtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
   const annualTotal = subtotal * (1 + planSurcharge(safeInput.paymentPlan));
   addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
