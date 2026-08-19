@@ -1,10 +1,12 @@
-# Re-trigger the self-cleaning repair after the protected-main squash merge.
 name: Apply Live Evidence Admin App Check Fix 626
 
 on:
   push:
     branches:
       - fix/live-role-admin-appcheck-resolution-626
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -15,7 +17,7 @@ concurrency:
 
 jobs:
   patch-test-clean:
-    if: github.ref == 'refs/heads/fix/live-role-admin-appcheck-resolution-626'
+    if: github.ref == 'refs/heads/fix/live-role-admin-appcheck-resolution-626' || github.head_ref == 'fix/live-role-admin-appcheck-resolution-626'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
