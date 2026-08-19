@@ -49,8 +49,9 @@ test('every selectable property type resolves to a valid pricing class and calcu
   }
 });
 
-test('every selectable property type uses its correct pricing driver (units, beds, or sqft)', () => {
-  // Test drivers by varying inputs and checking if quote changes
+test('every selectable property type uses its correct pricing driver (units, beds, sqft, or facility)', () => {
+  // Test drivers by varying inputs and checking if quote changes.
+  // Flat-facility classes intentionally ignore sqft, units, and beds.
   for (const type of selectableTypes) {
     // Mosque has a custom driver using sqft & units, so we handle it separately
     if (type === 'Mosque / Masjid') {
@@ -103,15 +104,16 @@ test('every selectable property type uses its correct pricing driver (units, bed
     const unitsChanged = qBase.annualTotal !== qUnitsDouble.annualTotal;
     const bedsChanged = qBase.annualTotal !== qBedsDouble.annualTotal;
 
-    const isMajlis = ['Government Property', 'Government Majlis', 'Private Majlis'].includes(type);
-    if (isMajlis) {
+    const isFacilityPriced = ['Government Majlis', 'Private Majlis', 'Farm / Estate'].includes(type);
+    if (isFacilityPriced) {
       assert.equal(sqftChanged, false, `${type} quote must not vary with sqft`);
       assert.equal(unitsChanged, false, `${type} quote must not vary with units`);
       assert.equal(bedsChanged, false, `${type} quote must not vary with beds`);
       continue;
     }
 
-    // Sum of changes must be exactly 1 driver
+    // All remaining non-mosque types have exactly one quantity driver.
+    // Government Property is intentionally sqft-priced and therefore belongs here.
     const totalDrivers = (sqftChanged ? 1 : 0) + (unitsChanged ? 1 : 0) + (bedsChanged ? 1 : 0);
     assert.equal(totalDrivers, 1, `Property type ${type} must have exactly one active pricing driver (resolved: sqft=${sqftChanged}, units=${unitsChanged}, beds=${bedsChanged})`);
   }
