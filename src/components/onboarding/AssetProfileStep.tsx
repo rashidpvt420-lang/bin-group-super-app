@@ -1,27 +1,34 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Container, Grid, MenuItem, Paper,
-  Snackbar, Stack, TextField, Typography, alpha
+  Snackbar, Stack, TextField, Typography, alpha,
 } from '@mui/material';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Briefcase, Building, Building2, CopyPlus,
-  Gem, Home, Hotel, Landmark, RefreshCcw, Scan, ShieldCheck, Trash2, Warehouse
+  Gem, Home, Hotel, Landmark, RefreshCcw, Scan, ShieldCheck, Trash2, Warehouse,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import type { PropertyData } from '../../store/onboardingStore';
+import { ASSET_PROFILE_PROPERTY_TYPES } from '../../utils/calculateUaeQuote2026';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { auth, functions, getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
 
 const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
-const ASSET_TYPE_IDS = new Set([
-  'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office', 'Retail Center', 'Mall',
-  'Hotel', 'Resort', 'Hospital', 'Clinic', 'School', 'Warehouse', 'Industrial Property', 'Labour Camp',
-  'Staff Accommodation', 'Government Property', 'Government Majlis', 'Private Majlis', 'Mosque / Masjid',
-  'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue', 'Farm / Estate',
+const ASSET_TYPE_IDS = new Set<string>(ASSET_PROFILE_PROPERTY_TYPES);
+const SQFT_PRICED_TYPES = new Set([
+  'Residential Building', 'Commercial Building', 'Office', 'Retail Center', 'Mall', 'Hotel', 'Resort',
+  'Hospital', 'Clinic', 'School', 'Warehouse', 'Industrial Property', 'Government Property',
+  'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue',
 ]);
-const authority = (emirate: string) => emirate === 'Abu Dhabi' ? 'Awqaf / ADMDR' : emirate === 'Dubai' ? 'IACAD / SIRA' : emirate === 'Sharjah' ? 'Sharjah Islamic Affairs' : emirate ? 'Local Islamic Affairs Authority' : '';
+const UNIT_PRICED_TYPES = new Set(['Apartment', 'Villa', 'Labour Camp', 'Staff Accommodation']);
+
+const authority = (emirate: string) => emirate === 'Abu Dhabi' ? 'Awqaf / ADMDR'
+  : emirate === 'Dubai' ? 'IACAD / SIRA'
+    : emirate === 'Sharjah' ? 'Sharjah Islamic Affairs'
+      : emirate ? 'Local Islamic Affairs Authority' : '';
+
 const emptyMosque = (emirate = '') => ({
   mosqueName: '', emirate, regulatoryAuthority: authority(emirate), assetClass: 'RELIGIOUS_FACILITY',
   riskProfile: 'ASSESSMENT_REQUIRED', serviceModel: 'MOSQUE_FM', grossFloorAreaSqft: 0,
@@ -30,6 +37,13 @@ const emptyMosque = (emirate = '') => ({
   cctvInstalled: false, cctvCameraCount: 0, cctvResolution: '', storageDays: 0,
   hasDonationBoxCoverage: false, ramadanSurgePlanConfirmed: false, prayerTimeSchedulingConfirmed: false,
 });
+
+const blankAssetCard = (): Partial<PropertyData> => ({
+  emirate: '', area: '', address: '', propertyType: '', subType: '', floors: 0, units: 0, sqft: 0, age: 0,
+  annualRent: undefined, annualRevenue: undefined, assetGrade: 'Standard', majlis: false, majlisType: 'none',
+  ownerType: 'Private', useType: 'Rental', missions: [],
+});
+
 const clean = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const verifiedOcrPatch = (extracted: any): Partial<PropertyData> => {
   const patch: Partial<PropertyData> = {};
@@ -44,17 +58,52 @@ const verifiedOcrPatch = (extracted: any): Partial<PropertyData> => {
   return patch;
 };
 
+const metadataForType = (id: string, current?: PropertyData): Partial<PropertyData> => {
+  const mosqueSelected = id === 'Mosque / Masjid';
+  const majlis = id === 'Government Majlis' || id === 'Private Majlis';
+  return {
+    propertyType: id,
+    subType: mosqueSelected ? 'Mosque Facilities Management' : (current?.subType || ''),
+    majlis,
+    majlisType: id === 'Government Majlis' ? 'government' : id === 'Private Majlis' ? 'private' : 'none',
+    ownerType: ['Government Property', 'Government Majlis', 'Mosque / Masjid'].includes(id) ? 'Government' : 'Private',
+    useType: ['Hotel', 'Resort'].includes(id) ? 'hospitality'
+      : ['Hospital', 'Clinic'].includes(id) ? 'healthcare'
+        : id === 'School' ? 'education'
+          : mosqueSelected ? 'religious'
+            : current?.useType || 'Rental',
+    mosqueProfile: mosqueSelected ? current?.mosqueProfile || emptyMosque(current?.emirate || '') : undefined,
+    assetClass: mosqueSelected ? 'RELIGIOUS_FACILITY' : undefined,
+    riskProfile: mosqueSelected ? 'ASSESSMENT_REQUIRED' : undefined,
+    serviceModel: mosqueSelected ? 'MOSQUE_FM' : undefined,
+    missions: [],
+  };
+};
+
+const unitsLabel = (type: string, ar: boolean) => {
+  const labels: Record<string, [string, string]> = {
+    Apartment: ['Apartment count', 'عدد الشقق'], Villa: ['Villa count', 'عدد الفلل'], Hotel: ['Rooms / keys', 'الغرف / المفاتيح'],
+    Resort: ['Rooms / keys', 'الغرف / المفاتيح'], Hospital: ['Beds / capacity', 'الأسرة / السعة'], Clinic: ['Treatment capacity', 'السعة العلاجية'],
+    School: ['Student capacity', 'سعة الطلاب'], 'Labour Camp': ['Beds', 'الأسرة'], 'Staff Accommodation': ['Beds', 'الأسرة'],
+    'Government Majlis': ['Guest capacity', 'سعة الضيوف'], 'Private Majlis': ['Guest capacity', 'سعة الضيوف'],
+    Stadium: ['Venue capacity', 'سعة الموقع'], 'Sports Complex': ['Venue capacity', 'سعة الموقع'], 'Event Venue': ['Venue capacity', 'سعة الموقع'],
+  };
+  const pair = labels[type] || ['Units / capacity', 'الوحدات / السعة'];
+  return ar ? pair[1] : pair[0];
+};
+
 const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = ({ onNext, onBack }) => {
   const { properties, updateProperty, addProperty, removeProperty } = useOnboardingStore();
   const { t, isRTL, lang } = useLanguage();
-  const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
+  const ar = lang === 'ar';
+  const label = (en: string, arText: string) => ar ? arText : en;
   const [activeIndex, setActiveIndex] = useState(0);
   const [scanning, setScanning] = useState(false);
   const [ocrError, setOcrError] = useState('');
   const [validationError, setValidationError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  React.useEffect(() => { if (!properties.length) addProperty(); }, [properties.length, addProperty]);
+  React.useEffect(() => { if (!properties.length) addProperty(blankAssetCard()); }, [properties.length, addProperty]);
   React.useEffect(() => { if (activeIndex >= properties.length) setActiveIndex(Math.max(0, properties.length - 1)); }, [activeIndex, properties.length]);
 
   const active = properties[activeIndex];
@@ -84,9 +133,10 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
 
   const warningsFor = (property: PropertyData) => {
     const warnings: string[] = [];
-    if (!property.propertyType) warnings.push(label('asset type', 'نوع العقار'));
-    if (!(Number(property.sqft) > 0)) warnings.push(label('area', 'المساحة'));
-    if (!(Number(property.units) > 0)) warnings.push(label('units/capacity', 'الوحدات/السعة'));
+    if (!ASSET_TYPE_IDS.has(property.propertyType)) warnings.push(label('asset type', 'نوع العقار'));
+    if (!UAE_EMIRATES.includes(property.emirate)) warnings.push(label('emirate', 'الإمارة'));
+    if (SQFT_PRICED_TYPES.has(property.propertyType) && !(Number(property.sqft) > 0)) warnings.push(label('measured service area', 'مساحة الخدمة المقاسة'));
+    if (UNIT_PRICED_TYPES.has(property.propertyType) && !(Number(property.units) > 0)) warnings.push(unitsLabel(property.propertyType, ar));
     if (property.propertyType === 'Mosque / Masjid') {
       const value = property.mosqueProfile || {};
       if (!String(value.mosqueName || '').trim()) warnings.push(label('mosque name', 'اسم المسجد'));
@@ -97,28 +147,11 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     }
     return warnings;
   };
+
   const activeWarnings = useMemo(() => active ? warningsFor(active) : [], [active, lang]);
   const allWarnings = useMemo(() => properties.map((property, index) => ({ index, warnings: warningsFor(property) })).filter((item) => item.warnings.length), [properties, lang]);
-
   const setProperty = (patch: Partial<PropertyData>) => updateProperty(activeIndex, patch);
-  const selectType = (type: typeof types[number]) => {
-    const [id] = type;
-    const mosqueSelected = id === 'Mosque / Masjid';
-    setProperty({
-      propertyType: id,
-      subType: mosqueSelected ? 'Mosque Facilities Management' : active?.subType,
-      majlis: id === 'Government Majlis' || id === 'Private Majlis',
-      majlisType: id === 'Government Majlis' ? 'government' : id === 'Private Majlis' ? 'private' : 'none',
-      ownerType: ['Government Property', 'Government Majlis', 'Mosque / Masjid'].includes(id) ? 'Government' : active?.ownerType || 'Private',
-      useType: ['Hotel', 'Resort'].includes(id) ? 'hospitality' : ['Hospital', 'Clinic'].includes(id) ? 'healthcare' : id === 'School' ? 'education' : mosqueSelected ? 'religious' : active?.useType || 'Rental',
-      assetGrade: ['Mall', 'Hotel', 'Resort', 'Hospital', 'Clinic', 'School', 'Government Property', 'Government Majlis', 'Private Majlis', 'Mosque / Masjid', 'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue'].includes(id) ? 'Sovereign' : active?.assetGrade || 'Premium',
-      mosqueProfile: mosqueSelected ? active?.mosqueProfile || emptyMosque(active?.emirate || '') : undefined,
-      assetClass: mosqueSelected ? 'RELIGIOUS_FACILITY' : undefined,
-      riskProfile: mosqueSelected ? 'ASSESSMENT_REQUIRED' : undefined,
-      serviceModel: mosqueSelected ? 'MOSQUE_FM' : undefined,
-      missions: [],
-    });
-  };
+  const selectType = (type: typeof types[number]) => setProperty(metadataForType(type[0], active));
   const updateMosque = (patch: Record<string, any>) => {
     const next = { ...mosque, ...patch };
     if ('emirate' in patch) next.regulatoryAuthority = authority(String(patch.emirate || ''));
@@ -143,8 +176,9 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         setProperty({ titleDeedStatus: 'manual_review_required' });
         setOcrError(label('No reliable property values were extracted. Enter them manually or upload a clearer document.', 'لم يتم استخراج بيانات موثوقة. أدخلها يدوياً أو ارفع مستنداً أوضح.'));
       } else {
-        setProperty({ ...patch, titleDeedStatus: 'extracted' });
-        setSnackbar({ open: true, message: label('Verified title-deed values were applied to this property.', 'تم تطبيق قيم سند الملكية الموثقة على هذا العقار.'), severity: 'success' });
+        const metadata = patch.propertyType ? metadataForType(patch.propertyType, active) : {};
+        setProperty({ ...metadata, ...patch, titleDeedStatus: 'extracted' });
+        setSnackbar({ open: true, message: label('Only verified title-deed values were applied to this property.', 'تم تطبيق قيم سند الملكية الموثقة فقط على هذا العقار.'), severity: 'success' });
       }
     } catch (error) {
       console.error('OCR Failure:', error);
@@ -153,10 +187,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     } finally { setScanning(false); event.target.value = ''; }
   };
 
-  const addAnother = () => {
-    addProperty({ emirate: active?.emirate || 'Dubai', area: '', address: '' });
-    setActiveIndex(properties.length);
-  };
+  const addAnother = () => { addProperty(blankAssetCard()); setActiveIndex(properties.length); };
   const removeActive = () => {
     if (properties.length <= 1) return;
     removeProperty(activeIndex);
@@ -189,7 +220,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
         <Paper sx={{ p: 2.5, mb: 3, borderRadius: 5, bgcolor: 'rgba(22,22,24,0.78)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}>
           <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
-              {properties.map((property, index) => <Chip key={property.id || index} onClick={() => { setActiveIndex(index); setValidationError(''); }} label={`${label('Property', 'العقار')} ${index + 1} · ${property.propertyType || label('Unclassified', 'غير مصنف')}`} color={index === activeIndex ? 'primary' : 'default'} variant={index === activeIndex ? 'filled' : 'outlined'} sx={{ fontWeight: 900 }} />)}
+              {properties.map((property, index) => <Chip key={property.id || index} onClick={() => { setActiveIndex(index); setValidationError(''); }} label={`${label('Property', 'العقار')} ${index + 1} · ${ASSET_TYPE_IDS.has(property.propertyType) ? property.propertyType : label('Unclassified', 'غير مصنف')}`} color={index === activeIndex ? 'primary' : 'default'} variant={index === activeIndex ? 'filled' : 'outlined'} sx={{ fontWeight: 900 }} />)}
             </Stack>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1}>
               <Button startIcon={<CopyPlus size={17} />} onClick={addAnother} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{label('Add Property', 'إضافة عقار')}</Button>
@@ -205,7 +236,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Asset type', 'نوع العقار')}</Typography>
                 <Button component="label" startIcon={scanning ? <CircularProgress size={16} /> : <Scan size={17} />} disabled={scanning} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{label('Scan title deed', 'مسح سند الملكية')}<input hidden type="file" accept="image/*,.pdf" onChange={scanTitleDeed} /></Button>
               </Stack>
-              <Grid container spacing={1.5}>{types.map((type) => { const [id, en, ar, Icon, category] = type; const selected = active.propertyType === id; return <Grid item xs={6} sm={4} key={id}><Paper onClick={() => selectType(type)} sx={{ p: 1.5, minHeight: 110, cursor: 'pointer', borderRadius: 3, textAlign: 'center', bgcolor: selected ? alpha(binThemeTokens.gold, 0.14) : 'rgba(255,255,255,0.03)', border: `1px solid ${selected ? binThemeTokens.gold : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 0.7 }}><Icon size={22} color={selected ? binThemeTokens.gold : 'rgba(255,255,255,0.45)'} /><Typography variant="caption" fontWeight={900} color="#FFF">{label(en, ar)}</Typography><Typography variant="caption" color="rgba(255,255,255,0.5)">{label(...categories[category])}</Typography></Paper></Grid>; })}</Grid>
+              <Grid container spacing={1.5}>{types.map((type) => { const [id, en, arText, Icon, category] = type; const selected = active.propertyType === id; return <Grid item xs={6} sm={4} key={id}><Paper onClick={() => selectType(type)} sx={{ p: 1.5, minHeight: 110, cursor: 'pointer', borderRadius: 3, textAlign: 'center', bgcolor: selected ? alpha(binThemeTokens.gold, 0.14) : 'rgba(255,255,255,0.03)', border: `1px solid ${selected ? binThemeTokens.gold : 'rgba(255,255,255,0.08)'}`, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 0.7 }}><Icon size={22} color={selected ? binThemeTokens.gold : 'rgba(255,255,255,0.45)'} /><Typography variant="caption" fontWeight={900} color="#FFF">{label(en, arText)}</Typography><Typography variant="caption" color="rgba(255,255,255,0.5)">{label(...categories[category])}</Typography></Paper></Grid>; })}</Grid>
             </Paper>
           </Grid>
 
@@ -213,15 +244,17 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
             <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.08)' }}>
               <Typography variant="h6" fontWeight={950} color="#FFF" mb={2}>{label(`Property ${activeIndex + 1} measurements`, `قياسات العقار ${activeIndex + 1}`)}</Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12}><TextField fullWidth select label={label('Emirate', 'الإمارة')} value={active.emirate || 'Dubai'} onChange={(event) => setProperty({ emirate: event.target.value })}>{UAE_EMIRATES.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField></Grid>
+                <Grid item xs={12}><TextField fullWidth select label={label('Emirate', 'الإمارة')} value={active.emirate || ''} onChange={(event) => setProperty({ emirate: event.target.value })}><MenuItem value="">{label('Select emirate', 'اختر الإمارة')}</MenuItem>{UAE_EMIRATES.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField></Grid>
                 <Grid item xs={12}><TextField fullWidth label={label('Area / community', 'المنطقة / المجتمع')} value={active.area || ''} onChange={(event) => setProperty({ area: event.target.value })} /></Grid>
-                <Grid item xs={6}><TextField fullWidth type="number" label={label('Units / capacity', 'الوحدات / السعة')} value={active.units || 0} onChange={(event) => setProperty({ units: Math.max(0, Number(event.target.value)) })} /></Grid>
+                <Grid item xs={6}><TextField fullWidth type="number" label={unitsLabel(active.propertyType, ar)} value={active.units || 0} onChange={(event) => setProperty({ units: Math.max(0, Number(event.target.value)) })} /></Grid>
                 <Grid item xs={6}><TextField fullWidth type="number" label={label('Floors', 'الطوابق')} value={active.floors || 0} onChange={(event) => setProperty({ floors: Math.max(0, Number(event.target.value)) })} /></Grid>
-                <Grid item xs={6}><TextField fullWidth type="number" label={label('Area (sq ft)', 'المساحة (قدم²)')} value={active.sqft || 0} onChange={(event) => setProperty({ sqft: Math.max(0, Number(event.target.value)) })} /></Grid>
-                <Grid item xs={6}><TextField fullWidth type="number" label={label('Property age', 'عمر العقار')} value={active.age || 0} onChange={(event) => setProperty({ age: Math.max(0, Number(event.target.value)) })} /></Grid>
-                <Grid item xs={12}><TextField fullWidth select label={label('Asset grade', 'درجة العقار')} value={active.assetGrade || 'Premium'} onChange={(event) => setProperty({ assetGrade: event.target.value as any })}><MenuItem value="Standard">{label('Standard', 'قياسي')}</MenuItem><MenuItem value="Premium">{label('Premium', 'مميز')}</MenuItem><MenuItem value="Luxury">{label('Luxury', 'فاخر')}</MenuItem><MenuItem value="Ultra-Luxury">{label('Ultra-Luxury', 'فائق الفخامة')}</MenuItem><MenuItem value="Sovereign">{label('Sovereign', 'سيادي')}</MenuItem></TextField></Grid>
+                <Grid item xs={6}><TextField fullWidth type="number" label={label('Measured service area (sq ft)', 'مساحة الخدمة المقاسة (قدم²)')} value={active.sqft || 0} onChange={(event) => setProperty({ sqft: Math.max(0, Number(event.target.value)) })} /></Grid>
+                <Grid item xs={6}><TextField fullWidth type="number" label={label('Property age (years)', 'عمر العقار (سنوات)')} value={active.age || 0} onChange={(event) => setProperty({ age: Math.max(0, Number(event.target.value)) })} /></Grid>
+                <Grid item xs={12}><TextField fullWidth type="number" label={label('Annual rent / managed revenue (AED) — required only for PM', 'الإيجار / الإيراد السنوي المدار (درهم) — مطلوب فقط للإدارة')} value={active.annualRent ?? ''} onChange={(event) => setProperty({ annualRent: event.target.value === '' ? undefined : Math.max(0, Number(event.target.value)) })} /></Grid>
+                <Grid item xs={12}><TextField fullWidth select label={label('Asset grade', 'درجة العقار')} value={active.assetGrade || 'Standard'} onChange={(event) => setProperty({ assetGrade: event.target.value as any })}><MenuItem value="Standard">{label('Standard', 'قياسي')}</MenuItem><MenuItem value="Premium">{label('Premium', 'مميز')}</MenuItem><MenuItem value="Luxury">{label('Luxury', 'فاخر')}</MenuItem><MenuItem value="Ultra-Luxury">{label('Ultra-Luxury', 'فائق الفخامة')}</MenuItem><MenuItem value="Sovereign">{label('Sovereign', 'سيادي')}</MenuItem></TextField></Grid>
               </Grid>
-              {!!activeWarnings.length && <Alert severity="warning" sx={{ mt: 2 }}>{label('Missing', 'ناقص')}: {activeWarnings.join(lang === 'ar' ? '، ' : ', ')}</Alert>}
+              <Typography variant="caption" sx={{ display: 'block', mt: 2, color: 'rgba(255,255,255,0.5)' }}>{label('Pricing uses the driver appropriate to the selected asset: unit, bed, measured service area, or one facility. Capacity is never used as a price multiplier unless the class is explicitly bed/unit priced.', 'يستخدم التسعير عامل القياس المناسب للعقار: وحدة أو سرير أو مساحة خدمة مقاسة أو منشأة واحدة. لا تُستخدم السعة كمضاعف للسعر إلا عندما يكون التسعير صراحةً حسب السرير/الوحدة.')}</Typography>
+              {!!activeWarnings.length && <Alert severity="warning" sx={{ mt: 2 }}>{label('Missing', 'ناقص')}: {activeWarnings.join(ar ? '، ' : ', ')}</Alert>}
             </Paper>
           </Grid>
         </Grid>

@@ -1,78 +1,19 @@
 import { createHash } from "crypto";
+import {
+  ASSET_PROFILE_PROPERTY_TYPES,
+  calculateUaeQuote2026,
+  resolveAssetClassIdForPropertyType,
+  type QuoteInput,
+} from "./pricing/calculateUaeQuote2026";
+import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 
 const QUOTE_VERSION = "uae-owner-onboarding-2026-v3-server-authority";
 const QUOTE_TTL_MS = 72 * 60 * 60 * 1000;
 const VALID_CONTRACT_MODES = new Set(["FM_ONLY", "PM_ONLY", "BOTH"]);
+const BED_PRICED_ASSET_IDS = new Set(["lab-camp", "staff-accom"]);
 
 type PropertyInput = Record<string, any>;
 type ContractMode = "FM_ONLY" | "PM_ONLY" | "BOTH";
-
-type AssetPrice = {
-  minimum: number;
-  unit: "unit" | "sqft" | "bed";
-  maintenance: number;
-  management: number;
-  combined: number;
-};
-
-const ASSETS: Record<string, AssetPrice> = {
-  "apt-std": { minimum: 1500, unit: "unit", maintenance: 1200, management: 5, combined: 6500 },
-  "apt-lux": { minimum: 6500, unit: "unit", maintenance: 4500, management: 7, combined: 12000 },
-  "villa-std": { minimum: 6000, unit: "unit", maintenance: 5000, management: 5, combined: 10000 },
-  "villa-lux": { minimum: 15000, unit: "unit", maintenance: 12000, management: 8, combined: 30000 },
-  "apt-sht": { minimum: 2500, unit: "unit", maintenance: 2000, management: 15, combined: 10000 },
-  "off-sml": { minimum: 3500, unit: "sqft", maintenance: 8, management: 4, combined: 15 },
-  "com-twr": { minimum: 50000, unit: "sqft", maintenance: 12, management: 3, combined: 20 },
-  "rtl-mall": { minimum: 150000, unit: "sqft", maintenance: 30, management: 5, combined: 50 },
-  "lab-camp": { minimum: 20000, unit: "bed", maintenance: 60, management: 5, combined: 100 },
-  hosp: { minimum: 75000, unit: "sqft", maintenance: 70, management: 4, combined: 100 },
-  "data-ctr": { minimum: 250000, unit: "sqft", maintenance: 50, management: 10, combined: 150 },
-  "mix-dev": { minimum: 100000, unit: "sqft", maintenance: 15, management: 4, combined: 25 },
-  government_majlis: { minimum: 25000, unit: "unit", maintenance: 25000, management: 0, combined: 25000 },
-  private_majlis: { minimum: 12000, unit: "unit", maintenance: 12000, management: 0, combined: 12000 },
-  mid_scale_hotel: { minimum: 150000, unit: "unit", maintenance: 100000, management: 10, combined: 200000 },
-};
-
-const ADD_ON_BASE: Record<string, number> = {
-  fire_safety: 8000,
-  water_tank: 2200,
-  elevator_amc: 7500,
-  hvac_pm: 6680,
-  cleaning: 18450,
-  security: 36600,
-  pest_control: 2475,
-  landscaping: 12000,
-  move_in_out_inspection: 1200,
-  mep_support: 13500,
-  waste_management: 6600,
-  pool_care: 9600,
-  facade_access: 18000,
-  "façade_access": 18000,
-  dist_cooling: 12000,
-  sira_renewal: 8500,
-  grease_trap: 4800,
-  pca_audit: 6500,
-  majlis_deep_care: 12000,
-  majlis_landscaping: 12000,
-  majlis_exterior_wash: 4500,
-  majlis_standby: 4500,
-  manpower: 30000,
-  concierge: 42000,
-  generator: 7500,
-  cctv: 8500,
-  office_units: 6500,
-  retail_shops: 8500,
-  parking_management: 9000,
-  fit_out_quotation: 0,
-  emergency_priority: 2500,
-  technician_standby: 7500,
-  tech_standby: 7500,
-  event_support: 7500,
-  cleaning_team: 18000,
-  deep_cleaning: 4500,
-  cctv_security: 8500,
-  inspection_move: 1200,
-};
 
 function number(value: unknown, fallback = 0) {
   const parsed = typeof value === "string"
@@ -89,27 +30,51 @@ function text(value: unknown) {
   return String(value || "").trim();
 }
 
-function assetId(property: PropertyInput): string {
-  const type = text(property.propertyType).toLowerCase();
-  const subType = text(property.subType).toLowerCase();
-  const assetClass = text(property.assetClass).toLowerCase();
-  const serviceModel = text(property.serviceModel).toLowerCase();
-  const descriptor = `${type} ${subType} ${assetClass} ${serviceModel}`.replace(/[^a-z0-9]+/g, "_");
-  if (descriptor.includes("mosque") || descriptor.includes("masjid") || descriptor.includes("religious_facility")) return "mosque_fm";
-  if (descriptor.includes("government_majlis") || property.majlis === true) return "government_majlis";
-  if (descriptor.includes("private_majlis")) return "private_majlis";
-  if (descriptor.includes("hotel")) return "mid_scale_hotel";
-  if (descriptor.includes("hospital") || descriptor.includes("clinic")) return "hosp";
+function descriptorFor(property: PropertyInput) {
+  return [
+    property.propertyType,
+    property.subType,
+    property.assetClass,
+    property.serviceModel,
+    property.majlisType,
+  ]
+    .map(text)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_");
+}
+
+/**
+ * Server-side property classification must resolve to the same canonical class
+ * used by the browser/shared calculator. Unknown property types fail closed.
+ */
+export function resolveOwnerOnboardingPricingClass(property: PropertyInput): string {
+  const requestedType = text(property.propertyType);
+  const canonicalType = ASSET_PROFILE_PROPERTY_TYPES.find(
+    (candidate) => candidate.toLowerCase() === requestedType.toLowerCase(),
+  );
+  const grade = text(property.assetGrade) || "Standard";
+  const explicit = resolveAssetClassIdForPropertyType(canonicalType || requestedType, grade);
+  if (explicit) return explicit;
+
+  const descriptor = descriptorFor(property);
+  // Private must be checked before generic/government Majlis flags.
+  if (descriptor.includes("private_majlis") || text(property.majlisType).toLowerCase() === "private") return "private_majlis";
+  if (descriptor.includes("government_majlis") || text(property.majlisType).toLowerCase() === "government" || property.majlis === true) return "government_majlis";
+  if (descriptor.includes("mosque") || descriptor.includes("masjid") || descriptor.includes("religious_facility") || descriptor.includes("mosque_fm")) return "mosque_fm";
   if (descriptor.includes("data_center") || descriptor.includes("data_centre")) return "data-ctr";
-  if (descriptor.includes("mixed_use")) return "mix-dev";
-  if (descriptor.includes("retail_mall") || descriptor.includes("mall")) return "rtl-mall";
-  if (descriptor.includes("labor_camp") || descriptor.includes("labour_camp") || descriptor.includes("warehouse")) return "lab-camp";
   if (descriptor.includes("short_term")) return "apt-sht";
-  if (type === "villa") return ["luxury", "ultra-luxury"].includes(text(property.assetGrade).toLowerCase()) ? "villa-lux" : "villa-std";
-  if (descriptor.includes("luxury_apartment")) return "apt-lux";
-  if (type === "building" || descriptor.includes("commercial_tower")) return "com-twr";
-  if (type === "commercial" || descriptor.includes("office")) return "off-sml";
-  return "apt-std";
+  if (descriptor.includes("commercial_tower")) return "com-twr";
+  if (descriptor.includes("residential_building")) return "res-bldg";
+  if (descriptor.includes("mixed_use")) return "mix-dev";
+  if (descriptor.includes("high_rise") || descriptor.includes("highrise")) return "highrise";
+
+  const rawAssetClass = text(property.assetClass);
+  if (rawAssetClass && UAE_PRICING_MATRIX_2026.assetClasses.some((asset) => asset.id === rawAssetClass)) {
+    return rawAssetClass;
+  }
+
+  throw new Error(`Unsupported property type '${requestedType || "(blank)"}'. Select a configured Asset Profile type before pricing.`);
 }
 
 function contractType(property: PropertyInput): ContractMode {
@@ -123,7 +88,7 @@ function contractType(property: PropertyInput): ContractMode {
   ).toLowerCase();
   let mode = "";
   if (["pm", "pm_only", "rent", "property_management"].includes(strategy)) mode = "PM_ONLY";
-  if (["fm", "fm_only", "maintenance", "maintenance_only"].includes(strategy)) mode = "FM_ONLY";
+  if (["fm", "fm_only", "maintenance", "maintenance_only", "mosque_fm"].includes(strategy)) mode = "FM_ONLY";
   if (["both", "hybrid", "combined", "total_care", "total-care"].includes(strategy)) mode = "BOTH";
   if (!VALID_CONTRACT_MODES.has(mode)) {
     throw new Error("Every property requires a valid Maintenance, Property Management, or Hybrid contract mode.");
@@ -131,112 +96,80 @@ function contractType(property: PropertyInput): ContractMode {
   return mode as ContractMode;
 }
 
-function emirateMultiplier(property: PropertyInput) {
-  const emirate = text(property.emirate).toLowerCase().replace(/[^a-z0-9]+/g, "");
-  if (emirate.includes("dubai")) return 1.15;
-  if (emirate.includes("abudhabi")) return 1.1;
-  if (emirate.includes("sharjah")) return 0.9;
-  if (
-    emirate === "rak" ||
-    emirate.includes("rasalkhaimah") ||
-    emirate.includes("ajman") ||
-    emirate.includes("fujairah") ||
-    emirate === "uaq" ||
-    emirate.includes("ummalquwain")
-  ) return 0.8;
-  return 1;
+function safeZone(value: unknown): QuoteInput["zone"] {
+  const zone = text(value).toUpperCase();
+  return zone === "A" || zone === "C" ? zone : "B";
 }
 
-function slaMultiplier(property: PropertyInput) {
-  const tier = text(property.slaTier).toLowerCase();
-  if (tier === "elite") return 1.3;
-  if (tier === "premium") return 1.15;
-  return 1;
+function safeSlaTier(value: unknown): QuoteInput["slaTier"] {
+  const tier = text(value).toLowerCase();
+  if (tier === "premium" || tier === "elite") return tier;
+  return "standard";
 }
 
-function paymentPlanSurcharge(property: PropertyInput) {
-  const plan = text(property.paymentPlan).toLowerCase();
-  if (plan === "monthly") return 0.06;
-  if (plan === "quarterly") return 0.03;
-  return 0;
+function safePaymentPlan(value: unknown): QuoteInput["paymentPlan"] {
+  const plan = text(value).toLowerCase();
+  if (plan === "monthly" || plan === "quarterly") return plan;
+  return "annual";
 }
 
-function mandatoryAddOns(property: PropertyInput, id: string) {
-  const ids = new Set<string>(["fire_safety"]);
-  if (id === "mosque_fm") {
-    ["water_tank", "hvac_pm", "cleaning", "sira_renewal", "emergency_priority"].forEach((item) => ids.add(item));
-  }
-  if (property.tank === true) ids.add("water_tank");
-  if (id !== "government_majlis" && id !== "private_majlis" && id !== "majlis" && (number(property.floors) > 1 || number(property.lifts) > 0)) ids.add("elevator_amc");
-  if (property.sira === true) ids.add("sira_renewal");
-  if (property.bmu === true) ids.add("facade_access");
-  if (number(property.age) > 15) ids.add("pca_audit");
-  if (property.pool === true) ids.add("pool_care");
-  if (property.hvac === true || number(property.hvacCount) > 0) ids.add("hvac_pm");
-  return ids;
-}
+function quoteInputForProperty(
+  property: PropertyInput,
+  selectedAddOns: string[],
+  mode: ContractMode,
+): { assetClassId: string; pricingDriver: string; input: QuoteInput } {
+  const assetClassId = resolveOwnerOnboardingPricingClass(property);
+  const mosqueProfile = property.mosqueProfile && typeof property.mosqueProfile === "object"
+    ? property.mosqueProfile as PropertyInput
+    : {};
+  const isMosque = assetClassId === "mosque_fm";
+  const isBedPriced = BED_PRICED_ASSET_IDS.has(assetClassId);
+  const matrixClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === assetClassId);
+  const pricingDriver = isMosque ? "sqft+capacity" : text(matrixClass?.pricingUnit);
+  if (!pricingDriver) throw new Error(`Pricing class '${assetClassId}' has no configured pricing driver.`);
 
-function addOnTotal(property: PropertyInput, id: string, selectedAddOns: string[]) {
-  const ids = mandatoryAddOns(property, id);
-  selectedAddOns.forEach((item) => ids.add(item === "façade_access" ? "facade_access" : item));
-  return Array.from(ids).reduce((total, item) => total + (ADD_ON_BASE[item] || 0), 0);
-}
+  const units = isMosque
+    ? number(mosqueProfile.maxWorshipperCapacity || property.units || property.rooms)
+    : number(property.units);
+  const beds = isBedPriced
+    ? number(property.beds || property.bedrooms || property.units || property.rooms)
+    : number(property.beds);
 
-function calculateMosque(property: PropertyInput, selectedAddOns: string[]) {
-  const profile = property.mosqueProfile || {};
-  const sqft = Math.max(number(profile.grossFloorAreaSqft || property.sqft), 1000);
-  const age = number(profile.propertyAgeYears || property.age);
-  const capacity = Math.max(number(profile.maxWorshipperCapacity || property.rooms || property.units), 1);
-  const type = contractType(property);
-  const mepRate = type === "FM_ONLY" ? 20 : type === "BOTH" ? 38 : 30;
-  const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.18 : age <= 15 ? 1.35 : 1.55;
-  const capacityMultiplier = capacity <= 300 ? 1 : capacity <= 1000 ? 1.15 : capacity <= 3000 ? 1.35 : 1.6;
-  const baseQuote = sqft * mepRate * ageCoefficient;
-  const softServices = sqft * 8 * capacityMultiplier;
-  const wuduAreaProxySqft = Math.min(Math.max(Math.ceil(capacity * 0.12), 35), 650);
-  const wuduCleaning = wuduAreaProxySqft * 35 * 26;
-  const ramadanSurge = 15500 + 2500;
-  const compliancePremium = Math.max(baseQuote * 0.04, 2500);
-  const complexityPremium = (baseQuote + softServices) * 0.1;
-  return (baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal(property, "mosque_fm", selectedAddOns)) *
-    slaMultiplier(property) *
-    (1 + paymentPlanSurcharge(property));
-}
-
-function calculateProperty(property: PropertyInput, selectedAddOns: string[]) {
-  const id = assetId(property);
-  if (id === "mosque_fm") return calculateMosque(property, selectedAddOns);
-  const asset = ASSETS[id] || ASSETS["apt-std"];
-  const type = contractType(property);
-  const annualRent = number(property.annualRent);
-  let rate = type === "FM_ONLY"
-    ? asset.maintenance
-    : type === "PM_ONLY"
-      ? ((annualRent || 100000) * asset.management) / 100
-      : asset.combined;
-  if (asset.unit === "sqft" && number(property.sqft) > 0) rate *= number(property.sqft);
-  else if (asset.unit === "unit" && number(property.units) > 0) rate *= number(property.units);
-  else if (asset.unit === "bed" && number(property.bedrooms || property.beds) > 0) rate *= number(property.bedrooms || property.beds);
-  const baseQuote = Math.max(rate, asset.minimum);
-  const zone = text(property.zone).toUpperCase();
-  const zoneMultiplier = zone === "A" ? 1.3 : zone === "C" ? 0.75 : 1;
-  const emirateAdjusted = baseQuote * zoneMultiplier * emirateMultiplier(property);
-  const age = number(property.age);
-  const ageMultiplier = age > 20 ? 1.25 : age > 10 ? 1.15 : age > 5 ? 1.08 : 1;
-  let complexityPercent = 0;
-  if (number(property.floors) >= 40) complexityPercent += 15;
-  else if (number(property.floors) >= 15) complexityPercent += 8;
-  if (number(property.lifts) > 10) complexityPercent += 10;
-  else if (number(property.lifts) > 4) complexityPercent += 5;
-  if (property.hvac === true) complexityPercent += 5;
-  if (property.districtCooling === true) complexityPercent -= 5;
-  if (property.gen === true) complexityPercent += 4;
-  if (property.bmu === true) complexityPercent += 6;
-  if (property.fireAlarm === true || property.firePump === true) complexityPercent += 5;
-  if (id === "hosp" || id === "data-ctr") complexityPercent += 20;
-  const complexityPremium = emirateAdjusted * (complexityPercent / 100);
-  return ((emirateAdjusted * ageMultiplier * slaMultiplier(property)) + complexityPremium + addOnTotal(property, id, selectedAddOns)) *
-    (1 + paymentPlanSurcharge(property));
+  return {
+    assetClassId,
+    pricingDriver,
+    input: {
+      assetClassId,
+      emirate: text(property.emirate),
+      zone: safeZone(property.zone),
+      contractType: mode,
+      sqft: isMosque ? number(mosqueProfile.grossFloorAreaSqft || property.sqft) : number(property.sqft),
+      units,
+      beds,
+      annualRent: number(property.annualRent),
+      annualRevenue: number(property.annualRevenue),
+      propertyAge: isMosque ? number(mosqueProfile.propertyAgeYears || property.age) : number(property.age),
+      floors: number(property.floors),
+      lifts: number(property.lifts),
+      hasPool: property.pool === true,
+      hasGym: property.gym === true,
+      hasCentralHVAC: isMosque ? true : property.hvac === true,
+      hasDistrictCooling: property.districtCooling === true,
+      hasCivilDefenseSystem: property.fireAlarm === true || property.firePump === true,
+      hasSiraCctv: isMosque
+        ? property.sira === true || mosqueProfile.cctvInstalled === true || number(mosqueProfile.cctvCameraCount) > 0
+        : property.sira === true,
+      hasGenerator: property.gen === true,
+      hasBmu: property.bmu === true,
+      addOns: selectedAddOns,
+      slaTier: safeSlaTier(property.slaTier || (isMosque ? "premium" : "standard")),
+      paymentPlan: safePaymentPlan(property.paymentPlan),
+      hasWaterTank: property.tank === true,
+      hvacCount: isMosque ? number(mosqueProfile.hvacUnitsCount || property.hvacCount) : number(property.hvacCount),
+      offices: number(property.offices),
+      shops: number(property.shops),
+    },
+  };
 }
 
 export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unknown, nowMs = Date.now()) {
@@ -259,13 +192,20 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
     if (!text(cleanProperty.emirate) || !text(cleanProperty.propertyType)) {
       throw new Error(`Property ${index + 1} is missing emirate or property type.`);
     }
-    if (number(cleanProperty.units) <= 0 && number(cleanProperty.sqft) <= 0 && number(cleanProperty.bedrooms || cleanProperty.beds) <= 0) {
-      throw new Error(`Property ${index + 1} has no valid pricing driver.`);
+
+    const { assetClassId, pricingDriver, input } = quoteInputForProperty(cleanProperty, selectedAddOns, contractMode);
+    const quote = calculateUaeQuote2026(input);
+    if (!Number.isFinite(quote.annualTotal) || quote.annualTotal <= 0) {
+      const reasons = quote.riskFlags.length ? quote.riskFlags.join(", ") : "automatic pricing returned no annual total";
+      throw new Error(`Property ${index + 1} (${cleanProperty.propertyType}) could not be priced: ${reasons}.`);
     }
+
     return {
       propertyId: text(cleanProperty.id || cleanProperty.propertyId || `property_${index + 1}`),
       contractMode,
-      annualTotal: money(calculateProperty(cleanProperty, selectedAddOns)),
+      pricingClass: assetClassId,
+      pricingDriver,
+      annualTotal: money(quote.annualTotal),
     };
   });
 

@@ -1,4 +1,4 @@
-import type { QuoteInput } from '@bin/shared';
+import { resolveAssetClassIdForPropertyType, type QuoteInput } from '@bin/shared';
 import type { PropertyData } from '../store/onboardingStore';
 
 const emirateMap: Record<string, string> = {
@@ -13,6 +13,8 @@ const emirateMap: Record<string, string> = {
   'Umm Al Quwain': 'ummAlQuwain',
 };
 
+const BED_PRICED_TYPES = new Set(['Labour Camp', 'Staff Accommodation']);
+
 const isMosqueAsset = (property: PropertyData) => {
   const descriptor = `${property.propertyType || ''} ${property.subType || ''} ${property.assetClass || ''} ${property.serviceModel || ''}`.toLowerCase();
   return descriptor.includes('mosque') || descriptor.includes('masjid') || descriptor.includes('religious_facility') || descriptor.includes('mosque_fm');
@@ -20,12 +22,11 @@ const isMosqueAsset = (property: PropertyData) => {
 
 const assetClassFor = (property: PropertyData, isMosque: boolean) => {
   if (isMosque) return 'mosque_fm';
-  if (property.propertyType === 'Villa') return property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'villa-lux' : 'villa-std';
-  if (property.propertyType === 'Building' || property.propertyType === 'Residential Building') return 'com-twr';
-  if (property.propertyType === 'Commercial' || property.propertyType === 'Commercial Building') return 'off-sml';
-  if (property.propertyType === 'Government Majlis' || property.propertyType?.toLowerCase() === 'majlis' || property.majlis) return 'government_majlis';
-  if (property.propertyType === 'Hotel') return 'mid_scale_hotel';
-  return 'apt-std';
+  const assetClassId = resolveAssetClassIdForPropertyType(property.propertyType, property.assetGrade);
+  if (!assetClassId) {
+    throw new Error(`Unsupported property type '${property.propertyType || '(blank)'}'. Select a configured Asset Profile type before requesting a quote.`);
+  }
+  return assetClassId;
 };
 
 export const ownerPortfolioQuoteInputForProperty = (
@@ -34,9 +35,14 @@ export const ownerPortfolioQuoteInputForProperty = (
 ): QuoteInput => {
   const mosqueProfile = property.mosqueProfile || {};
   const isMosque = isMosqueAsset(property);
+  const assetClassId = assetClassFor(property, isMosque);
+  const beds = BED_PRICED_TYPES.has(property.propertyType)
+    ? Number(property.beds || property.units || property.rooms || property.bedrooms || 0)
+    : Number(property.beds || 0);
+
   return {
-    assetClassId: assetClassFor(property, isMosque),
-    emirate: emirateMap[property.emirate] || 'dubai',
+    assetClassId,
+    emirate: emirateMap[property.emirate] || property.emirate || '',
     zone: property.zone || 'B',
     contractType: property.strategy === 'pm_only' || property.strategy === 'rent'
       ? 'PM_ONLY'
@@ -45,11 +51,14 @@ export const ownerPortfolioQuoteInputForProperty = (
         : 'BOTH',
     sqft: isMosque ? Number(mosqueProfile.grossFloorAreaSqft) || property.sqft : property.sqft,
     units: isMosque ? Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units : property.units,
+    beds,
     annualRent: property.annualRent,
+    annualRevenue: property.annualRevenue,
     propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
     floors: property.floors,
     lifts: property.lifts,
     hasPool: property.pool,
+    hasGym: property.gym,
     hasCentralHVAC: isMosque ? true : property.hvac,
     hasDistrictCooling: property.districtCooling,
     hasCivilDefenseSystem: property.fireAlarm || property.firePump,
@@ -60,7 +69,7 @@ export const ownerPortfolioQuoteInputForProperty = (
     slaTier: property.slaTier || (isMosque ? 'premium' : 'standard'),
     paymentPlan: property.paymentPlan || 'annual',
     hasWaterTank: property.tank,
-    hvacCount: property.hvacCount,
+    hvacCount: isMosque ? Number(mosqueProfile.hvacUnitsCount || property.hvacCount || 0) : property.hvacCount,
     offices: property.offices,
     shops: property.shops,
   };
