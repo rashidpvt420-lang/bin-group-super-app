@@ -12,7 +12,7 @@ import TenantCorrectionQueuePanel from './TenantCorrectionQueuePanel';
 
 export default function TenantUnitLinkQueuePage() {
     const { isRTL } = useLanguage();
-    const copy = (en: string, ar: string) => (isRTL ? ar : en);
+    const copy = React.useCallback((en: string, ar: string) => (isRTL ? ar : en), [isRTL]);
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<any[]>([]);
     const [notice, setNotice] = useState('');
@@ -30,7 +30,7 @@ export default function TenantUnitLinkQueuePage() {
             setNotice(copy('Failed to load Tenant unit-link requests.', 'تعذر تحميل طلبات ربط وحدات المستأجرين.'));
             setLoading(false);
         });
-    }, [isRTL]);
+    }, [copy]);
 
     const handleAction = async (requestRecord: any, decision: 'APPROVE' | 'REJECT', rejectionReason = '') => {
         if (decision === 'REJECT' && rejectionReason.trim().length < 8) {

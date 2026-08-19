@@ -389,18 +389,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
     }, [authorizeFirebaseUser, invalidateActiveAttempt, isAuthenticated, markAuthReady, resetMfaState, setStatus, user?.uid]);
 
-    const login = async ({ email, password }: { email: string; password: string }) => {
-        setError(null);
-        setStatus('verifying-token');
-        try {
-            await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
-        } catch (err: any) {
-            setStatus('failed');
-            throw err;
-        }
-    };
+    const login = useCallback(
+        async ({ email, password }: { email: string; password: string }) => {
+            setError(null);
+            setStatus('verifying-token');
+            try {
+                await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+            } catch (err: any) {
+                setStatus('failed');
+                throw err;
+            }
+        },
+        [setStatus],
+    );
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         invalidateActiveAttempt();
         await signOut(auth);
         setIsAuthenticated(false);
@@ -408,7 +411,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetMfaState();
         setError(null);
         setStatus('idle');
-    };
+    }, [invalidateActiveAttempt, resetMfaState, setStatus]);
 
     const loading = status === 'restoring-session' || status === 'verifying-token' || status === 'verifying-profile';
 
@@ -426,7 +429,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             retryAuthorization,
             status,
         }),
-        [isAuthenticated, loading, error, user, mfaEnrollmentRequired, mfaVerified, mfaFactorCount, retryAuthorization, status],
+        [isAuthenticated, loading, error, user, mfaEnrollmentRequired, mfaVerified, mfaFactorCount, login, logout, retryAuthorization, status],
     );
 
     return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

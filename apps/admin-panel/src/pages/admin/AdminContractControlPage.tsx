@@ -11,7 +11,7 @@ type Notice = { severity: 'success' | 'error' | 'info' | 'warning'; text: string
 
 export default function AdminContractControlPage() {
   const { isRTL } = useLanguage();
-  const label = (en: string, ar: string) => (isRTL ? ar : en);
+  const label = React.useCallback((en: string, ar: string) => (isRTL ? ar : en), [isRTL]);
   const [contracts, setContracts] = React.useState<any[]>([]);
   const [renewals, setRenewals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -37,7 +37,7 @@ export default function AdminContractControlPage() {
       setRenewals(rows);
     });
     return () => { stopContracts(); stopRenewals(); };
-  }, [isRTL]);
+  }, [isRTL, label]);
 
   const openContracts = contracts.filter(isOpen);
 

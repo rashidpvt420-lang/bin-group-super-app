@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - feature/staff-operating-system
+      - fix/staff-os-post-merge-readiness
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,7 +18,7 @@ concurrency:
 env:
   STAGING_PROJECT_ID: bin-group-staging
   PRODUCTION_PROJECT_ID: bin-group-57c60
-  SOURCE_BRANCH: feature/staff-operating-system
+  SOURCE_BRANCH: ${{ github.ref_name }}
   STAGING_STORAGE_LOCATION: europe-west3
   STAFF_FUNCTION_REGION: europe-west3
   CI: true
@@ -377,8 +379,8 @@ jobs:
           test "$STAGING_PROJECT_ID" = "bin-group-staging"
           test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
           npm run prepare:rules
-          npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive
-          npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive
+          npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive || (sleep 5 && npx firebase-tools deploy --only firestore:rules,firestore:indexes --project "$STAGING_PROJECT_ID" --non-interactive)
+          npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive || (sleep 5 && npx firebase-tools deploy --only storage --project "$STAGING_PROJECT_ID" --non-interactive)
           echo "STORAGE_RULES_DEPLOYED=true" >> "$GITHUB_ENV"
 
       - name: Generate isolated staging Hosting configs
