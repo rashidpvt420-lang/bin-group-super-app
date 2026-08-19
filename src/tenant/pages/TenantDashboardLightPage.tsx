@@ -18,8 +18,9 @@ import {
   Truck,
   Wrench,
 } from 'lucide-react';
-import { collection, db, limit, onSnapshot, query, where } from '../../lib/firebase';
+import { collection, db, getDocs, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
@@ -53,6 +54,24 @@ export default function TenantDashboardLightPage() {
   const [activeTickets, setActiveTickets] = useState<any[]>([]);
   const [ticketWarning, setTicketWarning] = useState('');
   const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
+  const [hasUnit, setHasUnit] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)))
+      .then((snap) => {
+        if (!snap.empty) {
+          setHasUnit(true);
+        } else if (user.email) {
+          getDocs(query(collection(db, 'units'), where('tenantEmail', '==', user.email.toLowerCase()), limit(1)))
+            .then((snap2) => setHasUnit(!snap2.empty));
+        } else {
+          setHasUnit(false);
+        }
+      })
+      .catch(() => setHasUnit(false));
+  }, [user?.uid, user?.email]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -448,6 +467,12 @@ export default function TenantDashboardLightPage() {
             </Paper>
           </Grid>
         </Grid>
+
+        {hasUnit === false && (
+          <Box sx={{ mt: 4 }}>
+            <TenantUnitLinkFallback compact message="No assigned unit is linked to this tenant profile yet." />
+          </Box>
+        )}
       </Stack>
 
       <Drawer

@@ -113,8 +113,8 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     await expect(page.locator('text=Link my unit').first()).toBeVisible();
     await page.keyboard.press('Escape');
 
-    const linkMyUnit = page.locator('text=Link my unit').first();
-    if (await linkMyUnit.isVisible().catch(() => false)) {
+    const linkMyUnitForm = page.locator('[data-testid="tenant-unit-link-fallback"]').first();
+    if (await linkMyUnitForm.isVisible().catch(() => false)) {
       await page.getByLabel('Property / building name').fill('E2E Verification Tower');
       await page.getByLabel('Unit number').fill('E2E-000');
       await page.getByLabel('Notes for verification').fill('Automated no-unit fallback smoke proof.');
