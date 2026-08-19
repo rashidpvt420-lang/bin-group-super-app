@@ -1,0 +1,45 @@
+name: Cancel Stale Production 5dcd868
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [synchronize, reopened]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-stale-run:
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.ref == 'ops/dispatch-live-role-smoke-5dcd868' &&
+      github.event.pull_request.title == 'Dispatch exact-SHA Live Role Smoke after production'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      STALE_SHA: 5dcd8688d8da81ffaf43be150377715e1139f860
+      STALE_RUN_ID: '32271880911'
+    steps:
+      - name: Cancel stale exact-SHA production run after main advanced
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" != "$STALE_SHA" ]] || {
+            echo '::error::Main has not advanced; refusing stale-run cancellation.'
+            exit 1
+          }
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID")"
+          [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$STALE_SHA" ]]
+          status="$(jq -r '.status' <<<"$run_json")"
+          if [[ "$status" != 'completed' ]]; then
+            gh api --method POST "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID/cancel"
+            echo "Cancellation requested for stale Firebase Production Deploy run $STALE_RUN_ID."
+          else
+            echo "Stale run already completed with conclusion $(jq -r '.conclusion // empty' <<<"$run_json")."
+          fi
