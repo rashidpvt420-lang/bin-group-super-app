@@ -1,3 +1,4 @@
+# Re-trigger the self-cleaning repair after the protected-main squash merge.
 name: Apply Live Evidence Admin App Check Fix 626
 
 on:
