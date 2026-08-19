@@ -1,0 +1,230 @@
+name: Staff OS Staging Live E2E
+
+on:
+  push:
+    branches:
+      - feature/staff-operating-system
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: staff-os-staging-live-e2e
+  cancel-in-progress: true
+
+env:
+  STAGING_PROJECT_ID: bin-group-staging
+  PRODUCTION_PROJECT_ID: bin-group-57c60
+  STAGING_HOSTING_SITE: bin-group-staging
+  CI: true
+
+jobs:
+  live-staging-gate:
+    name: Real App Check and five-profile staging gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.STAGING_GCP_SERVICE_ACCOUNT }}
+    steps:
+      - name: Enforce staging-only branch and project boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/feature/staff-operating-system"
+          test "$STAGING_PROJECT_ID" = "bin-group-staging"
+          test "$STAGING_PROJECT_ID" != "$PRODUCTION_PROJECT_ID"
+          test "$PRODUCTION_PROJECT_ID" = "bin-group-57c60"
+          test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
+          test -n "$GCP_SERVICE_ACCOUNT"
+          test "$GCP_WORKLOAD_IDENTITY_PROVIDER" = "projects/355288045402/locations/global/workloadIdentityPools/github-actions-staging/providers/github-bin-group-staging"
+          test "$GCP_SERVICE_ACCOUNT" = "github-staging-deploy@bin-group-staging.iam.gserviceaccount.com"
+
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify exact checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Authenticate to staging with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ env.STAGING_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify authenticated project is staging only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gcloud config get-value project 2>/dev/null)" = "$STAGING_PROJECT_ID"
+          PROJECT="$(gcloud projects describe "$STAGING_PROJECT_ID" --format='value(projectId)')"
+          test "$PROJECT" = "$STAGING_PROJECT_ID"
+          test "$PROJECT" != "$PRODUCTION_PROJECT_ID"
+
+      - name: Wait for exact-SHA staging preview channels
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA:0:12}"
+          APP_CHANNEL="staff-app-${SHORT_SHA}"
+          ADMIN_CHANNEL="staff-admin-${SHORT_SHA}"
+          CHANNELS_FILE="$RUNNER_TEMP/staging-channels.json"
+          URLS_FILE="$RUNNER_TEMP/staging-live-urls.json"
+
+          for attempt in $(seq 1 90); do
+            if npx firebase-tools hosting:channel:list \
+              --site "$STAGING_HOSTING_SITE" \
+              --project "$STAGING_PROJECT_ID" \
+              --json > "$CHANNELS_FILE" 2>/dev/null; then
+              if APP_CHANNEL="$APP_CHANNEL" ADMIN_CHANNEL="$ADMIN_CHANNEL" CHANNELS_FILE="$CHANNELS_FILE" URLS_FILE="$URLS_FILE" node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.env.CHANNELS_FILE, 'utf8'));
+          const raw = payload?.result?.channels || payload?.result || payload?.channels || [];
+          const rows = Array.isArray(raw) ? raw : [];
+          const idOf = (row) => String(row?.channelId || row?.id || row?.name || '').split('/').pop();
+          const urlOf = (row) => String(row?.url || row?.previewUrl || row?.webAppUrl || '').trim();
+          const app = rows.find((row) => idOf(row) === process.env.APP_CHANNEL);
+          const admin = rows.find((row) => idOf(row) === process.env.ADMIN_CHANNEL);
+          const appUrl = urlOf(app);
+          const adminUrl = urlOf(admin);
+          if (!appUrl || !adminUrl) process.exit(1);
+          const validate = (label, value) => {
+            const parsed = new URL(value);
+            if (parsed.protocol !== 'https:' || !/^bin-group-staging.*\.web\.app$/.test(parsed.hostname)) {
+              throw new Error(`${label} is not an isolated staging Hosting URL: ${value}`);
+            }
+            if (parsed.hostname.includes('bin-group-57c60')) throw new Error(`${label} resolved to production.`);
+          };
+          validate('appUrl', appUrl);
+          validate('adminUrl', adminUrl);
+          fs.writeFileSync(process.env.URLS_FILE, JSON.stringify({ appUrl, adminUrl }, null, 2));
+          NODE
+              then
+                break
+              fi
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              echo "::error::Timed out waiting for exact-SHA staging preview channels $APP_CHANNEL and $ADMIN_CHANNEL."
+              exit 1
+            fi
+            sleep 10
+          done
+
+          APP_URL="$(node -e "const fs=require('fs');console.log(JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/staging-live-urls.json','utf8')).appUrl)")"
+          ADMIN_URL="$(node -e "const fs=require('fs');console.log(JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/staging-live-urls.json','utf8')).adminUrl)")"
+          MANIFEST="staff-os-staging-${GITHUB_SHA}.json"
+
+          curl --fail --silent --show-error --location "$APP_URL/$MANIFEST" -o "$RUNNER_TEMP/live-app-manifest.json"
+          curl --fail --silent --show-error --location "$ADMIN_URL/$MANIFEST" -o "$RUNNER_TEMP/live-admin-manifest.json"
+          APP_URL="$APP_URL" ADMIN_URL="$ADMIN_URL" node <<'NODE'
+          const fs = require('fs');
+          for (const file of ['live-app-manifest.json', 'live-admin-manifest.json']) {
+            const payload = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/' + file, 'utf8'));
+            if (payload.commitSha !== process.env.GITHUB_SHA) throw new Error(`${file}: exact SHA mismatch`);
+            if (payload.firebaseProjectId !== process.env.STAGING_PROJECT_ID) throw new Error(`${file}: staging project mismatch`);
+            if (payload.productionTouched !== false) throw new Error(`${file}: production safety marker mismatch`);
+          }
+          NODE
+
+          echo "E2E_BASE_URL=$APP_URL" >> "$GITHUB_ENV"
+          echo "STAGING_APP_URL=$APP_URL" >> "$GITHUB_ENV"
+          echo "E2E_ADMIN_BASE_URL=$ADMIN_URL" >> "$GITHUB_ENV"
+          echo "STAGING_ADMIN_URL=$ADMIN_URL" >> "$GITHUB_ENV"
+          echo "Verified exact-SHA staging previews for $GITHUB_SHA."
+
+      - name: Generate masked staging-only E2E credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          make_password() { node -e "console.log(require('crypto').randomBytes(30).toString('base64url'))"; }
+
+          ADMIN_PASSWORD="$(make_password)"
+          OWNER_PASSWORD="$(make_password)"
+          TENANT_PASSWORD="$(make_password)"
+          TECHNICIAN_PASSWORD="$(make_password)"
+          TECHNICIAN_B_PASSWORD="$(make_password)"
+          BROKER_PASSWORD="$(make_password)"
+
+          for secret in "$ADMIN_PASSWORD" "$OWNER_PASSWORD" "$TENANT_PASSWORD" "$TECHNICIAN_PASSWORD" "$TECHNICIAN_B_PASSWORD" "$BROKER_PASSWORD"; do
+            echo "::add-mask::$secret"
+          done
+
+          cat >> "$GITHUB_ENV" <<EOF
+          STAGING_E2E_ADMIN_EMAIL=e2e-staging-admin@bingroup.com
+          STAGING_E2E_ADMIN_PASSWORD=$ADMIN_PASSWORD
+          STAGING_E2E_OWNER_EMAIL=e2e-staging-owner@bingroup.com
+          STAGING_E2E_OWNER_PASSWORD=$OWNER_PASSWORD
+          STAGING_E2E_TENANT_EMAIL=e2e-staging-tenant@bingroup.com
+          STAGING_E2E_TENANT_PASSWORD=$TENANT_PASSWORD
+          STAGING_E2E_TECHNICIAN_EMAIL=e2e-staging-technician@bingroup.com
+          STAGING_E2E_TECHNICIAN_PASSWORD=$TECHNICIAN_PASSWORD
+          STAGING_E2E_TECHNICIAN_B_EMAIL=e2e-staging-technician-b@bingroup.com
+          STAGING_E2E_TECHNICIAN_B_PASSWORD=$TECHNICIAN_B_PASSWORD
+          STAGING_E2E_BROKER_EMAIL=e2e-staging-broker@bingroup.com
+          STAGING_E2E_BROKER_PASSWORD=$BROKER_PASSWORD
+          E2E_ADMIN_EMAIL=e2e-staging-admin@bingroup.com
+          E2E_ADMIN_PASSWORD=$ADMIN_PASSWORD
+          E2E_OWNER_MAILBOX_EMAIL=e2e-staging-owner@bingroup.com
+          E2E_OWNER_PASSWORD=$OWNER_PASSWORD
+          E2E_TENANT_EMAIL=e2e-staging-tenant@bingroup.com
+          E2E_TENANT_PASSWORD=$TENANT_PASSWORD
+          E2E_TECHNICIAN_EMAIL=e2e-staging-technician@bingroup.com
+          E2E_TECHNICIAN_PASSWORD=$TECHNICIAN_PASSWORD
+          E2E_TECHNICIAN_B_EMAIL=e2e-staging-technician-b@bingroup.com
+          E2E_TECHNICIAN_B_PASSWORD=$TECHNICIAN_B_PASSWORD
+          E2E_BROKER_MAILBOX_EMAIL=e2e-staging-broker@bingroup.com
+          E2E_BROKER_PASSWORD=$BROKER_PASSWORD
+          EOF
+
+      - name: Seed isolated staging Auth and role fixtures
+        env:
+          STAGING_PROJECT_ID: bin-group-staging
+          GOOGLE_CLOUD_PROJECT: bin-group-staging
+          GCLOUD_PROJECT: bin-group-staging
+          GCP_PROJECT_ID: bin-group-staging
+        run: node scripts/seed-staging-e2e.mjs
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Prove real reCAPTCHA Enterprise App Check on exact staging SHA
+        env:
+          E2E_STRICT_LIVE: 'true'
+        run: npx playwright test tests/e2e/live-staging-appcheck-proof.spec.ts --project=chromium-desktop
+
+      - name: Run authenticated five-profile staging smoke
+        env:
+          E2E_STRICT_LIVE: 'true'
+        run: npx playwright test tests/e2e/staging-five-profile-live.spec.ts --project=chromium-desktop
+
+      - name: Upload staging live E2E evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: staff-os-staging-live-e2e-${{ github.sha }}
+          path: |
+            playwright-report
+            test-results
+            ${{ runner.temp }}/live-app-manifest.json
+            ${{ runner.temp }}/live-admin-manifest.json
+            ${{ runner.temp }}/staging-live-urls.json
+          if-no-files-found: warn
+          retention-days: 30
