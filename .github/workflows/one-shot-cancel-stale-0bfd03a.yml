@@ -1,0 +1,52 @@
+name: One-shot Cancel Stale 0bfd Release
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-stale-release:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.ref == 'ops/cancel-stale-0bfd03a'
+    steps:
+      - name: Verify exact current main and cancel exact stale runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CURRENT_MAIN_SHA: f889536649dece11c9402a82a0159b37759c6743
+          STALE_SHA: 0bfd03a93a28693ce5d29c35eab34391052e7886
+          FIREBASE_RUN_ID: '32256570743'
+          ORCHESTRATOR_RUN_ID: '32256503596'
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq .sha)"
+          [[ "$current" == "$CURRENT_MAIN_SHA" ]] || fail "main moved to $current; refusing cancellation under stale assumptions"
+
+          verify_and_cancel() {
+            local run_id="$1" expected_path="$2" expected_name="$3"
+            local data status sha path event name
+            data="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r .status <<<"$data")"
+            sha="$(jq -r .head_sha <<<"$data")"
+            path="$(jq -r .path <<<"$data")"
+            event="$(jq -r .event <<<"$data")"
+            name="$(jq -r .name <<<"$data")"
+            [[ "$sha" == "$STALE_SHA" ]] || fail "run $run_id SHA $sha does not equal stale SHA $STALE_SHA"
+            [[ "$path" == "$expected_path" ]] || fail "run $run_id path $path does not equal $expected_path"
+            [[ "$event" == "workflow_dispatch" ]] || fail "run $run_id event $event is not workflow_dispatch"
+            [[ "$name" == "$expected_name" || "$expected_name" == "*" ]] || fail "run $run_id name mismatch: $name"
+            if [[ "$status" == "completed" ]]; then
+              echo "Run $run_id already completed; no cancellation required."
+              return 0
+            fi
+            gh api --method POST "repos/$REPOSITORY/actions/runs/$run_id/cancel"
+            echo "Cancellation requested for stale run $run_id"
+          }
+
+          verify_and_cancel "$FIREBASE_RUN_ID" '.github/workflows/firebase-production-deploy.yml' 'Firebase Production Deploy'
+          verify_and_cancel "$ORCHESTRATOR_RUN_ID" '.github/workflows/founder-release-orchestrator-one-shot.yml' '*'
