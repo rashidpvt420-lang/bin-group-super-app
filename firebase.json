@@ -2,7 +2,8 @@
   "firestore": {
     "database": "(default)",
     "rules": "launch_generated/firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "indexes": "firestore.indexes.json",
+    "comment": "Touch to trigger manifest guard"
   },
   "emulators": {
     "firestore": {
