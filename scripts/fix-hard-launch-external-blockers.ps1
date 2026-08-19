@@ -194,6 +194,7 @@ $env:BIN_GROUP_ANDROID_KEYPASS = $keyPassword
 try {
   & keytool -genkeypair -v `
     -keystore $keystorePath `
+    -storetype JKS `
     -alias $KeyAlias `
     -keyalg RSA `
     -keysize 4096 `
@@ -208,6 +209,7 @@ try {
 
   & keytool -exportcert -rfc `
     -keystore $keystorePath `
+    -storetype JKS `
     -alias $KeyAlias `
     -storepass:env BIN_GROUP_ANDROID_STOREPASS `
     -file $pemPath
@@ -217,6 +219,7 @@ try {
 
   $keytoolReport = & keytool -list -v `
     -keystore $keystorePath `
+    -storetype JKS `
     -alias $KeyAlias `
     -storepass:env BIN_GROUP_ANDROID_STOREPASS
   if ($LASTEXITCODE -ne 0) {
