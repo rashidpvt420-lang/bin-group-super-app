@@ -5,8 +5,18 @@ import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
 
 const OWNER_PAGE_COUNT = 5;
 const createOnboardingSessionId = () => {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `onb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const secureCrypto = globalThis.crypto;
+  if (!secureCrypto || typeof secureCrypto.getRandomValues !== 'function') {
+    throw new Error('Secure randomness is required to create an onboarding session.');
+  }
+  if (typeof secureCrypto.randomUUID === 'function') return secureCrypto.randomUUID();
+
+  const bytes = new Uint8Array(16);
+  secureCrypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 const clampOwnerPage = (value: number) => Math.min(Math.max(Number(value) || 1, 1), OWNER_PAGE_COUNT);
 
@@ -21,6 +31,7 @@ export interface PropertyData {
   ownerType: 'Private' | 'Government' | string;
   floors: number;
   units: number;
+  beds?: number;
   bedrooms: number;
   bathrooms: number;
   shops: number;
