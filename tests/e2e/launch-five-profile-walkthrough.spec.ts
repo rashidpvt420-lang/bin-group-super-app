@@ -59,6 +59,16 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     techBContext = await browser.newContext();
     brokerContext = await browser.newContext();
     adminContext = await browser.newContext();
+
+    for (const ctx of [ownerContext, tenantContext, techAContext, techBContext, brokerContext, adminContext]) {
+      ctx.on('page', async (page) => {
+        try {
+          await installAppCheckDebugToken(page);
+        } catch (e) {
+          // ignore navigation context destruction errors during early page creation
+        }
+      });
+    }
   });
 
   test.afterAll(async () => {
@@ -84,6 +94,15 @@ test.describe.serial('5-Profile Hard Launch Walkthrough', () => {
     const page = await tenantContext.newPage();
     await loginToProfile(page, TENANT_EMAIL(), 'tenant', rolePassword('TENANT'));
     
+    // If simple mode is active, switch to advanced dashboard first
+    try {
+      const advancedDashboardBtn = page.locator('button:has-text("Open advanced dashboard")').first();
+      await advancedDashboardBtn.waitFor({ state: 'visible', timeout: 4000 });
+      await advancedDashboardBtn.click();
+    } catch (e) {
+      // Already in advanced dashboard, or button not present
+    }
+
     // Check More Services drawer
     const moreServicesBtn = page.locator('button:has-text("More Services")').first();
     await expect(moreServicesBtn).toBeVisible();
