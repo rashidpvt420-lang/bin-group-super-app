@@ -1,0 +1,161 @@
+name: Dispatch Exact-SHA Live Role Smoke 5dcd868
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, synchronize, converted_to_draft]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: dispatch-live-role-smoke-5dcd868
+  cancel-in-progress: false
+
+env:
+  TARGET_SHA: 5dcd8688d8da81ffaf43be150377715e1139f860
+  PRODUCTION_RUN_ID: '32271880911'
+  EXPECTED_HEAD: ops/dispatch-live-role-smoke-5dcd868
+
+jobs:
+  dispatch-live-evidence:
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.ref == 'ops/dispatch-live-role-smoke-5dcd868' &&
+      github.event.pull_request.title == 'Dispatch exact-SHA Live Role Smoke after production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Validate frozen main and production provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          [[ "$GITHUB_HEAD_REF" == "$EXPECTED_HEAD" ]] || fail "Unexpected operational head branch."
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || fail "main moved from protected target $TARGET_SHA to $current_main."
+
+          for _ in $(seq 1 240); do
+            run_json="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID")"
+            status="$(jq -r '.status' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+            [[ "$(jq -r '.path' <<<"$run_json")" == '.github/workflows/firebase-production-deploy.yml' ]] || fail "Production run path mismatch."
+            [[ "$(jq -r '.event' <<<"$run_json")" == 'workflow_dispatch' ]] || fail "Production run event mismatch."
+            [[ "$(jq -r '.head_branch' <<<"$run_json")" == 'main' ]] || fail "Production run branch mismatch."
+            [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$TARGET_SHA" ]] || fail "Production run SHA mismatch."
+            if [[ "$status" == 'completed' ]]; then
+              [[ "$conclusion" == 'success' ]] || fail "Firebase Production Deploy completed with $conclusion; refusing Live Role Smoke."
+              break
+            fi
+            sleep 30
+          done
+
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID")"
+          [[ "$(jq -r '.status' <<<"$run_json")" == 'completed' && "$(jq -r '.conclusion' <<<"$run_json")" == 'success' ]] || fail "Firebase Production Deploy did not complete successfully inside the protected wait window."
+
+          expected_artifact="production-deployment-$TARGET_SHA"
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$PRODUCTION_RUN_ID/artifacts?per_page=100")"
+          count="$(jq -r --arg name "$expected_artifact" '[.artifacts[] | select(.name == $name and .expired == false)] | length' <<<"$artifacts")"
+          [[ "$count" == '1' ]] || fail "Expected exactly one non-expired $expected_artifact artifact; found $count."
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || fail "main moved after production validation."
+
+      - name: Reuse or dispatch exact-SHA live-evidence
+        id: live
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          expected_artifact="live-launch-evidence-$TARGET_SHA"
+
+          runs="$(gh api "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+          while read -r candidate; do
+            [[ "$candidate" =~ ^[0-9]+$ ]] || continue
+            artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$candidate/artifacts?per_page=100")"
+            if jq -e --arg name "$expected_artifact" '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' <<<"$artifacts" >/dev/null; then
+              echo "Reusing successful exact-SHA Live Role Smoke run $candidate"
+              echo "run_id=$candidate" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done < <(jq -r --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | reverse | .[].id' <<<"$runs")
+
+          mapfile -t baseline < <(jq -r '.workflow_runs[].id' <<<"$runs")
+          baseline_json="$(printf '%s\n' "${baseline[@]:-}" | jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)')"
+
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            --arg deployRun "$PRODUCTION_RUN_ID" \
+            '{ref:$ref,inputs:{mode:"live-evidence",expected_commit_sha:$sha,production_deploy_run_id:$deployRun}}' \
+            > live-dispatch.json
+
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/dispatches" \
+            --input live-dispatch.json
+
+          run_id=''
+          for _ in $(seq 1 60); do
+            after="$(gh api "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            run_id="$(jq -r --arg sha "$TARGET_SHA" --argjson old "$baseline_json" '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch") | select((.id as $id | ($old | index($id))) == null)] | sort_by(.created_at) | last | .id // empty' <<<"$after")"
+            if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then break; fi
+            sleep 5
+          done
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || fail "Live Role Smoke dispatch was accepted but no unique exact-SHA run could be correlated."
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Exact-SHA Live Role Smoke run: https://github.com/$REPOSITORY/actions/runs/$run_id"
+
+      - name: Require live-evidence success and artifact
+        shell: bash
+        env:
+          LIVE_RUN_ID: ${{ steps.live.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$LIVE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "Missing Live Role Smoke run ID."
+
+          for _ in $(seq 1 240); do
+            run_json="$(gh api "repos/$REPOSITORY/actions/runs/$LIVE_RUN_ID")"
+            [[ "$(jq -r '.path' <<<"$run_json")" == '.github/workflows/live-role-smoke.yml' ]] || fail "Live run path mismatch."
+            [[ "$(jq -r '.head_branch' <<<"$run_json")" == 'main' ]] || fail "Live run branch mismatch."
+            [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$TARGET_SHA" ]] || fail "Live run SHA mismatch."
+            status="$(jq -r '.status' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+            if [[ "$status" == 'completed' ]]; then
+              [[ "$conclusion" == 'success' ]] || fail "Live Role Smoke completed with $conclusion."
+              break
+            fi
+            sleep 30
+          done
+
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$LIVE_RUN_ID")"
+          [[ "$(jq -r '.status' <<<"$run_json")" == 'completed' && "$(jq -r '.conclusion' <<<"$run_json")" == 'success' ]] || fail "Live Role Smoke did not complete successfully inside the protected wait window."
+
+          expected_artifact="live-launch-evidence-$TARGET_SHA"
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$LIVE_RUN_ID/artifacts?per_page=100")"
+          count="$(jq -r --arg name "$expected_artifact" '[.artifacts[] | select(.name == $name and .expired == false)] | length' <<<"$artifacts")"
+          [[ "$count" == '1' ]] || fail "Expected exactly one non-expired $expected_artifact artifact; found $count."
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || fail "main moved during live evidence."
+
+          {
+            echo '## Exact-SHA production live evidence complete'
+            echo
+            echo "- Target SHA: \`$TARGET_SHA\`"
+            echo "- Firebase Production Deploy: \`$PRODUCTION_RUN_ID\`"
+            echo "- Live Role Smoke Tests: \`$LIVE_RUN_ID\`"
+            echo "- Live evidence artifact: \`$expected_artifact\`"
+            echo '- Hard public launch claim: false'
+            echo '- Next hard gate: real same-SHA 24-hour pilot and protected hard clearance'
+          } >> "$GITHUB_STEP_SUMMARY"
