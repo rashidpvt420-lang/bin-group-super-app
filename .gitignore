@@ -136,6 +136,8 @@ qa-verify-all.js
 
 # Test artifacts
 test-results/
+test-results*.txt
+**/test-results*.txt
 test_output.txt
 playwright-report/
 

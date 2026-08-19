@@ -24,7 +24,7 @@ const fieldLabels: Record<string, [string, string]> = {
 
 export default function TenantCorrectionQueuePanel() {
     const { isRTL } = useLanguage();
-    const copy = (en: string, ar: string) => isRTL ? ar : en;
+    const copy = useCallback((en: string, ar: string) => (isRTL ? ar : en), [isRTL]);
     const [requests, setRequests] = useState<CorrectionRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState('');
@@ -45,7 +45,7 @@ export default function TenantCorrectionQueuePanel() {
         } finally {
             setLoading(false);
         }
-    }, [isRTL]);
+    }, [copy]);
 
     useEffect(() => { void refresh(); }, [refresh]);
 
