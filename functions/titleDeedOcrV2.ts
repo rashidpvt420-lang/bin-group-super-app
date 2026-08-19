@@ -70,8 +70,22 @@ function boundedConfidence(value: unknown) {
   return Math.max(0, Math.min(1, parsed > 1 ? parsed / 100 : parsed));
 }
 
+function optionalNonNegativeNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function optionalNonNegativeInteger(value: unknown) {
+  const parsed = optionalNonNegativeNumber(value);
+  return parsed === null ? null : Math.round(parsed);
+}
+
 function normalizedResult(value: any) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const landAreaSqft = optionalNonNegativeNumber(record.landAreaSqft);
+  const unitCount = optionalNonNegativeInteger(record.unitCount);
   return {
     titleDeedNumber: text(record.titleDeedNumber || record.deedNumber, "", 120),
     plotNumber: text(record.plotNumber, "", 120),
@@ -81,8 +95,12 @@ function normalizedResult(value: any) {
     emirate: text(record.emirate, "", 80),
     municipality: text(record.municipality || record.issuingAuthority, "", 160),
     issueDate: text(record.issueDate, "", 80),
-    landAreaSqft: Number.isFinite(Number(record.landAreaSqft)) ? Math.max(0, Number(record.landAreaSqft)) : null,
-    unitCount: Number.isFinite(Number(record.unitCount)) ? Math.max(0, Math.round(Number(record.unitCount))) : null,
+    landAreaSqft,
+    unitCount,
+    // Backward-compatible frontend aliases. They mirror extracted facts only;
+    // a missing OCR value remains null and is never replaced with a default.
+    sqft: landAreaSqft,
+    units: unitCount,
     confidenceScore: boundedConfidence(record.confidenceScore),
   };
 }
